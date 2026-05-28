@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from stoa.config import settings
-from stoa.routers import auth, questions, students, teachers, parents, admin, files
+from stoa.routers import auth, conversations, questions, students, teachers, parents, admin, files
 
 app = FastAPI(
     title="STOA API",
@@ -21,6 +21,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
+app.include_router(conversations.teacher_help_router, prefix="/teacher-help", tags=["teacher-help"])
 app.include_router(questions.router, prefix="/questions", tags=["questions"])
 app.include_router(students.router, prefix="/students", tags=["students"])
 app.include_router(teachers.router, prefix="/teachers", tags=["teachers"])
