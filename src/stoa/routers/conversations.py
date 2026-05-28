@@ -1,5 +1,6 @@
 """Conversation routes — multi-turn AI tutoring sessions.
 
+
 Implements the frontend chat API contract:
   GET  /conversations                        list conversations for current student
   POST /conversations                        create conversation
@@ -7,6 +8,7 @@ Implements the frontend chat API contract:
   POST /conversations/{id}/messages          send message → Bedrock AI reply
   POST /teacher-help/request                 escalate to teacher
 """
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -14,6 +16,8 @@ import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user, require_role
@@ -299,7 +303,8 @@ def _send_message_impl(
         ai_content = f"{steps_text}\n\n{answer_text}{hint_text}".strip()
         if not ai_content:
             ai_content = answer_text or "Entschuldigung, ich konnte keine Antwort generieren."
-    except Exception:
+    except Exception as ai_err:
+        logger.error("Bedrock AI call failed: %s: %s", type(ai_err).__name__, ai_err)
         ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
 
     # Save AI message
