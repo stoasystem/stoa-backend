@@ -25,8 +25,17 @@ class Settings(BaseSettings):
 
     # Cognito
     cognito_user_pool_id: str = ""
-    cognito_client_id: str = ""
-    cognito_jwks_url: str = ""
+    cognito_student_client_id: str = ""
+    cognito_parent_client_id: str = ""
+    cognito_teacher_client_id: str = ""
+    cognito_admin_client_id: str = ""
+
+    @property
+    def cognito_jwks_url(self) -> str:
+        return (
+            f"https://cognito-idp.{self.aws_region}.amazonaws.com"
+            f"/{self.cognito_user_pool_id}/.well-known/jwks.json"
+        )
 
     # Bedrock
     bedrock_model_id: str = "anthropic.claude-haiku-20240307-v1:0"
