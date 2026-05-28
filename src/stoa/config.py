@@ -9,7 +9,10 @@ class Settings(BaseSettings):
 
     # App
     environment: str = "development"
-    cors_origins: List[str] = ["http://localhost:5173"]
+    cors_origins: List[str] = [
+        "http://localhost:5173",
+        "https://app.stoaedu.ch",
+    ]
 
     # AWS
     aws_region: str = "eu-central-2"

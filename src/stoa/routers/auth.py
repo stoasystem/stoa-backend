@@ -1,4 +1,4 @@
-"""Authentication routes — Cognito-backed register / login / refresh / logout."""
+"""Authentication routes — aligned with frontend API contract."""
 import uuid
 from datetime import datetime
 
@@ -9,64 +9,117 @@ from pydantic import BaseModel, EmailStr
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
-from stoa.models.user import Grade, RegisterRequest, SubscriptionTier, UserRole
+from stoa.deps import get_current_user
 
 router = APIRouter()
 
 
+# ---------------------------------------------------------------------------
+# Request / Response models (aligned with frontend types/user.ts)
+# ---------------------------------------------------------------------------
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    role: UserRole
+    # role is optional — backend infers from DynamoDB profile if omitted
+    role: str | None = None
 
 
-class AuthTokens(BaseModel):
-    access_token: str
-    id_token: str
-    refresh_token: str
-    expires_in: int
-    token_type: str = "Bearer"
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: str                       # frontend: student | parent | tutor | admin
+    name: str | None = None
+    preferredLanguage: str = "de"   # camelCase matches frontend payload
+    # Accept (and silently ignore) any extra frontend onboarding fields
+    model_config = {"extra": "allow"}
+
+
+class UserOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    preferredLanguage: str | None = None
+    subscriptionStatus: str = "trial"
+    plan: str = "free_trial"
+
+
+class AuthResponse(BaseModel):
+    accessToken: str
+    user: UserOut
+    onboardingStatus: str | None = None
+    verificationStatus: str | None = None
 
 
 class RefreshRequest(BaseModel):
     refresh_token: str
-    role: UserRole
+    role: str | None = None
 
 
 class LogoutRequest(BaseModel):
     access_token: str
 
 
-def _get_cognito(settings: Settings) -> boto3.client:
+# ---------------------------------------------------------------------------
+# Role helpers
+# ---------------------------------------------------------------------------
+
+# Frontend uses "tutor" for what the backend calls "teacher"
+_ROLE_ALIAS = {"tutor": "teacher"}
+_ROLE_DISPLAY = {"teacher": "tutor"}   # reverse for response
+
+
+def _normalise_role(role: str) -> str:
+    """Map frontend role names to backend role names."""
+    return _ROLE_ALIAS.get(role, role)
+
+
+def _display_role(role: str) -> str:
+    """Map backend role names back to frontend role names."""
+    return _ROLE_DISPLAY.get(role, role)
+
+
+def _client_id_for_role(role: str, settings: Settings) -> str:
+    mapping = {
+        "student": settings.cognito_student_client_id,
+        "parent": settings.cognito_parent_client_id,
+        "teacher": settings.cognito_teacher_client_id,
+        "admin": settings.cognito_admin_client_id,
+    }
+    cid = mapping.get(role)
+    if not cid:
+        raise HTTPException(status_code=400, detail=f"No Cognito client for role '{role}'")
+    return cid
+
+
+def _get_cognito(settings: Settings):
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
 
-def _client_id_for_role(role: UserRole, settings: Settings) -> str:
-    """Return the Cognito App Client ID matching the given role."""
-    mapping = {
-        UserRole.STUDENT: settings.cognito_student_client_id,
-        UserRole.PARENT: settings.cognito_parent_client_id,
-        UserRole.TEACHER: settings.cognito_teacher_client_id,
-        UserRole.ADMIN: settings.cognito_admin_client_id,
-    }
-    client_id = mapping.get(role)
-    if not client_id:
-        raise HTTPException(status_code=400, detail=f"No Cognito client configured for role '{role}'")
-    return client_id
+def _build_user_out(profile: dict) -> UserOut:
+    role = _display_role(profile.get("role", "student"))
+    return UserOut(
+        id=profile.get("user_id", ""),
+        name=profile.get("name") or profile.get("email", "").split("@")[0],
+        email=profile.get("email", ""),
+        role=role,
+        preferredLanguage=profile.get("language") or profile.get("preferredLanguage"),
+        subscriptionStatus="trial",
+        plan="free_trial",
+    )
 
 
-@router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
-    """Create a new Cognito user and store the profile in DynamoDB."""
+    """Create a Cognito user and DynamoDB profile, return tokens + user."""
     cognito = _get_cognito(settings)
     user_id = str(uuid.uuid4())
-
-    custom_attrs = [
-        {"Name": "custom:role", "Value": body.role.value},
-        {"Name": "custom:subscription_tier", "Value": SubscriptionTier.FREE.value},
-    ]
-    if body.grade:
-        custom_attrs.append({"Name": "custom:grade", "Value": body.grade.value})
+    role = _normalise_role(body.role)
 
     try:
         cognito.admin_create_user(
@@ -77,10 +130,10 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             UserAttributes=[
                 {"Name": "email", "Value": body.email},
                 {"Name": "email_verified", "Value": "true"},
-                *custom_attrs,
+                {"Name": "custom:role", "Value": role},
+                {"Name": "custom:subscription_tier", "Value": "free"},
             ],
         )
-        # Immediately set a permanent password so the user is CONFIRMED
         cognito.admin_set_user_password(
             UserPoolId=settings.cognito_user_pool_id,
             Username=body.email,
@@ -96,24 +149,52 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
     profile = {
         "user_id": user_id,
         "email": body.email,
-        "role": body.role.value,
-        "grade": body.grade.value if body.grade else None,
-        "subjects": body.subjects or [],
-        "language": body.language,
-        "subscription_tier": SubscriptionTier.FREE.value,
-        "parent_id": body.parent_id,
+        "name": body.name or body.email.split("@")[0],
+        "role": role,
+        "language": body.preferredLanguage,
+        "subjects": [],
+        "subscription_tier": "free",
         "created_at": datetime.utcnow().isoformat(),
     }
     user_repo.put_user(profile)
 
-    return {"user_id": user_id, "email": body.email, "role": body.role.value}
+    # Log the user in immediately to return tokens
+    client_id = _client_id_for_role(role, settings)
+    try:
+        resp = cognito.initiate_auth(
+            AuthFlow="USER_PASSWORD_AUTH",
+            AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
+            ClientId=client_id,
+        )
+        access_token = resp["AuthenticationResult"]["AccessToken"]
+    except ClientError:
+        # Registration succeeded even if auto-login fails
+        access_token = ""
+
+    verification_status = "pending_review" if role == "teacher" else None
+
+    return AuthResponse(
+        accessToken=access_token,
+        user=_build_user_out(profile),
+        onboardingStatus="completed" if role != "teacher" else "pending_review",
+        verificationStatus=verification_status,
+    )
 
 
-@router.post("/login", response_model=AuthTokens)
+@router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
-    """Authenticate with USER_PASSWORD_AUTH flow and return JWT tokens."""
+    """Authenticate user. Role is inferred from DynamoDB profile if not provided."""
+    # Look up role from DynamoDB profile (frontend doesn't send role)
+    if body.role:
+        role = _normalise_role(body.role)
+    else:
+        profile = user_repo.get_user_by_email(body.email)
+        if not profile:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        role = profile.get("role", "student")
+
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(body.role, settings)
+    client_id = _client_id_for_role(role, settings)
 
     try:
         resp = cognito.initiate_auth(
@@ -127,20 +208,43 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
             raise HTTPException(status_code=401, detail="Invalid email or password")
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
-    result = resp["AuthenticationResult"]
-    return AuthTokens(
-        access_token=result["AccessToken"],
-        id_token=result["IdToken"],
-        refresh_token=result["RefreshToken"],
-        expires_in=result["ExpiresIn"],
+    access_token = resp["AuthenticationResult"]["AccessToken"]
+
+    # Fetch full profile for response
+    profile = user_repo.get_user_by_email(body.email)
+    if not profile:
+        profile = {"user_id": "", "email": body.email, "role": role}
+
+    return AuthResponse(
+        accessToken=access_token,
+        user=_build_user_out(profile),
+        onboardingStatus="completed",
     )
 
 
-@router.post("/refresh", response_model=AuthTokens)
+@router.get("/me", response_model=UserOut)
+async def me(current_user: dict = Depends(get_current_user)):
+    """Return the authenticated user's profile."""
+    # Cognito access token uses `username` = email (since we registered with email)
+    email = current_user.get("username") or current_user.get("email", "")
+    profile = user_repo.get_user_by_email(email) if email else None
+    if not profile:
+        profile = {
+            "user_id": current_user.get("sub", ""),
+            "email": email,
+            "name": email.split("@")[0],
+            "role": current_user.get("role", "student"),
+        }
+    return _build_user_out(profile)
+
+
+@router.post("/refresh", response_model=AuthResponse)
 async def refresh(body: RefreshRequest, settings: Settings = Depends(get_settings)):
-    """Exchange a refresh token for a new access/id token pair."""
+    """Exchange a refresh token for fresh tokens."""
+    # Require role for refresh (or default to student)
+    role = _normalise_role(body.role) if body.role else "student"
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(body.role, settings)
+    client_id = _client_id_for_role(role, settings)
 
     try:
         resp = cognito.initiate_auth(
@@ -155,17 +259,15 @@ async def refresh(body: RefreshRequest, settings: Settings = Depends(get_setting
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
     result = resp["AuthenticationResult"]
-    return AuthTokens(
-        access_token=result["AccessToken"],
-        id_token=result["IdToken"],
-        refresh_token=body.refresh_token,
-        expires_in=result["ExpiresIn"],
+    return AuthResponse(
+        accessToken=result["AccessToken"],
+        user=UserOut(id="", name="", email="", role=role),
     )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(body: LogoutRequest, settings: Settings = Depends(get_settings)):
-    """Revoke the access token (global sign-out alternative)."""
+    """Revoke the access token globally."""
     cognito = _get_cognito(settings)
     try:
         cognito.global_sign_out(AccessToken=body.access_token)
