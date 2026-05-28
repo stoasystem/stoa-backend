@@ -305,7 +305,16 @@ def _send_message_impl(
             ai_content = answer_text or "Entschuldigung, ich konnte keine Antwort generieren."
     except Exception as ai_err:
         logger.error("Bedrock AI call failed: %s: %s", type(ai_err).__name__, ai_err)
-        ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
+        err_str = str(ai_err)
+        if "use case details" in err_str or "ResourceNotFound" in type(ai_err).__name__:
+            # Bedrock access not yet approved — use a structured placeholder
+            ai_content = (
+                f"Ich helfe dir gerne mit deiner Frage zur {subject}! "
+                "Unser KI-System wird gerade eingerichtet und ist in Kürze verfügbar. "
+                "Für sofortige Hilfe kannst du die 'Lehrer fragen' Funktion nutzen."
+            )
+        else:
+            ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
 
     # Save AI message
     table.put_item(Item={
