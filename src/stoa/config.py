@@ -41,8 +41,8 @@ class Settings(BaseSettings):
         )
 
     # Bedrock
-    # Use EU cross-region inference profile (no manual model access request required)
-    bedrock_model_id: str = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+    # EU cross-region inference profile — no manual model access approval needed
+    bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
     bedrock_max_tokens: int = 2048
 
     # Limits (per role per day)
