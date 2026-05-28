@@ -8,6 +8,7 @@ Implements the frontend chat API contract:
   POST /conversations/{id}/messages          send message → Bedrock AI reply
   POST /teacher-help/request                 escalate to teacher
 """
+import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from datetime import datetime, timezone
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -250,6 +252,66 @@ async def send_message(
         table=table,
     )
     return SendMessageResponse(studentMessage=student_msg, assistantMessage=assistant_msg)
+
+
+@router.post("/{conv_id}/messages/stream")
+async def stream_message(
+    conv_id: str,
+    body: SendMessageRequest,
+    user: dict = Depends(require_role("student")),
+):
+    """Send a message and stream the AI reply as Server-Sent Events.
+
+    API Gateway buffers the full response before sending, so this is
+    pseudo-streaming: the client receives all SSE events at once, but
+    the SSE parser handles them correctly and the UI updates as expected.
+    """
+    student_id = user["sub"]
+    conv = _get_conversation(conv_id)
+    if not conv or conv.get("student_id") != student_id:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    table = get_table()
+    student_msg, assistant_msg = _send_message_impl(
+        conv_id=conv_id,
+        student_id=student_id,
+        subject=conv.get("subject", "math"),
+        grade=conv.get("grade", ""),
+        content=body.content,
+        table=table,
+    )
+
+    def _sse(event_type: str, data: dict) -> str:
+        return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+    def generate():
+        yield _sse("message_start", {
+            "messageId": assistant_msg.id,
+            "role": "assistant",
+            "createdAt": assistant_msg.createdAt,
+        })
+        # Split content into ~100-char chunks so the frontend can render
+        # progressively if it ever gains true streaming support.
+        chunk_size = 100
+        content = assistant_msg.content
+        for i in range(0, len(content), chunk_size):
+            yield _sse("message_delta", {
+                "messageId": assistant_msg.id,
+                "delta": content[i:i + chunk_size],
+            })
+        yield _sse("message_done", {
+            "messageId": assistant_msg.id,
+            "status": "completed",
+        })
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _send_message_impl(
