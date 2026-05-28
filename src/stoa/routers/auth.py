@@ -140,6 +140,19 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             Password=body.password,
             Permanent=True,
         )
+        # Add user to the role group so the access token carries cognito:groups
+        _role_to_group = {"student": "students", "parent": "parents",
+                          "teacher": "teachers", "admin": "admins"}
+        group_name = _role_to_group.get(role)
+        if group_name:
+            try:
+                cognito.admin_add_user_to_group(
+                    UserPoolId=settings.cognito_user_pool_id,
+                    Username=body.email,
+                    GroupName=group_name,
+                )
+            except ClientError:
+                pass  # Non-fatal: role resolution falls back to DynamoDB lookup
     except ClientError as e:
         code = e.response["Error"]["Code"]
         if code == "UsernameExistsException":

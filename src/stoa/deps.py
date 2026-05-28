@@ -103,8 +103,19 @@ async def get_current_user(
     if claims.get("token_use") != "access":
         raise HTTPException(status_code=401, detail="Expected access token")
 
-    # Attach role from custom Cognito attribute (prefixed by Cognito)
-    role = claims.get("custom:role") or claims.get("cognito:groups", [None])[0]
+    # Resolve role from Cognito groups (present in access token via cognito:groups).
+    # Group names: students → student, parents → parent, teachers → teacher, admins → admin
+    _group_to_role = {
+        "students": "student",
+        "parents": "parent",
+        "teachers": "teacher",
+        "admins": "admin",
+    }
+    groups = claims.get("cognito:groups") or []
+    role = next((_group_to_role[g] for g in groups if g in _group_to_role), None)
+    # Fallback: custom:role attribute (not typically in access token but kept for safety)
+    if not role:
+        role = claims.get("custom:role")
     claims["role"] = role
     return claims
 
