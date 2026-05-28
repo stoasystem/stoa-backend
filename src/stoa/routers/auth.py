@@ -223,17 +223,36 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
 
 
 @router.get("/me", response_model=UserOut)
-async def me(current_user: dict = Depends(get_current_user)):
+async def me(
+    current_user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+):
     """Return the authenticated user's profile."""
-    # Cognito access token uses `username` = email (since we registered with email)
-    email = current_user.get("username") or current_user.get("email", "")
+    # JWT `username` is Cognito internal UUID — resolve email via admin API
+    cognito_username = current_user.get("username", "")
+    email = ""
+    role_from_cognito = None
+
+    if cognito_username:
+        try:
+            cognito = _get_cognito(settings)
+            user_data = cognito.admin_get_user(
+                UserPoolId=settings.cognito_user_pool_id,
+                Username=cognito_username,
+            )
+            attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
+            email = attrs.get("email", "")
+            role_from_cognito = attrs.get("custom:role")
+        except ClientError:
+            pass
+
     profile = user_repo.get_user_by_email(email) if email else None
     if not profile:
         profile = {
             "user_id": current_user.get("sub", ""),
             "email": email,
-            "name": email.split("@")[0],
-            "role": current_user.get("role", "student"),
+            "name": email.split("@")[0] if email else "",
+            "role": role_from_cognito or current_user.get("role") or "student",
         }
     return _build_user_out(profile)
 
