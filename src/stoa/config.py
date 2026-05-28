@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         )
 
     # Bedrock
-    bedrock_model_id: str = "anthropic.claude-haiku-20240307-v1:0"
+    bedrock_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
     bedrock_max_tokens: int = 2048
 
     # Limits (per role per day)
