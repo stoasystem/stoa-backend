@@ -1,0 +1,67 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  deploy:
+    name: Build Lambda package & Update function
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Build Lambda deployment package (linux arm64 wheels)
+        run: |
+          rm -rf dist
+          # Install dependencies targeting Lambda runtime (linux arm64)
+          pip install \
+            --platform manylinux2014_aarch64 \
+            --implementation cp \
+            --python-version 3.12 \
+            --only-binary :all: \
+            --target dist \
+            -r requirements.txt
+          # Copy source code
+          cp -r src/stoa dist/stoa
+
+      - name: Zip package
+        run: |
+          cd dist
+          zip -r ../lambda.zip . -q
+          cd ..
+          echo "Package size: $(du -sh lambda.zip | cut -f1)"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::562923011260:role/stoa-github-backend-deploy
+          aws-region: eu-central-2
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name stoa-api \
+            --zip-file fileb://lambda.zip \
+            --region eu-central-2
+
+      - name: Wait for update to complete
+        run: |
+          aws lambda wait function-updated \
+            --function-name stoa-api \
+            --region eu-central-2
+          echo "Lambda updated successfully"
