@@ -3,14 +3,53 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
 
+import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from stoa.config import Settings, get_settings
 from stoa.db.repositories import question_repo, user_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import get_current_user, require_role
 
 router = APIRouter()
+
+
+def _resolve_profile(user: dict, settings: Settings) -> dict | None:
+    """Look up the DynamoDB profile for the current JWT user.
+
+    Cognito access tokens carry the internal UUID as `sub`/`username`.
+    DynamoDB profiles are indexed by email (GSI-Email). We call
+    admin_get_user once to get the email, then do a GSI lookup.
+    Profiles created via the register endpoint also store cognito_sub
+    once available (progressive enrichment).
+    """
+    user_id = user.get("sub", "")
+
+    # 1. Try direct lookup by user_id (works for users created via register endpoint
+    #    where we used uuid.uuid4() — may miss Cognito-only users)
+    profile = user_repo.get_user(user_id)
+    if profile:
+        return profile
+
+    # 2. Resolve email via Cognito admin API, then look up by GSI
+    cognito_username = user.get("username", user_id)
+    try:
+        cognito = boto3.client("cognito-idp", region_name=settings.aws_region)
+        data = cognito.admin_get_user(
+            UserPoolId=settings.cognito_user_pool_id,
+            Username=cognito_username,
+        )
+        attrs = {a["Name"]: a["Value"] for a in data.get("UserAttributes", [])}
+        email = attrs.get("email", "")
+    except ClientError:
+        return None
+
+    if not email:
+        return None
+
+    return user_repo.get_user_by_email(email)
 
 
 # ---------------------------------------------------------------------------
@@ -40,10 +79,13 @@ class UpdateStudentProfileRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @router.get("/me/profile", response_model=StudentProfileResponse)
-async def get_my_profile(user: dict = Depends(require_role("student"))):
+async def get_my_profile(
+    user: dict = Depends(require_role("student")),
+    settings: Settings = Depends(get_settings),
+):
     """Return the current student's learning profile."""
     user_id = user["sub"]
-    profile = user_repo.get_user(user_id)
+    profile = _resolve_profile(user, settings)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     now = datetime.now(timezone.utc).isoformat()
@@ -63,12 +105,13 @@ async def get_my_profile(user: dict = Depends(require_role("student"))):
 async def update_my_profile(
     body: UpdateStudentProfileRequest,
     user: dict = Depends(require_role("student")),
+    settings: Settings = Depends(get_settings),
 ):
     """Update the current student's learning profile."""
-    user_id = user["sub"]
-    profile = user_repo.get_user(user_id)
+    profile = _resolve_profile(user, settings)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    user_id = profile.get("user_id", user["sub"])
 
     now = datetime.now(timezone.utc).isoformat()
     update_expr_parts = ["updated_at = :u"]
