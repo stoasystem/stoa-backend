@@ -159,13 +159,34 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             raise HTTPException(status_code=409, detail="Email already registered")
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
+    # Extract onboarding profile fields forwarded by the frontend
+    extra = body.model_extra or {}
+    student_profile = extra.get("studentProfile") or {}
+    parent_profile = extra.get("parentProfile") or {}
+
+    if role == "student":
+        grade = student_profile.get("grade", "")
+        subjects = student_profile.get("subjectsNeedingHelp", [])
+        school_system = student_profile.get("schoolSystem", "")
+    elif role == "parent":
+        grade = parent_profile.get("childGrade", "")
+        subjects = parent_profile.get("subjectsNeedingHelp", [])
+        school_system = ""
+    else:
+        grade = ""
+        subjects = extra.get("subjects", [])
+        school_system = ""
+
     profile = {
         "user_id": user_id,
         "email": body.email,
         "name": body.name or body.email.split("@")[0],
         "role": role,
         "language": body.preferredLanguage,
-        "subjects": [],
+        "grade": grade,
+        "primary_subjects": subjects,
+        "subjects": subjects,
+        "school_system": school_system,
         "subscription_tier": "free",
         "created_at": datetime.utcnow().isoformat(),
     }

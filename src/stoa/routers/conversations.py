@@ -129,6 +129,37 @@ class TeacherHelpResponse(BaseModel):
     updatedAt: str | None = None
 
 
+def _generate_title(first_message: str, subject: str) -> str | None:
+    """Call Bedrock to generate a short conversation title (max 6 words)."""
+    try:
+        from stoa.config import get_settings
+        import boto3, json as _json
+        settings = get_settings()
+        bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+        prompt = (
+            f"Generate a concise title (max 6 words, no punctuation) for a {subject} "
+            f"tutoring conversation that starts with: \"{first_message[:120]}\". "
+            "Respond with only the title, nothing else."
+        )
+        body = _json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 30,
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        resp = bedrock.invoke_model(
+            modelId=settings.bedrock_model_id,
+            body=body,
+            contentType="application/json",
+            accept="application/json",
+        )
+        result = _json.loads(resp["body"].read())
+        title = result["content"][0]["text"].strip().strip('"').strip("'")
+        return title[:80] if title else None
+    except Exception as exc:
+        logger.warning("Title generation failed: %s", exc)
+        return None
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ConversationListResponse)
@@ -390,15 +421,30 @@ def _send_message_impl(
         "created_at": _now(),
     })
 
-    # Update conversation's updated_at + last_message_preview
+    # Auto-generate title on first message
+    auto_title: str | None = None
     try:
+        existing = _get_messages(conv_id)
+        # 2 messages = this student + this assistant message (just saved above)
+        if len(existing) <= 2:
+            auto_title = _generate_title(content, subject)
+    except Exception:
+        pass
+
+    # Update conversation's updated_at + last_message_preview (+ title if first message)
+    try:
+        update_expr = "SET updated_at = :u, last_message_preview = :p"
+        expr_values: dict = {
+            ":u": _now(),
+            ":p": (ai_content[:80] + "…") if len(ai_content) > 80 else ai_content,
+        }
+        if auto_title:
+            update_expr += ", title = :t"
+            expr_values[":t"] = auto_title
         table.update_item(
             Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
-            UpdateExpression="SET updated_at = :u, last_message_preview = :p",
-            ExpressionAttributeValues={
-                ":u": _now(),
-                ":p": (ai_content[:80] + "…") if len(ai_content) > 80 else ai_content,
-            },
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values,
         )
     except Exception:
         pass
@@ -431,12 +477,19 @@ async def request_teacher_help(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Mark conversation as escalated
+    # Mark conversation as escalated with request metadata
     try:
         table.update_item(
             Key={"PK": _conv_pk(body.conversationId), "SK": "CONV"},
-            UpdateExpression="SET escalated = :e, escalated_at = :t",
-            ExpressionAttributeValues={":e": True, ":t": now},
+            UpdateExpression=(
+                "SET escalated = :e, escalated_at = :t, "
+                "escalation_request_id = :r, escalation_status = :s"
+                + (", escalation_message = :m" if body.message else "")
+            ),
+            ExpressionAttributeValues={
+                ":e": True, ":t": now, ":r": request_id, ":s": "pending",
+                **({":m": body.message} if body.message else {}),
+            },
         )
     except Exception:
         pass
