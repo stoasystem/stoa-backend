@@ -217,37 +217,74 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
 
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
-    """Authenticate user. Role is inferred from DynamoDB profile if not provided."""
-    # Look up role from DynamoDB profile (frontend doesn't send role)
-    if body.role:
-        role = _normalise_role(body.role)
-    else:
-        profile = user_repo.get_user_by_email(body.email)
-        if not profile:
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        role = profile.get("role", "student")
-
+    """Authenticate user against Cognito, then resolve role from DynamoDB profile."""
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
 
-    try:
-        resp = cognito.initiate_auth(
-            AuthFlow="USER_PASSWORD_AUTH",
-            AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
-            ClientId=client_id,
-        )
-    except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code in ("NotAuthorizedException", "UserNotFoundException"):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+    # Try to resolve role from DynamoDB profile first (faster path).
+    # If no profile exists (e.g. user created directly in Cognito), we fall
+    # back to trying all known clients — all users share the same User Pool.
+    profile = user_repo.get_user_by_email(body.email)
+
+    if body.role:
+        candidate_roles = [_normalise_role(body.role)]
+    elif profile:
+        candidate_roles = [profile.get("role", "student")]
+    else:
+        # Unknown user — try every client; the correct one will authenticate.
+        candidate_roles = ["student", "parent", "teacher", "admin"]
+
+    resp = None
+    last_error_code = None
+    for role in candidate_roles:
+        try:
+            client_id = _client_id_for_role(role, settings)
+        except HTTPException:
+            continue
+        try:
+            resp = cognito.initiate_auth(
+                AuthFlow="USER_PASSWORD_AUTH",
+                AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
+                ClientId=client_id,
+            )
+            break  # success
+        except ClientError as e:
+            last_error_code = e.response["Error"]["Code"]
+            if last_error_code == "UserNotFoundException":
+                # User not in this pool at all — no point trying other clients.
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            if last_error_code == "NotAuthorizedException":
+                # Wrong password — the user exists in this pool but password is wrong.
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+            # Any other error (e.g. client not enabled for this flow): try next role.
+            continue
+
+    if resp is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
 
-    # Fetch full profile for response
-    profile = user_repo.get_user_by_email(body.email)
+    # Re-fetch profile (may have been None above)
     if not profile:
-        profile = {"user_id": "", "email": body.email, "role": role}
+        profile = user_repo.get_user_by_email(body.email)
+
+    # Build a minimal profile from Cognito data if DynamoDB has no record.
+    if not profile:
+        # Decode the access token to get Cognito groups (role)
+        try:
+            import base64, json as _json
+            payload_b64 = access_token.split(".")[1]
+            payload_b64 += "=" * (-len(payload_b64) % 4)
+            claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            groups = claims.get("cognito:groups", [])
+            inferred_role = groups[0] if groups else candidate_roles[0]
+        except Exception:
+            inferred_role = candidate_roles[0]
+        profile = {
+            "user_id": "",
+            "email": body.email,
+            "role": inferred_role,
+            "name": body.email.split("@")[0],
+        }
 
     return AuthResponse(
         accessToken=access_token,
