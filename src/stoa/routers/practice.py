@@ -122,10 +122,42 @@ async def get_overview(user: dict = Depends(require_role("student"))):
                   for c in practice_repo.get_challenges(recommended_raw["lesson_id"])]
     recommended = _build_lesson(recommended_raw, challenges, "available")
 
+    # Count recent mistakes for dashboard display
+    mistakes = practice_repo.get_mistakes(user_id)
+    recent_mistakes = [
+        {
+            "id": m.get("challenge_id", ""),
+            "challengeId": m.get("challenge_id", ""),
+            "lessonId": m.get("lesson_id", ""),
+            "subject": m.get("subject_id", ""),
+            "topic": m.get("topic_id", ""),
+            "prompt": m.get("prompt", ""),
+            "yourAnswer": m.get("answer", ""),
+            "correctAnswer": m.get("correct_answer", ""),
+            "explanation": m.get("explanation", ""),
+            "reviewed": False,
+            "createdAt": m.get("created_at", ""),
+        }
+        for m in mistakes[:5]
+    ]
+
+    completed_count = len(completed_ids)
+    daily_target = 3
     return {
         "subjectId": recommended_raw.get("subject_id", "mathematics"),
         "topicId": recommended_raw.get("topic_id", ""),
         "recommendedLesson": recommended,
+        "dailyGoal": {
+            "completed": min(completed_count, daily_target),
+            "target": daily_target,
+            "label": f"{min(completed_count, daily_target)}/{daily_target} lessons",
+        },
+        "studyStreak": 0,
+        "progressPoints": completed_count * 10,
+        "recentMistakes": recent_mistakes,
+        "weakTopics": [],
+        "subjects": [],
+        "topics": [],
     }
 
 
