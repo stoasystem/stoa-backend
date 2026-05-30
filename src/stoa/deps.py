@@ -113,9 +113,51 @@ async def get_current_user(
     }
     groups = claims.get("cognito:groups") or []
     role = next((_group_to_role[g] for g in groups if g in _group_to_role), None)
+
     # Fallback: custom:role attribute (not typically in access token but kept for safety)
     if not role:
         role = claims.get("custom:role")
+
+    # Fallback: look up role in DynamoDB when the user was registered but
+    # not yet added to a Cognito group (e.g. admin_add_user_to_group failed).
+    if not role:
+        from stoa.db.repositories import user_repo  # lazy import to avoid circular deps
+        cognito_username = claims.get("username", "")
+        if cognito_username:
+            try:
+                cognito = boto3.client("cognito-idp", region_name=settings.aws_region)
+                user_data = cognito.admin_get_user(
+                    UserPoolId=settings.cognito_user_pool_id,
+                    Username=cognito_username,
+                )
+                attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
+                email = attrs.get("email", "")
+                if email:
+                    profile = user_repo.get_user_by_email(email)
+                    if profile:
+                        raw_role = profile.get("role", "")
+                        # Backend stores "teacher"; frontend/JWT uses "tutor" mapping
+                        _display = {"teacher": "tutor"}
+                        role = _display.get(raw_role, raw_role) or None
+                        # Also add the user to the correct Cognito group so future
+                        # tokens carry the group claim without needing this fallback.
+                        _role_to_group = {
+                            "student": "students", "parent": "parents",
+                            "teacher": "teachers", "tutor": "teachers", "admin": "admins",
+                        }
+                        group = _role_to_group.get(raw_role)
+                        if group:
+                            try:
+                                cognito.admin_add_user_to_group(
+                                    UserPoolId=settings.cognito_user_pool_id,
+                                    Username=cognito_username,
+                                    GroupName=group,
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass  # best-effort; role is already resolved above
+            except Exception:  # noqa: BLE001
+                pass  # if lookup fails, role stays None → 403 on protected routes
+
     claims["role"] = role
     return claims
 
