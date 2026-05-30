@@ -237,7 +237,8 @@ def get_hint_answer(prompt: str, subject: str = "Mathematik", grade: str = "6. K
         "temperature": 0.3,
         "system": system,
         "messages": [{"role": "user", "content": f"Aufgabe: {safe_prompt}"}],
-    })    try:
+    })
+    try:
         response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
         result = json.loads(response["body"].read())
         return result["content"][0]["text"].strip()
