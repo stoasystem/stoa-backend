@@ -204,8 +204,7 @@ def get_ai_answer(
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": settings.bedrock_max_tokens,
-        "temperature": 0.4,       # lower temp → more focused, less hallucination
-        "top_p": 0.9,
+        "temperature": 0.4,
         "system": system_prompt,
         "messages": messages,
     })
@@ -238,8 +237,7 @@ def get_hint_answer(prompt: str, subject: str = "Mathematik", grade: str = "6. K
         "temperature": 0.3,
         "system": system,
         "messages": [{"role": "user", "content": f"Aufgabe: {safe_prompt}"}],
-    })
-    try:
+    })    try:
         response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
         result = json.loads(response["body"].read())
         return result["content"][0]["text"].strip()
