@@ -126,7 +126,7 @@ def mark_lesson_completed(user_id: str, lesson: dict) -> None:
 
 
 def record_attempt(user_id: str, challenge_id: str, correct: bool,
-                   subject_id: str = "", lesson_id: str = "") -> None:
+                   subject_id: str = "", lesson_id: str = "", topic_id: str = "") -> None:
     """Record a wrong answer for the mistakes review feature."""
     if correct:
         return
@@ -139,6 +139,7 @@ def record_attempt(user_id: str, challenge_id: str, correct: bool,
         "user_id": user_id,
         "challenge_id": challenge_id,
         "subject_id": subject_id,
+        "topic_id": topic_id,
         "lesson_id": lesson_id,
         "correct": False,
         "created_at": datetime.now(timezone.utc).isoformat(),

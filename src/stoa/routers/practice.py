@@ -6,6 +6,7 @@ Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +17,15 @@ from stoa.deps import get_current_user, require_role
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _as_int(val: Any, default: int = 0) -> int:
+    """Convert DynamoDB Decimal or any numeric to plain int."""
+    if val is None:
+        return default
+    if isinstance(val, Decimal):
+        return int(val)
+    return int(val)
 
 
 # ── Response helpers ────────────────────────────────────────────────────────
@@ -99,65 +109,129 @@ async def list_subjects(user: dict = Depends(get_current_user)):
 
 @router.get("/overview")
 async def get_overview(user: dict = Depends(require_role("student"))):
-    """Return a recommended next lesson for the student."""
+    """Return a full practice overview for the student dashboard."""
     user_id = user["sub"]
-    progress = practice_repo.get_progress(user_id)
-    completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
+    progress_records = practice_repo.get_progress(user_id)
+    completed_ids = {p["lesson_id"] for p in progress_records if p.get("status") == "completed"}
 
-    # Find the first lesson not yet completed
+    today = datetime.now(timezone.utc).date().isoformat()
+    completed_today = sum(
+        1 for p in progress_records
+        if p.get("status") == "completed" and str(p.get("completed_at", ""))[:10] == today
+    )
+    daily_target = 3
+
+    # -- Subjects --
+    subjects_raw = practice_repo.get_subjects()
+    all_topics_raw = practice_repo.get_topics()
     all_lessons = practice_repo.get_lessons()
+
+    # Per-topic progress
+    topic_progress: dict[str, dict] = {}
+    for t in all_topics_raw:
+        tid = t["topic_id"]
+        t_lessons = [l for l in all_lessons if l.get("topic_id") == tid]
+        done = sum(1 for l in t_lessons if l["lesson_id"] in completed_ids)
+        pct = int(done / len(t_lessons) * 100) if t_lessons else 0
+        current = next(
+            (l["lesson_id"] for l in sorted(t_lessons, key=lambda x: x.get("order", 0))
+             if l["lesson_id"] not in completed_ids),
+            t_lessons[-1]["lesson_id"] if t_lessons else None,
+        )
+        topic_progress[tid] = {"pct": pct, "current_lesson_id": current}
+
+    subjects_out = []
+    for s in sorted(subjects_raw, key=lambda x: _as_int(x.get("order", 0))):
+        subjects_out.append({
+            "id": s["subject_id"],
+            "name": s["name"],
+            "description": s.get("description", ""),
+            "gradeLevels": s.get("grade_levels", []),
+            "progress": int(
+                sum(topic_progress[t["topic_id"]]["pct"]
+                    for t in all_topics_raw if t.get("subject_id") == s["subject_id"])
+                / max(sum(1 for t in all_topics_raw if t.get("subject_id") == s["subject_id"]), 1)
+            ),
+            "accent": s.get("accent", "burgundy"),
+        })
+
+    topics_out = []
+    for t in sorted(all_topics_raw, key=lambda x: _as_int(x.get("order", 0))):
+        tp = topic_progress.get(t["topic_id"], {})
+        topics_out.append({
+            "id": t["topic_id"],
+            "subjectId": t["subject_id"],
+            "gradeLevel": t.get("grade_level", ""),
+            "title": t["title"],
+            "description": t.get("description", ""),
+            "order": _as_int(t.get("order", 0)),
+            "status": "available",
+            "progress": tp.get("pct", 0),
+            "currentLessonId": tp.get("current_lesson_id"),
+        })
+
+    # -- Recommended lesson --
     recommended_raw = None
     for l in sorted(all_lessons, key=lambda x: (x.get("topic_id", ""), x.get("order", 0))):
         if l["lesson_id"] not in completed_ids:
             recommended_raw = l
             break
-
     if not recommended_raw:
         recommended_raw = all_lessons[0] if all_lessons else None
-
     if not recommended_raw:
         raise HTTPException(status_code=404, detail="No lessons available")
 
     challenges = [_build_challenge(c)
                   for c in practice_repo.get_challenges(recommended_raw["lesson_id"])]
-    recommended = _build_lesson(recommended_raw, challenges, "available")
+    recommended = _build_lesson(recommended_raw, challenges,
+                                _lesson_status(recommended_raw["lesson_id"], completed_ids,
+                                               topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")))
 
-    # Count recent mistakes for dashboard display
-    mistakes = practice_repo.get_mistakes(user_id)
-    recent_mistakes = [
-        {
-            "id": m.get("challenge_id", ""),
+    # -- Mistakes --
+    mistakes_raw = practice_repo.get_mistakes(user_id)[:5]
+    recent_mistakes = []
+    for m in mistakes_raw:
+        recent_mistakes.append({
+            "id": m.get("mistake_id", m.get("challenge_id", "")),
             "challengeId": m.get("challenge_id", ""),
             "lessonId": m.get("lesson_id", ""),
-            "subject": m.get("subject_id", ""),
             "topic": m.get("topic_id", ""),
+            "subject": m.get("subject_id", ""),
             "prompt": m.get("prompt", ""),
-            "yourAnswer": m.get("answer", ""),
+            "studentAnswer": m.get("student_answer", ""),
             "correctAnswer": m.get("correct_answer", ""),
-            "explanation": m.get("explanation", ""),
-            "reviewed": False,
-            "createdAt": m.get("created_at", ""),
-        }
-        for m in mistakes[:5]
-    ]
+            "reviewedAt": None,
+        })
 
-    completed_count = len(completed_ids)
-    daily_target = 3
+    # Weak topics: topics with ≥2 mistakes
+    topic_mistake_counts: dict[str, int] = {}
+    for m in practice_repo.get_mistakes(user_id):
+        tid = m.get("topic_id", "")
+        topic_mistake_counts[tid] = topic_mistake_counts.get(tid, 0) + 1
+    weak_topics = [
+        {
+            "id": tid,
+            "subject": "mathematics",
+            "topic": next((t["title"] for t in all_topics_raw if t["topic_id"] == tid), tid),
+            "note": f"{count} incorrect answer{'s' if count != 1 else ''}",
+        }
+        for tid, count in sorted(topic_mistake_counts.items(), key=lambda x: -x[1])
+        if count >= 1
+    ][:3]
+
     return {
-        "subjectId": recommended_raw.get("subject_id", "mathematics"),
-        "topicId": recommended_raw.get("topic_id", ""),
+        "subjects": subjects_out,
+        "topics": topics_out,
         "recommendedLesson": recommended,
         "dailyGoal": {
-            "completed": min(completed_count, daily_target),
+            "completed": completed_today,
             "target": daily_target,
-            "label": f"{min(completed_count, daily_target)}/{daily_target} lessons",
+            "label": f"{completed_today}/{daily_target} lessons today",
         },
-        "studyStreak": 0,
-        "progressPoints": completed_count * 10,
+        "studyStreak": 1 if completed_today > 0 else 0,
+        "progressPoints": len(completed_ids) * 10,
         "recentMistakes": recent_mistakes,
-        "weakTopics": [],
-        "subjects": [],
-        "topics": [],
+        "weakTopics": weak_topics,
     }
 
 
@@ -376,6 +450,7 @@ async def submit_answer(
     practice_repo.record_attempt(
         user_id, challenge_id, correct,
         subject_id=challenge.get("subject_id", ""),
+        topic_id=challenge.get("topic_id", ""),
         lesson_id=lesson_id,
     )
 

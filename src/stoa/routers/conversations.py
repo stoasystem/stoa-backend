@@ -68,7 +68,9 @@ def _get_messages(conv_id: str) -> list[dict]:
         ),
         ScanIndexForward=True,
     )
-    return resp.get("Items", [])
+    items = resp.get("Items", [])
+    # Sort by creation time so teacher notes and system messages appear in chronological order
+    return sorted(items, key=lambda x: x.get("created_at", ""))
 
 
 # ── Request / Response models ──────────────────────────────────────────────────
