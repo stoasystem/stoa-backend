@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     standard_tier_daily_question_limit: int = 30
     premium_tier_daily_question_limit: int = 100
 
+    # Conversation message limits per day (all tiers share one generous limit;
+    # chat is the core UX — don't over-restrict)
+    daily_chat_message_limit: int = 80
+
+    # Practice hint limits per day
+    daily_hint_limit: int = 30
+
     # SQS
     teacher_queue_url: str = ""
 

@@ -25,6 +25,7 @@ from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user, require_role
 from stoa.db.dynamodb import get_table
 from stoa.services import ai_service
+from stoa.services.rate_limit import check_and_record_chat
 
 router = APIRouter()
 
@@ -275,6 +276,7 @@ async def send_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    check_and_record_chat(student_id)
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,
@@ -304,6 +306,7 @@ async def stream_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    check_and_record_chat(student_id)
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,
@@ -370,6 +373,10 @@ def _send_message_impl(
     }
     normalized_subject = subject_map.get(subject, "math")
 
+    # Fetch conversation history BEFORE saving the new message so the model
+    # sees the prior turns (student + assistant only; teacher/system excluded).
+    prior_messages = _get_messages(conv_id)
+
     # Save student message
     table.put_item(Item={
         "PK": _conv_pk(conv_id),
@@ -382,13 +389,14 @@ def _send_message_impl(
         "created_at": now,
     })
 
-    # Call Bedrock AI
+    # Call Bedrock AI with full conversation history for multi-turn context
     try:
         ai_result = ai_service.get_ai_answer(
             content=content,
             subject=normalized_subject,
             grade=grade,
             language="de",
+            history=prior_messages,
         )
         # Format AI response as human-readable text
         steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(ai_result.get("steps", [])))

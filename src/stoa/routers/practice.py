@@ -496,23 +496,27 @@ async def get_mistakes(user: dict = Depends(require_role("student"))):
 
 @router.post("/hints")
 async def get_hint(body: dict, user: dict = Depends(require_role("student"))):
+    from stoa.services.rate_limit import check_and_record_hint
     challenge_id = body.get("challengeId", "")
     challenge = practice_repo.get_challenge(challenge_id)
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
+    check_and_record_hint(user["sub"], challenge_id)
+
     hint = challenge.get("hint", "")
     if not hint:
-        # Generate hint with Bedrock
+        # Generate hint with Bedrock using the dedicated hint function
         try:
-            from stoa.services.ai_service import get_ai_answer
-            hint = get_ai_answer(
-                question=f"Gib einen kurzen Hinweis (1-2 Sätze) für diese Mathe-Aufgabe: {challenge['prompt']}",
-                grade="6. Klasse",
-                subject="Mathematik",
-                context=[],
+            from stoa.services.ai_service import get_hint_answer
+            hint = get_hint_answer(
+                prompt=challenge["prompt"],
+                subject=challenge.get("subject_id", "Mathematik"),
+                grade=challenge.get("grade_level", "6. Klasse"),
             )
         except Exception:
+            pass
+        if not hint:
             hint = "Schau dir die Grundregeln für dieses Thema noch einmal an."
 
     return {
