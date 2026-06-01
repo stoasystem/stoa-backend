@@ -167,25 +167,41 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         code = e.response["Error"]["Code"]
         if code == "UsernameExistsException":
             raise HTTPException(status_code=409, detail="Email already registered")
+        if code in ("InvalidPasswordException", "InvalidParameterException"):
+            raise HTTPException(status_code=400, detail="Password does not meet requirements")
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
-    # Extract onboarding profile fields forwarded by the frontend
+    # Extract onboarding profile fields forwarded by the frontend.
+    # Frontend sends nested data under "profile"; legacy payload may use "studentProfile"/"parentProfile".
     extra = body.model_extra or {}
-    student_profile = extra.get("studentProfile") or {}
-    parent_profile = extra.get("parentProfile") or {}
+    nested = extra.get("profile") or {}
+    student_profile = nested if role == "student" else (extra.get("studentProfile") or {})
+    parent_profile = nested if role == "parent" else (extra.get("parentProfile") or {})
 
     if role == "student":
         grade = student_profile.get("grade", "")
         subjects = student_profile.get("subjectsNeedingHelp", [])
         school_system = student_profile.get("schoolSystem", "")
+        school = student_profile.get("school", "")
+        parent_name = student_profile.get("parentName", "")
+        parent_email = student_profile.get("parentEmail", "")
+        age = student_profile.get("age")
     elif role == "parent":
         grade = parent_profile.get("childGrade", "")
         subjects = parent_profile.get("subjectsNeedingHelp", [])
         school_system = ""
+        school = parent_profile.get("childSchool", "")
+        parent_name = ""
+        parent_email = ""
+        age = parent_profile.get("childAge")
     else:
         grade = ""
         subjects = extra.get("subjects", [])
         school_system = ""
+        school = ""
+        parent_name = ""
+        parent_email = ""
+        age = None
 
     profile = {
         "user_id": user_id,
@@ -194,12 +210,17 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         "role": role,
         "language": body.preferredLanguage,
         "grade": grade,
+        "school": school,
+        "school_system": school_system,
         "primary_subjects": subjects,
         "subjects": subjects,
-        "school_system": school_system,
+        "parent_name": parent_name,
+        "parent_email": parent_email,
         "subscription_tier": "free",
         "created_at": datetime.utcnow().isoformat(),
     }
+    if age is not None:
+        profile["age"] = int(age)
     user_repo.put_user(profile)
 
     # Log the user in immediately to return tokens
