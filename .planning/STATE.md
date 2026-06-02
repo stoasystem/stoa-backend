@@ -87,8 +87,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 ### Blockers/Concerns
 
 - Scan-based child lookup is accepted for MVP scale and should be revisited if parent-child volume grows.
-- S3 report artifact Lambda environment and permission wiring must be resolved in CDK before storage work.
-- An unused parent practice-summary service path still uses demo fallback outside the v1 parent-critical flow.
+- `stoa-backend/dist` is a gitignored Lambda build artifact; local CDK deploys must build it first. Backend and infra CI build it before deployment.
+- Follow-up candidates from v1.1 include manual report retry/resend, notification preferences, multi-language reports, PDF export, delivery audit trail, and billing-gated access.
 
 ## Deferred Items
 
@@ -96,10 +96,10 @@ Items acknowledged and carried forward at v1.0 milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Weekly report automation | Scheduled generation, Bedrock summary generation, S3 artifacts, EventBridge target, SES email, monitoring and retry behavior | Active in v1.1 roadmap | v1.0 close |
+| Weekly report automation | Scheduled generation, Bedrock summary generation, S3 artifacts, EventBridge target, SES email, monitoring and retry behavior | Shipped in v1.1 | v1.0 close |
 | Data access | Scan-based child lookup | Accepted MVP tech debt | v1.0 close |
-| Infrastructure | `S3_REPORTS_BUCKET` Lambda env and report bucket permissions | Active in Phase 6 | v1.0 close |
-| Frontend cleanup | Unused parent practice-summary demo fallback path | Check during Phase 11 if it intersects generated report display | v1.0 close |
+| Infrastructure | `S3_REPORTS_BUCKET` Lambda env and report bucket permissions | Shipped in v1.1 Phase 6 | v1.0 close |
+| Frontend cleanup | Unused parent practice-summary demo fallback path | Did not intersect generated report display in v1.1 | v1.0 close |
 
 ## Session Continuity
 
