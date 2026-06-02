@@ -16,51 +16,51 @@
 
 - [x] **PARENT-01**: Parent can call `GET /parents/me/children` to list linked children from real DynamoDB user/link records.
 - [x] **PARENT-02**: Parent with no linked children receives `{ "items": [] }` from `GET /parents/me/children`.
-- [ ] **PARENT-03**: Parent can call `GET /parents/me/children/{child_id}/summary` for a linked child and receive a stable summary response.
-- [ ] **PARENT-04**: Parent can call `GET /parents/me/children/{child_id}/history` for a linked child and receive newest-first real learning events with an empty `{ "items": [] }` state when none exist.
-- [ ] **PARENT-05**: Parent can call `GET /parents/me/children/{child_id}/report` and receive either `status: "available"` with a real report or `status: "missing"` with `report: null`.
-- [ ] **PARENT-06**: Parent can call `GET /parents/me/children/{child_id}/reports/{week}` when the frontend needs a week-specific report lookup.
-- [ ] **PARENT-07**: Parent API responses use frontend-friendly child, summary, history, and report shapes matching the milestone data contract.
+- [x] **PARENT-03**: Parent can call `GET /parents/me/children/{child_id}/summary` for a linked child and receive a stable summary response.
+- [x] **PARENT-04**: Parent can call `GET /parents/me/children/{child_id}/history` for a linked child and receive newest-first real learning events with an empty `{ "items": [] }` state when none exist.
+- [x] **PARENT-05**: Parent can call `GET /parents/me/children/{child_id}/report` and receive either `status: "available"` with a real report or `status: "missing"` with `report: null`.
+- [x] **PARENT-06**: Parent can call `GET /parents/me/children/{child_id}/reports/{week}` when the frontend needs a week-specific report lookup.
+- [x] **PARENT-07**: Parent API responses use frontend-friendly child, summary, history, and report shapes matching the milestone data contract.
 - [x] **PARENT-08**: Existing `/parents/{parent_id}/...` endpoints remain compatible unless a specific implementation reason requires changing them.
 
 ### Authorization
 
 - [x] **AUTHZ-01**: Parent can access only children linked to that parent.
-- [ ] **AUTHZ-02**: Parent cannot access another parent's child summary, history, or report.
+- [x] **AUTHZ-02**: Parent cannot access another parent's child summary, history, or report.
 - [x] **AUTHZ-03**: Student cannot call normal parent endpoints.
 - [x] **AUTHZ-04**: Teacher or tutor cannot call normal parent endpoints unless a separate support/admin workflow is explicitly added.
 - [x] **AUTHZ-05**: Admin access to parent/child data is kept out of normal `/parents/me/...` flows and remains explicit through admin routes.
-- [ ] **AUTHZ-06**: Every child-specific parent endpoint verifies ownership before reading or returning child data.
+- [x] **AUTHZ-06**: Every child-specific parent endpoint verifies ownership before reading or returning child data.
 
 ### Data Aggregation
 
-- [ ] **DATA-01**: Child summary aggregates available real data from question, conversation, practice progress, mistake, and report repositories/routes without fabricating mock values.
-- [ ] **DATA-02**: Child history combines available real question, conversation, practice, teacher help, and report events into a stable timeline shape.
-- [ ] **DATA-03**: Report lookup returns real stored report content when present and never fabricates report content when missing.
+- [x] **DATA-01**: Child summary aggregates available real data from question, conversation, practice progress, mistake, and report repositories/routes without fabricating mock values.
+- [x] **DATA-02**: Child history combines available real question, conversation, practice, teacher help, and report events into a stable timeline shape.
+- [x] **DATA-03**: Report lookup returns real stored report content when present and never fabricates report content when missing.
 - [x] **DATA-04**: Parent-child identity resolution handles the current Cognito `sub` versus local user ID mismatch risk through a documented canonical identifier or explicit compatibility fallback.
 - [x] **DATA-05**: Child lookup avoids table scans when an existing index supports the access pattern, or documents why scan-based MVP lookup is accepted.
 
 ### Frontend Integration
 
-- [ ] **FRONT-01**: Parent frontend services call `/parents/me/...` backend routes for normal logged-in parent flows.
-- [ ] **FRONT-02**: Parent dashboard renders backend child list responses without relying on demo fallback.
-- [ ] **FRONT-03**: Child summary/detail page renders backend summary and explicit empty/error states.
-- [ ] **FRONT-04**: Child learning history page renders backend history and explicit empty/error states.
-- [ ] **FRONT-05**: Child report page renders both available-report and missing-report backend states.
-- [ ] **FRONT-06**: Parent-critical frontend pages no longer silently hide backend failures with `withDemoFallback`.
+- [x] **FRONT-01**: Parent frontend services call `/parents/me/...` backend routes for normal logged-in parent flows.
+- [x] **FRONT-02**: Parent dashboard renders backend child list responses without relying on demo fallback.
+- [x] **FRONT-03**: Child summary/detail page renders backend summary and explicit empty/error states.
+- [x] **FRONT-04**: Child learning history page renders backend history and explicit empty/error states.
+- [x] **FRONT-05**: Child report page renders both available-report and missing-report backend states.
+- [x] **FRONT-06**: Parent-critical frontend pages no longer silently hide backend failures with `withDemoFallback`.
 
 ### Verification
 
-- [ ] **TEST-01**: Backend tests prove a parent can list only their own children.
-- [ ] **TEST-02**: Backend tests prove a parent cannot access another parent's child summary, history, or report.
-- [ ] **TEST-03**: Backend tests prove students cannot call parent endpoints.
-- [ ] **TEST-04**: Backend tests prove empty child list returns a stable empty response.
-- [ ] **TEST-05**: Backend tests prove missing report returns `status: "missing"`, not a 500 or mock content.
-- [ ] **TEST-06**: Frontend tests prove parent dashboard renders real API responses.
-- [ ] **TEST-07**: Frontend tests prove parent dashboard renders the no-child empty state.
-- [ ] **TEST-08**: Frontend tests prove child report page renders missing-report state.
-- [ ] **TEST-09**: Frontend tests or service-level assertions prove parent service paths match backend `/parents/me/...` routes.
-- [ ] **TEST-10**: Test data or documentation exists for one parent test account, one linked student account, and enough student activity data to verify summary/history.
+- [x] **TEST-01**: Backend tests prove a parent can list only their own children.
+- [x] **TEST-02**: Backend tests prove a parent cannot access another parent's child summary, history, or report.
+- [x] **TEST-03**: Backend tests prove students cannot call parent endpoints.
+- [x] **TEST-04**: Backend tests prove empty child list returns a stable empty response.
+- [x] **TEST-05**: Backend tests prove missing report returns `status: "missing"`, not a 500 or mock content.
+- [x] **TEST-06**: Frontend tests prove parent dashboard renders real API responses.
+- [x] **TEST-07**: Frontend tests prove parent dashboard renders the no-child empty state.
+- [x] **TEST-08**: Frontend tests prove child report page renders missing-report state.
+- [x] **TEST-09**: Frontend tests or service-level assertions prove parent service paths match backend `/parents/me/...` routes.
+- [x] **TEST-10**: Test data or documentation exists for one parent test account, one linked student account, and enough student activity data to verify summary/history.
 
 ## v2 Requirements
 
@@ -110,39 +110,39 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-03 | Phase 1 | Complete |
 | PARENT-01 | Phase 2 | Complete |
 | PARENT-02 | Phase 2 | Complete |
-| PARENT-03 | Phase 3 | Pending |
-| PARENT-04 | Phase 3 | Pending |
-| PARENT-05 | Phase 3 | Pending |
-| PARENT-06 | Phase 3 | Pending |
-| PARENT-07 | Phase 3 | Pending |
+| PARENT-03 | Phase 3 | Complete |
+| PARENT-04 | Phase 3 | Complete |
+| PARENT-05 | Phase 3 | Complete |
+| PARENT-06 | Phase 3 | Complete |
+| PARENT-07 | Phase 3 | Complete |
 | PARENT-08 | Phase 2 | Complete |
 | AUTHZ-01 | Phase 2 | Complete |
-| AUTHZ-02 | Phase 3 | Pending |
+| AUTHZ-02 | Phase 3 | Complete |
 | AUTHZ-03 | Phase 2 | Complete |
 | AUTHZ-04 | Phase 2 | Complete |
 | AUTHZ-05 | Phase 2 | Complete |
-| AUTHZ-06 | Phase 3 | Pending |
-| DATA-01 | Phase 3 | Pending |
-| DATA-02 | Phase 3 | Pending |
-| DATA-03 | Phase 3 | Pending |
+| AUTHZ-06 | Phase 3 | Complete |
+| DATA-01 | Phase 3 | Complete |
+| DATA-02 | Phase 3 | Complete |
+| DATA-03 | Phase 3 | Complete |
 | DATA-04 | Phase 1 | Complete |
 | DATA-05 | Phase 1 | Complete |
-| FRONT-01 | Phase 4 | Pending |
-| FRONT-02 | Phase 4 | Pending |
-| FRONT-03 | Phase 4 | Pending |
-| FRONT-04 | Phase 4 | Pending |
-| FRONT-05 | Phase 4 | Pending |
-| FRONT-06 | Phase 4 | Pending |
-| TEST-01 | Phase 5 | Pending |
-| TEST-02 | Phase 5 | Pending |
-| TEST-03 | Phase 5 | Pending |
-| TEST-04 | Phase 5 | Pending |
-| TEST-05 | Phase 5 | Pending |
-| TEST-06 | Phase 5 | Pending |
-| TEST-07 | Phase 5 | Pending |
-| TEST-08 | Phase 5 | Pending |
-| TEST-09 | Phase 5 | Pending |
-| TEST-10 | Phase 5 | Pending |
+| FRONT-01 | Phase 4 | Complete |
+| FRONT-02 | Phase 4 | Complete |
+| FRONT-03 | Phase 4 | Complete |
+| FRONT-04 | Phase 4 | Complete |
+| FRONT-05 | Phase 4 | Complete |
+| FRONT-06 | Phase 4 | Complete |
+| TEST-01 | Phase 5 | Complete |
+| TEST-02 | Phase 5 | Complete |
+| TEST-03 | Phase 5 | Complete |
+| TEST-04 | Phase 5 | Complete |
+| TEST-05 | Phase 5 | Complete |
+| TEST-06 | Phase 5 | Complete |
+| TEST-07 | Phase 5 | Complete |
+| TEST-08 | Phase 5 | Complete |
+| TEST-09 | Phase 5 | Complete |
+| TEST-10 | Phase 5 | Complete |
 
 **Coverage:**
 
