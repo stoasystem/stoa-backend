@@ -15,7 +15,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 - [x] **Phase 7: Weekly Learning Aggregation** - Backend creates truthful weekly report payloads from linked student activity. (completed 2026-06-02)
 - [x] **Phase 8: Bedrock Report Generation** - Backend turns weekly payloads into validated parent-facing generated report content with deterministic fallback. (completed 2026-06-02)
 - [x] **Phase 9: Report Storage and Email Delivery** - Backend stores report metadata/artifacts before sending SES email and preserving delivery failures. (completed 2026-06-02)
-- [ ] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts.
+- [x] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts. (completed 2026-06-02)
 - [ ] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states.
 - [ ] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior.
 - [ ] **Phase 13: Frontend Report State Verification** - Frontend tests prove generated, missing, and email-failed report states render correctly.
@@ -90,7 +90,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
   4. Duplicate runs skip existing generated or email-sent reports.
   5. The job returns structured counts for attempted, generated, skipped, emailed, and failed reports.
 
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 ### Phase 11: Generated Report API and Frontend Display
 
@@ -146,7 +146,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 | 7. Weekly Learning Aggregation | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 8. Bedrock Report Generation | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 9. Report Storage and Email Delivery | v1.1 | 1/1 | Complete    | 2026-06-02 |
-| 10. Scheduled Job Orchestration | v1.1 | 0/TBD | Not started | - |
+| 10. Scheduled Job Orchestration | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 11. Generated Report API and Frontend Display | v1.1 | 0/TBD | Not started | - |
 | 12. Backend Report Flow Verification | v1.1 | 0/TBD | Not started | - |
 | 13. Frontend Report State Verification | v1.1 | 0/TBD | Not started | - |

@@ -17,11 +17,11 @@
 
 ### Backend Job
 
-- [ ] **JOB-01**: Scheduled handler accepts EventBridge scheduled events and defaults to the previous Zurich calendar week.
-- [ ] **JOB-02**: Job discovers eligible linked parent/student pairs.
-- [ ] **JOB-03**: Report generation is idempotent by `(parent_id, student_id, week_start)`.
-- [ ] **JOB-04**: Duplicate job runs skip existing generated or email-sent reports.
-- [ ] **JOB-05**: Job returns structured counts for attempted, generated, skipped, emailed, and failed reports.
+- [x] **JOB-01**: Scheduled handler accepts EventBridge scheduled events and defaults to the previous Zurich calendar week.
+- [x] **JOB-02**: Job discovers eligible linked parent/student pairs.
+- [x] **JOB-03**: Report generation is idempotent by `(parent_id, student_id, week_start)`.
+- [x] **JOB-04**: Duplicate job runs skip existing generated or email-sent reports.
+- [x] **JOB-05**: Job returns structured counts for attempted, generated, skipped, emailed, and failed reports.
 
 ### Aggregation and AI
 
@@ -119,11 +119,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EMAIL-02 | Phase 9 | Complete |
 | EMAIL-03 | Phase 9 | Complete |
 | EMAIL-04 | Phase 9 | Complete |
-| JOB-01 | Phase 10 | Pending |
-| JOB-02 | Phase 10 | Pending |
-| JOB-03 | Phase 10 | Pending |
-| JOB-04 | Phase 10 | Pending |
-| JOB-05 | Phase 10 | Pending |
+| JOB-01 | Phase 10 | Complete |
+| JOB-02 | Phase 10 | Complete |
+| JOB-03 | Phase 10 | Complete |
+| JOB-04 | Phase 10 | Complete |
+| JOB-05 | Phase 10 | Complete |
 | API-01 | Phase 11 | Pending |
 | API-02 | Phase 11 | Pending |
 | API-03 | Phase 11 | Pending |
