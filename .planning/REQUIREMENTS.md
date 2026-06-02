@@ -8,12 +8,12 @@
 
 ### Infrastructure and CDK
 
-- [ ] **CDK-01**: CDK defines a separate scheduled weekly report Lambda handler, not an API Gateway or Mangum event path.
-- [ ] **CDK-02**: Report Lambda receives `S3_REPORTS_BUCKET` and has read/write permissions for the reports bucket.
-- [ ] **CDK-03**: Report Lambda has DynamoDB read/write, Bedrock invoke, and SES send permissions.
-- [ ] **CDK-04**: EventBridge Scheduler invokes the report Lambda on the intended weekly schedule.
-- [ ] **CDK-05**: Report job has retry and failure handling through CDK-defined infrastructure.
-- [ ] **CDK-06**: Monitoring exposes report job failures through CloudWatch logs, metrics, or alarms.
+- [x] **CDK-01**: CDK defines a separate scheduled weekly report Lambda handler, not an API Gateway or Mangum event path.
+- [x] **CDK-02**: Report Lambda receives `S3_REPORTS_BUCKET` and has read/write permissions for the reports bucket.
+- [x] **CDK-03**: Report Lambda has DynamoDB read/write, Bedrock invoke, and SES send permissions.
+- [x] **CDK-04**: EventBridge Scheduler invokes the report Lambda on the intended weekly schedule.
+- [x] **CDK-05**: Report job has retry and failure handling through CDK-defined infrastructure.
+- [x] **CDK-06**: Monitoring exposes report job failures through CloudWatch logs, metrics, or alarms.
 
 ### Backend Job
 
@@ -100,12 +100,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CDK-01 | Phase 6 | Pending |
-| CDK-02 | Phase 6 | Pending |
-| CDK-03 | Phase 6 | Pending |
-| CDK-04 | Phase 6 | Pending |
-| CDK-05 | Phase 6 | Pending |
-| CDK-06 | Phase 6 | Pending |
+| CDK-01 | Phase 6 | Complete |
+| CDK-02 | Phase 6 | Complete |
+| CDK-03 | Phase 6 | Complete |
+| CDK-04 | Phase 6 | Complete |
+| CDK-05 | Phase 6 | Complete |
+| CDK-06 | Phase 6 | Complete |
 | AGGR-01 | Phase 7 | Pending |
 | AGGR-02 | Phase 7 | Pending |
 | AI-01 | Phase 8 | Pending |
@@ -148,4 +148,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 after creating v1.1 roadmap*
+*Last updated: 2026-06-02 after completing Phase 6*
