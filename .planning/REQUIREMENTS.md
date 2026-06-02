@@ -8,9 +8,9 @@
 
 ### Infrastructure Audit
 
-- [ ] **INFRA-01**: Implementer can confirm DynamoDB table name, GSI names, Cognito groups/app clients, Lambda environment variables, report bucket, and report permissions from `/Users/zhdeng/stoa-infra` CDK before backend changes.
-- [ ] **INFRA-02**: Implementer can document whether parent-child lookup is supported by current single-table indexes or whether a CDK-backed GSI change is required.
-- [ ] **INFRA-03**: Backend reads resource names and URLs from environment variables injected by CDK, not hard-coded assumptions.
+- [x] **INFRA-01**: Implementer can confirm DynamoDB table name, GSI names, Cognito groups/app clients, Lambda environment variables, report bucket, and report permissions from `/Users/zhdeng/stoa-infra` CDK before backend changes.
+- [x] **INFRA-02**: Implementer can document whether parent-child lookup is supported by current single-table indexes or whether a CDK-backed GSI change is required.
+- [x] **INFRA-03**: Backend reads resource names and URLs from environment variables injected by CDK, not hard-coded assumptions.
 
 ### Parent API
 
@@ -37,8 +37,8 @@
 - [ ] **DATA-01**: Child summary aggregates available real data from question, conversation, practice progress, mistake, and report repositories/routes without fabricating mock values.
 - [ ] **DATA-02**: Child history combines available real question, conversation, practice, teacher help, and report events into a stable timeline shape.
 - [ ] **DATA-03**: Report lookup returns real stored report content when present and never fabricates report content when missing.
-- [ ] **DATA-04**: Parent-child identity resolution handles the current Cognito `sub` versus local user ID mismatch risk through a documented canonical identifier or explicit compatibility fallback.
-- [ ] **DATA-05**: Child lookup avoids table scans when an existing index supports the access pattern, or documents why scan-based MVP lookup is accepted.
+- [x] **DATA-04**: Parent-child identity resolution handles the current Cognito `sub` versus local user ID mismatch risk through a documented canonical identifier or explicit compatibility fallback.
+- [x] **DATA-05**: Child lookup avoids table scans when an existing index supports the access pattern, or documents why scan-based MVP lookup is accepted.
 
 ### Frontend Integration
 
@@ -105,9 +105,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 | PARENT-01 | Phase 2 | Pending |
 | PARENT-02 | Phase 2 | Pending |
 | PARENT-03 | Phase 3 | Pending |
@@ -125,8 +125,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-01 | Phase 3 | Pending |
 | DATA-02 | Phase 3 | Pending |
 | DATA-03 | Phase 3 | Pending |
-| DATA-04 | Phase 1 | Pending |
-| DATA-05 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Complete |
+| DATA-05 | Phase 1 | Complete |
 | FRONT-01 | Phase 4 | Pending |
 | FRONT-02 | Phase 4 | Pending |
 | FRONT-03 | Phase 4 | Pending |
@@ -145,6 +145,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-10 | Phase 5 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 38 total
 - Mapped to phases: 38
 - Unmapped: 0
