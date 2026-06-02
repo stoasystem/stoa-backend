@@ -27,10 +27,10 @@
 
 - [x] **AGGR-01**: Report service aggregates weekly question, AI answer, teacher help, practice progress, mistake, and weak-topic data.
 - [x] **AGGR-02**: Empty or sparse weekly data produces a valid deterministic report payload, not fabricated activity.
-- [ ] **AI-01**: Bedrock receives compact structured weekly report input.
-- [ ] **AI-02**: Bedrock output is parsed as strict JSON with summary, strengths, weak topics, recommendations, and optional teacher note.
-- [ ] **AI-03**: Malformed or failed Bedrock output falls back to deterministic parent-facing content.
-- [ ] **AI-04**: Parent-facing generated copy does not expose internal provider or model terms.
+- [x] **AI-01**: Bedrock receives compact structured weekly report input.
+- [x] **AI-02**: Bedrock output is parsed as strict JSON with summary, strengths, weak topics, recommendations, and optional teacher note.
+- [x] **AI-03**: Malformed or failed Bedrock output falls back to deterministic parent-facing content.
+- [x] **AI-04**: Parent-facing generated copy does not expose internal provider or model terms.
 
 ### Storage and Email
 
@@ -108,10 +108,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CDK-06 | Phase 6 | Complete |
 | AGGR-01 | Phase 7 | Complete |
 | AGGR-02 | Phase 7 | Complete |
-| AI-01 | Phase 8 | Pending |
-| AI-02 | Phase 8 | Pending |
-| AI-03 | Phase 8 | Pending |
-| AI-04 | Phase 8 | Pending |
+| AI-01 | Phase 8 | Complete |
+| AI-02 | Phase 8 | Complete |
+| AI-03 | Phase 8 | Complete |
+| AI-04 | Phase 8 | Complete |
 | STORE-01 | Phase 9 | Pending |
 | STORE-02 | Phase 9 | Pending |
 | STORE-03 | Phase 9 | Pending |
