@@ -17,3 +17,20 @@ def get_report_by_week(parent_id: str, week_start: str) -> dict | None:
     )
     items = resp.get("Items", [])
     return items[0] if items else None
+
+
+def list_reports_for_parent(
+    parent_id: str,
+    limit: int = 25,
+    last_key: dict | None = None,
+) -> dict:
+    table = get_table()
+    kwargs = {
+        "IndexName": "GSI-ParentId",
+        "KeyConditionExpression": Key("parent_id").eq(parent_id),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
