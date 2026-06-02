@@ -54,14 +54,18 @@ jobs:
 
       - name: Update Lambda function code
         run: |
-          aws lambda update-function-code \
-            --function-name stoa-api \
-            --zip-file fileb://lambda.zip \
-            --region eu-central-2
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda update-function-code \
+              --function-name "$function_name" \
+              --zip-file fileb://lambda.zip \
+              --region eu-central-2
+          done
 
       - name: Wait for update to complete
         run: |
-          aws lambda wait function-updated \
-            --function-name stoa-api \
-            --region eu-central-2
-          echo "Lambda updated successfully"
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda wait function-updated \
+              --function-name "$function_name" \
+              --region eu-central-2
+          done
+          echo "Lambda functions updated successfully"
