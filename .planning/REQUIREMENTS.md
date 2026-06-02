@@ -44,13 +44,13 @@
 
 ### Parent API and Frontend
 
-- [ ] **API-01**: Parent report endpoint returns generated report detail with week range, stats, summary, weak topics, recommendations, generated timestamp, and email status.
-- [ ] **API-02**: Parent report endpoint preserves a clear missing state for weeks with no generated report.
-- [ ] **API-03**: Parent report endpoint exposes generation or email failure state without leaking cross-student data.
-- [ ] **FRONT-01**: Parent report page renders generated report summary, week range, stats, weak topics, recommendations, and generated timestamp.
-- [ ] **FRONT-02**: Parent report page renders email failed, pending, or sent state where useful.
-- [ ] **FRONT-03**: Parent report page preserves the missing report state.
-- [ ] **FRONT-04**: Generated report page no longer relies on mock-only rich report assumptions.
+- [x] **API-01**: Parent report endpoint returns generated report detail with week range, stats, summary, weak topics, recommendations, generated timestamp, and email status.
+- [x] **API-02**: Parent report endpoint preserves a clear missing state for weeks with no generated report.
+- [x] **API-03**: Parent report endpoint exposes generation or email failure state without leaking cross-student data.
+- [x] **FRONT-01**: Parent report page renders generated report summary, week range, stats, weak topics, recommendations, and generated timestamp.
+- [x] **FRONT-02**: Parent report page renders email failed, pending, or sent state where useful.
+- [x] **FRONT-03**: Parent report page preserves the missing report state.
+- [x] **FRONT-04**: Generated report page no longer relies on mock-only rich report assumptions.
 
 ### Verification
 
@@ -124,13 +124,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | JOB-03 | Phase 10 | Complete |
 | JOB-04 | Phase 10 | Complete |
 | JOB-05 | Phase 10 | Complete |
-| API-01 | Phase 11 | Pending |
-| API-02 | Phase 11 | Pending |
-| API-03 | Phase 11 | Pending |
-| FRONT-01 | Phase 11 | Pending |
-| FRONT-02 | Phase 11 | Pending |
-| FRONT-03 | Phase 11 | Pending |
-| FRONT-04 | Phase 11 | Pending |
+| API-01 | Phase 11 | Complete |
+| API-02 | Phase 11 | Complete |
+| API-03 | Phase 11 | Complete |
+| FRONT-01 | Phase 11 | Complete |
+| FRONT-02 | Phase 11 | Complete |
+| FRONT-03 | Phase 11 | Complete |
+| FRONT-04 | Phase 11 | Complete |
 | TEST-01 | Phase 12 | Pending |
 | TEST-02 | Phase 12 | Pending |
 | TEST-03 | Phase 12 | Pending |

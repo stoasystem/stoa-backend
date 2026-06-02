@@ -16,7 +16,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 - [x] **Phase 8: Bedrock Report Generation** - Backend turns weekly payloads into validated parent-facing generated report content with deterministic fallback. (completed 2026-06-02)
 - [x] **Phase 9: Report Storage and Email Delivery** - Backend stores report metadata/artifacts before sending SES email and preserving delivery failures. (completed 2026-06-02)
 - [x] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts. (completed 2026-06-02)
-- [ ] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states.
+- [x] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states. (completed 2026-06-02)
 - [ ] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior.
 - [ ] **Phase 13: Frontend Report State Verification** - Frontend tests prove generated, missing, and email-failed report states render correctly.
 
@@ -105,7 +105,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
   4. The parent report page renders generated report summary, week range, stats, weak topics, recommendations, generated timestamp, and useful email status.
   5. The generated report page preserves missing state and no longer depends on mock-only rich report assumptions.
 
-**Plans**: TBD
+**Plans**: 1/1 complete
 **UI hint**: yes
 
 ### Phase 12: Backend Report Flow Verification
@@ -147,6 +147,6 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 | 8. Bedrock Report Generation | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 9. Report Storage and Email Delivery | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 10. Scheduled Job Orchestration | v1.1 | 1/1 | Complete    | 2026-06-02 |
-| 11. Generated Report API and Frontend Display | v1.1 | 0/TBD | Not started | - |
+| 11. Generated Report API and Frontend Display | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 12. Backend Report Flow Verification | v1.1 | 0/TBD | Not started | - |
 | 13. Frontend Report State Verification | v1.1 | 0/TBD | Not started | - |
