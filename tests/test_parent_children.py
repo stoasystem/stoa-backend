@@ -71,6 +71,43 @@ def _report(student_id: str = "child-1") -> dict:
     }
 
 
+def _generated_report(student_id: str = "child-1", status: str = "email_sent") -> dict:
+    report = _report(student_id)
+    report.update(
+        {
+            "week_end": "2026-06-07",
+            "status": status,
+            "email_status": "failed" if status == "email_failed" else "sent",
+            "generated_at": "2026-06-08T06:00:00+00:00",
+            "stats": {
+                "questionsAsked": 4,
+                "aiResolved": 3,
+                "teacherHelpRequests": 1,
+                "practiceLessonsCompleted": 2,
+                "mistakesLogged": 1,
+            },
+            "summary": "Anna made steady progress this week.",
+            "strengths": ["Completed practice."],
+            "weak_topics": [{"topic": "fractions", "note": "Review equivalent fractions."}],
+            "recommendation_items": ["Practice fractions for ten minutes.", "Review one mistake together."],
+            "teacher_note": "Teacher help was requested.",
+            "email_error_class": "MessageRejected" if status == "email_failed" else None,
+            "email_error_message": "SES rejected recipient" if status == "email_failed" else None,
+        }
+    )
+    if status == "generation_failed":
+        report.update(
+            {
+                "email_status": "not_started",
+                "generation_error_class": "RuntimeError",
+                "generation_error_message": "generation failed",
+            }
+        )
+    if status == "generation_claimed":
+        report.update({"email_status": "not_started"})
+    return report
+
+
 def test_resolve_parent_profile_direct_lookup(monkeypatch):
     profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
     monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: profile)
@@ -837,6 +874,117 @@ def test_parent_child_week_report_available_after_ownership(monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "available"
     assert calls == [("parent-local", "child-1", "2026-06-01")]
+
+
+def test_parent_child_week_report_returns_generated_detail_fields(monkeypatch):
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _generated_report(student_id),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "available"
+    assert body["report"]["weekEnd"] == "2026-06-07"
+    assert body["report"]["summary"] == "Anna made steady progress this week."
+    assert body["report"]["generatedAt"] == "2026-06-08T06:00:00+00:00"
+    assert body["report"]["emailStatus"] == "sent"
+    assert body["report"]["stats"] == {
+        "questionsAsked": 4,
+        "aiResolved": 3,
+        "teacherHelpRequests": 1,
+        "practiceLessonsCompleted": 2,
+        "mistakesLogged": 1,
+    }
+    assert body["report"]["weakTopics"] == [
+        {"topic": "fractions", "note": "Review equivalent fractions."}
+    ]
+    assert body["report"]["recommendationItems"] == [
+        "Practice fractions for ten minutes.",
+        "Review one mistake together.",
+    ]
+    assert body["report"]["teacherNote"] == "Teacher help was requested."
+
+
+def test_parent_child_week_report_exposes_email_failed_state(monkeypatch):
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _generated_report(student_id, status="email_failed"),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "available"
+    assert body["report"]["reportStatus"] == "email_failed"
+    assert body["report"]["emailStatus"] == "failed"
+    assert body["report"]["emailErrorClass"] == "MessageRejected"
+
+
+def test_parent_child_week_report_exposes_generation_failed_state(monkeypatch):
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _generated_report(student_id, status="generation_failed"),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["message"] == "Weekly report generation failed."
+    assert body["report"]["generationErrorClass"] == "RuntimeError"
+    assert body["report"]["generationErrorMessage"] is None
+
+
+def test_parent_child_week_report_exposes_generation_pending_state(monkeypatch):
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _generated_report(student_id, status="generation_claimed"),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["message"] == "Weekly report generation is still in progress."
+    assert body["report"]["reportStatus"] == "generation_claimed"
+
+
+def test_parent_child_week_report_rejects_sibling_returned_by_repo(monkeypatch):
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _generated_report("sibling"),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "missing"
 
 
 @pytest.mark.parametrize("week_report", [None, _report("sibling")])

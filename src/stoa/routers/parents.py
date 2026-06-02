@@ -86,16 +86,43 @@ class ParentChildHistoryResponse(BaseModel):
     items: list[ParentChildHistoryEvent]
 
 
+class ParentChildReportStats(BaseModel):
+    questionsAsked: int = 0
+    aiResolved: int = 0
+    teacherHelpRequests: int = 0
+    practiceLessonsCompleted: int = 0
+    mistakesLogged: int = 0
+
+
+class ParentChildReportWeakTopic(BaseModel):
+    topic: str
+    note: str = ""
+
+
 class ParentChildReportDetail(BaseModel):
     reportId: str
     parentId: str
     studentId: str
     weekStart: str
+    weekEnd: str | None = None
     usageCount: int = 0
     aiResolved: int = 0
     teacherResolved: int = 0
     weakKnowledgePoints: list[str] = Field(default_factory=list)
     recommendations: str = ""
+    recommendationItems: list[str] = Field(default_factory=list)
+    stats: ParentChildReportStats = Field(default_factory=ParentChildReportStats)
+    summary: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    weakTopics: list[ParentChildReportWeakTopic] = Field(default_factory=list)
+    teacherNote: str | None = None
+    generatedAt: str | None = None
+    emailStatus: str | None = None
+    reportStatus: str | None = None
+    emailErrorClass: str | None = None
+    emailErrorMessage: str | None = None
+    generationErrorClass: str | None = None
+    generationErrorMessage: str | None = None
 
 
 class ParentChildReportState(BaseModel):
@@ -378,16 +405,48 @@ def _report_history_events(parent_user_id: str, child_id: str) -> list[ParentChi
 
 
 def _report_detail_from_item(report: dict[str, Any]) -> ParentChildReportDetail:
+    stats = report.get("stats") or {}
+    weak_topics = report.get("weak_topics") or []
+    recommendation_items = report.get("recommendation_items")
+    if not isinstance(recommendation_items, list):
+        recommendation_items = [report.get("recommendations", "")] if report.get("recommendations") else []
     return ParentChildReportDetail(
         reportId=report.get("report_id", ""),
         parentId=report.get("parent_id", ""),
         studentId=report.get("student_id", ""),
         weekStart=report.get("week_start", ""),
+        weekEnd=report.get("week_end"),
         usageCount=report.get("usage_count", 0),
         aiResolved=report.get("ai_resolved", 0),
         teacherResolved=report.get("teacher_resolved", 0),
         weakKnowledgePoints=report.get("weak_knowledge_points", []),
         recommendations=report.get("recommendations", ""),
+        recommendationItems=[str(item) for item in recommendation_items if item],
+        stats=ParentChildReportStats(
+            questionsAsked=stats.get("questionsAsked", report.get("usage_count", 0)),
+            aiResolved=stats.get("aiResolved", report.get("ai_resolved", 0)),
+            teacherHelpRequests=stats.get("teacherHelpRequests", report.get("teacher_resolved", 0)),
+            practiceLessonsCompleted=stats.get("practiceLessonsCompleted", report.get("practice_lessons_completed", 0)),
+            mistakesLogged=stats.get("mistakesLogged", report.get("mistakes_logged", 0)),
+        ),
+        summary=report.get("summary", ""),
+        strengths=[str(item) for item in report.get("strengths", []) if item],
+        weakTopics=[
+            ParentChildReportWeakTopic(
+                topic=str(item.get("topic", "")),
+                note=str(item.get("note", "")),
+            )
+            for item in weak_topics
+            if isinstance(item, dict) and item.get("topic")
+        ],
+        teacherNote=report.get("teacher_note"),
+        generatedAt=report.get("generated_at"),
+        emailStatus=report.get("email_status"),
+        reportStatus=report.get("status"),
+        emailErrorClass=report.get("email_error_class"),
+        emailErrorMessage=report.get("email_error_message"),
+        generationErrorClass=report.get("generation_error_class"),
+        generationErrorMessage=None,
     )
 
 
@@ -401,6 +460,30 @@ def _missing_report_state() -> ParentChildReportState:
 
 def _available_report_state(report: dict[str, Any]) -> ParentChildReportState:
     return ParentChildReportState(status="available", report=_report_detail_from_item(report))
+
+
+def _failed_report_state(report: dict[str, Any]) -> ParentChildReportState:
+    return ParentChildReportState(
+        status="failed",
+        report=_report_detail_from_item(report),
+        message="Weekly report generation failed.",
+    )
+
+
+def _pending_report_state(report: dict[str, Any]) -> ParentChildReportState:
+    return ParentChildReportState(
+        status="pending",
+        report=_report_detail_from_item(report),
+        message="Weekly report generation is still in progress.",
+    )
+
+
+def _report_state_from_item(report: dict[str, Any]) -> ParentChildReportState:
+    if report.get("status") == "generation_claimed":
+        return _pending_report_state(report)
+    if report.get("status") == "generation_failed":
+        return _failed_report_state(report)
+    return _available_report_state(report)
 
 
 @router.get("/me/children", response_model=ChildListResponse)
@@ -516,7 +599,7 @@ async def get_child_report(
     report = _latest_report_for_child(resolved.parent_user_id, child_id)
     if report and report.get("student_id") != child_id:
         report = None
-    return _available_report_state(report) if report else _missing_report_state()
+    return _report_state_from_item(report) if report else _missing_report_state()
 
 
 @router.get("/me/children/{child_id}/reports/{week}", response_model=ParentChildReportState)
@@ -529,9 +612,9 @@ async def get_child_report_by_week(
     resolved = _resolve_parent_profile(user, settings)
     _get_owned_child_profile(resolved, child_id)
     report = report_repo.get_report_for_child_by_week(resolved.parent_user_id, child_id, week)
-    if not report:
+    if not report or report.get("student_id") != child_id:
         return _missing_report_state()
-    return _available_report_state(report)
+    return _report_state_from_item(report)
 
 
 @router.get("/{parent_id}/children", response_model=list[LegacyChildSummary])
