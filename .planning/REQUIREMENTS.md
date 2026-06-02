@@ -100,13 +100,52 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| CDK-01 | Phase 6 | Pending |
+| CDK-02 | Phase 6 | Pending |
+| CDK-03 | Phase 6 | Pending |
+| CDK-04 | Phase 6 | Pending |
+| CDK-05 | Phase 6 | Pending |
+| CDK-06 | Phase 6 | Pending |
+| AGGR-01 | Phase 7 | Pending |
+| AGGR-02 | Phase 7 | Pending |
+| AI-01 | Phase 8 | Pending |
+| AI-02 | Phase 8 | Pending |
+| AI-03 | Phase 8 | Pending |
+| AI-04 | Phase 8 | Pending |
+| STORE-01 | Phase 9 | Pending |
+| STORE-02 | Phase 9 | Pending |
+| STORE-03 | Phase 9 | Pending |
+| EMAIL-01 | Phase 9 | Pending |
+| EMAIL-02 | Phase 9 | Pending |
+| EMAIL-03 | Phase 9 | Pending |
+| EMAIL-04 | Phase 9 | Pending |
+| JOB-01 | Phase 10 | Pending |
+| JOB-02 | Phase 10 | Pending |
+| JOB-03 | Phase 10 | Pending |
+| JOB-04 | Phase 10 | Pending |
+| JOB-05 | Phase 10 | Pending |
+| API-01 | Phase 11 | Pending |
+| API-02 | Phase 11 | Pending |
+| API-03 | Phase 11 | Pending |
+| FRONT-01 | Phase 11 | Pending |
+| FRONT-02 | Phase 11 | Pending |
+| FRONT-03 | Phase 11 | Pending |
+| FRONT-04 | Phase 11 | Pending |
+| TEST-01 | Phase 12 | Pending |
+| TEST-02 | Phase 12 | Pending |
+| TEST-03 | Phase 12 | Pending |
+| TEST-04 | Phase 12 | Pending |
+| TEST-05 | Phase 12 | Pending |
+| TEST-06 | Phase 12 | Pending |
+| TEST-07 | Phase 13 | Pending |
+| TEST-08 | Phase 13 | Pending |
 
 **Coverage:**
 
 - v1.1 requirements: 39 total
-- Mapped to phases: 0
-- Unmapped: 39
+- Mapped to phases: 39
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 after defining v1.1 requirements*
+*Last updated: 2026-06-02 after creating v1.1 roadmap*
