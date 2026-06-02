@@ -28,9 +28,17 @@ Delivered:
 - Parent API and frontend render generated, missing, pending, failed, and email-failed report states.
 - Focused backend and frontend tests verify the report flow.
 
-## Current Milestone
+## Current Milestone: v1.2 S3 Report Artifact Infrastructure
 
-No active milestone. Start the next one with `$gsd-new-milestone`.
+**Goal:** Make report artifact storage deployable and verifiable before extending weekly report operations further.
+
+**Target features:**
+
+- Verify CDK report bucket wiring for API and weekly report Lambdas.
+- Confirm `S3_REPORTS_BUCKET` is injected and report bucket read/write permissions are deployed.
+- Define and enforce a stable private S3 report artifact key contract.
+- Add or validate backend report artifact helper behavior for JSON/HTML artifact writes and reads.
+- Add verification and smoke checks that prove Lambda can write/read private report artifacts.
 
 ## Requirements
 
@@ -56,7 +64,10 @@ Shipped requirements:
 
 ### Active
 
-- [ ] Define the next milestone.
+- [ ] Verify report artifact infrastructure and runtime configuration.
+- [ ] Lock the private S3 key convention for report artifacts.
+- [ ] Add or validate backend helper coverage for report artifact storage.
+- [ ] Prove deployed Lambda read/write access with a private-object smoke test.
 
 ### Out of Scope
 
@@ -179,4 +190,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after shipping milestone v1.1*
+*Last updated: 2026-06-03 after starting milestone v1.2*
