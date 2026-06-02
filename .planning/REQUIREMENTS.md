@@ -105,50 +105,50 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| PARENT-01 | TBD | Pending |
-| PARENT-02 | TBD | Pending |
-| PARENT-03 | TBD | Pending |
-| PARENT-04 | TBD | Pending |
-| PARENT-05 | TBD | Pending |
-| PARENT-06 | TBD | Pending |
-| PARENT-07 | TBD | Pending |
-| PARENT-08 | TBD | Pending |
-| AUTHZ-01 | TBD | Pending |
-| AUTHZ-02 | TBD | Pending |
-| AUTHZ-03 | TBD | Pending |
-| AUTHZ-04 | TBD | Pending |
-| AUTHZ-05 | TBD | Pending |
-| AUTHZ-06 | TBD | Pending |
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
-| DATA-03 | TBD | Pending |
-| DATA-04 | TBD | Pending |
-| DATA-05 | TBD | Pending |
-| FRONT-01 | TBD | Pending |
-| FRONT-02 | TBD | Pending |
-| FRONT-03 | TBD | Pending |
-| FRONT-04 | TBD | Pending |
-| FRONT-05 | TBD | Pending |
-| FRONT-06 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| TEST-05 | TBD | Pending |
-| TEST-06 | TBD | Pending |
-| TEST-07 | TBD | Pending |
-| TEST-08 | TBD | Pending |
-| TEST-09 | TBD | Pending |
-| TEST-10 | TBD | Pending |
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| PARENT-01 | Phase 2 | Pending |
+| PARENT-02 | Phase 2 | Pending |
+| PARENT-03 | Phase 3 | Pending |
+| PARENT-04 | Phase 3 | Pending |
+| PARENT-05 | Phase 3 | Pending |
+| PARENT-06 | Phase 3 | Pending |
+| PARENT-07 | Phase 3 | Pending |
+| PARENT-08 | Phase 2 | Pending |
+| AUTHZ-01 | Phase 2 | Pending |
+| AUTHZ-02 | Phase 3 | Pending |
+| AUTHZ-03 | Phase 2 | Pending |
+| AUTHZ-04 | Phase 2 | Pending |
+| AUTHZ-05 | Phase 2 | Pending |
+| AUTHZ-06 | Phase 3 | Pending |
+| DATA-01 | Phase 3 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 3 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| DATA-05 | Phase 1 | Pending |
+| FRONT-01 | Phase 4 | Pending |
+| FRONT-02 | Phase 4 | Pending |
+| FRONT-03 | Phase 4 | Pending |
+| FRONT-04 | Phase 4 | Pending |
+| FRONT-05 | Phase 4 | Pending |
+| FRONT-06 | Phase 4 | Pending |
+| TEST-01 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Pending |
+| TEST-03 | Phase 5 | Pending |
+| TEST-04 | Phase 5 | Pending |
+| TEST-05 | Phase 5 | Pending |
+| TEST-06 | Phase 5 | Pending |
+| TEST-07 | Phase 5 | Pending |
+| TEST-08 | Phase 5 | Pending |
+| TEST-09 | Phase 5 | Pending |
+| TEST-10 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 38 total
-- Mapped to phases: 0
-- Unmapped: 38
+- Mapped to phases: 38
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 after starting milestone v1.0*
+*Last updated: 2026-06-02 after creating v1.0 roadmap*

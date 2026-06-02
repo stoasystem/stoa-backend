@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: Parent Portal Real Data Integration
 status: planning
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Define roadmap for v1.0 Parent Portal Real Data Integration.
+**Current focus:** Phase 1: Infrastructure and Contract Grounding.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: -
-Status: Defining roadmap
-Last activity: 2026-06-02 - Milestone v1.0 started from `.planning/milestones/parent-portal-real-data-integration.md`
+Phase: 1 of 5 (Infrastructure and Contract Grounding)
+Plan: Not planned yet
+Status: Ready to plan
+Last activity: 2026-06-02 - Roadmap created for v1.0; Phase 1 ready for `$gsd-plan-phase 1`
 
 Progress: [----------] 0%
 
@@ -62,9 +62,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- Parent-child identity may not resolve consistently if Cognito `sub` and local user IDs diverge.
-- Parent-child lookup may require a scan unless existing CDK indexes support the access pattern.
-- Frontend demo fallback can hide backend integration failures unless removed from parent-critical flows.
+- Phase 1 must resolve parent-child identity if Cognito `sub` and local user IDs diverge.
+- Phase 1 must confirm whether parent-child lookup can use existing CDK indexes or accepts a scan-based MVP lookup.
+- Phase 4 must remove silent demo fallback from parent-critical flows without broad frontend redesign.
 
 ## Deferred Items
 
@@ -77,5 +77,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: Milestone initialized; roadmap pending.
+Stopped at: Roadmap created; Phase 1 ready to plan.
 Resume file: None
