@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: S3 Report Artifact Infrastructure
 status: planning
-last_updated: "2026-06-03T00:35:13+02:00"
+last_updated: "2026-06-03T00:39:45+02:00"
 last_activity: 2026-06-03
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -20,22 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 15: Artifact Key Contract & Helper Hardening
+**Current focus:** Phase 16: Storage Failure Ordering & Privacy Boundary
 
 ## Current Position
 
-Phase: 15 of 18 (artifact key contract & helper hardening)
+Phase: 16 of 18 (storage failure ordering & privacy boundary)
 Plan: Not started
-Status: Ready to plan Phase 15
-Last activity: 2026-06-03 - Completed Phase 14 CDK/runtime verification and production reports bucket guard.
+Status: Ready to plan Phase 16
+Last activity: 2026-06-03 - Completed Phase 15 artifact key contract and helper hardening.
 
-Progress: [##--------] 20%
+Progress: [####------] 40%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 20
+- Total plans completed: 21
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Progress: [##--------] 20%
 | 1-13 | 19 complete | - | - |
 | 14-18 | TBD | - | - |
 | 14 | 1 | - | - |
+| 15 | 1 | - | - |
 
 **Recent Trend:**
 
@@ -65,7 +66,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Plan Phase 15 with `$gsd-plan-phase 15`.
+- Plan Phase 16 with `$gsd-plan-phase 16`.
 
 ### Blockers/Concerns
 

@@ -22,7 +22,7 @@ This milestone verifies the existing CDK reports bucket wiring, locks the privat
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 14: CDK & Runtime Configuration Verification** - Operators can prove reports bucket privacy, Lambda env vars, IAM grants, and production bucket config are deployment-ready. (completed 2026-06-03)
-- [ ] **Phase 15: Artifact Key Contract & Helper Hardening** - Backend artifact keys and helper behavior use one canonical private S3 contract.
+- [x] **Phase 15: Artifact Key Contract & Helper Hardening** - Backend artifact keys and helper behavior use one canonical private S3 contract. (completed 2026-06-02)
 - [ ] **Phase 16: Storage Failure Ordering & Privacy Boundary** - Report metadata, email delivery, and parent access remain correct when artifact storage succeeds or fails.
 - [ ] **Phase 17: Deployed Private-Object Smoke** - Maintainers can prove a deployed weekly report Lambda can write and read a private report artifact object.
 - [ ] **Phase 18: Evidence Ledger & Milestone Closure** - Milestone closure records test, CDK, deployed-state, smoke, and follow-up evidence.
@@ -56,7 +56,7 @@ This milestone verifies the existing CDK reports bucket wiring, locks the privat
   4. JSON and HTML artifacts are written to `settings.s3_reports_bucket` with the required content types and no S3 ACL parameters.
   5. Backend code can read a JSON report artifact by S3 key for smoke verification or future backend-mediated reads.
 
-**Plans**: TBD
+**Plans**: 1/1 plans complete
 
 ### Phase 16: Storage Failure Ordering & Privacy Boundary
 
@@ -110,7 +110,7 @@ Phases execute in numeric order: 14 -> 15 -> 16 -> 17 -> 18
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 14. CDK & Runtime Configuration Verification | v1.2 | 1/1 | Complete    | 2026-06-03 |
-| 15. Artifact Key Contract & Helper Hardening | v1.2 | 0/TBD | Not started | - |
+| 15. Artifact Key Contract & Helper Hardening | v1.2 | 1/1 | Complete    | 2026-06-03 |
 | 16. Storage Failure Ordering & Privacy Boundary | v1.2 | 0/TBD | Not started | - |
 | 17. Deployed Private-Object Smoke | v1.2 | 0/TBD | Not started | - |
 | 18. Evidence Ledger & Milestone Closure | v1.2 | 0/TBD | Not started | - |

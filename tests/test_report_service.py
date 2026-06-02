@@ -489,12 +489,20 @@ def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch)
     assert stored_items[0]["status"] == "generated"
     assert stored_items[0]["summary"] == "Student made steady progress this week."
     assert stored_items[0]["recommendations"] == "Practice fractions for ten minutes."
-    assert stored_items[0]["s3_key"].endswith("/report.html")
-    assert stored_items[0]["json_s3_key"].endswith("/report.json")
+    assert (
+        stored_items[0]["s3_key"]
+        == "weekly-reports/parent-1/student-1/2026-06-01/report.html"
+    )
+    assert (
+        stored_items[0]["json_s3_key"]
+        == "weekly-reports/parent-1/student-1/2026-06-01/report.json"
+    )
     assert len(s3.puts) == 2
     assert s3.puts[0]["Bucket"] == "reports-bucket"
     assert s3.puts[0]["ContentType"] == "application/json"
     assert s3.puts[1]["ContentType"] == "text/html; charset=utf-8"
+    assert "ACL" not in s3.puts[0]
+    assert "ACL" not in s3.puts[1]
     assert json.loads(s3.puts[0]["Body"].decode())["content"]["summary"] == generated_report_content()["summary"]
     assert status_updates[0][1] == "email_sent"
 

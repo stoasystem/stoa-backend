@@ -26,22 +26,22 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 
 ### Artifact Contract
 
-- [ ] **ARTIFACT-01**: Backend code builds JSON and HTML report artifact keys with the canonical `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` shape.
-- [ ] **ARTIFACT-02**: Backend tests assert exact JSON and HTML artifact keys, including the `weekly-reports/` prefix.
-- [ ] **ARTIFACT-03**: Report artifact keys use canonical backend parent/student IDs and ISO `week_start` values.
-- [ ] **ARTIFACT-04**: Report artifact keys never include parent email, student email, display names, or arbitrary user-facing text.
-- [ ] **ARTIFACT-05**: Invalid or blank production artifact key inputs fail closed instead of collapsing into shared `unknown` paths.
+- [x] **ARTIFACT-01**: Backend code builds JSON and HTML report artifact keys with the canonical `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` shape.
+- [x] **ARTIFACT-02**: Backend tests assert exact JSON and HTML artifact keys, including the `weekly-reports/` prefix.
+- [x] **ARTIFACT-03**: Report artifact keys use canonical backend parent/student IDs and ISO `week_start` values.
+- [x] **ARTIFACT-04**: Report artifact keys never include parent email, student email, display names, or arbitrary user-facing text.
+- [x] **ARTIFACT-05**: Invalid or blank production artifact key inputs fail closed instead of collapsing into shared `unknown` paths.
 
 ### Backend Storage
 
-- [ ] **STORAGE-01**: Backend code exposes a report artifact helper or equivalently testable functions for building keys and writing JSON/HTML artifacts.
-- [ ] **STORAGE-02**: JSON artifacts are written to `settings.s3_reports_bucket` with `ContentType="application/json"`.
-- [ ] **STORAGE-03**: HTML artifacts are written to `settings.s3_reports_bucket` with `ContentType="text/html; charset=utf-8"`.
-- [ ] **STORAGE-04**: Report artifact writes do not pass S3 ACL parameters and rely on bucket privacy plus Lambda IAM.
+- [x] **STORAGE-01**: Backend code exposes a report artifact helper or equivalently testable functions for building keys and writing JSON/HTML artifacts.
+- [x] **STORAGE-02**: JSON artifacts are written to `settings.s3_reports_bucket` with `ContentType="application/json"`.
+- [x] **STORAGE-03**: HTML artifacts are written to `settings.s3_reports_bucket` with `ContentType="text/html; charset=utf-8"`.
+- [x] **STORAGE-04**: Report artifact writes do not pass S3 ACL parameters and rely on bucket privacy plus Lambda IAM.
 - [ ] **STORAGE-05**: DynamoDB report metadata is saved only after both JSON and HTML S3 artifact writes succeed.
 - [ ] **STORAGE-06**: SES email delivery is attempted only after S3 artifact writes and DynamoDB metadata storage succeed.
 - [ ] **STORAGE-07**: Backend tests prove that failure after the first artifact write does not create report metadata or send email.
-- [ ] **STORAGE-08**: Backend code can read a JSON report artifact by S3 key when needed for smoke or future backend-mediated reads.
+- [x] **STORAGE-08**: Backend code can read a JSON report artifact by S3 key when needed for smoke or future backend-mediated reads.
 
 ### Runtime Smoke
 
@@ -103,19 +103,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-03 | Phase 14 | Complete |
 | INFRA-04 | Phase 14 | Complete |
 | INFRA-05 | Phase 14 | Complete |
-| ARTIFACT-01 | Phase 15 | Pending |
-| ARTIFACT-02 | Phase 15 | Pending |
-| ARTIFACT-03 | Phase 15 | Pending |
-| ARTIFACT-04 | Phase 15 | Pending |
-| ARTIFACT-05 | Phase 15 | Pending |
-| STORAGE-01 | Phase 15 | Pending |
-| STORAGE-02 | Phase 15 | Pending |
-| STORAGE-03 | Phase 15 | Pending |
-| STORAGE-04 | Phase 15 | Pending |
+| ARTIFACT-01 | Phase 15 | Complete |
+| ARTIFACT-02 | Phase 15 | Complete |
+| ARTIFACT-03 | Phase 15 | Complete |
+| ARTIFACT-04 | Phase 15 | Complete |
+| ARTIFACT-05 | Phase 15 | Complete |
+| STORAGE-01 | Phase 15 | Complete |
+| STORAGE-02 | Phase 15 | Complete |
+| STORAGE-03 | Phase 15 | Complete |
+| STORAGE-04 | Phase 15 | Complete |
 | STORAGE-05 | Phase 16 | Pending |
 | STORAGE-06 | Phase 16 | Pending |
 | STORAGE-07 | Phase 16 | Pending |
-| STORAGE-08 | Phase 15 | Pending |
+| STORAGE-08 | Phase 15 | Complete |
 | SMOKE-01 | Phase 17 | Pending |
 | SMOKE-02 | Phase 17 | Pending |
 | SMOKE-03 | Phase 17 | Pending |

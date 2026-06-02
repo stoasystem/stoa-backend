@@ -14,7 +14,7 @@ from boto3.dynamodb.conditions import Attr, Key
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
-from stoa.services import notify_service
+from stoa.services import notify_service, report_artifact_service
 
 logger = logging.getLogger(__name__)
 
@@ -334,19 +334,14 @@ def store_and_send_weekly_report(
     html_report = render_weekly_report_html(payload, generated_content)
     json_report = build_weekly_report_json_artifact(payload, generated_content, report_item)
 
-    reports_bucket = settings.report_artifacts_bucket
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
-    s3.put_object(
-        Bucket=reports_bucket,
-        Key=report_item["json_s3_key"],
-        Body=json.dumps(json_report, separators=(",", ":"), ensure_ascii=False).encode(),
-        ContentType="application/json",
-    )
-    s3.put_object(
-        Bucket=reports_bucket,
-        Key=report_item["html_s3_key"],
-        Body=html_report.encode(),
-        ContentType="text/html; charset=utf-8",
+    report_artifact_service.write_report_artifacts(
+        report_artifact_service.ReportArtifactKeys(
+            json_key=report_item["json_s3_key"],
+            html_key=report_item["html_s3_key"],
+        ),
+        json_report,
+        html_report,
+        s3_client=s3_client,
     )
     report_repo.put_report(report_item)
     logger.info(
@@ -753,11 +748,12 @@ def _report_id(parent_id: str, student_id: str, week_start: str) -> str:
 
 
 def _report_artifact_keys(parent_id: str, student_id: str, week_start: str) -> tuple[str, str]:
-    prefix = (
-        f"weekly-reports/{_safe_s3_segment(parent_id)}/"
-        f"{_safe_s3_segment(student_id)}/{_safe_s3_segment(week_start)}"
+    keys = report_artifact_service.build_report_artifact_keys(
+        parent_id,
+        student_id,
+        week_start,
     )
-    return f"{prefix}/report.json", f"{prefix}/report.html"
+    return keys.json_key, keys.html_key
 
 
 def _safe_s3_segment(value: str) -> str:
