@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Parent Child List and Access Rules** - Let logged-in parents list only linked children while blocking normal parent flows for the wrong roles. (completed 2026-06-02)
 - [x] **Phase 3: Child Summary, History, and Report Data** - Deliver child-specific parent routes with real aggregation, ownership checks, and stable available/missing states. (completed 2026-06-02)
 - [x] **Phase 4: Frontend Parent Portal Integration** - Align parent services and pages to `/parents/me/...` backend responses without silent demo fallback. (completed 2026-06-02)
-- [ ] **Phase 5: Verification and Test Data** - Prove backend, client, route-contract, and real-data behaviors with focused tests and documented test accounts.
+- [x] **Phase 5: Verification and Test Data** - Prove backend, client, route-contract, and real-data behaviors with focused tests and documented test accounts. (completed 2026-06-02)
 
 ## Phase Details
 
@@ -92,7 +92,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Test data or documentation identifies one parent account, one linked student account, and enough activity to verify summary/history.
   4. Full milestone verification demonstrates a real parent can log in, see children, open summary/history, and see available/missing report states without mock fallback.
 
-**Plans**: TBD
+**Plans**: 2/2 complete
 
 ## Coverage
 
@@ -117,4 +117,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Parent Child List and Access Rules | 2/2 | Complete | 2026-06-02 |
 | 3. Child Summary, History, and Report Data | 3/3 | Complete | 2026-06-02 |
 | 4. Frontend Parent Portal Integration | 3/3 | Complete | 2026-06-02 |
-| 5. Verification and Test Data | 0/TBD | Not started | - |
+| 5. Verification and Test Data | 2/2 | Complete | 2026-06-02 |
