@@ -60,6 +60,10 @@ jobs:
               --zip-file fileb://lambda.zip \
               --region eu-central-2 \
               --dry-run
+            aws lambda get-function-configuration \
+              --function-name "$function_name" \
+              --region eu-central-2 \
+              >/dev/null
           done
 
       - name: Update Lambda function code
