@@ -59,11 +59,11 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 
 ### Evidence
 
-- [ ] **EVIDENCE-01**: Milestone closure records backend test commands and results for artifact storage behavior.
-- [ ] **EVIDENCE-02**: Milestone closure records CDK synth/diff evidence for reports bucket, Lambda env vars, IAM grants, and no bucket replacement.
-- [ ] **EVIDENCE-03**: Milestone closure records deployed Lambda env/IAM verification or explicitly marks deployed-state confidence as incomplete.
-- [ ] **EVIDENCE-04**: Milestone closure records private-object smoke result and any smoke object cleanup decision.
-- [ ] **EVIDENCE-05**: Milestone closure records follow-ups for `enforce_ssl=True`, prefix-scoped IAM, lifecycle cleanup, and broader operational tooling if they are not implemented in v1.2.
+- [x] **EVIDENCE-01**: Milestone closure records backend test commands and results for artifact storage behavior.
+- [x] **EVIDENCE-02**: Milestone closure records CDK synth/diff evidence for reports bucket, Lambda env vars, IAM grants, and no bucket replacement.
+- [x] **EVIDENCE-03**: Milestone closure records deployed Lambda env/IAM verification or explicitly marks deployed-state confidence as incomplete.
+- [x] **EVIDENCE-04**: Milestone closure records private-object smoke result and any smoke object cleanup decision.
+- [x] **EVIDENCE-05**: Milestone closure records follow-ups for `enforce_ssl=True`, prefix-scoped IAM, lifecycle cleanup, and broader operational tooling if they are not implemented in v1.2.
 
 ## Future Requirements
 
@@ -124,11 +124,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRIVACY-01 | Phase 16 | Complete |
 | PRIVACY-02 | Phase 16 | Complete |
 | PRIVACY-03 | Phase 16 | Complete |
-| EVIDENCE-01 | Phase 18 | Pending |
-| EVIDENCE-02 | Phase 18 | Pending |
-| EVIDENCE-03 | Phase 18 | Pending |
-| EVIDENCE-04 | Phase 18 | Pending |
-| EVIDENCE-05 | Phase 18 | Pending |
+| EVIDENCE-01 | Phase 18 | Complete |
+| EVIDENCE-02 | Phase 18 | Complete |
+| EVIDENCE-03 | Phase 18 | Complete |
+| EVIDENCE-04 | Phase 18 | Complete |
+| EVIDENCE-05 | Phase 18 | Complete |
 
 **Coverage:**
 

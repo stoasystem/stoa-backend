@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: S3 Report Artifact Infrastructure
-status: planning
-last_updated: "2026-06-03T00:46:44+02:00"
+status: complete
+last_updated: "2026-06-03T00:49:21+02:00"
 last_activity: 2026-06-03
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 80
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,22 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 18: Evidence Ledger & Milestone Closure
+**Current focus:** v1.2 complete - S3 Report Artifact Infrastructure
 
 ## Current Position
 
 Phase: 18 of 18 (evidence ledger & milestone closure)
-Plan: Not started
-Status: Ready to plan Phase 18
-Last activity: 2026-06-03 - Completed Phase 17 private-object smoke event path.
+Plan: 18-01 complete
+Status: Milestone complete
+Last activity: 2026-06-03 - Completed v1.2 evidence ledger and milestone closure.
 
-Progress: [########--] 80%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed: 24
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -49,6 +49,7 @@ Progress: [########--] 80%
 | 15 | 1 | - | - |
 | 16 | 1 | - | - |
 | 17 | 1 | - | - |
+| 18 | 1 | - | - |
 
 **Recent Trend:**
 
@@ -68,11 +69,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Plan Phase 18 with `$gsd-plan-phase 18`.
+- No active phase todo. v1.2 is complete; next work should start a new milestone or run live AWS verification follow-up.
 
 ### Blockers/Concerns
 
-- Deployed AWS runtime state is not yet verified; Phase 18 must record this as incomplete unless a later phase verifies it with AWS CLI or deployment smoke evidence.
+- Deployed AWS runtime state is explicitly recorded as incomplete because AWS CLI/CDK CLI were unavailable locally; run live Lambda env/IAM and smoke checks in a deploy-capable environment.
 - `stoa-backend/dist` is a gitignored Lambda build artifact; deployed smoke confidence depends on fresh packaged Lambda code.
 
 ## Deferred Items
