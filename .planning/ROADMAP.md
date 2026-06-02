@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Infrastructure and Contract Grounding** - Confirm CDK-backed resources, parent-child access patterns, environment configuration, and identity mapping before backend route work. (completed 2026-06-02)
 - [x] **Phase 2: Parent Child List and Access Rules** - Let logged-in parents list only linked children while blocking normal parent flows for the wrong roles. (completed 2026-06-02)
-- [ ] **Phase 3: Child Summary, History, and Report Data** - Deliver child-specific parent routes with real aggregation, ownership checks, and stable available/missing states.
+- [x] **Phase 3: Child Summary, History, and Report Data** - Deliver child-specific parent routes with real aggregation, ownership checks, and stable available/missing states. (completed 2026-06-02)
 - [ ] **Phase 4: Frontend Parent Portal Integration** - Align parent services and pages to `/parents/me/...` backend responses without silent demo fallback.
 - [ ] **Phase 5: Verification and Test Data** - Prove backend, client, route-contract, and real-data behaviors with focused tests and documented test accounts.
 
@@ -62,7 +62,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Cross-parent child summary, history, and report requests are denied before reading or returning child data.
   5. Child, summary, history, and report responses match the milestone frontend-friendly data shapes.
 
-**Plans**: TBD
+**Plans**: 3/3 complete
 
 ### Phase 4: Frontend Parent Portal Integration
 
@@ -115,6 +115,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Infrastructure and Contract Grounding | 1/1 | Complete | 2026-06-02 |
 | 2. Parent Child List and Access Rules | 2/2 | Complete | 2026-06-02 |
-| 3. Child Summary, History, and Report Data | 0/TBD | Not started | - |
+| 3. Child Summary, History, and Report Data | 3/3 | Complete | 2026-06-02 |
 | 4. Frontend Parent Portal Integration | 0/TBD | Not started | - |
 | 5. Verification and Test Data | 0/TBD | Not started | - |
