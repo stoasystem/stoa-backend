@@ -268,15 +268,21 @@ def test_store_and_send_weekly_report_does_not_write_metadata_or_email_when_s3_f
         lambda report_id, status, **fields: events.append(("update", status)),
     )
 
+    s3 = RecordingS3Client(events, fail_on_call=2)
+    ses = RecordingSESClient(events)
     with pytest.raises(RuntimeError, match="s3 unavailable"):
         report_service.store_and_send_weekly_report(
             _sample_report_payload(),
             _generated_report_content(),
-            s3_client=RecordingS3Client(events, fail_on_call=2),
-            ses_client=RecordingSESClient(events),
+            s3_client=s3,
+            ses_client=ses,
         )
 
     assert [event[0] for event in events] == ["s3", "s3"]
+    assert len(s3.puts) == 2
+    assert s3.puts[0]["Key"] == "weekly-reports/parent-1/student-1/2026-06-01/report.json"
+    assert s3.puts[1]["Key"] == "weekly-reports/parent-1/student-1/2026-06-01/report.html"
+    assert ses.emails == []
 
 
 def test_previous_zurich_week_start_uses_zurich_calendar_boundary():

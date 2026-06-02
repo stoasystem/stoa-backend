@@ -91,6 +91,9 @@ def _generated_report(student_id: str = "child-1", status: str = "email_sent") -
             "weak_topics": [{"topic": "fractions", "note": "Review equivalent fractions."}],
             "recommendation_items": ["Practice fractions for ten minutes.", "Review one mistake together."],
             "teacher_note": "Teacher help was requested.",
+            "s3_key": "weekly-reports/parent-local/child-1/2026-06-01/report.html",
+            "html_s3_key": "weekly-reports/parent-local/child-1/2026-06-01/report.html",
+            "json_s3_key": "weekly-reports/parent-local/child-1/2026-06-01/report.json",
             "email_error_class": "MessageRejected" if status == "email_failed" else None,
             "email_error_message": "SES rejected recipient" if status == "email_failed" else None,
         }
@@ -910,6 +913,17 @@ def test_parent_child_week_report_returns_generated_detail_fields(monkeypatch):
         "Review one mistake together.",
     ]
     assert body["report"]["teacherNote"] == "Teacher help was requested."
+    for forbidden_field in (
+        "s3_key",
+        "html_s3_key",
+        "json_s3_key",
+        "s3Key",
+        "htmlS3Key",
+        "jsonS3Key",
+        "publicUrl",
+        "presignedUrl",
+    ):
+        assert forbidden_field not in body["report"]
 
 
 def test_parent_child_week_report_exposes_email_failed_state(monkeypatch):

@@ -38,9 +38,9 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 - [x] **STORAGE-02**: JSON artifacts are written to `settings.s3_reports_bucket` with `ContentType="application/json"`.
 - [x] **STORAGE-03**: HTML artifacts are written to `settings.s3_reports_bucket` with `ContentType="text/html; charset=utf-8"`.
 - [x] **STORAGE-04**: Report artifact writes do not pass S3 ACL parameters and rely on bucket privacy plus Lambda IAM.
-- [ ] **STORAGE-05**: DynamoDB report metadata is saved only after both JSON and HTML S3 artifact writes succeed.
-- [ ] **STORAGE-06**: SES email delivery is attempted only after S3 artifact writes and DynamoDB metadata storage succeed.
-- [ ] **STORAGE-07**: Backend tests prove that failure after the first artifact write does not create report metadata or send email.
+- [x] **STORAGE-05**: DynamoDB report metadata is saved only after both JSON and HTML S3 artifact writes succeed.
+- [x] **STORAGE-06**: SES email delivery is attempted only after S3 artifact writes and DynamoDB metadata storage succeed.
+- [x] **STORAGE-07**: Backend tests prove that failure after the first artifact write does not create report metadata or send email.
 - [x] **STORAGE-08**: Backend code can read a JSON report artifact by S3 key when needed for smoke or future backend-mediated reads.
 
 ### Runtime Smoke
@@ -53,9 +53,9 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 
 ### Privacy Boundary
 
-- [ ] **PRIVACY-01**: Parent report access remains backend-mediated through authorized parent API routes.
-- [ ] **PRIVACY-02**: No frontend direct S3 fetch, public S3 URL, public bucket policy, or public object ACL is introduced for report artifacts.
-- [ ] **PRIVACY-03**: Any future backend artifact read path must preserve existing parent-child ownership checks before returning report data.
+- [x] **PRIVACY-01**: Parent report access remains backend-mediated through authorized parent API routes.
+- [x] **PRIVACY-02**: No frontend direct S3 fetch, public S3 URL, public bucket policy, or public object ACL is introduced for report artifacts.
+- [x] **PRIVACY-03**: Any future backend artifact read path must preserve existing parent-child ownership checks before returning report data.
 
 ### Evidence
 
@@ -112,18 +112,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STORAGE-02 | Phase 15 | Complete |
 | STORAGE-03 | Phase 15 | Complete |
 | STORAGE-04 | Phase 15 | Complete |
-| STORAGE-05 | Phase 16 | Pending |
-| STORAGE-06 | Phase 16 | Pending |
-| STORAGE-07 | Phase 16 | Pending |
+| STORAGE-05 | Phase 16 | Complete |
+| STORAGE-06 | Phase 16 | Complete |
+| STORAGE-07 | Phase 16 | Complete |
 | STORAGE-08 | Phase 15 | Complete |
 | SMOKE-01 | Phase 17 | Pending |
 | SMOKE-02 | Phase 17 | Pending |
 | SMOKE-03 | Phase 17 | Pending |
 | SMOKE-04 | Phase 17 | Pending |
 | SMOKE-05 | Phase 17 | Pending |
-| PRIVACY-01 | Phase 16 | Pending |
-| PRIVACY-02 | Phase 16 | Pending |
-| PRIVACY-03 | Phase 16 | Pending |
+| PRIVACY-01 | Phase 16 | Complete |
+| PRIVACY-02 | Phase 16 | Complete |
+| PRIVACY-03 | Phase 16 | Complete |
 | EVIDENCE-01 | Phase 18 | Pending |
 | EVIDENCE-02 | Phase 18 | Pending |
 | EVIDENCE-03 | Phase 18 | Pending |
