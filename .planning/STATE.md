@@ -3,15 +3,15 @@ gsd_state_version: '1.0'
 milestone: v1.0
 milestone_name: Parent Portal Real Data Integration
 status: planning
-stopped_at: Phase 3 complete; Phase 4 ready to plan.
-last_updated: "2026-06-02T13:14:32.593Z"
+stopped_at: Phase 4 complete; Phase 5 ready to plan.
+last_updated: "2026-06-02T13:38:47.377Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 60
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
+  percent: 80
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 4: Frontend Parent Portal Integration.
+**Current focus:** Phase 5: Verification and Test Data.
 
 ## Current Position
 
-Phase: 4 of 5 (Frontend Parent Portal Integration)
+Phase: 5 of 5 (Verification and Test Data)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-06-02 - Phase 3 completed; Phase 4 ready for autonomous planning
+Last activity: 2026-06-02 - Phase 4 completed; Phase 5 ready for autonomous planning
 
-Progress: [######----] 60%
+Progress: [########--] 80%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 9
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -47,6 +47,7 @@ Progress: [######----] 60%
 | 1 | 1 | - | - |
 | 2 | 2 | - | - |
 | 3 | 3 | - | - |
+| 4 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -69,6 +70,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 2: Legacy parent routes compare path parent IDs to resolved local parent profile IDs, not raw JWT `sub`.
 - Phase 3: Child-specific `/parents/me/children/{child_id}/...` routes verify parent-child ownership before child data reads.
 - Phase 3: Summary/history/report routes return real data with stable empty or missing states and no fabricated report content.
+- Phase 4: Parent frontend services call `/parents/me/...` directly without `withDemoFallback` on parent-critical child, summary, history, and weekly report flows.
+- Phase 4: Parent dashboard, summary, history, and weekly report pages render Phase 3 backend shapes with explicit empty, missing, and error states.
 
 ### Pending Todos
 
@@ -76,8 +79,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 4 must remove silent demo fallback from parent-critical flows without broad frontend redesign.
-- Phase 4 frontend edits may live outside this backend workspace and may require explicit write access.
+- Phase 5 must document usable parent/student test data and verify the end-to-end real parent flow.
+- Weekly report automation remains deferred; Phase 5 should verify missing-report behavior as acceptable for records that do not exist.
 
 ## Deferred Items
 
@@ -90,5 +93,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: Phase 3 complete; Phase 4 ready to plan.
+Stopped at: Phase 4 complete; Phase 5 ready to plan.
 Resume file: None
