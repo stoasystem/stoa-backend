@@ -98,43 +98,43 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| INFRA-04 | TBD | Pending |
-| INFRA-05 | TBD | Pending |
-| ARTIFACT-01 | TBD | Pending |
-| ARTIFACT-02 | TBD | Pending |
-| ARTIFACT-03 | TBD | Pending |
-| ARTIFACT-04 | TBD | Pending |
-| ARTIFACT-05 | TBD | Pending |
-| STORAGE-01 | TBD | Pending |
-| STORAGE-02 | TBD | Pending |
-| STORAGE-03 | TBD | Pending |
-| STORAGE-04 | TBD | Pending |
-| STORAGE-05 | TBD | Pending |
-| STORAGE-06 | TBD | Pending |
-| STORAGE-07 | TBD | Pending |
-| STORAGE-08 | TBD | Pending |
-| SMOKE-01 | TBD | Pending |
-| SMOKE-02 | TBD | Pending |
-| SMOKE-03 | TBD | Pending |
-| SMOKE-04 | TBD | Pending |
-| SMOKE-05 | TBD | Pending |
-| PRIVACY-01 | TBD | Pending |
-| PRIVACY-02 | TBD | Pending |
-| PRIVACY-03 | TBD | Pending |
-| EVIDENCE-01 | TBD | Pending |
-| EVIDENCE-02 | TBD | Pending |
-| EVIDENCE-03 | TBD | Pending |
-| EVIDENCE-04 | TBD | Pending |
-| EVIDENCE-05 | TBD | Pending |
+| INFRA-01 | Phase 14 | Pending |
+| INFRA-02 | Phase 14 | Pending |
+| INFRA-03 | Phase 14 | Pending |
+| INFRA-04 | Phase 14 | Pending |
+| INFRA-05 | Phase 14 | Pending |
+| ARTIFACT-01 | Phase 15 | Pending |
+| ARTIFACT-02 | Phase 15 | Pending |
+| ARTIFACT-03 | Phase 15 | Pending |
+| ARTIFACT-04 | Phase 15 | Pending |
+| ARTIFACT-05 | Phase 15 | Pending |
+| STORAGE-01 | Phase 15 | Pending |
+| STORAGE-02 | Phase 15 | Pending |
+| STORAGE-03 | Phase 15 | Pending |
+| STORAGE-04 | Phase 15 | Pending |
+| STORAGE-05 | Phase 16 | Pending |
+| STORAGE-06 | Phase 16 | Pending |
+| STORAGE-07 | Phase 16 | Pending |
+| STORAGE-08 | Phase 15 | Pending |
+| SMOKE-01 | Phase 17 | Pending |
+| SMOKE-02 | Phase 17 | Pending |
+| SMOKE-03 | Phase 17 | Pending |
+| SMOKE-04 | Phase 17 | Pending |
+| SMOKE-05 | Phase 17 | Pending |
+| PRIVACY-01 | Phase 16 | Pending |
+| PRIVACY-02 | Phase 16 | Pending |
+| PRIVACY-03 | Phase 16 | Pending |
+| EVIDENCE-01 | Phase 18 | Pending |
+| EVIDENCE-02 | Phase 18 | Pending |
+| EVIDENCE-03 | Phase 18 | Pending |
+| EVIDENCE-04 | Phase 18 | Pending |
+| EVIDENCE-05 | Phase 18 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 31 total
-- Mapped to phases: 0
-- Unmapped: 31
+- Mapped to phases: 31
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 after research synthesis*
+*Last updated: 2026-06-03 after roadmap creation*

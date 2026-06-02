@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: S3 Report Artifact Infrastructure
 status: planning
-last_updated: "2026-06-03T00:15:08+02:00"
+last_updated: "2026-06-03T00:26:47+02:00"
 last_activity: 2026-06-03
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-02)
+See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** No active milestone. Ready to start next milestone.
+**Current focus:** Phase 14: CDK & Runtime Configuration Verification
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-03 — Milestone v1.2 started
+Phase: 14 of 18 (CDK & Runtime Configuration Verification)
+Plan: TBD
+Status: Ready to plan Phase 14
+Last activity: 2026-06-03 - Created v1.2 roadmap and mapped all requirements.
+
+Progress: [----------] 0%
 
 ## Performance Metrics
 
@@ -41,24 +43,13 @@ Last activity: 2026-06-03 — Milestone v1.2 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 1 | - | - |
-| 2 | 2 | - | - |
-| 3 | 3 | - | - |
-| 4 | 3 | - | - |
-| 5 | 2 | - | - |
-| 6 | 1 | - | - |
-| 7 | 1 | - | - |
-| 8 | 1 | - | - |
-| 9 | 1 | - | - |
-| 10 | 1 | - | - |
-| 11 | 1 | - | - |
-| 12 | 1 | - | - |
-| 13 | 1 | - | - |
+| 1-13 | 19 complete | - | - |
+| 14-18 | TBD | - | - |
 
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: shipped
+- Trend: shipped v1.1; v1.2 planning started
 
 ## Accumulated Context
 
@@ -66,42 +57,34 @@ Last activity: 2026-06-03 — Milestone v1.2 started
 
 Decisions are logged in PROJECT.md Key Decisions table.
 
-- v1.0: Use `/parents/me/...` as the normal parent portal contract.
-- v1.0: Treat weekly report automation as a follow-up milestone.
-- v1.0: Check existing CDK before adding backend data-access or infrastructure assumptions.
-- Phase 1: Use local DynamoDB parent profile `user_id` as the canonical parent ownership identifier.
-- Phase 1: Accept scan-based child lookup as MVP unless production scale requires a CDK-backed GSI.
-- Phase 1: Treat S3 report artifact access as blocked until CDK injects `S3_REPORTS_BUCKET` and grants report bucket permissions.
-- Phase 3: Child-specific `/parents/me/children/{child_id}/...` routes verify parent-child ownership before child data reads.
-- Phase 3: Summary/history/report routes return real data with stable empty or missing states and no fabricated report content.
-- Phase 4: Parent frontend services call `/parents/me/...` directly without `withDemoFallback` on parent-critical child, summary, history, and weekly report flows.
-- Phase 5: Backend and frontend verification passed; test data is documented for local/demo parent and linked student flows.
-- v1.1 roadmap: Continue numbering from Phase 6 and keep CDK/infrastructure before backend report generation.
-- v1.1 roadmap: Use a separate scheduled Lambda handler and store generated reports before email completion.
+- v1.2 roadmap starts at Phase 14 because v1.1 ended at Phase 13.
+- v1.2 blesses `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` as the canonical artifact key convention.
+- v1.2 keeps report artifacts private and backend-mediated; no public S3 access or client direct S3 fetch is in scope.
+- v1.2 uses existing CDK resources unless verification proves current reports bucket, Lambda env vars, or IAM grants are insufficient.
 
 ### Pending Todos
 
-- Start next milestone with `$gsd-new-milestone` when ready.
+- Plan Phase 14 with `$gsd-plan-phase 14`.
 
 ### Blockers/Concerns
 
-- Scan-based child lookup is accepted for MVP scale and should be revisited if parent-child volume grows.
-- `stoa-backend/dist` is a gitignored Lambda build artifact; local CDK deploys must build it first. Backend and infra CI build it before deployment.
-- Follow-up candidates from v1.1 include manual report retry/resend, notification preferences, multi-language reports, PDF export, delivery audit trail, and billing-gated access.
+- Deployed AWS runtime state is not yet verified; Phase 14 must separate CDK source confidence from deployed-state confidence.
+- `stoa-backend/dist` is a gitignored Lambda build artifact; deployed smoke confidence depends on fresh packaged Lambda code.
 
 ## Deferred Items
 
-Items acknowledged and carried forward at v1.0 milestone close:
+Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Weekly report automation | Scheduled generation, Bedrock summary generation, S3 artifacts, EventBridge target, SES email, monitoring and retry behavior | Shipped in v1.1 | v1.0 close |
 | Data access | Scan-based child lookup | Accepted MVP tech debt | v1.0 close |
-| Infrastructure | `S3_REPORTS_BUCKET` Lambda env and report bucket permissions | Shipped in v1.1 Phase 6 | v1.0 close |
-| Frontend cleanup | Unused parent practice-summary demo fallback path | Did not intersect generated report display in v1.1 | v1.0 close |
+| Operations | Manual report retry/resend and delivery audit trail | Follow-up candidate | v1.1 close |
+| Report output | Multi-language reports and PDF export | Follow-up candidate | v1.1 close |
+| Access control | Billing-gated report access | Follow-up candidate | v1.1 close |
+| Artifact hardening | `enforce_ssl`, prefix-scoped IAM, lifecycle cleanup, broader operational tooling | Track during v1.2 closure | v1.2 roadmap |
 
 ## Session Continuity
 
-Last session: 2026-06-02
-Stopped at: v1.1 milestone shipped and archived; ready to start next milestone.
+Last session: 2026-06-03 00:26 +02:00
+Stopped at: v1.2 roadmap created; Phase 14 ready for planning.
 Resume file: None
