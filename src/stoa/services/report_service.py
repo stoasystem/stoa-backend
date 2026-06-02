@@ -334,15 +334,16 @@ def store_and_send_weekly_report(
     html_report = render_weekly_report_html(payload, generated_content)
     json_report = build_weekly_report_json_artifact(payload, generated_content, report_item)
 
+    reports_bucket = settings.report_artifacts_bucket
     s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
     s3.put_object(
-        Bucket=settings.s3_reports_bucket,
+        Bucket=reports_bucket,
         Key=report_item["json_s3_key"],
         Body=json.dumps(json_report, separators=(",", ":"), ensure_ascii=False).encode(),
         ContentType="application/json",
     )
     s3.put_object(
-        Bucket=settings.s3_reports_bucket,
+        Bucket=reports_bucket,
         Key=report_item["html_s3_key"],
         Body=html_report.encode(),
         ContentType="text/html; charset=utf-8",

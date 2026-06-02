@@ -18,11 +18,11 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Operator can verify through CDK synth/diff that `StoaReportsBucket` remains private, retained, encrypted, access-logged, and is not replaced.
-- [ ] **INFRA-02**: Operator can verify that the API Lambda receives `S3_REPORTS_BUCKET` from CDK.
-- [ ] **INFRA-03**: Operator can verify that the weekly report Lambda receives `S3_REPORTS_BUCKET` from CDK.
-- [ ] **INFRA-04**: Operator can verify that both API and weekly report Lambdas have reports bucket read/write permissions.
-- [ ] **INFRA-05**: Production report artifact code cannot silently use the local placeholder bucket name `stoa-reports` when a CDK-injected bucket is required.
+- [x] **INFRA-01**: Operator can verify through CDK synth/diff that `StoaReportsBucket` remains private, retained, encrypted, access-logged, and is not replaced.
+- [x] **INFRA-02**: Operator can verify that the API Lambda receives `S3_REPORTS_BUCKET` from CDK.
+- [x] **INFRA-03**: Operator can verify that the weekly report Lambda receives `S3_REPORTS_BUCKET` from CDK.
+- [x] **INFRA-04**: Operator can verify that both API and weekly report Lambdas have reports bucket read/write permissions.
+- [x] **INFRA-05**: Production report artifact code cannot silently use the local placeholder bucket name `stoa-reports` when a CDK-injected bucket is required.
 
 ### Artifact Contract
 
@@ -98,11 +98,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 14 | Pending |
-| INFRA-02 | Phase 14 | Pending |
-| INFRA-03 | Phase 14 | Pending |
-| INFRA-04 | Phase 14 | Pending |
-| INFRA-05 | Phase 14 | Pending |
+| INFRA-01 | Phase 14 | Complete |
+| INFRA-02 | Phase 14 | Complete |
+| INFRA-03 | Phase 14 | Complete |
+| INFRA-04 | Phase 14 | Complete |
+| INFRA-05 | Phase 14 | Complete |
 | ARTIFACT-01 | Phase 15 | Pending |
 | ARTIFACT-02 | Phase 15 | Pending |
 | ARTIFACT-03 | Phase 15 | Pending |
@@ -131,6 +131,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVIDENCE-05 | Phase 18 | Pending |
 
 **Coverage:**
+
 - v1.2 requirements: 31 total
 - Mapped to phases: 31
 - Unmapped: 0

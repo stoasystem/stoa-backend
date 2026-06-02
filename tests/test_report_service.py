@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from stoa.config import Settings
 from stoa.services import report_service
 
 
@@ -92,6 +93,35 @@ def test_report_week_window_accepts_iso_date():
 def test_report_week_window_rejects_invalid_date():
     with pytest.raises(ValueError):
         report_service.report_week_window("not-a-date")
+
+
+def test_report_artifacts_bucket_allows_local_placeholder_in_development():
+    settings = Settings(environment="development", s3_reports_bucket="stoa-reports")
+
+    assert settings.report_artifacts_bucket == "stoa-reports"
+
+
+def test_report_artifacts_bucket_rejects_production_placeholder():
+    settings = Settings(environment="production", s3_reports_bucket="stoa-reports")
+
+    with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
+        _ = settings.report_artifacts_bucket
+
+
+def test_report_artifacts_bucket_rejects_blank_production_value():
+    settings = Settings(environment="production", s3_reports_bucket=" ")
+
+    with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
+        _ = settings.report_artifacts_bucket
+
+
+def test_report_artifacts_bucket_returns_trimmed_cdk_value_in_production():
+    settings = Settings(
+        environment="production",
+        s3_reports_bucket=" stoa-reports-562923011260 ",
+    )
+
+    assert settings.report_artifacts_bucket == "stoa-reports-562923011260"
 
 
 def test_empty_aggregation_returns_zero_payload(monkeypatch):
@@ -467,6 +497,35 @@ def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch)
     assert s3.puts[1]["ContentType"] == "text/html; charset=utf-8"
     assert json.loads(s3.puts[0]["Body"].decode())["content"]["summary"] == generated_report_content()["summary"]
     assert status_updates[0][1] == "email_sent"
+
+
+def test_store_and_send_weekly_report_rejects_production_placeholder_bucket(monkeypatch):
+    events = []
+
+    monkeypatch.setattr(report_service.settings, "environment", "production")
+    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "stoa-reports")
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "put_report",
+        lambda item: events.append(("put_report", item["status"])),
+    )
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "update_report_status",
+        lambda report_id, status, **fields: events.append(("update", status)),
+    )
+
+    s3 = FakeS3Client(events)
+    with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
+        report_service.store_and_send_weekly_report(
+            sample_report_payload(),
+            generated_report_content(),
+            s3_client=s3,
+            ses_client=FakeSESClient(events),
+        )
+
+    assert events == []
+    assert s3.puts == []
 
 
 def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):

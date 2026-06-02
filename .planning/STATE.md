@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: S3 Report Artifact Infrastructure
 status: planning
-last_updated: "2026-06-03T00:26:47+02:00"
+last_updated: "2026-06-03T00:35:13+02:00"
 last_activity: 2026-06-03
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -20,22 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 14: CDK & Runtime Configuration Verification
+**Current focus:** Phase 15: Artifact Key Contract & Helper Hardening
 
 ## Current Position
 
-Phase: 14 of 18 (CDK & Runtime Configuration Verification)
-Plan: TBD
-Status: Ready to plan Phase 14
-Last activity: 2026-06-03 - Created v1.2 roadmap and mapped all requirements.
+Phase: 15 of 18 (artifact key contract & helper hardening)
+Plan: Not started
+Status: Ready to plan Phase 15
+Last activity: 2026-06-03 - Completed Phase 14 CDK/runtime verification and production reports bucket guard.
 
-Progress: [----------] 0%
+Progress: [##--------] 20%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,6 +45,7 @@ Progress: [----------] 0%
 |-------|-------|-------|----------|
 | 1-13 | 19 complete | - | - |
 | 14-18 | TBD | - | - |
+| 14 | 1 | - | - |
 
 **Recent Trend:**
 
@@ -64,11 +65,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Plan Phase 14 with `$gsd-plan-phase 14`.
+- Plan Phase 15 with `$gsd-plan-phase 15`.
 
 ### Blockers/Concerns
 
-- Deployed AWS runtime state is not yet verified; Phase 14 must separate CDK source confidence from deployed-state confidence.
+- Deployed AWS runtime state is not yet verified; Phase 18 must record this as incomplete unless a later phase verifies it with AWS CLI or deployment smoke evidence.
 - `stoa-backend/dist` is a gitignored Lambda build artifact; deployed smoke confidence depends on fresh packaged Lambda code.
 
 ## Deferred Items

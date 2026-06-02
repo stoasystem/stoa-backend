@@ -4,6 +4,10 @@ from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+LOCAL_REPORTS_BUCKET_PLACEHOLDER = "stoa-reports"
+PRODUCTION_ENVIRONMENTS = {"production", "prod"}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -23,7 +27,7 @@ class Settings(BaseSettings):
 
     # S3
     s3_images_bucket: str = "stoa-images"
-    s3_reports_bucket: str = "stoa-reports"
+    s3_reports_bucket: str = LOCAL_REPORTS_BUCKET_PLACEHOLDER
     s3_presign_expiry_seconds: int = 300
 
     # Cognito
@@ -39,6 +43,21 @@ class Settings(BaseSettings):
             f"https://cognito-idp.{self.aws_region}.amazonaws.com"
             f"/{self.cognito_user_pool_id}/.well-known/jwks.json"
         )
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() in PRODUCTION_ENVIRONMENTS
+
+    @property
+    def report_artifacts_bucket(self) -> str:
+        bucket = self.s3_reports_bucket.strip()
+        if self.is_production and (
+            not bucket or bucket == LOCAL_REPORTS_BUCKET_PLACEHOLDER
+        ):
+            raise ValueError(
+                "S3_REPORTS_BUCKET must be configured by CDK in production"
+            )
+        return bucket or LOCAL_REPORTS_BUCKET_PLACEHOLDER
 
     # Bedrock
     # EU cross-region inference profile — no manual model access approval needed
