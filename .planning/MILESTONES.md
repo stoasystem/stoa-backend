@@ -22,9 +22,30 @@ Key accomplishments:
 
 Known deferred items at close: 4 (see `.planning/v1.0-MILESTONE-AUDIT.md` tech debt).
 
+### v1.1 Weekly Report Automation
+
+**Status:** Shipped 2026-06-02
+**Audit:** `.planning/v1.1-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.1-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.1-REQUIREMENTS.md`
+**Phases:** 8
+**Plans:** 8
+**Requirements:** 34/34 v1.1 requirements complete
+
+Key accomplishments:
+
+- Added CDK-backed scheduled weekly report Lambda infrastructure with EventBridge Scheduler, permissions, DLQ, and monitoring.
+- Built weekly learning aggregation, parent-facing Bedrock report generation with deterministic fallback, and report artifact storage.
+- Stored generated report metadata and full HTML/JSON artifacts before SES delivery completion.
+- Added idempotent scheduled orchestration for linked parent/student report generation.
+- Exposed generated, missing, pending, failed, and email-failed report states through the parent API and frontend.
+- Verified backend and frontend report flows with focused pytest, ruff, Playwright, and lint coverage.
+
+Known deferred items at close: 5 follow-up candidates (see `.planning/v1.1-MILESTONE-AUDIT.md` residual risks and follow-ups).
+
 ## Current
 
 No active milestone.
 
 ---
-*Last updated: 2026-06-02 after shipping v1.0*
+*Last updated: 2026-06-02 after shipping v1.1*

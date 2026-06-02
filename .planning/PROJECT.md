@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.0 parent portal integration now serves normal parent flows through authenticated `/parents/me/...` backend routes. A real parent Cognito account can see linked children, open child detail views, review real learning summary/history, and open report pages that correctly handle both existing and missing reports.
+The v1.1 weekly report automation now generates weekly learning reports for linked parent/student pairs, stores generated report artifacts, sends parent emails, and renders generated report states in the parent portal.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.0 Parent Portal Real Data Integration on 2026-06-02
+**Shipped version:** v1.1 Weekly Report Automation on 2026-06-02
 
 Delivered:
 
@@ -22,20 +22,15 @@ Delivered:
 - Parent-owned report lookup through `GET /parents/me/children/{child_id}/report` and week-specific `GET /parents/me/children/{child_id}/reports/{week}`.
 - Frontend parent services and pages use real backend route shapes and no longer silently hide parent-critical API failures behind demo fallback.
 - Focused backend and frontend tests cover parent authorization, empty states, missing reports, and route contract alignment.
+- CDK defines a scheduled weekly report Lambda, EventBridge Scheduler target, permissions, retry/DLQ behavior, and monitoring.
+- Backend aggregates weekly student learning activity, generates parent-facing content with Bedrock and deterministic fallback, stores metadata/artifacts, and sends SES email.
+- Scheduled orchestration is idempotent by `(parent_id, student_id, week_start)`.
+- Parent API and frontend render generated, missing, pending, failed, and email-failed report states.
+- Focused backend and frontend tests verify the report flow.
 
-## Current Milestone: v1.1 Weekly Report Automation
+## Current Milestone
 
-**Goal:** Automatically generate weekly learning reports for linked parent/student pairs, store the generated report, send it to parents by email, and render the richer generated report in the parent portal.
-
-**Target features:**
-
-- CDK defines the scheduled weekly report Lambda target, EventBridge Scheduler wiring, reports bucket env/permissions, SES/Bedrock/DynamoDB permissions, retry/failure behavior, and monitoring alarms.
-- Backend adds weekly report aggregation/generation services and a scheduled Lambda handler that is idempotent by `(parent_id, student_id, week_start)`.
-- Bedrock generates parent-facing summary, weak topics, and recommendations with strict JSON validation and deterministic fallback.
-- Reports store metadata in DynamoDB and full HTML/JSON artifacts in the private S3 reports bucket before email is considered complete.
-- SES sends weekly report email to the parent and preserves generated reports when email delivery fails.
-- Parent frontend renders generated report content, missing state, and generation/email failure states from real backend responses.
-- Backend and frontend tests cover aggregation, idempotency, Bedrock parser/fallback, S3/SES failure behavior, and generated report UI.
+No active milestone. Start the next one with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -48,7 +43,7 @@ Existing codebase capabilities inferred from the mapped backend:
 - DynamoDB single-table repositories exist for users, questions, practice, and reports.
 - Student summary, student question history, practice progress, mistakes, and report storage are available as data sources for parent-visible aggregation.
 
-v1.0 shipped requirements:
+Shipped requirements:
 
 - Parent users can list only their linked children through `/parents/me/children` - v1.0.
 - Parent users can open a linked child summary backed by real backend aggregation - v1.0.
@@ -57,18 +52,11 @@ v1.0 shipped requirements:
 - Parent-critical frontend flows use real backend API contracts and do not silently fall back to demo data - v1.0.
 - Authorization prevents parents, students, teachers, tutors, and admins from using normal parent routes outside their intended access rules - v1.0.
 - Required infrastructure assumptions are confirmed against CDK before backend implementation - v1.0.
+- Weekly report automation infrastructure, generation, storage, email delivery, API display, frontend rendering, and verification shipped - v1.1.
 
 ### Active
 
-- [ ] Weekly report automation, including scheduled generation and delivery.
-- [ ] CDK report automation wiring, including scheduled Lambda, reports bucket access, SES/Bedrock/DynamoDB permissions, retries/failure handling, and monitoring.
-- [ ] Backend weekly report aggregation and generation for linked parent/student pairs.
-- [ ] Bedrock-generated parent-facing report summary and recommendations with validated JSON output and deterministic fallback.
-- [ ] DynamoDB report metadata and S3 report artifact storage.
-- [ ] SES weekly report email delivery with failure status preservation.
-- [ ] Parent frontend generated report detail display with missing and failed states.
-- [ ] Backend and frontend verification for the weekly report flow.
-- [ ] Cleanup or integration of the unused parent practice-summary demo fallback path if it intersects with generated report display.
+- [ ] Define the next milestone.
 
 ### Out of Scope
 
@@ -110,7 +98,7 @@ Current backend capabilities:
 - Child summary, learning history, latest report, and week-specific report lookups exist through `/parents/me/children/{child_id}/...`.
 - Legacy `/parents/{parent_id}/...` child/report routes remain compatible for explicit legacy/admin use.
 - Student summary, question history, practice progress, mistakes, conversations, and report storage are available as data sources for parent-visible aggregation.
-- Report storage exists at repository/model level, but report generation service does not exist.
+- Weekly report aggregation, Bedrock/fallback generation, storage, email delivery, and scheduled job orchestration exist in backend services/jobs.
 
 ### Frontend Context
 
@@ -147,7 +135,8 @@ Known current resources:
 - Lambda FastAPI backend through API Gateway HTTP API.
 - SQS FIFO teacher escalation queue.
 - SES email identity.
-- EventBridge schedule group exists, but weekly report generation target is not implemented in backend.
+- EventBridge schedule group and weekly report Lambda target exist in CDK.
+- Infra CI builds `stoa-backend/dist` before CDK diff/deploy because Lambda assets are gitignored build artifacts.
 
 ## Constraints
 
@@ -169,8 +158,8 @@ Known current resources:
 | Check CDK before backend data-access changes | The milestone explicitly depended on current DynamoDB/Cognito/Lambda resource definitions | Good - Phase 1 created the evidence ledger |
 | Use local DynamoDB parent profile `user_id` as canonical parent ownership ID | Cognito `sub` can differ from local user IDs used by existing records | Good - used by parent resolver and ownership checks |
 | Remove `withDemoFallback` from parent-critical flows | Parent portal correctness depends on surfacing real backend failures instead of replacing them with demo data | Good - shipped in frontend integration |
-| Prefer a separate scheduled Lambda handler for weekly reports | EventBridge Scheduler should not invoke the Mangum API handler directly | Pending in v1.1 |
-| Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Pending in v1.1 |
+| Prefer a separate scheduled Lambda handler for weekly reports | EventBridge Scheduler should not invoke the Mangum API handler directly | Good - shipped in v1.1 |
+| Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Good - shipped in v1.1 |
 
 ## Evolution
 
@@ -190,4 +179,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after starting milestone v1.1*
+*Last updated: 2026-06-02 after shipping milestone v1.1*
