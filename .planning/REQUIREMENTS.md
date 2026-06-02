@@ -34,13 +34,13 @@
 
 ### Storage and Email
 
-- [ ] **STORE-01**: Report metadata is stored in DynamoDB with status, stats, summary, recommendations, S3 key, timestamps, and error fields.
-- [ ] **STORE-02**: Full report HTML and JSON artifacts are stored in the private reports S3 bucket.
-- [ ] **STORE-03**: Generated report content is stored before email send is considered complete.
-- [ ] **EMAIL-01**: SES sends weekly report email only to the linked parent email.
-- [ ] **EMAIL-02**: Email includes student name, week range, summary, recommendations, and parent portal link.
-- [ ] **EMAIL-03**: Email failure keeps the generated report available and marks `email_failed`.
-- [ ] **EMAIL-04**: Report logs include identifiers, counts, and error classes, but do not log full student question content.
+- [x] **STORE-01**: Report metadata is stored in DynamoDB with status, stats, summary, recommendations, S3 key, timestamps, and error fields.
+- [x] **STORE-02**: Full report HTML and JSON artifacts are stored in the private reports S3 bucket.
+- [x] **STORE-03**: Generated report content is stored before email send is considered complete.
+- [x] **EMAIL-01**: SES sends weekly report email only to the linked parent email.
+- [x] **EMAIL-02**: Email includes student name, week range, summary, recommendations, and parent portal link.
+- [x] **EMAIL-03**: Email failure keeps the generated report available and marks `email_failed`.
+- [x] **EMAIL-04**: Report logs include identifiers, counts, and error classes, but do not log full student question content.
 
 ### Parent API and Frontend
 
@@ -112,13 +112,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AI-02 | Phase 8 | Complete |
 | AI-03 | Phase 8 | Complete |
 | AI-04 | Phase 8 | Complete |
-| STORE-01 | Phase 9 | Pending |
-| STORE-02 | Phase 9 | Pending |
-| STORE-03 | Phase 9 | Pending |
-| EMAIL-01 | Phase 9 | Pending |
-| EMAIL-02 | Phase 9 | Pending |
-| EMAIL-03 | Phase 9 | Pending |
-| EMAIL-04 | Phase 9 | Pending |
+| STORE-01 | Phase 9 | Complete |
+| STORE-02 | Phase 9 | Complete |
+| STORE-03 | Phase 9 | Complete |
+| EMAIL-01 | Phase 9 | Complete |
+| EMAIL-02 | Phase 9 | Complete |
+| EMAIL-03 | Phase 9 | Complete |
+| EMAIL-04 | Phase 9 | Complete |
 | JOB-01 | Phase 10 | Pending |
 | JOB-02 | Phase 10 | Pending |
 | JOB-03 | Phase 10 | Pending |

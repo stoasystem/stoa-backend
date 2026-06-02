@@ -14,7 +14,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 - [x] **Phase 6: CDK Report Automation Foundation** - CDK defines the scheduled report Lambda, resource configuration, failure handling, and monitoring. (completed 2026-06-02)
 - [x] **Phase 7: Weekly Learning Aggregation** - Backend creates truthful weekly report payloads from linked student activity. (completed 2026-06-02)
 - [x] **Phase 8: Bedrock Report Generation** - Backend turns weekly payloads into validated parent-facing generated report content with deterministic fallback. (completed 2026-06-02)
-- [ ] **Phase 9: Report Storage and Email Delivery** - Backend stores report metadata/artifacts before sending SES email and preserving delivery failures.
+- [x] **Phase 9: Report Storage and Email Delivery** - Backend stores report metadata/artifacts before sending SES email and preserving delivery failures. (completed 2026-06-02)
 - [ ] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts.
 - [ ] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states.
 - [ ] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior.
@@ -75,7 +75,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
   4. Email failure keeps the generated report available and marks the report as `email_failed`.
   5. Report logs include identifiers, counts, and error classes without logging full student question content.
 
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 ### Phase 10: Scheduled Job Orchestration
 
@@ -145,7 +145,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 | 6. CDK Report Automation Foundation | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 7. Weekly Learning Aggregation | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 8. Bedrock Report Generation | v1.1 | 1/1 | Complete    | 2026-06-02 |
-| 9. Report Storage and Email Delivery | v1.1 | 0/TBD | Not started | - |
+| 9. Report Storage and Email Delivery | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 10. Scheduled Job Orchestration | v1.1 | 0/TBD | Not started | - |
 | 11. Generated Report API and Frontend Display | v1.1 | 0/TBD | Not started | - |
 | 12. Backend Report Flow Verification | v1.1 | 0/TBD | Not started | - |
