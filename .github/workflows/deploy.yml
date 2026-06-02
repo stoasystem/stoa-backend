@@ -52,6 +52,16 @@ jobs:
           role-to-assume: arn:aws:iam::562923011260:role/stoa-github-backend-deploy
           aws-region: eu-central-2
 
+      - name: Preflight Lambda update permissions
+        run: |
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda update-function-code \
+              --function-name "$function_name" \
+              --zip-file fileb://lambda.zip \
+              --region eu-central-2 \
+              --dry-run
+          done
+
       - name: Update Lambda function code
         run: |
           for function_name in stoa-api stoa-weekly-report; do
