@@ -25,8 +25,8 @@
 
 ### Aggregation and AI
 
-- [ ] **AGGR-01**: Report service aggregates weekly question, AI answer, teacher help, practice progress, mistake, and weak-topic data.
-- [ ] **AGGR-02**: Empty or sparse weekly data produces a valid deterministic report payload, not fabricated activity.
+- [x] **AGGR-01**: Report service aggregates weekly question, AI answer, teacher help, practice progress, mistake, and weak-topic data.
+- [x] **AGGR-02**: Empty or sparse weekly data produces a valid deterministic report payload, not fabricated activity.
 - [ ] **AI-01**: Bedrock receives compact structured weekly report input.
 - [ ] **AI-02**: Bedrock output is parsed as strict JSON with summary, strengths, weak topics, recommendations, and optional teacher note.
 - [ ] **AI-03**: Malformed or failed Bedrock output falls back to deterministic parent-facing content.
@@ -106,8 +106,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CDK-04 | Phase 6 | Complete |
 | CDK-05 | Phase 6 | Complete |
 | CDK-06 | Phase 6 | Complete |
-| AGGR-01 | Phase 7 | Pending |
-| AGGR-02 | Phase 7 | Pending |
+| AGGR-01 | Phase 7 | Complete |
+| AGGR-02 | Phase 7 | Complete |
 | AI-01 | Phase 8 | Pending |
 | AI-02 | Phase 8 | Pending |
 | AI-03 | Phase 8 | Pending |
