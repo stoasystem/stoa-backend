@@ -54,12 +54,12 @@
 
 ### Verification
 
-- [ ] **TEST-01**: Backend tests cover week-window calculation and report idempotency.
-- [ ] **TEST-02**: Backend tests cover aggregation for empty and mixed weekly activity.
-- [ ] **TEST-03**: Backend tests cover Bedrock JSON parser and fallback behavior.
-- [ ] **TEST-04**: Backend tests cover DynamoDB metadata and S3 artifact writes.
-- [ ] **TEST-05**: Backend tests cover SES failure marking `email_failed`.
-- [ ] **TEST-06**: Backend tests cover parent endpoint generated, missing, and failed report responses.
+- [x] **TEST-01**: Backend tests cover week-window calculation and report idempotency.
+- [x] **TEST-02**: Backend tests cover aggregation for empty and mixed weekly activity.
+- [x] **TEST-03**: Backend tests cover Bedrock JSON parser and fallback behavior.
+- [x] **TEST-04**: Backend tests cover DynamoDB metadata and S3 artifact writes.
+- [x] **TEST-05**: Backend tests cover SES failure marking `email_failed`.
+- [x] **TEST-06**: Backend tests cover parent endpoint generated, missing, and failed report responses.
 - [ ] **TEST-07**: Frontend tests cover generated report detail rendering.
 - [ ] **TEST-08**: Frontend tests cover missing and email-failed report states.
 
@@ -131,12 +131,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FRONT-02 | Phase 11 | Complete |
 | FRONT-03 | Phase 11 | Complete |
 | FRONT-04 | Phase 11 | Complete |
-| TEST-01 | Phase 12 | Pending |
-| TEST-02 | Phase 12 | Pending |
-| TEST-03 | Phase 12 | Pending |
-| TEST-04 | Phase 12 | Pending |
-| TEST-05 | Phase 12 | Pending |
-| TEST-06 | Phase 12 | Pending |
+| TEST-01 | Phase 12 | Complete |
+| TEST-02 | Phase 12 | Complete |
+| TEST-03 | Phase 12 | Complete |
+| TEST-04 | Phase 12 | Complete |
+| TEST-05 | Phase 12 | Complete |
+| TEST-06 | Phase 12 | Complete |
 | TEST-07 | Phase 13 | Pending |
 | TEST-08 | Phase 13 | Pending |
 

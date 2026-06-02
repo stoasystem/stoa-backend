@@ -17,7 +17,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 - [x] **Phase 9: Report Storage and Email Delivery** - Backend stores report metadata/artifacts before sending SES email and preserving delivery failures. (completed 2026-06-02)
 - [x] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts. (completed 2026-06-02)
 - [x] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states. (completed 2026-06-02)
-- [ ] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior.
+- [x] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior. (completed 2026-06-02)
 - [ ] **Phase 13: Frontend Report State Verification** - Frontend tests prove generated, missing, and email-failed report states render correctly.
 
 ## Phase Details
@@ -121,7 +121,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
   4. Backend tests cover SES failure marking `email_failed`.
   5. Backend tests cover parent endpoint generated, missing, and failed report responses.
 
-**Plans**: TBD
+**Plans**: 1/1 complete
 
 ### Phase 13: Frontend Report State Verification
 
@@ -148,5 +148,5 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 | 9. Report Storage and Email Delivery | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 10. Scheduled Job Orchestration | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 11. Generated Report API and Frontend Display | v1.1 | 1/1 | Complete    | 2026-06-02 |
-| 12. Backend Report Flow Verification | v1.1 | 0/TBD | Not started | - |
+| 12. Backend Report Flow Verification | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 13. Frontend Report State Verification | v1.1 | 0/TBD | Not started | - |
