@@ -23,11 +23,19 @@ Delivered:
 - Frontend parent services and pages use real backend route shapes and no longer silently hide parent-critical API failures behind demo fallback.
 - Focused backend and frontend tests cover parent authorization, empty states, missing reports, and route contract alignment.
 
-## Next Milestone Goals
+## Current Milestone: v1.1 Weekly Report Automation
 
-- Define the next milestone with `$gsd-new-milestone`.
-- Strong candidate: weekly report automation, including scheduled generation, Bedrock narrative summaries, S3 artifacts if required, EventBridge target wiring, SES email delivery, monitoring, and retry behavior.
-- Supporting cleanup candidates: indexed parent-child lookup for production scale and cleanup of the unused parent practice-summary demo fallback path.
+**Goal:** Automatically generate weekly learning reports for linked parent/student pairs, store the generated report, send it to parents by email, and render the richer generated report in the parent portal.
+
+**Target features:**
+
+- CDK defines the scheduled weekly report Lambda target, EventBridge Scheduler wiring, reports bucket env/permissions, SES/Bedrock/DynamoDB permissions, retry/failure behavior, and monitoring alarms.
+- Backend adds weekly report aggregation/generation services and a scheduled Lambda handler that is idempotent by `(parent_id, student_id, week_start)`.
+- Bedrock generates parent-facing summary, weak topics, and recommendations with strict JSON validation and deterministic fallback.
+- Reports store metadata in DynamoDB and full HTML/JSON artifacts in the private S3 reports bucket before email is considered complete.
+- SES sends weekly report email to the parent and preserves generated reports when email delivery fails.
+- Parent frontend renders generated report content, missing state, and generation/email failure states from real backend responses.
+- Backend and frontend tests cover aggregation, idempotency, Bedrock parser/fallback, S3/SES failure behavior, and generated report UI.
 
 ## Requirements
 
@@ -53,14 +61,24 @@ v1.0 shipped requirements:
 ### Active
 
 - [ ] Weekly report automation, including scheduled generation and delivery.
-- [ ] Scalable indexed child lookup if production parent-child volume requires it.
-- [ ] S3 report artifact Lambda environment and permission wiring if report artifacts are needed.
-- [ ] Cleanup or integration of the unused parent practice-summary demo fallback path.
+- [ ] CDK report automation wiring, including scheduled Lambda, reports bucket access, SES/Bedrock/DynamoDB permissions, retries/failure handling, and monitoring.
+- [ ] Backend weekly report aggregation and generation for linked parent/student pairs.
+- [ ] Bedrock-generated parent-facing report summary and recommendations with validated JSON output and deterministic fallback.
+- [ ] DynamoDB report metadata and S3 report artifact storage.
+- [ ] SES weekly report email delivery with failure status preservation.
+- [ ] Parent frontend generated report detail display with missing and failed states.
+- [ ] Backend and frontend verification for the weekly report flow.
+- [ ] Cleanup or integration of the unused parent practice-summary demo fallback path if it intersects with generated report display.
 
 ### Out of Scope
 
+- Billing or paid subscription enforcement - not part of report automation MVP.
+- PDF generation - HTML/JSON report artifacts are enough for this milestone.
+- Multi-language report generation beyond the primary parent-facing language chosen for MVP.
 - Stripe or billing integration - unrelated to parent real-data integration.
 - Organization/school portal work - separate product surface.
+- Real-time report generation on every parent page load - scheduled generation is the intended model.
+- Manual admin report editor - follow-up operational feature.
 - Live classroom work - separate product surface.
 - Full admin analytics - separate admin analytics scope.
 - Broad frontend redesign - v1.0 was integration and state correctness.
@@ -151,6 +169,8 @@ Known current resources:
 | Check CDK before backend data-access changes | The milestone explicitly depended on current DynamoDB/Cognito/Lambda resource definitions | Good - Phase 1 created the evidence ledger |
 | Use local DynamoDB parent profile `user_id` as canonical parent ownership ID | Cognito `sub` can differ from local user IDs used by existing records | Good - used by parent resolver and ownership checks |
 | Remove `withDemoFallback` from parent-critical flows | Parent portal correctness depends on surfacing real backend failures instead of replacing them with demo data | Good - shipped in frontend integration |
+| Prefer a separate scheduled Lambda handler for weekly reports | EventBridge Scheduler should not invoke the Mangum API handler directly | Pending in v1.1 |
+| Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Pending in v1.1 |
 
 ## Evolution
 
@@ -170,4 +190,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after v1.0 milestone*
+*Last updated: 2026-06-02 after starting milestone v1.1*
