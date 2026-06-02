@@ -4,23 +4,30 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The current milestone moves the parent portal from demo/mock-backed screens to real AWS-backed data. A real parent Cognito account should be able to log in, see linked children, open child detail views, review real learning summary/history, and open report pages that correctly handle both existing and missing reports.
+The v1.0 parent portal integration now serves normal parent flows through authenticated `/parents/me/...` backend routes. A real parent Cognito account can see linked children, open child detail views, review real learning summary/history, and open report pages that correctly handle both existing and missing reports.
 
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
 
-## Current Milestone: v1.0 Parent Portal Real Data Integration
+## Current State
 
-**Goal:** Replace parent portal mock/demo-backed flows with authenticated `/parents/me/...` backend data, ownership checks, stable empty states, and frontend service alignment.
+**Shipped version:** v1.0 Parent Portal Real Data Integration on 2026-06-02
 
-**Target features:**
+Delivered:
+
 - Parent-owned child listing through `GET /parents/me/children`.
 - Parent-owned child summary through `GET /parents/me/children/{child_id}/summary`.
 - Parent-owned child learning history through `GET /parents/me/children/{child_id}/history`.
-- Parent-owned report lookup through `GET /parents/me/children/{child_id}/report` and week-specific lookup when needed.
-- Frontend parent services use real backend routes and no longer silently hide parent-critical API failures behind demo fallback.
+- Parent-owned report lookup through `GET /parents/me/children/{child_id}/report` and week-specific `GET /parents/me/children/{child_id}/reports/{week}`.
+- Frontend parent services and pages use real backend route shapes and no longer silently hide parent-critical API failures behind demo fallback.
 - Focused backend and frontend tests cover parent authorization, empty states, missing reports, and route contract alignment.
+
+## Next Milestone Goals
+
+- Define the next milestone with `$gsd-new-milestone`.
+- Strong candidate: weekly report automation, including scheduled generation, Bedrock narrative summaries, S3 artifacts if required, EventBridge target wiring, SES email delivery, monitoring, and retry behavior.
+- Supporting cleanup candidates: indexed parent-child lookup for production scale and cleanup of the unused parent practice-summary demo fallback path.
 
 ## Requirements
 
@@ -31,30 +38,32 @@ Existing codebase capabilities inferred from the mapped backend:
 - FastAPI backend is composed under `src/stoa/main.py` with route modules for auth, students, parents, practice, questions, conversations, teachers/tutors, admin, and files.
 - Cognito JWT validation and role resolution exist in `src/stoa/deps.py`.
 - DynamoDB single-table repositories exist for users, questions, practice, and reports.
-- Parent routes already expose parent child/report functionality, but use path parent IDs and do not match the preferred frontend `/parents/me/...` contract.
 - Student summary, student question history, practice progress, mistakes, and report storage are available as data sources for parent-visible aggregation.
+
+v1.0 shipped requirements:
+
+- Parent users can list only their linked children through `/parents/me/children` - v1.0.
+- Parent users can open a linked child summary backed by real backend aggregation - v1.0.
+- Parent users can open a linked child learning history backed by real backend data - v1.0.
+- Parent users can open child report pages that distinguish available reports from missing reports without fabricated content - v1.0.
+- Parent-critical frontend flows use real backend API contracts and do not silently fall back to demo data - v1.0.
+- Authorization prevents parents, students, teachers, tutors, and admins from using normal parent routes outside their intended access rules - v1.0.
+- Required infrastructure assumptions are confirmed against CDK before backend implementation - v1.0.
 
 ### Active
 
-- [ ] Parent users can list only their linked children through `/parents/me/children`.
-- [ ] Parent users can open a linked child summary backed by real backend aggregation.
-- [ ] Parent users can open a linked child learning history backed by real backend data.
-- [ ] Parent users can open child report pages that distinguish available reports from missing reports without fabricated content.
-- [ ] Parent-critical frontend flows use real backend API contracts and do not silently fall back to demo data.
-- [ ] Authorization prevents parents, students, teachers, tutors, and admins from using normal parent routes outside their intended access rules.
-- [ ] Required infrastructure assumptions are confirmed against CDK before backend implementation.
+- [ ] Weekly report automation, including scheduled generation and delivery.
+- [ ] Scalable indexed child lookup if production parent-child volume requires it.
+- [ ] S3 report artifact Lambda environment and permission wiring if report artifacts are needed.
+- [ ] Cleanup or integration of the unused parent practice-summary demo fallback path.
 
 ### Out of Scope
 
-- Automatic weekly report generation - separate follow-up milestone.
-- EventBridge schedule target implementation - belongs to weekly report automation.
-- SES weekly email sending workflow - belongs to weekly report automation.
-- PDF generation - not required for current parent report display/empty-state flows.
 - Stripe or billing integration - unrelated to parent real-data integration.
-- Organization/school portal work - outside this parent portal milestone.
-- Live classroom work - outside this parent portal milestone.
-- Full admin analytics - outside this parent portal milestone.
-- Broad frontend redesign - this milestone is integration and state correctness.
+- Organization/school portal work - separate product surface.
+- Live classroom work - separate product surface.
+- Full admin analytics - separate admin analytics scope.
+- Broad frontend redesign - v1.0 was integration and state correctness.
 
 ## Context
 
@@ -79,11 +88,10 @@ Relevant backend files:
 
 Current backend capabilities:
 
-- Parent child listing exists, but uses path parent ID.
-- Weekly report lookup exists, but uses path parent ID and week.
-- Student summary exists, but uses `/students/{student_id}/summary`.
-- Student question history exists, but uses `/students/{student_id}/questions`.
-- Practice progress and mistakes exist for students.
+- Parent child listing exists through `/parents/me/children`.
+- Child summary, learning history, latest report, and week-specific report lookups exist through `/parents/me/children/{child_id}/...`.
+- Legacy `/parents/{parent_id}/...` child/report routes remain compatible for explicit legacy/admin use.
+- Student summary, question history, practice progress, mistakes, conversations, and report storage are available as data sources for parent-visible aggregation.
 - Report storage exists at repository/model level, but report generation service does not exist.
 
 ### Frontend Context
@@ -94,14 +102,13 @@ Relevant frontend files:
 - `/Users/zhdeng/stoa-frontend/src/pages/parent/`
 - `/Users/zhdeng/stoa-frontend/src/services/parent/parentApi.ts`
 - `/Users/zhdeng/stoa-frontend/src/services/parent/parentReportApi.ts`
-- `/Users/zhdeng/stoa-frontend/src/services/practice/practiceApi.ts`
 - `/Users/zhdeng/stoa-frontend/src/services/demo/demoFallback.ts`
 
-Current frontend issue:
+Current frontend state:
 
-- Parent pages call routes such as `/parents/me/children` and `/parents/me/children/{childId}/report`.
-- Backend currently exposes `/parents/{parent_id}/children` and `/parents/{parent_id}/reports/{week}`.
-- Parent-facing frontend calls still use `withDemoFallback`, so API failures can be hidden by mock data.
+- Parent-critical child list, summary, history, and report services call `/parents/me/...` routes directly.
+- Parent-critical pages render explicit loading, error, empty, missing, and available states.
+- Demo fallback is no longer used for normal parent-critical child, summary, history, and report flows.
 
 ### Infrastructure Context
 
@@ -131,17 +138,19 @@ Known current resources:
 - **DynamoDB:** Reuse the existing single-table design unless a specific missing access pattern requires a new GSI.
 - **CDK source of truth:** Any required infrastructure change must be implemented in CDK, not manually assumed.
 - **Configuration:** Backend resource names and URLs must come from environment variables injected by CDK.
-- **Frontend contract:** Frontend integration must target the real backend API contract and remove silent demo fallback from parent-critical flows.
+- **Frontend contract:** Frontend integration must target the real backend API contract and avoid silent demo fallback from parent-critical flows.
 - **Authorization:** Every child-specific parent endpoint must verify ownership before reading or returning child data.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Prefer `/parents/me/...` routes for parent portal flows | Parent identity is already available from JWT and clients should not pass parent IDs for normal logged-in parent workflows | Pending |
-| Keep existing path-ID parent endpoints compatible where useful | Existing routes may still serve legacy or internal use cases while the portal moves to `/parents/me/...` | Pending |
-| Treat report generation as a follow-up milestone | This milestone needs query/display/empty states, not scheduled generation, emails, or PDFs | Pending |
-| Check CDK before backend data-access changes | The milestone explicitly depends on current DynamoDB/Cognito/Lambda resource definitions | Pending |
+| Prefer `/parents/me/...` routes for parent portal flows | Parent identity is already available from JWT and clients should not pass parent IDs for normal logged-in parent workflows | Good - shipped in v1.0 |
+| Keep existing path-ID parent endpoints compatible where useful | Existing routes may still serve legacy or internal use cases while the portal moves to `/parents/me/...` | Good - legacy compatibility preserved in v1.0 |
+| Treat report generation as a follow-up milestone | v1.0 needed query/display/empty states, not scheduled generation, emails, or PDFs | Good - deferred to next milestone candidate |
+| Check CDK before backend data-access changes | The milestone explicitly depended on current DynamoDB/Cognito/Lambda resource definitions | Good - Phase 1 created the evidence ledger |
+| Use local DynamoDB parent profile `user_id` as canonical parent ownership ID | Cognito `sub` can differ from local user IDs used by existing records | Good - used by parent resolver and ownership checks |
+| Remove `withDemoFallback` from parent-critical flows | Parent portal correctness depends on surfacing real backend failures instead of replacing them with demo data | Good - shipped in frontend integration |
 
 ## Evolution
 
@@ -161,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after starting milestone v1.0*
+*Last updated: 2026-06-02 after v1.0 milestone*

@@ -2,9 +2,9 @@
 gsd_state_version: '1.0'
 milestone: v1.0
 milestone_name: Parent Portal Real Data Integration
-status: planning
-stopped_at: All phases complete; milestone ready for audit.
-last_updated: "2026-06-02T13:46:48.921Z"
+status: complete
+stopped_at: v1.0 milestone audited, archived, and ready for next milestone setup.
+last_updated: "2026-06-02T13:51:21.000Z"
 last_activity: 2026-06-02
 progress:
   total_phases: 5
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Milestone audit and completion.
+**Current focus:** No active milestone. Start the next cycle with `$gsd-new-milestone`.
 
 ## Current Position
 
-Phase: 5 of 5 (Verification and Test Data)
+Phase: Milestone complete
 Plan: Complete
-Status: All phases complete
-Last activity: 2026-06-02 - Phase 5 completed; milestone ready for audit
+Status: v1.0 shipped with tech debt only
+Last activity: 2026-06-02 - v1.0 audited and archived
 
 Progress: [##########] 100%
 
@@ -52,8 +52,8 @@ Progress: [##########] 100%
 
 **Recent Trend:**
 
-- Last 5 plans: none
-- Trend: -
+- Last 5 plans: complete
+- Trend: shipped
 
 ## Accumulated Context
 
@@ -65,7 +65,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.0: Treat weekly report automation as a follow-up milestone.
 - v1.0: Check existing CDK before adding backend data-access or infrastructure assumptions.
 - Phase 1: Use local DynamoDB parent profile `user_id` as the canonical parent ownership identifier.
-- Phase 1: Accept scan-based child lookup as MVP unless Phase 2 proves a CDK-backed GSI is required.
+- Phase 1: Accept scan-based child lookup as MVP unless production scale requires a CDK-backed GSI.
 - Phase 1: Treat S3 report artifact access as blocked until CDK injects `S3_REPORTS_BUCKET` and grants report bucket permissions.
 - Phase 2: `/parents/me/children` is parent-only and returns `{ "items": [...] }`.
 - Phase 2: Legacy parent routes compare path parent IDs to resolved local parent profile IDs, not raw JWT `sub`.
@@ -77,22 +77,28 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+- Start the next milestone with `$gsd-new-milestone`.
 
 ### Blockers/Concerns
 
 - Weekly report automation remains deferred to a follow-up milestone.
+- Scan-based child lookup is accepted for MVP scale and should be revisited if parent-child volume grows.
+- S3 report artifact Lambda environment and permission wiring remains deferred until report artifacts are in scope.
+- An unused parent practice-summary service path still uses demo fallback outside the v1 parent-critical flow.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward at v1.0 milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Weekly report automation | Scheduled generation, Bedrock summary generation, S3 artifacts, EventBridge target, SES email, monitoring and retry behavior | Deferred to follow-up milestone | v1.0 start |
+| Weekly report automation | Scheduled generation, Bedrock summary generation, S3 artifacts, EventBridge target, SES email, monitoring and retry behavior | Deferred to follow-up milestone | v1.0 close |
+| Data access | Scan-based child lookup | Accepted MVP tech debt | v1.0 close |
+| Infrastructure | `S3_REPORTS_BUCKET` Lambda env and report bucket permissions | Deferred until S3 report artifacts are in scope | v1.0 close |
+| Frontend cleanup | Unused parent practice-summary demo fallback path | Deferred cleanup | v1.0 close |
 
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: All phases complete; milestone ready for audit.
+Stopped at: v1.0 milestone audited, archived, and ready for next milestone setup.
 Resume file: None
