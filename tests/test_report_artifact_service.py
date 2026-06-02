@@ -19,13 +19,15 @@ class FakeS3Client:
         self.puts = []
         self.gets = []
         self.read_body = read_body
+        self.objects = {}
 
     def put_object(self, **kwargs):
         self.puts.append(kwargs)
+        self.objects[kwargs["Key"]] = kwargs["Body"]
 
     def get_object(self, **kwargs):
         self.gets.append(kwargs)
-        return {"Body": FakeBody(self.read_body)}
+        return {"Body": FakeBody(self.read_body if self.read_body is not None else self.objects[kwargs["Key"]])}
 
 
 def test_build_report_artifact_keys_uses_exact_canonical_shape():
@@ -110,3 +112,32 @@ def test_get_report_json_reads_and_decodes_private_artifact(monkeypatch):
 def test_get_report_json_rejects_noncanonical_keys():
     with pytest.raises(ValueError, match="canonical"):
         report_artifact_service.get_report_json("reports/parent-1/student-1/2026-06-01/report.json")
+
+
+def test_run_report_artifact_s3_smoke_writes_and_reads_private_json(monkeypatch):
+    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    s3 = FakeS3Client()
+
+    result = report_artifact_service.run_report_artifact_s3_smoke(
+        {"week_start": "2026-06-01"},
+        s3_client=s3,
+    )
+
+    expected_key = "weekly-reports/smoke-parent/smoke-student/2026-06-01/report.json"
+    assert result == {
+        "status": "passed",
+        "bucket": "reports-bucket",
+        "key": expected_key,
+        "content_type": "application/json",
+        "readback_ok": True,
+        "cleanup": "not_performed",
+    }
+    assert len(s3.puts) == 1
+    assert s3.puts[0]["Bucket"] == "reports-bucket"
+    assert s3.puts[0]["Key"] == expected_key
+    assert s3.puts[0]["ContentType"] == "application/json"
+    assert "ACL" not in s3.puts[0]
+    assert s3.gets == [{"Bucket": "reports-bucket", "Key": expected_key}]
+    assert "content" not in result
+    assert "publicUrl" not in result
+    assert "presignedUrl" not in result

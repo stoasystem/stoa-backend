@@ -45,11 +45,11 @@ This blesses the shipped v1.1 backend convention instead of migrating to the sho
 
 ### Runtime Smoke
 
-- [ ] **SMOKE-01**: Maintainer can invoke a narrow weekly report Lambda smoke event that does not expose a public API route.
-- [ ] **SMOKE-02**: Smoke execution writes a deterministic private JSON object under the canonical `weekly-reports/` prefix.
-- [ ] **SMOKE-03**: Smoke execution reads the same private object back immediately and verifies its content.
-- [ ] **SMOKE-04**: Smoke output records bucket, key, content type, and readback success without exposing report content.
-- [ ] **SMOKE-05**: Smoke verification does not require public S3 URLs, frontend S3 access, bucket listing, or S3 access-log delivery.
+- [x] **SMOKE-01**: Maintainer can invoke a narrow weekly report Lambda smoke event that does not expose a public API route.
+- [x] **SMOKE-02**: Smoke execution writes a deterministic private JSON object under the canonical `weekly-reports/` prefix.
+- [x] **SMOKE-03**: Smoke execution reads the same private object back immediately and verifies its content.
+- [x] **SMOKE-04**: Smoke output records bucket, key, content type, and readback success without exposing report content.
+- [x] **SMOKE-05**: Smoke verification does not require public S3 URLs, frontend S3 access, bucket listing, or S3 access-log delivery.
 
 ### Privacy Boundary
 
@@ -116,11 +116,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STORAGE-06 | Phase 16 | Complete |
 | STORAGE-07 | Phase 16 | Complete |
 | STORAGE-08 | Phase 15 | Complete |
-| SMOKE-01 | Phase 17 | Pending |
-| SMOKE-02 | Phase 17 | Pending |
-| SMOKE-03 | Phase 17 | Pending |
-| SMOKE-04 | Phase 17 | Pending |
-| SMOKE-05 | Phase 17 | Pending |
+| SMOKE-01 | Phase 17 | Complete |
+| SMOKE-02 | Phase 17 | Complete |
+| SMOKE-03 | Phase 17 | Complete |
+| SMOKE-04 | Phase 17 | Complete |
+| SMOKE-05 | Phase 17 | Complete |
 | PRIVACY-01 | Phase 16 | Complete |
 | PRIVACY-02 | Phase 16 | Complete |
 | PRIVACY-03 | Phase 16 | Complete |

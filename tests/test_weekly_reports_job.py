@@ -34,6 +34,26 @@ def test_target_week_start_uses_eventbridge_time():
     assert result == "2026-05-25"
 
 
+def test_handler_routes_report_artifact_smoke_without_running_weekly_job(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        weekly_reports.report_artifact_service,
+        "run_report_artifact_s3_smoke",
+        lambda event: calls.append(event) or {"status": "passed", "readback_ok": True},
+    )
+    monkeypatch.setattr(
+        weekly_reports,
+        "run_weekly_report_job",
+        lambda event: (_ for _ in ()).throw(AssertionError("weekly job should not run")),
+    )
+
+    result = weekly_reports.handler({"job": "report_artifact_s3_smoke"}, None)
+
+    assert result == {"status": "passed", "readback_ok": True}
+    assert calls == [{"job": "report_artifact_s3_smoke"}]
+
+
 def test_discover_linked_parent_student_pairs_pages(monkeypatch):
     table = FakeTable(
         [

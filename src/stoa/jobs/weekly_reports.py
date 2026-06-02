@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo
-from stoa.services import report_service
+from stoa.services import report_artifact_service, report_service
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,9 @@ SKIPPED_STATUSES = {"generated", "email_sent", "email_failed"}
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Lambda handler for the scheduled weekly report job."""
+    event = event or {}
+    if event.get("job") == "report_artifact_s3_smoke":
+        return report_artifact_service.run_report_artifact_s3_smoke(event)
     return run_weekly_report_job(event)
 
 

@@ -13,6 +13,10 @@ from stoa.config import settings
 REPORT_ARTIFACT_PREFIX = "weekly-reports"
 REPORT_JSON_CONTENT_TYPE = "application/json"
 REPORT_HTML_CONTENT_TYPE = "text/html; charset=utf-8"
+REPORT_ARTIFACT_SMOKE_MARKER = "report-artifact-s3-smoke"
+REPORT_ARTIFACT_SMOKE_PARENT_ID = "smoke-parent"
+REPORT_ARTIFACT_SMOKE_STUDENT_ID = "smoke-student"
+REPORT_ARTIFACT_SMOKE_WEEK_START = "2026-06-01"
 
 _BACKEND_ID_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.=-]+$")
 
@@ -75,6 +79,48 @@ def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, A
     if not isinstance(artifact, dict):
         raise ValueError("report JSON artifact must decode to an object")
     return artifact
+
+
+def run_report_artifact_s3_smoke(
+    event: dict[str, Any] | None = None,
+    *,
+    s3_client: Any | None = None,
+) -> dict[str, Any]:
+    """Write and read a deterministic private JSON artifact for Lambda smoke verification."""
+    event = event or {}
+    week_start = event.get("week_start") or event.get("weekStart") or REPORT_ARTIFACT_SMOKE_WEEK_START
+    keys = build_report_artifact_keys(
+        event.get("parent_id") or REPORT_ARTIFACT_SMOKE_PARENT_ID,
+        event.get("student_id") or REPORT_ARTIFACT_SMOKE_STUDENT_ID,
+        week_start,
+    )
+    bucket = settings.report_artifacts_bucket
+    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    body = {
+        "marker": REPORT_ARTIFACT_SMOKE_MARKER,
+        "key": keys.json_key,
+        "weekStart": _validate_week_start(week_start),
+    }
+
+    s3.put_object(
+        Bucket=bucket,
+        Key=keys.json_key,
+        Body=json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode(),
+        ContentType=REPORT_JSON_CONTENT_TYPE,
+    )
+    readback = get_report_json(keys.json_key, s3_client=s3)
+    readback_ok = (
+        readback.get("marker") == REPORT_ARTIFACT_SMOKE_MARKER
+        and readback.get("key") == keys.json_key
+    )
+    return {
+        "status": "passed" if readback_ok else "failed",
+        "bucket": bucket,
+        "key": keys.json_key,
+        "content_type": REPORT_JSON_CONTENT_TYPE,
+        "readback_ok": readback_ok,
+        "cleanup": "not_performed",
+    }
 
 
 def _validate_backend_id_segment(value: str, field_name: str) -> str:
