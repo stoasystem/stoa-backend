@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -37,6 +37,29 @@ class FakeBedrockClient:
         if self.error:
             raise self.error
         return {"body": FakeBody({"content": [{"text": self.text}]})}
+
+
+class FakeS3Client:
+    def __init__(self, events=None):
+        self.events = events if events is not None else []
+        self.puts = []
+
+    def put_object(self, **kwargs):
+        self.events.append(("s3", kwargs["Key"]))
+        self.puts.append(kwargs)
+
+
+class FakeSESClient:
+    def __init__(self, events=None, error=None):
+        self.events = events if events is not None else []
+        self.error = error
+        self.emails = []
+
+    def send_email(self, **kwargs):
+        self.events.append(("ses", kwargs["Destination"]["ToAddresses"]))
+        self.emails.append(kwargs)
+        if self.error:
+            raise self.error
 
 
 def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, mistakes=None, conversations=None):
@@ -391,3 +414,115 @@ def test_generate_weekly_report_content_falls_back_on_bedrock_error():
         "recommendations": ["Encourage one short practice session before the next weekly report."],
         "teacherNote": None,
     }
+
+
+def generated_report_content():
+    return {
+        "summary": "Student made steady progress this week.",
+        "strengths": ["Completed practice."],
+        "weakTopics": [{"topic": "fractions", "note": "Review this next."}],
+        "recommendations": ["Practice fractions for ten minutes."],
+        "teacherNote": "Teacher help was requested.",
+    }
+
+
+def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch):
+    events = []
+    stored_items = []
+    status_updates = []
+
+    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "put_report",
+        lambda item: events.append(("put_report", item["status"])) or stored_items.append(item),
+    )
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "update_report_status",
+        lambda report_id, status, **fields: status_updates.append((report_id, status, fields)),
+    )
+
+    s3 = FakeS3Client(events)
+    ses = FakeSESClient(events)
+    result = report_service.store_and_send_weekly_report(
+        sample_report_payload(),
+        generated_report_content(),
+        s3_client=s3,
+        ses_client=ses,
+        now=datetime(2026, 6, 8, tzinfo=timezone.utc),
+    )
+
+    assert [event[0] for event in events] == ["s3", "s3", "put_report", "ses"]
+    assert result["status"] == "email_sent"
+    assert result["email_status"] == "sent"
+    assert stored_items[0]["status"] == "generated"
+    assert stored_items[0]["summary"] == "Student made steady progress this week."
+    assert stored_items[0]["recommendations"] == "Practice fractions for ten minutes."
+    assert stored_items[0]["s3_key"].endswith("/report.html")
+    assert stored_items[0]["json_s3_key"].endswith("/report.json")
+    assert len(s3.puts) == 2
+    assert s3.puts[0]["Bucket"] == "reports-bucket"
+    assert s3.puts[0]["ContentType"] == "application/json"
+    assert s3.puts[1]["ContentType"] == "text/html; charset=utf-8"
+    assert json.loads(s3.puts[0]["Body"].decode())["content"]["summary"] == generated_report_content()["summary"]
+    assert status_updates[0][1] == "email_sent"
+
+
+def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):
+    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    monkeypatch.setattr(report_service.report_repo, "put_report", lambda item: None)
+    monkeypatch.setattr(report_service.report_repo, "update_report_status", lambda report_id, status, **fields: None)
+
+    ses = FakeSESClient()
+    report_service.store_and_send_weekly_report(
+        sample_report_payload(),
+        generated_report_content(),
+        s3_client=FakeS3Client(),
+        ses_client=ses,
+    )
+
+    email = ses.emails[0]
+    assert email["Source"] == "noreply@stoaedu.ch"
+    assert email["Destination"]["ToAddresses"] == ["parent@example.com"]
+    body = email["Message"]["Body"]["Html"]["Data"]
+    assert "Student" in body
+    assert "2026-06-01 to 2026-06-07" in body
+    assert generated_report_content()["summary"] in body
+    assert "Practice fractions for ten minutes." in body
+    assert "https://app.stoaedu.ch/parent/children/student-1/reports/2026-06-01" in body
+
+
+def test_store_and_send_weekly_report_marks_email_failed_after_storage(monkeypatch):
+    events = []
+    stored_items = []
+    status_updates = []
+
+    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "put_report",
+        lambda item: events.append(("put_report", item["status"])) or stored_items.append(item),
+    )
+    monkeypatch.setattr(
+        report_service.report_repo,
+        "update_report_status",
+        lambda report_id, status, **fields: events.append(("update", status))
+        or status_updates.append((report_id, status, fields)),
+    )
+
+    result = report_service.store_and_send_weekly_report(
+        sample_report_payload(),
+        generated_report_content(),
+        s3_client=FakeS3Client(events),
+        ses_client=FakeSESClient(events, error=RuntimeError("ses unavailable")),
+    )
+
+    assert [event[0] for event in events] == ["s3", "s3", "put_report", "ses", "update"]
+    assert stored_items[0]["status"] == "generated"
+    assert result["status"] == "email_failed"
+    assert result["email_status"] == "failed"
+    assert result["email_error_class"] == "RuntimeError"
+    assert result["email_error_message"] == "ses unavailable"
+    assert status_updates[0][1] == "email_failed"
+    assert status_updates[0][2]["email_status"] == "failed"

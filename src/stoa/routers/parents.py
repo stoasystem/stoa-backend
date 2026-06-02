@@ -528,8 +528,8 @@ async def get_child_report_by_week(
 ):
     resolved = _resolve_parent_profile(user, settings)
     _get_owned_child_profile(resolved, child_id)
-    report = report_repo.get_report_by_week(resolved.parent_user_id, week)
-    if not report or report.get("student_id") != child_id:
+    report = report_repo.get_report_for_child_by_week(resolved.parent_user_id, child_id, week)
+    if not report:
         return _missing_report_state()
     return _available_report_state(report)
 

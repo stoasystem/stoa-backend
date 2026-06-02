@@ -406,6 +406,85 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
     ]
 
 
+def test_report_repo_update_report_status_updates_summary_item(monkeypatch):
+    class FakeUpdateTable:
+        def __init__(self):
+            self.calls = []
+
+        def update_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakeUpdateTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    report_repo.update_report_status(
+        "report-1",
+        "email_failed",
+        email_status="failed",
+        email_error_class="RuntimeError",
+    )
+
+    assert table.calls == [
+        {
+            "Key": {"PK": "REPORT#report-1", "SK": "SUMMARY"},
+            "UpdateExpression": "SET #f0 = :v0, #f1 = :v1, #f2 = :v2",
+            "ExpressionAttributeNames": {
+                "#f0": "status",
+                "#f1": "email_status",
+                "#f2": "email_error_class",
+            },
+            "ExpressionAttributeValues": {
+                ":v0": "email_failed",
+                ":v1": "failed",
+                ":v2": "RuntimeError",
+            },
+        }
+    ]
+
+
+def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(monkeypatch):
+    class FakeQueryTable:
+        def __init__(self):
+            self.calls = []
+            self.pages = [
+                {"Items": [_report("sibling")], "LastEvaluatedKey": {"PK": "REPORT#sibling"}},
+                {"Items": [_report("child-1")]},
+            ]
+
+        def query(self, **kwargs):
+            self.calls.append(kwargs)
+            return self.pages.pop(0)
+
+    table = FakeQueryTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    report = report_repo.get_report_for_child_by_week("parent-local", "child-1", "2026-06-01")
+
+    assert report["student_id"] == "child-1"
+    assert table.calls[0]["IndexName"] == "GSI-ParentId"
+    assert table.calls[1]["ExclusiveStartKey"] == {"PK": "REPORT#sibling"}
+
+
+def test_parent_child_week_report_available_when_same_week_sibling_first(monkeypatch):
+    app = _app_for_user({"sub": "parent-local", "role": "parent"})
+    app.dependency_overrides[parents.get_settings] = _settings
+    client = TestClient(app)
+
+    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
+    monkeypatch.setattr(parents, "_get_owned_child_profile", lambda resolved, child_id: _child_profile())
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: _report("child-1"),
+    )
+
+    response = client.get("/parents/me/children/child-1/reports/2026-06-01")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "available"
+    assert response.json()["report"]["studentId"] == "child-1"
+
+
 def test_latest_report_for_child_pages_and_filters(monkeypatch):
     calls = []
     pages = [
@@ -690,7 +769,7 @@ def test_parent_child_report_rejects_unlinked_before_report_read(monkeypatch):
         raise AssertionError("report reader should not run")
 
     monkeypatch.setattr(parents, "_latest_report_for_child", fail)
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", fail)
+    monkeypatch.setattr(parents.report_repo, "get_report_for_child_by_week", fail)
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/other-child/report")
@@ -703,25 +782,29 @@ def test_parent_child_week_report_available_after_ownership(monkeypatch):
     monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
     monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
-    def get_report(parent_id, week):
-        calls.append((parent_id, week))
+    def get_report(parent_id, student_id, week):
+        calls.append((parent_id, student_id, week))
         return _report()
 
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", get_report)
+    monkeypatch.setattr(parents.report_repo, "get_report_for_child_by_week", get_report)
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/child-1/reports/2026-06-01")
 
     assert response.status_code == 200
     assert response.json()["status"] == "available"
-    assert calls == [("parent-local", "2026-06-01")]
+    assert calls == [("parent-local", "child-1", "2026-06-01")]
 
 
 @pytest.mark.parametrize("week_report", [None, _report("sibling")])
 def test_parent_child_week_report_missing(monkeypatch, week_report):
     monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
     monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", lambda parent_id, week: week_report)
+    monkeypatch.setattr(
+        parents.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week: week_report if week_report and week_report.get("student_id") == student_id else None,
+    )
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/child-1/reports/2026-06-01")

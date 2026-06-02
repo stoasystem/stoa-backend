@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+from html import escape
 import json
 import logging
 import re
@@ -12,7 +13,8 @@ from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import practice_repo, question_repo, user_repo
+from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
+from stoa.services import notify_service
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +320,230 @@ def build_deterministic_report_fallback(payload: dict[str, Any]) -> dict[str, An
     }
 
 
+def store_and_send_weekly_report(
+    payload: dict[str, Any],
+    generated_content: dict[str, Any],
+    *,
+    s3_client: Any | None = None,
+    ses_client: Any | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Store report artifacts and metadata before attempting parent email."""
+    timestamp = _now_iso(now)
+    report_item = build_weekly_report_record(payload, generated_content, generated_at=timestamp)
+    html_report = render_weekly_report_html(payload, generated_content)
+    json_report = build_weekly_report_json_artifact(payload, generated_content, report_item)
+
+    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3.put_object(
+        Bucket=settings.s3_reports_bucket,
+        Key=report_item["json_s3_key"],
+        Body=json.dumps(json_report, separators=(",", ":"), ensure_ascii=False).encode(),
+        ContentType="application/json",
+    )
+    s3.put_object(
+        Bucket=settings.s3_reports_bucket,
+        Key=report_item["html_s3_key"],
+        Body=html_report.encode(),
+        ContentType="text/html; charset=utf-8",
+    )
+    report_repo.put_report(report_item)
+    logger.info(
+        "Weekly report stored report_id=%s parent_id=%s student_id=%s week_start=%s counts=%s",
+        report_item["report_id"],
+        report_item["parent_id"],
+        report_item["student_id"],
+        report_item["week_start"],
+        report_item.get("source_counts", {}),
+    )
+
+    try:
+        notify_service.send_weekly_report_email(
+            report_item["parent_email"],
+            html_report,
+            subject=f"STOA weekly report for {report_item['student_name']}",
+            ses_client=ses_client,
+        )
+    except Exception as exc:
+        failed_at = _now_iso()
+        error_class = type(exc).__name__
+        error_message = str(exc)[:240]
+        report_repo.update_report_status(
+            report_item["report_id"],
+            "email_failed",
+            email_status="failed",
+            email_failed_at=failed_at,
+            email_error_class=error_class,
+            email_error_message=error_message,
+            updated_at=failed_at,
+        )
+        logger.warning(
+            "Weekly report email failed report_id=%s parent_id=%s student_id=%s week_start=%s error_class=%s",
+            report_item["report_id"],
+            report_item["parent_id"],
+            report_item["student_id"],
+            report_item["week_start"],
+            error_class,
+        )
+        return {
+            **report_item,
+            "status": "email_failed",
+            "email_status": "failed",
+            "email_failed_at": failed_at,
+            "email_error_class": error_class,
+            "email_error_message": error_message,
+            "updated_at": failed_at,
+        }
+
+    sent_at = _now_iso()
+    report_repo.update_report_status(
+        report_item["report_id"],
+        "email_sent",
+        email_status="sent",
+        email_sent_at=sent_at,
+        updated_at=sent_at,
+    )
+    logger.info(
+        "Weekly report email sent report_id=%s parent_id=%s student_id=%s week_start=%s",
+        report_item["report_id"],
+        report_item["parent_id"],
+        report_item["student_id"],
+        report_item["week_start"],
+    )
+    return {
+        **report_item,
+        "status": "email_sent",
+        "email_status": "sent",
+        "email_sent_at": sent_at,
+        "updated_at": sent_at,
+    }
+
+
+def build_weekly_report_record(
+    payload: dict[str, Any],
+    generated_content: dict[str, Any],
+    *,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    parent = payload.get("parent", {})
+    student = payload.get("student", {})
+    week = payload.get("week", {})
+    metrics = payload.get("metrics", {})
+    source_counts = payload.get("sourceCounts", {})
+    parent_id = parent.get("id", "")
+    student_id = student.get("id", "")
+    week_start = week.get("start", "")
+    report_id = _report_id(parent_id, student_id, week_start)
+    json_key, html_key = _report_artifact_keys(parent_id, student_id, week_start)
+    recommendations = generated_content.get("recommendations", [])
+    weak_topics = generated_content.get("weakTopics", [])
+    timestamp = generated_at or _now_iso()
+
+    return {
+        "report_id": report_id,
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "parent_email": parent.get("email", ""),
+        "student_name": student.get("name") or "Student",
+        "week_start": week_start,
+        "week_end": week.get("end", ""),
+        "status": "generated",
+        "email_status": "pending",
+        "generated_at": timestamp,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "usage_count": int(metrics.get("questionsAsked", 0) or 0),
+        "ai_resolved": int(metrics.get("aiResolved", 0) or 0),
+        "teacher_resolved": int(metrics.get("teacherHelpRequests", 0) or 0),
+        "practice_lessons_completed": int(metrics.get("practiceLessonsCompleted", 0) or 0),
+        "mistakes_logged": int(metrics.get("mistakesLogged", 0) or 0),
+        "stats": {
+            "questionsAsked": int(metrics.get("questionsAsked", 0) or 0),
+            "aiResolved": int(metrics.get("aiResolved", 0) or 0),
+            "teacherHelpRequests": int(metrics.get("teacherHelpRequests", 0) or 0),
+            "practiceLessonsCompleted": int(metrics.get("practiceLessonsCompleted", 0) or 0),
+            "mistakesLogged": int(metrics.get("mistakesLogged", 0) or 0),
+        },
+        "summary": generated_content.get("summary", ""),
+        "strengths": generated_content.get("strengths", []),
+        "weak_topics": weak_topics,
+        "weak_knowledge_points": [topic.get("topic", "") for topic in weak_topics if topic.get("topic")],
+        "recommendations": "; ".join(recommendations) if isinstance(recommendations, list) else str(recommendations),
+        "recommendation_items": recommendations if isinstance(recommendations, list) else [str(recommendations)],
+        "teacher_note": generated_content.get("teacherNote"),
+        "s3_key": html_key,
+        "html_s3_key": html_key,
+        "json_s3_key": json_key,
+        "source_counts": {
+            "questions": int(source_counts.get("questions", 0) or 0),
+            "practiceProgress": int(source_counts.get("practiceProgress", 0) or 0),
+            "mistakes": int(source_counts.get("mistakes", 0) or 0),
+            "conversations": int(source_counts.get("conversations", 0) or 0),
+        },
+        "email_error_class": None,
+        "email_error_message": None,
+    }
+
+
+def build_weekly_report_json_artifact(
+    payload: dict[str, Any],
+    generated_content: dict[str, Any],
+    report_item: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "report": {
+            "reportId": report_item["report_id"],
+            "parentId": report_item["parent_id"],
+            "studentId": report_item["student_id"],
+            "studentName": report_item["student_name"],
+            "weekStart": report_item["week_start"],
+            "weekEnd": report_item["week_end"],
+            "generatedAt": report_item["generated_at"],
+            "status": report_item["status"],
+            "emailStatus": report_item["email_status"],
+        },
+        "stats": report_item["stats"],
+        "content": generated_content,
+        "sourceCounts": report_item["source_counts"],
+        "activities": payload.get("activities", []),
+    }
+
+
+def render_weekly_report_html(payload: dict[str, Any], generated_content: dict[str, Any]) -> str:
+    student = payload.get("student", {})
+    week = payload.get("week", {})
+    student_name = student.get("name") or "Student"
+    week_range = _week_range_label(week)
+    recommendations = generated_content.get("recommendations", [])
+    weak_topics = generated_content.get("weakTopics", [])
+    portal_link = _parent_portal_link(student.get("id", ""), week.get("start", ""))
+    if not isinstance(recommendations, list):
+        recommendations = [str(recommendations)]
+
+    recommendation_items = "".join(f"<li>{escape(str(item))}</li>" for item in recommendations)
+    weak_topic_items = "".join(
+        f"<li><strong>{escape(str(topic.get('topic', '')))}</strong>: {escape(str(topic.get('note', '')))}</li>"
+        for topic in weak_topics
+    )
+    teacher_note = generated_content.get("teacherNote")
+    teacher_note_html = f"<p><strong>Teacher note:</strong> {escape(teacher_note)}</p>" if teacher_note else ""
+
+    return f"""<!doctype html>
+<html>
+  <body>
+    <h1>Weekly report for {escape(student_name)}</h1>
+    <p><strong>Week:</strong> {escape(week_range)}</p>
+    <p>{escape(str(generated_content.get("summary", "")))}</p>
+    <h2>Recommendations</h2>
+    <ul>{recommendation_items}</ul>
+    <h2>Weak topics</h2>
+    <ul>{weak_topic_items}</ul>
+    {teacher_note_html}
+    <p><a href="{escape(portal_link)}">Open this report in the parent portal</a></p>
+  </body>
+</html>"""
+
+
 def _parse_iso_datetime(value: Any) -> datetime | None:
     if not value or not isinstance(value, str):
         return None
@@ -483,6 +709,37 @@ def _truncate_activity_summary(value: Any) -> str:
     if len(text) <= _MAX_ACTIVITY_SUMMARY_CHARS:
         return text
     return text[: _MAX_ACTIVITY_SUMMARY_CHARS - 3].rstrip() + "..."
+
+
+def _now_iso(now: datetime | None = None) -> str:
+    value = now or datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _report_id(parent_id: str, student_id: str, week_start: str) -> str:
+    return f"weekly-report-{parent_id}-{student_id}-{week_start}"
+
+
+def _report_artifact_keys(parent_id: str, student_id: str, week_start: str) -> tuple[str, str]:
+    prefix = (
+        f"weekly-reports/{_safe_s3_segment(parent_id)}/"
+        f"{_safe_s3_segment(student_id)}/{_safe_s3_segment(week_start)}"
+    )
+    return f"{prefix}/report.json", f"{prefix}/report.html"
+
+
+def _safe_s3_segment(value: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.=-]+", "-", str(value).strip())
+    return safe.strip("-") or "unknown"
+
+
+def _parent_portal_link(student_id: str, week_start: str) -> str:
+    return (
+        "https://app.stoaedu.ch/parent/children/"
+        f"{_safe_s3_segment(student_id)}/reports/{_safe_s3_segment(week_start)}"
+    )
 
 
 def _required_string(parsed: dict[str, Any], key: str) -> str:

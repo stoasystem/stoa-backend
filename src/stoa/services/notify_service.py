@@ -19,14 +19,20 @@ def enqueue_teacher_request(question_id: str, student_id: str, subject: str) -> 
     )
 
 
-def send_weekly_report_email(parent_email: str, report_html: str) -> None:
+def send_weekly_report_email(
+    parent_email: str,
+    report_html: str,
+    *,
+    subject: str | None = None,
+    ses_client=None,
+) -> None:
     """Send the weekly report to a parent via SES."""
-    ses = boto3.client("ses", region_name=settings.aws_region)
+    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
     ses.send_email(
-        Source="noreply@stoa.ch",
+        Source="noreply@stoaedu.ch",
         Destination={"ToAddresses": [parent_email]},
         Message={
-            "Subject": {"Data": "STOA — Wochenbericht Ihres Kindes"},
+            "Subject": {"Data": subject or "STOA - Wochenbericht Ihres Kindes"},
             "Body": {"Html": {"Data": report_html}},
         },
     )
