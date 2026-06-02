@@ -60,8 +60,8 @@
 - [x] **TEST-04**: Backend tests cover DynamoDB metadata and S3 artifact writes.
 - [x] **TEST-05**: Backend tests cover SES failure marking `email_failed`.
 - [x] **TEST-06**: Backend tests cover parent endpoint generated, missing, and failed report responses.
-- [ ] **TEST-07**: Frontend tests cover generated report detail rendering.
-- [ ] **TEST-08**: Frontend tests cover missing and email-failed report states.
+- [x] **TEST-07**: Frontend tests cover generated report detail rendering.
+- [x] **TEST-08**: Frontend tests cover missing and email-failed report states.
 
 ## Future Requirements
 
@@ -137,8 +137,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-04 | Phase 12 | Complete |
 | TEST-05 | Phase 12 | Complete |
 | TEST-06 | Phase 12 | Complete |
-| TEST-07 | Phase 13 | Pending |
-| TEST-08 | Phase 13 | Pending |
+| TEST-07 | Phase 13 | Complete |
+| TEST-08 | Phase 13 | Complete |
 
 **Coverage:**
 

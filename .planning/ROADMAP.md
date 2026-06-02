@@ -18,7 +18,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 - [x] **Phase 10: Scheduled Job Orchestration** - Scheduled handler runs weekly generation idempotently and returns structured job counts. (completed 2026-06-02)
 - [x] **Phase 11: Generated Report API and Frontend Display** - Parent report API and page render generated report details, missing reports, and failure states. (completed 2026-06-02)
 - [x] **Phase 12: Backend Report Flow Verification** - Backend tests prove aggregation, generation, storage, idempotency, email failure, and API behavior. (completed 2026-06-02)
-- [ ] **Phase 13: Frontend Report State Verification** - Frontend tests prove generated, missing, and email-failed report states render correctly.
+- [x] **Phase 13: Frontend Report State Verification** - Frontend tests prove generated, missing, and email-failed report states render correctly. (completed 2026-06-02)
 
 ## Phase Details
 
@@ -133,7 +133,7 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
   1. Frontend tests cover generated report detail rendering.
   2. Frontend tests cover missing and email-failed report states.
 
-**Plans**: TBD
+**Plans**: 1/1 complete
 **UI hint**: yes
 
 ## Progress
@@ -149,4 +149,4 @@ v1.1 turns the parent report page from a lookup surface into an automated weekly
 | 10. Scheduled Job Orchestration | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 11. Generated Report API and Frontend Display | v1.1 | 1/1 | Complete    | 2026-06-02 |
 | 12. Backend Report Flow Verification | v1.1 | 1/1 | Complete    | 2026-06-02 |
-| 13. Frontend Report State Verification | v1.1 | 0/TBD | Not started | - |
+| 13. Frontend Report State Verification | v1.1 | 1/1 | Complete    | 2026-06-02 |
