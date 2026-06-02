@@ -1,4 +1,5 @@
 """DynamoDB access patterns for the WeeklyReport entity."""
+from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 from stoa.db.dynamodb import get_table
 
@@ -6,6 +7,20 @@ from stoa.db.dynamodb import get_table
 def put_report(item: dict) -> None:
     table = get_table()
     table.put_item(Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item})
+
+
+def try_claim_report_generation(item: dict) -> bool:
+    table = get_table()
+    try:
+        table.put_item(
+            Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+            ConditionExpression="attribute_not_exists(PK)",
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
 
 
 def update_report_status(report_id: str, status: str, **fields) -> None:

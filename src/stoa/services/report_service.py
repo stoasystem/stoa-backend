@@ -485,6 +485,35 @@ def build_weekly_report_record(
     }
 
 
+def build_weekly_report_claim(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    *,
+    claimed_at: str | None = None,
+) -> dict[str, Any]:
+    json_key, html_key = _report_artifact_keys(parent_id, student_id, week_start)
+    timestamp = claimed_at or _now_iso()
+    return {
+        "report_id": _report_id(parent_id, student_id, week_start),
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "week_start": week_start,
+        "status": "generation_claimed",
+        "email_status": "not_started",
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "usage_count": 0,
+        "ai_resolved": 0,
+        "teacher_resolved": 0,
+        "weak_knowledge_points": [],
+        "recommendations": "",
+        "s3_key": html_key,
+        "html_s3_key": html_key,
+        "json_s3_key": json_key,
+    }
+
+
 def build_weekly_report_json_artifact(
     payload: dict[str, Any],
     generated_content: dict[str, Any],

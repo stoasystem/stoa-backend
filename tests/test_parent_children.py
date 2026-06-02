@@ -1,4 +1,5 @@
 import pytest
+from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -440,6 +441,48 @@ def test_report_repo_update_report_status_updates_summary_item(monkeypatch):
             },
         }
     ]
+
+
+def test_report_repo_try_claim_report_generation_uses_conditional_put(monkeypatch):
+    class FakePutTable:
+        def __init__(self):
+            self.calls = []
+
+        def put_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakePutTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    claimed = report_repo.try_claim_report_generation({"report_id": "report-1", "status": "generation_claimed"})
+
+    assert claimed is True
+    assert table.calls == [
+        {
+            "Item": {
+                "PK": "REPORT#report-1",
+                "SK": "SUMMARY",
+                "report_id": "report-1",
+                "status": "generation_claimed",
+            },
+            "ConditionExpression": "attribute_not_exists(PK)",
+        }
+    ]
+
+
+def test_report_repo_try_claim_report_generation_returns_false_on_existing(monkeypatch):
+    class FakePutTable:
+        def put_item(self, **kwargs):
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException", "Message": "exists"}},
+                "PutItem",
+            )
+
+    monkeypatch.setattr(report_repo, "get_table", lambda: FakePutTable())
+
+    claimed = report_repo.try_claim_report_generation({"report_id": "report-1"})
+
+    assert claimed is False
 
 
 def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(monkeypatch):
