@@ -14,22 +14,22 @@
 
 ### Parent API
 
-- [ ] **PARENT-01**: Parent can call `GET /parents/me/children` to list linked children from real DynamoDB user/link records.
-- [ ] **PARENT-02**: Parent with no linked children receives `{ "items": [] }` from `GET /parents/me/children`.
+- [x] **PARENT-01**: Parent can call `GET /parents/me/children` to list linked children from real DynamoDB user/link records.
+- [x] **PARENT-02**: Parent with no linked children receives `{ "items": [] }` from `GET /parents/me/children`.
 - [ ] **PARENT-03**: Parent can call `GET /parents/me/children/{child_id}/summary` for a linked child and receive a stable summary response.
 - [ ] **PARENT-04**: Parent can call `GET /parents/me/children/{child_id}/history` for a linked child and receive newest-first real learning events with an empty `{ "items": [] }` state when none exist.
 - [ ] **PARENT-05**: Parent can call `GET /parents/me/children/{child_id}/report` and receive either `status: "available"` with a real report or `status: "missing"` with `report: null`.
 - [ ] **PARENT-06**: Parent can call `GET /parents/me/children/{child_id}/reports/{week}` when the frontend needs a week-specific report lookup.
 - [ ] **PARENT-07**: Parent API responses use frontend-friendly child, summary, history, and report shapes matching the milestone data contract.
-- [ ] **PARENT-08**: Existing `/parents/{parent_id}/...` endpoints remain compatible unless a specific implementation reason requires changing them.
+- [x] **PARENT-08**: Existing `/parents/{parent_id}/...` endpoints remain compatible unless a specific implementation reason requires changing them.
 
 ### Authorization
 
-- [ ] **AUTHZ-01**: Parent can access only children linked to that parent.
+- [x] **AUTHZ-01**: Parent can access only children linked to that parent.
 - [ ] **AUTHZ-02**: Parent cannot access another parent's child summary, history, or report.
-- [ ] **AUTHZ-03**: Student cannot call normal parent endpoints.
-- [ ] **AUTHZ-04**: Teacher or tutor cannot call normal parent endpoints unless a separate support/admin workflow is explicitly added.
-- [ ] **AUTHZ-05**: Admin access to parent/child data is kept out of normal `/parents/me/...` flows and remains explicit through admin routes.
+- [x] **AUTHZ-03**: Student cannot call normal parent endpoints.
+- [x] **AUTHZ-04**: Teacher or tutor cannot call normal parent endpoints unless a separate support/admin workflow is explicitly added.
+- [x] **AUTHZ-05**: Admin access to parent/child data is kept out of normal `/parents/me/...` flows and remains explicit through admin routes.
 - [ ] **AUTHZ-06**: Every child-specific parent endpoint verifies ownership before reading or returning child data.
 
 ### Data Aggregation
@@ -108,19 +108,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
 | INFRA-03 | Phase 1 | Complete |
-| PARENT-01 | Phase 2 | Pending |
-| PARENT-02 | Phase 2 | Pending |
+| PARENT-01 | Phase 2 | Complete |
+| PARENT-02 | Phase 2 | Complete |
 | PARENT-03 | Phase 3 | Pending |
 | PARENT-04 | Phase 3 | Pending |
 | PARENT-05 | Phase 3 | Pending |
 | PARENT-06 | Phase 3 | Pending |
 | PARENT-07 | Phase 3 | Pending |
-| PARENT-08 | Phase 2 | Pending |
-| AUTHZ-01 | Phase 2 | Pending |
+| PARENT-08 | Phase 2 | Complete |
+| AUTHZ-01 | Phase 2 | Complete |
 | AUTHZ-02 | Phase 3 | Pending |
-| AUTHZ-03 | Phase 2 | Pending |
-| AUTHZ-04 | Phase 2 | Pending |
-| AUTHZ-05 | Phase 2 | Pending |
+| AUTHZ-03 | Phase 2 | Complete |
+| AUTHZ-04 | Phase 2 | Complete |
+| AUTHZ-05 | Phase 2 | Complete |
 | AUTHZ-06 | Phase 3 | Pending |
 | DATA-01 | Phase 3 | Pending |
 | DATA-02 | Phase 3 | Pending |

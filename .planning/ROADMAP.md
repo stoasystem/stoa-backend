@@ -14,7 +14,7 @@ This milestone moves the parent portal from mock/demo-backed flows to authorized
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Infrastructure and Contract Grounding** - Confirm CDK-backed resources, parent-child access patterns, environment configuration, and identity mapping before backend route work. (completed 2026-06-02)
-- [ ] **Phase 2: Parent Child List and Access Rules** - Let logged-in parents list only linked children while blocking normal parent flows for the wrong roles.
+- [x] **Phase 2: Parent Child List and Access Rules** - Let logged-in parents list only linked children while blocking normal parent flows for the wrong roles. (completed 2026-06-02)
 - [ ] **Phase 3: Child Summary, History, and Report Data** - Deliver child-specific parent routes with real aggregation, ownership checks, and stable available/missing states.
 - [ ] **Phase 4: Frontend Parent Portal Integration** - Align parent services and pages to `/parents/me/...` backend responses without silent demo fallback.
 - [ ] **Phase 5: Verification and Test Data** - Prove backend, client, route-contract, and real-data behaviors with focused tests and documented test accounts.
@@ -47,7 +47,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Student, teacher, tutor, and admin users cannot use normal `/parents/me/...` parent flows outside explicit authorized routes.
   4. Existing `/parents/{parent_id}/...` endpoints remain compatible unless implementation evidence documents a necessary change.
 
-**Plans**: TBD
+**Plans**: 2/2 complete
 
 ### Phase 3: Child Summary, History, and Report Data
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Infrastructure and Contract Grounding | 1/1 | Complete | 2026-06-02 |
-| 2. Parent Child List and Access Rules | 0/TBD | Not started | - |
+| 2. Parent Child List and Access Rules | 2/2 | Complete | 2026-06-02 |
 | 3. Child Summary, History, and Report Data | 0/TBD | Not started | - |
 | 4. Frontend Parent Portal Integration | 0/TBD | Not started | - |
 | 5. Verification and Test Data | 0/TBD | Not started | - |
