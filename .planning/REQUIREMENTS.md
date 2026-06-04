@@ -14,10 +14,10 @@
 
 ### Production API and UI Verification
 
-- [ ] **LIVE-01**: Live admin report operations list endpoint is verified with an admin-authenticated request and returns metadata-only report operation rows or an explicit empty state.
-- [ ] **LIVE-02**: Live detail endpoint is verified for a safe report target and returns artifact availability, generation, delivery, operation metadata, and action eligibility without private artifact keys.
+- [ ] **LIVE-01**: Live admin report operations list endpoint is verified with an admin-authenticated request and returns metadata-only report operation rows or an explicit empty state. Blocked in Phase 30 until a production admin token is available.
+- [ ] **LIVE-02**: Live detail endpoint is verified for a safe report target and returns artifact availability, generation, delivery, operation metadata, and action eligibility without private artifact keys. Blocked in Phase 30 until admin-auth list returns a safe target row.
 - [x] **LIVE-03**: Live frontend `/admin/report-operations` renders the deployed UI for an admin user and uses the production API base URL. Completed in Phase 29 with production route/bundle evidence and local admin e2e; production admin click-through remains residual manual evidence.
-- [ ] **LIVE-04**: Live unauthenticated and non-admin access checks reject report operations API/UI access.
+- [ ] **LIVE-04**: Live unauthenticated and non-admin access checks reject report operations API/UI access. Partial in Phase 30: unauthenticated and invalid-token checks returned 401; valid non-admin token check is blocked without a production non-admin token.
 
 ### Safe Recovery Smoke
 
@@ -75,10 +75,10 @@ Deferred to a future milestone.
 | REL-02 | Phase 28 | Complete |
 | REL-03 | Phase 28 | Complete |
 | REL-04 | Phase 28 | Complete |
-| LIVE-01 | Phase 30 | Pending |
-| LIVE-02 | Phase 30 | Pending |
+| LIVE-01 | Phase 30 | Blocked - no production admin token |
+| LIVE-02 | Phase 30 | Blocked - no production admin token |
 | LIVE-03 | Phase 29 | Complete |
-| LIVE-04 | Phase 30 | Pending |
+| LIVE-04 | Phase 30 | Partial - no valid production non-admin token |
 | SMOKE-01 | Phase 31 | Pending |
 | SMOKE-02 | Phase 31 | Pending |
 | SMOKE-03 | Phase 31 | Pending |
@@ -100,4 +100,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after completing Phase 29*
+*Last updated: 2026-06-04 after Phase 30 live verification gaps*

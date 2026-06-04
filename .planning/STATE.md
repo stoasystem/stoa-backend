@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Report Recovery Production Rollout & Live Smoke
-status: planning
-last_updated: "2026-06-04T16:35:00Z"
+status: blocked
+last_updated: "2026-06-04T16:45:00Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 30 of 32 (Backend Production Deployment and API Live Verification)
-Plan: —
-Status: Phase 29 complete; Phase 30 ready for planning
-Last activity: 2026-06-04 — Completed Phase 29 frontend production deployment verification
+Plan: 30-01
+Status: Phase 30 executed with gaps; blocked on production admin token for read-only admin API checks
+Last activity: 2026-06-04 — Completed Phase 30 automated live checks and recorded admin-auth blocker
 
 ## Performance Metrics
 
@@ -59,14 +59,14 @@ Last activity: 2026-06-04 — Completed Phase 29 frontend production deployment 
 | 27 | 1 complete | - | - |
 | 28 | 1 complete | - | - |
 | 29 | 1 complete | - | - |
-| 30 | 0/1 planned | - | - |
+| 30 | 1/1 gaps_found | - | - |
 | 31 | 0/1 planned | - | - |
 | 32 | 0/1 planned | - | - |
 
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: Phase 29 verified production frontend route and bundle evidence; Phase 30 backend live verification is next
+- Trend: Phase 30 verified backend Lambda/API/CDK automated evidence but is blocked on production admin token for admin-auth list/detail checks
 
 ## Accumulated Context
 
@@ -91,14 +91,15 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.5 prioritizes production rollout, safe live smoke, runbook, observability, and rollback evidence before incident-wide async recovery automation.
 - Phase 28 defines release readiness, evidence, rollback, CDK diff classification, and mutation safety gates before live smoke.
 - Phase 29 verifies the production frontend route and bundle contain the report operations UI/API markers, production API URL, and no private artifact exposure markers; admin browser click-through remains residual manual evidence.
+- Phase 30 verifies AWS identity, Lambda config, API health, unauth/invalid-token rejection, focused tests, focused ruff, and CDK diff; admin-auth list/detail remains blocked because no production admin token is available.
 
 ### Pending Todos
 
-- Plan Phase 30: Backend Production Deployment and API Live Verification.
+- Provide a production admin access token or approve a temporary non-customer admin verification account lifecycle, then rerun Phase 30 admin-auth read-only checks.
 
 ### Blockers/Concerns
 
-- No active blockers.
+- Phase 30 admin-auth live API verification is blocked: no production admin token is available. Demo admin login `admin@test.com / password123` returns HTTP 401 because the account is not present in production.
 - `stoa-backend/dist` is a gitignored Lambda build artifact; future CDK diff reviews should treat Lambda asset hash changes separately from infrastructure drift.
 
 ## Deferred Items
@@ -115,6 +116,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 18:35 +02:00
-Stopped at: Phase 29 complete; Phase 30 ready for planning.
+Last session: 2026-06-04 18:45 +02:00
+Stopped at: Phase 30 blocked on production admin token for read-only admin API verification.
 Resume file: None

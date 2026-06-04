@@ -75,7 +75,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. Live admin-authenticated list and detail checks return metadata-only report operation responses or explicit empty states.
 5. Live API responses do not expose raw HTML/JSON, private artifact keys, public URLs, presigned URLs, or direct S3 URL markers.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans executed with gaps
 
 ### Phase 31: Safe Recovery Smoke Fixture and Mutation Verification
 
@@ -116,7 +116,7 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 |-------|-----------|----------------|--------|-----------|
 | 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Complete | 2026-06-04 |
 | 29. Frontend Production Deployment Verification | v1.5 | 1/1 | Complete | 2026-06-04 |
-| 30. Backend Production Deployment and API Live Verification | v1.5 | 0/1 | Pending | - |
+| 30. Backend Production Deployment and API Live Verification | v1.5 | 1/1 | Gaps Found | - |
 | 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
 | 32. Operations Runbook, Observability, and Milestone Closeout | v1.5 | 0/1 | Pending | - |
 
@@ -124,14 +124,14 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 28 | Complete |
+| REL-01 | Phase 28/30 | Complete |
 | REL-02 | Phase 28 | Complete |
-| REL-03 | Phase 28 | Complete |
+| REL-03 | Phase 28/30 | Complete |
 | REL-04 | Phase 28 | Complete |
-| LIVE-01 | Phase 30 | Pending |
-| LIVE-02 | Phase 30 | Pending |
+| LIVE-01 | Phase 30 | Blocked - no production admin token |
+| LIVE-02 | Phase 30 | Blocked - no production admin token |
 | LIVE-03 | Phase 29 | Complete |
-| LIVE-04 | Phase 30 | Pending |
+| LIVE-04 | Phase 30 | Partial - unauth/invalid token passed, valid non-admin token unavailable |
 | SMOKE-01 | Phase 31 | Pending |
 | SMOKE-02 | Phase 31 | Pending |
 | SMOKE-03 | Phase 31 | Pending |
@@ -152,4 +152,4 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after completing Phase 29*
+*Last updated: 2026-06-04 after Phase 30 live verification gaps*
