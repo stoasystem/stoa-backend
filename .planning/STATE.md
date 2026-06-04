@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Report Artifact Security & Operations Hardening
 status: planning
-last_updated: "2026-06-04T16:05:00+02:00"
+last_updated: "2026-06-04T16:13:00+02:00"
 last_activity: 2026-06-04
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 ## Current Position
 
-Phase: 19 of 22 (Reports Bucket Transport Security)
+Phase: 20 of 22 (Prefix-Scoped Report Artifact IAM)
 Plan: Not created
-Status: Requirements and roadmap created; Phase 19 ready for planning
-Last activity: 2026-06-04 - Started v1.3 and created requirements/roadmap.
+Status: Phase 19 complete; Phase 20 ready for planning
+Last activity: 2026-06-04 - Deployed reports bucket HTTPS-only enforcement and verified live AWS state.
 
 ## Performance Metrics
 
@@ -48,7 +48,8 @@ Last activity: 2026-06-04 - Started v1.3 and created requirements/roadmap.
 | 16 | 1 | - | - |
 | 17 | 1 | - | - |
 | 18 | 1 | - | - |
-| 19-22 | 4 planned | - | - |
+| 19 | 1 complete | - | - |
+| 20-22 | 3 planned | - | - |
 
 **Recent Trend:**
 
@@ -66,11 +67,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.2 keeps report artifacts private and backend-mediated; no public S3 access or client direct S3 fetch is in scope.
 - v1.2 uses existing CDK resources unless verification proves current reports bucket, Lambda env vars, or IAM grants are insufficient.
 - v1.3 prioritizes reports bucket HTTPS enforcement, prefix-scoped IAM, artifact cleanup, and report operations tooling before broader report product expansion.
+- Phase 19 uses `s3.Bucket(enforce_ssl=True)` for `StoaReportsBucket`; live AWS bucket policy denies `aws:SecureTransport=false`.
 
 ### Pending Todos
 
-- Create the Phase 19 plan for reports bucket transport security.
-- Verify CDK reports bucket hardening through synth/diff before deployment.
+- Create the Phase 20 plan for prefix-scoped report artifact IAM.
+- Replace broad reports bucket grants only where scoped policies preserve required API and weekly report behavior.
 - Keep Lambda asset-hash drift separate from reports bucket policy/IAM drift during CDK review.
 
 ### Blockers/Concerns

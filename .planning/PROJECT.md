@@ -63,10 +63,10 @@ Shipped requirements:
 - Authorization prevents parents, students, teachers, tutors, and admins from using normal parent routes outside their intended access rules - v1.0.
 - Required infrastructure assumptions are confirmed against CDK before backend implementation - v1.0.
 - Weekly report automation infrastructure, generation, storage, email delivery, API display, frontend rendering, and verification shipped - v1.1.
+- Reports bucket HTTPS-only transport enforcement was deployed and live-verified without bucket replacement - v1.3 Phase 19.
 
 ### Active
 
-- [ ] Enforce HTTPS-only S3 transport for the reports bucket without replacing the deployed bucket.
 - [ ] Narrow report artifact Lambda IAM permissions toward the canonical `weekly-reports/*` prefix where S3 supports prefix scoping.
 - [ ] Add safe cleanup behavior for smoke artifacts and failed partial report artifact writes.
 - [ ] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.

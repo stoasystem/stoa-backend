@@ -18,9 +18,9 @@ This milestone hardens the existing reports bucket and operational paths. It sho
 
 ### Reports Bucket Transport Security
 
-- [ ] **SEC-01**: CDK enforces HTTPS-only S3 access for the reports bucket through `enforce_ssl=True` or an equivalent deny-insecure-transport bucket policy.
-- [ ] **SEC-02**: CDK diff/deploy evidence proves report bucket security hardening does not replace the deployed `stoa-reports-562923011260` bucket.
-- [ ] **SEC-03**: Live bucket verification confirms public access block and default encryption remain enabled after hardening.
+- [x] **SEC-01**: CDK enforces HTTPS-only S3 access for the reports bucket through `enforce_ssl=True` or an equivalent deny-insecure-transport bucket policy.
+- [x] **SEC-02**: CDK diff/deploy evidence proves report bucket security hardening does not replace the deployed `stoa-reports-562923011260` bucket.
+- [x] **SEC-03**: Live bucket verification confirms public access block and default encryption remain enabled after hardening.
 
 ### Prefix-Scoped IAM
 
@@ -75,9 +75,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 19 | Planned |
-| SEC-02 | Phase 19 | Planned |
-| SEC-03 | Phase 19 | Planned |
+| SEC-01 | Phase 19 | Complete |
+| SEC-02 | Phase 19 | Complete |
+| SEC-03 | Phase 19 | Complete |
 | IAM-01 | Phase 20 | Planned |
 | IAM-02 | Phase 20 | Planned |
 | IAM-03 | Phase 20 | Planned |
@@ -93,9 +93,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 **Coverage:**
 
 - v1.3 requirements: 14 total
+- Complete: 3
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after roadmap creation*
+*Last updated: 2026-06-04 after Phase 19 completion*
