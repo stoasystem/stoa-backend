@@ -36,9 +36,9 @@
 
 ### Admin Job UI and Production Browser Smoke
 
-- [ ] **UI-01**: Admin report operations UI exposes an async jobs surface for previewing `email_failed` resend scope, entering a reason, starting a job, polling progress, viewing results, and requesting cancellation.
-- [ ] **UI-02**: Admin UI exposes report and job audit timelines with precise labels for immutable evidence, mutable triage fields, cancellation semantics, and refused/failed target outcomes.
-- [ ] **UI-03**: Frontend API services and e2e tests verify job/audit workflows, role boundaries, metadata-only response rendering, and no private artifact marker exposure.
+- [x] **UI-01**: Admin report operations UI exposes an async jobs surface for previewing `email_failed` resend scope, entering a reason, starting a job, polling progress, viewing results, and requesting cancellation. Completed in Phase 36 UI implementation.
+- [x] **UI-02**: Admin UI exposes report and job audit timelines with precise labels for immutable evidence, mutable triage fields, cancellation semantics, and refused/failed target outcomes. Completed in Phase 36 UI implementation.
+- [x] **UI-03**: Frontend API services and e2e tests verify job/audit workflows, role boundaries, metadata-only response rendering, and no private artifact marker exposure. Completed in Phase 36 UI implementation.
 - [ ] **UI-04**: Production admin browser smoke uses a real existing admin session or approved secret-backed credential path without creating temporary production admin accounts.
 - [ ] **UI-05**: Production browser smoke is read-only by default, verifies route/API/auth/privacy behavior, redacts evidence artifacts, and does not mutate customer reports.
 
@@ -109,9 +109,9 @@ Traceability is filled by the active v1.6 roadmap.
 | JOB-07 | Phase 35 | Complete |
 | JOB-08 | Phase 35 | Complete |
 | JOB-09 | Phase 35 | Complete |
-| UI-01 | Phase 36 | Pending |
-| UI-02 | Phase 36 | Pending |
-| UI-03 | Phase 36 | Pending |
+| UI-01 | Phase 36 | Complete |
+| UI-02 | Phase 36 | Complete |
+| UI-03 | Phase 36 | Complete |
 | UI-04 | Phase 36 | Pending |
 | UI-05 | Phase 36 | Pending |
 | OPS-01 | Phase 37 | Pending |
@@ -127,4 +127,4 @@ Traceability is filled by the active v1.6 roadmap.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 35 completion*
+*Last updated: 2026-06-05 after Phase 36 UI implementation*

@@ -118,7 +118,7 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 | 33. Recovery Contract, CDK Readiness, And Dist Guard | v1.6 | 1/1 | Complete | 2026-06-04 |
 | 34. Recovery Service Extraction And Audit Foundation | v1.6 | 1/1 | Complete | 2026-06-04 |
 | 35. Async Resend Job Backend | v1.6 | 1/1 | Complete | 2026-06-04 |
-| 36. Admin Job/Audit UI And Production Browser Smoke | v1.6 | 0/TBD | Ready for planning | - |
+| 36. Admin Job/Audit UI And Production Browser Smoke | v1.6 | 1/1 partial | In progress: production smoke pending | - |
 | 37. Runbook, Release Gate, And Live Verification | v1.6 | 0/TBD | Not started | - |
 
 ## Traceability
@@ -144,9 +144,9 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 | JOB-07 | Phase 35 | Complete |
 | JOB-08 | Phase 35 | Complete |
 | JOB-09 | Phase 35 | Complete |
-| UI-01 | Phase 36 | Pending |
-| UI-02 | Phase 36 | Pending |
-| UI-03 | Phase 36 | Pending |
+| UI-01 | Phase 36 | Complete |
+| UI-02 | Phase 36 | Complete |
+| UI-03 | Phase 36 | Complete |
 | UI-04 | Phase 36 | Pending |
 | UI-05 | Phase 36 | Pending |
 | OPS-01 | Phase 37 | Pending |
@@ -161,4 +161,4 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 35 completion*
+*Last updated: 2026-06-05 after Phase 36 UI implementation*

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Report Recovery Operations Hardening
 status: planning
-last_updated: "2026-06-04T23:55:54+02:00"
-last_activity: 2026-06-04
+last_updated: "2026-06-05T00:05:15+02:00"
+last_activity: 2026-06-05
 progress:
   total_phases: 5
   completed_phases: 3
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Ready to plan Phase 36: Admin Job/Audit UI And Production Browser Smoke.
+**Current focus:** Phase 36 production admin browser smoke is pending after UI implementation.
 
 ## Current Position
 
 Phase: 36 of 37 (4 of 5 for v1.6)
 Plan: TBD
-Status: Ready for phase planning
-Last activity: 2026-06-04 - Phase 35 completed with bounded async resend job backend, worker execution, cancellation, and scoped Lambda invoke permission.
+Status: In progress
+Last activity: 2026-06-05 - Phase 36 admin job/audit UI implemented and locally verified; production browser smoke pending deployment and admin session.
 
 Progress: [██████----] 60%
 
@@ -47,7 +47,7 @@ Progress: [██████----] 60%
 | 33 | 1 complete | - | - |
 | 34 | 1 complete | - | - |
 | 35 | 1 complete | - | - |
-| 36 | TBD | - | - |
+| 36 | 1 partial | - | - |
 | 37 | TBD | - | - |
 
 **Recent Trend:**
@@ -68,10 +68,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 33 uses a deterministic `cdk_asset_hash` so manifest audit timestamps do not create meaningless CDK Lambda asset drift.
 - Phase 34 audit immutability is application-enforced through DynamoDB conditional append writes; compliance-grade WORM storage remains deferred.
 - Phase 35 uses existing Lambda and DynamoDB resources for bounded async resend jobs; higher-scale orchestration remains deferred until evidence requires it.
+- Phase 36 UI implementation is complete locally, but production browser smoke remains open until deployed code and admin session/credential access are available.
 
 ### Pending Todos
 
-- Plan Phase 36.
+- Deploy Phase 35/36 changes, then run read-only production admin browser smoke with an approved existing admin session or secret-backed credential path.
 
 ### Blockers/Concerns
 
@@ -91,10 +92,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 23:55 +02:00
-Stopped at: Phase 35 complete; ready to plan Phase 36.
+Last session: 2026-06-05 00:05 +02:00
+Stopped at: Phase 36 UI implementation complete; production browser smoke pending.
 Resume file: None
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 36`.
+- Deploy backend/infra/frontend changes.
+- Run read-only production admin browser smoke for `/admin/report-operations`.
