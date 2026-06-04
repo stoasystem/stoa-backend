@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.4 report operations platform now gives admins a backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, bulk resend selected `email_failed` reports, and use a real admin UI without exposing private report artifacts.
+The v1.5 report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.4 Report Operations Admin UI / Bulk Recovery on 2026-06-04
+**Shipped version:** v1.5 Report Recovery Production Rollout & Live Smoke on 2026-06-04
 
 Delivered:
 
@@ -39,20 +39,17 @@ Delivered:
 - Admins can bulk resend selected `email_failed` reports and receive per-item `success`, `refused`, `not_found`, and `failed` results.
 - Frontend `/admin/report-operations` uses real admin report operations APIs for filtering, detail inspection, retry, resend, selected bulk resend, and result rendering.
 - Focused backend tests, frontend e2e, and live AWS checks verify report operations authorization, privacy boundaries, deployed Lambda state, API health/auth gate, and CDK diff.
+- Production frontend `/admin/report-operations` route and bundle were verified with production API configuration and no private artifact markers.
+- Production backend report operations API verifies admin-auth list/detail, bounded-scan pagination, valid non-admin rejection, and metadata-only response boundaries.
+- Safe non-customer generation retry, single resend, and selected bulk resend smoke passed, with temporary Cognito/DynamoDB/S3 fixture cleanup confirmed.
+- `stoa-api` has scoped SES send permission for report recovery email paths, and `StoaApiStack` final CDK diff is clean.
+- Operators have a report recovery runbook covering retry/resend/bulk resend, observability, rollback, escalation, and known limits.
 
 ## Current Milestone
 
-### v1.5 Report Recovery Production Rollout & Live Smoke
+No active milestone.
 
-**Goal:** Deploy the v1.4 report recovery workflow to production-facing surfaces, verify it with safe live evidence, and give operators a repeatable runbook for recovery, rollback, and observability.
-
-Target features:
-
-- Backend and frontend release readiness evidence for report operations changes.
-- Production frontend deployment verification for `/admin/report-operations`.
-- Authenticated production API checks for report operations list/detail actions and privacy boundaries.
-- Safe non-customer retry/resend/bulk resend smoke for approved failed report targets.
-- Operator runbook covering recovery workflows, observability, rollback, and known limits.
+Start the next milestone with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -81,17 +78,11 @@ Shipped requirements:
 - Admin-only report operations metadata and failed-delivery resend endpoints are deployed with audit/status fields - v1.3 Phase 22.
 - Admin report operations list/detail APIs, single generation retry, selected bulk resend, and admin UI shipped - v1.4.
 - Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
+- Report recovery production rollout, live admin-auth API verification, safe non-customer retry/resend/bulk smoke, scoped API SES permission, operations runbook, and final CDK diff verification shipped - v1.5.
 
 ### Active
 
-Active v1.5 requirements:
-
-- Release backend report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift.
-- Release the frontend `/admin/report-operations` UI to `app.stoaedu.ch` using the production API configuration.
-- Record release evidence for backend SHAs, frontend bundle/cache state, API URL, Lambda status, and rollback entry points.
-- Verified production admin-auth list/detail report operations APIs and unauthenticated/non-admin rejection paths.
-- Ran safe `generation_failed` retry, single `email_failed` resend, and selected bulk resend smoke against approved non-customer targets.
-- Document cleanup/restore steps, CloudWatch/AWS Console observability, rollback, escalation, and known operational limits.
+No active requirements. The next milestone should define a fresh requirement set.
 
 ### Out of Scope
 
@@ -201,7 +192,9 @@ Known current resources:
 | Use explicit smoke/partial cleanup instead of broad lifecycle cleanup | Cleanup keys are known and can use scoped `DeleteObject` without bucket listing | Good - shipped in v1.3 |
 | Keep report operations backend-mediated and admin-only | Support needs metadata and resend controls without public S3 URLs or raw artifact exposure | Good - shipped in v1.3 |
 | Build v1.4 as an admin recovery workflow before broader report product expansion | v1.3 shipped secure API-only controls; the next value is making them usable for support and adding safe batch recovery | Good - shipped in v1.4 |
-| Start v1.5 with production rollout and safe live smoke before incident-wide automation | v1.4 shipped recovery code and local/e2e verification, but production UI deployment and safe mutation smoke remain residual gaps | Pending - v1.5 |
+| Start v1.5 with production rollout and safe live smoke before incident-wide automation | v1.4 shipped recovery code and local/e2e verification, but production UI deployment and safe mutation smoke remained residual gaps | Good - shipped in v1.5 |
+| Keep recovery operations backend-mediated and metadata-only in production | Safe support tooling must not expose private report artifacts or direct S3 paths | Good - verified in v1.5 |
+| Treat stale `../stoa-backend/dist` as a deployment risk | CDK deploys Lambda assets from local build output and can overwrite current code if not rebuilt | Good - documented in v1.5 runbook |
 
 ## Evolution
 
@@ -221,4 +214,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after starting milestone v1.5*
+*Last updated: 2026-06-04 after v1.5 archive*

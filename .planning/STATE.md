@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Report Recovery Production Rollout & Live Smoke
-status: active
-last_updated: "2026-06-04T18:32:00Z"
-last_activity: 2026-06-04
+status: Awaiting next milestone
+stopped_at: v1.5 archived; phase directory cleanup complete.
+last_updated: "2026-06-04T18:55:43.521Z"
+last_activity: 2026-06-04 — Milestone v1.5 completed, archived, and phase directories moved to .planning/milestones/v1.5-phases/.
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 32 - Operations Runbook, Observability, and Milestone Closeout
+**Current focus:** Awaiting next milestone
 
 ## Current Position
 
-Phase: 32 of 32 (Operations Runbook, Observability, and Milestone Closeout)
-Plan: 32-01 pending
-Status: Phase 31 live smoke complete; runbook and final audit remain
-Last activity: 2026-06-04 — Fixed admin report ops scan pagination, deployed scoped `stoa-api` SES permission, restored current Lambda package, completed safe non-customer retry/resend/bulk resend smoke, and confirmed fixture cleanup
+Phase: Milestone v1.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-04 — Milestone v1.5 completed, archived, and phase directories moved to .planning/milestones/v1.5-phases/.
 
 ## Performance Metrics
 
@@ -61,7 +62,7 @@ Last activity: 2026-06-04 — Fixed admin report ops scan pagination, deployed s
 | 29 | 1 complete | - | - |
 | 30 | 1 complete | - | - |
 | 31 | 1 complete | - | - |
-| 32 | 0/1 planned | - | - |
+| 32 | 1 complete | - | - |
 
 **Recent Trend:**
 
@@ -93,10 +94,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 29 verifies the production frontend route and bundle contain the report operations UI/API markers, production API URL, and no private artifact exposure markers; admin browser click-through remains residual manual evidence.
 - Phase 30 verifies AWS identity, Lambda config, API health, unauth/invalid-token rejection, focused tests, focused ruff, CDK diff, temporary admin/parent account lifecycle cleanup, admin-auth list/detail HTTP 200, bounded-scan pagination second-page HTTP 200, and valid non-admin HTTP 403.
 - Phase 31 verifies safe non-customer generation retry, single resend, selected bulk resend, audit/status updates, metadata-only response shapes, scoped `stoa-api` SES permission, current Lambda package restoration, and cleanup of temporary Cognito/DynamoDB/S3 fixture data.
+- Phase 32 writes the operations runbook, observability commands, rollback/escalation checklist, known limits, final backend/frontend/CDK verification, and v1.5 closeout evidence.
 
 ### Pending Todos
 
-- Write Phase 32 operations runbook, observability guidance, rollback checklist, final verification evidence, and milestone audit.
+- Start the next milestone with `$gsd-new-milestone` when ready.
 
 ### Blockers/Concerns
 
@@ -117,6 +119,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 20:32 +02:00
-Stopped at: Phase 32 pending after Phase 31 live smoke completion and cleanup.
+Last session: 2026-06-04 20:53 +02:00
+Stopped at: v1.5 archived; phase directory cleanup complete.
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

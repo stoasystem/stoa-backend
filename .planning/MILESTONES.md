@@ -103,23 +103,33 @@ Key accomplishments:
 
 Known deferred items at close: live frontend deployment of the new UI bundle, production recovery mutation smoke with an approved safe failed report target, incident-wide async recovery jobs.
 
-## Current
-
 ### v1.5 Report Recovery Production Rollout & Live Smoke
 
-**Status:** Phase 31 live smoke complete; Phase 32 pending
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phases:** 5 planned
-**Goal:** Deploy the v1.4 report recovery workflow to production-facing surfaces, verify it with safe live evidence, and give operators a repeatable runbook for recovery, rollback, and observability.
+**Status:** Shipped 2026-06-04
+**Audit:** `.planning/milestones/v1.5-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.5-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.5-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v1.5-phases/`
+**Phases:** 5
+**Plans:** 5
+**Requirements:** 20/20 v1.5 requirements complete
 
-Planned focus:
+Key accomplishments:
 
-- Confirmed backend and frontend release readiness, deployment contract, and rollback entry points before live mutation checks.
-- Verified deployed frontend `/admin/report-operations` renders the real admin UI with production API configuration and no demo fallback.
-- Verified production report operations API auth gates, admin-auth list/detail behavior, Lambda deployment state, CDK diff evidence, and bounded-scan pagination remediation.
-- Ran safe non-customer retry/resend/bulk resend smoke for approved failed report targets and cleaned up smoke data.
-- Publish operations runbook, observability guidance, rollback checklist, final verification evidence, and milestone audit.
+- Verified backend and frontend release readiness, rollback entry points, deployment contract, and production evidence requirements.
+- Verified production `/admin/report-operations` route and bundle markers with production API configuration and no private artifact markers.
+- Fixed and verified admin report ops bounded-scan pagination, admin-auth list/detail behavior, and valid non-admin rejection.
+- Ran safe non-customer generation retry, single resend, and selected bulk resend smoke with cleanup confirmation.
+- Added scoped `stoa-api` SES send permission for report recovery email paths and restored current Lambda package alignment through CDK.
+- Published report recovery operations runbook with observability, rollback, escalation, and known limits.
+
+Known deferred items at close: production admin browser click-through before real support use, incident-wide async recovery jobs, immutable audit logs, support ticket integration, report editing, PDF/multilingual/billing report product expansions, and broad repo lint debt outside focused report operations files.
+
+## Current
+
+No active milestone.
+
+Start the next milestone with `$gsd-new-milestone`.
 
 ---
-*Last updated: 2026-06-04 after Phase 31 live smoke*
+*Last updated: 2026-06-04 after v1.5 archive*
