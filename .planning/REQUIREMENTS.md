@@ -37,11 +37,11 @@
 
 ### Privacy, Authorization, and Verification
 
-- [ ] **SEC-01**: All report operations list, detail, retry, and bulk resend endpoints are admin-only.
-- [ ] **SEC-02**: Report operations API and UI never expose raw report HTML/JSON, public S3 URLs, presigned URLs, or direct frontend S3 fetch paths.
-- [ ] **VER-01**: Backend tests cover list/detail access, status filtering, generation retry, bulk resend, per-item results, audit fields, and non-admin rejection.
-- [ ] **VER-02**: Frontend tests cover report operations navigation, filters/states, detail inspection, action eligibility, bulk selection, and result rendering.
-- [ ] **VER-03**: Live verification records deployed API state, frontend route behavior, and at least one safe recovery smoke path.
+- [x] **SEC-01**: All report operations list, detail, retry, and bulk resend endpoints are admin-only.
+- [x] **SEC-02**: Report operations API and UI never expose raw report HTML/JSON, public S3 URLs, presigned URLs, or direct frontend S3 fetch paths.
+- [x] **VER-01**: Backend tests cover list/detail access, status filtering, generation retry, bulk resend, per-item results, audit fields, and non-admin rejection.
+- [x] **VER-02**: Frontend tests cover report operations navigation, filters/states, detail inspection, action eligibility, bulk selection, and result rendering.
+- [x] **VER-03**: Live verification records deployed API state, frontend route behavior, and at least one safe recovery smoke path.
 
 ## Future Requirements
 
@@ -94,11 +94,11 @@ Deferred to a future milestone.
 | UI-03 | Phase 26 | Complete |
 | UI-04 | Phase 26 | Complete |
 | UI-05 | Phase 26 | Complete |
-| SEC-01 | Phase 27 | Pending |
-| SEC-02 | Phase 27 | Pending |
-| VER-01 | Phase 27 | Pending |
-| VER-02 | Phase 27 | Pending |
-| VER-03 | Phase 27 | Pending |
+| SEC-01 | Phase 27 | Complete |
+| SEC-02 | Phase 27 | Complete |
+| VER-01 | Phase 27 | Complete |
+| VER-02 | Phase 27 | Complete |
+| VER-03 | Phase 27 | Complete |
 
 **Coverage:**
 
@@ -108,4 +108,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 26 completion*
+*Last updated: 2026-06-04 after Phase 27 completion*

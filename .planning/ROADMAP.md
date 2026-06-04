@@ -27,7 +27,7 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 - [x] **Phase 24: Generation Failure Retry** - Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports. (completed 2026-06-04)
 - [x] **Phase 25: Bulk Email Resend Recovery** - Admins can resend selected `email_failed` reports and receive per-report results. (completed 2026-06-04)
 - [x] **Phase 26: Admin Report Operations UI** - Admins can use a frontend operations page for report triage, detail inspection, and recovery actions. (completed 2026-06-04)
-- [ ] **Phase 27: Report Recovery Verification and Live Evidence** - The full recovery workflow is verified for authorization, privacy, tests, and deployed behavior.
+- [x] **Phase 27: Report Recovery Verification and Live Evidence** - The full recovery workflow is verified for authorization, privacy, tests, and deployed behavior. (completed 2026-06-04)
 
 ## Phase Details
 
@@ -104,7 +104,7 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 4. Focused frontend tests cover navigation, filters/states, detail inspection, action eligibility, bulk selection, and result rendering.
 5. Live verification records deployed API state, frontend route behavior, and at least one safe recovery smoke path.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 ## Progress
 
@@ -117,7 +117,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 | 24. Generation Failure Retry | v1.4 | 1/1 | Complete | 2026-06-04 |
 | 25. Bulk Email Resend Recovery | v1.4 | 1/1 | Complete | 2026-06-04 |
 | 26. Admin Report Operations UI | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 27. Report Recovery Verification and Live Evidence | v1.4 | 0/1 | Pending | - |
+| 27. Report Recovery Verification and Live Evidence | v1.4 | 1/1 | Complete | 2026-06-04 |
 
 ## Traceability
 
@@ -141,11 +141,11 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 | UI-03 | Phase 26 | Complete |
 | UI-04 | Phase 26 | Complete |
 | UI-05 | Phase 26 | Complete |
-| SEC-01 | Phase 27 | Pending |
-| SEC-02 | Phase 27 | Pending |
-| VER-01 | Phase 27 | Pending |
-| VER-02 | Phase 27 | Pending |
-| VER-03 | Phase 27 | Pending |
+| SEC-01 | Phase 27 | Complete |
+| SEC-02 | Phase 27 | Complete |
+| VER-01 | Phase 27 | Complete |
+| VER-02 | Phase 27 | Complete |
+| VER-03 | Phase 27 | Complete |
 
 **Coverage:**
 
@@ -154,4 +154,4 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 26 completion*
+*Last updated: 2026-06-04 after Phase 27 completion*

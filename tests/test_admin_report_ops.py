@@ -214,6 +214,25 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
     assert response.json()["operation_result"] == "success"
 
 
+def test_resend_failed_report_is_admin_only(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: _report(),
+    )
+
+    def fail(*args, **kwargs):
+        raise AssertionError("resend pipeline should not run")
+
+    monkeypatch.setattr(admin.report_artifact_service, "get_report_html", fail)
+    monkeypatch.setattr(admin.notify_service, "send_weekly_report_email", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post("/admin/reports/parent-1/student-1/2026-06-01/resend")
+
+    assert response.status_code == 403
+
+
 def test_resend_refuses_non_failed_report(monkeypatch):
     monkeypatch.setattr(
         report_repo,
