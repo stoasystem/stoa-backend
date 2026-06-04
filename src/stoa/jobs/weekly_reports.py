@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo
-from stoa.services import report_artifact_service, report_service
+from stoa.services import report_artifact_service, report_recovery_job_service, report_service
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,13 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     event = event or {}
     if event.get("job") == "report_artifact_s3_smoke":
         return report_artifact_service.run_report_artifact_s3_smoke(event)
+    if event.get("job") == "report_recovery_resend_email":
+        job_id = str(event.get("job_id") or "")
+        if not job_id:
+            return {"status": "failed", "detail": "job_id is required"}
+        return report_recovery_job_service.execute_resend_job(job_id, context=context)
+    if str(event.get("job", "")).startswith("report_recovery_"):
+        return {"status": "failed", "detail": "Unsupported report recovery job"}
     return run_weekly_report_job(event)
 
 

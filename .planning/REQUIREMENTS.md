@@ -20,19 +20,19 @@
 - [x] **AUDIT-02**: Audit writes are conditionally append-only, have no TTL, reject overwrite attempts, and document that v1.6 provides application-enforced immutability rather than compliance-grade WORM storage. Completed in Phase 34.
 - [x] **AUDIT-03**: Audit events record actor, action, reason, target identifiers, before/after recovery status metadata, result, redacted error details, timestamps, request/job correlation IDs, and source surface. Completed in Phase 34.
 - [x] **AUDIT-04**: Admin-only audit read APIs expose report-local and job-local timelines as metadata-only responses without private S3 keys, raw report JSON/HTML, presigned URLs, auth tokens, or customer-sensitive browser artifacts. Completed in Phase 34.
-- [ ] **AUDIT-05**: Backend tests cover admin authorization, non-admin rejection, append-only enforcement, redaction, pagination, and audit events for successful, refused, failed, and cancelled recovery paths.
+- [x] **AUDIT-05**: Backend tests cover admin authorization, non-admin rejection, append-only enforcement, redaction, pagination, and audit events for successful, refused, failed, and cancelled recovery paths. Completed in Phase 35.
 
 ### Async Incident Recovery Jobs
 
-- [ ] **JOB-01**: Admin can create a dry-run preflight preview for an async `resend_email` recovery job from explicit filters, including week/status scope, optional parent/student scope, max bounds, required reason, eligible/refused/missing counts, and metadata-only sample rows.
-- [ ] **JOB-02**: Admin can create a bounded async `resend_email` job only after confirming the preview scope and providing a required operator reason.
-- [ ] **JOB-03**: Job creation persists a stable target snapshot so progress, cancellation, results, and audit evidence reference a fixed target set even if report records change later.
-- [ ] **JOB-04**: Job state is durable and observable through `queued`, `running`, `cancellation_requested`, `cancelled`, `completed`, `completed_with_failures`, and `failed` states with counters and timestamps.
-- [ ] **JOB-05**: The existing `stoa-api` Lambda invokes the existing `stoa-weekly-report` Lambda asynchronously for recovery job work using scoped IAM permission and without processing incident-wide sends inside an API request.
-- [ ] **JOB-06**: The recovery worker rereads each target, rechecks eligibility, atomically claims resend work before SES side effects, and records `success`, `refused`, `not_found`, `failed`, or `skipped_cancelled` per target.
-- [ ] **JOB-07**: Async job execution enforces conservative caps for target count, page count, Lambda time remaining, failure threshold, SES pacing, and root-cause stop conditions.
-- [ ] **JOB-08**: Admin can request cooperative cancellation, and the system clearly records that cancellation stops future target attempts without rolling back completed sends.
-- [ ] **JOB-09**: Backend and infra tests cover job preview/create/list/detail/results/cancel, duplicate invocation/idempotency, conditional resend claims, worker stop conditions, metadata-only boundaries, and scoped Lambda invoke permission.
+- [x] **JOB-01**: Admin can create a dry-run preflight preview for an async `resend_email` recovery job from explicit filters, including week/status scope, optional parent/student scope, max bounds, required reason, eligible/refused/missing counts, and metadata-only sample rows. Completed in Phase 35.
+- [x] **JOB-02**: Admin can create a bounded async `resend_email` job only after confirming the preview scope and providing a required operator reason. Completed in Phase 35.
+- [x] **JOB-03**: Job creation persists a stable target snapshot so progress, cancellation, results, and audit evidence reference a fixed target set even if report records change later. Completed in Phase 35.
+- [x] **JOB-04**: Job state is durable and observable through `queued`, `running`, `cancellation_requested`, `cancelled`, `completed`, `completed_with_failures`, and `failed` states with counters and timestamps. Completed in Phase 35.
+- [x] **JOB-05**: The existing `stoa-api` Lambda invokes the existing `stoa-weekly-report` Lambda asynchronously for recovery job work using scoped IAM permission and without processing incident-wide sends inside an API request. Completed in Phase 35.
+- [x] **JOB-06**: The recovery worker rereads each target, rechecks eligibility, atomically claims resend work before SES side effects, and records `success`, `refused`, `not_found`, `failed`, or `skipped_cancelled` per target. Completed in Phase 35.
+- [x] **JOB-07**: Async job execution enforces conservative caps for target count, page count, Lambda time remaining, failure threshold, SES pacing, and root-cause stop conditions. Completed in Phase 35.
+- [x] **JOB-08**: Admin can request cooperative cancellation, and the system clearly records that cancellation stops future target attempts without rolling back completed sends. Completed in Phase 35.
+- [x] **JOB-09**: Backend and infra tests cover job preview/create/list/detail/results/cancel, duplicate invocation/idempotency, conditional resend claims, worker stop conditions, metadata-only boundaries, and scoped Lambda invoke permission. Completed in Phase 35.
 
 ### Admin Job UI and Production Browser Smoke
 
@@ -99,16 +99,16 @@ Traceability is filled by the active v1.6 roadmap.
 | AUDIT-02 | Phase 34 | Complete |
 | AUDIT-03 | Phase 34 | Complete |
 | AUDIT-04 | Phase 34 | Complete |
-| AUDIT-05 | Phase 35 | Pending |
-| JOB-01 | Phase 35 | Pending |
-| JOB-02 | Phase 35 | Pending |
-| JOB-03 | Phase 35 | Pending |
-| JOB-04 | Phase 35 | Pending |
-| JOB-05 | Phase 35 | Pending |
-| JOB-06 | Phase 35 | Pending |
-| JOB-07 | Phase 35 | Pending |
-| JOB-08 | Phase 35 | Pending |
-| JOB-09 | Phase 35 | Pending |
+| AUDIT-05 | Phase 35 | Complete |
+| JOB-01 | Phase 35 | Complete |
+| JOB-02 | Phase 35 | Complete |
+| JOB-03 | Phase 35 | Complete |
+| JOB-04 | Phase 35 | Complete |
+| JOB-05 | Phase 35 | Complete |
+| JOB-06 | Phase 35 | Complete |
+| JOB-07 | Phase 35 | Complete |
+| JOB-08 | Phase 35 | Complete |
+| JOB-09 | Phase 35 | Complete |
 | UI-01 | Phase 36 | Pending |
 | UI-02 | Phase 36 | Pending |
 | UI-03 | Phase 36 | Pending |
@@ -127,4 +127,4 @@ Traceability is filled by the active v1.6 roadmap.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 34 completion*
+*Last updated: 2026-06-04 after Phase 35 completion*

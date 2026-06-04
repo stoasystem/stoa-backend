@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
+from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 
 
@@ -785,3 +786,173 @@ def test_recovery_job_audit_timeline_returns_job_scope(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"items": [], "count": 0, "next_token": None, "scope": "recovery_job"}
     assert calls == [("job-1", {"limit": 5, "last_key": None})]
+
+
+def test_resend_recovery_job_preview_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("preview should not query reports")
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/resend-email/preview",
+        json={"reason": "incident resend", "filters": {"status": "email_failed"}},
+    )
+
+    assert response.status_code == 403
+
+
+def test_resend_recovery_job_preview_returns_metadata_only(monkeypatch):
+    calls = []
+
+    def list_reports_for_admin(**kwargs):
+        calls.append(kwargs)
+        return {"Items": [_report()]}
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", list_reports_for_admin)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/resend-email/preview",
+        json={
+            "reason": "incident resend",
+            "filters": {"status": "email_failed", "week_start": "2026-06-01"},
+            "max_targets": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "resend_email"
+    assert data["eligible_count"] == 1
+    assert data["refused_count"] == 0
+    assert data["sample"][0]["artifacts"] == {"html_available": True, "json_available": True}
+    assert data["preview_token"]
+    assert calls == [
+        {
+            "status": "email_failed",
+            "week_start": "2026-06-01",
+            "parent_id": None,
+            "student_id": None,
+            "limit": 5,
+            "last_key": None,
+        }
+    ]
+    serialized = str(data)
+    assert "weekly-reports/" not in serialized
+    assert "html_s3_key" not in serialized
+    assert "json_s3_key" not in serialized
+
+
+def test_create_resend_recovery_job_persists_snapshot_and_invokes_worker(monkeypatch):
+    persisted = []
+    audits = []
+    invoked = []
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", lambda **kwargs: {"Items": [_report()]})
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda job, targets: persisted.append((job, targets)))
+    monkeypatch.setattr(
+        report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    monkeypatch.setattr(report_recovery_job_service, "invoke_weekly_report_job", lambda job_id: invoked.append(job_id))
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    preview = client.post(
+        "/admin/reports/recovery-jobs/resend-email/preview",
+        json={"reason": "incident resend", "filters": {"status": "email_failed"}},
+    ).json()
+    response = client.post(
+        "/admin/reports/recovery-jobs/resend-email",
+        json={
+            "reason": "incident resend",
+            "filters": {"status": "email_failed"},
+            "preview_token": preview["preview_token"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "queued"
+    assert data["target_count"] == 1
+    assert persisted[0][0]["created_by"] == "admin-sub"
+    assert persisted[0][1][0]["result"] == "pending"
+    assert persisted[0][1][0]["parent_id"] == "parent-1"
+    assert invoked == [persisted[0][0]["job_id"]]
+    assert audits[0][1]["action"] == "create_resend_job"
+    serialized = str(data) + str(persisted)
+    assert "weekly-reports/" not in serialized
+
+
+def test_create_resend_recovery_job_requires_matching_preview(monkeypatch):
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", lambda **kwargs: {"Items": [_report()]})
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/resend-email",
+        json={
+            "reason": "incident resend",
+            "filters": {"status": "email_failed"},
+            "preview_token": "stale",
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_recovery_job_list_detail_results_and_cancel(monkeypatch):
+    updates = []
+    audits = []
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "queued",
+        "reason": "incident resend",
+        "created_by": "admin-sub",
+        "created_at": "2026-06-04T10:00:00+00:00",
+        "updated_at": "2026-06-04T10:00:00+00:00",
+        "filters": {"status": "email_failed"},
+        "target_count": 1,
+        "pending_count": 1,
+    }
+    target = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "TARGET#00000#target-1",
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "pending",
+        "detail": "failed weekly-reports/private/report.html html_s3_key",
+    }
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: job if job_id == "job-1" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_jobs", lambda **kwargs: {"Items": [job]})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": [target]})
+    monkeypatch.setattr(
+        report_repo,
+        "request_recovery_job_cancellation",
+        lambda job_id, **kwargs: updates.append((job_id, kwargs)) or True,
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    assert client.get("/admin/reports/recovery-jobs").status_code == 200
+    detail = client.get("/admin/reports/recovery-jobs/job-1")
+    results = client.get("/admin/reports/recovery-jobs/job-1/results")
+    cancel = client.post("/admin/reports/recovery-jobs/job-1/cancel")
+
+    assert detail.status_code == 200
+    assert results.status_code == 200
+    assert cancel.status_code == 200
+    assert cancel.json()["status"] == "cancellation_requested"
+    assert updates[0][0] == "job-1"
+    assert audits[0][1]["action"] == "request_cancellation"
+    serialized = str(results.json())
+    assert "weekly-reports/" not in serialized
+    assert "html_s3_key" not in serialized

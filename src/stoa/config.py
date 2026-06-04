@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # SQS
     teacher_queue_url: str = ""
 
+    # Lambda targets
+    weekly_report_function_name: str = "stoa-weekly-report"
+
 
 @lru_cache
 def get_settings() -> Settings:

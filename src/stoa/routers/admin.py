@@ -9,7 +9,7 @@ from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
-from stoa.services import report_recovery_service
+from stoa.services import report_recovery_job_service, report_recovery_service
 
 router = APIRouter()
 
@@ -126,6 +126,103 @@ class ReportAuditListResponse(BaseModel):
     count: int
     next_token: str | None = None
     scope: str
+
+
+class RecoveryJobFilters(BaseModel):
+    status: str = "email_failed"
+    week_start: str | None = None
+    parent_id: str | None = None
+    student_id: str | None = None
+
+
+class RecoveryJobPreviewRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    filters: RecoveryJobFilters = Field(default_factory=RecoveryJobFilters)
+    max_targets: int = Field(default=25, ge=1, le=25)
+
+
+class RecoveryJobPreviewTarget(BaseModel):
+    target_id: str
+    report_id: str | None = None
+    parent_id: str | None = None
+    student_id: str | None = None
+    student_name: str | None = None
+    week_start: str | None = None
+    status: str | None = None
+    email_status: str | None = None
+    artifacts: dict[str, bool]
+    eligibility: str
+    refusal_reason: str | None = None
+
+
+class RecoveryJobPreviewResponse(BaseModel):
+    operation: str
+    reason: str
+    requested_by: str
+    filters: dict[str, str | None]
+    max_targets: int
+    scanned_pages: int
+    eligible_count: int
+    refused_count: int
+    missing_count: int
+    sample: list[RecoveryJobPreviewTarget]
+    preview_token: str
+
+
+class RecoveryJobCreateRequest(RecoveryJobPreviewRequest):
+    preview_token: str = Field(..., min_length=1)
+
+
+class RecoveryJobResponse(BaseModel):
+    job_id: str
+    job_type: str
+    status: str
+    reason: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    cancellation_requested_by: str | None = None
+    cancellation_requested_at: str | None = None
+    filters: dict[str, Any] | None = None
+    target_count: int = 0
+    pending_count: int = 0
+    attempted_count: int = 0
+    success_count: int = 0
+    refused_count: int = 0
+    not_found_count: int = 0
+    failed_count: int = 0
+    skipped_cancelled_count: int = 0
+    stop_reason: str | None = None
+
+
+class RecoveryJobListResponse(BaseModel):
+    items: list[RecoveryJobResponse]
+    count: int
+    next_token: str | None = None
+
+
+class RecoveryJobTargetResponse(BaseModel):
+    target_id: str
+    report_id: str | None = None
+    parent_id: str | None = None
+    student_id: str | None = None
+    student_name: str | None = None
+    week_start: str | None = None
+    result: str
+    status: str | None = None
+    email_status: str | None = None
+    detail: str | None = None
+    error_class: str | None = None
+    attempted_at: str | None = None
+    completed_at: str | None = None
+
+
+class RecoveryJobTargetsResponse(BaseModel):
+    items: list[RecoveryJobTargetResponse]
+    count: int
+    next_token: str | None = None
 
 
 @router.get("/users")
@@ -343,6 +440,116 @@ async def bulk_resend_report_emails(
         )
 
     return BulkReportResendResponse(operation="bulk_resend_email", count=len(results), results=results)
+
+
+@router.post(
+    "/reports/recovery-jobs/resend-email/preview",
+    response_model=RecoveryJobPreviewResponse,
+)
+async def preview_resend_recovery_job(
+    request: RecoveryJobPreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Preview a bounded async resend recovery job before mutation."""
+    try:
+        return report_recovery_job_service.preview_resend_job(
+            reason=request.reason,
+            operator=_operator_id(user),
+            filters=request.filters.model_dump(),
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+
+
+@router.post(
+    "/reports/recovery-jobs/resend-email",
+    response_model=RecoveryJobResponse,
+)
+async def create_resend_recovery_job(
+    request: RecoveryJobCreateRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded async resend recovery job after preview confirmation."""
+    try:
+        job = report_recovery_job_service.create_resend_job(
+            reason=request.reason,
+            operator=_operator_id(user),
+            filters=request.filters.model_dump(),
+            preview_token=request.preview_token,
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+    return _recovery_job_response(job)
+
+
+@router.get("/reports/recovery-jobs", response_model=RecoveryJobListResponse)
+async def list_recovery_jobs(
+    limit: int = Query(default=50, ge=1, le=100),
+    next_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List async report recovery jobs."""
+    try:
+        last_key = report_repo.decode_recovery_job_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+    result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
+    items = [_recovery_job_response(item) for item in result.get("Items", [])]
+    return RecoveryJobListResponse(
+        items=items,
+        count=len(items),
+        next_token=report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+    )
+
+
+@router.get("/reports/recovery-jobs/{job_id}", response_model=RecoveryJobResponse)
+async def get_recovery_job(
+    job_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Get one async report recovery job."""
+    job = report_repo.get_recovery_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Recovery job not found")
+    return _recovery_job_response(job)
+
+
+@router.get("/reports/recovery-jobs/{job_id}/results", response_model=RecoveryJobTargetsResponse)
+async def list_recovery_job_results(
+    job_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    next_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List metadata-only target results for one async recovery job."""
+    if not report_repo.get_recovery_job(job_id):
+        raise HTTPException(status_code=404, detail="Recovery job not found")
+    try:
+        last_key = report_repo.decode_recovery_job_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+    result = report_repo.list_recovery_job_targets(job_id, limit=limit, last_key=last_key)
+    items = [_recovery_job_target_response(item) for item in result.get("Items", [])]
+    return RecoveryJobTargetsResponse(
+        items=items,
+        count=len(items),
+        next_token=report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+    )
+
+
+@router.post("/reports/recovery-jobs/{job_id}/cancel", response_model=RecoveryJobResponse)
+async def cancel_recovery_job(
+    job_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Request cooperative cancellation for an async report recovery job."""
+    try:
+        job = report_recovery_job_service.cancel_resend_job(job_id, operator=_operator_id(user))
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+    return _recovery_job_response(job)
 
 
 @router.post(
@@ -569,6 +776,55 @@ def _operator_id(user: dict) -> str:
 def _report_recovery_http_error(exc: report_recovery_service.ReportRecoveryError) -> HTTPException:
     detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report recovery operation failed"
     return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _recovery_job_http_error(exc: report_recovery_job_service.RecoveryJobError) -> HTTPException:
+    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Recovery job operation failed"
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _recovery_job_response(job: dict) -> RecoveryJobResponse:
+    return RecoveryJobResponse(
+        job_id=str(job.get("job_id", "")),
+        job_type=str(job.get("job_type", "")),
+        status=str(job.get("status", "")),
+        reason=report_recovery_service.redact_private_artifact_text(job.get("reason")),
+        created_by=job.get("created_by"),
+        created_at=job.get("created_at"),
+        updated_at=job.get("updated_at"),
+        started_at=job.get("started_at"),
+        completed_at=job.get("completed_at"),
+        cancellation_requested_by=job.get("cancellation_requested_by"),
+        cancellation_requested_at=job.get("cancellation_requested_at"),
+        filters=_redact_audit_metadata(job.get("filters")),
+        target_count=int(job.get("target_count") or 0),
+        pending_count=int(job.get("pending_count") or 0),
+        attempted_count=int(job.get("attempted_count") or 0),
+        success_count=int(job.get("success_count") or 0),
+        refused_count=int(job.get("refused_count") or 0),
+        not_found_count=int(job.get("not_found_count") or 0),
+        failed_count=int(job.get("failed_count") or 0),
+        skipped_cancelled_count=int(job.get("skipped_cancelled_count") or 0),
+        stop_reason=job.get("stop_reason"),
+    )
+
+
+def _recovery_job_target_response(item: dict) -> RecoveryJobTargetResponse:
+    return RecoveryJobTargetResponse(
+        target_id=str(item.get("target_id", "")),
+        report_id=item.get("report_id"),
+        parent_id=item.get("parent_id"),
+        student_id=item.get("student_id"),
+        student_name=item.get("student_name"),
+        week_start=item.get("week_start"),
+        result=str(item.get("result", "")),
+        status=item.get("status"),
+        email_status=item.get("email_status"),
+        detail=report_recovery_service.redact_private_artifact_text(item.get("detail")),
+        error_class=item.get("error_class"),
+        attempted_at=item.get("attempted_at"),
+        completed_at=item.get("completed_at"),
+    )
 
 
 def _report_audit_event_response(item: dict) -> ReportAuditEventResponse:

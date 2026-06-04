@@ -54,6 +54,38 @@ def test_handler_routes_report_artifact_smoke_without_running_weekly_job(monkeyp
     assert calls == [{"job": "report_artifact_s3_smoke"}]
 
 
+def test_handler_routes_report_recovery_resend_job(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service,
+        "execute_resend_job",
+        lambda job_id, **kwargs: calls.append((job_id, kwargs.get("context"))) or {"status": "completed"},
+    )
+    monkeypatch.setattr(
+        weekly_reports,
+        "run_weekly_report_job",
+        lambda event: (_ for _ in ()).throw(AssertionError("weekly job should not run")),
+    )
+    context = object()
+
+    result = weekly_reports.handler({"job": "report_recovery_resend_email", "job_id": "job-1"}, context)
+
+    assert result == {"status": "completed"}
+    assert calls == [("job-1", context)]
+
+
+def test_handler_rejects_unknown_report_recovery_job(monkeypatch):
+    monkeypatch.setattr(
+        weekly_reports,
+        "run_weekly_report_job",
+        lambda event: (_ for _ in ()).throw(AssertionError("weekly job should not run")),
+    )
+
+    result = weekly_reports.handler({"job": "report_recovery_unknown", "job_id": "job-1"}, None)
+
+    assert result == {"status": "failed", "detail": "Unsupported report recovery job"}
+
+
 def test_discover_linked_parent_student_pairs_pages(monkeypatch):
     table = FakeTable(
         [
@@ -296,3 +328,153 @@ def test_handler_accepts_eventbridge_scheduled_event(monkeypatch):
         "email_sent": 0,
         "failed": 0,
     }
+
+
+def test_report_recovery_resend_worker_processes_success(monkeypatch):
+    target_updates = []
+    job_updates = []
+    report_updates = []
+    audits = []
+    sent = []
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "queued",
+        "reason": "incident resend",
+        "created_by": "admin-sub",
+        "target_count": 1,
+        "failure_threshold": 5,
+    }
+    target = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "TARGET#00000#report-1",
+        "target_id": "report-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "pending",
+    }
+    report = {
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "student_name": "Student",
+        "parent_email": "parent@example.com",
+        "week_start": "2026-06-01",
+        "status": "email_failed",
+        "email_status": "failed",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    monkeypatch.setattr(weekly_reports.report_recovery_job_service.report_repo, "get_recovery_job", lambda job_id: job)
+    monkeypatch.setattr(weekly_reports.report_recovery_job_service.report_repo, "try_claim_recovery_job", lambda job_id, **kwargs: True)
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "list_recovery_job_targets",
+        lambda job_id, **kwargs: {"Items": [target]},
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "try_claim_recovery_job_target",
+        lambda job_id, target_sk, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: report,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "try_claim_report_resend",
+        lambda report_id, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_target",
+        lambda job_id, target_sk, result, **fields: target_updates.append((job_id, target_sk, result, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_status",
+        lambda job_id, status, **fields: job_updates.append((job_id, status, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_recovery_service.report_repo,
+        "put_report_audit_event",
+        lambda report_id, event: audits.append((report_id, event)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_recovery_service.report_repo,
+        "update_report_status",
+        lambda report_id, status, **fields: report_updates.append((report_id, status, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_recovery_service.report_artifact_service,
+        "get_report_html",
+        lambda key: "<html>Report</html>",
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_recovery_service.notify_service,
+        "send_weekly_report_email",
+        lambda email, html, **kwargs: sent.append((email, html)),
+    )
+
+    result = weekly_reports.report_recovery_job_service.execute_resend_job("job-1")
+
+    assert result["status"] == "completed"
+    assert sent == [("parent@example.com", "<html>Report</html>")]
+    assert report_updates[0][1] == "email_sent"
+    assert target_updates[0][2] == "success"
+    assert job_updates[0][1] == "completed"
+    assert job_updates[0][2]["success_count"] == 1
+    assert "weekly-reports/" not in str(audits)
+
+
+def test_report_recovery_resend_worker_marks_cancelled_pending_targets(monkeypatch):
+    target_updates = []
+    job_updates = []
+    audits = []
+    job = {
+        "job_id": "job-1",
+        "status": "cancellation_requested",
+        "target_count": 1,
+    }
+    target = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "TARGET#00000#report-1",
+        "target_id": "report-1",
+        "result": "pending",
+    }
+    monkeypatch.setattr(weekly_reports.report_recovery_job_service.report_repo, "get_recovery_job", lambda job_id: job)
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "list_recovery_job_targets",
+        lambda job_id, **kwargs: {"Items": [target]},
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_target",
+        lambda job_id, target_sk, result, **fields: target_updates.append((job_id, target_sk, result, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_status",
+        lambda job_id, status, **fields: job_updates.append((job_id, status, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+
+    result = weekly_reports.report_recovery_job_service.execute_resend_job("job-1")
+
+    assert result["status"] == "cancelled"
+    assert target_updates[0][2] == "skipped_cancelled"
+    assert job_updates[0][1] == "cancelled"
+    assert audits[0][1]["result"] == "cancelled"

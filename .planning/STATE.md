@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Report Recovery Operations Hardening
 status: planning
-last_updated: "2026-06-04T23:44:16+02:00"
+last_updated: "2026-06-04T23:55:54+02:00"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 40
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -20,23 +20,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Ready to plan Phase 35: Async Resend Job Backend.
+**Current focus:** Ready to plan Phase 36: Admin Job/Audit UI And Production Browser Smoke.
 
 ## Current Position
 
-Phase: 35 of 37 (3 of 5 for v1.6)
+Phase: 36 of 37 (4 of 5 for v1.6)
 Plan: TBD
 Status: Ready for phase planning
-Last activity: 2026-06-04 - Phase 34 completed with shared recovery service paths and append-only audit timeline APIs.
+Last activity: 2026-06-04 - Phase 35 completed with bounded async resend job backend, worker execution, cancellation, and scoped Lambda invoke permission.
 
-Progress: [████------] 40%
+Progress: [██████----] 60%
 
 ## Performance Metrics
 
 **Velocity:**
 
 - Historical plans completed through v1.5: 33
-- Active milestone plans completed: 2
+- Active milestone plans completed: 3
 - Average duration: -
 - Total execution time this milestone: 0.0 hours
 
@@ -46,7 +46,7 @@ Progress: [████------] 40%
 |-------|-------|-------|----------|
 | 33 | 1 complete | - | - |
 | 34 | 1 complete | - | - |
-| 35 | TBD | - | - |
+| 35 | 1 complete | - | - |
 | 36 | TBD | - | - |
 | 37 | TBD | - | - |
 
@@ -67,10 +67,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 36 is marked with `UI hint: yes` for the admin job/audit UI and production browser smoke work.
 - Phase 33 uses a deterministic `cdk_asset_hash` so manifest audit timestamps do not create meaningless CDK Lambda asset drift.
 - Phase 34 audit immutability is application-enforced through DynamoDB conditional append writes; compliance-grade WORM storage remains deferred.
+- Phase 35 uses existing Lambda and DynamoDB resources for bounded async resend jobs; higher-scale orchestration remains deferred until evidence requires it.
 
 ### Pending Todos
 
-- Plan Phase 35.
+- Plan Phase 36.
 
 ### Blockers/Concerns
 
@@ -90,10 +91,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 23:44 +02:00
-Stopped at: Phase 34 complete; ready to plan Phase 35.
+Last session: 2026-06-04 23:55 +02:00
+Stopped at: Phase 35 complete; ready to plan Phase 36.
 Resume file: None
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 35`.
+- Run `$gsd-plan-phase 36`.

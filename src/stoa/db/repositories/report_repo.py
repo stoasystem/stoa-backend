@@ -69,6 +69,160 @@ def put_recovery_job_audit_event(job_id: str, event: dict) -> None:
     )
 
 
+def put_recovery_job(job: dict, targets: list[dict]) -> None:
+    """Persist one recovery job and its stable target snapshot."""
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
+            "SK": "SUMMARY",
+            "entity_type": "REPORT_RECOVERY_JOB",
+            **job,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+    for index, target in enumerate(targets):
+        table.put_item(
+            Item={
+                "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
+                "SK": f"TARGET#{index:05d}#{target['target_id']}",
+                "entity_type": "REPORT_RECOVERY_JOB_TARGET",
+                "job_id": job["job_id"],
+                "target_index": index,
+                **target,
+            },
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+
+
+def get_recovery_job(job_id: str) -> dict | None:
+    table = get_table()
+    response = table.get_item(Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"})
+    return response.get("Item")
+
+
+def list_recovery_jobs(*, limit: int = 50, last_key: dict | None = None) -> dict:
+    table = get_table()
+    kwargs = {
+        "FilterExpression": Attr("PK").begins_with("REPORT_RECOVERY_JOB#") & Attr("SK").eq("SUMMARY"),
+        "Limit": limit,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.scan(**kwargs)
+
+
+def list_recovery_job_targets(job_id: str, *, limit: int = 50, last_key: dict | None = None) -> dict:
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}") & Key("SK").begins_with("TARGET#"),
+        "Limit": limit,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
+
+
+def try_claim_recovery_job(job_id: str, *, started_at: str) -> bool:
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
+            UpdateExpression="SET #status = :running, started_at = if_not_exists(started_at, :started_at), updated_at = :started_at",
+            ConditionExpression="#status = :queued",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":running": "running",
+                ":queued": "queued",
+                ":started_at": started_at,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def request_recovery_job_cancellation(job_id: str, *, requested_by: str, requested_at: str) -> bool:
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
+            UpdateExpression=(
+                "SET #status = :cancellation_requested, "
+                "cancellation_requested_by = :requested_by, "
+                "cancellation_requested_at = :requested_at, "
+                "updated_at = :requested_at"
+            ),
+            ConditionExpression="#status IN (:queued, :running)",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":cancellation_requested": "cancellation_requested",
+                ":queued": "queued",
+                ":running": "running",
+                ":requested_by": requested_by,
+                ":requested_at": requested_at,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def update_recovery_job_status(job_id: str, status: str, **fields) -> None:
+    table = get_table()
+    update_fields = {"status": status, **fields}
+    names = {f"#f{index}": key for index, key in enumerate(update_fields)}
+    values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
+    table.update_item(
+        Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
+        UpdateExpression="SET " + ", ".join(
+            f"{name} = :v{index}" for index, name in enumerate(names)
+        ),
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+    )
+
+
+def try_claim_recovery_job_target(job_id: str, target_sk: str, *, attempted_at: str) -> bool:
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": target_sk},
+            UpdateExpression="SET #result = :in_progress, attempted_at = :attempted_at, updated_at = :attempted_at",
+            ConditionExpression="#result = :pending",
+            ExpressionAttributeNames={"#result": "result"},
+            ExpressionAttributeValues={
+                ":in_progress": "in_progress",
+                ":pending": "pending",
+                ":attempted_at": attempted_at,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def update_recovery_job_target(job_id: str, target_sk: str, result: str, **fields) -> None:
+    table = get_table()
+    update_fields = {"result": result, **fields}
+    names = {f"#f{index}": key for index, key in enumerate(update_fields)}
+    values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
+    table.update_item(
+        Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": target_sk},
+        UpdateExpression="SET " + ", ".join(
+            f"{name} = :v{index}" for index, name in enumerate(names)
+        ),
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+    )
+
+
 def list_report_audit_events(
     report_id: str,
     *,
@@ -126,6 +280,40 @@ def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: s
                 ":expected": "generation_failed",
                 ":attempted_at": attempted_at,
                 ":operation": "retry_generation",
+                ":operator": operator,
+                ":in_progress": "in_progress",
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def try_claim_report_resend(report_id: str, *, operator: str, attempted_at: str) -> bool:
+    """Atomically claim a failed email report before resend side effects."""
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
+            UpdateExpression=(
+                "SET #status = :resending, "
+                "resend_attempted_at = :attempted_at, "
+                "last_operation = :operation, "
+                "last_operation_at = :attempted_at, "
+                "last_operation_by = :operator, "
+                "last_operation_result = :in_progress, "
+                "updated_at = :attempted_at"
+            ),
+            ConditionExpression="#status = :email_failed OR email_status = :failed",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":resending": "email_resending",
+                ":email_failed": "email_failed",
+                ":failed": "failed",
+                ":attempted_at": attempted_at,
+                ":operation": "resend_email",
                 ":operator": operator,
                 ":in_progress": "in_progress",
             },
@@ -242,6 +430,32 @@ def decode_audit_page_token(token: str | None) -> dict | None:
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_audit_page_payload(decoded):
+        return decoded["key"]
+    raise ValueError("Invalid pagination token")
+
+
+def encode_recovery_job_page_token(last_key: dict | None) -> str | None:
+    """Encode recovery job list/result pagination keys."""
+    if not last_key:
+        return None
+    raw = json.dumps(
+        {"scope": "recovery_jobs", "key": last_key},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_recovery_job_page_token(token: str | None) -> dict | None:
+    """Decode recovery job pagination token into an ExclusiveStartKey."""
+    if not token:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        decoded = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid pagination token") from exc
+    if _is_valid_recovery_job_page_payload(decoded):
         return decoded["key"]
     raise ValueError("Invalid pagination token")
 
@@ -390,6 +604,17 @@ def _is_valid_audit_page_payload(decoded: object) -> bool:
         and isinstance(sk, str)
         and sk.startswith("AUDIT#")
     )
+
+
+def _is_valid_recovery_job_page_payload(decoded: object) -> bool:
+    if not isinstance(decoded, dict) or decoded.get("scope") != "recovery_jobs":
+        return False
+    key = decoded.get("key")
+    if not isinstance(key, dict):
+        return False
+    pk = key.get("PK")
+    sk = key.get("SK")
+    return isinstance(pk, str) and pk.startswith("REPORT_RECOVERY_JOB#") and isinstance(sk, str)
 
 
 def list_reports_for_parent_week(

@@ -582,6 +582,122 @@ def test_report_repo_put_recovery_job_audit_event_uses_conditional_append(monkey
     ]
 
 
+def test_report_repo_recovery_job_page_token_round_trips_job_key():
+    key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#report-1"}
+
+    token = report_repo.encode_recovery_job_page_token(key)
+
+    assert isinstance(token, str)
+    assert report_repo.decode_recovery_job_page_token(token) == key
+
+
+def test_report_repo_recovery_job_page_token_rejects_report_key():
+    token = report_repo.encode_recovery_job_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"})
+
+    with pytest.raises(ValueError):
+        report_repo.decode_recovery_job_page_token(token)
+
+
+def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):
+    class FakePutTable:
+        def __init__(self):
+            self.calls = []
+
+        def put_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakePutTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    report_repo.put_recovery_job(
+        {
+            "job_id": "job-1",
+            "job_type": "resend_email",
+            "status": "queued",
+        },
+        [
+            {
+                "target_id": "report-1",
+                "report_id": "report-1",
+                "parent_id": "parent-1",
+                "student_id": "student-1",
+                "week_start": "2026-06-01",
+                "result": "pending",
+            }
+        ],
+    )
+
+    assert table.calls[0] == {
+        "Item": {
+            "PK": "REPORT_RECOVERY_JOB#job-1",
+            "SK": "SUMMARY",
+            "entity_type": "REPORT_RECOVERY_JOB",
+            "job_id": "job-1",
+            "job_type": "resend_email",
+            "status": "queued",
+        },
+        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    }
+    assert table.calls[1] == {
+        "Item": {
+            "PK": "REPORT_RECOVERY_JOB#job-1",
+            "SK": "TARGET#00000#report-1",
+            "entity_type": "REPORT_RECOVERY_JOB_TARGET",
+            "job_id": "job-1",
+            "target_index": 0,
+            "target_id": "report-1",
+            "report_id": "report-1",
+            "parent_id": "parent-1",
+            "student_id": "student-1",
+            "week_start": "2026-06-01",
+            "result": "pending",
+        },
+        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    }
+
+
+def test_report_repo_try_claim_report_resend_claims_failed_report(monkeypatch):
+    class FakeUpdateTable:
+        def __init__(self):
+            self.calls = []
+
+        def update_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakeUpdateTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    claimed = report_repo.try_claim_report_resend(
+        "report-1",
+        operator="admin-sub",
+        attempted_at="2026-06-04T10:00:00+00:00",
+    )
+
+    assert claimed is True
+    assert table.calls[0]["Key"] == {"PK": "REPORT#report-1", "SK": "SUMMARY"}
+    assert table.calls[0]["ConditionExpression"] == "#status = :email_failed OR email_status = :failed"
+    assert table.calls[0]["ExpressionAttributeValues"][":resending"] == "email_resending"
+
+
+def test_report_repo_try_claim_report_resend_returns_false_when_not_failed(monkeypatch):
+    class FakeUpdateTable:
+        def update_item(self, **kwargs):
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException"}},
+                "UpdateItem",
+            )
+
+    monkeypatch.setattr(report_repo, "get_table", lambda: FakeUpdateTable())
+
+    claimed = report_repo.try_claim_report_resend(
+        "report-1",
+        operator="admin-sub",
+        attempted_at="2026-06-04T10:00:00+00:00",
+    )
+
+    assert claimed is False
+
+
 def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
     class FakeQueryTable:
         def __init__(self):
