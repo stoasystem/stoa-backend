@@ -45,11 +45,16 @@ Delivered:
 - `stoa-api` has scoped SES send permission for report recovery email paths, and `StoaApiStack` final CDK diff is clean.
 - Operators have a report recovery runbook covering retry/resend/bulk resend, observability, rollback, escalation, and known limits.
 
-## Current Milestone
+## Current Milestone: v1.6 Report Recovery Operations Hardening
 
-No active milestone.
+**Goal:** Make report recovery safe for incident-wide operations by adding async bulk recovery, immutable audit evidence, production admin browser smoke, and CI/CD protection against stale Lambda package deployments.
 
-Start the next milestone with `$gsd-new-milestone`.
+**Target features:**
+
+- Incident-wide async report recovery jobs with progress, bounded execution, cancellation/stop conditions, and operator-visible results.
+- Immutable audit log records for report recovery actions that preserve who did what, when, why, and with which targets.
+- Production admin browser smoke that verifies the deployed UI with a real admin session without creating temporary production admin accounts.
+- CI/CD Lambda dist rebuild guard so CDK diff/deploy cannot silently use stale `stoa-backend/dist` assets.
 
 ## Requirements
 
@@ -82,7 +87,7 @@ Shipped requirements:
 
 ### Active
 
-No active requirements. The next milestone should define a fresh requirement set.
+Milestone v1.6 requirements are being defined.
 
 ### Out of Scope
 
@@ -214,4 +219,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after v1.5 archive*
+*Last updated: 2026-06-04 after starting milestone v1.6*

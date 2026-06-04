@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Report Recovery Production Rollout & Live Smoke
-status: Awaiting next milestone
-stopped_at: v1.5 archived; phase directory cleanup complete.
-last_updated: "2026-06-04T18:55:43.521Z"
-last_activity: 2026-06-04 — Milestone v1.5 completed, archived, and phase directories moved to .planning/milestones/v1.5-phases/.
+milestone: v1.6
+milestone_name: Report Recovery Operations Hardening
+status: planning
+last_updated: "2026-06-04T21:09:55.589Z"
+last_activity: 2026-06-04
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Awaiting next milestone
+**Current focus:** Defining v1.6 report recovery operations hardening requirements
 
 ## Current Position
 
-Phase: Milestone v1.5 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-04 — Milestone v1.5 completed, archived, and phase directories moved to .planning/milestones/v1.5-phases/.
+Status: Defining requirements
+Last activity: 2026-06-04 — Milestone v1.6 started
 
 ## Performance Metrics
 
@@ -98,7 +97,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Start the next milestone with `$gsd-new-milestone` when ready.
+- Complete v1.6 research, requirements, and roadmap.
 
 ### Blockers/Concerns
 
@@ -120,9 +119,9 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-04 20:53 +02:00
-Stopped at: v1.5 archived; phase directory cleanup complete.
+Stopped at: v1.6 started; research and requirements definition in progress.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Complete v1.6 research, requirements, and roadmap.
