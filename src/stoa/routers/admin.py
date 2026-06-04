@@ -4,7 +4,7 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo, user_repo
@@ -61,6 +61,37 @@ class ReportResendResponse(BaseModel):
     operation: str
     operation_result: str
     updated_at: str
+
+
+class ReportResendTarget(BaseModel):
+    parent_id: str
+    student_id: str
+    week_start: str
+
+
+class BulkReportResendRequest(BaseModel):
+    reports: list[ReportResendTarget] = Field(..., min_length=1, max_length=25)
+
+
+class BulkReportResendItemResult(BaseModel):
+    parent_id: str
+    student_id: str
+    week_start: str
+    result: str
+    report_id: str | None = None
+    status: str | None = None
+    email_status: str | None = None
+    operation: str = "resend_email"
+    operation_result: str | None = None
+    updated_at: str | None = None
+    detail: str | None = None
+    error_class: str | None = None
+
+
+class BulkReportResendResponse(BaseModel):
+    operation: str
+    count: int
+    results: list[BulkReportResendItemResult]
 
 
 class ReportGenerationRetryResponse(BaseModel):
@@ -238,6 +269,54 @@ async def get_report_operations(
     return _report_operation_response(report)
 
 
+@router.post("/reports/bulk-resend", response_model=BulkReportResendResponse)
+async def bulk_resend_report_emails(
+    request: BulkReportResendRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Resend selected failed report emails with independent per-item results."""
+    operator = _operator_id(user)
+    results: list[BulkReportResendItemResult] = []
+
+    for target in request.reports:
+        report = report_repo.get_report_for_child_by_week(target.parent_id, target.student_id, target.week_start)
+        if not report:
+            results.append(
+                BulkReportResendItemResult(
+                    parent_id=target.parent_id,
+                    student_id=target.student_id,
+                    week_start=target.week_start,
+                    result="not_found",
+                    operation_result="not_found",
+                    detail="Report not found",
+                )
+            )
+            continue
+
+        try:
+            resend = _resend_report_email(report, operator)
+        except HTTPException as exc:
+            results.append(_bulk_resend_error_result(target, report, exc))
+            continue
+
+        results.append(
+            BulkReportResendItemResult(
+                parent_id=target.parent_id,
+                student_id=target.student_id,
+                week_start=target.week_start,
+                result="success",
+                report_id=resend.report_id,
+                status=resend.status,
+                email_status=resend.email_status,
+                operation=resend.operation,
+                operation_result=resend.operation_result,
+                updated_at=resend.updated_at,
+            )
+        )
+
+    return BulkReportResendResponse(operation="bulk_resend_email", count=len(results), results=results)
+
+
 @router.post(
     "/reports/{parent_id}/{student_id}/{week_start}/resend",
     response_model=ReportResendResponse,
@@ -250,6 +329,10 @@ async def resend_report_email(
 ):
     """Resend a failed report email using the existing private HTML artifact."""
     report = _get_report_or_404(parent_id, student_id, week_start)
+    return _resend_report_email(report, _operator_id(user))
+
+
+def _resend_report_email(report: dict, operator: str) -> ReportResendResponse:
     if report.get("status") != "email_failed" and report.get("email_status") != "failed":
         raise HTTPException(status_code=409, detail="Report delivery is not failed")
 
@@ -258,7 +341,6 @@ async def resend_report_email(
     if not html_key or not parent_email:
         raise HTTPException(status_code=422, detail="Report is missing email or HTML artifact metadata")
 
-    operator = _operator_id(user)
     attempted_at = _now_iso()
     try:
         html = report_artifact_service.get_report_html(str(html_key))
@@ -306,6 +388,26 @@ async def resend_report_email(
         operation="resend_email",
         operation_result="success",
         updated_at=sent_at,
+    )
+
+
+def _bulk_resend_error_result(
+    target: ReportResendTarget,
+    report: dict,
+    exc: HTTPException,
+) -> BulkReportResendItemResult:
+    result = "failed" if exc.status_code >= 500 else "refused"
+    detail = _redact_private_artifact_text(exc.detail) or "Report resend failed"
+    return BulkReportResendItemResult(
+        parent_id=target.parent_id,
+        student_id=target.student_id,
+        week_start=target.week_start,
+        result=result,
+        report_id=report.get("report_id"),
+        status=report.get("status"),
+        email_status=report.get("email_status"),
+        operation_result=result,
+        detail=detail,
     )
 
 

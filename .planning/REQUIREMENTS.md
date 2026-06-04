@@ -22,10 +22,10 @@
 
 ### Delivery Recovery
 
-- [ ] **DEL-01**: Admin can bulk resend selected `email_failed` reports with a backend-enforced maximum batch size.
-- [ ] **DEL-02**: Bulk resend validates each selected report independently and returns per-report success, refused, not-found, or failed results.
-- [ ] **DEL-03**: Bulk resend uses existing private HTML artifacts through backend-mediated S3 reads and never returns raw report content to the client.
-- [ ] **DEL-04**: Bulk resend records per-report operator, action, attempt time, completion/failure time, result, and error class/message.
+- [x] **DEL-01**: Admin can bulk resend selected `email_failed` reports with a backend-enforced maximum batch size.
+- [x] **DEL-02**: Bulk resend validates each selected report independently and returns per-report success, refused, not-found, or failed results.
+- [x] **DEL-03**: Bulk resend uses existing private HTML artifacts through backend-mediated S3 reads and never returns raw report content to the client.
+- [x] **DEL-04**: Bulk resend records per-report operator, action, attempt time, completion/failure time, result, and error class/message.
 
 ### Admin UI
 
@@ -85,10 +85,10 @@ Deferred to a future milestone.
 | GEN-02 | Phase 24 | Complete |
 | GEN-03 | Phase 24 | Complete |
 | GEN-04 | Phase 24 | Complete |
-| DEL-01 | Phase 25 | Pending |
-| DEL-02 | Phase 25 | Pending |
-| DEL-03 | Phase 25 | Pending |
-| DEL-04 | Phase 25 | Pending |
+| DEL-01 | Phase 25 | Complete |
+| DEL-02 | Phase 25 | Complete |
+| DEL-03 | Phase 25 | Complete |
+| DEL-04 | Phase 25 | Complete |
 | UI-01 | Phase 26 | Pending |
 | UI-02 | Phase 26 | Pending |
 | UI-03 | Phase 26 | Pending |
@@ -108,4 +108,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 24 completion*
+*Last updated: 2026-06-04 after Phase 25 completion*

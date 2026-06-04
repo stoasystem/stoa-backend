@@ -227,6 +227,142 @@ def test_resend_refuses_non_failed_report(monkeypatch):
     assert response.status_code == 409
 
 
+def test_bulk_resend_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("bulk resend should not query reports")
+
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/bulk-resend",
+        json={"reports": [{"parent_id": "parent-1", "student_id": "student-1", "week_start": "2026-06-01"}]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_bulk_resend_enforces_batch_size(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("oversized bulk resend should not query reports")
+
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/bulk-resend",
+        json={
+            "reports": [
+                {"parent_id": "parent-1", "student_id": f"student-{index}", "week_start": "2026-06-01"}
+                for index in range(26)
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
+    updates = []
+    sent = []
+    html_reads = []
+
+    success = {
+        **_report(),
+        "student_id": "student-success",
+        "report_id": "report-success",
+        "html_s3_key": "weekly-reports/parent-1/student-success/2026-06-01/report.html",
+    }
+    refused = {
+        **_report(status="email_sent", email_status="sent"),
+        "student_id": "student-refused",
+        "report_id": "report-refused",
+    }
+    failed = {
+        **_report(),
+        "student_id": "student-failed",
+        "report_id": "report-failed",
+        "parent_email": "fail@example.com",
+        "html_s3_key": "weekly-reports/parent-1/student-failed/2026-06-01/report.html",
+    }
+    reports = {
+        "student-success": success,
+        "student-refused": refused,
+        "student-failed": failed,
+    }
+
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: reports.get(student_id),
+    )
+
+    def get_html(key):
+        html_reads.append(key)
+        return "<html>Report</html>"
+
+    def send_email(email, html, **kwargs):
+        sent.append((email, html, kwargs.get("subject")))
+        if email == "fail@example.com":
+            raise RuntimeError("SES failed weekly-reports/private/report.html")
+
+    monkeypatch.setattr(admin.report_artifact_service, "get_report_html", get_html)
+    monkeypatch.setattr(admin.notify_service, "send_weekly_report_email", send_email)
+    monkeypatch.setattr(
+        report_repo,
+        "update_report_status",
+        lambda report_id, status, **fields: updates.append((report_id, status, fields)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/bulk-resend",
+        json={
+            "reports": [
+                {"parent_id": "parent-1", "student_id": "student-success", "week_start": "2026-06-01"},
+                {"parent_id": "parent-1", "student_id": "student-refused", "week_start": "2026-06-01"},
+                {"parent_id": "parent-1", "student_id": "student-missing", "week_start": "2026-06-01"},
+                {"parent_id": "parent-1", "student_id": "student-failed", "week_start": "2026-06-01"},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "bulk_resend_email"
+    assert data["count"] == 4
+    assert [item["result"] for item in data["results"]] == ["success", "refused", "not_found", "failed"]
+    assert [item["operation_result"] for item in data["results"]] == [
+        "success",
+        "refused",
+        "not_found",
+        "failed",
+    ]
+    assert data["results"][0]["report_id"] == "report-success"
+    assert data["results"][2]["detail"] == "Report not found"
+    assert sent == [
+        ("parent@example.com", "<html>Report</html>", "STOA weekly report for Student"),
+        ("fail@example.com", "<html>Report</html>", "STOA weekly report for Student"),
+    ]
+    assert html_reads == [
+        "weekly-reports/parent-1/student-success/2026-06-01/report.html",
+        "weekly-reports/parent-1/student-failed/2026-06-01/report.html",
+    ]
+    assert [(update[0], update[1], update[2]["last_operation_result"]) for update in updates] == [
+        ("report-success", "email_sent", "success"),
+        ("report-failed", "email_failed", "failed"),
+    ]
+    assert updates[0][2]["last_operation_by"] == "admin-sub"
+    assert updates[1][2]["email_error_message"] == "SES failed [report-artifact-key]"
+    serialized = str(data)
+    assert "<html" not in serialized
+    assert "weekly-reports/" not in serialized
+    assert "json_s3_key" not in serialized
+    assert "html_s3_key" not in serialized
+    assert "presignedUrl" not in serialized
+    assert "https://s3" not in serialized
+
+
 def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(monkeypatch):
     updates = []
     calls = []
