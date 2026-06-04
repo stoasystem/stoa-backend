@@ -1,61 +1,58 @@
-# Requirements: Report Operations Admin UI / Bulk Recovery
+# Requirements: Report Recovery Production Rollout & Live Smoke
 
 **Defined:** 2026-06-04
 **Core Value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
 
-## v1.4 Requirements
+## v1.5 Requirements
 
-### Admin Report Operations API
+### Deployment Readiness
 
-- [x] **OPS-01**: Admin can list weekly report operation rows with report status, email status, generation error, delivery error, last operation, and updated timestamps.
-- [x] **OPS-02**: Admin report list supports bounded pagination and explicit filters for status, week start, parent ID, and student ID where the backend access pattern supports them.
-- [x] **OPS-03**: Backend either proves the current DynamoDB access pattern is safe for the pilot admin list or adds a CDK-managed index before broad list usage.
-- [x] **OPS-04**: Admin can fetch one report operation detail with artifact availability metadata, generation metadata, delivery metadata, and operation audit metadata.
-- [x] **OPS-05**: Report operation detail exposes action eligibility and disabled reasons for retry/resend actions.
+- [ ] **REL-01**: Backend release workflow can deploy the v1.4 report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift.
+- [ ] **REL-02**: Frontend release workflow can deploy the `/admin/report-operations` UI bundle to `app.stoaedu.ch` with production API configuration and no report-ops demo fallback.
+- [ ] **REL-03**: Release evidence records commit SHAs, deployment timestamps, frontend asset/cache state, API URL, and Lambda code/update status.
+- [ ] **REL-04**: Rollback entry points are identified before mutation smoke runs, including backend Lambda code rollback and frontend asset rollback.
 
-### Generation Recovery
+### Production API and UI Verification
 
-- [x] **GEN-01**: Admin can retry one `generation_failed` report for a specific parent, student, and week.
-- [x] **GEN-02**: Generation retry preserves the canonical report ID and `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` artifact keys.
-- [x] **GEN-03**: Generation retry refuses successful, pending, generated, `email_sent`, and `email_failed` reports unless a future explicit regenerate feature is designed.
-- [x] **GEN-04**: Generation retry records operator, action, attempt time, completion/failure time, result, and error class/message.
+- [ ] **LIVE-01**: Live admin report operations list endpoint is verified with an admin-authenticated request and returns metadata-only report operation rows or an explicit empty state.
+- [ ] **LIVE-02**: Live detail endpoint is verified for a safe report target and returns artifact availability, generation, delivery, operation metadata, and action eligibility without private artifact keys.
+- [ ] **LIVE-03**: Live frontend `/admin/report-operations` renders the deployed UI for an admin user and uses the production API base URL.
+- [ ] **LIVE-04**: Live unauthenticated and non-admin access checks reject report operations API/UI access.
 
-### Delivery Recovery
+### Safe Recovery Smoke
 
-- [x] **DEL-01**: Admin can bulk resend selected `email_failed` reports with a backend-enforced maximum batch size.
-- [x] **DEL-02**: Bulk resend validates each selected report independently and returns per-report success, refused, not-found, or failed results.
-- [x] **DEL-03**: Bulk resend uses existing private HTML artifacts through backend-mediated S3 reads and never returns raw report content to the client.
-- [x] **DEL-04**: Bulk resend records per-report operator, action, attempt time, completion/failure time, result, and error class/message.
+- [ ] **SMOKE-01**: A safe non-customer report recovery smoke target is prepared or identified with documented parent/student/week identifiers and cleanup expectations.
+- [ ] **SMOKE-02**: Safe `generation_failed` retry smoke runs on the approved target and records status transition, audit fields, artifact availability, and absence of private artifact leakage.
+- [ ] **SMOKE-03**: Safe `email_failed` single resend smoke runs on the approved target and records delivery status transition plus resend audit fields.
+- [ ] **SMOKE-04**: Safe selected bulk resend smoke runs on approved targets and records per-item `success`, `refused`, `not_found`, or `failed` results.
+- [ ] **SMOKE-05**: Smoke data is cleaned up or restored to a documented terminal state without affecting customer reports.
 
-### Admin UI
+### Observability and Operations
 
-- [x] **UI-01**: Admin can open a report operations page from the admin navigation.
-- [x] **UI-02**: Admin report operations UI shows list filters, loading state, empty state, error state, paginated results, and status badges.
-- [x] **UI-03**: Admin can inspect one report row in a detail view or panel without leaving the report operations workflow.
-- [x] **UI-04**: Admin can trigger allowed retry/resend actions from the UI and see per-action or per-item results.
-- [x] **UI-05**: Admin report operations UI does not use silent demo fallback for operational data or recovery actions.
+- [ ] **OPSRUN-01**: Operators have a report recovery runbook that explains when to retry generation, resend email, bulk resend, and stop for engineering review.
+- [ ] **OPSRUN-02**: Operators have CloudWatch/AWS Console queries or dashboard links for report recovery logs, Lambda health, SES delivery failures, and DynamoDB report records.
+- [ ] **OPSRUN-03**: Recovery actions have a rollback/escalation checklist for failed smoke, repeated resend failure, unexpected artifact state, and unauthorized access findings.
+- [ ] **OPSRUN-04**: Known limits are documented, including synchronous selected bulk resend cap and no incident-wide async recovery job yet.
 
-### Privacy, Authorization, and Verification
+### Verification and Closeout
 
-- [x] **SEC-01**: All report operations list, detail, retry, and bulk resend endpoints are admin-only.
-- [x] **SEC-02**: Report operations API and UI never expose raw report HTML/JSON, public S3 URLs, presigned URLs, or direct frontend S3 fetch paths.
-- [x] **VER-01**: Backend tests cover list/detail access, status filtering, generation retry, bulk resend, per-item results, audit fields, and non-admin rejection.
-- [x] **VER-02**: Frontend tests cover report operations navigation, filters/states, detail inspection, action eligibility, bulk selection, and result rendering.
-- [x] **VER-03**: Live verification records deployed API state, frontend route behavior, and at least one safe recovery smoke path.
+- [ ] **VERIFY-01**: Backend focused tests and frontend e2e tests still pass after deployment-oriented changes.
+- [ ] **VERIFY-02**: CDK diff evidence distinguishes expected Lambda/frontend asset changes from infrastructure or IAM drift.
+- [ ] **VERIFY-03**: Final milestone audit records live deployment evidence, smoke outputs, residual risks, and next operational backlog.
 
 ## Future Requirements
 
 Deferred to a future milestone.
 
-### Operations Expansion
+### Incident Automation
 
-- **FUT-01**: Admin can run incident-wide asynchronous recovery jobs for large report failure events.
-- **FUT-02**: Admin can view a separate immutable report operation audit log beyond fields stored on the report record.
-- **FUT-03**: Admin can regenerate already successful reports as an explicit content-refresh workflow.
-- **FUT-04**: Report operations integrate with support tickets or incident notes.
+- **FUT-01**: Admin can start asynchronous incident-wide report recovery jobs with progress tracking.
+- **FUT-02**: Report recovery writes immutable audit log entries beyond mutable fields on the report record.
+- **FUT-03**: Report recovery integrates with support tickets or incident notes.
 
 ### Report Product Expansion
 
+- **FUT-04**: Admin can regenerate already successful reports as an explicit content-refresh workflow.
 - **FUT-05**: Admin can manage PDF report generation.
 - **FUT-06**: Admin can manage multilingual report delivery.
 - **FUT-07**: Report access can be gated by billing/subscription state.
@@ -64,48 +61,43 @@ Deferred to a future milestone.
 
 | Feature | Reason |
 |---------|--------|
-| Public or presigned S3 report URLs | v1.3 established backend-mediated private artifact access. |
-| Raw report HTML/JSON preview in admin UI | Recovery needs metadata/actions, not content exposure. |
-| Step Functions redrive orchestration | Current report workflow is Lambda/API based; adding Step Functions is not needed unless bounded synchronous recovery proves insufficient. |
-| Large incident-wide bulk recovery | v1.4 targets selected, capped recovery; large asynchronous jobs are future scope. |
-| Editing generated report content | This milestone is operations recovery, not report authoring. |
-| PDF or multilingual report output | Product expansion remains separate from operations recovery. |
-| Billing-gated report recovery | Billing access control is not required to make admin recovery usable. |
+| Incident-wide async recovery jobs | v1.5 focuses on production rollout, safe live smoke, and runbooks for selected recovery. |
+| Immutable audit log table | Mutable report audit fields are enough for rollout; immutable audit storage is a future operations expansion. |
+| Editing report content | This milestone verifies recovery operations, not report authoring. |
+| Public or presigned S3 report URLs | Report artifacts remain backend-mediated and private. |
+| PDF, multilingual reports, or billing-gated reports | Product expansion remains separate from production rollout readiness. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | Phase 23 | Complete |
-| OPS-02 | Phase 23 | Complete |
-| OPS-03 | Phase 23 | Complete |
-| OPS-04 | Phase 23 | Complete |
-| OPS-05 | Phase 23 | Complete |
-| GEN-01 | Phase 24 | Complete |
-| GEN-02 | Phase 24 | Complete |
-| GEN-03 | Phase 24 | Complete |
-| GEN-04 | Phase 24 | Complete |
-| DEL-01 | Phase 25 | Complete |
-| DEL-02 | Phase 25 | Complete |
-| DEL-03 | Phase 25 | Complete |
-| DEL-04 | Phase 25 | Complete |
-| UI-01 | Phase 26 | Complete |
-| UI-02 | Phase 26 | Complete |
-| UI-03 | Phase 26 | Complete |
-| UI-04 | Phase 26 | Complete |
-| UI-05 | Phase 26 | Complete |
-| SEC-01 | Phase 27 | Complete |
-| SEC-02 | Phase 27 | Complete |
-| VER-01 | Phase 27 | Complete |
-| VER-02 | Phase 27 | Complete |
-| VER-03 | Phase 27 | Complete |
+| REL-01 | Phase 28 | Pending |
+| REL-02 | Phase 28 | Pending |
+| REL-03 | Phase 28 | Pending |
+| REL-04 | Phase 28 | Pending |
+| LIVE-01 | Phase 30 | Pending |
+| LIVE-02 | Phase 30 | Pending |
+| LIVE-03 | Phase 29 | Pending |
+| LIVE-04 | Phase 30 | Pending |
+| SMOKE-01 | Phase 31 | Pending |
+| SMOKE-02 | Phase 31 | Pending |
+| SMOKE-03 | Phase 31 | Pending |
+| SMOKE-04 | Phase 31 | Pending |
+| SMOKE-05 | Phase 31 | Pending |
+| OPSRUN-01 | Phase 32 | Pending |
+| OPSRUN-02 | Phase 32 | Pending |
+| OPSRUN-03 | Phase 32 | Pending |
+| OPSRUN-04 | Phase 32 | Pending |
+| VERIFY-01 | Phase 32 | Pending |
+| VERIFY-02 | Phase 32 | Pending |
+| VERIFY-03 | Phase 32 | Pending |
 
 **Coverage:**
 
-- v1.4 requirements: 23 total
-- Mapped to phases: 23
+- v1.5 requirements: 20 total
+- Mapped to phases: 20
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 27 completion*
+*Last updated: 2026-06-04 after starting v1.5 planning*

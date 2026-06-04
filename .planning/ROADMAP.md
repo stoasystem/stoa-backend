@@ -6,152 +6,150 @@
 - [x] **v1.1 Weekly Report Automation** - Shipped 2026-06-02. Archive: `.planning/milestones/v1.1-ROADMAP.md`.
 - [x] **v1.2 S3 Report Artifact Infrastructure** - Shipped 2026-06-04 after live AWS verification. Record: `.planning/milestones/s3-report-artifact-infrastructure.md`.
 - [x] **v1.3 Report Artifact Security & Operations Hardening** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.3-ROADMAP.md`.
+- [x] **v1.4 Report Operations Admin UI / Bulk Recovery** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.4-ROADMAP.md`.
 
 ## Current Milestone
 
-### v1.4 Report Operations Admin UI / Bulk Recovery
+### v1.5 Report Recovery Production Rollout & Live Smoke
 
-**Milestone Goal:** Turn the API-only report operations surface into an admin-usable recovery workflow for report generation and delivery failures.
+**Milestone Goal:** Deploy the v1.4 report recovery workflow to production-facing surfaces, verify it with safe live evidence, and give operators a repeatable runbook for selected report recovery.
 
-This milestone adds an admin report operations page, backend list/detail APIs, single-report `generation_failed` retry, selected bulk resend for `email_failed`, and end-to-end verification that recovery remains private, admin-only, and auditable.
+This milestone turns the locally verified v1.4 workflow into an operationally ready production rollout. It focuses on frontend/backend deployment evidence, authenticated live API/UI checks, safe non-customer recovery smoke, and support-ready runbooks.
 
 ## Phases
 
 **Phase Numbering:**
 
 - Integer phases continue from previous milestones.
-- v1.3 ended at Phase 22, so v1.4 starts at Phase 23.
+- v1.4 ended at Phase 27, so v1.5 starts at Phase 28.
 - Decimal phases are reserved for urgent insertions.
 
-- [x] **Phase 23: Report Operations List and Detail API** - Admins can list, filter, page, and inspect report operation metadata without AWS Console access. (completed 2026-06-04)
-- [x] **Phase 24: Generation Failure Retry** - Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports. (completed 2026-06-04)
-- [x] **Phase 25: Bulk Email Resend Recovery** - Admins can resend selected `email_failed` reports and receive per-report results. (completed 2026-06-04)
-- [x] **Phase 26: Admin Report Operations UI** - Admins can use a frontend operations page for report triage, detail inspection, and recovery actions. (completed 2026-06-04)
-- [x] **Phase 27: Report Recovery Verification and Live Evidence** - The full recovery workflow is verified for authorization, privacy, tests, and deployed behavior. (completed 2026-06-04)
+- [ ] **Phase 28: Release Readiness and Deployment Contract** - Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
+- [ ] **Phase 29: Frontend Production Deployment Verification** - Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
+- [ ] **Phase 30: Backend Production Deployment and API Live Verification** - Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
+- [ ] **Phase 31: Safe Recovery Smoke Fixture and Mutation Verification** - Run safe non-customer retry/resend/bulk resend smoke and record outputs.
+- [ ] **Phase 32: Operations Runbook, Observability, and Milestone Closeout** - Write operator runbook, observability links/queries, rollback checklist, and final audit.
 
 ## Phase Details
 
-### Phase 23: Report Operations List and Detail API
+### Phase 28: Release Readiness and Deployment Contract
 
-**Goal**: Admins can list, filter, page, and inspect report operation metadata without AWS Console access.
-**Depends on**: Phase 22
-**Requirements**: OPS-01, OPS-02, OPS-03, OPS-04, OPS-05
+**Goal**: Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
+**Depends on**: Phase 27
+**Requirements**: REL-01, REL-02, REL-03, REL-04
 **Success Criteria**:
 
-1. `GET /admin/reports/ops` returns report operation rows with status, email status, error metadata, last operation, and updated timestamps.
-2. The list API supports bounded `limit` pagination and explicit filters for status, week start, parent ID, and student ID where supported by the access pattern.
-3. The phase records evidence that the current DynamoDB access pattern is safe for pilot usage or implements a CDK-managed index before broad use.
-4. Existing detail endpoint returns generation metadata and action eligibility/disabled reasons in addition to artifact availability, delivery, and operation metadata.
-5. Backend tests cover list filters, pagination, detail metadata, and action eligibility.
+1. Release checklist names backend, frontend, and infra repositories, branches, commits, commands, and expected outputs.
+2. Deployment contract records production API base URL, frontend app URL, AWS region/profile, Lambda names, and reports bucket.
+3. Rollback points are documented for backend Lambda code, frontend assets, and any deployment pipeline failure.
+4. CDK diff policy for this milestone distinguishes expected code/frontend asset changes from infrastructure/IAM drift.
+5. No production recovery mutation is attempted before safe smoke target criteria are documented.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
-### Phase 24: Generation Failure Retry
+### Phase 29: Frontend Production Deployment Verification
 
-**Goal**: Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports.
-**Depends on**: Phase 23
-**Requirements**: GEN-01, GEN-02, GEN-03, GEN-04
+**Goal**: Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
+**Depends on**: Phase 28
+**Requirements**: REL-02, REL-03, LIVE-03
 **Success Criteria**:
 
-1. Admin retry endpoint targets one parent, student, and week report.
-2. Retry preserves the canonical report ID and `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` artifact keys.
-3. Retry refuses successful, pending, generated, `email_sent`, and `email_failed` reports with clear status-specific errors.
-4. Retry records operator, operation, attempt/completion or failure timestamps, result, and error class/message.
-5. Backend tests prove successful retry, refused statuses, audit fields, and no unrelated report regeneration.
+1. Frontend deployment uses the v1.4/v1.5 report operations UI commits and production API configuration.
+2. `https://app.stoaedu.ch/admin/report-operations` serves the new UI bundle, not only old SPA fallback HTML.
+3. Admin-authenticated browser check confirms navigation, filters, list/detail surface, and action controls render against production API.
+4. Verification records frontend asset timestamp/hash/cache evidence and deployment commit SHA.
+5. UI verification confirms no report ops demo fallback and no direct frontend S3 fetch path.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
-### Phase 25: Bulk Email Resend Recovery
+### Phase 30: Backend Production Deployment and API Live Verification
 
-**Goal**: Admins can resend selected `email_failed` reports and receive per-report results.
-**Depends on**: Phase 24
-**Requirements**: DEL-01, DEL-02, DEL-03, DEL-04
+**Goal**: Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
+**Depends on**: Phase 28
+**Requirements**: REL-01, REL-03, LIVE-01, LIVE-02, LIVE-04, VERIFY-02
 **Success Criteria**:
 
-1. Bulk resend endpoint accepts selected report identifiers and enforces a maximum batch size.
-2. Each selected report is validated independently and returns success, refused, not-found, or failed result.
-3. Resend uses private HTML artifacts through backend-mediated S3 reads and never returns raw report content.
-4. Per-report audit fields record operator, operation, attempt/completion or failure timestamps, result, and error class/message.
-5. Backend tests cover mixed success/refusal/failure batches and verify failed items do not block other items.
+1. Backend deployment updates `stoa-api` and `stoa-weekly-report` code where needed and records Lambda LastUpdateStatus.
+2. CDK diff/deploy evidence shows no unexpected infrastructure or IAM drift.
+3. Live unauthenticated and non-admin checks reject report operations endpoints.
+4. Live admin-authenticated list and detail checks return metadata-only report operation responses or explicit empty states.
+5. Live API responses do not expose raw HTML/JSON, private artifact keys, public URLs, presigned URLs, or direct S3 URL markers.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
-### Phase 26: Admin Report Operations UI
+### Phase 31: Safe Recovery Smoke Fixture and Mutation Verification
 
-**Goal**: Admins can use a frontend operations page for report triage, detail inspection, and recovery actions.
-**Depends on**: Phase 25
-**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05
+**Goal**: Run safe non-customer retry/resend/bulk resend smoke and record outputs.
+**Depends on**: Phase 30
+**Requirements**: SMOKE-01, SMOKE-02, SMOKE-03, SMOKE-04, SMOKE-05
 **Success Criteria**:
 
-1. Admin navigation exposes a report operations route and page.
-2. The page shows filters, loading state, empty state, error state, paginated results, and status badges.
-3. Admin can inspect one report row in a detail panel or detail view without leaving the workflow.
-4. Admin can trigger eligible retry/resend actions and see single-action or per-item results.
-5. The frontend uses real admin report operations APIs without silent demo fallback.
+1. Safe smoke target parent/student/week records are documented before mutation.
+2. Smoke target contains no customer PII and has cleanup or restore expectations.
+3. Generation retry smoke records status transition, audit fields, artifact availability, and privacy checks.
+4. Single resend and selected bulk resend smoke record status transitions, audit fields, per-item results, and privacy checks.
+5. Smoke fixture is cleaned up or restored to a documented terminal state.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
-### Phase 27: Report Recovery Verification and Live Evidence
+### Phase 32: Operations Runbook, Observability, and Milestone Closeout
 
-**Goal**: The full recovery workflow is verified for authorization, privacy, tests, and deployed behavior.
-**Depends on**: Phase 26
-**Requirements**: SEC-01, SEC-02, VER-01, VER-02, VER-03
+**Goal**: Write operator runbook, observability links/queries, rollback checklist, and final audit.
+**Depends on**: Phase 31
+**Requirements**: OPSRUN-01, OPSRUN-02, OPSRUN-03, OPSRUN-04, VERIFY-01, VERIFY-02, VERIFY-03
 **Success Criteria**:
 
-1. Tests prove all list, detail, retry, and bulk resend endpoints reject non-admin users.
-2. API and UI tests prove no raw report HTML/JSON, public S3 URLs, presigned URLs, or direct frontend S3 fetch paths are exposed.
-3. Focused backend tests cover list/detail access, status filtering, generation retry, bulk resend, per-item results, and audit fields.
-4. Focused frontend tests cover navigation, filters/states, detail inspection, action eligibility, bulk selection, and result rendering.
-5. Live verification records deployed API state, frontend route behavior, and at least one safe recovery smoke path.
+1. Operator runbook explains retry generation, single resend, selected bulk resend, stop conditions, and escalation paths.
+2. Observability section includes CloudWatch log query examples, Lambda health checks, SES/delivery investigation pointers, and DynamoDB report lookup guidance.
+3. Rollback checklist covers failed deployment, failed smoke, unexpected artifact state, repeated resend failure, and unauthorized access findings.
+4. Final backend/frontend tests and e2e checks pass after deployment-oriented documentation and code changes.
+5. Milestone audit records deployment evidence, smoke outputs, residual risks, and next operational backlog.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
+Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 23. Report Operations List and Detail API | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 24. Generation Failure Retry | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 25. Bulk Email Resend Recovery | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 26. Admin Report Operations UI | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 27. Report Recovery Verification and Live Evidence | v1.4 | 1/1 | Complete | 2026-06-04 |
+| 28. Release Readiness and Deployment Contract | v1.5 | 0/1 | Pending | - |
+| 29. Frontend Production Deployment Verification | v1.5 | 0/1 | Pending | - |
+| 30. Backend Production Deployment and API Live Verification | v1.5 | 0/1 | Pending | - |
+| 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
+| 32. Operations Runbook, Observability, and Milestone Closeout | v1.5 | 0/1 | Pending | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | Phase 23 | Complete |
-| OPS-02 | Phase 23 | Complete |
-| OPS-03 | Phase 23 | Complete |
-| OPS-04 | Phase 23 | Complete |
-| OPS-05 | Phase 23 | Complete |
-| GEN-01 | Phase 24 | Complete |
-| GEN-02 | Phase 24 | Complete |
-| GEN-03 | Phase 24 | Complete |
-| GEN-04 | Phase 24 | Complete |
-| DEL-01 | Phase 25 | Complete |
-| DEL-02 | Phase 25 | Complete |
-| DEL-03 | Phase 25 | Complete |
-| DEL-04 | Phase 25 | Complete |
-| UI-01 | Phase 26 | Complete |
-| UI-02 | Phase 26 | Complete |
-| UI-03 | Phase 26 | Complete |
-| UI-04 | Phase 26 | Complete |
-| UI-05 | Phase 26 | Complete |
-| SEC-01 | Phase 27 | Complete |
-| SEC-02 | Phase 27 | Complete |
-| VER-01 | Phase 27 | Complete |
-| VER-02 | Phase 27 | Complete |
-| VER-03 | Phase 27 | Complete |
+| REL-01 | Phase 28 | Pending |
+| REL-02 | Phase 28 | Pending |
+| REL-03 | Phase 28 | Pending |
+| REL-04 | Phase 28 | Pending |
+| LIVE-01 | Phase 30 | Pending |
+| LIVE-02 | Phase 30 | Pending |
+| LIVE-03 | Phase 29 | Pending |
+| LIVE-04 | Phase 30 | Pending |
+| SMOKE-01 | Phase 31 | Pending |
+| SMOKE-02 | Phase 31 | Pending |
+| SMOKE-03 | Phase 31 | Pending |
+| SMOKE-04 | Phase 31 | Pending |
+| SMOKE-05 | Phase 31 | Pending |
+| OPSRUN-01 | Phase 32 | Pending |
+| OPSRUN-02 | Phase 32 | Pending |
+| OPSRUN-03 | Phase 32 | Pending |
+| OPSRUN-04 | Phase 32 | Pending |
+| VERIFY-01 | Phase 32 | Pending |
+| VERIFY-02 | Phase 32 | Pending |
+| VERIFY-03 | Phase 32 | Pending |
 
 **Coverage:**
 
-- v1.4 requirements: 23 total
-- Mapped to phases: 23
+- v1.5 requirements: 20 total
+- Mapped to phases: 20
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 27 completion*
+*Last updated: 2026-06-04 after starting v1.5 planning*

@@ -105,7 +105,21 @@ Known deferred items at close: live frontend deployment of the new UI bundle, pr
 
 ## Current
 
-No active milestone. Next milestone should be opened after choosing the next product or operations focus.
+### v1.5 Report Recovery Production Rollout & Live Smoke
+
+**Status:** Planning started 2026-06-04
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phases:** 5 planned
+**Goal:** Deploy the v1.4 report recovery workflow to production-facing surfaces, verify it with safe live evidence, and give operators a repeatable runbook for recovery, rollback, and observability.
+
+Planned focus:
+
+- Confirm backend and frontend release readiness, deployment contract, and rollback entry points before live mutation checks.
+- Verify deployed frontend `/admin/report-operations` renders the real admin UI with production API configuration and no demo fallback.
+- Verify production report operations API auth gates, admin-auth list/detail behavior, Lambda deployment state, and CDK diff evidence.
+- Run safe non-customer retry/resend/bulk resend smoke for approved failed report targets and restore any smoke data.
+- Publish operations runbook, observability guidance, rollback checklist, final verification evidence, and milestone audit.
 
 ---
-*Last updated: 2026-06-04 after shipping v1.4*
+*Last updated: 2026-06-04 after starting v1.5 planning*

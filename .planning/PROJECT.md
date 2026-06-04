@@ -42,7 +42,17 @@ Delivered:
 
 ## Current Milestone
 
-No active milestone. Next milestone should be opened after choosing the next product or operations focus.
+### v1.5 Report Recovery Production Rollout & Live Smoke
+
+**Goal:** Deploy the v1.4 report recovery workflow to production-facing surfaces, verify it with safe live evidence, and give operators a repeatable runbook for recovery, rollback, and observability.
+
+Target features:
+
+- Backend and frontend release readiness evidence for report operations changes.
+- Production frontend deployment verification for `/admin/report-operations`.
+- Authenticated production API checks for report operations list/detail actions and privacy boundaries.
+- Safe non-customer retry/resend/bulk resend smoke for approved failed report targets.
+- Operator runbook covering recovery workflows, observability, rollback, and known limits.
 
 ## Requirements
 
@@ -74,7 +84,14 @@ Shipped requirements:
 
 ### Active
 
-No active requirements. Open the next milestone to define the next requirement set.
+Active v1.5 requirements:
+
+- Release backend report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift.
+- Release the frontend `/admin/report-operations` UI to `app.stoaedu.ch` using the production API configuration.
+- Record release evidence for backend SHAs, frontend bundle/cache state, API URL, Lambda status, and rollback entry points.
+- Verify production admin-auth list/detail report operations APIs and unauthenticated/non-admin rejection paths.
+- Run safe `generation_failed` retry, single `email_failed` resend, and selected bulk resend smoke against approved non-customer targets.
+- Document cleanup/restore steps, CloudWatch/AWS Console observability, rollback, escalation, and known operational limits.
 
 ### Out of Scope
 
@@ -184,6 +201,7 @@ Known current resources:
 | Use explicit smoke/partial cleanup instead of broad lifecycle cleanup | Cleanup keys are known and can use scoped `DeleteObject` without bucket listing | Good - shipped in v1.3 |
 | Keep report operations backend-mediated and admin-only | Support needs metadata and resend controls without public S3 URLs or raw artifact exposure | Good - shipped in v1.3 |
 | Build v1.4 as an admin recovery workflow before broader report product expansion | v1.3 shipped secure API-only controls; the next value is making them usable for support and adding safe batch recovery | Good - shipped in v1.4 |
+| Start v1.5 with production rollout and safe live smoke before incident-wide automation | v1.4 shipped recovery code and local/e2e verification, but production UI deployment and safe mutation smoke remain residual gaps | Pending - v1.5 |
 
 ## Evolution
 
@@ -203,4 +221,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after shipping milestone v1.4*
+*Last updated: 2026-06-04 after starting milestone v1.5*

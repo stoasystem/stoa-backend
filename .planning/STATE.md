@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Report Operations Admin UI / Bulk Recovery
-status: complete
-last_updated: "2026-06-04T15:54:00Z"
+milestone: v1.5
+milestone_name: Report Recovery Production Rollout & Live Smoke
+status: planning
+last_updated: "2026-06-04T16:04:37Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** No active milestone
+**Current focus:** Phase 28 - Release Readiness and Deployment Contract
 
 ## Current Position
 
-Phase: 27 of 27 (Report Recovery Verification and Live Evidence)
+Phase: 28 of 32 (Release Readiness and Deployment Contract)
 Plan: —
-Status: All v1.4 phases complete
-Last activity: 2026-06-04 — Completed Phase 27 report recovery verification and live evidence
+Status: v1.5 planning started; Phase 28 ready for detailed planning
+Last activity: 2026-06-04 — Started v1.5 Report Recovery Production Rollout & Live Smoke planning docs
 
 ## Performance Metrics
 
@@ -57,11 +57,16 @@ Last activity: 2026-06-04 — Completed Phase 27 report recovery verification an
 | 25 | 1 complete | - | - |
 | 26 | 1 complete | - | - |
 | 27 | 1 complete | - | - |
+| 28 | 0/1 planned | - | - |
+| 29 | 0/1 planned | - | - |
+| 30 | 0/1 planned | - | - |
+| 31 | 0/1 planned | - | - |
+| 32 | 0/1 planned | - | - |
 
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: v1.4 Phases 23-27 complete; report operations recovery workflow verified locally and with live deployment evidence
+- Trend: v1.5 planning started after v1.4 report operations recovery workflow shipped and archived
 
 ## Accumulated Context
 
@@ -83,10 +88,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 25 adds admin-only selected bulk resend for `email_failed` reports with per-item results and shared resend audit fields.
 - Phase 26 adds frontend admin report operations UI for filtering, detail inspection, generation retry, single resend, and selected bulk resend.
 - Phase 27 verifies authorization, privacy, backend/frontend tests, and live deployment state for report operations recovery.
+- v1.5 prioritizes production rollout, safe live smoke, runbook, observability, and rollback evidence before incident-wide async recovery automation.
 
 ### Pending Todos
 
-- No active milestone todos. Open the next milestone to continue planned work.
+- Plan Phase 28: Release Readiness and Deployment Contract.
 
 ### Blockers/Concerns
 
@@ -107,6 +113,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 17:54 +02:00
-Stopped at: v1.4 milestone archived and ready to synchronize.
+Last session: 2026-06-04 18:04 +02:00
+Stopped at: v1.5 planning docs started; Phase 28 ready for planning.
 Resume file: None
