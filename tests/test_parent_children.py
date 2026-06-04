@@ -447,6 +447,91 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
     ]
 
 
+def test_report_repo_page_token_round_trip():
+    key = {"PK": "REPORT#1", "SK": "SUMMARY"}
+
+    token = report_repo.encode_page_token(key)
+
+    assert isinstance(token, str)
+    assert report_repo.decode_page_token(token) == key
+
+
+def test_report_repo_decode_page_token_rejects_invalid_token():
+    with pytest.raises(ValueError):
+        report_repo.decode_page_token("not-base64")
+
+
+def test_report_repo_decode_page_token_rejects_non_report_key():
+    token = report_repo.encode_page_token({"PK": "USER#1", "SK": "PROFILE"})
+
+    with pytest.raises(ValueError):
+        report_repo.decode_page_token(token)
+
+
+def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
+    class FakeQueryTable:
+        def __init__(self):
+            self.calls = []
+
+        def query(self, **kwargs):
+            self.calls.append(kwargs)
+            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1"}}
+
+    table = FakeQueryTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    result = report_repo.list_reports_for_admin(
+        parent_id="parent-local",
+        status="email_failed",
+        week_start="2026-06-01",
+        student_id="child-1",
+        limit=9,
+        last_key={"PK": "REPORT#0", "SK": "SUMMARY"},
+    )
+
+    assert result["Items"][0]["student_id"] == "child-1"
+    assert table.calls == [
+        {
+            "IndexName": "GSI-ParentId",
+            "KeyConditionExpression": table.calls[0]["KeyConditionExpression"],
+            "Limit": 9,
+            "ScanIndexForward": False,
+            "FilterExpression": table.calls[0]["FilterExpression"],
+            "ExclusiveStartKey": {"PK": "REPORT#0", "SK": "SUMMARY"},
+        }
+    ]
+
+
+def test_report_repo_list_reports_for_admin_uses_bounded_scan_without_parent(monkeypatch):
+    class FakeScanTable:
+        def __init__(self):
+            self.calls = []
+
+        def scan(self, **kwargs):
+            self.calls.append(kwargs)
+            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1"}}
+
+    table = FakeScanTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    result = report_repo.list_reports_for_admin(
+        status="generation_failed",
+        week_start="2026-06-01",
+        student_id="child-1",
+        limit=11,
+        last_key={"PK": "REPORT#0", "SK": "SUMMARY"},
+    )
+
+    assert result["Items"][0]["student_id"] == "child-1"
+    assert table.calls == [
+        {
+            "FilterExpression": table.calls[0]["FilterExpression"],
+            "Limit": 11,
+            "ExclusiveStartKey": {"PK": "REPORT#0", "SK": "SUMMARY"},
+        }
+    ]
+
+
 def test_report_repo_update_report_status_updates_summary_item(monkeypatch):
     class FakeUpdateTable:
         def __init__(self):

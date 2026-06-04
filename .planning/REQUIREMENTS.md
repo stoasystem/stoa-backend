@@ -7,11 +7,11 @@
 
 ### Admin Report Operations API
 
-- [ ] **OPS-01**: Admin can list weekly report operation rows with report status, email status, generation error, delivery error, last operation, and updated timestamps.
-- [ ] **OPS-02**: Admin report list supports bounded pagination and explicit filters for status, week start, parent ID, and student ID where the backend access pattern supports them.
-- [ ] **OPS-03**: Backend either proves the current DynamoDB access pattern is safe for the pilot admin list or adds a CDK-managed index before broad list usage.
-- [ ] **OPS-04**: Admin can fetch one report operation detail with artifact key metadata, generation metadata, delivery metadata, and operation audit metadata.
-- [ ] **OPS-05**: Report operation detail exposes action eligibility and disabled reasons for retry/resend actions.
+- [x] **OPS-01**: Admin can list weekly report operation rows with report status, email status, generation error, delivery error, last operation, and updated timestamps.
+- [x] **OPS-02**: Admin report list supports bounded pagination and explicit filters for status, week start, parent ID, and student ID where the backend access pattern supports them.
+- [x] **OPS-03**: Backend either proves the current DynamoDB access pattern is safe for the pilot admin list or adds a CDK-managed index before broad list usage.
+- [x] **OPS-04**: Admin can fetch one report operation detail with artifact availability metadata, generation metadata, delivery metadata, and operation audit metadata.
+- [x] **OPS-05**: Report operation detail exposes action eligibility and disabled reasons for retry/resend actions.
 
 ### Generation Recovery
 
@@ -76,11 +76,11 @@ Deferred to a future milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | Phase 23 | Pending |
-| OPS-02 | Phase 23 | Pending |
-| OPS-03 | Phase 23 | Pending |
-| OPS-04 | Phase 23 | Pending |
-| OPS-05 | Phase 23 | Pending |
+| OPS-01 | Phase 23 | Complete |
+| OPS-02 | Phase 23 | Complete |
+| OPS-03 | Phase 23 | Complete |
+| OPS-04 | Phase 23 | Complete |
+| OPS-05 | Phase 23 | Complete |
 | GEN-01 | Phase 24 | Pending |
 | GEN-02 | Phase 24 | Pending |
 | GEN-03 | Phase 24 | Pending |
@@ -108,4 +108,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after v1.4 roadmap creation*
+*Last updated: 2026-06-04 after Phase 23 completion*

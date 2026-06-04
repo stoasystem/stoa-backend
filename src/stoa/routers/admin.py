@@ -35,12 +35,22 @@ class ReportOperationResponse(BaseModel):
     report_id: str
     parent_id: str
     student_id: str
+    student_name: str | None = None
     week_start: str
     status: str | None = None
     email_status: str | None = None
-    artifact_keys: dict[str, str | None]
+    artifacts: dict[str, bool]
+    generation: dict[str, str | None]
     delivery: dict[str, str | None]
     operations: dict[str, str | None]
+    actions: dict[str, dict[str, str | bool | None]]
+
+
+class ReportOperationListResponse(BaseModel):
+    items: list[ReportOperationResponse]
+    count: int
+    next_token: str | None = None
+    access_pattern: str
 
 
 class ReportResendResponse(BaseModel):
@@ -169,6 +179,39 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
     )
 
 
+@router.get("/reports/ops", response_model=ReportOperationListResponse)
+async def list_report_operations(
+    limit: int = Query(default=50, ge=1, le=100),
+    status: Optional[str] = Query(default=None),
+    week_start: Optional[str] = Query(default=None),
+    parent_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
+    next_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List report operation metadata for admin triage."""
+    try:
+        last_key = report_repo.decode_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    result = report_repo.list_reports_for_admin(
+        status=status,
+        week_start=week_start,
+        parent_id=parent_id,
+        student_id=student_id,
+        limit=limit,
+        last_key=last_key,
+    )
+    items = [_report_operation_response(report) for report in result.get("Items", [])]
+    return ReportOperationListResponse(
+        items=items,
+        count=len(items),
+        next_token=report_repo.encode_page_token(result.get("LastEvaluatedKey")),
+        access_pattern="parent_gsi" if parent_id else "bounded_scan",
+    )
+
+
 @router.get(
     "/reports/{parent_id}/{student_id}/{week_start}/ops",
     response_model=ReportOperationResponse,
@@ -267,12 +310,19 @@ def _report_operation_response(report: dict) -> ReportOperationResponse:
         report_id=report.get("report_id", ""),
         parent_id=report.get("parent_id", ""),
         student_id=report.get("student_id", ""),
+        student_name=report.get("student_name"),
         week_start=report.get("week_start", ""),
         status=report.get("status"),
         email_status=report.get("email_status"),
-        artifact_keys={
-            "json_s3_key": report.get("json_s3_key"),
-            "html_s3_key": report.get("html_s3_key") or report.get("s3_key"),
+        artifacts={
+            "json_available": bool(report.get("json_s3_key")),
+            "html_available": bool(report.get("html_s3_key") or report.get("s3_key")),
+        },
+        generation={
+            "generated_at": report.get("generated_at"),
+            "generation_failed_at": report.get("generation_failed_at"),
+            "generation_error_class": report.get("generation_error_class"),
+            "generation_error_message": report.get("generation_error_message"),
         },
         delivery={
             "parent_email": report.get("parent_email"),
@@ -289,7 +339,31 @@ def _report_operation_response(report: dict) -> ReportOperationResponse:
             "resend_attempted_at": report.get("resend_attempted_at"),
             "resend_completed_at": report.get("resend_completed_at"),
         },
+        actions=_report_action_eligibility(report),
     )
+
+
+def _report_action_eligibility(report: dict) -> dict[str, dict[str, str | bool | None]]:
+    status = report.get("status")
+    email_status = report.get("email_status")
+    can_resend = status == "email_failed" or email_status == "failed"
+    can_retry_generation = status == "generation_failed"
+    return {
+        "resend_email": {
+            "enabled": can_resend,
+            "reason": None if can_resend else _disabled_reason(status, "email_failed"),
+        },
+        "retry_generation": {
+            "enabled": can_retry_generation,
+            "reason": None if can_retry_generation else _disabled_reason(status, "generation_failed"),
+        },
+    }
+
+
+def _disabled_reason(status: str | None, required_status: str) -> str:
+    if not status:
+        return f"Report status is missing; requires {required_status}"
+    return f"Report status is {status}; requires {required_status}"
 
 
 def _operator_id(user: dict) -> str:

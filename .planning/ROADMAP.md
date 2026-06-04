@@ -23,7 +23,7 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 - v1.3 ended at Phase 22, so v1.4 starts at Phase 23.
 - Decimal phases are reserved for urgent insertions.
 
-- [ ] **Phase 23: Report Operations List and Detail API** - Admins can list, filter, page, and inspect report operation metadata without AWS Console access.
+- [x] **Phase 23: Report Operations List and Detail API** - Admins can list, filter, page, and inspect report operation metadata without AWS Console access. (completed 2026-06-04)
 - [ ] **Phase 24: Generation Failure Retry** - Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports.
 - [ ] **Phase 25: Bulk Email Resend Recovery** - Admins can resend selected `email_failed` reports and receive per-report results.
 - [ ] **Phase 26: Admin Report Operations UI** - Admins can use a frontend operations page for report triage, detail inspection, and recovery actions.
@@ -41,10 +41,10 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 1. `GET /admin/reports/ops` returns report operation rows with status, email status, error metadata, last operation, and updated timestamps.
 2. The list API supports bounded `limit` pagination and explicit filters for status, week start, parent ID, and student ID where supported by the access pattern.
 3. The phase records evidence that the current DynamoDB access pattern is safe for pilot usage or implements a CDK-managed index before broad use.
-4. Existing detail endpoint returns generation metadata and action eligibility/disabled reasons in addition to v1.3 artifact/delivery/operation metadata.
+4. Existing detail endpoint returns generation metadata and action eligibility/disabled reasons in addition to artifact availability, delivery, and operation metadata.
 5. Backend tests cover list filters, pagination, detail metadata, and action eligibility.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 ### Phase 24: Generation Failure Retry
 
@@ -113,7 +113,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 23. Report Operations List and Detail API | v1.4 | 0/1 | Pending | - |
+| 23. Report Operations List and Detail API | v1.4 | 1/1 | Complete | 2026-06-04 |
 | 24. Generation Failure Retry | v1.4 | 0/1 | Pending | - |
 | 25. Bulk Email Resend Recovery | v1.4 | 0/1 | Pending | - |
 | 26. Admin Report Operations UI | v1.4 | 0/1 | Pending | - |
@@ -123,11 +123,11 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | Phase 23 | Pending |
-| OPS-02 | Phase 23 | Pending |
-| OPS-03 | Phase 23 | Pending |
-| OPS-04 | Phase 23 | Pending |
-| OPS-05 | Phase 23 | Pending |
+| OPS-01 | Phase 23 | Complete |
+| OPS-02 | Phase 23 | Complete |
+| OPS-03 | Phase 23 | Complete |
+| OPS-04 | Phase 23 | Complete |
+| OPS-05 | Phase 23 | Complete |
 | GEN-01 | Phase 24 | Pending |
 | GEN-02 | Phase 24 | Pending |
 | GEN-03 | Phase 24 | Pending |
@@ -154,4 +154,4 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after v1.4 roadmap creation*
+*Last updated: 2026-06-04 after Phase 23 completion*
