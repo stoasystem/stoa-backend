@@ -37,10 +37,10 @@ This milestone hardens the existing reports bucket and operational paths. It sho
 
 ### Report Operations
 
-- [ ] **OPS-01**: Maintainer/admin can inspect report artifact metadata and delivery status for a parent, student, and week without direct S3 console use.
-- [ ] **OPS-02**: Maintainer/admin can retry or resend failed report delivery without regenerating unrelated successful reports.
-- [ ] **OPS-03**: Operations visibility preserves parent-child authorization boundaries and does not expose public S3 URLs or raw private report content to unauthorized users.
-- [ ] **OPS-04**: Report operation actions are auditable through logs or persisted status fields sufficient for support triage.
+- [x] **OPS-01**: Maintainer/admin can inspect report artifact metadata and delivery status for a parent, student, and week without direct S3 console use.
+- [x] **OPS-02**: Maintainer/admin can retry or resend failed report delivery without regenerating unrelated successful reports.
+- [x] **OPS-03**: Operations visibility preserves parent-child authorization boundaries and does not expose public S3 URLs or raw private report content to unauthorized users.
+- [x] **OPS-04**: Report operation actions are auditable through logs or persisted status fields sufficient for support triage.
 
 ## Future Requirements
 
@@ -85,18 +85,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLEAN-01 | Phase 21 | Complete |
 | CLEAN-02 | Phase 21 | Complete |
 | CLEAN-03 | Phase 21 | Complete |
-| OPS-01 | Phase 22 | Planned |
-| OPS-02 | Phase 22 | Planned |
-| OPS-03 | Phase 22 | Planned |
-| OPS-04 | Phase 22 | Planned |
+| OPS-01 | Phase 22 | Complete |
+| OPS-02 | Phase 22 | Complete |
+| OPS-03 | Phase 22 | Complete |
+| OPS-04 | Phase 22 | Complete |
 
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 10
+- Complete: 14
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 21 completion*
+*Last updated: 2026-06-04 after Phase 22 completion*

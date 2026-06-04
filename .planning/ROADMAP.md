@@ -25,7 +25,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
 - [x] **Phase 19: Reports Bucket Transport Security** - Operators can prove the deployed reports bucket enforces HTTPS-only access without bucket replacement. (completed 2026-06-04)
 - [x] **Phase 20: Prefix-Scoped Report Artifact IAM** - Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking report generation, smoke, or image storage. (completed 2026-06-04)
 - [x] **Phase 21: Smoke and Orphan Artifact Cleanup** - Smoke and failed partial report artifacts have a safe cleanup path that preserves real report artifacts. (completed 2026-06-04)
-- [ ] **Phase 22: Report Operations Visibility and Recovery** - Maintainers can inspect report artifact/delivery state and retry or resend failed delivery safely.
+- [x] **Phase 22: Report Operations Visibility and Recovery** - Maintainers can inspect report artifact/delivery state and retry or resend failed delivery safely. (completed 2026-06-04)
 
 ## Phase Details
 
@@ -83,7 +83,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
   3. Authorization and audit behavior prevent unauthorized access to raw private report content or public S3 URLs.
   4. Tests cover operations visibility, retry/resend targeting, and support-triage audit evidence.
 
-**Plans**: 0/1 planned
+**Plans**: 1/1 plans complete
 
 ## Progress
 
@@ -95,7 +95,7 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 | 19. Reports Bucket Transport Security | v1.3 | 1/1 | Complete | 2026-06-04 |
 | 20. Prefix-Scoped Report Artifact IAM | v1.3 | 1/1 | Complete | 2026-06-04 |
 | 21. Smoke and Orphan Artifact Cleanup | v1.3 | 1/1 | Complete | 2026-06-04 |
-| 22. Report Operations Visibility and Recovery | v1.3 | 0/1 | Planned | - |
+| 22. Report Operations Visibility and Recovery | v1.3 | 1/1 | Complete | 2026-06-04 |
 
 ## Traceability
 
@@ -111,17 +111,17 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 | CLEAN-01 | Phase 21 | Complete |
 | CLEAN-02 | Phase 21 | Complete |
 | CLEAN-03 | Phase 21 | Complete |
-| OPS-01 | Phase 22 | Planned |
-| OPS-02 | Phase 22 | Planned |
-| OPS-03 | Phase 22 | Planned |
-| OPS-04 | Phase 22 | Planned |
+| OPS-01 | Phase 22 | Complete |
+| OPS-02 | Phase 22 | Complete |
+| OPS-03 | Phase 22 | Complete |
+| OPS-04 | Phase 22 | Complete |
 
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 10
+- Complete: 14
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 21 completion*
+*Last updated: 2026-06-04 after Phase 22 completion*

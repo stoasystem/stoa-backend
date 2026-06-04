@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Report Artifact Security & Operations Hardening
 status: planning
-last_updated: "2026-06-04T16:39:00+02:00"
+last_updated: "2026-06-04T16:49:00+02:00"
 last_activity: 2026-06-04
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 ## Current Position
 
 Phase: 22 of 22 (Report Operations Visibility and Recovery)
-Plan: Not created
-Status: Phase 21 complete; Phase 22 ready for planning
-Last activity: 2026-06-04 - Deployed smoke and partial artifact cleanup; final live smoke cleanup passed and CDK diff is clean.
+Plan: 22-01 complete
+Status: All v1.3 phases complete; milestone ready for audit and closure
+Last activity: 2026-06-04 - Deployed admin report operations visibility/resend tooling; tests passed and CDK diff is clean.
 
 ## Performance Metrics
 
@@ -51,7 +51,7 @@ Last activity: 2026-06-04 - Deployed smoke and partial artifact cleanup; final l
 | 19 | 1 complete | - | - |
 | 20 | 1 complete | - | - |
 | 21 | 1 complete | - | - |
-| 22 | 1 planned | - | - |
+| 22 | 1 complete | - | - |
 
 **Recent Trend:**
 
@@ -72,12 +72,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 19 uses `s3.Bucket(enforce_ssl=True)` for `StoaReportsBucket`; live AWS bucket policy denies `aws:SecureTransport=false`.
 - Phase 20 scopes API and weekly report Lambda report artifact S3 actions to `weekly-reports/*`; no reports bucket-level permissions are retained.
 - Phase 21 deletes deterministic smoke artifacts after readback and best-effort deletes partial JSON artifacts when HTML write fails.
+- Phase 22 adds admin-only report operations metadata and failed-delivery resend endpoints with persisted audit fields.
 
 ### Pending Todos
 
-- Create the Phase 22 plan for report operations visibility and recovery.
-- Keep report operations backend-mediated and avoid public S3 URLs or unauthorized raw artifact exposure.
-- Keep Lambda asset-hash drift separate from reports bucket policy/IAM drift during CDK review.
+- Run v1.3 milestone audit.
+- Complete and archive v1.3 after audit passes.
 
 ### Blockers/Concerns
 
@@ -94,7 +94,7 @@ Items acknowledged and carried forward from previous milestone close:
 | Operations | Manual report retry/resend and delivery audit trail | Follow-up candidate | v1.1 close |
 | Report output | Multi-language reports and PDF export | Follow-up candidate | v1.1 close |
 | Access control | Billing-gated report access | Follow-up candidate | v1.1 close |
-| Artifact hardening | `enforce_ssl`, prefix-scoped IAM, lifecycle cleanup, broader operational tooling | Active in v1.3 | v1.2 close |
+| Artifact hardening | `enforce_ssl`, prefix-scoped IAM, lifecycle cleanup, broader operational tooling | Completed in v1.3 | v1.2 close |
 
 ## Session Continuity
 

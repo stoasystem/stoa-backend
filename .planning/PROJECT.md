@@ -66,10 +66,11 @@ Shipped requirements:
 - Reports bucket HTTPS-only transport enforcement was deployed and live-verified without bucket replacement - v1.3 Phase 19.
 - API and weekly report Lambda report artifact S3 actions are scoped to `weekly-reports/*`, with image bucket permissions preserved - v1.3 Phase 20.
 - Deterministic smoke artifacts and failed partial JSON artifacts have explicit cleanup paths, with live smoke proving cleanup performed - v1.3 Phase 21.
+- Admin-only report operations metadata and failed-delivery resend endpoints are deployed with audit/status fields - v1.3 Phase 22.
 
 ### Active
 
-- [ ] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.
+- [x] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.
 
 ### Out of Scope
 

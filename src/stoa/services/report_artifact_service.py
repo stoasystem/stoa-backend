@@ -88,6 +88,17 @@ def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, A
     return artifact
 
 
+def get_report_html(s3_key: str, *, s3_client: Any | None = None) -> str:
+    """Read and decode an HTML report artifact from the private reports bucket."""
+    key = _validate_html_artifact_key(s3_key)
+    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    response = s3.get_object(Bucket=settings.report_artifacts_bucket, Key=key)
+    body = response["Body"].read()
+    if isinstance(body, bytes):
+        return body.decode()
+    return str(body)
+
+
 def run_report_artifact_s3_smoke(
     event: dict[str, Any] | None = None,
     *,
@@ -179,4 +190,13 @@ def _validate_json_artifact_key(value: str) -> str:
         raise ValueError("s3_key is required")
     if not key.startswith(f"{REPORT_ARTIFACT_PREFIX}/") or not key.endswith("/report.json"):
         raise ValueError("s3_key must be a canonical report JSON artifact key")
+    return key
+
+
+def _validate_html_artifact_key(value: str) -> str:
+    key = str(value or "").strip()
+    if not key:
+        raise ValueError("s3_key is required")
+    if not key.startswith(f"{REPORT_ARTIFACT_PREFIX}/") or not key.endswith("/report.html"):
+        raise ValueError("s3_key must be a canonical report HTML artifact key")
     return key
