@@ -29,11 +29,11 @@
 
 ### Admin UI
 
-- [ ] **UI-01**: Admin can open a report operations page from the admin navigation.
-- [ ] **UI-02**: Admin report operations UI shows list filters, loading state, empty state, error state, paginated results, and status badges.
-- [ ] **UI-03**: Admin can inspect one report row in a detail view or panel without leaving the report operations workflow.
-- [ ] **UI-04**: Admin can trigger allowed retry/resend actions from the UI and see per-action or per-item results.
-- [ ] **UI-05**: Admin report operations UI does not use silent demo fallback for operational data or recovery actions.
+- [x] **UI-01**: Admin can open a report operations page from the admin navigation.
+- [x] **UI-02**: Admin report operations UI shows list filters, loading state, empty state, error state, paginated results, and status badges.
+- [x] **UI-03**: Admin can inspect one report row in a detail view or panel without leaving the report operations workflow.
+- [x] **UI-04**: Admin can trigger allowed retry/resend actions from the UI and see per-action or per-item results.
+- [x] **UI-05**: Admin report operations UI does not use silent demo fallback for operational data or recovery actions.
 
 ### Privacy, Authorization, and Verification
 
@@ -89,11 +89,11 @@ Deferred to a future milestone.
 | DEL-02 | Phase 25 | Complete |
 | DEL-03 | Phase 25 | Complete |
 | DEL-04 | Phase 25 | Complete |
-| UI-01 | Phase 26 | Pending |
-| UI-02 | Phase 26 | Pending |
-| UI-03 | Phase 26 | Pending |
-| UI-04 | Phase 26 | Pending |
-| UI-05 | Phase 26 | Pending |
+| UI-01 | Phase 26 | Complete |
+| UI-02 | Phase 26 | Complete |
+| UI-03 | Phase 26 | Complete |
+| UI-04 | Phase 26 | Complete |
+| UI-05 | Phase 26 | Complete |
 | SEC-01 | Phase 27 | Pending |
 | SEC-02 | Phase 27 | Pending |
 | VER-01 | Phase 27 | Pending |
@@ -108,4 +108,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 25 completion*
+*Last updated: 2026-06-04 after Phase 26 completion*
