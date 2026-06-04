@@ -25,7 +25,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 28: Release Readiness and Deployment Contract** - Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
-- [ ] **Phase 29: Frontend Production Deployment Verification** - Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
+- [x] **Phase 29: Frontend Production Deployment Verification** - Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
 - [ ] **Phase 30: Backend Production Deployment and API Live Verification** - Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
 - [ ] **Phase 31: Safe Recovery Smoke Fixture and Mutation Verification** - Run safe non-customer retry/resend/bulk resend smoke and record outputs.
 - [ ] **Phase 32: Operations Runbook, Observability, and Milestone Closeout** - Write operator runbook, observability links/queries, rollback checklist, and final audit.
@@ -60,7 +60,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. Verification records frontend asset timestamp/hash/cache evidence and deployment commit SHA.
 5. UI verification confirms no report ops demo fallback and no direct frontend S3 fetch path.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 ### Phase 30: Backend Production Deployment and API Live Verification
 
@@ -115,7 +115,7 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Complete | 2026-06-04 |
-| 29. Frontend Production Deployment Verification | v1.5 | 0/1 | Pending | - |
+| 29. Frontend Production Deployment Verification | v1.5 | 1/1 | Complete | 2026-06-04 |
 | 30. Backend Production Deployment and API Live Verification | v1.5 | 0/1 | Pending | - |
 | 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
 | 32. Operations Runbook, Observability, and Milestone Closeout | v1.5 | 0/1 | Pending | - |
@@ -130,7 +130,7 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 | REL-04 | Phase 28 | Complete |
 | LIVE-01 | Phase 30 | Pending |
 | LIVE-02 | Phase 30 | Pending |
-| LIVE-03 | Phase 29 | Pending |
+| LIVE-03 | Phase 29 | Complete |
 | LIVE-04 | Phase 30 | Pending |
 | SMOKE-01 | Phase 31 | Pending |
 | SMOKE-02 | Phase 31 | Pending |
@@ -152,4 +152,4 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after completing Phase 28*
+*Last updated: 2026-06-04 after completing Phase 29*
