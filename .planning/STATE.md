@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Report Operations Admin UI / Bulk Recovery
 status: planning
-last_updated: "2026-06-04T15:00:40.457Z"
+last_updated: "2026-06-04T15:27:44Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 24 - Generation Failure Retry
+**Current focus:** Phase 25 - Bulk Email Resend Recovery
 
 ## Current Position
 
-Phase: 24 of 27 (Generation Failure Retry)
+Phase: 25 of 27 (Bulk Email Resend Recovery)
 Plan: —
-Status: Phase 23 complete; Phase 24 ready for planning
-Last activity: 2026-06-04 — Completed Phase 23 report operations list/detail API
+Status: Phase 24 complete; Phase 25 ready for planning
+Last activity: 2026-06-04 — Completed Phase 24 generation failure retry
 
 ## Performance Metrics
 
@@ -53,7 +53,7 @@ Last activity: 2026-06-04 — Completed Phase 23 report operations list/detail A
 | 21 | 1 complete | - | - |
 | 22 | 1 complete | - | - |
 | 23 | 1 complete | - | - |
-| 24 | 0/1 | - | - |
+| 24 | 1 complete | - | - |
 | 25 | 0/1 | - | - |
 | 26 | 0/1 | - | - |
 | 27 | 0/1 | - | - |
@@ -61,7 +61,7 @@ Last activity: 2026-06-04 — Completed Phase 23 report operations list/detail A
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: v1.4 Phase 23 complete; backend report operations list/detail API shipped locally
+- Trend: v1.4 Phases 23-24 complete; backend report operations list/detail and generation retry shipped locally
 
 ## Accumulated Context
 
@@ -79,10 +79,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 21 deletes deterministic smoke artifacts after readback and best-effort deletes partial JSON artifacts when HTML write fails.
 - Phase 22 adds admin-only report operations metadata and failed-delivery resend endpoints with persisted audit fields.
 - Phase 23 adds admin report operations list/detail metadata, bounded pagination, generation metadata, and action eligibility.
+- Phase 24 adds admin-only single-report `generation_failed` retry with retry audit fields.
 
 ### Pending Todos
 
-- Plan Phase 24: Generation Failure Retry.
+- Plan Phase 25: Bulk Email Resend Recovery.
 
 ### Blockers/Concerns
 
@@ -103,6 +104,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 17:20 +02:00
-Stopped at: Phase 23 complete; Phase 24 ready for planning.
+Last session: 2026-06-04 17:28 +02:00
+Stopped at: Phase 24 complete; Phase 25 ready for planning.
 Resume file: None

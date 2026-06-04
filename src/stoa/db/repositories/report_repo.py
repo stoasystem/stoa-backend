@@ -41,6 +41,39 @@ def update_report_status(report_id: str, status: str, **fields) -> None:
     )
 
 
+def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: str) -> bool:
+    """Atomically claim a generation-failed report for one admin retry."""
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
+            UpdateExpression=(
+                "SET #status = :retrying, "
+                "generation_retry_attempted_at = :attempted_at, "
+                "last_operation = :operation, "
+                "last_operation_at = :attempted_at, "
+                "last_operation_by = :operator, "
+                "last_operation_result = :in_progress, "
+                "updated_at = :attempted_at"
+            ),
+            ConditionExpression="#status = :expected",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":retrying": "generation_retrying",
+                ":expected": "generation_failed",
+                ":attempted_at": attempted_at,
+                ":operation": "retry_generation",
+                ":operator": operator,
+                ":in_progress": "in_progress",
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
 def get_report_by_week(parent_id: str, week_start: str) -> dict | None:
     table = get_table()
     resp = table.query(

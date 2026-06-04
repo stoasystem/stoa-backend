@@ -1,5 +1,6 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from datetime import datetime, timezone
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +11,7 @@ from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
-from stoa.services import notify_service, report_artifact_service
+from stoa.services import notify_service, report_artifact_service, report_service
 
 router = APIRouter()
 
@@ -60,6 +61,16 @@ class ReportResendResponse(BaseModel):
     operation: str
     operation_result: str
     updated_at: str
+
+
+class ReportGenerationRetryResponse(BaseModel):
+    report_id: str
+    status: str
+    email_status: str | None = None
+    operation: str
+    operation_result: str
+    updated_at: str
+    artifacts: dict[str, bool]
 
 
 @router.get("/users")
@@ -264,7 +275,7 @@ async def resend_report_email(
             email_status="failed",
             email_failed_at=failed_at,
             email_error_class=type(exc).__name__,
-            email_error_message=str(exc)[:240],
+            email_error_message=_safe_error_message(exc),
             resend_attempted_at=attempted_at,
             last_operation="resend_email",
             last_operation_at=failed_at,
@@ -298,6 +309,75 @@ async def resend_report_email(
     )
 
 
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/retry-generation",
+    response_model=ReportGenerationRetryResponse,
+)
+async def retry_report_generation(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Retry generation for one generation-failed weekly report."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    if report.get("status") != "generation_failed":
+        raise HTTPException(status_code=409, detail="Report generation is not failed")
+
+    operator = _operator_id(user)
+    attempted_at = _now_iso()
+    if not report_repo.try_start_generation_retry(report["report_id"], operator=operator, attempted_at=attempted_at):
+        raise HTTPException(status_code=409, detail="Report generation retry is already in progress or no longer failed")
+    try:
+        payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
+        generated_content = report_service.generate_weekly_report_content(payload)
+        stored_report = report_service.store_and_send_weekly_report(payload, generated_content)
+        if stored_report.get("report_id") != report.get("report_id"):
+            raise ValueError("Retry generated a mismatched report id")
+    except Exception as exc:
+        failed_at = _now_iso()
+        report_repo.update_report_status(
+            report["report_id"],
+            "generation_failed",
+            generation_failed_at=failed_at,
+            generation_error_class=type(exc).__name__,
+            generation_error_message=_safe_error_message(exc),
+            generation_retry_attempted_at=attempted_at,
+            last_operation="retry_generation",
+            last_operation_at=failed_at,
+            last_operation_by=operator,
+            last_operation_result="failed",
+            updated_at=failed_at,
+        )
+        raise HTTPException(status_code=502, detail="Report generation retry failed") from exc
+
+    completed_at = _now_iso()
+    report_repo.update_report_status(
+        stored_report["report_id"],
+        stored_report.get("status", "generated"),
+        email_status=stored_report.get("email_status"),
+        generation_retry_attempted_at=attempted_at,
+        generation_retry_completed_at=completed_at,
+        last_operation="retry_generation",
+        last_operation_at=completed_at,
+        last_operation_by=operator,
+        last_operation_result="success",
+        updated_at=completed_at,
+    )
+    return ReportGenerationRetryResponse(
+        report_id=stored_report["report_id"],
+        status=stored_report.get("status", "generated"),
+        email_status=stored_report.get("email_status"),
+        operation="retry_generation",
+        operation_result="success",
+        updated_at=completed_at,
+        artifacts={
+            "json_available": bool(stored_report.get("json_s3_key")),
+            "html_available": bool(stored_report.get("html_s3_key") or stored_report.get("s3_key")),
+        },
+    )
+
+
 def _get_report_or_404(parent_id: str, student_id: str, week_start: str) -> dict:
     report = report_repo.get_report_for_child_by_week(parent_id, student_id, week_start)
     if not report:
@@ -322,14 +402,14 @@ def _report_operation_response(report: dict) -> ReportOperationResponse:
             "generated_at": report.get("generated_at"),
             "generation_failed_at": report.get("generation_failed_at"),
             "generation_error_class": report.get("generation_error_class"),
-            "generation_error_message": report.get("generation_error_message"),
+            "generation_error_message": _redact_private_artifact_text(report.get("generation_error_message")),
         },
         delivery={
             "parent_email": report.get("parent_email"),
             "email_sent_at": report.get("email_sent_at"),
             "email_failed_at": report.get("email_failed_at"),
             "email_error_class": report.get("email_error_class"),
-            "email_error_message": report.get("email_error_message"),
+            "email_error_message": _redact_private_artifact_text(report.get("email_error_message")),
         },
         operations={
             "last_operation": report.get("last_operation"),
@@ -377,3 +457,17 @@ def _operator_id(user: dict) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_error_message(exc: Exception) -> str:
+    return _redact_private_artifact_text(str(exc))[:240] or type(exc).__name__
+
+
+def _redact_private_artifact_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    text = re.sub(r"weekly-reports/[^\s'\"<>]+", "[report-artifact-key]", text)
+    for token in ("json_s3_key", "html_s3_key", "s3_key"):
+        text = text.replace(token, "[report-artifact-field]")
+    return text

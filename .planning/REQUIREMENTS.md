@@ -15,10 +15,10 @@
 
 ### Generation Recovery
 
-- [ ] **GEN-01**: Admin can retry one `generation_failed` report for a specific parent, student, and week.
-- [ ] **GEN-02**: Generation retry preserves the canonical report ID and `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` artifact keys.
-- [ ] **GEN-03**: Generation retry refuses successful, pending, generated, `email_sent`, and `email_failed` reports unless a future explicit regenerate feature is designed.
-- [ ] **GEN-04**: Generation retry records operator, action, attempt time, completion/failure time, result, and error class/message.
+- [x] **GEN-01**: Admin can retry one `generation_failed` report for a specific parent, student, and week.
+- [x] **GEN-02**: Generation retry preserves the canonical report ID and `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` artifact keys.
+- [x] **GEN-03**: Generation retry refuses successful, pending, generated, `email_sent`, and `email_failed` reports unless a future explicit regenerate feature is designed.
+- [x] **GEN-04**: Generation retry records operator, action, attempt time, completion/failure time, result, and error class/message.
 
 ### Delivery Recovery
 
@@ -81,10 +81,10 @@ Deferred to a future milestone.
 | OPS-03 | Phase 23 | Complete |
 | OPS-04 | Phase 23 | Complete |
 | OPS-05 | Phase 23 | Complete |
-| GEN-01 | Phase 24 | Pending |
-| GEN-02 | Phase 24 | Pending |
-| GEN-03 | Phase 24 | Pending |
-| GEN-04 | Phase 24 | Pending |
+| GEN-01 | Phase 24 | Complete |
+| GEN-02 | Phase 24 | Complete |
+| GEN-03 | Phase 24 | Complete |
+| GEN-04 | Phase 24 | Complete |
 | DEL-01 | Phase 25 | Pending |
 | DEL-02 | Phase 25 | Pending |
 | DEL-03 | Phase 25 | Pending |
@@ -108,4 +108,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 23 completion*
+*Last updated: 2026-06-04 after Phase 24 completion*

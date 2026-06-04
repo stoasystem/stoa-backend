@@ -568,6 +568,69 @@ def test_report_repo_update_report_status_updates_summary_item(monkeypatch):
     ]
 
 
+def test_report_repo_try_start_generation_retry_claims_failed_report(monkeypatch):
+    class FakeUpdateTable:
+        def __init__(self):
+            self.calls = []
+
+        def update_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakeUpdateTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    claimed = report_repo.try_start_generation_retry(
+        "report-1",
+        operator="admin-sub",
+        attempted_at="2026-06-04T10:00:00+00:00",
+    )
+
+    assert claimed is True
+    assert table.calls == [
+        {
+            "Key": {"PK": "REPORT#report-1", "SK": "SUMMARY"},
+            "UpdateExpression": (
+                "SET #status = :retrying, "
+                "generation_retry_attempted_at = :attempted_at, "
+                "last_operation = :operation, "
+                "last_operation_at = :attempted_at, "
+                "last_operation_by = :operator, "
+                "last_operation_result = :in_progress, "
+                "updated_at = :attempted_at"
+            ),
+            "ConditionExpression": "#status = :expected",
+            "ExpressionAttributeNames": {"#status": "status"},
+            "ExpressionAttributeValues": {
+                ":retrying": "generation_retrying",
+                ":expected": "generation_failed",
+                ":attempted_at": "2026-06-04T10:00:00+00:00",
+                ":operation": "retry_generation",
+                ":operator": "admin-sub",
+                ":in_progress": "in_progress",
+            },
+        }
+    ]
+
+
+def test_report_repo_try_start_generation_retry_returns_false_when_claimed(monkeypatch):
+    class FakeUpdateTable:
+        def update_item(self, **kwargs):
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException"}},
+                "UpdateItem",
+            )
+
+    monkeypatch.setattr(report_repo, "get_table", lambda: FakeUpdateTable())
+
+    claimed = report_repo.try_start_generation_retry(
+        "report-1",
+        operator="admin-sub",
+        attempted_at="2026-06-04T10:00:00+00:00",
+    )
+
+    assert claimed is False
+
+
 def test_report_repo_try_claim_report_generation_uses_conditional_put(monkeypatch):
     class FakePutTable:
         def __init__(self):

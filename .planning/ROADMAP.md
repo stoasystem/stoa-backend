@@ -24,7 +24,7 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 23: Report Operations List and Detail API** - Admins can list, filter, page, and inspect report operation metadata without AWS Console access. (completed 2026-06-04)
-- [ ] **Phase 24: Generation Failure Retry** - Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports.
+- [x] **Phase 24: Generation Failure Retry** - Admins can retry one `generation_failed` report safely without regenerating unrelated successful reports. (completed 2026-06-04)
 - [ ] **Phase 25: Bulk Email Resend Recovery** - Admins can resend selected `email_failed` reports and receive per-report results.
 - [ ] **Phase 26: Admin Report Operations UI** - Admins can use a frontend operations page for report triage, detail inspection, and recovery actions.
 - [ ] **Phase 27: Report Recovery Verification and Live Evidence** - The full recovery workflow is verified for authorization, privacy, tests, and deployed behavior.
@@ -59,7 +59,7 @@ This milestone adds an admin report operations page, backend list/detail APIs, s
 4. Retry records operator, operation, attempt/completion or failure timestamps, result, and error class/message.
 5. Backend tests prove successful retry, refused statuses, audit fields, and no unrelated report regeneration.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 ### Phase 25: Bulk Email Resend Recovery
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 23. Report Operations List and Detail API | v1.4 | 1/1 | Complete | 2026-06-04 |
-| 24. Generation Failure Retry | v1.4 | 0/1 | Pending | - |
+| 24. Generation Failure Retry | v1.4 | 1/1 | Complete | 2026-06-04 |
 | 25. Bulk Email Resend Recovery | v1.4 | 0/1 | Pending | - |
 | 26. Admin Report Operations UI | v1.4 | 0/1 | Pending | - |
 | 27. Report Recovery Verification and Live Evidence | v1.4 | 0/1 | Pending | - |
@@ -128,10 +128,10 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 | OPS-03 | Phase 23 | Complete |
 | OPS-04 | Phase 23 | Complete |
 | OPS-05 | Phase 23 | Complete |
-| GEN-01 | Phase 24 | Pending |
-| GEN-02 | Phase 24 | Pending |
-| GEN-03 | Phase 24 | Pending |
-| GEN-04 | Phase 24 | Pending |
+| GEN-01 | Phase 24 | Complete |
+| GEN-02 | Phase 24 | Complete |
+| GEN-03 | Phase 24 | Complete |
+| GEN-04 | Phase 24 | Complete |
 | DEL-01 | Phase 25 | Pending |
 | DEL-02 | Phase 25 | Pending |
 | DEL-03 | Phase 25 | Pending |
@@ -154,4 +154,4 @@ Phases execute in numeric order: 23 -> 24 -> 25 -> 26 -> 27
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 23 completion*
+*Last updated: 2026-06-04 after Phase 24 completion*
