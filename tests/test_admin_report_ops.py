@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
+from stoa.services import report_recovery_service
 
 
 def _app_for_user(user: dict) -> FastAPI:
@@ -33,6 +34,17 @@ def _report(status: str = "email_failed", email_status: str = "failed") -> dict:
         "email_error_class": "MessageRejected",
         "email_error_message": "bad address",
     }
+
+
+@pytest.fixture(autouse=True)
+def audit_events(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        report_repo,
+        "put_report_audit_event",
+        lambda report_id, event: events.append((report_id, event)),
+    )
+    return events
 
 
 def test_report_ops_metadata_is_admin_only(monkeypatch):
@@ -206,7 +218,7 @@ def test_report_ops_list_round_trips_non_report_scan_key_next_token(monkeypatch)
     ]
 
 
-def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch):
+def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch, audit_events):
     updates = []
     sent = []
 
@@ -216,12 +228,12 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
         lambda parent_id, student_id, week_start: _report(),
     )
     monkeypatch.setattr(
-        admin.report_artifact_service,
+        report_recovery_service.report_artifact_service,
         "get_report_html",
         lambda key: "<html>Report</html>",
     )
     monkeypatch.setattr(
-        admin.notify_service,
+        report_recovery_service.notify_service,
         "send_weekly_report_email",
         lambda email, html, **kwargs: sent.append((email, html, kwargs.get("subject"))),
     )
@@ -242,6 +254,14 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
     assert updates[0][2]["last_operation_by"] == "admin-sub"
     assert updates[0][2]["last_operation_result"] == "success"
     assert response.json()["operation_result"] == "success"
+    assert audit_events[0][0] == _report()["report_id"]
+    event = audit_events[0][1]
+    assert event["action"] == "resend_email"
+    assert event["result"] == "success"
+    assert event["actor"] == "admin-sub"
+    assert event["before"]["status"] == "email_failed"
+    assert event["after"]["status"] == "email_sent"
+    assert "weekly-reports/" not in str(event)
 
 
 def test_resend_failed_report_is_admin_only(monkeypatch):
@@ -254,8 +274,8 @@ def test_resend_failed_report_is_admin_only(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("resend pipeline should not run")
 
-    monkeypatch.setattr(admin.report_artifact_service, "get_report_html", fail)
-    monkeypatch.setattr(admin.notify_service, "send_weekly_report_email", fail)
+    monkeypatch.setattr(report_recovery_service.report_artifact_service, "get_report_html", fail)
+    monkeypatch.setattr(report_recovery_service.notify_service, "send_weekly_report_email", fail)
     client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/resend")
@@ -355,8 +375,8 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
         if email == "fail@example.com":
             raise RuntimeError("SES failed weekly-reports/private/report.html")
 
-    monkeypatch.setattr(admin.report_artifact_service, "get_report_html", get_html)
-    monkeypatch.setattr(admin.notify_service, "send_weekly_report_email", send_email)
+    monkeypatch.setattr(report_recovery_service.report_artifact_service, "get_report_html", get_html)
+    monkeypatch.setattr(report_recovery_service.notify_service, "send_weekly_report_email", send_email)
     monkeypatch.setattr(
         report_repo,
         "update_report_status",
@@ -412,7 +432,7 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
     assert "https://s3" not in serialized
 
 
-def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(monkeypatch):
+def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(monkeypatch, audit_events):
     updates = []
     calls = []
     report = _report(status="generation_failed", email_status="not_sent")
@@ -440,9 +460,9 @@ def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(m
             "report_id": report["report_id"],
         }
 
-    monkeypatch.setattr(admin.report_service, "build_weekly_learning_payload", build_payload)
-    monkeypatch.setattr(admin.report_service, "generate_weekly_report_content", generate)
-    monkeypatch.setattr(admin.report_service, "store_and_send_weekly_report", store)
+    monkeypatch.setattr(report_recovery_service.report_service, "build_weekly_learning_payload", build_payload)
+    monkeypatch.setattr(report_recovery_service.report_service, "generate_weekly_report_content", generate)
+    monkeypatch.setattr(report_recovery_service.report_service, "store_and_send_weekly_report", store)
     monkeypatch.setattr(report_repo, "try_start_generation_retry", lambda report_id, **kwargs: True)
     monkeypatch.setattr(
         report_repo,
@@ -470,6 +490,12 @@ def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(m
     data = response.json()
     assert data["operation_result"] == "success"
     assert data["artifacts"] == {"json_available": True, "html_available": True}
+    assert audit_events[0][0] == report["report_id"]
+    event = audit_events[0][1]
+    assert event["action"] == "retry_generation"
+    assert event["result"] == "success"
+    assert event["actor"] == "admin-sub"
+    assert "weekly-reports/" not in str(event)
     serialized = str(data)
     assert "json_s3_key" not in serialized
     assert "html_s3_key" not in serialized
@@ -487,7 +513,7 @@ def test_retry_generation_is_admin_only(monkeypatch):
         raise AssertionError("retry pipeline should not run")
 
     monkeypatch.setattr(report_repo, "try_start_generation_retry", fail)
-    monkeypatch.setattr(admin.report_service, "build_weekly_learning_payload", fail)
+    monkeypatch.setattr(report_recovery_service.report_service, "build_weekly_learning_payload", fail)
     client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
@@ -506,7 +532,7 @@ def test_retry_generation_refuses_when_atomic_claim_fails(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("retry pipeline should not run")
 
-    monkeypatch.setattr(admin.report_service, "build_weekly_learning_payload", fail)
+    monkeypatch.setattr(report_recovery_service.report_service, "build_weekly_learning_payload", fail)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
@@ -533,7 +559,7 @@ def test_retry_generation_refuses_non_generation_failed_report(monkeypatch, stat
     def fail(*args, **kwargs):
         raise AssertionError("retry pipeline should not run")
 
-    monkeypatch.setattr(admin.report_service, "build_weekly_learning_payload", fail)
+    monkeypatch.setattr(report_recovery_service.report_service, "build_weekly_learning_payload", fail)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
@@ -541,7 +567,7 @@ def test_retry_generation_refuses_non_generation_failed_report(monkeypatch, stat
     assert response.status_code == 409
 
 
-def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch):
+def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch, audit_events):
     updates = []
     report = _report(status="generation_failed", email_status="not_sent")
     monkeypatch.setattr(
@@ -550,7 +576,7 @@ def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch
         lambda parent_id, student_id, week_start: report,
     )
     monkeypatch.setattr(
-        admin.report_service,
+        report_recovery_service.report_service,
         "build_weekly_learning_payload",
         lambda parent_id, student_id, week_start: (_ for _ in ()).throw(RuntimeError("bad generation")),
     )
@@ -573,6 +599,11 @@ def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch
     assert updates[0][2]["last_operation_by"] == "admin-sub"
     assert updates[0][2]["last_operation_result"] == "failed"
     assert updates[0][2]["generation_retry_attempted_at"]
+    event = audit_events[0][1]
+    assert event["action"] == "retry_generation"
+    assert event["result"] == "failed"
+    assert event["error_class"] == "RuntimeError"
+    assert event["error_message"] == "bad generation"
 
 
 def test_retry_generation_failure_redacts_private_artifact_keys(monkeypatch):
@@ -585,7 +616,7 @@ def test_retry_generation_failure_redacts_private_artifact_keys(monkeypatch):
     )
     monkeypatch.setattr(report_repo, "try_start_generation_retry", lambda report_id, **kwargs: True)
     monkeypatch.setattr(
-        admin.report_service,
+        report_recovery_service.report_service,
         "build_weekly_learning_payload",
         lambda parent_id, student_id, week_start: {
             "parent": {"id": parent_id},
@@ -593,9 +624,9 @@ def test_retry_generation_failure_redacts_private_artifact_keys(monkeypatch):
             "week": {"start": week_start},
         },
     )
-    monkeypatch.setattr(admin.report_service, "generate_weekly_report_content", lambda payload: {"summary": "ok"})
+    monkeypatch.setattr(report_recovery_service.report_service, "generate_weekly_report_content", lambda payload: {"summary": "ok"})
     monkeypatch.setattr(
-        admin.report_service,
+        report_recovery_service.report_service,
         "store_and_send_weekly_report",
         lambda payload, generated: (_ for _ in ()).throw(
             RuntimeError("failed weekly-reports/parent-1/student-1/2026-06-01/report.html json_s3_key")
@@ -639,3 +670,118 @@ def test_report_ops_metadata_redacts_persisted_private_artifact_error(monkeypatc
     serialized = str(response.json())
     assert "weekly-reports/" not in serialized
     assert "html_s3_key" not in serialized
+
+
+def test_report_audit_timeline_is_admin_only(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: _report(),
+    )
+
+    def fail(*args, **kwargs):
+        raise AssertionError("audit timeline should not query events")
+
+    monkeypatch.setattr(report_repo, "list_report_audit_events", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.get("/admin/reports/parent-1/student-1/2026-06-01/audit")
+
+    assert response.status_code == 403
+
+
+def test_report_audit_timeline_returns_metadata_only(monkeypatch):
+    calls = []
+    next_key = {"PK": "REPORT#report-parent-1-student-1-2026-06-01", "SK": "AUDIT#2026-06-04T10:00:00#next"}
+    event = {
+        "PK": "REPORT#report-parent-1-student-1-2026-06-01",
+        "SK": "AUDIT#2026-06-04T10:00:00#event-1",
+        "event_id": "event-1",
+        "event_at": "2026-06-04T10:00:00+00:00",
+        "report_id": "report-parent-1-student-1-2026-06-01",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "actor": "admin-sub",
+        "action": "resend_email",
+        "reason": "admin_single_resend",
+        "source": "admin_api",
+        "result": "success",
+        "before": {
+            "status": "email_failed",
+            "html_s3_key": "weekly-reports/private/report.html",
+        },
+        "after": {
+            "status": "email_sent",
+            "email_error_message": "failed weekly-reports/private/report.html html_s3_key",
+        },
+        "error_class": None,
+        "error_message": "failed weekly-reports/private/report.html html_s3_key",
+        "correlation_id": "corr-1",
+    }
+
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: _report(),
+    )
+
+    def list_audit(report_id, **kwargs):
+        calls.append((report_id, kwargs))
+        return {"Items": [event], "LastEvaluatedKey": next_key}
+
+    monkeypatch.setattr(report_repo, "list_report_audit_events", list_audit)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/parent-1/student-1/2026-06-01/audit", params={"limit": 10})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "report"
+    assert data["count"] == 1
+    assert report_repo.decode_audit_page_token(data["next_token"]) == next_key
+    assert data["items"][0]["action"] == "resend_email"
+    assert data["items"][0]["before"] == {"status": "email_failed"}
+    assert data["items"][0]["after"]["email_error_message"] == (
+        "failed [report-artifact-key] [report-artifact-field]"
+    )
+    assert calls == [
+        (
+            "report-parent-1-student-1-2026-06-01",
+            {"limit": 10, "last_key": None},
+        )
+    ]
+    serialized = str(data)
+    assert "weekly-reports/" not in serialized
+    assert "html_s3_key" not in serialized
+    assert "json_s3_key" not in serialized
+    assert "s3_key" not in serialized
+
+
+def test_report_audit_timeline_rejects_invalid_token(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: _report(),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/parent-1/student-1/2026-06-01/audit", params={"next_token": "bad"})
+
+    assert response.status_code == 400
+
+
+def test_recovery_job_audit_timeline_returns_job_scope(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        report_repo,
+        "list_recovery_job_audit_events",
+        lambda job_id, **kwargs: calls.append((job_id, kwargs)) or {"Items": []},
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/recovery-jobs/job-1/audit", params={"limit": 5})
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "count": 0, "next_token": None, "scope": "recovery_job"}
+    assert calls == [("job-1", {"limit": 5, "last_key": None})]

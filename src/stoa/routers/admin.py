@@ -1,7 +1,5 @@
 """Admin routes — user management, report operations, and platform statistics."""
-from datetime import datetime, timezone
-import re
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -11,7 +9,7 @@ from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
-from stoa.services import notify_service, report_artifact_service, report_service
+from stoa.services import report_recovery_service
 
 router = APIRouter()
 
@@ -102,6 +100,32 @@ class ReportGenerationRetryResponse(BaseModel):
     operation_result: str
     updated_at: str
     artifacts: dict[str, bool]
+
+
+class ReportAuditEventResponse(BaseModel):
+    event_id: str
+    event_at: str
+    report_id: str | None = None
+    parent_id: str | None = None
+    student_id: str | None = None
+    week_start: str | None = None
+    actor: str | None = None
+    action: str
+    reason: str | None = None
+    source: str | None = None
+    result: str
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+    error_class: str | None = None
+    error_message: str | None = None
+    correlation_id: str | None = None
+
+
+class ReportAuditListResponse(BaseModel):
+    items: list[ReportAuditEventResponse]
+    count: int
+    next_token: str | None = None
+    scope: str
 
 
 @router.get("/users")
@@ -294,8 +318,12 @@ async def bulk_resend_report_emails(
             continue
 
         try:
-            resend = _resend_report_email(report, operator)
-        except HTTPException as exc:
+            resend = report_recovery_service.resend_report_email(
+                report,
+                operator=operator,
+                reason="admin_selected_bulk_resend",
+            )
+        except report_recovery_service.ReportRecoveryError as exc:
             results.append(_bulk_resend_error_result(target, report, exc))
             continue
 
@@ -329,75 +357,31 @@ async def resend_report_email(
 ):
     """Resend a failed report email using the existing private HTML artifact."""
     report = _get_report_or_404(parent_id, student_id, week_start)
-    return _resend_report_email(report, _operator_id(user))
-
-
-def _resend_report_email(report: dict, operator: str) -> ReportResendResponse:
-    if report.get("status") != "email_failed" and report.get("email_status") != "failed":
-        raise HTTPException(status_code=409, detail="Report delivery is not failed")
-
-    html_key = report.get("html_s3_key") or report.get("s3_key")
-    parent_email = report.get("parent_email")
-    if not html_key or not parent_email:
-        raise HTTPException(status_code=422, detail="Report is missing email or HTML artifact metadata")
-
-    attempted_at = _now_iso()
     try:
-        html = report_artifact_service.get_report_html(str(html_key))
-        notify_service.send_weekly_report_email(
-            str(parent_email),
-            html,
-            subject=f"STOA weekly report for {report.get('student_name') or 'Student'}",
+        result = report_recovery_service.resend_report_email(
+            report,
+            operator=_operator_id(user),
+            reason="admin_single_resend",
         )
-    except Exception as exc:
-        failed_at = _now_iso()
-        report_repo.update_report_status(
-            report["report_id"],
-            "email_failed",
-            email_status="failed",
-            email_failed_at=failed_at,
-            email_error_class=type(exc).__name__,
-            email_error_message=_safe_error_message(exc),
-            resend_attempted_at=attempted_at,
-            last_operation="resend_email",
-            last_operation_at=failed_at,
-            last_operation_by=operator,
-            last_operation_result="failed",
-            updated_at=failed_at,
-        )
-        raise HTTPException(status_code=502, detail="Report resend failed") from exc
-
-    sent_at = _now_iso()
-    report_repo.update_report_status(
-        report["report_id"],
-        "email_sent",
-        email_status="sent",
-        email_sent_at=sent_at,
-        resend_attempted_at=attempted_at,
-        resend_completed_at=sent_at,
-        last_operation="resend_email",
-        last_operation_at=sent_at,
-        last_operation_by=operator,
-        last_operation_result="success",
-        updated_at=sent_at,
-    )
+    except report_recovery_service.ReportRecoveryError as exc:
+        raise _report_recovery_http_error(exc) from exc
     return ReportResendResponse(
-        report_id=report["report_id"],
-        status="email_sent",
-        email_status="sent",
-        operation="resend_email",
-        operation_result="success",
-        updated_at=sent_at,
+        report_id=result.report_id,
+        status=result.status,
+        email_status=result.email_status,
+        operation=result.operation,
+        operation_result=result.operation_result,
+        updated_at=result.updated_at,
     )
 
 
 def _bulk_resend_error_result(
     target: ReportResendTarget,
     report: dict,
-    exc: HTTPException,
+    exc: report_recovery_service.ReportRecoveryError,
 ) -> BulkReportResendItemResult:
     result = "failed" if exc.status_code >= 500 else "refused"
-    detail = _redact_private_artifact_text(exc.detail) or "Report resend failed"
+    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report resend failed"
     return BulkReportResendItemResult(
         parent_id=target.parent_id,
         student_id=target.student_id,
@@ -408,6 +392,7 @@ def _bulk_resend_error_result(
         email_status=report.get("email_status"),
         operation_result=result,
         detail=detail,
+        error_class=exc.error_class,
     )
 
 
@@ -423,60 +408,80 @@ async def retry_report_generation(
 ):
     """Retry generation for one generation-failed weekly report."""
     report = _get_report_or_404(parent_id, student_id, week_start)
-    if report.get("status") != "generation_failed":
-        raise HTTPException(status_code=409, detail="Report generation is not failed")
-
-    operator = _operator_id(user)
-    attempted_at = _now_iso()
-    if not report_repo.try_start_generation_retry(report["report_id"], operator=operator, attempted_at=attempted_at):
-        raise HTTPException(status_code=409, detail="Report generation retry is already in progress or no longer failed")
     try:
-        payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
-        generated_content = report_service.generate_weekly_report_content(payload)
-        stored_report = report_service.store_and_send_weekly_report(payload, generated_content)
-        if stored_report.get("report_id") != report.get("report_id"):
-            raise ValueError("Retry generated a mismatched report id")
-    except Exception as exc:
-        failed_at = _now_iso()
-        report_repo.update_report_status(
-            report["report_id"],
-            "generation_failed",
-            generation_failed_at=failed_at,
-            generation_error_class=type(exc).__name__,
-            generation_error_message=_safe_error_message(exc),
-            generation_retry_attempted_at=attempted_at,
-            last_operation="retry_generation",
-            last_operation_at=failed_at,
-            last_operation_by=operator,
-            last_operation_result="failed",
-            updated_at=failed_at,
+        result = report_recovery_service.retry_report_generation(
+            report,
+            parent_id=parent_id,
+            student_id=student_id,
+            week_start=week_start,
+            operator=_operator_id(user),
+            reason="admin_single_generation_retry",
         )
-        raise HTTPException(status_code=502, detail="Report generation retry failed") from exc
-
-    completed_at = _now_iso()
-    report_repo.update_report_status(
-        stored_report["report_id"],
-        stored_report.get("status", "generated"),
-        email_status=stored_report.get("email_status"),
-        generation_retry_attempted_at=attempted_at,
-        generation_retry_completed_at=completed_at,
-        last_operation="retry_generation",
-        last_operation_at=completed_at,
-        last_operation_by=operator,
-        last_operation_result="success",
-        updated_at=completed_at,
-    )
+    except report_recovery_service.ReportRecoveryError as exc:
+        raise _report_recovery_http_error(exc) from exc
     return ReportGenerationRetryResponse(
-        report_id=stored_report["report_id"],
-        status=stored_report.get("status", "generated"),
-        email_status=stored_report.get("email_status"),
-        operation="retry_generation",
-        operation_result="success",
-        updated_at=completed_at,
-        artifacts={
-            "json_available": bool(stored_report.get("json_s3_key")),
-            "html_available": bool(stored_report.get("html_s3_key") or stored_report.get("s3_key")),
-        },
+        report_id=result.report_id,
+        status=result.status,
+        email_status=result.email_status,
+        operation=result.operation,
+        operation_result=result.operation_result,
+        updated_at=result.updated_at,
+        artifacts=result.artifacts or {"json_available": False, "html_available": False},
+    )
+
+
+@router.get(
+    "/reports/{parent_id}/{student_id}/{week_start}/audit",
+    response_model=ReportAuditListResponse,
+)
+async def list_report_audit_events(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    next_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List append-only audit events for one report recovery timeline."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        last_key = report_repo.decode_audit_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    result = report_repo.list_report_audit_events(report["report_id"], limit=limit, last_key=last_key)
+    items = [_report_audit_event_response(item) for item in result.get("Items", [])]
+    return ReportAuditListResponse(
+        items=items,
+        count=len(items),
+        next_token=report_repo.encode_audit_page_token(result.get("LastEvaluatedKey")),
+        scope="report",
+    )
+
+
+@router.get(
+    "/reports/recovery-jobs/{job_id}/audit",
+    response_model=ReportAuditListResponse,
+)
+async def list_recovery_job_audit_events(
+    job_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    next_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List append-only audit events for a report recovery job timeline."""
+    try:
+        last_key = report_repo.decode_audit_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    result = report_repo.list_recovery_job_audit_events(job_id, limit=limit, last_key=last_key)
+    items = [_report_audit_event_response(item) for item in result.get("Items", [])]
+    return ReportAuditListResponse(
+        items=items,
+        count=len(items),
+        next_token=report_repo.encode_audit_page_token(result.get("LastEvaluatedKey")),
+        scope="recovery_job",
     )
 
 
@@ -504,14 +509,18 @@ def _report_operation_response(report: dict) -> ReportOperationResponse:
             "generated_at": report.get("generated_at"),
             "generation_failed_at": report.get("generation_failed_at"),
             "generation_error_class": report.get("generation_error_class"),
-            "generation_error_message": _redact_private_artifact_text(report.get("generation_error_message")),
+            "generation_error_message": report_recovery_service.redact_private_artifact_text(
+                report.get("generation_error_message")
+            ),
         },
         delivery={
             "parent_email": report.get("parent_email"),
             "email_sent_at": report.get("email_sent_at"),
             "email_failed_at": report.get("email_failed_at"),
             "email_error_class": report.get("email_error_class"),
-            "email_error_message": _redact_private_artifact_text(report.get("email_error_message")),
+            "email_error_message": report_recovery_service.redact_private_artifact_text(
+                report.get("email_error_message")
+            ),
         },
         operations={
             "last_operation": report.get("last_operation"),
@@ -557,19 +566,37 @@ def _operator_id(user: dict) -> str:
     )
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _report_recovery_http_error(exc: report_recovery_service.ReportRecoveryError) -> HTTPException:
+    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report recovery operation failed"
+    return HTTPException(status_code=exc.status_code, detail=detail)
 
 
-def _safe_error_message(exc: Exception) -> str:
-    return _redact_private_artifact_text(str(exc))[:240] or type(exc).__name__
+def _report_audit_event_response(item: dict) -> ReportAuditEventResponse:
+    return ReportAuditEventResponse(
+        event_id=str(item.get("event_id", "")),
+        event_at=str(item.get("event_at", "")),
+        report_id=item.get("report_id"),
+        parent_id=item.get("parent_id"),
+        student_id=item.get("student_id"),
+        week_start=item.get("week_start"),
+        actor=item.get("actor"),
+        action=str(item.get("action", "")),
+        reason=item.get("reason"),
+        source=item.get("source"),
+        result=str(item.get("result", "")),
+        before=_redact_audit_metadata(item.get("before")),
+        after=_redact_audit_metadata(item.get("after")),
+        error_class=item.get("error_class"),
+        error_message=report_recovery_service.redact_private_artifact_text(item.get("error_message")),
+        correlation_id=item.get("correlation_id"),
+    )
 
 
-def _redact_private_artifact_text(value: object) -> str | None:
-    if value is None:
+def _redact_audit_metadata(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
         return None
-    text = str(value)
-    text = re.sub(r"weekly-reports/[^\s'\"<>]+", "[report-artifact-key]", text)
-    for token in ("json_s3_key", "html_s3_key", "s3_key"):
-        text = text.replace(token, "[report-artifact-field]")
-    return text
+    return {
+        str(key): report_recovery_service.redact_private_artifact_text(raw) if isinstance(raw, str) else raw
+        for key, raw in value.items()
+        if not str(key).endswith("_s3_key") and str(key) != "s3_key"
+    }

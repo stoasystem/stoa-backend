@@ -16,10 +16,10 @@
 
 ### Immutable Recovery Audit
 
-- [ ] **AUDIT-01**: Existing single retry, single resend, and selected bulk resend recovery actions write append-only DynamoDB audit events in addition to existing mutable report summary fields.
-- [ ] **AUDIT-02**: Audit writes are conditionally append-only, have no TTL, reject overwrite attempts, and document that v1.6 provides application-enforced immutability rather than compliance-grade WORM storage.
-- [ ] **AUDIT-03**: Audit events record actor, action, reason, target identifiers, before/after recovery status metadata, result, redacted error details, timestamps, request/job correlation IDs, and source surface.
-- [ ] **AUDIT-04**: Admin-only audit read APIs expose report-local and job-local timelines as metadata-only responses without private S3 keys, raw report JSON/HTML, presigned URLs, auth tokens, or customer-sensitive browser artifacts.
+- [x] **AUDIT-01**: Existing single retry, single resend, and selected bulk resend recovery actions write append-only DynamoDB audit events in addition to existing mutable report summary fields. Completed in Phase 34.
+- [x] **AUDIT-02**: Audit writes are conditionally append-only, have no TTL, reject overwrite attempts, and document that v1.6 provides application-enforced immutability rather than compliance-grade WORM storage. Completed in Phase 34.
+- [x] **AUDIT-03**: Audit events record actor, action, reason, target identifiers, before/after recovery status metadata, result, redacted error details, timestamps, request/job correlation IDs, and source surface. Completed in Phase 34.
+- [x] **AUDIT-04**: Admin-only audit read APIs expose report-local and job-local timelines as metadata-only responses without private S3 keys, raw report JSON/HTML, presigned URLs, auth tokens, or customer-sensitive browser artifacts. Completed in Phase 34.
 - [ ] **AUDIT-05**: Backend tests cover admin authorization, non-admin rejection, append-only enforcement, redaction, pagination, and audit events for successful, refused, failed, and cancelled recovery paths.
 
 ### Async Incident Recovery Jobs
@@ -95,10 +95,10 @@ Traceability is filled by the active v1.6 roadmap.
 | GUARD-03 | Phase 33 | Complete |
 | GUARD-04 | Phase 33 | Complete |
 | GUARD-05 | Phase 33 | Complete |
-| AUDIT-01 | Phase 34 | Pending |
-| AUDIT-02 | Phase 34 | Pending |
-| AUDIT-03 | Phase 34 | Pending |
-| AUDIT-04 | Phase 34 | Pending |
+| AUDIT-01 | Phase 34 | Complete |
+| AUDIT-02 | Phase 34 | Complete |
+| AUDIT-03 | Phase 34 | Complete |
+| AUDIT-04 | Phase 34 | Complete |
 | AUDIT-05 | Phase 35 | Pending |
 | JOB-01 | Phase 35 | Pending |
 | JOB-02 | Phase 35 | Pending |
@@ -127,4 +127,4 @@ Traceability is filled by the active v1.6 roadmap.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 33 completion*
+*Last updated: 2026-06-04 after Phase 34 completion*

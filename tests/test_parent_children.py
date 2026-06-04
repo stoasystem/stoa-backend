@@ -484,6 +484,104 @@ def test_report_repo_admin_page_token_accepts_legacy_report_key_token():
     assert report_repo.decode_admin_page_token(token) == key
 
 
+def test_report_repo_audit_page_token_round_trips_report_key():
+    key = {"PK": "REPORT#report-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
+
+    token = report_repo.encode_audit_page_token(key)
+
+    assert isinstance(token, str)
+    assert report_repo.decode_audit_page_token(token) == key
+
+
+def test_report_repo_audit_page_token_round_trips_recovery_job_key():
+    key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
+
+    token = report_repo.encode_audit_page_token(key)
+
+    assert report_repo.decode_audit_page_token(token) == key
+
+
+def test_report_repo_audit_page_token_rejects_summary_key():
+    token = report_repo.encode_audit_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"})
+
+    with pytest.raises(ValueError):
+        report_repo.decode_audit_page_token(token)
+
+
+def test_report_repo_put_report_audit_event_uses_conditional_append(monkeypatch):
+    class FakePutTable:
+        def __init__(self):
+            self.calls = []
+
+        def put_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakePutTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    report_repo.put_report_audit_event(
+        "report-1",
+        {
+            "event_id": "event-1",
+            "event_at": "2026-06-04T10:00:00+00:00",
+            "action": "resend_email",
+            "result": "success",
+        },
+    )
+
+    assert table.calls == [
+        {
+            "Item": {
+                "PK": "REPORT#report-1",
+                "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1",
+                "entity_type": "REPORT_AUDIT_EVENT",
+                "event_id": "event-1",
+                "event_at": "2026-06-04T10:00:00+00:00",
+                "action": "resend_email",
+                "result": "success",
+            },
+            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        }
+    ]
+
+
+def test_report_repo_put_recovery_job_audit_event_uses_conditional_append(monkeypatch):
+    class FakePutTable:
+        def __init__(self):
+            self.calls = []
+
+        def put_item(self, **kwargs):
+            self.calls.append(kwargs)
+
+    table = FakePutTable()
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+
+    report_repo.put_recovery_job_audit_event(
+        "job-1",
+        {
+            "event_id": "event-1",
+            "event_at": "2026-06-04T10:00:00+00:00",
+            "action": "bulk_resend",
+            "result": "started",
+        },
+    )
+
+    assert table.calls == [
+        {
+            "Item": {
+                "PK": "REPORT_RECOVERY_JOB#job-1",
+                "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1",
+                "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
+                "event_id": "event-1",
+                "event_at": "2026-06-04T10:00:00+00:00",
+                "action": "bulk_resend",
+                "result": "started",
+            },
+            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        }
+    ]
+
+
 def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
     class FakeQueryTable:
         def __init__(self):

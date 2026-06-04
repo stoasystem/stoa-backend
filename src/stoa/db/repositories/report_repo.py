@@ -41,6 +41,69 @@ def update_report_status(report_id: str, status: str, **fields) -> None:
     )
 
 
+def put_report_audit_event(report_id: str, event: dict) -> None:
+    """Append one immutable report audit event."""
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT#{report_id}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "REPORT_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def put_recovery_job_audit_event(job_id: str, event: dict) -> None:
+    """Append one immutable recovery job audit event."""
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT_RECOVERY_JOB#{job_id}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def list_report_audit_events(
+    report_id: str,
+    *,
+    limit: int = 50,
+    last_key: dict | None = None,
+) -> dict:
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq(f"REPORT#{report_id}") & Key("SK").begins_with("AUDIT#"),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
+
+
+def list_recovery_job_audit_events(
+    job_id: str,
+    *,
+    limit: int = 50,
+    last_key: dict | None = None,
+) -> dict:
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}")
+        & Key("SK").begins_with("AUDIT#"),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
+
+
 def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: str) -> bool:
     """Atomically claim a generation-failed report for one admin retry."""
     table = get_table()
@@ -154,6 +217,32 @@ def decode_admin_page_token(token: str | None) -> dict | None:
     # report LastEvaluatedKey directly.
     if isinstance(decoded, dict) and _is_valid_report_page_key(decoded):
         return decoded
+    raise ValueError("Invalid pagination token")
+
+
+def encode_audit_page_token(last_key: dict | None) -> str | None:
+    """Encode an audit timeline page token."""
+    if not last_key:
+        return None
+    raw = json.dumps(
+        {"scope": "report_audit", "key": last_key},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_audit_page_token(token: str | None) -> dict | None:
+    """Decode an audit timeline page token into an ExclusiveStartKey."""
+    if not token:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        decoded = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid pagination token") from exc
+    if _is_valid_audit_page_payload(decoded):
+        return decoded["key"]
     raise ValueError("Invalid pagination token")
 
 
@@ -282,6 +371,25 @@ def _is_valid_admin_page_payload(decoded: object) -> bool:
     pk = key.get("PK")
     sk = key.get("SK")
     return isinstance(pk, str) and isinstance(sk, str)
+
+
+def _is_valid_audit_page_payload(decoded: object) -> bool:
+    if not isinstance(decoded, dict) or decoded.get("scope") != "report_audit":
+        return False
+    key = decoded.get("key")
+    if not isinstance(key, dict):
+        return False
+    pk = key.get("PK")
+    sk = key.get("SK")
+    return (
+        isinstance(pk, str)
+        and (
+            pk.startswith("REPORT#")
+            or pk.startswith("REPORT_RECOVERY_JOB#")
+        )
+        and isinstance(sk, str)
+        and sk.startswith("AUDIT#")
+    )
 
 
 def list_reports_for_parent_week(

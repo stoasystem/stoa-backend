@@ -26,7 +26,7 @@ This milestone hardens the v1.5 report operations platform for broader incidents
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 33: Recovery Contract, CDK Readiness, And Dist Guard** - Define the v1.6 recovery contract, prove CDK readiness, and block stale Lambda package deployment paths.
-- [ ] **Phase 34: Recovery Service Extraction And Audit Foundation** - Make existing recovery actions use shared service paths and append-only audit evidence.
+- [x] **Phase 34: Recovery Service Extraction And Audit Foundation** - Make existing recovery actions use shared service paths and append-only audit evidence.
 - [ ] **Phase 35: Async Resend Job Backend** - Add bounded async `email_failed` resend jobs with stable targets, progress, cancellation, results, and worker execution.
 - [ ] **Phase 36: Admin Job/Audit UI And Production Browser Smoke** - Expose job/audit workflows in the admin UI and verify the deployed route with read-only production browser smoke.
 - [ ] **Phase 37: Runbook, Release Gate, And Live Verification** - Update operations guidance, release evidence, live verification, and final milestone audit.
@@ -61,7 +61,7 @@ This milestone hardens the v1.5 report operations platform for broader incidents
 4. Admin-only audit read APIs expose report-local and job-local timelines as metadata-only responses.
 5. Audit API responses omit private S3 keys, raw report JSON/HTML, presigned URLs, auth tokens, and customer-sensitive browser artifacts.
 
-**Plans**: TBD
+**Plans**: 1 complete
 
 ### Phase 35: Async Resend Job Backend
 
@@ -116,8 +116,8 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 33. Recovery Contract, CDK Readiness, And Dist Guard | v1.6 | 1/1 | Complete | 2026-06-04 |
-| 34. Recovery Service Extraction And Audit Foundation | v1.6 | 0/TBD | Ready for planning | - |
-| 35. Async Resend Job Backend | v1.6 | 0/TBD | Not started | - |
+| 34. Recovery Service Extraction And Audit Foundation | v1.6 | 1/1 | Complete | 2026-06-04 |
+| 35. Async Resend Job Backend | v1.6 | 0/TBD | Ready for planning | - |
 | 36. Admin Job/Audit UI And Production Browser Smoke | v1.6 | 0/TBD | Not started | - |
 | 37. Runbook, Release Gate, And Live Verification | v1.6 | 0/TBD | Not started | - |
 
@@ -130,10 +130,10 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 | GUARD-03 | Phase 33 | Complete |
 | GUARD-04 | Phase 33 | Complete |
 | GUARD-05 | Phase 33 | Complete |
-| AUDIT-01 | Phase 34 | Pending |
-| AUDIT-02 | Phase 34 | Pending |
-| AUDIT-03 | Phase 34 | Pending |
-| AUDIT-04 | Phase 34 | Pending |
+| AUDIT-01 | Phase 34 | Complete |
+| AUDIT-02 | Phase 34 | Complete |
+| AUDIT-03 | Phase 34 | Complete |
+| AUDIT-04 | Phase 34 | Complete |
 | AUDIT-05 | Phase 35 | Pending |
 | JOB-01 | Phase 35 | Pending |
 | JOB-02 | Phase 35 | Pending |
@@ -161,4 +161,4 @@ Phases execute in numeric order: 33 -> 34 -> 35 -> 36 -> 37
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 33 completion*
+*Last updated: 2026-06-04 after Phase 34 completion*
