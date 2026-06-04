@@ -1,95 +1,72 @@
-# Requirements: STOA Backend v1.2 S3 Report Artifact Infrastructure
+# Requirements: STOA Backend v1.3 Report Artifact Security & Operations Hardening
 
-**Defined:** 2026-06-03
+**Defined:** 2026-06-04
 **Core Value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
 
 ## Milestone Decision
 
-The canonical report artifact prefix for this milestone is:
+v1.3 builds on the verified v1.2 private artifact contract:
 
 ```text
 weekly-reports/{parent_id}/{student_id}/{week_start}/report.json
 weekly-reports/{parent_id}/{student_id}/{week_start}/report.html
 ```
 
-This blesses the shipped v1.1 backend convention instead of migrating to the shorter `reports/...` prefix from the slice note. The milestone should update tests, docs, smoke paths, and metadata expectations to this single convention.
+This milestone hardens the existing reports bucket and operational paths. It should not introduce public S3 access, frontend direct S3 reads, a new reports bucket, or a new artifact prefix unless implementation proves the existing contract cannot support the requirement.
 
-## v1.2 Requirements
+## v1.3 Requirements
 
-### Infrastructure
+### Reports Bucket Transport Security
 
-- [x] **INFRA-01**: Operator can verify through CDK synth/diff that `StoaReportsBucket` remains private, retained, encrypted, access-logged, and is not replaced.
-- [x] **INFRA-02**: Operator can verify that the API Lambda receives `S3_REPORTS_BUCKET` from CDK.
-- [x] **INFRA-03**: Operator can verify that the weekly report Lambda receives `S3_REPORTS_BUCKET` from CDK.
-- [x] **INFRA-04**: Operator can verify that both API and weekly report Lambdas have reports bucket read/write permissions.
-- [x] **INFRA-05**: Production report artifact code cannot silently use the local placeholder bucket name `stoa-reports` when a CDK-injected bucket is required.
+- [ ] **SEC-01**: CDK enforces HTTPS-only S3 access for the reports bucket through `enforce_ssl=True` or an equivalent deny-insecure-transport bucket policy.
+- [ ] **SEC-02**: CDK diff/deploy evidence proves report bucket security hardening does not replace the deployed `stoa-reports-562923011260` bucket.
+- [ ] **SEC-03**: Live bucket verification confirms public access block and default encryption remain enabled after hardening.
 
-### Artifact Contract
+### Prefix-Scoped IAM
 
-- [x] **ARTIFACT-01**: Backend code builds JSON and HTML report artifact keys with the canonical `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}` shape.
-- [x] **ARTIFACT-02**: Backend tests assert exact JSON and HTML artifact keys, including the `weekly-reports/` prefix.
-- [x] **ARTIFACT-03**: Report artifact keys use canonical backend parent/student IDs and ISO `week_start` values.
-- [x] **ARTIFACT-04**: Report artifact keys never include parent email, student email, display names, or arbitrary user-facing text.
-- [x] **ARTIFACT-05**: Invalid or blank production artifact key inputs fail closed instead of collapsing into shared `unknown` paths.
+- [ ] **IAM-01**: API Lambda report artifact S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix where S3 supports prefix scoping.
+- [ ] **IAM-02**: Weekly report Lambda S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix while preserving generation and smoke read/write behavior.
+- [ ] **IAM-03**: Non-report storage behavior remains unaffected, especially existing API Lambda access to the images bucket.
+- [ ] **IAM-04**: CDK and live IAM verification records any unavoidable bucket-level permissions and their rationale.
 
-### Backend Storage
+### Artifact Cleanup
 
-- [x] **STORAGE-01**: Backend code exposes a report artifact helper or equivalently testable functions for building keys and writing JSON/HTML artifacts.
-- [x] **STORAGE-02**: JSON artifacts are written to `settings.s3_reports_bucket` with `ContentType="application/json"`.
-- [x] **STORAGE-03**: HTML artifacts are written to `settings.s3_reports_bucket` with `ContentType="text/html; charset=utf-8"`.
-- [x] **STORAGE-04**: Report artifact writes do not pass S3 ACL parameters and rely on bucket privacy plus Lambda IAM.
-- [x] **STORAGE-05**: DynamoDB report metadata is saved only after both JSON and HTML S3 artifact writes succeed.
-- [x] **STORAGE-06**: SES email delivery is attempted only after S3 artifact writes and DynamoDB metadata storage succeed.
-- [x] **STORAGE-07**: Backend tests prove that failure after the first artifact write does not create report metadata or send email.
-- [x] **STORAGE-08**: Backend code can read a JSON report artifact by S3 key when needed for smoke or future backend-mediated reads.
+- [ ] **CLEAN-01**: Smoke artifacts under deterministic smoke paths are cleaned up automatically through lifecycle policy or explicit smoke cleanup.
+- [ ] **CLEAN-02**: Failed partial artifact writes do not leave untracked long-lived orphan JSON objects without a cleanup path.
+- [ ] **CLEAN-03**: Cleanup behavior is verified with tests and/or live smoke evidence without deleting real parent report artifacts.
 
-### Runtime Smoke
+### Report Operations
 
-- [x] **SMOKE-01**: Maintainer can invoke a narrow weekly report Lambda smoke event that does not expose a public API route.
-- [x] **SMOKE-02**: Smoke execution writes a deterministic private JSON object under the canonical `weekly-reports/` prefix.
-- [x] **SMOKE-03**: Smoke execution reads the same private object back immediately and verifies its content.
-- [x] **SMOKE-04**: Smoke output records bucket, key, content type, and readback success without exposing report content.
-- [x] **SMOKE-05**: Smoke verification does not require public S3 URLs, frontend S3 access, bucket listing, or S3 access-log delivery.
-
-### Privacy Boundary
-
-- [x] **PRIVACY-01**: Parent report access remains backend-mediated through authorized parent API routes.
-- [x] **PRIVACY-02**: No frontend direct S3 fetch, public S3 URL, public bucket policy, or public object ACL is introduced for report artifacts.
-- [x] **PRIVACY-03**: Any future backend artifact read path must preserve existing parent-child ownership checks before returning report data.
-
-### Evidence
-
-- [x] **EVIDENCE-01**: Milestone closure records backend test commands and results for artifact storage behavior.
-- [x] **EVIDENCE-02**: Milestone closure records CDK synth/diff evidence for reports bucket, Lambda env vars, IAM grants, and no bucket replacement.
-- [x] **EVIDENCE-03**: Milestone closure records deployed Lambda env/IAM verification or explicitly marks deployed-state confidence as incomplete.
-- [x] **EVIDENCE-04**: Milestone closure records private-object smoke result and any smoke object cleanup decision.
-- [x] **EVIDENCE-05**: Milestone closure records follow-ups for `enforce_ssl=True`, prefix-scoped IAM, lifecycle cleanup, and broader operational tooling if they are not implemented in v1.2.
+- [ ] **OPS-01**: Maintainer/admin can inspect report artifact metadata and delivery status for a parent, student, and week without direct S3 console use.
+- [ ] **OPS-02**: Maintainer/admin can retry or resend failed report delivery without regenerating unrelated successful reports.
+- [ ] **OPS-03**: Operations visibility preserves parent-child authorization boundaries and does not expose public S3 URLs or raw private report content to unauthorized users.
+- [ ] **OPS-04**: Report operation actions are auditable through logs or persisted status fields sufficient for support triage.
 
 ## Future Requirements
 
-### Security Hardening
+### Operations Expansion
 
-- **SEC-01**: CDK can restrict reports bucket read/write permissions to the final artifact prefix, such as `weekly-reports/*`.
-- **SEC-02**: CDK can enforce HTTPS-only S3 access for the reports bucket with `enforce_ssl=True`.
-- **SEC-03**: Smoke artifacts can be cleaned up automatically through lifecycle policy or explicit delete permissions.
+- **OPS-F01**: Rich admin UI dashboard for report health if v1.3 only delivers backend/API/CLI primitives.
+- **OPS-F02**: Bulk retry workflows for incident recovery across many failed reports.
 
-### Operations
+### Report Product Expansion
 
-- **OPS-01**: Admin can view report artifact metadata and storage health from an operational surface.
-- **OPS-02**: Admin can retry or resend failed report delivery without regenerating unrelated report data.
-- **OPS-03**: Support can generate authorized presigned artifact downloads with short TTL and audit logging.
+- **PDF-F01**: PDF report artifacts.
+- **I18N-F01**: Multi-language reports.
+- **BILL-F01**: Billing-gated report access.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Bedrock report content changes | v1.2 verifies artifact storage, not report generation quality. |
-| SES delivery expansion | Existing email flow is sufficient; this milestone only preserves ordering guarantees. |
-| Parent frontend changes | Parent frontend should keep using backend report routes, not S3 directly. |
-| PDF report artifacts | Explicitly deferred; JSON and HTML artifacts are enough for this storage slice. |
-| DynamoDB report metadata redesign | Existing metadata fields already store artifact keys. |
-| New AWS bucket, queue, table, or Lambda | Existing CDK resources are sufficient unless verification proves otherwise. |
-| Public S3 access or bucket website hosting | Conflicts with private report artifact storage. |
+| New reports bucket | v1.2 verified the existing reports bucket and v1.3 should harden it in place. |
+| Public S3 access, public bucket policy, or public URLs | Conflicts with private backend-mediated report artifact access. |
+| Frontend direct S3 fetch | Parent report access must remain backend-mediated and ownership-checked. |
+| Report generation quality changes | This milestone hardens storage and operations, not Bedrock prompt/content quality. |
+| PDF report artifacts | Deferred product expansion; JSON and HTML remain sufficient for this milestone. |
+| Multi-language reports | Separate report product scope. |
+| Billing or subscription enforcement | Separate access-control and product scope. |
+| Broad frontend redesign | v1.3 can add minimal admin visibility if needed, but not a parent portal redesign. |
 | Manual AWS console fixes | CDK remains the infrastructure source of truth. |
 
 ## Traceability
@@ -98,44 +75,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 14 | Complete |
-| INFRA-02 | Phase 14 | Complete |
-| INFRA-03 | Phase 14 | Complete |
-| INFRA-04 | Phase 14 | Complete |
-| INFRA-05 | Phase 14 | Complete |
-| ARTIFACT-01 | Phase 15 | Complete |
-| ARTIFACT-02 | Phase 15 | Complete |
-| ARTIFACT-03 | Phase 15 | Complete |
-| ARTIFACT-04 | Phase 15 | Complete |
-| ARTIFACT-05 | Phase 15 | Complete |
-| STORAGE-01 | Phase 15 | Complete |
-| STORAGE-02 | Phase 15 | Complete |
-| STORAGE-03 | Phase 15 | Complete |
-| STORAGE-04 | Phase 15 | Complete |
-| STORAGE-05 | Phase 16 | Complete |
-| STORAGE-06 | Phase 16 | Complete |
-| STORAGE-07 | Phase 16 | Complete |
-| STORAGE-08 | Phase 15 | Complete |
-| SMOKE-01 | Phase 17 | Complete |
-| SMOKE-02 | Phase 17 | Complete |
-| SMOKE-03 | Phase 17 | Complete |
-| SMOKE-04 | Phase 17 | Complete |
-| SMOKE-05 | Phase 17 | Complete |
-| PRIVACY-01 | Phase 16 | Complete |
-| PRIVACY-02 | Phase 16 | Complete |
-| PRIVACY-03 | Phase 16 | Complete |
-| EVIDENCE-01 | Phase 18 | Complete |
-| EVIDENCE-02 | Phase 18 | Complete |
-| EVIDENCE-03 | Phase 18 | Complete |
-| EVIDENCE-04 | Phase 18 | Complete |
-| EVIDENCE-05 | Phase 18 | Complete |
+| SEC-01 | Phase 19 | Planned |
+| SEC-02 | Phase 19 | Planned |
+| SEC-03 | Phase 19 | Planned |
+| IAM-01 | Phase 20 | Planned |
+| IAM-02 | Phase 20 | Planned |
+| IAM-03 | Phase 20 | Planned |
+| IAM-04 | Phase 20 | Planned |
+| CLEAN-01 | Phase 21 | Planned |
+| CLEAN-02 | Phase 21 | Planned |
+| CLEAN-03 | Phase 21 | Planned |
+| OPS-01 | Phase 22 | Planned |
+| OPS-02 | Phase 22 | Planned |
+| OPS-03 | Phase 22 | Planned |
+| OPS-04 | Phase 22 | Planned |
 
 **Coverage:**
 
-- v1.2 requirements: 31 total
-- Mapped to phases: 31
+- v1.3 requirements: 14 total
+- Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 after roadmap creation*
+*Requirements defined: 2026-06-04*
+*Last updated: 2026-06-04 after roadmap creation*
