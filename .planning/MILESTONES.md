@@ -82,23 +82,30 @@ Key accomplishments:
 
 Known deferred items at close: richer admin UI dashboard, bulk incident retry, PDF/multilanguage/billing report product expansions.
 
-## Current
-
 ### v1.4 Report Operations Admin UI / Bulk Recovery
 
-**Status:** Planning started 2026-06-04
-**Goal:** Turn API-only report operations into an admin-usable recovery workflow for report generation and delivery failures.
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phases:** 5 planned
+**Status:** Shipped 2026-06-04
+**Audit:** `.planning/v1.4-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.4-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.4-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v1.4-phases/`
+**Phases:** 5
+**Plans:** 5
+**Requirements:** 23/23 v1.4 requirements complete
 
-Planned focus:
+Key accomplishments:
 
-- Add an admin report operations UI with list, filters, detail, and triage states.
-- Add single-report retry for `generation_failed`.
-- Add selected bulk resend for `email_failed`.
-- Preserve admin-only backend mediation and no public/private S3 content exposure.
-- Verify backend, frontend, and deployed recovery flows.
+- Added admin report operations list/detail APIs with filters, bounded pagination, generation metadata, delivery metadata, and action eligibility.
+- Added atomic single-report retry for `generation_failed` reports with retry audit fields.
+- Added selected bulk resend for `email_failed` reports with per-item results and shared resend audit fields.
+- Added frontend `/admin/report-operations` UI for filtering, detail inspection, single actions, selected bulk resend, and result rendering.
+- Verified backend authorization/privacy, frontend e2e workflow, Lambda deployed state, API health/auth gate, and CDK diff.
+
+Known deferred items at close: live frontend deployment of the new UI bundle, production recovery mutation smoke with an approved safe failed report target, incident-wide async recovery jobs.
+
+## Current
+
+No active milestone. Next milestone should be opened after choosing the next product or operations focus.
 
 ---
-*Last updated: 2026-06-04 after starting v1.4 planning*
+*Last updated: 2026-06-04 after shipping v1.4*

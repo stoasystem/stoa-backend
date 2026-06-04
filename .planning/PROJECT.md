@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.3 report artifact platform now stores weekly report JSON/HTML artifacts under a verified private S3 contract, enforces HTTPS-only S3 access, scopes Lambda artifact IAM to `weekly-reports/*`, cleans up smoke/partial artifacts, and gives admins backend-mediated delivery visibility plus failed-delivery resend controls.
+The v1.4 report operations platform now gives admins a backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, bulk resend selected `email_failed` reports, and use a real admin UI without exposing private report artifacts.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.3 Report Artifact Security & Operations Hardening on 2026-06-04
+**Shipped version:** v1.4 Report Operations Admin UI / Bulk Recovery on 2026-06-04
 
 Delivered:
 
@@ -34,18 +34,15 @@ Delivered:
 - API and weekly report Lambda report artifact S3 actions are scoped to `weekly-reports/*`.
 - Deterministic smoke artifacts are deleted after smoke readback, and failed partial JSON writes are cleaned up best-effort.
 - Admin-only report operations endpoints expose metadata and failed-delivery resend without public S3 URLs or raw artifact content.
+- Admin report operations list/detail APIs expose generation, delivery, artifact availability, operation metadata, filters, pagination, and action eligibility.
+- Admins can retry one `generation_failed` report through an atomic conditional claim and persisted retry audit fields.
+- Admins can bulk resend selected `email_failed` reports and receive per-item `success`, `refused`, `not_found`, and `failed` results.
+- Frontend `/admin/report-operations` uses real admin report operations APIs for filtering, detail inspection, retry, resend, selected bulk resend, and result rendering.
+- Focused backend tests, frontend e2e, and live AWS checks verify report operations authorization, privacy boundaries, deployed Lambda state, API health/auth gate, and CDK diff.
 
-## Current Milestone: v1.4 Report Operations Admin UI / Bulk Recovery
+## Current Milestone
 
-**Goal:** Turn the API-only report operations surface into an admin-usable recovery workflow for report generation and delivery failures.
-
-Target features:
-
-- Admin report operations UI for listing, filtering, inspecting, and triaging weekly report generation/delivery state.
-- `generation_failed` retry for one failed parent/student/week report without disturbing already successful reports.
-- Bulk resend for selected `email_failed` reports with clear per-item results and audit fields.
-- Backend-mediated privacy and authorization boundaries that never expose raw S3 content, public S3 URLs, or presigned URLs to admins.
-- Focused backend, frontend, and live verification for report recovery workflows.
+No active milestone. Next milestone should be opened after choosing the next product or operations focus.
 
 ## Requirements
 
@@ -72,15 +69,12 @@ Shipped requirements:
 - API and weekly report Lambda report artifact S3 actions are scoped to `weekly-reports/*`, with image bucket permissions preserved - v1.3 Phase 20.
 - Deterministic smoke artifacts and failed partial JSON artifacts have explicit cleanup paths, with live smoke proving cleanup performed - v1.3 Phase 21.
 - Admin-only report operations metadata and failed-delivery resend endpoints are deployed with audit/status fields - v1.3 Phase 22.
+- Admin report operations list/detail APIs, single generation retry, selected bulk resend, and admin UI shipped - v1.4.
+- Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
 
 ### Active
 
-- [ ] Admins can list and filter weekly report operations state from a frontend admin surface.
-- [ ] Admins can inspect report artifact, generation, delivery, and operation metadata for a specific report.
-- [ ] Admins can retry a specific `generation_failed` report without regenerating unrelated successful reports.
-- [ ] Admins can bulk resend selected `email_failed` reports and see per-report success/failure results.
-- [ ] Report operations remain admin-only and backend-mediated with no public S3 URL or raw artifact exposure.
-- [ ] Report recovery operations persist audit metadata for actor, action, attempt time, result, and error details.
+No active requirements. Open the next milestone to define the next requirement set.
 
 ### Out of Scope
 
@@ -189,7 +183,7 @@ Known current resources:
 | Start v1.3 with security hardening before broader report product expansion | Live verification proved artifact storage works; the next risk is operational safety around that storage contract | Good - shipped in v1.3 |
 | Use explicit smoke/partial cleanup instead of broad lifecycle cleanup | Cleanup keys are known and can use scoped `DeleteObject` without bucket listing | Good - shipped in v1.3 |
 | Keep report operations backend-mediated and admin-only | Support needs metadata and resend controls without public S3 URLs or raw artifact exposure | Good - shipped in v1.3 |
-| Build v1.4 as an admin recovery workflow before broader report product expansion | v1.3 shipped secure API-only controls; the next value is making them usable for support and adding safe batch recovery | Pending - v1.4 |
+| Build v1.4 as an admin recovery workflow before broader report product expansion | v1.3 shipped secure API-only controls; the next value is making them usable for support and adding safe batch recovery | Good - shipped in v1.4 |
 
 ## Evolution
 
@@ -209,4 +203,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after starting milestone v1.4*
+*Last updated: 2026-06-04 after shipping milestone v1.4*

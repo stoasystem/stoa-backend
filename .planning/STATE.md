@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v1.4 milestone completion
+**Current focus:** No active milestone
 
 ## Current Position
 
@@ -86,7 +86,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- Complete v1.4 milestone archive/audit after commits are synchronized.
+- No active milestone todos. Open the next milestone to continue planned work.
 
 ### Blockers/Concerns
 
@@ -108,5 +108,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-04 17:54 +02:00
-Stopped at: All v1.4 phases complete; milestone ready for completion workflow.
+Stopped at: v1.4 milestone archived and ready to synchronize.
 Resume file: None
