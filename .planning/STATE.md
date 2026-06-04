@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Report Recovery Production Rollout & Live Smoke
-status: ready_to_execute
-last_updated: "2026-06-04T16:10:05Z"
+status: planning
+last_updated: "2026-06-04T16:20:00Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
   completed_plans: 1
   percent: 20
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 28 - Release Readiness and Deployment Contract
+**Current focus:** Phase 29 - Frontend Production Deployment Verification
 
 ## Current Position
 
-Phase: 28 of 32 (Release Readiness and Deployment Contract)
-Plan: 28-01
-Status: Phase 28 planned; ready to execute
-Last activity: 2026-06-04 — Created Phase 28 context and execution plan
+Phase: 29 of 32 (Frontend Production Deployment Verification)
+Plan: —
+Status: Phase 28 complete; Phase 29 ready for planning
+Last activity: 2026-06-04 — Completed Phase 28 release readiness contract
 
 ## Performance Metrics
 
@@ -57,7 +57,7 @@ Last activity: 2026-06-04 — Created Phase 28 context and execution plan
 | 25 | 1 complete | - | - |
 | 26 | 1 complete | - | - |
 | 27 | 1 complete | - | - |
-| 28 | 1/1 planned | - | - |
+| 28 | 1 complete | - | - |
 | 29 | 0/1 planned | - | - |
 | 30 | 0/1 planned | - | - |
 | 31 | 0/1 planned | - | - |
@@ -66,7 +66,7 @@ Last activity: 2026-06-04 — Created Phase 28 context and execution plan
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: v1.5 planning started after v1.4 report operations recovery workflow shipped and archived; Phase 28 is planned and ready to execute
+- Trend: Phase 28 completed the release readiness contract; Phase 29 frontend production deployment verification is next
 
 ## Accumulated Context
 
@@ -89,10 +89,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 26 adds frontend admin report operations UI for filtering, detail inspection, generation retry, single resend, and selected bulk resend.
 - Phase 27 verifies authorization, privacy, backend/frontend tests, and live deployment state for report operations recovery.
 - v1.5 prioritizes production rollout, safe live smoke, runbook, observability, and rollback evidence before incident-wide async recovery automation.
+- Phase 28 defines release readiness, evidence, rollback, CDK diff classification, and mutation safety gates before live smoke.
 
 ### Pending Todos
 
-- Execute Phase 28: Release Readiness and Deployment Contract.
+- Plan Phase 29: Frontend Production Deployment Verification.
 
 ### Blockers/Concerns
 
@@ -113,6 +114,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 18:10 +02:00
-Stopped at: Phase 28 planned and ready to execute.
+Last session: 2026-06-04 18:20 +02:00
+Stopped at: Phase 28 complete; Phase 29 ready for planning.
 Resume file: None

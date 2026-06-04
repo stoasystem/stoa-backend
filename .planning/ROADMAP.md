@@ -24,7 +24,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 - v1.4 ended at Phase 27, so v1.5 starts at Phase 28.
 - Decimal phases are reserved for urgent insertions.
 
-- [ ] **Phase 28: Release Readiness and Deployment Contract** - Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
+- [x] **Phase 28: Release Readiness and Deployment Contract** - Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
 - [ ] **Phase 29: Frontend Production Deployment Verification** - Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
 - [ ] **Phase 30: Backend Production Deployment and API Live Verification** - Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
 - [ ] **Phase 31: Safe Recovery Smoke Fixture and Mutation Verification** - Run safe non-customer retry/resend/bulk resend smoke and record outputs.
@@ -45,7 +45,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. CDK diff policy for this milestone distinguishes expected code/frontend asset changes from infrastructure/IAM drift.
 5. No production recovery mutation is attempted before safe smoke target criteria are documented.
 
-**Plans**: 1/1 plans created
+**Plans**: 1/1 plans complete
 
 ### Phase 29: Frontend Production Deployment Verification
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Planned | - |
+| 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Complete | 2026-06-04 |
 | 29. Frontend Production Deployment Verification | v1.5 | 0/1 | Pending | - |
 | 30. Backend Production Deployment and API Live Verification | v1.5 | 0/1 | Pending | - |
 | 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
@@ -124,10 +124,10 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 28 | Pending |
-| REL-02 | Phase 28 | Pending |
-| REL-03 | Phase 28 | Pending |
-| REL-04 | Phase 28 | Pending |
+| REL-01 | Phase 28 | Complete |
+| REL-02 | Phase 28 | Complete |
+| REL-03 | Phase 28 | Complete |
+| REL-04 | Phase 28 | Complete |
 | LIVE-01 | Phase 30 | Pending |
 | LIVE-02 | Phase 30 | Pending |
 | LIVE-03 | Phase 29 | Pending |
@@ -152,4 +152,4 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after starting v1.5 planning*
+*Last updated: 2026-06-04 after completing Phase 28*

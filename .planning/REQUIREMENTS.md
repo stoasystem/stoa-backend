@@ -7,10 +7,10 @@
 
 ### Deployment Readiness
 
-- [ ] **REL-01**: Backend release workflow can deploy the v1.4 report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift.
-- [ ] **REL-02**: Frontend release workflow can deploy the `/admin/report-operations` UI bundle to `app.stoaedu.ch` with production API configuration and no report-ops demo fallback.
-- [ ] **REL-03**: Release evidence records commit SHAs, deployment timestamps, frontend asset/cache state, API URL, and Lambda code/update status.
-- [ ] **REL-04**: Rollback entry points are identified before mutation smoke runs, including backend Lambda code rollback and frontend asset rollback.
+- [x] **REL-01**: Backend release workflow can deploy the v1.4 report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift. Completed in Phase 28 release readiness contract.
+- [x] **REL-02**: Frontend release workflow can deploy the `/admin/report-operations` UI bundle to `app.stoaedu.ch` with production API configuration and no report-ops demo fallback. Completed in Phase 28 release readiness contract.
+- [x] **REL-03**: Release evidence records commit SHAs, deployment timestamps, frontend asset/cache state, API URL, and Lambda code/update status. Completed in Phase 28 release readiness contract.
+- [x] **REL-04**: Rollback entry points are identified before mutation smoke runs, including backend Lambda code rollback and frontend asset rollback. Completed in Phase 28 release readiness contract.
 
 ### Production API and UI Verification
 
@@ -71,10 +71,10 @@ Deferred to a future milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 28 | Pending |
-| REL-02 | Phase 28 | Pending |
-| REL-03 | Phase 28 | Pending |
-| REL-04 | Phase 28 | Pending |
+| REL-01 | Phase 28 | Complete |
+| REL-02 | Phase 28 | Complete |
+| REL-03 | Phase 28 | Complete |
+| REL-04 | Phase 28 | Complete |
 | LIVE-01 | Phase 30 | Pending |
 | LIVE-02 | Phase 30 | Pending |
 | LIVE-03 | Phase 29 | Pending |
@@ -100,4 +100,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after starting v1.5 planning*
+*Last updated: 2026-06-04 after completing Phase 28*
