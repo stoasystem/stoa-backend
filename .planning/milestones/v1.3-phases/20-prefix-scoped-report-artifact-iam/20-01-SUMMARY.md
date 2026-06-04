@@ -16,10 +16,10 @@ tech-stack:
     - Keep image bucket grants separate from report artifact grants
 key-files:
   created:
-    - .planning/phases/20-prefix-scoped-report-artifact-iam/20-CONTEXT.md
-    - .planning/phases/20-prefix-scoped-report-artifact-iam/20-01-PLAN.md
-    - .planning/phases/20-prefix-scoped-report-artifact-iam/20-01-SUMMARY.md
-    - .planning/phases/20-prefix-scoped-report-artifact-iam/20-VERIFICATION.md
+    - .planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-CONTEXT.md
+    - .planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-01-PLAN.md
+    - .planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-01-SUMMARY.md
+    - .planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-VERIFICATION.md
   modified:
     - /Users/zhdeng/stoa-infra/stacks/api_stack.py
     - .planning/REQUIREMENTS.md

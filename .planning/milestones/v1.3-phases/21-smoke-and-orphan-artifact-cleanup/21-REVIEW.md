@@ -28,10 +28,10 @@ No blocking code, security, or behavior issues remain.
 - `src/stoa/services/report_artifact_service.py`
 - `tests/test_report_artifact_service.py`
 - `tests/test_report_flow.py`
-- `.planning/phases/21-smoke-and-orphan-artifact-cleanup/21-CONTEXT.md`
-- `.planning/phases/21-smoke-and-orphan-artifact-cleanup/21-01-PLAN.md`
-- `.planning/phases/21-smoke-and-orphan-artifact-cleanup/21-01-SUMMARY.md`
-- `.planning/phases/21-smoke-and-orphan-artifact-cleanup/21-VERIFICATION.md`
+- `.planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-CONTEXT.md`
+- `.planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-01-PLAN.md`
+- `.planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-01-SUMMARY.md`
+- `.planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-VERIFICATION.md`
 
 ## Notes
 

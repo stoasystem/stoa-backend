@@ -26,10 +26,10 @@ One least-privilege warning was found and fixed.
 ## Reviewed Scope
 
 - `/Users/zhdeng/stoa-infra/stacks/api_stack.py`
-- `.planning/phases/20-prefix-scoped-report-artifact-iam/20-CONTEXT.md`
-- `.planning/phases/20-prefix-scoped-report-artifact-iam/20-01-PLAN.md`
-- `.planning/phases/20-prefix-scoped-report-artifact-iam/20-01-SUMMARY.md`
-- `.planning/phases/20-prefix-scoped-report-artifact-iam/20-VERIFICATION.md`
+- `.planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-CONTEXT.md`
+- `.planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-01-PLAN.md`
+- `.planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-01-SUMMARY.md`
+- `.planning/milestones/v1.3-phases/20-prefix-scoped-report-artifact-iam/20-VERIFICATION.md`
 
 ## Notes
 

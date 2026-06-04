@@ -26,10 +26,10 @@ No bugs, security vulnerabilities, or regressions were found in the CDK source c
 ## Reviewed Scope
 
 - `/Users/zhdeng/stoa-infra/stacks/storage_stack.py`
-- `.planning/phases/19-reports-bucket-transport-security/19-CONTEXT.md`
-- `.planning/phases/19-reports-bucket-transport-security/19-01-PLAN.md`
-- `.planning/phases/19-reports-bucket-transport-security/19-01-SUMMARY.md`
-- `.planning/phases/19-reports-bucket-transport-security/19-VERIFICATION.md`
+- `.planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-CONTEXT.md`
+- `.planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-01-PLAN.md`
+- `.planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-01-SUMMARY.md`
+- `.planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-VERIFICATION.md`
 
 ## Notes
 

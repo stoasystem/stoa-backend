@@ -22,10 +22,10 @@ No code, security, or behavior findings remain.
 - `src/stoa/routers/admin.py`
 - `src/stoa/services/report_artifact_service.py`
 - `tests/test_admin_report_ops.py`
-- `.planning/phases/22-report-operations-visibility-and-recovery/22-CONTEXT.md`
-- `.planning/phases/22-report-operations-visibility-and-recovery/22-01-PLAN.md`
-- `.planning/phases/22-report-operations-visibility-and-recovery/22-01-SUMMARY.md`
-- `.planning/phases/22-report-operations-visibility-and-recovery/22-VERIFICATION.md`
+- `.planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-CONTEXT.md`
+- `.planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-01-PLAN.md`
+- `.planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-01-SUMMARY.md`
+- `.planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-VERIFICATION.md`
 
 ## Notes
 

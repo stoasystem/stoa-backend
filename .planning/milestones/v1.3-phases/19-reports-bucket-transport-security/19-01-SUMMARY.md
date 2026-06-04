@@ -16,10 +16,10 @@ tech-stack:
     - Record pre-deploy diff and post-deploy live evidence for infra hardening
 key-files:
   created:
-    - .planning/phases/19-reports-bucket-transport-security/19-CONTEXT.md
-    - .planning/phases/19-reports-bucket-transport-security/19-01-PLAN.md
-    - .planning/phases/19-reports-bucket-transport-security/19-01-SUMMARY.md
-    - .planning/phases/19-reports-bucket-transport-security/19-VERIFICATION.md
+    - .planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-CONTEXT.md
+    - .planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-01-PLAN.md
+    - .planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-01-SUMMARY.md
+    - .planning/milestones/v1.3-phases/19-reports-bucket-transport-security/19-VERIFICATION.md
   modified:
     - /Users/zhdeng/stoa-infra/stacks/storage_stack.py
     - .planning/REQUIREMENTS.md

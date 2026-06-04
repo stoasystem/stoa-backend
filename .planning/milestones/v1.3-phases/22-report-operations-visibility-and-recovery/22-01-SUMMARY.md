@@ -16,11 +16,11 @@ tech-stack:
     - Persist support audit fields on report status updates
 key-files:
   created:
-    - .planning/phases/22-report-operations-visibility-and-recovery/22-CONTEXT.md
-    - .planning/phases/22-report-operations-visibility-and-recovery/22-01-PLAN.md
-    - .planning/phases/22-report-operations-visibility-and-recovery/22-01-SUMMARY.md
-    - .planning/phases/22-report-operations-visibility-and-recovery/22-VERIFICATION.md
-    - .planning/phases/22-report-operations-visibility-and-recovery/22-REVIEW.md
+    - .planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-CONTEXT.md
+    - .planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-01-PLAN.md
+    - .planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-01-SUMMARY.md
+    - .planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-VERIFICATION.md
+    - .planning/milestones/v1.3-phases/22-report-operations-visibility-and-recovery/22-REVIEW.md
     - tests/test_admin_report_ops.py
   modified:
     - src/stoa/routers/admin.py

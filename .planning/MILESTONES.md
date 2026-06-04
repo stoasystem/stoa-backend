@@ -46,8 +46,8 @@ Known deferred items at close: 5 follow-up candidates (see `.planning/v1.1-MILES
 ### v1.2 S3 Report Artifact Infrastructure
 
 **Status:** Shipped 2026-06-04 after live AWS verification
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone record:** `.planning/milestones/s3-report-artifact-infrastructure.md`
+**Phase archive:** `.planning/milestones/v1.2-phases/`
 **Phases:** 5
 **Plans:** 5
 **Requirements:** 31/31 v1.2 requirements complete
@@ -62,22 +62,29 @@ Key accomplishments:
 
 Known deferred items at close: report bucket `enforce_ssl`, prefix-scoped IAM, smoke/orphan lifecycle cleanup, and report operations tooling.
 
-## Current
-
 ### v1.3 Report Artifact Security & Operations Hardening
 
-**Status:** Planning started 2026-06-04
-**Goal:** Harden private weekly report artifact storage and add operational controls so report artifacts are safer, cleaner, and easier to support after v1.2 live verification.
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phases:** 4 planned
+**Status:** Shipped 2026-06-04
+**Audit:** `.planning/v1.3-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.3-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.3-REQUIREMENTS.md`
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 14/14 v1.3 requirements complete
 
-Planned focus:
+Key accomplishments:
 
-- Add reports bucket `enforce_ssl=True` in CDK and prove no bucket replacement.
-- Scope report artifact IAM toward `weekly-reports/*` where feasible.
-- Add smoke/orphan artifact lifecycle or explicit cleanup behavior.
-- Add report operations tooling for retry, resend, and admin/support visibility.
+- Deployed HTTPS-only S3 transport enforcement on the existing reports bucket without bucket replacement.
+- Scoped API and weekly report Lambda artifact S3 permissions to `weekly-reports/*`, preserving image bucket behavior.
+- Added deterministic smoke cleanup and failed partial JSON artifact cleanup.
+- Added admin-only report operations metadata and failed-delivery resend endpoints with persisted audit fields.
+- Verified live AWS state with CDK diff/deploy, IAM checks, Lambda smoke, and S3 object absence checks.
+
+Known deferred items at close: richer admin UI dashboard, bulk incident retry, PDF/multilanguage/billing report product expansions.
+
+## Current
+
+No active milestone.
 
 ---
-*Last updated: 2026-06-04 after starting v1.3 planning*
+*Last updated: 2026-06-04 after v1.3 milestone completion*

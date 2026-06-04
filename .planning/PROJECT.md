@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.2 report artifact infrastructure now stores weekly report JSON/HTML artifacts under a verified private S3 contract, with deployed Lambda smoke evidence that private artifact writes and reads work in AWS.
+The v1.3 report artifact platform now stores weekly report JSON/HTML artifacts under a verified private S3 contract, enforces HTTPS-only S3 access, scopes Lambda artifact IAM to `weekly-reports/*`, cleans up smoke/partial artifacts, and gives admins backend-mediated delivery visibility plus failed-delivery resend controls.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.2 S3 Report Artifact Infrastructure on 2026-06-04
+**Shipped version:** v1.3 Report Artifact Security & Operations Hardening on 2026-06-04
 
 Delivered:
 
@@ -30,17 +30,14 @@ Delivered:
 - Report artifacts use the canonical private key contract `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}`.
 - `stoa-api` and `stoa-weekly-report` are deployed with `S3_REPORTS_BUCKET=stoa-reports-562923011260`.
 - Deployed smoke invoked `stoa-weekly-report` and proved a private JSON artifact can be written and read back from S3 without public URLs or frontend S3 access.
+- The reports bucket now enforces HTTPS-only S3 transport through CDK-managed bucket policy.
+- API and weekly report Lambda report artifact S3 actions are scoped to `weekly-reports/*`.
+- Deterministic smoke artifacts are deleted after smoke readback, and failed partial JSON writes are cleaned up best-effort.
+- Admin-only report operations endpoints expose metadata and failed-delivery resend without public S3 URLs or raw artifact content.
 
-## Current Milestone: v1.3 Report Artifact Security & Operations Hardening
+## Current Milestone
 
-**Goal:** Harden private weekly report artifact storage and add operational controls so report artifacts are safer, cleaner, and easier to support after v1.2 live verification.
-
-Target features:
-
-- Add `enforce_ssl=True` to the reports bucket in CDK and verify there is no bucket replacement.
-- Scope Lambda S3 permissions toward `weekly-reports/*` where feasible.
-- Add smoke/orphan artifact cleanup through lifecycle or explicit cleanup behavior.
-- Add report operations tooling for retry/resend/admin visibility.
+No active milestone. v1.3 is complete; the next milestone should focus on the highest-value report product or operations expansion.
 
 ## Requirements
 
@@ -70,7 +67,7 @@ Shipped requirements:
 
 ### Active
 
-- [x] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.
+- [ ] Define the next milestone scope after v1.3 closure.
 
 ### Out of Scope
 
@@ -176,7 +173,9 @@ Known current resources:
 | Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Good - shipped in v1.1 |
 | Use `weekly-reports/` as the canonical private report artifact prefix | Matches shipped v1.1 behavior and avoids migrating existing artifact references | Good - verified in v1.2 |
 | Keep report artifacts backend-mediated and private | Parent access must stay ownership-checked through backend routes, with no public S3 URL or direct frontend S3 fetch | Good - verified in v1.2 |
-| Start v1.3 with security hardening before broader report product expansion | Live verification proved artifact storage works; the next risk is operational safety around that storage contract | Active - v1.3 |
+| Start v1.3 with security hardening before broader report product expansion | Live verification proved artifact storage works; the next risk is operational safety around that storage contract | Good - shipped in v1.3 |
+| Use explicit smoke/partial cleanup instead of broad lifecycle cleanup | Cleanup keys are known and can use scoped `DeleteObject` without bucket listing | Good - shipped in v1.3 |
+| Keep report operations backend-mediated and admin-only | Support needs metadata and resend controls without public S3 URLs or raw artifact exposure | Good - shipped in v1.3 |
 
 ## Evolution
 
@@ -196,4 +195,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after starting milestone v1.3*
+*Last updated: 2026-06-04 after v1.3 milestone completion*

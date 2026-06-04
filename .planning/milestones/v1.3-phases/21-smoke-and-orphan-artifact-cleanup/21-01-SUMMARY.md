@@ -16,11 +16,11 @@ tech-stack:
     - Best-effort cleanup of partial writes while preserving original storage failure
 key-files:
   created:
-    - .planning/phases/21-smoke-and-orphan-artifact-cleanup/21-CONTEXT.md
-    - .planning/phases/21-smoke-and-orphan-artifact-cleanup/21-01-PLAN.md
-    - .planning/phases/21-smoke-and-orphan-artifact-cleanup/21-01-SUMMARY.md
-    - .planning/phases/21-smoke-and-orphan-artifact-cleanup/21-VERIFICATION.md
-    - .planning/phases/21-smoke-and-orphan-artifact-cleanup/21-REVIEW.md
+    - .planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-CONTEXT.md
+    - .planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-01-PLAN.md
+    - .planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-01-SUMMARY.md
+    - .planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-VERIFICATION.md
+    - .planning/milestones/v1.3-phases/21-smoke-and-orphan-artifact-cleanup/21-REVIEW.md
   modified:
     - src/stoa/services/report_artifact_service.py
     - tests/test_report_artifact_service.py
