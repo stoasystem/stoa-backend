@@ -127,9 +127,22 @@ Known deferred items at close: production admin browser click-through before rea
 
 ## Current
 
-No active milestone.
+### v1.6 Report Recovery Operations Hardening
 
-Start the next milestone with `$gsd-new-milestone`.
+**Status:** Planning started 2026-06-04
+**Goal:** Make report recovery safe for incident-wide operations by adding async bulk recovery, immutable audit evidence, production admin browser smoke, and CI/CD protection against stale Lambda package deployments.
+**Phases:** 5 planned (Phase 33-37)
+**Requirements:** 28/28 mapped
+
+Planned phases:
+
+- Phase 33: Recovery Contract, CDK Readiness, And Dist Guard
+- Phase 34: Recovery Service Extraction And Audit Foundation
+- Phase 35: Async Resend Job Backend
+- Phase 36: Admin Job/Audit UI And Production Browser Smoke
+- Phase 37: Runbook, Release Gate, And Live Verification
+
+Next step: `$gsd-plan-phase 33`.
 
 ---
-*Last updated: 2026-06-04 after v1.5 archive*
+*Last updated: 2026-06-04 after starting v1.6 roadmap*

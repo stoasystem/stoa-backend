@@ -86,45 +86,45 @@ Deferred to a future milestone.
 
 ## Traceability
 
-Traceability is filled by the roadmap after phases are approved.
+Traceability is filled by the active v1.6 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUARD-01 | TBD | Pending |
-| GUARD-02 | TBD | Pending |
-| GUARD-03 | TBD | Pending |
-| GUARD-04 | TBD | Pending |
-| GUARD-05 | TBD | Pending |
-| AUDIT-01 | TBD | Pending |
-| AUDIT-02 | TBD | Pending |
-| AUDIT-03 | TBD | Pending |
-| AUDIT-04 | TBD | Pending |
-| AUDIT-05 | TBD | Pending |
-| JOB-01 | TBD | Pending |
-| JOB-02 | TBD | Pending |
-| JOB-03 | TBD | Pending |
-| JOB-04 | TBD | Pending |
-| JOB-05 | TBD | Pending |
-| JOB-06 | TBD | Pending |
-| JOB-07 | TBD | Pending |
-| JOB-08 | TBD | Pending |
-| JOB-09 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| UI-05 | TBD | Pending |
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
-| OPS-04 | TBD | Pending |
+| GUARD-01 | Phase 33 | Pending |
+| GUARD-02 | Phase 33 | Pending |
+| GUARD-03 | Phase 33 | Pending |
+| GUARD-04 | Phase 33 | Pending |
+| GUARD-05 | Phase 33 | Pending |
+| AUDIT-01 | Phase 34 | Pending |
+| AUDIT-02 | Phase 34 | Pending |
+| AUDIT-03 | Phase 34 | Pending |
+| AUDIT-04 | Phase 34 | Pending |
+| AUDIT-05 | Phase 35 | Pending |
+| JOB-01 | Phase 35 | Pending |
+| JOB-02 | Phase 35 | Pending |
+| JOB-03 | Phase 35 | Pending |
+| JOB-04 | Phase 35 | Pending |
+| JOB-05 | Phase 35 | Pending |
+| JOB-06 | Phase 35 | Pending |
+| JOB-07 | Phase 35 | Pending |
+| JOB-08 | Phase 35 | Pending |
+| JOB-09 | Phase 35 | Pending |
+| UI-01 | Phase 36 | Pending |
+| UI-02 | Phase 36 | Pending |
+| UI-03 | Phase 36 | Pending |
+| UI-04 | Phase 36 | Pending |
+| UI-05 | Phase 36 | Pending |
+| OPS-01 | Phase 37 | Pending |
+| OPS-02 | Phase 37 | Pending |
+| OPS-03 | Phase 37 | Pending |
+| OPS-04 | Phase 37 | Pending |
 
 **Coverage:**
 
 - v1.6 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after v1.6 research synthesis*
+*Last updated: 2026-06-04 after v1.6 roadmap creation*
