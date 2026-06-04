@@ -87,7 +87,13 @@ Shipped requirements:
 
 ### Active
 
-Milestone v1.6 requirements are being defined.
+Milestone v1.6 requirements are defined in `.planning/REQUIREMENTS.md`:
+
+- Lambda package manifest and CDK/CI stale-dist guard.
+- Application-enforced append-only recovery audit records.
+- Bounded async `email_failed` resend jobs with preview, target snapshots, progress, cancellation, and per-target results.
+- Admin job/audit UI plus read-only production admin browser smoke.
+- Updated runbook, release gate, live verification, and final milestone audit.
 
 ### Out of Scope
 
