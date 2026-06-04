@@ -24,10 +24,10 @@ This milestone hardens the existing reports bucket and operational paths. It sho
 
 ### Prefix-Scoped IAM
 
-- [ ] **IAM-01**: API Lambda report artifact S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix where S3 supports prefix scoping.
-- [ ] **IAM-02**: Weekly report Lambda S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix while preserving generation and smoke read/write behavior.
-- [ ] **IAM-03**: Non-report storage behavior remains unaffected, especially existing API Lambda access to the images bucket.
-- [ ] **IAM-04**: CDK and live IAM verification records any unavoidable bucket-level permissions and their rationale.
+- [x] **IAM-01**: API Lambda report artifact S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix where S3 supports prefix scoping.
+- [x] **IAM-02**: Weekly report Lambda S3 object permissions are narrowed to the canonical `weekly-reports/*` prefix while preserving generation and smoke read/write behavior.
+- [x] **IAM-03**: Non-report storage behavior remains unaffected, especially existing API Lambda access to the images bucket.
+- [x] **IAM-04**: CDK and live IAM verification records any unavoidable bucket-level permissions and their rationale.
 
 ### Artifact Cleanup
 
@@ -78,10 +78,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-01 | Phase 19 | Complete |
 | SEC-02 | Phase 19 | Complete |
 | SEC-03 | Phase 19 | Complete |
-| IAM-01 | Phase 20 | Planned |
-| IAM-02 | Phase 20 | Planned |
-| IAM-03 | Phase 20 | Planned |
-| IAM-04 | Phase 20 | Planned |
+| IAM-01 | Phase 20 | Complete |
+| IAM-02 | Phase 20 | Complete |
+| IAM-03 | Phase 20 | Complete |
+| IAM-04 | Phase 20 | Complete |
 | CLEAN-01 | Phase 21 | Planned |
 | CLEAN-02 | Phase 21 | Planned |
 | CLEAN-03 | Phase 21 | Planned |
@@ -93,10 +93,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 3
+- Complete: 7
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 19 completion*
+*Last updated: 2026-06-04 after Phase 20 completion*

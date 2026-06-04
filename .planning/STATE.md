@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Report Artifact Security & Operations Hardening
 status: planning
-last_updated: "2026-06-04T16:13:00+02:00"
+last_updated: "2026-06-04T16:23:00+02:00"
 last_activity: 2026-06-04
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 ## Current Position
 
-Phase: 20 of 22 (Prefix-Scoped Report Artifact IAM)
+Phase: 21 of 22 (Smoke and Orphan Artifact Cleanup)
 Plan: Not created
-Status: Phase 19 complete; Phase 20 ready for planning
-Last activity: 2026-06-04 - Deployed reports bucket HTTPS-only enforcement and verified live AWS state.
+Status: Phase 20 complete; Phase 21 ready for planning
+Last activity: 2026-06-04 - Deployed prefix-scoped report artifact IAM and verified live Lambda smoke.
 
 ## Performance Metrics
 
@@ -49,7 +49,8 @@ Last activity: 2026-06-04 - Deployed reports bucket HTTPS-only enforcement and v
 | 17 | 1 | - | - |
 | 18 | 1 | - | - |
 | 19 | 1 complete | - | - |
-| 20-22 | 3 planned | - | - |
+| 20 | 1 complete | - | - |
+| 21-22 | 2 planned | - | - |
 
 **Recent Trend:**
 
@@ -68,11 +69,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.2 uses existing CDK resources unless verification proves current reports bucket, Lambda env vars, or IAM grants are insufficient.
 - v1.3 prioritizes reports bucket HTTPS enforcement, prefix-scoped IAM, artifact cleanup, and report operations tooling before broader report product expansion.
 - Phase 19 uses `s3.Bucket(enforce_ssl=True)` for `StoaReportsBucket`; live AWS bucket policy denies `aws:SecureTransport=false`.
+- Phase 20 scopes API and weekly report Lambda report artifact S3 actions to `weekly-reports/*`; no reports bucket-level permissions are retained.
 
 ### Pending Todos
 
-- Create the Phase 20 plan for prefix-scoped report artifact IAM.
-- Replace broad reports bucket grants only where scoped policies preserve required API and weekly report behavior.
+- Create the Phase 21 plan for smoke and orphan artifact cleanup.
+- Use existing scoped `s3:DeleteObject` under `weekly-reports/*` for cleanup behavior.
 - Keep Lambda asset-hash drift separate from reports bucket policy/IAM drift during CDK review.
 
 ### Blockers/Concerns

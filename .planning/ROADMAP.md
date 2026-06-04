@@ -23,7 +23,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 19: Reports Bucket Transport Security** - Operators can prove the deployed reports bucket enforces HTTPS-only access without bucket replacement. (completed 2026-06-04)
-- [ ] **Phase 20: Prefix-Scoped Report Artifact IAM** - Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking report generation, smoke, or image storage.
+- [x] **Phase 20: Prefix-Scoped Report Artifact IAM** - Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking report generation, smoke, or image storage. (completed 2026-06-04)
 - [ ] **Phase 21: Smoke and Orphan Artifact Cleanup** - Smoke and failed partial report artifacts have a safe cleanup path that preserves real report artifacts.
 - [ ] **Phase 22: Report Operations Visibility and Recovery** - Maintainers can inspect report artifact/delivery state and retry or resend failed delivery safely.
 
@@ -55,7 +55,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
   3. API Lambda image bucket permissions and behavior remain unaffected.
   4. Backend tests and live smoke prove report artifact read/write behavior still works.
 
-**Plans**: 0/1 planned
+**Plans**: 1/1 plans complete
 
 ### Phase 21: Smoke and Orphan Artifact Cleanup
 
@@ -93,7 +93,7 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 19. Reports Bucket Transport Security | v1.3 | 1/1 | Complete | 2026-06-04 |
-| 20. Prefix-Scoped Report Artifact IAM | v1.3 | 0/1 | Planned | - |
+| 20. Prefix-Scoped Report Artifact IAM | v1.3 | 1/1 | Complete | 2026-06-04 |
 | 21. Smoke and Orphan Artifact Cleanup | v1.3 | 0/1 | Planned | - |
 | 22. Report Operations Visibility and Recovery | v1.3 | 0/1 | Planned | - |
 
@@ -104,10 +104,10 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 | SEC-01 | Phase 19 | Complete |
 | SEC-02 | Phase 19 | Complete |
 | SEC-03 | Phase 19 | Complete |
-| IAM-01 | Phase 20 | Planned |
-| IAM-02 | Phase 20 | Planned |
-| IAM-03 | Phase 20 | Planned |
-| IAM-04 | Phase 20 | Planned |
+| IAM-01 | Phase 20 | Complete |
+| IAM-02 | Phase 20 | Complete |
+| IAM-03 | Phase 20 | Complete |
+| IAM-04 | Phase 20 | Complete |
 | CLEAN-01 | Phase 21 | Planned |
 | CLEAN-02 | Phase 21 | Planned |
 | CLEAN-03 | Phase 21 | Planned |
@@ -119,9 +119,9 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 3
+- Complete: 7
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 19 completion*
+*Last updated: 2026-06-04 after Phase 20 completion*
