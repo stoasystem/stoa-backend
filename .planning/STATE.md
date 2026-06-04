@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Report Artifact Security & Operations Hardening
-status: complete
-last_updated: "2026-06-04T16:55:00+02:00"
+milestone: v1.4
+milestone_name: Report Operations Admin UI / Bulk Recovery
+status: planning
+last_updated: "2026-06-04T15:00:40.457Z"
 last_activity: 2026-06-04
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v1.3 complete - Report Artifact Security & Operations Hardening
+**Current focus:** v1.4 planning - Report Operations Admin UI / Bulk Recovery
 
 ## Current Position
 
-Phase: 22 of 22 (Report Operations Visibility and Recovery)
-Plan: 22-01 complete
-Status: Milestone complete and archived
-Last activity: 2026-06-04 - Completed v1.3 audit, archive, and cleanup.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-04 — Milestone v1.4 started
 
 ## Performance Metrics
 
@@ -76,7 +76,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- No active phase todo. v1.3 is complete; next work should start a new milestone.
+- Define v1.4 requirements.
+- Create v1.4 roadmap continuing after Phase 22.
 
 ### Blockers/Concerns
 
@@ -97,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 16:55 +02:00
-Stopped at: v1.3 milestone complete and ready for the next milestone selection.
+Last session: 2026-06-04 17:00 +02:00
+Stopped at: v1.4 milestone started; defining requirements and roadmap.
 Resume file: None

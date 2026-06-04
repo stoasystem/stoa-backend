@@ -84,7 +84,21 @@ Known deferred items at close: richer admin UI dashboard, bulk incident retry, P
 
 ## Current
 
-No active milestone.
+### v1.4 Report Operations Admin UI / Bulk Recovery
+
+**Status:** Planning started 2026-06-04
+**Goal:** Turn API-only report operations into an admin-usable recovery workflow for report generation and delivery failures.
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phases:** To be defined
+
+Planned focus:
+
+- Add an admin report operations UI with list, filters, detail, and triage states.
+- Add single-report retry for `generation_failed`.
+- Add selected bulk resend for `email_failed`.
+- Preserve admin-only backend mediation and no public/private S3 content exposure.
+- Verify backend, frontend, and deployed recovery flows.
 
 ---
-*Last updated: 2026-06-04 after v1.3 milestone completion*
+*Last updated: 2026-06-04 after starting v1.4 planning*

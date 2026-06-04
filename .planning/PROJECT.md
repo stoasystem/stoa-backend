@@ -35,9 +35,17 @@ Delivered:
 - Deterministic smoke artifacts are deleted after smoke readback, and failed partial JSON writes are cleaned up best-effort.
 - Admin-only report operations endpoints expose metadata and failed-delivery resend without public S3 URLs or raw artifact content.
 
-## Current Milestone
+## Current Milestone: v1.4 Report Operations Admin UI / Bulk Recovery
 
-No active milestone. v1.3 is complete; the next milestone should focus on the highest-value report product or operations expansion.
+**Goal:** Turn the API-only report operations surface into an admin-usable recovery workflow for report generation and delivery failures.
+
+Target features:
+
+- Admin report operations UI for listing, filtering, inspecting, and triaging weekly report generation/delivery state.
+- `generation_failed` retry for one failed parent/student/week report without disturbing already successful reports.
+- Bulk resend for selected `email_failed` reports with clear per-item results and audit fields.
+- Backend-mediated privacy and authorization boundaries that never expose raw S3 content, public S3 URLs, or presigned URLs to admins.
+- Focused backend, frontend, and live verification for report recovery workflows.
 
 ## Requirements
 
@@ -67,7 +75,12 @@ Shipped requirements:
 
 ### Active
 
-- [ ] Define the next milestone scope after v1.3 closure.
+- [ ] Admins can list and filter weekly report operations state from a frontend admin surface.
+- [ ] Admins can inspect report artifact, generation, delivery, and operation metadata for a specific report.
+- [ ] Admins can retry a specific `generation_failed` report without regenerating unrelated successful reports.
+- [ ] Admins can bulk resend selected `email_failed` reports and see per-report success/failure results.
+- [ ] Report operations remain admin-only and backend-mediated with no public S3 URL or raw artifact exposure.
+- [ ] Report recovery operations persist audit metadata for actor, action, attempt time, result, and error details.
 
 ### Out of Scope
 
@@ -176,6 +189,7 @@ Known current resources:
 | Start v1.3 with security hardening before broader report product expansion | Live verification proved artifact storage works; the next risk is operational safety around that storage contract | Good - shipped in v1.3 |
 | Use explicit smoke/partial cleanup instead of broad lifecycle cleanup | Cleanup keys are known and can use scoped `DeleteObject` without bucket listing | Good - shipped in v1.3 |
 | Keep report operations backend-mediated and admin-only | Support needs metadata and resend controls without public S3 URLs or raw artifact exposure | Good - shipped in v1.3 |
+| Build v1.4 as an admin recovery workflow before broader report product expansion | v1.3 shipped secure API-only controls; the next value is making them usable for support and adding safe batch recovery | Pending - v1.4 |
 
 ## Evolution
 
@@ -195,4 +209,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after v1.3 milestone completion*
+*Last updated: 2026-06-04 after starting milestone v1.4*
