@@ -45,7 +45,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. CDK diff policy for this milestone distinguishes expected code/frontend asset changes from infrastructure/IAM drift.
 5. No production recovery mutation is attempted before safe smoke target criteria are documented.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans created
 
 ### Phase 29: Frontend Production Deployment Verification
 
@@ -114,7 +114,7 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 28. Release Readiness and Deployment Contract | v1.5 | 0/1 | Pending | - |
+| 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Planned | - |
 | 29. Frontend Production Deployment Verification | v1.5 | 0/1 | Pending | - |
 | 30. Backend Production Deployment and API Live Verification | v1.5 | 0/1 | Pending | - |
 | 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
