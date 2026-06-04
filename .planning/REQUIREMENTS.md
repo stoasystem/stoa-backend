@@ -31,9 +31,9 @@ This milestone hardens the existing reports bucket and operational paths. It sho
 
 ### Artifact Cleanup
 
-- [ ] **CLEAN-01**: Smoke artifacts under deterministic smoke paths are cleaned up automatically through lifecycle policy or explicit smoke cleanup.
-- [ ] **CLEAN-02**: Failed partial artifact writes do not leave untracked long-lived orphan JSON objects without a cleanup path.
-- [ ] **CLEAN-03**: Cleanup behavior is verified with tests and/or live smoke evidence without deleting real parent report artifacts.
+- [x] **CLEAN-01**: Smoke artifacts under deterministic smoke paths are cleaned up automatically through lifecycle policy or explicit smoke cleanup.
+- [x] **CLEAN-02**: Failed partial artifact writes do not leave untracked long-lived orphan JSON objects without a cleanup path.
+- [x] **CLEAN-03**: Cleanup behavior is verified with tests and/or live smoke evidence without deleting real parent report artifacts.
 
 ### Report Operations
 
@@ -82,9 +82,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IAM-02 | Phase 20 | Complete |
 | IAM-03 | Phase 20 | Complete |
 | IAM-04 | Phase 20 | Complete |
-| CLEAN-01 | Phase 21 | Planned |
-| CLEAN-02 | Phase 21 | Planned |
-| CLEAN-03 | Phase 21 | Planned |
+| CLEAN-01 | Phase 21 | Complete |
+| CLEAN-02 | Phase 21 | Complete |
+| CLEAN-03 | Phase 21 | Complete |
 | OPS-01 | Phase 22 | Planned |
 | OPS-02 | Phase 22 | Planned |
 | OPS-03 | Phase 22 | Planned |
@@ -93,10 +93,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 7
+- Complete: 10
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 20 completion*
+*Last updated: 2026-06-04 after Phase 21 completion*

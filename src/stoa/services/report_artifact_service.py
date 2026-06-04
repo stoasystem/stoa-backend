@@ -59,12 +59,19 @@ def write_report_artifacts(
         Body=json.dumps(json_artifact, separators=(",", ":"), ensure_ascii=False).encode(),
         ContentType=REPORT_JSON_CONTENT_TYPE,
     )
-    s3.put_object(
-        Bucket=bucket,
-        Key=keys.html_key,
-        Body=html_artifact.encode(),
-        ContentType=REPORT_HTML_CONTENT_TYPE,
-    )
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=keys.html_key,
+            Body=html_artifact.encode(),
+            ContentType=REPORT_HTML_CONTENT_TYPE,
+        )
+    except Exception:
+        try:
+            _delete_report_artifact(bucket, keys.json_key, s3_client=s3)
+        except Exception:
+            pass
+        raise
 
 
 def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, Any]:
@@ -113,14 +120,36 @@ def run_report_artifact_s3_smoke(
         readback.get("marker") == REPORT_ARTIFACT_SMOKE_MARKER
         and readback.get("key") == keys.json_key
     )
-    return {
-        "status": "passed" if readback_ok else "failed",
+    cleanup = "not_attempted"
+    cleanup_error_class = None
+    if readback_ok:
+        try:
+            _delete_report_artifact(bucket, keys.json_key, s3_client=s3)
+            cleanup = "performed"
+        except Exception as exc:
+            cleanup = "failed"
+            cleanup_error_class = type(exc).__name__
+    status = "passed" if readback_ok and cleanup == "performed" else "failed"
+    result = {
+        "status": status,
         "bucket": bucket,
         "key": keys.json_key,
         "content_type": REPORT_JSON_CONTENT_TYPE,
         "readback_ok": readback_ok,
-        "cleanup": "not_performed",
+        "cleanup": cleanup,
     }
+    if cleanup_error_class:
+        result["cleanup_error_class"] = cleanup_error_class
+    return result
+
+
+def _delete_report_artifact(
+    bucket: str,
+    key: str,
+    *,
+    s3_client: Any,
+) -> None:
+    s3_client.delete_object(Bucket=bucket, Key=key)
 
 
 def _validate_backend_id_segment(value: str, field_name: str) -> str:

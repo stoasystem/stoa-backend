@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Report Artifact Security & Operations Hardening
 status: planning
-last_updated: "2026-06-04T16:23:00+02:00"
+last_updated: "2026-06-04T16:39:00+02:00"
 last_activity: 2026-06-04
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 ## Current Position
 
-Phase: 21 of 22 (Smoke and Orphan Artifact Cleanup)
+Phase: 22 of 22 (Report Operations Visibility and Recovery)
 Plan: Not created
-Status: Phase 20 complete; Phase 21 ready for planning
-Last activity: 2026-06-04 - Deployed prefix-scoped report artifact IAM and verified live Lambda smoke.
+Status: Phase 21 complete; Phase 22 ready for planning
+Last activity: 2026-06-04 - Deployed smoke and partial artifact cleanup; final live smoke cleanup passed and CDK diff is clean.
 
 ## Performance Metrics
 
@@ -50,7 +50,8 @@ Last activity: 2026-06-04 - Deployed prefix-scoped report artifact IAM and verif
 | 18 | 1 | - | - |
 | 19 | 1 complete | - | - |
 | 20 | 1 complete | - | - |
-| 21-22 | 2 planned | - | - |
+| 21 | 1 complete | - | - |
+| 22 | 1 planned | - | - |
 
 **Recent Trend:**
 
@@ -70,11 +71,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.3 prioritizes reports bucket HTTPS enforcement, prefix-scoped IAM, artifact cleanup, and report operations tooling before broader report product expansion.
 - Phase 19 uses `s3.Bucket(enforce_ssl=True)` for `StoaReportsBucket`; live AWS bucket policy denies `aws:SecureTransport=false`.
 - Phase 20 scopes API and weekly report Lambda report artifact S3 actions to `weekly-reports/*`; no reports bucket-level permissions are retained.
+- Phase 21 deletes deterministic smoke artifacts after readback and best-effort deletes partial JSON artifacts when HTML write fails.
 
 ### Pending Todos
 
-- Create the Phase 21 plan for smoke and orphan artifact cleanup.
-- Use existing scoped `s3:DeleteObject` under `weekly-reports/*` for cleanup behavior.
+- Create the Phase 22 plan for report operations visibility and recovery.
+- Keep report operations backend-mediated and avoid public S3 URLs or unauthorized raw artifact exposure.
 - Keep Lambda asset-hash drift separate from reports bucket policy/IAM drift during CDK review.
 
 ### Blockers/Concerns

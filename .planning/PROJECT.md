@@ -65,10 +65,10 @@ Shipped requirements:
 - Weekly report automation infrastructure, generation, storage, email delivery, API display, frontend rendering, and verification shipped - v1.1.
 - Reports bucket HTTPS-only transport enforcement was deployed and live-verified without bucket replacement - v1.3 Phase 19.
 - API and weekly report Lambda report artifact S3 actions are scoped to `weekly-reports/*`, with image bucket permissions preserved - v1.3 Phase 20.
+- Deterministic smoke artifacts and failed partial JSON artifacts have explicit cleanup paths, with live smoke proving cleanup performed - v1.3 Phase 21.
 
 ### Active
 
-- [ ] Add safe cleanup behavior for smoke artifacts and failed partial report artifact writes.
 - [ ] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.
 
 ### Out of Scope

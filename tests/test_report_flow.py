@@ -68,12 +68,17 @@ class RecordingS3Client:
         self.events = events
         self.fail_on_call = fail_on_call
         self.puts = []
+        self.deletes = []
 
     def put_object(self, **kwargs):
         self.puts.append(kwargs)
         self.events.append(("s3", kwargs["Key"]))
         if self.fail_on_call == len(self.puts):
             raise RuntimeError("s3 unavailable")
+
+    def delete_object(self, **kwargs):
+        self.deletes.append(kwargs)
+        self.events.append(("s3_delete", kwargs["Key"]))
 
 
 class RecordingSESClient:
@@ -278,10 +283,16 @@ def test_store_and_send_weekly_report_does_not_write_metadata_or_email_when_s3_f
             ses_client=ses,
         )
 
-    assert [event[0] for event in events] == ["s3", "s3"]
+    assert [event[0] for event in events] == ["s3", "s3", "s3_delete"]
     assert len(s3.puts) == 2
     assert s3.puts[0]["Key"] == "weekly-reports/parent-1/student-1/2026-06-01/report.json"
     assert s3.puts[1]["Key"] == "weekly-reports/parent-1/student-1/2026-06-01/report.html"
+    assert s3.deletes == [
+        {
+            "Bucket": "reports-bucket",
+            "Key": "weekly-reports/parent-1/student-1/2026-06-01/report.json",
+        }
+    ]
     assert ses.emails == []
 
 

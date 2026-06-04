@@ -24,7 +24,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
 
 - [x] **Phase 19: Reports Bucket Transport Security** - Operators can prove the deployed reports bucket enforces HTTPS-only access without bucket replacement. (completed 2026-06-04)
 - [x] **Phase 20: Prefix-Scoped Report Artifact IAM** - Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking report generation, smoke, or image storage. (completed 2026-06-04)
-- [ ] **Phase 21: Smoke and Orphan Artifact Cleanup** - Smoke and failed partial report artifacts have a safe cleanup path that preserves real report artifacts.
+- [x] **Phase 21: Smoke and Orphan Artifact Cleanup** - Smoke and failed partial report artifacts have a safe cleanup path that preserves real report artifacts. (completed 2026-06-04)
 - [ ] **Phase 22: Report Operations Visibility and Recovery** - Maintainers can inspect report artifact/delivery state and retry or resend failed delivery safely.
 
 ## Phase Details
@@ -69,7 +69,7 @@ This milestone adds HTTPS-only reports bucket access, narrows report artifact IA
   3. Tests verify cleanup behavior does not delete real parent report artifacts.
   4. Live smoke output records cleanup status clearly.
 
-**Plans**: 0/1 planned
+**Plans**: 1/1 plans complete
 
 ### Phase 22: Report Operations Visibility and Recovery
 
@@ -94,7 +94,7 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 |-------|-----------|----------------|--------|-----------|
 | 19. Reports Bucket Transport Security | v1.3 | 1/1 | Complete | 2026-06-04 |
 | 20. Prefix-Scoped Report Artifact IAM | v1.3 | 1/1 | Complete | 2026-06-04 |
-| 21. Smoke and Orphan Artifact Cleanup | v1.3 | 0/1 | Planned | - |
+| 21. Smoke and Orphan Artifact Cleanup | v1.3 | 1/1 | Complete | 2026-06-04 |
 | 22. Report Operations Visibility and Recovery | v1.3 | 0/1 | Planned | - |
 
 ## Traceability
@@ -108,9 +108,9 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 | IAM-02 | Phase 20 | Complete |
 | IAM-03 | Phase 20 | Complete |
 | IAM-04 | Phase 20 | Complete |
-| CLEAN-01 | Phase 21 | Planned |
-| CLEAN-02 | Phase 21 | Planned |
-| CLEAN-03 | Phase 21 | Planned |
+| CLEAN-01 | Phase 21 | Complete |
+| CLEAN-02 | Phase 21 | Complete |
+| CLEAN-03 | Phase 21 | Complete |
 | OPS-01 | Phase 22 | Planned |
 | OPS-02 | Phase 22 | Planned |
 | OPS-03 | Phase 22 | Planned |
@@ -119,9 +119,9 @@ Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 **Coverage:**
 
 - v1.3 requirements: 14 total
-- Complete: 7
+- Complete: 10
 - Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 20 completion*
+*Last updated: 2026-06-04 after Phase 21 completion*
