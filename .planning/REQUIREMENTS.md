@@ -74,40 +74,38 @@ Deferred to a future milestone.
 
 ## Traceability
 
-Traceability will be populated when `.planning/ROADMAP.md` is created.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | TBD | Pending |
-| OPS-02 | TBD | Pending |
-| OPS-03 | TBD | Pending |
-| OPS-04 | TBD | Pending |
-| OPS-05 | TBD | Pending |
-| GEN-01 | TBD | Pending |
-| GEN-02 | TBD | Pending |
-| GEN-03 | TBD | Pending |
-| GEN-04 | TBD | Pending |
-| DEL-01 | TBD | Pending |
-| DEL-02 | TBD | Pending |
-| DEL-03 | TBD | Pending |
-| DEL-04 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| UI-05 | TBD | Pending |
-| SEC-01 | TBD | Pending |
-| SEC-02 | TBD | Pending |
-| VER-01 | TBD | Pending |
-| VER-02 | TBD | Pending |
-| VER-03 | TBD | Pending |
+| OPS-01 | Phase 23 | Pending |
+| OPS-02 | Phase 23 | Pending |
+| OPS-03 | Phase 23 | Pending |
+| OPS-04 | Phase 23 | Pending |
+| OPS-05 | Phase 23 | Pending |
+| GEN-01 | Phase 24 | Pending |
+| GEN-02 | Phase 24 | Pending |
+| GEN-03 | Phase 24 | Pending |
+| GEN-04 | Phase 24 | Pending |
+| DEL-01 | Phase 25 | Pending |
+| DEL-02 | Phase 25 | Pending |
+| DEL-03 | Phase 25 | Pending |
+| DEL-04 | Phase 25 | Pending |
+| UI-01 | Phase 26 | Pending |
+| UI-02 | Phase 26 | Pending |
+| UI-03 | Phase 26 | Pending |
+| UI-04 | Phase 26 | Pending |
+| UI-05 | Phase 26 | Pending |
+| SEC-01 | Phase 27 | Pending |
+| SEC-02 | Phase 27 | Pending |
+| VER-01 | Phase 27 | Pending |
+| VER-02 | Phase 27 | Pending |
+| VER-03 | Phase 27 | Pending |
 
 **Coverage:**
 
 - v1.4 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after v1.4 requirements draft*
+*Last updated: 2026-06-04 after v1.4 roadmap creation*

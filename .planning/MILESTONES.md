@@ -90,7 +90,7 @@ Known deferred items at close: richer admin UI dashboard, bulk incident retry, P
 **Goal:** Turn API-only report operations into an admin-usable recovery workflow for report generation and delivery failures.
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
-**Phases:** To be defined
+**Phases:** 5 planned
 
 Planned focus:
 
