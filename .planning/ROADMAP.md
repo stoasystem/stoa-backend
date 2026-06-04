@@ -4,113 +4,123 @@
 
 - [x] **v1.0 Parent Portal Real Data Integration** - Shipped 2026-06-02. Archive: `.planning/milestones/v1.0-ROADMAP.md`.
 - [x] **v1.1 Weekly Report Automation** - Shipped 2026-06-02. Archive: `.planning/milestones/v1.1-ROADMAP.md`.
+- [x] **v1.2 S3 Report Artifact Infrastructure** - Shipped 2026-06-04 after live AWS verification.
 
 ## Current Milestone
 
-### v1.2 S3 Report Artifact Infrastructure
+### v1.3 Report Artifact Security & Operations Hardening
 
-**Milestone Goal:** Make report artifact storage deployable and verifiable before extending weekly report operations further.
+**Milestone Goal:** Harden private weekly report artifact storage and add operational controls so report artifacts are safer, cleaner, and easier to support after v1.2 live verification.
 
-This milestone verifies the existing CDK reports bucket wiring, locks the private artifact key contract, hardens backend artifact storage behavior, proves deployed Lambda private-object access, and records closure evidence for the next weekly report operations slice.
+This milestone adds HTTPS-only reports bucket access, narrows report artifact IAM toward the canonical `weekly-reports/*` prefix, adds cleanup for smoke/orphan artifacts, and creates report operations visibility and recovery tooling.
 
 ## Phases
 
 **Phase Numbering:**
 
 - Integer phases continue from previous milestones.
-- v1.1 ended at Phase 13, so v1.2 starts at Phase 14.
+- v1.2 ended at Phase 18, so v1.3 starts at Phase 19.
 - Decimal phases are reserved for urgent insertions.
 
-- [x] **Phase 14: CDK & Runtime Configuration Verification** - Operators can prove reports bucket privacy, Lambda env vars, IAM grants, and production bucket config are deployment-ready. (completed 2026-06-03)
-- [x] **Phase 15: Artifact Key Contract & Helper Hardening** - Backend artifact keys and helper behavior use one canonical private S3 contract. (completed 2026-06-02)
-- [x] **Phase 16: Storage Failure Ordering & Privacy Boundary** - Report metadata, email delivery, and parent access remain correct when artifact storage succeeds or fails. (completed 2026-06-02)
-- [x] **Phase 17: Deployed Private-Object Smoke** - Maintainers can prove a deployed weekly report Lambda can write and read a private report artifact object. (completed 2026-06-02)
-- [x] **Phase 18: Evidence Ledger & Milestone Closure** - Milestone closure records test, CDK, deployed-state, smoke, and follow-up evidence. (completed 2026-06-02)
+- [ ] **Phase 19: Reports Bucket Transport Security** - Operators can prove the deployed reports bucket enforces HTTPS-only access without bucket replacement.
+- [ ] **Phase 20: Prefix-Scoped Report Artifact IAM** - Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking report generation, smoke, or image storage.
+- [ ] **Phase 21: Smoke and Orphan Artifact Cleanup** - Smoke and failed partial report artifacts have a safe cleanup path that preserves real report artifacts.
+- [ ] **Phase 22: Report Operations Visibility and Recovery** - Maintainers can inspect report artifact/delivery state and retry or resend failed delivery safely.
 
 ## Phase Details
 
-### Phase 14: CDK & Runtime Configuration Verification
+### Phase 19: Reports Bucket Transport Security
 
-**Goal**: Operators can verify the existing CDK and runtime configuration are ready for private report artifact storage.
-**Depends on**: Phase 13
-**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05
+**Goal**: CDK enforces HTTPS-only access for the reports bucket without replacing the deployed bucket or weakening existing privacy.
+**Depends on**: Phase 18
+**Requirements**: SEC-01, SEC-02, SEC-03
 **Success Criteria** (what must be TRUE):
 
-  1. Operator can inspect CDK synth/diff evidence showing `StoaReportsBucket` remains private, retained, encrypted, access-logged, and unreplaced.
-  2. Operator can verify both the API Lambda and weekly report Lambda receive `S3_REPORTS_BUCKET` from CDK.
-  3. Operator can verify both Lambdas have read/write IAM access to the reports bucket.
-  4. Production report artifact code surfaces missing CDK-injected bucket configuration instead of silently using the local `stoa-reports` placeholder.
+  1. CDK change adds `enforce_ssl=True` or an equivalent deny-insecure-transport policy to the reports bucket.
+  2. `cdk diff` evidence shows the reports bucket is not replaced.
+  3. Live bucket checks confirm public access block and default encryption remain enabled.
+  4. Verification records any expected policy-only change separately from Lambda code asset drift.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 planned
 
-### Phase 15: Artifact Key Contract & Helper Hardening
+### Phase 20: Prefix-Scoped Report Artifact IAM
 
-**Goal**: Backend report artifact helpers enforce one canonical private S3 key contract for JSON and HTML artifacts.
-**Depends on**: Phase 14
-**Requirements**: ARTIFACT-01, ARTIFACT-02, ARTIFACT-03, ARTIFACT-04, ARTIFACT-05, STORAGE-01, STORAGE-02, STORAGE-03, STORAGE-04, STORAGE-08
+**Goal**: Lambda report artifact permissions are narrowed toward `weekly-reports/*` without breaking API image uploads or weekly report artifact reads/writes.
+**Depends on**: Phase 19
+**Requirements**: IAM-01, IAM-02, IAM-03, IAM-04
 **Success Criteria** (what must be TRUE):
 
-  1. Maintainer can confirm JSON and HTML artifact keys are built exactly as `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}`.
-  2. Backend tests fail if artifact keys lose the `weekly-reports/` prefix, use non-canonical IDs, or use a non-ISO `week_start`.
-  3. Maintainer can verify artifact keys exclude parent email, student email, display names, and arbitrary user-facing text.
-  4. JSON and HTML artifacts are written to `settings.s3_reports_bucket` with the required content types and no S3 ACL parameters.
-  5. Backend code can read a JSON report artifact by S3 key for smoke verification or future backend-mediated reads.
+  1. CDK policies scope reports S3 object actions to the canonical `weekly-reports/*` prefix where feasible.
+  2. Bucket-level permissions are preserved only where S3 requires them and are documented with rationale.
+  3. API Lambda image bucket permissions and behavior remain unaffected.
+  4. Backend tests and live smoke prove report artifact read/write behavior still works.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 planned
 
-### Phase 16: Storage Failure Ordering & Privacy Boundary
+### Phase 21: Smoke and Orphan Artifact Cleanup
 
-**Goal**: Report storage failure behavior and parent report access boundaries remain safe and observable.
-**Depends on**: Phase 15
-**Requirements**: STORAGE-05, STORAGE-06, STORAGE-07, PRIVACY-01, PRIVACY-02, PRIVACY-03
+**Goal**: Smoke and partial report artifacts have a safe cleanup path that avoids long-lived test/orphan objects while preserving real report artifacts.
+**Depends on**: Phase 20
+**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03
 **Success Criteria** (what must be TRUE):
 
-  1. DynamoDB report metadata is created only after both JSON and HTML S3 artifact writes succeed.
-  2. SES email delivery is attempted only after artifact writes and DynamoDB metadata storage succeed.
-  3. Backend tests prove a failure after the first artifact write creates no report metadata and sends no email.
-  4. Parent report access remains backend-mediated and ownership-checked, with no public S3 route, public object ACL, or client direct S3 fetch introduced.
+  1. Smoke artifact cleanup is implemented through lifecycle policy or explicit smoke cleanup behavior.
+  2. A failure after the first artifact write has a cleanup path or bounded lifecycle retention.
+  3. Tests verify cleanup behavior does not delete real parent report artifacts.
+  4. Live smoke output records cleanup status clearly.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 planned
 
-### Phase 17: Deployed Private-Object Smoke
+### Phase 22: Report Operations Visibility and Recovery
 
-**Goal**: Maintainers can prove deployed Lambda read/write access to a private report artifact object without exposing S3 publicly.
-**Depends on**: Phase 16
-**Requirements**: SMOKE-01, SMOKE-02, SMOKE-03, SMOKE-04, SMOKE-05
+**Goal**: Maintainers can inspect report artifact/delivery state and retry or resend failed delivery without unsafe S3 exposure or unrelated regeneration.
+**Depends on**: Phase 21
+**Requirements**: OPS-01, OPS-02, OPS-03, OPS-04
 **Success Criteria** (what must be TRUE):
 
-  1. Maintainer can invoke a narrow weekly report Lambda smoke event without exposing a public API route.
-  2. Smoke execution writes a deterministic private JSON object under the canonical `weekly-reports/` prefix.
-  3. Smoke execution immediately reads the same private object back and verifies its content.
-  4. Smoke output records bucket, key, content type, and readback success without exposing report content.
-  5. Smoke verification does not depend on public S3 URLs, bucket listing, S3 access-log delivery, or client S3 access.
+  1. An operational API, CLI, or service path exposes report artifact metadata and delivery status for a parent, student, and week.
+  2. Retry/resend behavior targets a specific failed report and avoids regenerating unrelated successful reports.
+  3. Authorization and audit behavior prevent unauthorized access to raw private report content or public S3 URLs.
+  4. Tests cover operations visibility, retry/resend targeting, and support-triage audit evidence.
 
-**Plans**: 1/1 plans complete
-
-### Phase 18: Evidence Ledger & Milestone Closure
-
-**Goal**: Milestone closure contains durable evidence of what was verified and what remains follow-up work.
-**Depends on**: Phase 17
-**Requirements**: EVIDENCE-01, EVIDENCE-02, EVIDENCE-03, EVIDENCE-04, EVIDENCE-05
-**Success Criteria** (what must be TRUE):
-
-  1. Milestone closure records backend test commands and results for artifact storage behavior.
-  2. Milestone closure records CDK synth/diff evidence for the reports bucket, Lambda env vars, IAM grants, and no bucket replacement.
-  3. Milestone closure records deployed Lambda env/IAM verification or explicitly marks deployed-state confidence as incomplete.
-  4. Milestone closure records the private-object smoke result and any smoke object cleanup decision.
-  5. Milestone closure records follow-ups for `enforce_ssl=True`, prefix-scoped IAM, lifecycle cleanup, and broader operational tooling if not implemented in v1.2.
-
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 planned
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 14 -> 15 -> 16 -> 17 -> 18
+Phases execute in numeric order: 19 -> 20 -> 21 -> 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 14. CDK & Runtime Configuration Verification | v1.2 | 1/1 | Complete    | 2026-06-03 |
-| 15. Artifact Key Contract & Helper Hardening | v1.2 | 1/1 | Complete    | 2026-06-03 |
-| 16. Storage Failure Ordering & Privacy Boundary | v1.2 | 1/1 | Complete    | 2026-06-03 |
-| 17. Deployed Private-Object Smoke | v1.2 | 1/1 | Complete    | 2026-06-03 |
-| 18. Evidence Ledger & Milestone Closure | v1.2 | 1/1 | Complete    | 2026-06-03 |
+| 19. Reports Bucket Transport Security | v1.3 | 0/1 | Planned | - |
+| 20. Prefix-Scoped Report Artifact IAM | v1.3 | 0/1 | Planned | - |
+| 21. Smoke and Orphan Artifact Cleanup | v1.3 | 0/1 | Planned | - |
+| 22. Report Operations Visibility and Recovery | v1.3 | 0/1 | Planned | - |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SEC-01 | Phase 19 | Planned |
+| SEC-02 | Phase 19 | Planned |
+| SEC-03 | Phase 19 | Planned |
+| IAM-01 | Phase 20 | Planned |
+| IAM-02 | Phase 20 | Planned |
+| IAM-03 | Phase 20 | Planned |
+| IAM-04 | Phase 20 | Planned |
+| CLEAN-01 | Phase 21 | Planned |
+| CLEAN-02 | Phase 21 | Planned |
+| CLEAN-03 | Phase 21 | Planned |
+| OPS-01 | Phase 22 | Planned |
+| OPS-02 | Phase 22 | Planned |
+| OPS-03 | Phase 22 | Planned |
+| OPS-04 | Phase 22 | Planned |
+
+**Coverage:**
+
+- v1.3 requirements: 14 total
+- Mapped to phases: 14
+- Unmapped: 0
+
+---
+*Roadmap created: 2026-06-04*
