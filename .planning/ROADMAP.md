@@ -26,8 +26,8 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 
 - [x] **Phase 28: Release Readiness and Deployment Contract** - Define release evidence, rollback points, deployment commands, and environment contract before production mutation smoke.
 - [x] **Phase 29: Frontend Production Deployment Verification** - Deploy and verify the admin report operations UI on `app.stoaedu.ch`.
-- [ ] **Phase 30: Backend Production Deployment and API Live Verification** - Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
-- [ ] **Phase 31: Safe Recovery Smoke Fixture and Mutation Verification** - Run safe non-customer retry/resend/bulk resend smoke and record outputs.
+- [x] **Phase 30: Backend Production Deployment and API Live Verification** - Deploy and verify backend report operations API behavior with authenticated and unauthenticated live checks.
+- [x] **Phase 31: Safe Recovery Smoke Fixture and Mutation Verification** - Run safe non-customer retry/resend/bulk resend smoke and record outputs.
 - [ ] **Phase 32: Operations Runbook, Observability, and Milestone Closeout** - Write operator runbook, observability links/queries, rollback checklist, and final audit.
 
 ## Phase Details
@@ -75,7 +75,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. Live admin-authenticated list and detail checks return metadata-only report operation responses or explicit empty states.
 5. Live API responses do not expose raw HTML/JSON, private artifact keys, public URLs, presigned URLs, or direct S3 URL markers.
 
-**Plans**: 1/1 plans executed with gaps
+**Plans**: 1/1 plans complete after remediation
 
 ### Phase 31: Safe Recovery Smoke Fixture and Mutation Verification
 
@@ -90,7 +90,7 @@ This milestone turns the locally verified v1.4 workflow into an operationally re
 4. Single resend and selected bulk resend smoke record status transitions, audit fields, per-item results, and privacy checks.
 5. Smoke fixture is cleaned up or restored to a documented terminal state.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 ### Phase 32: Operations Runbook, Observability, and Milestone Closeout
 
@@ -116,8 +116,8 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 |-------|-----------|----------------|--------|-----------|
 | 28. Release Readiness and Deployment Contract | v1.5 | 1/1 | Complete | 2026-06-04 |
 | 29. Frontend Production Deployment Verification | v1.5 | 1/1 | Complete | 2026-06-04 |
-| 30. Backend Production Deployment and API Live Verification | v1.5 | 1/1 | Gaps Found | - |
-| 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 0/1 | Pending | - |
+| 30. Backend Production Deployment and API Live Verification | v1.5 | 1/1 | Complete | 2026-06-04 |
+| 31. Safe Recovery Smoke Fixture and Mutation Verification | v1.5 | 1/1 | Complete | 2026-06-04 |
 | 32. Operations Runbook, Observability, and Milestone Closeout | v1.5 | 0/1 | Pending | - |
 
 ## Traceability
@@ -128,15 +128,15 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 | REL-02 | Phase 28 | Complete |
 | REL-03 | Phase 28/30 | Complete |
 | REL-04 | Phase 28 | Complete |
-| LIVE-01 | Phase 30 | Partial - admin auth passed, pagination gap remains |
-| LIVE-02 | Phase 30 | Blocked - no safe detail target row |
+| LIVE-01 | Phase 30 | Complete |
+| LIVE-02 | Phase 30 | Complete |
 | LIVE-03 | Phase 29 | Complete |
-| LIVE-04 | Phase 30 | Partial - unauth/invalid token passed, valid non-admin token unavailable |
-| SMOKE-01 | Phase 31 | Pending |
-| SMOKE-02 | Phase 31 | Pending |
-| SMOKE-03 | Phase 31 | Pending |
-| SMOKE-04 | Phase 31 | Pending |
-| SMOKE-05 | Phase 31 | Pending |
+| LIVE-04 | Phase 30 | Complete |
+| SMOKE-01 | Phase 31 | Complete |
+| SMOKE-02 | Phase 31 | Complete |
+| SMOKE-03 | Phase 31 | Complete |
+| SMOKE-04 | Phase 31 | Complete |
+| SMOKE-05 | Phase 31 | Complete |
 | OPSRUN-01 | Phase 32 | Pending |
 | OPSRUN-02 | Phase 32 | Pending |
 | OPSRUN-03 | Phase 32 | Pending |
@@ -152,4 +152,4 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 - Unmapped: 0
 
 ---
-*Last updated: 2026-06-04 after Phase 30 live verification gaps*
+*Last updated: 2026-06-04 after Phase 31 live smoke*

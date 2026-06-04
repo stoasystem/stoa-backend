@@ -2,7 +2,7 @@
 plan_id: 30-01
 phase: 30
 phase_name: Backend Production Deployment and API Live Verification
-status: gaps_found
+status: passed_after_remediation
 completed: 2026-06-04
 requirements:
   - REL-01
@@ -29,7 +29,7 @@ Verified the parts of backend production deployment that can be safely automated
 - Unauthenticated and invalid-token report operations requests returned HTTP 401.
 - CDK diff showed only expected Lambda `Code.S3Key` asset hash drift in `StoaApiStack`; no unexpected IAM, bucket, API route, DynamoDB, or policy drift was reported.
 
-## Blocked
+## Remediated
 
 Production admin authentication was established with a temporary verification account, then cleaned up.
 
@@ -37,10 +37,12 @@ The documented demo admin account `admin@test.com / password123` is not present 
 
 After creating temporary admin account `codex-admin-verify-20260604@stoaedu.ch`, `GET /admin/reports/ops?limit=5` returned HTTP 200. The response was metadata-only, but it returned `count=0`, `items=[]`, and `next_token=true`; using that token returned HTTP 400 `Invalid pagination token`.
 
-No safe report row was available for detail verification.
+The pagination gap was fixed in backend commit `278a15e fix: allow admin report scan pagination tokens`. Production retest returned HTTP 200 for both the first bounded-scan page and the second page with the returned scoped `admin_reports` token.
 
-The temporary admin Cognito user and DynamoDB profile were deleted after verification. Post-cleanup checks confirmed Cognito `UserNotFoundException` and no DynamoDB item.
+A safe non-customer `codex-phase31-*` fixture completed admin detail verification, and a temporary valid parent token completed non-admin rejection verification with HTTP 403.
+
+The temporary admin/parent Cognito users, DynamoDB fixture records, and S3 artifacts were deleted after verification. Post-cleanup checks confirmed Cognito `UserNotFoundException`, no DynamoDB item, and S3 404.
 
 ## Next
 
-Do not run Phase 31 mutation smoke yet. First fix or work around the admin report ops pagination gap, provide a safe detail target row, and complete valid non-admin rejection verification.
+Proceed to Phase 31 mutation smoke using safe non-customer fixtures only.

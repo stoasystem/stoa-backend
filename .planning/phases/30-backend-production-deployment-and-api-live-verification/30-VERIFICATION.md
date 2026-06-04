@@ -1,7 +1,7 @@
 ---
 phase: 30
 phase_name: Backend Production Deployment and API Live Verification
-status: gaps_found
+status: passed_after_remediation
 verified: 2026-06-04
 requirements:
   - REL-01
@@ -16,9 +16,11 @@ requirements:
 
 ## Verdict
 
-`gaps_found`
+`passed_after_remediation`
 
-Backend deployment state, API health, unauthenticated rejection, focused tests, focused ruff, CDK diff classification, and production admin authentication were verified. Admin-authenticated report operations list returned HTTP 200, but Phase 30 still has gaps: the first page returned no rows with a `next_token`, the follow-up page returned `Invalid pagination token`, no safe detail target was available, and a valid non-admin token was not available.
+Backend deployment state, API health, unauthenticated rejection, focused tests, focused ruff, CDK diff classification, production admin authentication, valid non-admin rejection, list pagination, and safe detail verification are now verified.
+
+Initial Phase 30 execution found three live gaps: bounded-scan pagination returned an invalid second-page token, no safe detail target was available, and no valid production non-admin token was available. Follow-up remediation fixed the admin scan token contract, deployed the current backend package, created non-customer verification fixtures, and confirmed the temporary data was cleaned up.
 
 ## Requirements Coverage
 
@@ -26,16 +28,16 @@ Backend deployment state, API health, unauthenticated rejection, focused tests, 
 |-------------|--------|----------|
 | REL-01 | complete | `stoa-api` and `stoa-weekly-report` are deployed, `Active`, `LastUpdateStatus=Successful`, and share the current code SHA. CDK diff shows only Lambda `Code.S3Key` asset drift for those two functions. |
 | REL-03 | complete | Evidence records backend SHA, infra SHA, AWS identity, Lambda timestamps/code SHA/status/env, API health, auth gate results, and CDK diff classification. |
-| LIVE-01 | partial | A temporary production admin verification account successfully called `GET /admin/reports/ops?limit=5` and received HTTP 200. The response was metadata-only but returned `count=0`, `items=[]`, and `next_token=true`; following the token returned HTTP 400 `Invalid pagination token`. |
-| LIVE-02 | blocked | Admin-authenticated detail endpoint was not run because the list endpoint returned no safe report row and the next page token was invalid. |
-| LIVE-04 | partial | Unauthenticated and invalid-token access to `GET /admin/reports/ops` return HTTP 401. A true non-admin valid token was not available without creating a production user, so valid non-admin rejection remains blocked. |
+| LIVE-01 | complete | `GET /admin/reports/ops?limit=5` returned HTTP 200 and a scoped `admin_reports` next token; the second page with that token returned HTTP 200 instead of the previous HTTP 400. A parent-filtered safe fixture list returned HTTP 200, `count=3`, `next_token=null`, and `access_pattern=parent_gsi`. |
+| LIVE-02 | complete | Safe non-customer detail check for `codex-phase31-parent` / `codex-phase31-student` / `2026-06-01` returned HTTP 200 with artifact availability, generation, delivery, operations, and action eligibility metadata, without private artifact keys or direct S3 URL markers. |
+| LIVE-04 | complete | Unauthenticated and invalid-token access returned HTTP 401. A valid temporary parent token returned HTTP 403 `Role 'parent' is not permitted` for `GET /admin/reports/ops`. |
 | VERIFY-02 | complete | CDK diff was run and classified; only `StoaApiStack` Lambda `Code.S3Key` asset hash changes were present, with no unexpected IAM, bucket, API route, DynamoDB, or policy drift reported. |
 
 ## Source State
 
 | Repository | SHA |
 |------------|-----|
-| Backend `/Users/zhdeng/stoa-backend` | `3a3b8da` before Phase 30 docs commit |
+| Backend `/Users/zhdeng/stoa-backend` | `278a15e` after pagination remediation |
 | Frontend `/Users/zhdeng/stoa-frontend` | `1f4b88bfc93dea50c928502333f7e2b8084a12b4` |
 | Infra `/Users/zhdeng/stoa-infra` | `2b9aba9bb0ea62d2a39082da0eb5d9ead163317a` |
 
@@ -50,14 +52,14 @@ Backend deployment state, API health, unauthenticated rejection, focused tests, 
 
 | Function | Runtime | CodeSize | LastModified | CodeSha256 | State | LastUpdateStatus | Reports bucket |
 |----------|---------|----------|--------------|------------|-------|------------------|----------------|
-| `stoa-api` | `python3.12` | `30300686` | `2026-06-04T16:11:52.000+0000` | `yiG2bIzRSnuk+tHzcxYmW8fyghWiiaaqBlsC3ssH+Ps=` | `Active` | `Successful` | `S3_REPORTS_BUCKET=stoa-reports-562923011260` |
-| `stoa-weekly-report` | `python3.12` | `30300686` | `2026-06-04T16:11:59.000+0000` | `yiG2bIzRSnuk+tHzcxYmW8fyghWiiaaqBlsC3ssH+Ps=` | `Active` | `Successful` | `S3_REPORTS_BUCKET=stoa-reports-562923011260` |
+| `stoa-api` | `python3.12` | `30773819` | `2026-06-04T18:38:36.000+0000` | `flYCCVOM4LuBnCeOQ8+PNhgr/elOpd5jF9QaEzMQZpU=` | `Active` | `Successful` | `S3_REPORTS_BUCKET=stoa-reports-562923011260` |
+| `stoa-weekly-report` | `python3.12` | `30773819` | `2026-06-04T18:38:36.000+0000` | `flYCCVOM4LuBnCeOQ8+PNhgr/elOpd5jF9QaEzMQZpU=` | `Active` | `Successful` | `S3_REPORTS_BUCKET=stoa-reports-562923011260` |
 
 ## Automated Checks
 
 | Check | Result |
 |-------|--------|
-| `uv run pytest tests/test_admin_report_ops.py tests/test_parent_children.py` | Passed: 89 tests passed. |
+| `uv run pytest tests/test_admin_report_ops.py tests/test_parent_children.py` | Passed after pagination remediation: 92 tests passed. |
 | `uv run ruff check src/stoa/routers/admin.py tests/test_admin_report_ops.py tests/test_parent_children.py` | Passed: all checks passed. |
 | `uv run ruff check` | Failed on existing broad repo lint issues outside Phase 30 focused report operations scope; not treated as Phase 30 regression. |
 | `curl https://api.stoaedu.ch/health` | HTTP 200 body `{"status":"ok","version":"0.1.0"}`. |
@@ -67,6 +69,24 @@ Backend deployment state, API health, unauthenticated rejection, focused tests, 
 | Temporary admin verification account registration | HTTP 201 for `codex-admin-verify-20260604@stoaedu.ch`; returned user id `1351b045-3d3c-40ae-af31-4f18cb4c8410` and an access token. |
 | Admin-authenticated `GET /admin/reports/ops?limit=5` with temporary admin token | HTTP 200; response `count=0`, `items=[]`, `next_token=true`, `access_pattern=bounded_scan`; no private artifact markers were found. |
 | Admin-authenticated second page with returned `next_token` | HTTP 400 body `{"detail":"Invalid pagination token"}`. |
+| Remediated admin-authenticated first page | HTTP 200; response `items=[]`, `count=0`, scoped `admin_reports` next token, `access_pattern=bounded_scan`. |
+| Remediated admin-authenticated second page | HTTP 200 with scoped `admin_reports` next token; previous invalid-token error no longer reproduced. |
+| Valid non-admin parent token `GET /admin/reports/ops` | HTTP 403 body `{"detail":"Role 'parent' is not permitted"}`. |
+| Safe non-customer detail `GET /admin/reports/codex-phase31-parent/codex-phase31-student/2026-06-01/ops` | HTTP 200 metadata-only response with actions and no private artifact key fields. |
+
+## Remediation Evidence
+
+- Backend commit `278a15e fix: allow admin report scan pagination tokens` separates admin scan tokens from strict report summary page tokens.
+- Local verification after the fix passed: `uv run pytest tests/test_admin_report_ops.py tests/test_parent_children.py` -> 92 passed.
+- Focused ruff passed for `src/stoa/db/repositories/report_repo.py`, `src/stoa/routers/admin.py`, `tests/test_admin_report_ops.py`, and `tests/test_parent_children.py`.
+- Production first-page admin list returned HTTP 200 and a scoped admin token.
+- Production second-page admin list with that token returned HTTP 200, resolving the previous HTTP 400.
+- A temporary valid parent token returned HTTP 403 for report ops, completing valid non-admin rejection.
+- A safe non-customer report fixture enabled detail verification without touching customer reports.
+
+## Deployment Remediation Notes
+
+Phase 31 smoke initially uncovered that `stoa-api` lacked `ses:SendEmail`/`ses:SendRawEmail` and that a CDK deploy from stale local `dist` can overwrite the deployed Lambda code with an older package. The infra fix grants `stoa-api` SES send permissions scoped to `arn:aws:ses:eu-central-2:562923011260:identity/stoaedu.ch`; the backend package was rebuilt from current source and both Lambdas were updated through CDK to code SHA `flYCCVOM4LuBnCeOQ8+PNhgr/elOpd5jF9QaEzMQZpU=`. Final `cdk diff StoaApiStack` reported 0 stacks with differences.
 
 ## CDK Diff
 
@@ -100,19 +120,15 @@ Diff classification:
 
 No unexpected IAM, bucket, API route, DynamoDB, or policy drift was reported. The only drift is expected Lambda code asset hash drift.
 
-## Blocking Gaps
+## Resolved Gaps
 
-Phase 30 cannot fully pass until these are resolved:
+Phase 30 initially found these gaps; all are now resolved:
 
-- Fix or work around admin report ops bounded-scan pagination so an empty scan page does not return a `next_token` that `decode_page_token` rejects.
-- Provide a safe report target row for admin-authenticated detail verification, or create a non-customer report fixture with cleanup.
-- Provide a valid production non-admin token or approve a temporary non-admin verification account lifecycle for a valid non-admin rejection check.
+- Admin report ops bounded-scan pagination now uses scoped admin scan tokens and second-page requests return HTTP 200.
+- Safe detail verification used a non-customer `codex-phase31-*` fixture with cleanup.
+- Valid non-admin rejection used a temporary parent verification account with cleanup.
 
-Blocked or partial checks:
-
-- Admin-authenticated `GET /admin/reports/ops?limit=5`: partial; auth and 200 response passed, pagination/empty-page behavior has a bug.
-- Admin-authenticated detail `GET /admin/reports/{parent_id}/{student_id}/{week_start}/ops`: blocked; no safe target row available.
-- Valid non-admin token rejection check: blocked; no production non-admin token available.
+No Phase 30 blockers remain.
 
 ## Temporary Account Cleanup
 
@@ -128,6 +144,15 @@ Cleanup completed:
 - Post-cleanup `admin-get-user` returned `UserNotFoundException`.
 - Post-cleanup DynamoDB `get-item` returned no item.
 
-## Stop Condition
+## Cleanup Confirmation
 
-Phase 31 mutation smoke must not run until Phase 30 admin-auth read-only list/detail checks pass, the pagination gap is resolved or accepted with a safe workaround, and a safe smoke target is documented.
+Follow-up cleanup checks after Phase 31 confirmed:
+
+- Temporary admin Cognito user returned `UserNotFoundException`.
+- Temporary parent Cognito user returned `UserNotFoundException`.
+- Temporary DynamoDB report fixture lookup returned no item.
+- Temporary S3 artifact lookup returned 404 Not Found.
+
+## Phase 31 Gate
+
+Phase 31 mutation smoke is allowed after this remediation because admin-auth read-only list/detail checks pass, pagination is fixed, valid non-admin rejection is verified, and safe non-customer smoke fixture criteria are documented.

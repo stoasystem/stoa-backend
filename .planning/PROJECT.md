@@ -89,8 +89,8 @@ Active v1.5 requirements:
 - Release backend report operations code to `stoa-api` and `stoa-weekly-report` without unexpected infrastructure drift.
 - Release the frontend `/admin/report-operations` UI to `app.stoaedu.ch` using the production API configuration.
 - Record release evidence for backend SHAs, frontend bundle/cache state, API URL, Lambda status, and rollback entry points.
-- Verify production admin-auth list/detail report operations APIs and unauthenticated/non-admin rejection paths.
-- Run safe `generation_failed` retry, single `email_failed` resend, and selected bulk resend smoke against approved non-customer targets.
+- Verified production admin-auth list/detail report operations APIs and unauthenticated/non-admin rejection paths.
+- Ran safe `generation_failed` retry, single `email_failed` resend, and selected bulk resend smoke against approved non-customer targets.
 - Document cleanup/restore steps, CloudWatch/AWS Console observability, rollback, escalation, and known operational limits.
 
 ### Out of Scope

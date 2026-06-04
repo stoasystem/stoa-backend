@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Report Recovery Production Rollout & Live Smoke
-status: blocked
-last_updated: "2026-06-04T16:45:00Z"
+status: active
+last_updated: "2026-06-04T18:32:00Z"
 last_activity: 2026-06-04
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 30 - Backend Production Deployment and API Live Verification
+**Current focus:** Phase 32 - Operations Runbook, Observability, and Milestone Closeout
 
 ## Current Position
 
-Phase: 30 of 32 (Backend Production Deployment and API Live Verification)
-Plan: 30-01
-Status: Phase 30 executed with gaps; admin-auth list passed but pagination/detail/non-admin gaps remain
-Last activity: 2026-06-04 — Created and deleted temporary admin verification account, completed admin-auth list check, and recorded pagination/detail gaps
+Phase: 32 of 32 (Operations Runbook, Observability, and Milestone Closeout)
+Plan: 32-01 pending
+Status: Phase 31 live smoke complete; runbook and final audit remain
+Last activity: 2026-06-04 — Fixed admin report ops scan pagination, deployed scoped `stoa-api` SES permission, restored current Lambda package, completed safe non-customer retry/resend/bulk resend smoke, and confirmed fixture cleanup
 
 ## Performance Metrics
 
@@ -59,14 +59,14 @@ Last activity: 2026-06-04 — Created and deleted temporary admin verification a
 | 27 | 1 complete | - | - |
 | 28 | 1 complete | - | - |
 | 29 | 1 complete | - | - |
-| 30 | 1/1 gaps_found | - | - |
-| 31 | 0/1 planned | - | - |
+| 30 | 1 complete | - | - |
+| 31 | 1 complete | - | - |
 | 32 | 0/1 planned | - | - |
 
 **Recent Trend:**
 
 - Last 5 plans: complete
-- Trend: Phase 30 verified backend Lambda/API/CDK evidence and admin-auth list access, then found a production pagination gap and no safe detail target
+- Trend: Phase 30/31 production verification found and remediated pagination, API SES IAM, and stale local Lambda package deployment gaps
 
 ## Accumulated Context
 
@@ -91,15 +91,16 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - v1.5 prioritizes production rollout, safe live smoke, runbook, observability, and rollback evidence before incident-wide async recovery automation.
 - Phase 28 defines release readiness, evidence, rollback, CDK diff classification, and mutation safety gates before live smoke.
 - Phase 29 verifies the production frontend route and bundle contain the report operations UI/API markers, production API URL, and no private artifact exposure markers; admin browser click-through remains residual manual evidence.
-- Phase 30 verifies AWS identity, Lambda config, API health, unauth/invalid-token rejection, focused tests, focused ruff, CDK diff, temporary admin account lifecycle cleanup, and admin-auth list HTTP 200. Detail remains blocked because no safe target row is available; list pagination has an invalid-token gap after an empty first page.
+- Phase 30 verifies AWS identity, Lambda config, API health, unauth/invalid-token rejection, focused tests, focused ruff, CDK diff, temporary admin/parent account lifecycle cleanup, admin-auth list/detail HTTP 200, bounded-scan pagination second-page HTTP 200, and valid non-admin HTTP 403.
+- Phase 31 verifies safe non-customer generation retry, single resend, selected bulk resend, audit/status updates, metadata-only response shapes, scoped `stoa-api` SES permission, current Lambda package restoration, and cleanup of temporary Cognito/DynamoDB/S3 fixture data.
 
 ### Pending Todos
 
-- Fix or work around admin report ops bounded-scan pagination, provide a safe detail target row, and provide a valid production non-admin token or approve a temporary non-admin verification account lifecycle.
+- Write Phase 32 operations runbook, observability guidance, rollback checklist, final verification evidence, and milestone audit.
 
 ### Blockers/Concerns
 
-- Phase 30 admin-auth list access passed with a temporary admin verification account that was deleted after use. Remaining blockers: list pagination returns an invalid `next_token` after an empty first page, no safe detail target row is available, and no valid production non-admin token is available.
+- CDK deploys package `../stoa-backend/dist`; stale local `dist` can overwrite production Lambda code. Rebuild backend `dist` from current source before CDK deploys that touch Lambda assets, or use an IAM-only deployment path.
 - `stoa-backend/dist` is a gitignored Lambda build artifact; future CDK diff reviews should treat Lambda asset hash changes separately from infrastructure drift.
 
 ## Deferred Items
@@ -116,6 +117,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-04 18:45 +02:00
-Stopped at: Phase 30 blocked on pagination/detail/non-admin live verification gaps after temporary admin account cleanup.
+Last session: 2026-06-04 20:32 +02:00
+Stopped at: Phase 32 pending after Phase 31 live smoke completion and cleanup.
 Resume file: None

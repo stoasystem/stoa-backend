@@ -14,18 +14,18 @@
 
 ### Production API and UI Verification
 
-- [ ] **LIVE-01**: Live admin report operations list endpoint is verified with an admin-authenticated request and returns metadata-only report operation rows or an explicit empty state. Partial in Phase 30: temporary admin token returned HTTP 200, but empty first page returned `next_token=true` and the token produced HTTP 400.
-- [ ] **LIVE-02**: Live detail endpoint is verified for a safe report target and returns artifact availability, generation, delivery, operation metadata, and action eligibility without private artifact keys. Blocked in Phase 30 until admin-auth list returns or a fixture provides a safe target row.
+- [x] **LIVE-01**: Live admin report operations list endpoint is verified with an admin-authenticated request and returns metadata-only report operation rows or an explicit empty state. Completed in Phase 30 after bounded-scan pagination remediation.
+- [x] **LIVE-02**: Live detail endpoint is verified for a safe report target and returns artifact availability, generation, delivery, operation metadata, and action eligibility without private artifact keys. Completed in Phase 30 with a safe non-customer fixture.
 - [x] **LIVE-03**: Live frontend `/admin/report-operations` renders the deployed UI for an admin user and uses the production API base URL. Completed in Phase 29 with production route/bundle evidence and local admin e2e; production admin click-through remains residual manual evidence.
-- [ ] **LIVE-04**: Live unauthenticated and non-admin access checks reject report operations API/UI access. Partial in Phase 30: unauthenticated and invalid-token checks returned 401; valid non-admin token check is blocked without a production non-admin token.
+- [x] **LIVE-04**: Live unauthenticated and non-admin access checks reject report operations API/UI access. Completed in Phase 30: unauthenticated/invalid token returned 401 and a valid temporary parent token returned 403.
 
 ### Safe Recovery Smoke
 
-- [ ] **SMOKE-01**: A safe non-customer report recovery smoke target is prepared or identified with documented parent/student/week identifiers and cleanup expectations.
-- [ ] **SMOKE-02**: Safe `generation_failed` retry smoke runs on the approved target and records status transition, audit fields, artifact availability, and absence of private artifact leakage.
-- [ ] **SMOKE-03**: Safe `email_failed` single resend smoke runs on the approved target and records delivery status transition plus resend audit fields.
-- [ ] **SMOKE-04**: Safe selected bulk resend smoke runs on approved targets and records per-item `success`, `refused`, `not_found`, or `failed` results.
-- [ ] **SMOKE-05**: Smoke data is cleaned up or restored to a documented terminal state without affecting customer reports.
+- [x] **SMOKE-01**: A safe non-customer report recovery smoke target is prepared or identified with documented parent/student/week identifiers and cleanup expectations. Completed in Phase 31 with `codex-phase31-*` fixtures.
+- [x] **SMOKE-02**: Safe `generation_failed` retry smoke runs on the approved target and records status transition, audit fields, artifact availability, and absence of private artifact leakage. Completed in Phase 31.
+- [x] **SMOKE-03**: Safe `email_failed` single resend smoke runs on the approved target and records delivery status transition plus resend audit fields. Completed in Phase 31.
+- [x] **SMOKE-04**: Safe selected bulk resend smoke runs on approved targets and records per-item `success`, `refused`, `not_found`, or `failed` results. Completed in Phase 31.
+- [x] **SMOKE-05**: Smoke data is cleaned up or restored to a documented terminal state without affecting customer reports. Completed in Phase 31.
 
 ### Observability and Operations
 
@@ -75,15 +75,15 @@ Deferred to a future milestone.
 | REL-02 | Phase 28 | Complete |
 | REL-03 | Phase 28 | Complete |
 | REL-04 | Phase 28 | Complete |
-| LIVE-01 | Phase 30 | Partial - admin auth passed, pagination gap remains |
-| LIVE-02 | Phase 30 | Blocked - no safe detail target row |
+| LIVE-01 | Phase 30 | Complete |
+| LIVE-02 | Phase 30 | Complete |
 | LIVE-03 | Phase 29 | Complete |
-| LIVE-04 | Phase 30 | Partial - no valid production non-admin token |
-| SMOKE-01 | Phase 31 | Pending |
-| SMOKE-02 | Phase 31 | Pending |
-| SMOKE-03 | Phase 31 | Pending |
-| SMOKE-04 | Phase 31 | Pending |
-| SMOKE-05 | Phase 31 | Pending |
+| LIVE-04 | Phase 30 | Complete |
+| SMOKE-01 | Phase 31 | Complete |
+| SMOKE-02 | Phase 31 | Complete |
+| SMOKE-03 | Phase 31 | Complete |
+| SMOKE-04 | Phase 31 | Complete |
+| SMOKE-05 | Phase 31 | Complete |
 | OPSRUN-01 | Phase 32 | Pending |
 | OPSRUN-02 | Phase 32 | Pending |
 | OPSRUN-03 | Phase 32 | Pending |
@@ -100,4 +100,4 @@ Deferred to a future milestone.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after Phase 30 live verification gaps*
+*Last updated: 2026-06-04 after Phase 31 live smoke*
