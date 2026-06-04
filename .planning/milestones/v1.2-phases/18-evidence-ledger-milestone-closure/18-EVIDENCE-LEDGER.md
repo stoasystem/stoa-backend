@@ -35,10 +35,18 @@ Lambda env/IAM synth evidence from `StoaApiStack.template.json`:
 - `stoa-weekly-report` receives `S3_REPORTS_BUCKET` from the StorageStack reports bucket import.
 - Both Lambda role policies include reports bucket ARN resources and S3 read/write actions.
 
-Not run locally:
+Live verification run on 2026-06-04 with AWS SSO profile `stoa`:
 
-- `cdk diff`, because `cdk` CLI is not installed on PATH.
-- Live Lambda env/IAM AWS queries, because `aws` CLI is not installed on PATH.
+- `aws sts get-caller-identity --profile stoa` returned account `562923011260` and assumed role `AWSReservedSSO_AdministratorAccess_6ef697b4f5015b7c`.
+- `cdk diff StoaStorageStack StoaApiStack --profile stoa` completed with no differences for dependency stacks `StoaAuthStack`, `StoaDatabaseStack`, `StoaStorageStack`, and `StoaNotificationStack`.
+- `cdk diff` showed only Lambda `Code.S3Key` asset hash changes in `StoaApiStack` for `StoaApiFunction` and `StoaWeeklyReportFunction` (`457ebc15479b04bc137193caa61afeedde1e90ef1cb8a80d3753d2a7abdd9c50.zip` -> `ed27221b8448eee6224b006fd4d9d8d8222c3c0b03cb148f7a2d35b30baec26f.zip`). No reports bucket replacement, Lambda env var drift, or reports bucket IAM drift was reported.
+- `aws lambda get-function-configuration --function-name stoa-api --region eu-central-2 --profile stoa` returned `State=Active`, `LastUpdateStatus=Successful`, `CodeSize=30295139`, `Handler=stoa.main.handler`, and `S3_REPORTS_BUCKET=stoa-reports-562923011260`.
+- `aws lambda get-function-configuration --function-name stoa-weekly-report --region eu-central-2 --profile stoa` returned `State=Active`, `LastUpdateStatus=Successful`, `CodeSize=30295139`, `Handler=stoa.jobs.weekly_reports.handler`, and `S3_REPORTS_BUCKET=stoa-reports-562923011260`.
+- `aws iam get-role-policy` confirmed the API Lambda role default policy includes reports bucket S3 read/write actions on `arn:aws:s3:::stoa-reports-562923011260` and `arn:aws:s3:::stoa-reports-562923011260/*`.
+- `aws iam get-role-policy` confirmed the weekly report Lambda role default policy includes reports bucket S3 read/write actions on `arn:aws:s3:::stoa-reports-562923011260` and `arn:aws:s3:::stoa-reports-562923011260/*`.
+- `aws s3api get-public-access-block --bucket stoa-reports-562923011260 --profile stoa` confirmed all four public access blocks are true.
+- `aws s3api get-bucket-encryption --bucket stoa-reports-562923011260 --profile stoa` confirmed default SSE-S3 `AES256` encryption.
+- `aws s3api get-bucket-policy-status --bucket stoa-reports-562923011260 --profile stoa` returned `NoSuchBucketPolicy`, so there is no public bucket policy to evaluate.
 
 ## Backend Artifact Contract Evidence
 
@@ -80,18 +88,31 @@ Local fake-client tests prove the smoke path:
 - Does not return object content, public URLs, presigned URLs, bucket listings, or access-log evidence.
 - Records `cleanup: not_performed`.
 
-Live deployed smoke was not invoked locally because AWS CLI is unavailable.
-
-Deploy-capable follow-up command:
+Live deployed smoke was invoked on 2026-06-04:
 
 ```text
 aws lambda invoke \
   --function-name stoa-weekly-report \
+  --region eu-central-2 \
+  --profile stoa \
+  --cli-binary-format raw-in-base64-out \
   --payload '{"job":"report_artifact_s3_smoke","week_start":"2026-06-01"}' \
-  /tmp/stoa-report-artifact-smoke.json
+  /private/tmp/stoa-report-artifact-smoke.json
 ```
 
-Expected result: `status=passed`, `readback_ok=true`, `content_type=application/json`, `key` under `weekly-reports/`, no report content in output.
+Lambda invoke returned `StatusCode=200`, `ExecutedVersion=$LATEST`.
+
+Smoke output:
+
+```json
+{"status": "passed", "bucket": "stoa-reports-562923011260", "key": "weekly-reports/smoke-parent/smoke-student/2026-06-01/report.json", "content_type": "application/json", "readback_ok": true, "cleanup": "not_performed"}
+```
+
+S3 object verification:
+
+- `aws s3api head-object --bucket stoa-reports-562923011260 --key weekly-reports/smoke-parent/smoke-student/2026-06-01/report.json --profile stoa` returned `ContentType=application/json`, `ContentLength=135`, `ServerSideEncryption=AES256`, and `LastModified=2026-06-04T13:55:00+00:00`.
+- `aws s3api get-object-acl --bucket stoa-reports-562923011260 --key weekly-reports/smoke-parent/smoke-student/2026-06-01/report.json --profile stoa` returned only owner `FULL_CONTROL` for a canonical user grant; no public grants were present.
+- Smoke cleanup remains `not_performed`; lifecycle or explicit cleanup remains a follow-up.
 
 ## Follow-Ups
 
@@ -99,4 +120,3 @@ Expected result: `status=passed`, `readback_ok=true`, `content_type=application/
 - Scope reports bucket IAM grants to the canonical `weekly-reports/*` prefix after confirming no non-report objects are needed.
 - Add lifecycle cleanup or explicit delete behavior for smoke artifacts and orphaned first JSON writes.
 - Add operational tooling for report delivery retry/resend, artifact health, and admin/support visibility.
-- Run live AWS Lambda env/IAM verification and deployed smoke in a deploy-capable environment.

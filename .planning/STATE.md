@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: S3 Report Artifact Infrastructure
 status: complete
-last_updated: "2026-06-03T00:49:21+02:00"
-last_activity: 2026-06-03
+last_updated: "2026-06-04T15:55:00+02:00"
+last_activity: 2026-06-04
 progress:
   total_phases: 5
   completed_phases: 5
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 Phase: 18 of 18 (evidence ledger & milestone closure)
 Plan: 18-01 complete
 Status: Milestone complete
-Last activity: 2026-06-03 - Completed v1.2 evidence ledger and milestone closure.
+Last activity: 2026-06-04 - Completed v1.2 live AWS verification and deployed private-object smoke.
 
 Progress: [##########] 100%
 
@@ -69,12 +69,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-- No active phase todo. v1.2 is complete; next work should start a new milestone or run live AWS verification follow-up.
+- No active phase todo. v1.2 is complete and live AWS verification has been filled in; next work should start a new milestone.
 
 ### Blockers/Concerns
 
-- Deployed AWS runtime state is explicitly recorded as incomplete because AWS CLI/CDK CLI were unavailable locally; run live Lambda env/IAM and smoke checks in a deploy-capable environment.
-- `stoa-backend/dist` is a gitignored Lambda build artifact; deployed smoke confidence depends on fresh packaged Lambda code.
+- `cdk diff` now shows only Lambda `Code.S3Key` asset hash drift caused by the backend direct-deploy workflow; no reports bucket/env/IAM drift was found.
+- `stoa-backend/dist` is a gitignored Lambda build artifact; future CDK diff reviews should treat Lambda asset hash changes separately from infrastructure drift.
 
 ## Deferred Items
 

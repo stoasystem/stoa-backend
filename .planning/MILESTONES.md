@@ -43,9 +43,28 @@ Key accomplishments:
 
 Known deferred items at close: 5 follow-up candidates (see `.planning/v1.1-MILESTONE-AUDIT.md` residual risks and follow-ups).
 
+### v1.2 S3 Report Artifact Infrastructure
+
+**Status:** Shipped 2026-06-04 after live AWS verification
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phases:** 5
+**Plans:** 5
+**Requirements:** 31/31 v1.2 requirements complete
+
+Key accomplishments:
+
+- Verified the deployed reports bucket is private, encrypted, access-blocked, retained in CDK, and wired into both Lambda functions.
+- Locked the canonical artifact key contract as `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}`.
+- Added helper-backed JSON/HTML artifact writes and reads with tests for content type, safe key inputs, and no S3 ACL usage.
+- Preserved storage ordering so report metadata and email delivery only proceed after artifact writes succeed.
+- Ran deployed Lambda private-object smoke on 2026-06-04; `stoa-weekly-report` wrote and read back a private JSON object under the canonical prefix.
+
+Known deferred items at close: report bucket `enforce_ssl`, prefix-scoped IAM, smoke/orphan lifecycle cleanup, and report operations tooling.
+
 ## Current
 
 No active milestone.
 
 ---
-*Last updated: 2026-06-02 after shipping v1.1*
+*Last updated: 2026-06-04 after v1.2 live AWS verification*

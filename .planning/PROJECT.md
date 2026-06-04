@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.1 weekly report automation now generates weekly learning reports for linked parent/student pairs, stores generated report artifacts, sends parent emails, and renders generated report states in the parent portal.
+The v1.2 report artifact infrastructure now stores weekly report JSON/HTML artifacts under a verified private S3 contract, with deployed Lambda smoke evidence that private artifact writes and reads work in AWS.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.1 Weekly Report Automation on 2026-06-02
+**Shipped version:** v1.2 S3 Report Artifact Infrastructure on 2026-06-04
 
 Delivered:
 
@@ -27,18 +27,20 @@ Delivered:
 - Scheduled orchestration is idempotent by `(parent_id, student_id, week_start)`.
 - Parent API and frontend render generated, missing, pending, failed, and email-failed report states.
 - Focused backend and frontend tests verify the report flow.
+- Report artifacts use the canonical private key contract `weekly-reports/{parent_id}/{student_id}/{week_start}/report.{json,html}`.
+- `stoa-api` and `stoa-weekly-report` are deployed with `S3_REPORTS_BUCKET=stoa-reports-562923011260`.
+- Deployed smoke invoked `stoa-weekly-report` and proved a private JSON artifact can be written and read back from S3 without public URLs or frontend S3 access.
 
-## Current Milestone: v1.2 S3 Report Artifact Infrastructure
+## Current Milestone
 
-**Goal:** Make report artifact storage deployable and verifiable before extending weekly report operations further.
+No active milestone. v1.2 is complete; the next milestone should focus on report artifact security hardening or report operations tooling.
 
-**Target features:**
+Recommended next focus:
 
-- Verify CDK report bucket wiring for API and weekly report Lambdas.
-- Confirm `S3_REPORTS_BUCKET` is injected and report bucket read/write permissions are deployed.
-- Define and enforce a stable private S3 report artifact key contract.
-- Add or validate backend report artifact helper behavior for JSON/HTML artifact writes and reads.
-- Add verification and smoke checks that prove Lambda can write/read private report artifacts.
+- Add `enforce_ssl=True` to the reports bucket in CDK.
+- Scope reports bucket IAM grants to `weekly-reports/*` where feasible.
+- Add lifecycle cleanup or explicit delete behavior for smoke artifacts and orphaned first JSON writes.
+- Add operational tooling for report delivery retry/resend, artifact health, and admin/support visibility.
 
 ## Requirements
 
@@ -64,10 +66,7 @@ Shipped requirements:
 
 ### Active
 
-- [ ] Verify report artifact infrastructure and runtime configuration.
-- [ ] Lock the private S3 key convention for report artifacts.
-- [ ] Add or validate backend helper coverage for report artifact storage.
-- [ ] Prove deployed Lambda read/write access with a private-object smoke test.
+- [ ] Define the next milestone scope after v1.2 closure.
 
 ### Out of Scope
 
@@ -171,6 +170,8 @@ Known current resources:
 | Remove `withDemoFallback` from parent-critical flows | Parent portal correctness depends on surfacing real backend failures instead of replacing them with demo data | Good - shipped in frontend integration |
 | Prefer a separate scheduled Lambda handler for weekly reports | EventBridge Scheduler should not invoke the Mangum API handler directly | Good - shipped in v1.1 |
 | Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Good - shipped in v1.1 |
+| Use `weekly-reports/` as the canonical private report artifact prefix | Matches shipped v1.1 behavior and avoids migrating existing artifact references | Good - verified in v1.2 |
+| Keep report artifacts backend-mediated and private | Parent access must stay ownership-checked through backend routes, with no public S3 URL or direct frontend S3 fetch | Good - verified in v1.2 |
 
 ## Evolution
 
@@ -190,4 +191,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after starting milestone v1.2*
+*Last updated: 2026-06-04 after v1.2 live AWS verification*
