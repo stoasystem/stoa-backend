@@ -117,8 +117,8 @@ def test_report_ops_list_is_admin_only(monkeypatch):
 def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
     calls = []
 
-    monkeypatch.setattr(report_repo, "decode_page_token", lambda token: {"PK": "REPORT#prev", "SK": "SUMMARY"})
-    monkeypatch.setattr(report_repo, "encode_page_token", lambda key: "encoded-next" if key else None)
+    monkeypatch.setattr(report_repo, "decode_admin_page_token", lambda token: {"PK": "PRACTICE", "SK": "CHALLENGE#prev"})
+    monkeypatch.setattr(report_repo, "encode_admin_page_token", lambda key: "encoded-next" if key else None)
 
     def list_reports_for_admin(**kwargs):
         calls.append(kwargs)
@@ -153,7 +153,7 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
             "parent_id": "parent-1",
             "student_id": "student-1",
             "limit": 10,
-            "last_key": {"PK": "REPORT#prev", "SK": "SUMMARY"},
+            "last_key": {"PK": "PRACTICE", "SK": "CHALLENGE#prev"},
         }
     ]
     serialized = str(data)
@@ -168,12 +168,42 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
 
 
 def test_report_ops_list_rejects_invalid_pagination_token(monkeypatch):
-    monkeypatch.setattr(report_repo, "decode_page_token", lambda token: (_ for _ in ()).throw(ValueError("bad")))
+    monkeypatch.setattr(report_repo, "decode_admin_page_token", lambda token: (_ for _ in ()).throw(ValueError("bad")))
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.get("/admin/reports/ops", params={"next_token": "bad"})
 
     assert response.status_code == 400
+
+
+def test_report_ops_list_round_trips_non_report_scan_key_next_token(monkeypatch):
+    first_key = {"PK": "PRACTICE", "SK": "CHALLENGE#fractions"}
+    calls = []
+
+    def list_reports_for_admin(**kwargs):
+        calls.append(kwargs)
+        return {"Items": [], "LastEvaluatedKey": first_key}
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", list_reports_for_admin)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/ops", params={"limit": 5})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"] == []
+    assert data["count"] == 0
+    assert report_repo.decode_admin_page_token(data["next_token"]) == first_key
+    assert calls == [
+        {
+            "status": None,
+            "week_start": None,
+            "parent_id": None,
+            "student_id": None,
+            "limit": 5,
+            "last_key": None,
+        }
+    ]
 
 
 def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch):

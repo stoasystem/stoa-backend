@@ -468,6 +468,22 @@ def test_report_repo_decode_page_token_rejects_non_report_key():
         report_repo.decode_page_token(token)
 
 
+def test_report_repo_admin_page_token_round_trips_scan_key():
+    key = {"PK": "PRACTICE", "SK": "CHALLENGE#fractions"}
+
+    token = report_repo.encode_admin_page_token(key)
+
+    assert isinstance(token, str)
+    assert report_repo.decode_admin_page_token(token) == key
+
+
+def test_report_repo_admin_page_token_accepts_legacy_report_key_token():
+    key = {"PK": "REPORT#1", "SK": "SUMMARY"}
+    token = report_repo.encode_page_token(key)
+
+    assert report_repo.decode_admin_page_token(token) == key
+
+
 def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
     class FakeQueryTable:
         def __init__(self):

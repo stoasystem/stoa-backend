@@ -233,7 +233,7 @@ async def list_report_operations(
 ):
     """List report operation metadata for admin triage."""
     try:
-        last_key = report_repo.decode_page_token(next_token)
+        last_key = report_repo.decode_admin_page_token(next_token)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
 
@@ -249,7 +249,7 @@ async def list_report_operations(
     return ReportOperationListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_admin_page_token(result.get("LastEvaluatedKey")),
         access_pattern="parent_gsi" if parent_id else "bounded_scan",
     )
 

@@ -121,6 +121,42 @@ def decode_page_token(token: str | None) -> dict | None:
     return decoded
 
 
+def encode_admin_page_token(last_key: dict | None) -> str | None:
+    """Encode an admin report-ops page token.
+
+    Cross-parent admin listing uses DynamoDB Scan with a FilterExpression. Scan
+    pagination keys can point at any item in the single-table design, not only
+    report summary rows. Keep normal report page tokens strict, but allow admin
+    report ops to round-trip the scan key it received from DynamoDB.
+    """
+    if not last_key:
+        return None
+    raw = json.dumps(
+        {"scope": "admin_reports", "key": last_key},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_admin_page_token(token: str | None) -> dict | None:
+    """Decode an admin report-ops page token into an ExclusiveStartKey."""
+    if not token:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        decoded = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid pagination token") from exc
+    if _is_valid_admin_page_payload(decoded):
+        return decoded["key"]
+    # Backward compatibility for older admin report tokens that encoded the
+    # report LastEvaluatedKey directly.
+    if isinstance(decoded, dict) and _is_valid_report_page_key(decoded):
+        return decoded
+    raise ValueError("Invalid pagination token")
+
+
 def list_reports_for_admin(
     *,
     status: str | None = None,
@@ -235,6 +271,17 @@ def _is_valid_report_page_key(decoded: dict) -> bool:
         and isinstance(sk, str)
         and sk == "SUMMARY"
     )
+
+
+def _is_valid_admin_page_payload(decoded: object) -> bool:
+    if not isinstance(decoded, dict) or decoded.get("scope") != "admin_reports":
+        return False
+    key = decoded.get("key")
+    if not isinstance(key, dict):
+        return False
+    pk = key.get("PK")
+    sk = key.get("SK")
+    return isinstance(pk, str) and isinstance(sk, str)
 
 
 def list_reports_for_parent_week(
