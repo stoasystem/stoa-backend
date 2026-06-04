@@ -31,10 +31,16 @@ Verified the parts of backend production deployment that can be safely automated
 
 ## Blocked
 
-Production admin-authenticated read-only API checks did not run because no production admin token was available.
+Production admin authentication was established with a temporary verification account, then cleaned up.
 
 The documented demo admin account `admin@test.com / password123` is not present in production; `/auth/login` returned HTTP 401 with `No account found for this email. Please register first.`
 
+After creating temporary admin account `codex-admin-verify-20260604@stoaedu.ch`, `GET /admin/reports/ops?limit=5` returned HTTP 200. The response was metadata-only, but it returned `count=0`, `items=[]`, and `next_token=true`; using that token returned HTTP 400 `Invalid pagination token`.
+
+No safe report row was available for detail verification.
+
+The temporary admin Cognito user and DynamoDB profile were deleted after verification. Post-cleanup checks confirmed Cognito `UserNotFoundException` and no DynamoDB item.
+
 ## Next
 
-Do not run Phase 31 mutation smoke yet. First provide or create an approved safe production admin verification path, then rerun Phase 30 admin-auth read-only checks.
+Do not run Phase 31 mutation smoke yet. First fix or work around the admin report ops pagination gap, provide a safe detail target row, and complete valid non-admin rejection verification.

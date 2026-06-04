@@ -128,8 +128,8 @@ Phases execute in numeric order: 28 -> 29 -> 30 -> 31 -> 32
 | REL-02 | Phase 28 | Complete |
 | REL-03 | Phase 28/30 | Complete |
 | REL-04 | Phase 28 | Complete |
-| LIVE-01 | Phase 30 | Blocked - no production admin token |
-| LIVE-02 | Phase 30 | Blocked - no production admin token |
+| LIVE-01 | Phase 30 | Partial - admin auth passed, pagination gap remains |
+| LIVE-02 | Phase 30 | Blocked - no safe detail target row |
 | LIVE-03 | Phase 29 | Complete |
 | LIVE-04 | Phase 30 | Partial - unauth/invalid token passed, valid non-admin token unavailable |
 | SMOKE-01 | Phase 31 | Pending |

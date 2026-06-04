@@ -18,7 +18,7 @@ requirements:
 
 `gaps_found`
 
-Backend deployment state, API health, unauthenticated rejection, focused tests, focused ruff, and CDK diff classification were verified. Admin-authenticated report operations list/detail could not be completed because no production admin access token was available.
+Backend deployment state, API health, unauthenticated rejection, focused tests, focused ruff, CDK diff classification, and production admin authentication were verified. Admin-authenticated report operations list returned HTTP 200, but Phase 30 still has gaps: the first page returned no rows with a `next_token`, the follow-up page returned `Invalid pagination token`, no safe detail target was available, and a valid non-admin token was not available.
 
 ## Requirements Coverage
 
@@ -26,8 +26,8 @@ Backend deployment state, API health, unauthenticated rejection, focused tests, 
 |-------------|--------|----------|
 | REL-01 | complete | `stoa-api` and `stoa-weekly-report` are deployed, `Active`, `LastUpdateStatus=Successful`, and share the current code SHA. CDK diff shows only Lambda `Code.S3Key` asset drift for those two functions. |
 | REL-03 | complete | Evidence records backend SHA, infra SHA, AWS identity, Lambda timestamps/code SHA/status/env, API health, auth gate results, and CDK diff classification. |
-| LIVE-01 | blocked | Admin-authenticated `GET /admin/reports/ops` was not run because no production admin token was available. Demo admin login returned 401 with `No account found for this email. Please register first.` |
-| LIVE-02 | blocked | Admin-authenticated detail endpoint was not run because list endpoint could not be called without a production admin token and safe row target. |
+| LIVE-01 | partial | A temporary production admin verification account successfully called `GET /admin/reports/ops?limit=5` and received HTTP 200. The response was metadata-only but returned `count=0`, `items=[]`, and `next_token=true`; following the token returned HTTP 400 `Invalid pagination token`. |
+| LIVE-02 | blocked | Admin-authenticated detail endpoint was not run because the list endpoint returned no safe report row and the next page token was invalid. |
 | LIVE-04 | partial | Unauthenticated and invalid-token access to `GET /admin/reports/ops` return HTTP 401. A true non-admin valid token was not available without creating a production user, so valid non-admin rejection remains blocked. |
 | VERIFY-02 | complete | CDK diff was run and classified; only `StoaApiStack` Lambda `Code.S3Key` asset hash changes were present, with no unexpected IAM, bucket, API route, DynamoDB, or policy drift reported. |
 
@@ -64,6 +64,9 @@ Backend deployment state, API health, unauthenticated rejection, focused tests, 
 | Unauthenticated `GET https://api.stoaedu.ch/admin/reports/ops` | HTTP 401 body `{"message":"Unauthorized"}`. |
 | Invalid-token `GET https://api.stoaedu.ch/admin/reports/ops` | HTTP 401. |
 | Production login `POST /auth/login` for documented demo admin `admin@test.com / password123` | HTTP 401 body `{"detail":"No account found for this email. Please register first."}`. |
+| Temporary admin verification account registration | HTTP 201 for `codex-admin-verify-20260604@stoaedu.ch`; returned user id `1351b045-3d3c-40ae-af31-4f18cb4c8410` and an access token. |
+| Admin-authenticated `GET /admin/reports/ops?limit=5` with temporary admin token | HTTP 200; response `count=0`, `items=[]`, `next_token=true`, `access_pattern=bounded_scan`; no private artifact markers were found. |
+| Admin-authenticated second page with returned `next_token` | HTTP 400 body `{"detail":"Invalid pagination token"}`. |
 
 ## CDK Diff
 
@@ -99,18 +102,32 @@ No unexpected IAM, bucket, API route, DynamoDB, or policy drift was reported. Th
 
 ## Blocking Gaps
 
-Phase 30 cannot fully pass until one of these is available:
+Phase 30 cannot fully pass until these are resolved:
 
-- A production admin access token.
-- A safe production admin browser session whose `stoa_access_token` can be used for read-only API checks.
-- An approved temporary non-customer admin verification account lifecycle with create/use/delete steps.
+- Fix or work around admin report ops bounded-scan pagination so an empty scan page does not return a `next_token` that `decode_page_token` rejects.
+- Provide a safe report target row for admin-authenticated detail verification, or create a non-customer report fixture with cleanup.
+- Provide a valid production non-admin token or approve a temporary non-admin verification account lifecycle for a valid non-admin rejection check.
 
-Blocked checks:
+Blocked or partial checks:
 
-- Admin-authenticated `GET /admin/reports/ops?limit=5`.
-- Admin-authenticated detail `GET /admin/reports/{parent_id}/{student_id}/{week_start}/ops` for a safe returned row.
-- Valid non-admin token rejection check.
+- Admin-authenticated `GET /admin/reports/ops?limit=5`: partial; auth and 200 response passed, pagination/empty-page behavior has a bug.
+- Admin-authenticated detail `GET /admin/reports/{parent_id}/{student_id}/{week_start}/ops`: blocked; no safe target row available.
+- Valid non-admin token rejection check: blocked; no production non-admin token available.
+
+## Temporary Account Cleanup
+
+Temporary admin verification account:
+
+- Email: `codex-admin-verify-20260604@stoaedu.ch`
+- User id: `1351b045-3d3c-40ae-af31-4f18cb4c8410`
+
+Cleanup completed:
+
+- `aws cognito-idp admin-delete-user --user-pool-id eu-central-2_Ss93YQzjJ --username codex-admin-verify-20260604@stoaedu.ch --profile stoa --region eu-central-2` - passed.
+- `aws dynamodb delete-item --table-name stoa-main --key '{"PK":{"S":"USER#1351b045-3d3c-40ae-af31-4f18cb4c8410"},"SK":{"S":"PROFILE"}}' --profile stoa --region eu-central-2` - passed.
+- Post-cleanup `admin-get-user` returned `UserNotFoundException`.
+- Post-cleanup DynamoDB `get-item` returned no item.
 
 ## Stop Condition
 
-Phase 31 mutation smoke must not run until Phase 30 admin-auth read-only list/detail checks pass and a safe smoke target is documented.
+Phase 31 mutation smoke must not run until Phase 30 admin-auth read-only list/detail checks pass, the pagination gap is resolved or accepted with a safe workaround, and a safe smoke target is documented.
