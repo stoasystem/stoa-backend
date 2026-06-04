@@ -26,25 +26,15 @@ jobs:
         run: pip install uv
 
       - name: Build Lambda deployment package (linux arm64 wheels)
-        run: |
-          rm -rf dist
-          # Install dependencies targeting Lambda runtime (linux arm64)
-          pip install \
-            --platform manylinux2014_aarch64 \
-            --implementation cp \
-            --python-version 3.12 \
-            --only-binary :all: \
-            --target dist \
-            -r requirements.txt
-          # Copy source code
-          cp -r src/stoa dist/stoa
+        run: python scripts/build_lambda_dist.py --zip lambda.zip
 
-      - name: Zip package
+      - name: Verify Lambda dist provenance
+        run: python scripts/build_lambda_dist.py --verify-only
+
+      - name: Package summary
         run: |
-          cd dist
-          zip -r ../lambda.zip . -q
-          cd ..
           echo "Package size: $(du -sh lambda.zip | cut -f1)"
+          python -m json.tool dist/.stoa-build-manifest.json
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

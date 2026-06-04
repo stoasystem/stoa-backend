@@ -8,11 +8,11 @@
 
 ### Release Guard and Recovery Contract
 
-- [ ] **GUARD-01**: Operators have a documented v1.6 recovery contract covering job types, state transitions, target snapshots, stop conditions, cancellation semantics, privacy boundaries, and audit guarantees before backend implementation starts.
-- [ ] **GUARD-02**: CDK readiness evidence proves the existing `stoa-api`, `stoa-weekly-report`, DynamoDB table, SES permissions, S3 buckets, and Cognito admin authorization are sufficient for the v1.6 MVP or records the exact CDK changes required.
-- [ ] **GUARD-03**: Lambda package builds write a `dist/.stoa-build-manifest.json` with backend source SHA/hash, dependency hash, runtime target, architecture/platform, build timestamp, and handler inventory.
-- [ ] **GUARD-04**: CDK synth/diff/deploy paths fail fast when the backend Lambda `dist` artifact is missing, stale, built for the wrong runtime/platform, or missing expected handlers/modules.
-- [ ] **GUARD-05**: Operators have a documented emergency override for the stale-dist guard that is explicit, auditable, and not enabled by default.
+- [x] **GUARD-01**: Operators have a documented v1.6 recovery contract covering job types, state transitions, target snapshots, stop conditions, cancellation semantics, privacy boundaries, and audit guarantees before backend implementation starts. Completed in Phase 33.
+- [x] **GUARD-02**: CDK readiness evidence proves the existing `stoa-api`, `stoa-weekly-report`, DynamoDB table, SES permissions, S3 buckets, and Cognito admin authorization are sufficient for the v1.6 MVP or records the exact CDK changes required. Completed in Phase 33.
+- [x] **GUARD-03**: Lambda package builds write a `dist/.stoa-build-manifest.json` with backend source SHA/hash, dependency hash, runtime target, architecture/platform, build timestamp, and handler inventory. Completed in Phase 33.
+- [x] **GUARD-04**: CDK synth/diff/deploy paths fail fast when the backend Lambda `dist` artifact is missing, stale, built for the wrong runtime/platform, or missing expected handlers/modules. Completed in Phase 33.
+- [x] **GUARD-05**: Operators have a documented emergency override for the stale-dist guard that is explicit, auditable, and not enabled by default. Completed in Phase 33.
 
 ### Immutable Recovery Audit
 
@@ -90,11 +90,11 @@ Traceability is filled by the active v1.6 roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GUARD-01 | Phase 33 | Pending |
-| GUARD-02 | Phase 33 | Pending |
-| GUARD-03 | Phase 33 | Pending |
-| GUARD-04 | Phase 33 | Pending |
-| GUARD-05 | Phase 33 | Pending |
+| GUARD-01 | Phase 33 | Complete |
+| GUARD-02 | Phase 33 | Complete |
+| GUARD-03 | Phase 33 | Complete |
+| GUARD-04 | Phase 33 | Complete |
+| GUARD-05 | Phase 33 | Complete |
 | AUDIT-01 | Phase 34 | Pending |
 | AUDIT-02 | Phase 34 | Pending |
 | AUDIT-03 | Phase 34 | Pending |
@@ -127,4 +127,4 @@ Traceability is filled by the active v1.6 roadmap.
 
 ---
 *Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after v1.6 roadmap creation*
+*Last updated: 2026-06-04 after Phase 33 completion*
