@@ -31,16 +31,16 @@ Delivered:
 - `stoa-api` and `stoa-weekly-report` are deployed with `S3_REPORTS_BUCKET=stoa-reports-562923011260`.
 - Deployed smoke invoked `stoa-weekly-report` and proved a private JSON artifact can be written and read back from S3 without public URLs or frontend S3 access.
 
-## Current Milestone
+## Current Milestone: v1.3 Report Artifact Security & Operations Hardening
 
-No active milestone. v1.2 is complete; the next milestone should focus on report artifact security hardening or report operations tooling.
+**Goal:** Harden private weekly report artifact storage and add operational controls so report artifacts are safer, cleaner, and easier to support after v1.2 live verification.
 
-Recommended next focus:
+Target features:
 
-- Add `enforce_ssl=True` to the reports bucket in CDK.
-- Scope reports bucket IAM grants to `weekly-reports/*` where feasible.
-- Add lifecycle cleanup or explicit delete behavior for smoke artifacts and orphaned first JSON writes.
-- Add operational tooling for report delivery retry/resend, artifact health, and admin/support visibility.
+- Add `enforce_ssl=True` to the reports bucket in CDK and verify there is no bucket replacement.
+- Scope Lambda S3 permissions toward `weekly-reports/*` where feasible.
+- Add smoke/orphan artifact cleanup through lifecycle or explicit cleanup behavior.
+- Add report operations tooling for retry/resend/admin visibility.
 
 ## Requirements
 
@@ -66,7 +66,10 @@ Shipped requirements:
 
 ### Active
 
-- [ ] Define the next milestone scope after v1.2 closure.
+- [ ] Enforce HTTPS-only S3 transport for the reports bucket without replacing the deployed bucket.
+- [ ] Narrow report artifact Lambda IAM permissions toward the canonical `weekly-reports/*` prefix where S3 supports prefix scoping.
+- [ ] Add safe cleanup behavior for smoke artifacts and failed partial report artifact writes.
+- [ ] Provide maintainer/admin visibility and recovery controls for report artifact and delivery issues.
 
 ### Out of Scope
 
@@ -172,6 +175,7 @@ Known current resources:
 | Store generated report before email completion | Parents must still be able to view reports if SES delivery fails | Good - shipped in v1.1 |
 | Use `weekly-reports/` as the canonical private report artifact prefix | Matches shipped v1.1 behavior and avoids migrating existing artifact references | Good - verified in v1.2 |
 | Keep report artifacts backend-mediated and private | Parent access must stay ownership-checked through backend routes, with no public S3 URL or direct frontend S3 fetch | Good - verified in v1.2 |
+| Start v1.3 with security hardening before broader report product expansion | Live verification proved artifact storage works; the next risk is operational safety around that storage contract | Active - v1.3 |
 
 ## Evolution
 
@@ -191,4 +195,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after v1.2 live AWS verification*
+*Last updated: 2026-06-04 after starting milestone v1.3*

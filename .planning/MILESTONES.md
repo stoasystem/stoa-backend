@@ -64,7 +64,20 @@ Known deferred items at close: report bucket `enforce_ssl`, prefix-scoped IAM, s
 
 ## Current
 
-No active milestone.
+### v1.3 Report Artifact Security & Operations Hardening
+
+**Status:** Planning started 2026-06-04
+**Goal:** Harden private weekly report artifact storage and add operational controls so report artifacts are safer, cleaner, and easier to support after v1.2 live verification.
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phases:** 4 planned
+
+Planned focus:
+
+- Add reports bucket `enforce_ssl=True` in CDK and prove no bucket replacement.
+- Scope report artifact IAM toward `weekly-reports/*` where feasible.
+- Add smoke/orphan artifact lifecycle or explicit cleanup behavior.
+- Add report operations tooling for retry, resend, and admin/support visibility.
 
 ---
-*Last updated: 2026-06-04 after v1.2 live AWS verification*
+*Last updated: 2026-06-04 after starting v1.3 planning*
