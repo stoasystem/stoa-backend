@@ -41,6 +41,91 @@ def update_report_status(report_id: str, status: str, **fields) -> None:
     )
 
 
+def try_apply_report_edit(
+    report_id: str,
+    *,
+    expected_updated_at: str | None,
+    status: str,
+    fields: dict,
+) -> bool:
+    table = get_table()
+    update_fields = {"status": status, **fields}
+    names = {f"#f{index}": key for index, key in enumerate(update_fields)}
+    values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
+    if expected_updated_at is None:
+        condition = "attribute_not_exists(updated_at)"
+    else:
+        condition = "updated_at = :expected_updated_at"
+        values[":expected_updated_at"] = expected_updated_at
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
+            UpdateExpression="SET " + ", ".join(
+                f"{name} = :v{index}" for index, name in enumerate(names)
+            ),
+            ConditionExpression=condition,
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def put_report_edit_draft(report_id: str, draft: dict) -> None:
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT#{report_id}",
+            "SK": f"EDIT_DRAFT#{draft['draft_id']}",
+            "entity_type": "REPORT_EDIT_DRAFT",
+            **draft,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def get_report_edit_draft(report_id: str, draft_id: str) -> dict | None:
+    table = get_table()
+    response = table.get_item(
+        Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"}
+    )
+    return response.get("Item")
+
+
+def mark_report_edit_draft_applied(
+    report_id: str,
+    draft_id: str,
+    *,
+    applied_at: str,
+    applied_by: str,
+) -> bool:
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"},
+            UpdateExpression=(
+                "SET #status = :applied, applied_at = :applied_at, "
+                "applied_by = :applied_by, updated_at = :applied_at"
+            ),
+            ConditionExpression="#status = :draft",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":applied": "applied",
+                ":draft": "draft",
+                ":applied_at": applied_at,
+                ":applied_by": applied_by,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
 def put_report_audit_event(report_id: str, event: dict) -> None:
     """Append one immutable report audit event."""
     table = get_table()

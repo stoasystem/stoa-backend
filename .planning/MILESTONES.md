@@ -192,23 +192,46 @@ Key accomplishments:
 
 Known deferred items at close: failed/skipped subset resume, support evidence packages, Step Functions/SQS or dedicated worker orchestration if existing Lambda flow becomes insufficient, WORM audit storage, support ticket integration, report editing, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
 
+### v1.9 Recovery Resume And Support Evidence Packages
+
+**Status:** Shipped 2026-06-05
+**Audit:** `.planning/milestones/v1.9-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.9-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.9-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v1.9-phases/`
+**Goal:** Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages.
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 8/8 complete
+
+Key accomplishments:
+
+- Added backend resume preview/create support for failed/refused/not_found/skipped recovery subsets.
+- Preserved source job linkage, stable target snapshots, per-target source result metadata, and append-only audit evidence.
+- Added backend support evidence packages with bounded metadata-only job, target, result, and audit summaries.
+- Added frontend resume and support package controls on `/admin/report-operations`.
+- Verified backend/frontend deploys, Lambda manifest, Lambda runtime state, CDK diff classification, API request IDs, Cognito group membership, production bundle markers, and production read-only browser smoke.
+- Confirmed production smoke exposed no private markers and performed no production recovery mutation.
+
+Known deferred items at close: controlled report editing, Step Functions/SQS or dedicated worker orchestration if existing Lambda flow becomes insufficient, compliance-grade WORM audit storage, support ticket destination integration, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
+
 ## Current
 
-### v1.9 Recovery Resume And Support Evidence Packages
+### v2.0 Controlled Report Editing MVP
 
 **Status:** Active
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Roadmap:** `.planning/ROADMAP.md`
-**Goal:** Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages.
+**Goal:** Admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
 **Phases:** 4 planned
 **Requirements:** active
 
 Planned work:
 
-- Phase 46: Resume Contract And Evidence Package Design.
-- Phase 47: Failed/Skipped Subset Resume Backend.
-- Phase 48: Support Evidence Package UI.
-- Phase 49: v1.9 Release Gate And Live Verification.
+- Phase 50: Report Editing Contract And Safety Model.
+- Phase 51: Backend Report Edit Draft And Apply APIs.
+- Phase 52: Admin Report Editing UI.
+- Phase 53: v2.0 Release Gate And Final Verification.
 
 ---
-*Last updated: 2026-06-05 after archiving v1.8 and starting v1.9*
+*Last updated: 2026-06-05 after archiving v1.9 and starting v2.0*

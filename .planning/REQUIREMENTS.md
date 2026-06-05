@@ -1,119 +1,87 @@
-# Requirements: v1.9 Recovery Resume And Support Evidence Packages
+# Requirements: v2.0 Controlled Report Editing MVP
 
-**Milestone:** v1.9
+**Milestone:** v2.0
 **Status:** Active
 **Created:** 2026-06-05
 
 ## Goal
 
-Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages without exposing private report artifacts or creating unbounded scans.
+Admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
 
 ## Requirements
 
-### RESUME-01 Resume Preview
+### EDIT-01 Edit Draft Lifecycle
 
-Admins can preview a bounded target subset from a prior recovery job before creating a resume job.
-
-Acceptance criteria:
-
-- Preview requires admin authorization.
-- Preview requires a source `job_id`.
-- Preview supports only allowed target results: `failed`, `refused`, `not_found`, `skipped_cancelled`.
-- Preview returns metadata-only target samples.
-- Preview records source job type and eligible/refused/missing counts.
-- Preview token binds to source job, job type, result filters, operator reason, max targets, and target snapshot hash.
-
-### RESUME-02 Resume Job Creation
-
-Admins can create a new recovery job from a valid preview of a prior job's resumable target subset.
+Admins can create and read report edit drafts.
 
 Acceptance criteria:
 
-- Create requires a valid preview token.
-- Create writes `source_job_id`, inherited `job_type`, reason, filters, counters, and stable target snapshots.
-- Create refuses source jobs without eligible targets.
-- Create invokes the existing weekly worker event for the inherited job type.
-- Create writes an audit event linking source and resumed jobs.
+- Draft APIs require admin authorization.
+- Drafts bind to parent id, student id, week start, report id, source updated timestamp, editor, reason, and proposed fields.
+- Draft responses omit private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
+- Drafts are bounded to a small allowlist of editable metadata/content fields for the MVP.
 
-### RESUME-03 Resume Worker Execution
+### EDIT-02 Apply Edit
 
-Resumed jobs execute through existing recovery worker paths.
-
-Acceptance criteria:
-
-- Resumed `resend_email` jobs reuse the resend worker target execution path.
-- Resumed `retry_generation` jobs reuse the generation retry worker target execution path.
-- Target results and counters update the same way as normal recovery jobs.
-- Cancellation and failure thresholds still apply.
-- Source job linkage is preserved in job metadata and audit events.
-
-### RESUME-04 Authorization, Privacy, And Audit
-
-Resume operations are admin-only, metadata-only, and audit-linked.
+Admins can apply a valid draft to a report through the backend.
 
 Acceptance criteria:
 
-- Non-admin users cannot preview/create resume jobs.
-- Responses omit private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
-- Audit includes actor, source, source job id, resumed job id, result filters, counts, request id/correlation id, and result.
-- Production live smoke remains read-only unless an approved safe fixture is explicitly named.
+- Apply requires admin authorization and a valid draft id.
+- Apply rejects stale drafts when source report metadata changed.
+- Apply validates proposed fields before mutation.
+- Apply writes updated report metadata and append-only audit.
 
-### EVIDENCE-01 Support Evidence Package
+### EDIT-03 Audit Evidence
 
-Admins can generate a support-safe evidence package for a recovery job.
-
-Acceptance criteria:
-
-- Package includes job summary, target result rollups, selected target metadata, job audit timeline, report audit references, request IDs, and redacted operator notes.
-- Package supports optional `source_job_id` / resumed job linkage.
-- Package remains metadata-only.
-- Package has bounded limits for targets and audit events.
-
-### EVIDENCE-02 Evidence Package Observability
-
-Evidence package generation is observable without mutating report recovery state.
+Report edits produce audit evidence.
 
 Acceptance criteria:
 
-- Package response includes request id and export timestamp.
-- Package generation does not create or mutate recovery jobs.
-- Package can indicate partial results when limits truncate target/audit sections.
-- Package privacy metadata records that private artifact fields are omitted.
+- Audit includes editor, reason, draft id, before/after metadata, validation result, and source/apply timestamps.
+- Audit remains metadata-only and redacted.
+- Existing report audit APIs show edit events.
 
-### UI-06 Resume And Evidence Package UI
+### EDIT-04 Privacy And Storage Safety
 
-The admin report operations UI supports resume preview/start and support evidence package export.
-
-Acceptance criteria:
-
-- UI exposes resume controls for selected jobs with resumable target results.
-- UI shows source job, inherited job type, target result filters, counts, and operator reason.
-- UI can preview/start resume jobs and select the resumed job.
-- UI can export/view/copy/download support-safe evidence packages.
-- UI copy preserves read-only versus mutation distinction.
-
-### VERIFY-02 v1.9 Release Gate
-
-v1.9 closes with release and live verification evidence.
+Report editing does not expose or directly manipulate private artifacts from the frontend.
 
 Acceptance criteria:
 
-- Backend and frontend deploy run IDs, commit SHAs, job IDs, timestamps, and outcomes are recorded.
-- Lambda build manifest and runtime state are recorded.
+- Frontend never receives S3 keys, presigned URLs, raw HTML, or raw JSON.
+- Backend does not perform broad S3 scans.
+- MVP may update report metadata fields only; artifact rewrite is deferred unless safety evidence requires it.
+- CDK diff remains no-new-infra unless explicitly justified.
+
+### UI-07 Admin Editing UI
+
+Admin report operations UI supports draft/apply editing controls.
+
+Acceptance criteria:
+
+- UI exposes draft controls for selected reports.
+- UI distinguishes draft creation from apply mutation.
+- UI shows validation/audit outcome and private marker denylist remains clean.
+- Playwright covers draft/apply flow.
+
+### VERIFY-03 v2.0 Release Gate
+
+v2.0 closes with release and live verification evidence.
+
+Acceptance criteria:
+
+- Backend/frontend deploy evidence, commit SHAs, Lambda manifest/runtime, and quality gates are recorded.
 - CDK diff/deploy evidence is classified.
-- Production API checks record request IDs and admin authorization behavior.
-- Production browser smoke verifies UI presence and support package read-only behavior without creating a production resume job.
-- Final milestone audit records residual risks and future requirements.
+- Production smoke is read-only and does not create/apply production edits.
+- Final audit records residual risks and future requirements.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RESUME-01 | Phase 46/47 | Complete |
-| RESUME-02 | Phase 47 | Complete |
-| RESUME-03 | Phase 47 | Complete |
-| RESUME-04 | Phase 46/47/49 | In Progress |
-| EVIDENCE-01 | Phase 46/48 | Complete |
-| EVIDENCE-02 | Phase 48 | Complete |
-| UI-06 | Phase 48 | Complete |
-| VERIFY-02 | Phase 49 | Planned |
+| EDIT-01 | Phase 50/51 | Complete |
+| EDIT-02 | Phase 50/51 | Complete |
+| EDIT-03 | Phase 51 | Complete |
+| EDIT-04 | Phase 50/51/53 | In Progress |
+| UI-07 | Phase 52 | Complete |
+| VERIFY-03 | Phase 53 | Planned |

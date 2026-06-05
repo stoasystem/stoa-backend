@@ -9,7 +9,12 @@ from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
-from stoa.services import report_recovery_evidence_service, report_recovery_job_service, report_recovery_service
+from stoa.services import (
+    report_edit_service,
+    report_recovery_evidence_service,
+    report_recovery_job_service,
+    report_recovery_service,
+)
 
 router = APIRouter()
 
@@ -100,6 +105,35 @@ class ReportGenerationRetryResponse(BaseModel):
     operation_result: str
     updated_at: str
     artifacts: dict[str, bool]
+
+
+class ReportEditDraftRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    proposed_fields: dict[str, Any] = Field(..., min_length=1)
+
+
+class ReportEditDraftResponse(BaseModel):
+    draft_id: str
+    report_id: str
+    parent_id: str | None = None
+    student_id: str | None = None
+    week_start: str | None = None
+    source_updated_at: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    reason: str | None = None
+    proposed_fields: dict[str, str | None]
+    status: str
+    applied_by: str | None = None
+    applied_at: str | None = None
+
+
+class ReportEditApplyResponse(BaseModel):
+    operation: str
+    operation_result: str
+    draft: ReportEditDraftResponse
+    report: dict[str, Any]
 
 
 class ReportAuditEventResponse(BaseModel):
@@ -863,6 +897,84 @@ async def retry_report_generation(
     )
 
 
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts",
+    response_model=ReportEditDraftResponse,
+)
+async def create_report_edit_draft(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    body: ReportEditDraftRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded metadata-only report edit draft."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        draft = report_edit_service.create_edit_draft(
+            report,
+            operator=_operator_id(user),
+            reason=body.reason,
+            proposed_fields=body.proposed_fields,
+            correlation_id=_request_id(request),
+        )
+    except report_edit_service.ReportEditError as exc:
+        raise _report_edit_http_error(exc) from exc
+    return ReportEditDraftResponse(**draft)
+
+
+@router.get(
+    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}",
+    response_model=ReportEditDraftResponse,
+)
+async def get_report_edit_draft(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    draft_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Read a metadata-only report edit draft."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        draft = report_edit_service.get_edit_draft(report, draft_id)
+    except report_edit_service.ReportEditError as exc:
+        raise _report_edit_http_error(exc) from exc
+    return ReportEditDraftResponse(**draft)
+
+
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}/apply",
+    response_model=ReportEditApplyResponse,
+)
+async def apply_report_edit_draft(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    draft_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Apply one valid metadata-only report edit draft."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        result = report_edit_service.apply_edit_draft(
+            report,
+            draft_id=draft_id,
+            operator=_operator_id(user),
+            correlation_id=_request_id(request),
+        )
+    except report_edit_service.ReportEditError as exc:
+        raise _report_edit_http_error(exc) from exc
+    return ReportEditApplyResponse(
+        operation="edit_report",
+        operation_result="success",
+        draft=ReportEditDraftResponse(**result["draft"]),
+        report=result["report"],
+    )
+
+
 @router.get(
     "/reports/{parent_id}/{student_id}/{week_start}/audit",
     response_model=ReportAuditListResponse,
@@ -1174,6 +1286,11 @@ def _report_recovery_http_error(exc: report_recovery_service.ReportRecoveryError
 
 def _recovery_job_http_error(exc: report_recovery_job_service.RecoveryJobError) -> HTTPException:
     detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Recovery job operation failed"
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _report_edit_http_error(exc: report_edit_service.ReportEditError) -> HTTPException:
+    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report edit operation failed"
     return HTTPException(status_code=exc.status_code, detail=detail)
 
 

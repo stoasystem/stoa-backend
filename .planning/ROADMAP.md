@@ -2,137 +2,110 @@
 
 ## Completed Milestones
 
-- [x] **v1.0 Parent Portal Real Data Integration** - Shipped 2026-06-02. Archive: `.planning/milestones/v1.0-ROADMAP.md`.
-- [x] **v1.1 Weekly Report Automation** - Shipped 2026-06-02. Archive: `.planning/milestones/v1.1-ROADMAP.md`.
-- [x] **v1.2 S3 Report Artifact Infrastructure** - Shipped 2026-06-04 after live AWS verification. Record: `.planning/milestones/s3-report-artifact-infrastructure.md`.
-- [x] **v1.3 Report Artifact Security & Operations Hardening** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.3-ROADMAP.md`.
-- [x] **v1.4 Report Operations Admin UI / Bulk Recovery** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.4-ROADMAP.md`.
-- [x] **v1.5 Report Recovery Production Rollout & Live Smoke** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.5-ROADMAP.md`.
-- [x] **v1.6 Report Recovery Operations Hardening** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.6-ROADMAP.md`.
-- [x] **v1.7 Recovery Evidence Export & Admin Credential Operations** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.7-ROADMAP.md`.
-- [x] **v1.8 Incident Generation Retry Jobs** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.8-ROADMAP.md`.
+- [x] **v1.0 Parent Portal Real Data Integration** - Shipped 2026-06-02.
+- [x] **v1.1 Weekly Report Automation** - Shipped 2026-06-02.
+- [x] **v1.2 S3 Report Artifact Infrastructure** - Shipped 2026-06-04.
+- [x] **v1.3 Report Artifact Security & Operations Hardening** - Shipped 2026-06-04.
+- [x] **v1.4 Report Operations Admin UI / Bulk Recovery** - Shipped 2026-06-04.
+- [x] **v1.5 Report Recovery Production Rollout & Live Smoke** - Shipped 2026-06-04.
+- [x] **v1.6 Report Recovery Operations Hardening** - Shipped 2026-06-05.
+- [x] **v1.7 Recovery Evidence Export & Admin Credential Operations** - Shipped 2026-06-05.
+- [x] **v1.8 Incident Generation Retry Jobs** - Shipped 2026-06-05.
+- [x] **v1.9 Recovery Resume And Support Evidence Packages** - Shipped 2026-06-05.
 
 ## Current Milestone
 
-### v1.9 Recovery Resume And Support Evidence Packages
+### v2.0 Controlled Report Editing MVP
 
-**Milestone Goal:** Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages without exposing private report artifacts or creating unbounded scans.
+**Milestone Goal:** Admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
 
-This milestone builds on v1.8 by turning recovery jobs into restartable incident workflows. It deliberately reuses existing recovery job, target, audit, and evidence export resources unless implementation evidence proves a gap.
+This milestone creates a backend-mediated edit draft/apply workflow for existing weekly report artifacts. It does not add PDF generation, multilingual delivery, billing, analytics, WORM storage, or external ticketing.
 
 ## Phases
 
-**Phase Numbering:**
-
-- Integer phases continue from previous milestones.
-- v1.8 ended at Phase 45, so v1.9 starts at Phase 46.
-- Decimal phases are reserved for urgent insertions.
-
-- [x] **Phase 46: Resume Contract And Evidence Package Design** - Define subset resume semantics, safety bounds, audit actions, and support package schema.
-- [x] **Phase 47: Failed/Skipped Subset Resume Backend** - Add backend preview/create support for resume-from-job recovery jobs.
-- [x] **Phase 48: Support Evidence Package UI** - Add UI controls for resume preview/start and support evidence packages.
-- [ ] **Phase 49: v1.9 Release Gate And Live Verification** - Consolidate build/deploy/CDK/API/UI evidence and production read-only smoke.
+- [x] **Phase 50: Report Editing Contract And Safety Model** - Define draft/apply contract, validation, privacy, audit, and CDK readiness.
+- [x] **Phase 51: Backend Report Edit Draft And Apply APIs** - Add admin-only draft/apply/read APIs and audit evidence.
+- [x] **Phase 52: Admin Report Editing UI** - Add report edit draft/apply controls to `/admin/report-operations`.
+- [ ] **Phase 53: v2.0 Release Gate And Final Verification** - Record deploy/CDK/API/UI/live read-only evidence and archive v2.0.
 
 ## Phase Details
 
-### Phase 46: Resume Contract And Evidence Package Design
+### Phase 50: Report Editing Contract And Safety Model
 
-**Goal**: Implementers have a precise contract for creating a new recovery job from failed/refused/not_found/skipped targets of an existing job, plus a support-safe evidence package schema.
-**Depends on**: Phase 45
-**Requirements**: RESUME-01, EVIDENCE-01, RESUME-04
-**Success Criteria** (what must be TRUE):
+**Goal**: Implementers have a precise report editing contract and safety model.
+**Depends on**: Phase 49
+**Requirements**: EDIT-01, EDIT-02, EDIT-04
+**Success Criteria**:
 
-1. Contract defines eligible source job statuses, target result filters, inherited job type behavior, preview token binding, limits, cancellation, audit actions, and privacy boundary.
-2. Support evidence package schema defines job summary, target result rollups, audit timeline, request IDs, redacted operator notes, and denylisted fields.
-3. CDK readiness states whether new Step Functions, SQS, Lambda, table, bucket, or GSI resources are required.
-4. Phase 47 backend plan identifies exact files and tests to change.
-
-**Plans**: 1 complete
-
-### Phase 47: Failed/Skipped Subset Resume Backend
-
-**Goal**: Admins can preview and create bounded resume jobs from failed/refused/not_found/skipped targets of a prior recovery job.
-**Depends on**: Phase 46
-**Requirements**: RESUME-01, RESUME-02, RESUME-03, RESUME-04
-**Success Criteria** (what must be TRUE):
-
-1. Preview API returns metadata-only source target samples filtered by allowed target results.
-2. Create API writes a new recovery job with `source_job_id`, inherited `job_type`, stable target snapshots, audit events, and bounded limits.
-3. Existing worker execution paths can process resumed resend and generation retry jobs without new infrastructure.
-4. Tests cover admin-only auth, non-admin rejection, bounds, stale preview token, no eligible targets, source job mismatch, privacy denylist, and audit linkage.
+1. Contract defines draft fields, apply behavior, validation, artifact versioning, audit actions, and rollback boundary.
+2. Privacy model states raw S3 keys/presigned URLs never leave backend.
+3. CDK readiness states whether new buckets/tables/GSIs/IAM permissions are required.
+4. Phase 51 backend plan identifies exact files and tests.
 
 **Plans**: 1 complete
 
-### Phase 48: Support Evidence Package UI
+### Phase 51: Backend Report Edit Draft And Apply APIs
 
-**Goal**: Admins can inspect failed recovery jobs, preview/start a resume job, and export a support-safe evidence package from `/admin/report-operations`.
-**Depends on**: Phase 47
-**Requirements**: EVIDENCE-01, EVIDENCE-02, UI-06
-**Success Criteria** (what must be TRUE):
+**Goal**: Admins can create/read/apply bounded report edit drafts through backend APIs.
+**Depends on**: Phase 50
+**Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04
+**Success Criteria**:
 
-1. UI exposes resume controls only when a selected recovery job has resumable target results.
-2. UI distinguishes source job, resumed job, job type, target result filters, and operator reason.
-3. Support package export shows metadata-only evidence, redacted notes, request IDs, and privacy markers omitted.
-4. Frontend tests cover resume preview/create, package export, disabled states, and privacy denylist.
+1. Admin-only APIs create draft metadata without exposing private S3 keys.
+2. Apply validates source report state and writes updated metadata/audit.
+3. Apply records before/after metadata, editor, reason, validation result, and artifact version references.
+4. Tests cover auth, validation, privacy denylist, audit, stale draft/source mismatch, and read-only draft retrieval.
+
+**Plans**: 1 complete
+
+### Phase 52: Admin Report Editing UI
+
+**Goal**: Admins can draft and apply report metadata edits from `/admin/report-operations`.
+**Depends on**: Phase 51
+**Requirements**: UI-07
+**Success Criteria**:
+
+1. UI shows edit controls only for selected reports.
+2. UI distinguishes draft creation from apply mutation.
+3. UI renders validation/audit outcome without private artifact markers.
+4. Frontend e2e covers draft/apply flow and privacy denylist.
 
 **Plans**: 1 complete
 **UI hint**: yes
 
-### Phase 49: v1.9 Release Gate And Live Verification
+### Phase 53: v2.0 Release Gate And Final Verification
 
-**Goal**: v1.9 closes with release evidence proving subset resume and support packages are deployed, bounded, admin-only, auditable, and production-smokeable without mutation.
-**Depends on**: Phase 48
-**Requirements**: VERIFY-02
-**Success Criteria** (what must be TRUE):
+**Goal**: v2.0 closes with release evidence proving report editing is deployed, admin-only, auditable, and production-smokeable without mutation.
+**Depends on**: Phase 52
+**Requirements**: VERIFY-03
+**Success Criteria**:
 
-1. Release gate records Lambda build manifest, backend/frontend deploy runs, commit SHAs, Lambda runtime state, and local quality gates.
-2. CDK diff/deploy evidence is recorded, with no-new-infra or exact required infra changes classified.
-3. Production API checks include request IDs for health, auth gate, list jobs, and read-only support package APIs.
-4. Production browser smoke verifies `/admin/report-operations` resume/support package UI without creating a production resume job.
-5. Final v1.9 audit records implementation evidence, live verification, residual risks, deferred follow-up, and archive readiness.
+1. Release gate records backend/frontend deploy runs, commit SHAs, Lambda manifest/runtime state, and local quality gates.
+2. CDK diff/deploy evidence is recorded and classified.
+3. Production API/browser smoke is read-only and creates no production edit draft/apply mutation.
+4. Final v2.0 audit records residual risks and future requirements.
 
 **Plans**: 0 complete
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 46 -> 47 -> 48 -> 49
-
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 46. Resume Contract And Evidence Package Design | v1.9 | 1/1 | Complete | 2026-06-05 |
-| 47. Failed/Skipped Subset Resume Backend | v1.9 | 1/1 | Complete | 2026-06-05 |
-| 48. Support Evidence Package UI | v1.9 | 1/1 | Complete | 2026-06-05 |
-| 49. v1.9 Release Gate And Live Verification | v1.9 | 0/1 | Not Started | - |
+| 50. Report Editing Contract And Safety Model | v2.0 | 1/1 | Complete | 2026-06-05 |
+| 51. Backend Report Edit Draft And Apply APIs | v2.0 | 1/1 | Complete | 2026-06-05 |
+| 52. Admin Report Editing UI | v2.0 | 1/1 | Complete | 2026-06-05 |
+| 53. v2.0 Release Gate And Final Verification | v2.0 | 0/1 | Not Started | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RESUME-01 | Phase 46/47 | Complete |
-| RESUME-02 | Phase 47 | Complete |
-| RESUME-03 | Phase 47 | Complete |
-| RESUME-04 | Phase 46/47/49 | In Progress |
-| EVIDENCE-01 | Phase 46/48 | Complete |
-| EVIDENCE-02 | Phase 48 | Complete |
-| UI-06 | Phase 48 | Complete |
-| VERIFY-02 | Phase 49 | Planned |
-
-**Coverage:**
-
-- v1.9 requirements: 8 total
-- Complete: 0
-- Mapped to phases: 8
-- Unmapped: 0
-
-## Next Candidates
-
-Deferred from v1.8:
-
-- Step Functions/SQS/new table/new bucket/new Lambda/new GSI if existing Lambda flow becomes insufficient.
-- Compliance-grade WORM audit storage if legal/security requires it.
-- External support ticket integration when an approved connector/credential path exists.
-- Report editing, PDF generation, multilingual delivery, billing, analytics, and broader admin operations expansion.
+| EDIT-01 | Phase 50/51 | Complete |
+| EDIT-02 | Phase 50/51 | Complete |
+| EDIT-03 | Phase 51 | Complete |
+| EDIT-04 | Phase 50/51/53 | In Progress |
+| UI-07 | Phase 52 | Complete |
+| VERIFY-03 | Phase 53 | Planned |
 
 ---
-*Last updated: 2026-06-05 after completing Phase 48*
+*Last updated: 2026-06-05 after completing Phase 52*
