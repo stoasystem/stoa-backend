@@ -28,7 +28,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 
 - [x] **Phase 38: Credential Ops Contract And Export Design** - Define credential lifecycle operations and metadata-only export contract before implementation.
 - [x] **Phase 39: Metadata-only Export Backend** - Add admin-only bounded export APIs with explicit allowlists and privacy-boundary tests.
-- [ ] **Phase 40: Admin Export UI And Read-only Smoke** - Add read-only export controls to `/admin/report-operations` and verify UI privacy.
+- [x] **Phase 40: Admin Export UI And Read-only Smoke** - Add read-only export controls to `/admin/report-operations` and verify UI privacy.
 - [ ] **Phase 41: Release Gate And v1.7 Audit** - Consolidate release evidence, production read-only smoke, and final milestone audit.
 
 ## Phase Details
@@ -76,7 +76,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 4. Local/browser smoke verifies the export path is read-only and preserves existing job/audit workflows.
 5. UI copy clearly distinguishes evidence export from retry/resend mutation actions.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 **UI hint**: yes
 
 ### Phase 41: Release Gate And v1.7 Audit
@@ -103,7 +103,7 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 |-------|-----------|----------------|--------|-----------|
 | 38. Credential Ops Contract And Export Design | v1.7 | 1/1 | Complete | 2026-06-05 |
 | 39. Metadata-only Export Backend | v1.7 | 1/1 | Complete | 2026-06-05 |
-| 40. Admin Export UI And Read-only Smoke | v1.7 | 0/1 | Not Started | - |
+| 40. Admin Export UI And Read-only Smoke | v1.7 | 1/1 | Complete | 2026-06-05 |
 | 41. Release Gate And v1.7 Audit | v1.7 | 0/1 | Not Started | - |
 
 ## Traceability
@@ -115,13 +115,13 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 | EXPORT-01 | Phase 39 | Complete |
 | EXPORT-02 | Phase 39 | Complete |
 | EXPORT-03 | Phase 39 | Complete |
-| UI-01 | Phase 40 | Planned |
+| UI-01 | Phase 40 | Complete |
 | VERIFY-01 | Phase 41 | Planned |
 
 **Coverage:**
 
 - v1.7 requirements: 7 total
-- Complete: 5
+- Complete: 6
 - Mapped to phases: 7
 - Unmapped: 0
 
@@ -137,4 +137,4 @@ Deferred from v1.6:
 - Report editing, PDF generation, multilingual delivery, billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after completing Phase 39*
+*Last updated: 2026-06-05 after completing Phase 40*

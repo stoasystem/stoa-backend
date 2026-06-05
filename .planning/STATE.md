@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Recovery Evidence Export & Admin Credential Operations
 status: active
-last_updated: "2026-06-05T10:58:27+02:00"
+last_updated: "2026-06-05T11:22:05+02:00"
 last_activity: 2026-06-05
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-06-05)
 
 ## Current Position
 
-Phase: 39 of 41 (2 of 4 for v1.7)
-Plan: 39-01
+Phase: 40 of 41 (3 of 4 for v1.7)
+Plan: 40-01
 Status: Complete
-Last activity: 2026-06-05 - Phase 39 metadata-only export backend completed.
+Last activity: 2026-06-05 - Phase 40 admin export UI and local read-only smoke completed.
 
-Progress: [█████-----] 50%
+Progress: [████████--] 75%
 
 ## Performance Metrics
 
@@ -37,8 +37,8 @@ Progress: [█████-----] 50%
 
 - Historical plans completed through v1.5: 33
 - Historical plans completed through v1.6: 38
-- Active milestone plans created: 2
-- Active milestone plans completed: 2
+- Active milestone plans created: 3
+- Active milestone plans completed: 3
 - Average duration: -
 - Total execution time this milestone: 0.0 hours
 
@@ -48,7 +48,7 @@ Progress: [█████-----] 50%
 |-------|-------|-------|----------|
 | 38 | 1/1 complete | - | - |
 | 39 | 1/1 complete | - | - |
-| 40 | 0 complete | - | - |
+| 40 | 1/1 complete | - | - |
 | 41 | 0 complete | - | - |
 
 **Recent Trend:**
@@ -69,12 +69,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Export payloads must use explicit metadata allowlists and preserve the no-private-artifact boundary proven in v1.6 production browser smoke.
 - Phase 38 decided that exact `job_id` export is the preferred Phase 39 implementation path and no CDK change is required for the MVP.
 - Phase 39 implemented the admin-only `GET /admin/reports/recovery-evidence` backend without CDK changes.
+- Phase 40 added frontend export controls in `/admin/report-operations` and verified local browser smoke without production calls.
 
 ### Pending Todos
 
-- Plan Phase 40 admin export UI and read-only smoke.
-- Add export controls to `/admin/report-operations`.
-- Keep production smoke read-only until export UI exists.
+- Execute Phase 41 release gate, production read-only smoke, and v1.7 final audit.
 
 ### Blockers/Concerns
 
@@ -96,11 +95,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-05 10:39 +02:00
-Stopped at: Phase 39 complete; Phase 40 is next.
+Stopped at: Phase 40 complete; Phase 41 is next.
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 40 admin export UI.
-- Implement frontend export controls and local browser smoke.
-- Keep production UI smoke read-only.
+- Assemble Phase 41 release gate evidence.
+- Run production read-only UI smoke after deploy evidence is confirmed.
+- Complete final v1.7 audit and archive.
