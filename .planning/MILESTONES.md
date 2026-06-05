@@ -215,23 +215,44 @@ Key accomplishments:
 
 Known deferred items at close: controlled report editing, Step Functions/SQS or dedicated worker orchestration if existing Lambda flow becomes insufficient, compliance-grade WORM audit storage, support ticket destination integration, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
 
-## Current
-
 ### v2.0 Controlled Report Editing MVP
 
-**Status:** Active
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Roadmap:** `.planning/ROADMAP.md`
+**Status:** Shipped 2026-06-05
+**Audit:** `.planning/milestones/v2.0-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.0-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.0-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.0-phases/`
 **Goal:** Admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
-**Phases:** 4 planned
-**Requirements:** active
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 6/6 complete
 
-Planned work:
+Key accomplishments:
 
-- Phase 50: Report Editing Contract And Safety Model.
-- Phase 51: Backend Report Edit Draft And Apply APIs.
-- Phase 52: Admin Report Editing UI.
-- Phase 53: v2.0 Release Gate And Final Verification.
+- Defined a metadata-only report editing safety contract with no raw artifact rewrite.
+- Added admin-only edit draft create/read/apply APIs for `admin_note`, `editor_summary`, and `status_note`.
+- Added stale draft rejection and append-only edit audit evidence.
+- Added selected-report edit draft/apply controls to `/admin/report-operations`.
+- Verified backend/frontend deploys, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, Cognito admin group membership, production bundle markers, and production read-only browser smoke.
+- Confirmed production smoke exposed no private markers and performed no production edit/recovery mutation.
+
+Known deferred items at close: raw report artifact editing/rewrite, rich preview/diff approval workflow, WORM audit storage, support ticket/export destination integrations, PDF/multilingual delivery, billing, analytics, broader admin operations expansion, and stronger recovery orchestration if existing Lambda flow becomes insufficient.
+
+## Current
+
+### No Active Milestone
+
+**Status:** Idle
+**Goal:** Select the next milestone from deferred future requirements when ready.
+
+Deferred candidates:
+
+- Raw report artifact editing/rewrite.
+- WORM audit storage.
+- Support ticket/export destination integrations.
+- Step Functions/SQS or dedicated recovery orchestration.
+- PDF/multilingual delivery.
+- Billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after archiving v1.9 and starting v2.0*
+*Last updated: 2026-06-05 after archiving v2.0*

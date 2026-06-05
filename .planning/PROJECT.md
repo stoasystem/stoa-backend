@@ -12,7 +12,7 @@ The completed v1.8 milestone extends the same recovery platform to bounded async
 
 The completed v1.9 milestone adds failed/refused/not_found/skipped subset resume and support-safe evidence packages for incident operations.
 
-The active v2.0 milestone adds a controlled, metadata-only report edit draft/apply workflow for admins, with append-only audit evidence and no direct S3 artifact exposure.
+The completed v2.0 milestone adds a controlled, metadata-only report edit draft/apply workflow for admins, with append-only audit evidence and no direct S3 artifact exposure.
 
 ## Core Value
 
@@ -20,7 +20,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.9 Recovery Resume And Support Evidence Packages on 2026-06-05
+**Shipped version:** v2.0 Controlled Report Editing MVP on 2026-06-05
 
 Delivered:
 
@@ -68,32 +68,27 @@ Delivered:
 - Backend support evidence packages export bounded metadata-only incident evidence for recovery jobs without private artifact exposure.
 - Frontend `/admin/report-operations` exposes resume preview/create controls and support evidence package controls.
 - v1.9 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, Cognito group membership, production bundle markers, and production read-only browser smoke for resume/support UI with no production mutation.
+- Backend report editing supports metadata-only edit draft create/read/apply for `admin_note`, `editor_summary`, and `status_note`.
+- Report edit apply rejects stale drafts and writes append-only `apply_report_edit` audit evidence.
+- Frontend `/admin/report-operations` exposes selected-report edit draft/apply controls.
+- v2.0 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, Cognito group membership, production bundle markers, and production read-only browser smoke for edit draft/apply UI with no production mutation.
 
 ## Last Shipped Milestone
 
-**v1.9 Recovery Resume And Support Evidence Packages** shipped on 2026-06-05.
-
-Goal: admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages.
-
-Archived phases:
-
-- Phase 46: Resume Contract And Evidence Package Design.
-- Phase 47: Failed/Skipped Subset Resume Backend.
-- Phase 48: Support Evidence Package UI.
-- Phase 49: v1.9 Release Gate And Live Verification.
-
-## Current Milestone
-
-**v2.0 Controlled Report Editing MVP** started on 2026-06-05.
+**v2.0 Controlled Report Editing MVP** shipped on 2026-06-05.
 
 Goal: admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
 
-Planned phases:
+Archived phases:
 
 - Phase 50: Report Editing Contract And Safety Model.
 - Phase 51: Backend Report Edit Draft And Apply APIs.
 - Phase 52: Admin Report Editing UI.
 - Phase 53: v2.0 Release Gate And Final Verification.
+
+## Current Milestone
+
+No active milestone. The next milestone should be selected from deferred future requirements.
 
 ## Requirements
 
@@ -136,8 +131,6 @@ Milestone v1.7 requirements are archived in `.planning/milestones/v1.7-REQUIREME
 - UI-01: read-only admin evidence export UI on `/admin/report-operations` - Phase 40.
 - VERIFY-01: release gate and live evidence package for v1.7 closeout - Phase 41.
 
-### Completed
-
 Milestone v1.8 requirements are archived in `.planning/milestones/v1.8-REQUIREMENTS.md` and are complete:
 
 - GENJOB-01: generation retry preview - Phase 42/43.
@@ -158,9 +151,7 @@ Milestone v1.9 requirements are archived in `.planning/milestones/v1.9-REQUIREME
 - UI-06: resume and evidence package UI - Phase 48.
 - VERIFY-02: v1.9 release gate - Phase 49.
 
-### Active
-
-Milestone v2.0 requirements are tracked in `.planning/REQUIREMENTS.md`:
+Milestone v2.0 requirements are archived in `.planning/milestones/v2.0-REQUIREMENTS.md` and are complete:
 
 - EDIT-01: edit draft lifecycle - Phase 50/51.
 - EDIT-02: apply edit - Phase 50/51.
@@ -168,6 +159,10 @@ Milestone v2.0 requirements are tracked in `.planning/REQUIREMENTS.md`:
 - EDIT-04: privacy and storage safety - Phase 50/51/53.
 - UI-07: admin editing UI - Phase 52.
 - VERIFY-03: v2.0 release gate - Phase 53.
+
+### Active
+
+No active milestone requirements.
 
 ### Out of Scope
 
@@ -285,7 +280,7 @@ Known current resources:
 | Start v1.7 with credential operations and metadata-only export | v1.6 proved the recovery workflow works; the next low-risk value is reusable evidence and credential lifecycle hygiene before larger mutation/orchestration work | Good - shipped in v1.7 |
 | Start v1.8 with async generation retry jobs | v1.7 proved reusable evidence/export and credential operations; the next highest-value recovery expansion is bounded incident-wide generation retry using existing job infrastructure | Good - shipped in v1.8 |
 | Start v1.9 with recovery subset resume and support evidence packages | v1.8 proved both resend and generation retry async jobs; the next operational gap is restarting failed subsets and packaging metadata-only support evidence | Good - shipped in v1.9 |
-| Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Active - planned in Phases 50-53 |
+| Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
 
 ## Evolution
 
@@ -305,4 +300,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 during v2.0 release gate*
+*Last updated: 2026-06-05 after archiving milestone v2.0*
