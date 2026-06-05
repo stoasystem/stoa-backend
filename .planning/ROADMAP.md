@@ -26,7 +26,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 - v1.6 ended at Phase 37, so v1.7 starts at Phase 38.
 - Decimal phases are reserved for urgent insertions.
 
-- [ ] **Phase 38: Credential Ops Contract And Export Design** - Define credential lifecycle operations and metadata-only export contract before implementation.
+- [x] **Phase 38: Credential Ops Contract And Export Design** - Define credential lifecycle operations and metadata-only export contract before implementation.
 - [ ] **Phase 39: Metadata-only Export Backend** - Add admin-only bounded export APIs with explicit allowlists and privacy-boundary tests.
 - [ ] **Phase 40: Admin Export UI And Read-only Smoke** - Add read-only export controls to `/admin/report-operations` and verify UI privacy.
 - [ ] **Phase 41: Release Gate And v1.7 Audit** - Consolidate release evidence, production read-only smoke, and final milestone audit.
@@ -46,7 +46,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 4. Export payload fields are defined through an explicit metadata allowlist and explicit private artifact denylist.
 5. Phase 39 implementation plan states whether backend, frontend, or CDK changes are required.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ### Phase 39: Metadata-only Export Backend
 
@@ -101,7 +101,7 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 38. Credential Ops Contract And Export Design | v1.7 | 0/1 | Planned | - |
+| 38. Credential Ops Contract And Export Design | v1.7 | 1/1 | Complete | 2026-06-05 |
 | 39. Metadata-only Export Backend | v1.7 | 0/1 | Not Started | - |
 | 40. Admin Export UI And Read-only Smoke | v1.7 | 0/1 | Not Started | - |
 | 41. Release Gate And v1.7 Audit | v1.7 | 0/1 | Not Started | - |
@@ -110,8 +110,8 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADMIN-01 | Phase 38 | Planned |
-| ADMIN-02 | Phase 38 | Planned |
+| ADMIN-01 | Phase 38 | Complete |
+| ADMIN-02 | Phase 38 | Complete |
 | EXPORT-01 | Phase 39 | Planned |
 | EXPORT-02 | Phase 39 | Planned |
 | EXPORT-03 | Phase 39 | Planned |
@@ -121,6 +121,7 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 **Coverage:**
 
 - v1.7 requirements: 7 total
+- Complete: 2
 - Mapped to phases: 7
 - Unmapped: 0
 

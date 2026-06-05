@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Recovery Evidence Export & Admin Credential Operations
 status: active
-last_updated: "2026-06-05T10:39:05+02:00"
+last_updated: "2026-06-05T10:46:31+02:00"
 last_activity: 2026-06-05
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 1
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-06-05)
 
 ## Current Position
 
-Phase: 38 of 41 (0 of 4 for v1.7)
+Phase: 38 of 41 (1 of 4 for v1.7)
 Plan: 38-01
-Status: Planned
-Last activity: 2026-06-05 - Phase 38 context and execution plan created.
+Status: Complete
+Last activity: 2026-06-05 - Phase 38 credential operations and export contract completed.
 
-Progress: [----------] 0%
+Progress: [███-------] 25%
 
 ## Performance Metrics
 
@@ -38,7 +38,7 @@ Progress: [----------] 0%
 - Historical plans completed through v1.5: 33
 - Historical plans completed through v1.6: 38
 - Active milestone plans created: 1
-- Active milestone plans completed: 0
+- Active milestone plans completed: 1
 - Average duration: -
 - Total execution time this milestone: 0.0 hours
 
@@ -46,7 +46,7 @@ Progress: [----------] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 38 | 0/1 complete | - | - |
+| 38 | 1/1 complete | - | - |
 | 39 | 0 complete | - | - |
 | 40 | 0 complete | - | - |
 | 41 | 0 complete | - | - |
@@ -67,17 +67,18 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Production admin credential ownership/rotation is included because v1.6 created the long-lived secret-backed admin path but left operational ownership as follow-up.
 - Existing Lambda/DynamoDB/admin UI resources should be reused unless Phase 38 proves a concrete missing access pattern.
 - Export payloads must use explicit metadata allowlists and preserve the no-private-artifact boundary proven in v1.6 production browser smoke.
+- Phase 38 decided that exact `job_id` export is the preferred Phase 39 implementation path and no CDK change is required for the MVP.
 
 ### Pending Todos
 
-- Execute Phase 38 plan for credential ops contract and export design.
-- Confirm whether existing report repository access patterns can support bounded evidence export.
+- Plan Phase 39 metadata-only export backend.
+- Implement admin-only export API from the Phase 38 contract.
 - Keep production smoke read-only until export implementation is ready.
 
 ### Blockers/Concerns
 
 - CDK deploys package `../stoa-backend/dist`; Phase 33 added manifest and fail-fast guard, but CI must still prove the GitHub checkout layout after merge.
-- Production admin credential ownership and rotation policy must be assigned in Phase 38.
+- Production admin credential ownership and rotation cadence must be assigned by operations before routine support use.
 - Export scans must remain bounded; avoid introducing broad table scans into the admin UI.
 
 ## Deferred Items
@@ -94,10 +95,11 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-05 10:39 +02:00
-Stopped at: Phase 38 planned and ready to execute.
+Stopped at: Phase 38 complete; Phase 39 is next.
 Resume file: None
 
 ## Operator Next Steps
 
-- Implement credential ops runbook updates and export design contract.
-- Proceed to metadata-only export backend after Phase 38 verification.
+- Plan Phase 39 metadata-only export backend.
+- Implement and test admin-only export API.
+- Keep production UI smoke read-only until export UI exists.
