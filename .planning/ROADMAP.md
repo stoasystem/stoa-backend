@@ -12,7 +12,117 @@
 
 ## Current Milestone
 
-No active milestone. Run `$gsd-new-milestone` to define the next milestone requirements and roadmap.
+### v1.7 Recovery Evidence Export & Admin Credential Operations
+
+**Milestone Goal:** Make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
+
+This milestone turns v1.6 production verification into reusable operational evidence. It formalizes long-lived admin credential ownership and rotation, adds metadata-only recovery evidence export, exposes export through the admin UI, and closes with a release gate and production read-only smoke.
+
+## Phases
+
+**Phase Numbering:**
+
+- Integer phases continue from previous milestones.
+- v1.6 ended at Phase 37, so v1.7 starts at Phase 38.
+- Decimal phases are reserved for urgent insertions.
+
+- [ ] **Phase 38: Credential Ops Contract And Export Design** - Define credential lifecycle operations and metadata-only export contract before implementation.
+- [ ] **Phase 39: Metadata-only Export Backend** - Add admin-only bounded export APIs with explicit allowlists and privacy-boundary tests.
+- [ ] **Phase 40: Admin Export UI And Read-only Smoke** - Add read-only export controls to `/admin/report-operations` and verify UI privacy.
+- [ ] **Phase 41: Release Gate And v1.7 Audit** - Consolidate release evidence, production read-only smoke, and final milestone audit.
+
+## Phase Details
+
+### Phase 38: Credential Ops Contract And Export Design
+
+**Goal**: Operators have a production admin credential lifecycle contract and implementers have a metadata-only export design that reuses existing resources unless proven insufficient.
+**Depends on**: Phase 37
+**Requirements**: ADMIN-01, ADMIN-02
+**Success Criteria** (what must be TRUE):
+
+1. The runbook names the long-lived admin credential path, owner assignment, rotation cadence, access review checklist, emergency disable procedure, and Cognito admins group verification procedure without exposing secret material.
+2. Verification evidence can record timestamp, AWS account/region, redacted username, group membership status, and command/request IDs without printing passwords, tokens, or Cognito session secrets.
+3. Existing API Lambda, DynamoDB, admin auth, report repositories, and admin route resources are reviewed before implementation and any required gap is documented.
+4. Export payload fields are defined through an explicit metadata allowlist and explicit private artifact denylist.
+5. Phase 39 implementation plan states whether backend, frontend, or CDK changes are required.
+
+**Plans**: 0 complete
+
+### Phase 39: Metadata-only Export Backend
+
+**Goal**: Admins can request bounded metadata-only recovery job, target, result, and audit evidence through backend APIs that are admin-only, observable, and read-only.
+**Depends on**: Phase 38
+**Requirements**: EXPORT-01, EXPORT-02, EXPORT-03
+**Success Criteria** (what must be TRUE):
+
+1. Export API supports bounded query parameters and rejects unbounded or oversized requests.
+2. Export responses include only metadata-safe job IDs, operation IDs, statuses, timestamps, counts, actors, redacted target identifiers, and audit summaries.
+3. Export responses omit `weekly-reports/`, S3 keys, presigned URLs, raw report JSON, raw report HTML, auth tokens, session tokens, and customer-sensitive artifact payloads.
+4. Tests cover admin authorization, non-admin rejection, bounds, read-only behavior, explicit allowlist serialization, and privacy-boundary denylist assertions.
+5. Logs or audit evidence record request ID, actor, filters, result counts, and status without creating recovery jobs or mutating report state.
+
+**Plans**: 0 complete
+
+### Phase 40: Admin Export UI And Read-only Smoke
+
+**Goal**: Admins can collect metadata-only recovery evidence from `/admin/report-operations` without exposing private artifact data or changing production recovery state.
+**Depends on**: Phase 39
+**Requirements**: UI-01
+**Success Criteria** (what must be TRUE):
+
+1. Admin UI exposes bounded export controls for supported job/time/filter scopes.
+2. UI renders export status, counts, errors, and evidence payloads without private artifact fields.
+3. Frontend tests verify export API wiring, admin auth assumptions, error states, and absence of private artifact markers.
+4. Local/browser smoke verifies the export path is read-only and preserves existing job/audit workflows.
+5. UI copy clearly distinguishes evidence export from retry/resend mutation actions.
+
+**Plans**: 0 complete
+**UI hint**: yes
+
+### Phase 41: Release Gate And v1.7 Audit
+
+**Goal**: v1.7 closes with release-gate evidence proving credential operations, export backend/UI, privacy boundaries, and production read-only smoke.
+**Depends on**: Phase 40
+**Requirements**: VERIFY-01
+**Success Criteria** (what must be TRUE):
+
+1. Release gate references Lambda build manifest evidence and backend/frontend deploy evidence when deploys are performed.
+2. Admin-only API checks include request IDs, authorization evidence, bounds checks, and privacy-boundary assertions.
+3. CDK diff/deploy evidence is recorded when infrastructure changes are made, or explicitly marked not applicable when no CDK change is needed.
+4. Production browser smoke verifies `/admin/report-operations` export UI with the long-lived admin credential path and performs no production mutation.
+5. Final milestone audit records implementation evidence, live verification outputs, residual risks, deferred follow-up work, and archive readiness.
+
+**Plans**: 0 complete
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 38 -> 39 -> 40 -> 41
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 38. Credential Ops Contract And Export Design | v1.7 | 0/1 | Planned | - |
+| 39. Metadata-only Export Backend | v1.7 | 0/1 | Not Started | - |
+| 40. Admin Export UI And Read-only Smoke | v1.7 | 0/1 | Not Started | - |
+| 41. Release Gate And v1.7 Audit | v1.7 | 0/1 | Not Started | - |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| ADMIN-01 | Phase 38 | Planned |
+| ADMIN-02 | Phase 38 | Planned |
+| EXPORT-01 | Phase 39 | Planned |
+| EXPORT-02 | Phase 39 | Planned |
+| EXPORT-03 | Phase 39 | Planned |
+| UI-01 | Phase 40 | Planned |
+| VERIFY-01 | Phase 41 | Planned |
+
+**Coverage:**
+
+- v1.7 requirements: 7 total
+- Mapped to phases: 7
+- Unmapped: 0
 
 ## Next Candidates
 
@@ -20,11 +130,10 @@ Deferred from v1.6:
 
 - Incident-wide `generation_failed` retry.
 - Resume failed/skipped recovery subsets as a new audit-linked job.
-- Metadata-only recovery target/job/audit export.
 - Support ticket or incident note integration.
 - Stronger orchestration resources if evidence requires Step Functions, SQS, a dedicated worker Lambda, a new table, a new bucket, or a new GSI.
 - Compliance-grade WORM audit storage if legal/security requires it.
 - Report editing, PDF generation, multilingual delivery, billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after archiving v1.6*
+*Last updated: 2026-06-05 after starting v1.7*

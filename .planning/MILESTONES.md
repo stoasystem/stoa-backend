@@ -149,7 +149,21 @@ Known deferred items at close: incident-wide generation retry, resume failed/ski
 
 ## Current
 
-No active milestone. Start the next milestone from one selected deferred follow-up when ready.
+### v1.7 Recovery Evidence Export & Admin Credential Operations
+
+**Status:** Planning started 2026-06-05
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/ROADMAP.md`
+**Goal:** Make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
+**Phases:** 4 planned
+**Requirements:** 7 active
+
+Planned work:
+
+- Phase 38: Credential Ops Contract and Export Design.
+- Phase 39: Metadata-only Export Backend.
+- Phase 40: Admin Export UI and Read-only Smoke.
+- Phase 41: Release Gate and v1.7 Audit.
 
 ---
-*Last updated: 2026-06-05 after shipping v1.6*
+*Last updated: 2026-06-05 after starting v1.7*

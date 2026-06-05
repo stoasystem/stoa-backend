@@ -1,0 +1,121 @@
+# Requirements: v1.7 Recovery Evidence Export & Admin Credential Operations
+
+**Created:** 2026-06-05
+**Status:** Active milestone requirements
+**Source:** v1.6 final audit deferred items and operator follow-up
+
+## Milestone Goal
+
+Make the production report recovery platform easier to operate, audit, and hand off without expanding production mutation scope. v1.7 focuses on formal production admin credential lifecycle management and metadata-only recovery evidence export.
+
+## Success Criteria
+
+- Operators have a documented owner, rotation procedure, access review procedure, and smoke credential path for the long-lived production admin account.
+- Admins can export bounded metadata-only recovery job, target, result, and audit evidence for support/release review.
+- Export responses and UI never expose private report artifacts, S3 keys, presigned URLs, raw report JSON, raw report HTML, auth tokens, or customer-sensitive artifact payloads.
+- Export APIs are admin-only, bounded, observable, and safe to verify through read-only production smoke.
+- v1.7 release gate captures backend/frontend deploy evidence, API request IDs, CDK/diff/deploy evidence when applicable, and production read-only UI smoke results.
+
+## Functional Requirements
+
+### ADMIN-01 Production Admin Credential Ownership
+
+The production admin credential path created in v1.6 must have documented owner assignment, rotation cadence, emergency disable procedure, and access review checklist.
+
+Acceptance criteria:
+
+- The runbook names the credential storage path without exposing the secret value.
+- The procedure covers rotation, group membership validation, disabled-user recovery, and revocation.
+- Verification commands use the approved `stoa-prod-admin` AWS profile or an explicit secret-backed credential path.
+
+### ADMIN-02 Admin Group Verification Procedure
+
+Operators must be able to verify that the long-lived admin user belongs to the Cognito admins group before browser smoke or support use.
+
+Acceptance criteria:
+
+- The runbook includes exact redacted AWS/Cognito verification steps.
+- Verification evidence records timestamp, AWS account/region, redacted username, group membership status, and command/request IDs where available.
+- The procedure does not require printing passwords, tokens, or Cognito session secrets.
+
+### EXPORT-01 Metadata-only Recovery Evidence Export API
+
+Admins must be able to request an export of recovery evidence for a bounded time window, recovery job, or recovery operation filter.
+
+Acceptance criteria:
+
+- API supports bounded query parameters and rejects unbounded or oversized requests.
+- Response includes only metadata needed for support/release evidence: job IDs, operation IDs, statuses, timestamps, counts, actors, redacted target identifiers, and audit event summaries.
+- Response includes no private artifact locator or raw report payload fields.
+- API requires admin authorization and rejects non-admin callers.
+
+### EXPORT-02 Export Privacy Boundary
+
+Export implementation must preserve the existing backend-mediated artifact privacy contract.
+
+Acceptance criteria:
+
+- Tests prove absence of `weekly-reports/`, S3 object keys, presigned URLs, raw report JSON, raw report HTML, and auth/session tokens in export responses.
+- Export serialization uses explicit allowlists rather than returning raw DynamoDB records.
+- Any target identifiers included for operator usefulness are redacted or reduced to existing metadata-safe identifiers.
+
+### EXPORT-03 Export Auditability and Observability
+
+Export requests must leave enough evidence for release gates and support review without becoming a new mutable recovery action.
+
+Acceptance criteria:
+
+- Export requests are logged with request ID, actor, filters, result counts, and status.
+- Export does not create recovery jobs, update report state, resend email, retry generation, or write report artifacts.
+- If an audit record is added for export access, it must be explicitly classified as read-only evidence access.
+
+### UI-01 Admin Evidence Export UI
+
+The admin report operations UI must expose evidence export in a way that is clearly read-only and bounded.
+
+Acceptance criteria:
+
+- UI allows selecting supported filters/job/time window and downloading or copying metadata-only evidence.
+- UI shows export status, counts, and errors without exposing private report artifact fields.
+- UI works with existing admin auth and preserves current job/audit workflows.
+
+### VERIFY-01 Release Gate and Live Evidence Package
+
+v1.7 must close with a release gate that consolidates build, deploy, API, CDK, and production read-only browser evidence.
+
+Acceptance criteria:
+
+- Release gate references Lambda build manifest evidence.
+- Backend/frontend deploy evidence is recorded if deploys are performed.
+- Admin-only API checks include request IDs and privacy-boundary assertions.
+- CDK diff/deploy evidence is recorded when infrastructure changes are made, or explicitly marked not applicable when no CDK change is needed.
+- Production browser smoke verifies `/admin/report-operations` export UI without production mutation.
+
+## Non-Functional Requirements
+
+- Reuse existing API Lambda, DynamoDB table, reports repository, admin auth, and frontend admin route unless a concrete missing access pattern proves otherwise.
+- Prefer explicit field allowlists for all export payloads.
+- Keep export limits conservative to avoid expensive scans.
+- Do not add Step Functions, SQS, new tables, new buckets, new Lambdas, or new GSIs unless existing resources are proven insufficient.
+- Preserve existing recovery mutation safeguards.
+
+## Out of Scope
+
+- Incident-wide `generation_failed` retry.
+- Resume failed/skipped recovery subsets as a new recovery job type.
+- Step Functions/SQS orchestration expansion.
+- Compliance-grade WORM audit storage.
+- Support ticket system integration.
+- Report editing, PDF generation, multilingual delivery, billing, analytics, or broader admin operations expansion.
+
+## Traceability
+
+| Requirement | Primary Phase |
+|-------------|---------------|
+| ADMIN-01 | Phase 38 |
+| ADMIN-02 | Phase 38 |
+| EXPORT-01 | Phase 39 |
+| EXPORT-02 | Phase 39 |
+| EXPORT-03 | Phase 39 |
+| UI-01 | Phase 40 |
+| VERIFY-01 | Phase 41 |

@@ -4,7 +4,9 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.6 report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, run bounded async `email_failed` resend jobs, inspect append-only audit evidence, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
+The shipped report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, run bounded async `email_failed` resend jobs, inspect append-only audit evidence, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
+
+The active v1.7 milestone turns that platform into a cleaner operational release gate by formalizing production admin credential ownership/rotation and adding metadata-only recovery evidence export.
 
 ## Core Value
 
@@ -53,7 +55,16 @@ Delivered:
 
 ## Current Milestone
 
-No active milestone. v1.6 shipped on 2026-06-05. The next milestone should select from deferred follow-up work after reviewing `.planning/milestones/v1.6-MILESTONE-AUDIT.md`.
+**v1.7 Recovery Evidence Export & Admin Credential Operations** started on 2026-06-05.
+
+Goal: make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
+
+Planned phases:
+
+- Phase 38: Credential Ops Contract and Export Design.
+- Phase 39: Metadata-only Export Backend.
+- Phase 40: Admin Export UI and Read-only Smoke.
+- Phase 41: Release Gate and v1.7 Audit.
 
 ## Requirements
 
@@ -86,13 +97,15 @@ Shipped requirements:
 
 ### Active
 
-Milestone v1.6 requirements are complete and archived in `.planning/milestones/v1.6-REQUIREMENTS.md`:
+Milestone v1.7 requirements are tracked in `.planning/REQUIREMENTS.md`:
 
-- Lambda package manifest and CDK/CI stale-dist guard.
-- Application-enforced append-only recovery audit records.
-- Bounded async `email_failed` resend jobs with preview, target snapshots, progress, cancellation, and per-target results.
-- Admin job/audit UI plus read-only production admin browser smoke.
-- Updated runbook, release gate, live verification, and final milestone audit.
+- ADMIN-01: production admin credential ownership, rotation, emergency disable, and access review procedure.
+- ADMIN-02: Cognito admins group verification procedure that avoids exposing passwords, tokens, or session secrets.
+- EXPORT-01: admin-only bounded metadata export for recovery job, target, result, and audit evidence.
+- EXPORT-02: export privacy boundary that omits private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
+- EXPORT-03: read-only export observability and evidence logging.
+- UI-01: read-only admin evidence export UI on `/admin/report-operations`.
+- VERIFY-01: release gate and live evidence package for v1.7 closeout.
 
 ### Out of Scope
 
@@ -207,6 +220,7 @@ Known current resources:
 | Treat stale `../stoa-backend/dist` as a deployment risk | CDK deploys Lambda assets from local build output and can overwrite current code if not rebuilt | Good - documented in v1.5 runbook |
 | Keep v1.6 browser smoke read-only by default | Production browser verification should prove route/auth/privacy without mutating customer report data | Good - verified in Phase 36 |
 | Use secret-backed long-lived production admin credentials for smoke | v1.6 forbids temporary production admin smoke accounts but needs real admin auth | Good - credential path created in Phase 36; ownership/rotation remains operational follow-up |
+| Start v1.7 with credential operations and metadata-only export | v1.6 proved the recovery workflow works; the next low-risk value is reusable evidence and credential lifecycle hygiene before larger mutation/orchestration work | Active - planned in Phases 38-41 |
 
 ## Evolution
 
