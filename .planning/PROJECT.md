@@ -52,6 +52,7 @@ Delivered:
 - Frontend `/admin/report-operations` exposes async job and audit workflows.
 - Production read-only admin browser smoke verified the deployed route, auth, GET APIs, metadata-only privacy boundary, and no production mutation.
 - v1.6 runbook, release gate, live verification evidence, and final audit are complete.
+- Backend admin-only `GET /admin/reports/recovery-evidence` exports bounded metadata-only recovery job, target, and audit evidence without private artifact exposure or recovery mutation.
 
 ## Current Milestone
 
@@ -99,13 +100,16 @@ Shipped requirements:
 
 Milestone v1.7 requirements are tracked in `.planning/REQUIREMENTS.md`:
 
-- ADMIN-01: production admin credential ownership, rotation, emergency disable, and access review procedure.
-- ADMIN-02: Cognito admins group verification procedure that avoids exposing passwords, tokens, or session secrets.
-- EXPORT-01: admin-only bounded metadata export for recovery job, target, result, and audit evidence.
-- EXPORT-02: export privacy boundary that omits private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
-- EXPORT-03: read-only export observability and evidence logging.
 - UI-01: read-only admin evidence export UI on `/admin/report-operations`.
 - VERIFY-01: release gate and live evidence package for v1.7 closeout.
+
+Completed in v1.7:
+
+- ADMIN-01: production admin credential ownership, rotation, emergency disable, and access review procedure - Phase 38.
+- ADMIN-02: Cognito admins group verification procedure that avoids exposing passwords, tokens, or session secrets - Phase 38.
+- EXPORT-01: admin-only bounded metadata export for recovery job, target, result, and audit evidence - Phase 39.
+- EXPORT-02: export privacy boundary that omits private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads - Phase 39.
+- EXPORT-03: read-only export observability and evidence logging - Phase 39.
 
 ### Out of Scope
 

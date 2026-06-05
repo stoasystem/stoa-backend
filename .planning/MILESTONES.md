@@ -151,12 +151,12 @@ Known deferred items at close: incident-wide generation retry, resume failed/ski
 
 ### v1.7 Recovery Evidence Export & Admin Credential Operations
 
-**Status:** Phase 38 complete, Phase 39 next
+**Status:** Phase 39 complete, Phase 40 next
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Roadmap:** `.planning/ROADMAP.md`
 **Goal:** Make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
-**Phases:** 1 complete, 3 planned
-**Requirements:** 2 complete, 5 active
+**Phases:** 2 complete, 2 planned
+**Requirements:** 5 complete, 2 active
 
 Planned work:
 
@@ -166,4 +166,4 @@ Planned work:
 - Phase 41: Release Gate and v1.7 Audit.
 
 ---
-*Last updated: 2026-06-05 after starting v1.7*
+*Last updated: 2026-06-05 after completing Phase 39*

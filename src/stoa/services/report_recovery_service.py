@@ -250,6 +250,7 @@ def redact_private_artifact_text(value: object) -> str | None:
     if value is None:
         return None
     text = str(value)
+    text = re.sub(r"https?://[^\s'\"<>]*(?:s3|X-Amz-)[^\s'\"<>]*", "[report-artifact-url]", text)
     text = re.sub(r"weekly-reports/[^\s'\"<>]+", "[report-artifact-key]", text)
     for token in ("json_s3_key", "html_s3_key", "s3_key"):
         text = text.replace(token, "[report-artifact-field]")

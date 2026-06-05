@@ -1,7 +1,7 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from stoa.db.dynamodb import get_table
@@ -9,7 +9,7 @@ from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
-from stoa.services import report_recovery_job_service, report_recovery_service
+from stoa.services import report_recovery_evidence_service, report_recovery_job_service, report_recovery_service
 
 router = APIRouter()
 
@@ -484,6 +484,62 @@ async def create_resend_recovery_job(
     return _recovery_job_response(job)
 
 
+@router.get("/reports/recovery-evidence")
+async def export_recovery_evidence(
+    request: Request,
+    job_id: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    next_token: Optional[str] = Query(default=None),
+    include_targets: bool = Query(default=True),
+    include_job_audit: bool = Query(default=True),
+    target_limit: int = Query(default=50, ge=1, le=100),
+    audit_limit: int = Query(default=50, ge=1, le=100),
+    next_target_token: Optional[str] = Query(default=None),
+    next_audit_token: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """Export metadata-only report recovery evidence for release/support review."""
+    request_id = _request_id(request)
+    operator = _operator_id(user)
+    try:
+        if job_id:
+            response = _export_recovery_job_evidence(
+                job_id=job_id,
+                request_id=request_id,
+                include_targets=include_targets,
+                include_job_audit=include_job_audit,
+                target_limit=target_limit,
+                audit_limit=audit_limit,
+                next_target_token=next_target_token,
+                next_audit_token=next_audit_token,
+            )
+        else:
+            response = _export_recent_recovery_jobs(
+                request_id=request_id,
+                status=status,
+                limit=limit,
+                next_token=next_token,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    report_recovery_evidence_service.log_export_access(
+        actor=operator,
+        request_id=request_id,
+        scope=response["scope"],
+        filters=response["filters"],
+        result_counts={
+            "jobs": len(response["jobs"]),
+            "targets": len(response["targets"]),
+            "job_audit": len(response["job_audit"]),
+            "report_audit": len(response["report_audit"]),
+        },
+        status="success",
+    )
+    return response
+
+
 @router.get("/reports/recovery-jobs", response_model=RecoveryJobListResponse)
 async def list_recovery_jobs(
     limit: int = Query(default=50, ge=1, le=100),
@@ -697,6 +753,99 @@ def _get_report_or_404(parent_id: str, student_id: str, week_start: str) -> dict
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+
+def _export_recovery_job_evidence(
+    *,
+    job_id: str,
+    request_id: str | None,
+    include_targets: bool,
+    include_job_audit: bool,
+    target_limit: int,
+    audit_limit: int,
+    next_target_token: str | None,
+    next_audit_token: str | None,
+) -> dict[str, Any]:
+    job = report_repo.get_recovery_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Recovery job not found")
+
+    targets: list[dict] = []
+    target_next_token = None
+    if include_targets:
+        target_last_key = report_repo.decode_recovery_job_page_token(next_target_token)
+        target_result = report_repo.list_recovery_job_targets(
+            job_id,
+            limit=target_limit,
+            last_key=target_last_key,
+        )
+        targets = target_result.get("Items", [])
+        target_next_token = report_repo.encode_recovery_job_page_token(target_result.get("LastEvaluatedKey"))
+
+    job_audit: list[dict] = []
+    audit_next_token = None
+    if include_job_audit:
+        audit_last_key = report_repo.decode_audit_page_token(next_audit_token)
+        audit_result = report_repo.list_recovery_job_audit_events(
+            job_id,
+            limit=audit_limit,
+            last_key=audit_last_key,
+        )
+        job_audit = audit_result.get("Items", [])
+        audit_next_token = report_repo.encode_audit_page_token(audit_result.get("LastEvaluatedKey"))
+
+    return report_recovery_evidence_service.build_export_response(
+        scope="recovery_job",
+        request_id=request_id,
+        filters={
+            "job_id": job_id,
+            "include_targets": include_targets,
+            "include_job_audit": include_job_audit,
+            "target_limit": target_limit,
+            "audit_limit": audit_limit,
+        },
+        jobs=[job],
+        targets=targets,
+        job_audit=job_audit,
+        next_tokens={
+            "targets": target_next_token,
+            "job_audit": audit_next_token,
+        },
+    )
+
+
+def _export_recent_recovery_jobs(
+    *,
+    request_id: str | None,
+    status: str | None,
+    limit: int,
+    next_token: str | None,
+) -> dict[str, Any]:
+    last_key = report_repo.decode_recovery_job_page_token(next_token)
+    result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
+    jobs = result.get("Items", [])
+    if status:
+        jobs = [job for job in jobs if job.get("status") == status]
+    return report_recovery_evidence_service.build_export_response(
+        scope="recent_recovery_jobs",
+        request_id=request_id,
+        filters={
+            "status": status,
+            "limit": limit,
+        },
+        jobs=jobs,
+        next_tokens={
+            "jobs": report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+        },
+    )
+
+
+def _request_id(request: Request) -> str | None:
+    for header in ("x-request-id", "x-amzn-requestid", "x-amzn-trace-id", "x-correlation-id"):
+        value = request.headers.get(header)
+        if value:
+            return report_recovery_service.redact_private_artifact_text(value)[:240]
+    return None
 
 
 def _report_operation_response(report: dict) -> ReportOperationResponse:

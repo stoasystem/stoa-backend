@@ -27,7 +27,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 - Decimal phases are reserved for urgent insertions.
 
 - [x] **Phase 38: Credential Ops Contract And Export Design** - Define credential lifecycle operations and metadata-only export contract before implementation.
-- [ ] **Phase 39: Metadata-only Export Backend** - Add admin-only bounded export APIs with explicit allowlists and privacy-boundary tests.
+- [x] **Phase 39: Metadata-only Export Backend** - Add admin-only bounded export APIs with explicit allowlists and privacy-boundary tests.
 - [ ] **Phase 40: Admin Export UI And Read-only Smoke** - Add read-only export controls to `/admin/report-operations` and verify UI privacy.
 - [ ] **Phase 41: Release Gate And v1.7 Audit** - Consolidate release evidence, production read-only smoke, and final milestone audit.
 
@@ -61,7 +61,7 @@ This milestone turns v1.6 production verification into reusable operational evid
 4. Tests cover admin authorization, non-admin rejection, bounds, read-only behavior, explicit allowlist serialization, and privacy-boundary denylist assertions.
 5. Logs or audit evidence record request ID, actor, filters, result counts, and status without creating recovery jobs or mutating report state.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ### Phase 40: Admin Export UI And Read-only Smoke
 
@@ -102,7 +102,7 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 38. Credential Ops Contract And Export Design | v1.7 | 1/1 | Complete | 2026-06-05 |
-| 39. Metadata-only Export Backend | v1.7 | 0/1 | Not Started | - |
+| 39. Metadata-only Export Backend | v1.7 | 1/1 | Complete | 2026-06-05 |
 | 40. Admin Export UI And Read-only Smoke | v1.7 | 0/1 | Not Started | - |
 | 41. Release Gate And v1.7 Audit | v1.7 | 0/1 | Not Started | - |
 
@@ -112,16 +112,16 @@ Phases execute in numeric order: 38 -> 39 -> 40 -> 41
 |-------------|-------|--------|
 | ADMIN-01 | Phase 38 | Complete |
 | ADMIN-02 | Phase 38 | Complete |
-| EXPORT-01 | Phase 39 | Planned |
-| EXPORT-02 | Phase 39 | Planned |
-| EXPORT-03 | Phase 39 | Planned |
+| EXPORT-01 | Phase 39 | Complete |
+| EXPORT-02 | Phase 39 | Complete |
+| EXPORT-03 | Phase 39 | Complete |
 | UI-01 | Phase 40 | Planned |
 | VERIFY-01 | Phase 41 | Planned |
 
 **Coverage:**
 
 - v1.7 requirements: 7 total
-- Complete: 2
+- Complete: 5
 - Mapped to phases: 7
 - Unmapped: 0
 
@@ -137,4 +137,4 @@ Deferred from v1.6:
 - Report editing, PDF generation, multilingual delivery, billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after starting v1.7*
+*Last updated: 2026-06-05 after completing Phase 39*

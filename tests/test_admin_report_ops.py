@@ -37,6 +37,21 @@ def _report(status: str = "email_failed", email_status: str = "failed") -> dict:
     }
 
 
+def _assert_no_private_artifact_markers(data):
+    serialized = str(data)
+    assert "<html" not in serialized
+    assert "weekly-reports/" not in serialized
+    assert "json_s3_key" not in serialized
+    assert "html_s3_key" not in serialized
+    assert "s3_key" not in serialized
+    assert "presignedUrl" not in serialized
+    assert "presigned_url" not in serialized
+    assert "https://s3" not in serialized
+    assert "access_token" not in serialized
+    assert "id_token" not in serialized
+    assert "refresh_token" not in serialized
+
+
 @pytest.fixture(autouse=True)
 def audit_events(monkeypatch):
     events = []
@@ -956,3 +971,194 @@ def test_recovery_job_list_detail_results_and_cancel(monkeypatch):
     serialized = str(results.json())
     assert "weekly-reports/" not in serialized
     assert "html_s3_key" not in serialized
+
+
+def test_recovery_evidence_export_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin export should not query recovery evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.get("/admin/reports/recovery-evidence", params={"job_id": "job-1"})
+
+    assert response.status_code == 403
+
+
+def test_recovery_evidence_job_export_returns_metadata_only_and_read_only(monkeypatch):
+    mutations = []
+    job = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "SUMMARY",
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "completed",
+        "reason": "incident weekly-reports/private/report.html html_s3_key",
+        "created_by": "admin-sub",
+        "created_at": "2026-06-04T10:00:00+00:00",
+        "updated_at": "2026-06-04T10:05:00+00:00",
+        "filters": {"status": "email_failed", "json_s3_key": "weekly-reports/private/report.json"},
+        "presignedUrl": "https://s3.amazonaws.com/private?X-Amz-Signature=secret",
+        "target_count": 1,
+        "success_count": 1,
+    }
+    target = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "TARGET#00000#target-1",
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "student_name": "Student",
+        "week_start": "2026-06-01",
+        "result": "success",
+        "status": "email_sent",
+        "email_status": "sent",
+        "detail": "resent weekly-reports/private/report.html html_s3_key",
+        "publicUrl": "https://s3.amazonaws.com/private/report.html",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    event = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "AUDIT#2026-06-04T10:00:00#event-1",
+        "event_id": "event-1",
+        "event_at": "2026-06-04T10:00:00+00:00",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "actor": "admin-sub",
+        "action": "create_resend_job",
+        "reason": "incident weekly-reports/private/report.html",
+        "source": "admin_api",
+        "result": "success",
+        "before": {"status": "email_failed", "html_s3_key": "weekly-reports/private/report.html"},
+        "after": {
+            "status": "email_sent",
+            "detail": "used weekly-reports/private/report.html html_s3_key",
+            "artifact_url": "https://stoa-reports.s3.eu-central-2.amazonaws.com/private?X-Amz-Signature=secret",
+        },
+        "error_message": "ok weekly-reports/private/report.html",
+        "correlation_id": "job-1",
+    }
+    target_next_key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00001#target-2"}
+    audit_next_key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "AUDIT#2026-06-04T09:00:00#event-0"}
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: job if job_id == "job-1" else None)
+    monkeypatch.setattr(
+        report_repo,
+        "list_recovery_job_targets",
+        lambda job_id, **kwargs: {"Items": [target], "LastEvaluatedKey": target_next_key},
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "list_recovery_job_audit_events",
+        lambda job_id, **kwargs: {"Items": [event], "LastEvaluatedKey": audit_next_key},
+    )
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda *args, **kwargs: mutations.append("put_job"))
+    monkeypatch.setattr(report_repo, "update_recovery_job_status", lambda *args, **kwargs: mutations.append("job"))
+    monkeypatch.setattr(report_repo, "update_recovery_job_target", lambda *args, **kwargs: mutations.append("target"))
+    monkeypatch.setattr(report_repo, "update_report_status", lambda *args, **kwargs: mutations.append("report"))
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/recovery-evidence",
+        params={"job_id": "job-1", "target_limit": 10, "audit_limit": 5},
+        headers={"x-request-id": "req-123"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["request_id"] == "req-123"
+    assert data["scope"] == "recovery_job"
+    assert data["complete"] is False
+    assert data["privacy"] == {"metadata_only": True, "private_artifact_fields_omitted": True}
+    assert data["filters"]["job_id"] == "job-1"
+    assert data["jobs"][0]["reason"] == "incident [report-artifact-key] [report-artifact-field]"
+    assert data["jobs"][0]["filters"] == {"status": "email_failed"}
+    assert data["targets"][0]["detail"] == "resent [report-artifact-key] [report-artifact-field]"
+    assert data["job_audit"][0]["before"] == {"status": "email_failed"}
+    assert data["job_audit"][0]["after"]["detail"] == "used [report-artifact-key] [report-artifact-field]"
+    assert data["job_audit"][0]["after"]["artifact_url"] == "[report-artifact-url]"
+    assert report_repo.decode_recovery_job_page_token(data["next_tokens"]["targets"]) == target_next_key
+    assert report_repo.decode_audit_page_token(data["next_tokens"]["job_audit"]) == audit_next_key
+    assert mutations == []
+    _assert_no_private_artifact_markers(data)
+
+
+def test_recovery_evidence_recent_jobs_export_is_bounded(monkeypatch):
+    calls = []
+    next_key = {"PK": "REPORT_RECOVERY_JOB#job-2", "SK": "SUMMARY"}
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "completed",
+        "reason": "release evidence",
+        "target_count": 1,
+        "success_count": 1,
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+
+    def list_jobs(**kwargs):
+        calls.append(kwargs)
+        return {"Items": [job], "LastEvaluatedKey": next_key}
+
+    monkeypatch.setattr(report_repo, "list_recovery_jobs", list_jobs)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/recovery-evidence", params={"limit": 5, "status": "completed"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "recent_recovery_jobs"
+    assert data["complete"] is False
+    assert data["jobs"][0]["job_id"] == "job-1"
+    assert report_repo.decode_recovery_job_page_token(data["next_tokens"]["jobs"]) == next_key
+    assert calls == [{"limit": 5, "last_key": None}]
+    _assert_no_private_artifact_markers(data)
+
+
+def test_recovery_evidence_export_returns_404_for_missing_job(monkeypatch):
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/recovery-evidence", params={"job_id": "missing"})
+
+    assert response.status_code == 404
+
+
+def test_recovery_evidence_export_rejects_invalid_pagination_token(monkeypatch):
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid pagination token should stop before query")
+
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/recovery-evidence",
+        params={"job_id": "job-1", "next_target_token": "bad"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_recovery_evidence_export_respects_include_flags(monkeypatch):
+    calls = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda *args, **kwargs: calls.append("targets"))
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda *args, **kwargs: calls.append("audit"))
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/recovery-evidence",
+        params={"job_id": "job-1", "include_targets": False, "include_job_audit": False},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["targets"] == []
+    assert data["job_audit"] == []
+    assert data["complete"] is True
+    assert calls == []
