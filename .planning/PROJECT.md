@@ -4,7 +4,7 @@
 
 STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
-The v1.5 report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
+The v1.6 report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, run bounded async `email_failed` resend jobs, inspect append-only audit evidence, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
 
 ## Core Value
 
@@ -12,7 +12,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.5 Report Recovery Production Rollout & Live Smoke on 2026-06-04
+**Shipped version:** v1.6 Report Recovery Operations Hardening on 2026-06-05
 
 Delivered:
 
@@ -44,17 +44,16 @@ Delivered:
 - Safe non-customer generation retry, single resend, and selected bulk resend smoke passed, with temporary Cognito/DynamoDB/S3 fixture cleanup confirmed.
 - `stoa-api` has scoped SES send permission for report recovery email paths, and `StoaApiStack` final CDK diff is clean.
 - Operators have a report recovery runbook covering retry/resend/bulk resend, observability, rollback, escalation, and known limits.
+- Lambda package builds produce a manifest and CDK/CI guard against stale backend Lambda assets.
+- Existing recovery actions write application-enforced append-only audit evidence.
+- Admins can preview and create bounded async `email_failed` resend jobs with stable target snapshots, progress, cancellation, per-target results, and job/report audit evidence.
+- Frontend `/admin/report-operations` exposes async job and audit workflows.
+- Production read-only admin browser smoke verified the deployed route, auth, GET APIs, metadata-only privacy boundary, and no production mutation.
+- v1.6 runbook, release gate, live verification evidence, and final audit are complete.
 
-## Current Milestone: v1.6 Report Recovery Operations Hardening
+## Current Milestone
 
-**Goal:** Make report recovery safe for incident-wide operations by adding async bulk recovery, immutable audit evidence, production admin browser smoke, and CI/CD protection against stale Lambda package deployments.
-
-**Target features:**
-
-- Incident-wide async report recovery jobs with progress, bounded execution, cancellation/stop conditions, and operator-visible results.
-- Immutable audit log records for report recovery actions that preserve who did what, when, why, and with which targets.
-- Production admin browser smoke that verifies the deployed UI with a real admin session without creating temporary production admin accounts.
-- CI/CD Lambda dist rebuild guard so CDK diff/deploy cannot silently use stale `stoa-backend/dist` assets.
+No active milestone. v1.6 shipped on 2026-06-05. The next milestone should select from deferred follow-up work after reviewing `.planning/milestones/v1.6-MILESTONE-AUDIT.md`.
 
 ## Requirements
 
@@ -87,7 +86,7 @@ Shipped requirements:
 
 ### Active
 
-Milestone v1.6 requirements are defined in `.planning/REQUIREMENTS.md`:
+Milestone v1.6 requirements are complete and archived in `.planning/milestones/v1.6-REQUIREMENTS.md`:
 
 - Lambda package manifest and CDK/CI stale-dist guard.
 - Application-enforced append-only recovery audit records.
@@ -206,6 +205,8 @@ Known current resources:
 | Start v1.5 with production rollout and safe live smoke before incident-wide automation | v1.4 shipped recovery code and local/e2e verification, but production UI deployment and safe mutation smoke remained residual gaps | Good - shipped in v1.5 |
 | Keep recovery operations backend-mediated and metadata-only in production | Safe support tooling must not expose private report artifacts or direct S3 paths | Good - verified in v1.5 |
 | Treat stale `../stoa-backend/dist` as a deployment risk | CDK deploys Lambda assets from local build output and can overwrite current code if not rebuilt | Good - documented in v1.5 runbook |
+| Keep v1.6 browser smoke read-only by default | Production browser verification should prove route/auth/privacy without mutating customer report data | Good - verified in Phase 36 |
+| Use secret-backed long-lived production admin credentials for smoke | v1.6 forbids temporary production admin smoke accounts but needs real admin auth | Good - credential path created in Phase 36; ownership/rotation remains operational follow-up |
 
 ## Evolution
 
@@ -225,4 +226,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after starting milestone v1.6*
+*Last updated: 2026-06-05 after shipping milestone v1.6*

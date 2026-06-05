@@ -125,24 +125,31 @@ Key accomplishments:
 
 Known deferred items at close: production admin browser click-through before real support use, incident-wide async recovery jobs, immutable audit logs, support ticket integration, report editing, PDF/multilingual/billing report product expansions, and broad repo lint debt outside focused report operations files.
 
-## Current
-
 ### v1.6 Report Recovery Operations Hardening
 
-**Status:** Planning started 2026-06-04
+**Status:** Shipped 2026-06-05
+**Audit:** `.planning/milestones/v1.6-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.6-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.6-REQUIREMENTS.md`
 **Goal:** Make report recovery safe for incident-wide operations by adding async bulk recovery, immutable audit evidence, production admin browser smoke, and CI/CD protection against stale Lambda package deployments.
-**Phases:** 5 planned (Phase 33-37)
-**Requirements:** 28/28 mapped
+**Phases:** 5
+**Plans:** 5
+**Requirements:** 28/28 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 33: Recovery Contract, CDK Readiness, And Dist Guard
-- Phase 34: Recovery Service Extraction And Audit Foundation
-- Phase 35: Async Resend Job Backend
-- Phase 36: Admin Job/Audit UI And Production Browser Smoke
-- Phase 37: Runbook, Release Gate, And Live Verification
+- Added Lambda build manifest and CDK/CI stale-dist guard for backend Lambda package provenance.
+- Added shared recovery services and application-enforced append-only audit evidence.
+- Added bounded async `email_failed` resend jobs with preview, stable target snapshots, progress, per-target results, worker execution, and cooperative cancellation.
+- Added admin job/audit UI on `/admin/report-operations`.
+- Provisioned a long-lived production admin credential path and completed read-only production admin browser smoke with no production mutation and no private artifact marker exposure.
+- Published v1.6 runbook, release gate, live verification evidence, and final milestone audit.
 
-Next step: `$gsd-plan-phase 33`.
+Known deferred items at close: incident-wide generation retry, resume failed/skipped subset, metadata-only export, support ticket integration, stronger orchestration resources if evidence requires them, compliance-grade WORM audit storage, report editing, PDF/multilingual/billing/analytics expansion, and production admin credential ownership/rotation policy.
+
+## Current
+
+No active milestone. Start the next milestone from one selected deferred follow-up when ready.
 
 ---
-*Last updated: 2026-06-04 after starting v1.6 roadmap*
+*Last updated: 2026-06-05 after shipping v1.6*
