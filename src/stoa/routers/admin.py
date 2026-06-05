@@ -155,6 +155,12 @@ class RecoveryJobPreviewTarget(BaseModel):
     refusal_reason: str | None = None
 
 
+class RecoveryJobResumePreviewTarget(RecoveryJobPreviewTarget):
+    source_result: str | None = None
+    detail: str | None = None
+    error_class: str | None = None
+
+
 class RecoveryJobPreviewResponse(BaseModel):
     operation: str
     reason: str
@@ -167,6 +173,32 @@ class RecoveryJobPreviewResponse(BaseModel):
     missing_count: int
     sample: list[RecoveryJobPreviewTarget]
     preview_token: str
+
+
+class RecoveryJobResumePreviewRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    results: list[str] = Field(default_factory=lambda: ["failed", "refused", "not_found"])
+    max_targets: int = Field(default=25, ge=1, le=25)
+
+
+class RecoveryJobResumePreviewResponse(BaseModel):
+    operation: str
+    source_job_id: str
+    job_type: str
+    reason: str
+    requested_by: str
+    result_filters: list[str]
+    max_targets: int
+    scanned_targets: int
+    eligible_count: int
+    refused_count: int
+    missing_count: int
+    sample: list[RecoveryJobResumePreviewTarget]
+    preview_token: str
+
+
+class RecoveryJobResumeCreateRequest(RecoveryJobResumePreviewRequest):
+    preview_token: str = Field(..., min_length=1)
 
 
 class RecoveryJobCreateRequest(RecoveryJobPreviewRequest):
@@ -195,6 +227,8 @@ class RecoveryJobResponse(BaseModel):
     failed_count: int = 0
     skipped_cancelled_count: int = 0
     stop_reason: str | None = None
+    source_job_id: str | None = None
+    resume_result_filters: list[str] | None = None
 
 
 class RecoveryJobListResponse(BaseModel):
@@ -526,6 +560,52 @@ async def create_generation_retry_recovery_job(
     return _recovery_job_response(job)
 
 
+@router.post(
+    "/reports/recovery-jobs/{job_id}/resume/preview",
+    response_model=RecoveryJobResumePreviewResponse,
+)
+async def preview_resume_recovery_job(
+    job_id: str,
+    request: RecoveryJobResumePreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Preview a bounded resume job from a prior recovery job target subset."""
+    try:
+        return report_recovery_job_service.preview_resume_job(
+            source_job_id=job_id,
+            reason=request.reason,
+            operator=_operator_id(user),
+            results=request.results,
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+
+
+@router.post(
+    "/reports/recovery-jobs/{job_id}/resume",
+    response_model=RecoveryJobResponse,
+)
+async def create_resume_recovery_job(
+    job_id: str,
+    request: RecoveryJobResumeCreateRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded resume job from a prior recovery job target subset."""
+    try:
+        job = report_recovery_job_service.create_resume_job(
+            source_job_id=job_id,
+            reason=request.reason,
+            operator=_operator_id(user),
+            results=request.results,
+            preview_token=request.preview_token,
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+    return _recovery_job_response(job)
+
+
 @router.get("/reports/recovery-evidence")
 async def export_recovery_evidence(
     request: Request,
@@ -573,6 +653,54 @@ async def export_recovery_evidence(
         filters=response["filters"],
         result_counts={
             "jobs": len(response["jobs"]),
+            "targets": len(response["targets"]),
+            "job_audit": len(response["job_audit"]),
+            "report_audit": len(response["report_audit"]),
+        },
+        status="success",
+    )
+    return response
+
+
+@router.get("/reports/recovery-jobs/{job_id}/support-package")
+async def export_recovery_job_support_package(
+    request: Request,
+    job_id: str,
+    include_targets: bool = Query(default=True),
+    include_job_audit: bool = Query(default=True),
+    include_report_audit: bool = Query(default=False),
+    target_limit: int = Query(default=50, ge=1, le=100),
+    audit_limit: int = Query(default=50, ge=1, le=100),
+    next_target_token: Optional[str] = Query(default=None),
+    next_audit_token: Optional[str] = Query(default=None),
+    note: Optional[str] = Query(default=None, max_length=500),
+    user: dict = Depends(require_role("admin")),
+):
+    """Export a support-safe metadata package for one recovery job."""
+    request_id = _request_id(request)
+    operator = _operator_id(user)
+    try:
+        response = _export_recovery_job_support_package(
+            job_id=job_id,
+            request_id=request_id,
+            include_targets=include_targets,
+            include_job_audit=include_job_audit,
+            include_report_audit=include_report_audit,
+            target_limit=target_limit,
+            audit_limit=audit_limit,
+            next_target_token=next_target_token,
+            next_audit_token=next_audit_token,
+            operator_note=note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    report_recovery_evidence_service.log_export_access(
+        actor=operator,
+        request_id=request_id,
+        scope=response["scope"],
+        filters={"job_id": job_id, "source_job_id": response.get("source_job", {}).get("job_id") if response.get("source_job") else None},
+        result_counts={
             "targets": len(response["targets"]),
             "job_audit": len(response["job_audit"]),
             "report_audit": len(response["report_audit"]),
@@ -856,6 +984,81 @@ def _export_recovery_job_evidence(
     )
 
 
+def _export_recovery_job_support_package(
+    *,
+    job_id: str,
+    request_id: str | None,
+    include_targets: bool,
+    include_job_audit: bool,
+    include_report_audit: bool,
+    target_limit: int,
+    audit_limit: int,
+    next_target_token: str | None,
+    next_audit_token: str | None,
+    operator_note: str | None,
+) -> dict[str, Any]:
+    job = report_repo.get_recovery_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Recovery job not found")
+    source_job = None
+    source_job_id = job.get("source_job_id")
+    if source_job_id:
+        source_job = report_repo.get_recovery_job(str(source_job_id))
+
+    targets: list[dict] = []
+    target_next_token = None
+    if include_targets or include_report_audit:
+        target_last_key = report_repo.decode_recovery_job_page_token(next_target_token)
+        target_result = report_repo.list_recovery_job_targets(
+            job_id,
+            limit=target_limit,
+            last_key=target_last_key,
+        )
+        targets = target_result.get("Items", [])
+        target_next_token = report_repo.encode_recovery_job_page_token(target_result.get("LastEvaluatedKey"))
+
+    job_audit: list[dict] = []
+    audit_next_token = None
+    if include_job_audit:
+        audit_last_key = report_repo.decode_audit_page_token(next_audit_token)
+        audit_result = report_repo.list_recovery_job_audit_events(
+            job_id,
+            limit=audit_limit,
+            last_key=audit_last_key,
+        )
+        job_audit = audit_result.get("Items", [])
+        audit_next_token = report_repo.encode_audit_page_token(audit_result.get("LastEvaluatedKey"))
+
+    report_audit: list[dict] = []
+    if include_report_audit:
+        remaining = audit_limit
+        for target in targets:
+            if remaining <= 0:
+                break
+            report_id = target.get("report_id")
+            if not report_id:
+                continue
+            audit_result = report_repo.list_report_audit_events(str(report_id), limit=remaining)
+            events = audit_result.get("Items", [])
+            report_audit.extend(events)
+            remaining -= len(events)
+
+    return report_recovery_evidence_service.build_support_package_response(
+        request_id=request_id,
+        job=job,
+        source_job=source_job,
+        targets=targets if include_targets else [],
+        job_audit=job_audit,
+        report_audit=report_audit,
+        operator_note=operator_note,
+        next_tokens={
+            "targets": target_next_token if include_targets else None,
+            "job_audit": audit_next_token,
+            "report_audit": None,
+        },
+    )
+
+
 def _export_recent_recovery_jobs(
     *,
     request_id: str | None,
@@ -997,6 +1200,8 @@ def _recovery_job_response(job: dict) -> RecoveryJobResponse:
         failed_count=int(job.get("failed_count") or 0),
         skipped_cancelled_count=int(job.get("skipped_cancelled_count") or 0),
         stop_reason=job.get("stop_reason"),
+        source_job_id=job.get("source_job_id"),
+        resume_result_filters=job.get("resume_result_filters"),
     )
 
 

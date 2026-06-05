@@ -22,6 +22,17 @@ FAILURE_THRESHOLD = 5
 TIME_REMAINING_FLOOR_MS = 30_000
 RESEND_JOB_TYPE = "resend_email"
 GENERATION_RETRY_JOB_TYPE = "retry_generation"
+RESUME_OPERATION = "resume_recovery_job"
+DEFAULT_RESUME_RESULTS = ("failed", "refused", "not_found")
+RESUMABLE_TARGET_RESULTS = {"failed", "refused", "not_found", "skipped_cancelled"}
+RESUMABLE_SOURCE_STATUSES = {
+    "completed",
+    "completed_with_failures",
+    "cancelled",
+    "failed",
+    "stopped_failure_threshold",
+    "stopped_time_floor",
+}
 
 
 @dataclass(frozen=True)
@@ -102,6 +113,151 @@ def create_generation_retry_job(
         preview_token=preview_token,
         max_targets=max_targets,
     )
+
+
+def preview_resume_job(
+    *,
+    source_job_id: str,
+    reason: str,
+    operator: str,
+    results: list[str] | None = None,
+    max_targets: int = MAX_TARGETS,
+) -> dict[str, Any]:
+    if not reason.strip():
+        raise RecoveryJobError(422, "Recovery reason is required")
+    source_job = _get_resumable_source_job(source_job_id)
+    result_filters = _normalized_resume_results(results)
+    targets = _collect_resume_targets(source_job_id, result_filters=result_filters, max_targets=max_targets)
+    token = _encode_preview_token(
+        {
+            "operation": RESUME_OPERATION,
+            "source_job_id": source_job_id,
+            "job_type": str(source_job.get("job_type") or RESEND_JOB_TYPE),
+            "reason": reason,
+            "result_filters": result_filters,
+            "max_targets": min(max(1, int(max_targets)), MAX_TARGETS),
+            "target_ids": [target["target_id"] for target in targets],
+            "target_snapshot_hash": _target_snapshot_hash(targets),
+        }
+    )
+    return {
+        "operation": RESUME_OPERATION,
+        "source_job_id": source_job_id,
+        "job_type": str(source_job.get("job_type") or RESEND_JOB_TYPE),
+        "reason": reason,
+        "requested_by": operator,
+        "result_filters": result_filters,
+        "max_targets": min(max(1, int(max_targets)), MAX_TARGETS),
+        "scanned_targets": len(targets),
+        "eligible_count": len(targets),
+        "refused_count": 0,
+        "missing_count": 0,
+        "sample": targets[:10],
+        "preview_token": token,
+    }
+
+
+def create_resume_job(
+    *,
+    source_job_id: str,
+    reason: str,
+    operator: str,
+    results: list[str] | None,
+    preview_token: str,
+    max_targets: int = MAX_TARGETS,
+) -> dict[str, Any]:
+    preview = preview_resume_job(
+        source_job_id=source_job_id,
+        reason=reason,
+        operator=operator,
+        results=results,
+        max_targets=max_targets,
+    )
+    if preview["preview_token"] != preview_token:
+        raise RecoveryJobError(409, "Preview token no longer matches current recovery scope")
+    if preview["eligible_count"] == 0:
+        raise RecoveryJobError(422, "Resume job has no eligible targets")
+
+    now = _now_iso()
+    job_id = uuid4().hex
+    job_type = str(preview["job_type"])
+    resume_targets = _collect_resume_targets(
+        source_job_id,
+        result_filters=list(preview["result_filters"]),
+        max_targets=max_targets,
+    )
+    targets = [
+        {
+            "target_id": item["target_id"],
+            "report_id": item.get("report_id"),
+            "parent_id": item.get("parent_id"),
+            "student_id": item.get("student_id"),
+            "week_start": item.get("week_start"),
+            "student_name": item.get("student_name"),
+            "status": item.get("status"),
+            "email_status": item.get("email_status"),
+            "source_job_id": source_job_id,
+            "source_target_result": item.get("source_result"),
+            "result": "pending",
+            "created_at": now,
+            "updated_at": now,
+        }
+        for item in resume_targets
+    ]
+    job = {
+        "job_id": job_id,
+        "job_type": job_type,
+        "status": "queued",
+        "reason": reason,
+        "created_by": operator,
+        "created_at": now,
+        "updated_at": now,
+        "filters": {
+            "source_job_id": source_job_id,
+            "result_filters": preview["result_filters"],
+        },
+        "source_job_id": source_job_id,
+        "resume_result_filters": preview["result_filters"],
+        "resume_from": {"job_id": source_job_id, "job_type": job_type},
+        "target_count": len(targets),
+        "pending_count": len(targets),
+        "attempted_count": 0,
+        "success_count": 0,
+        "refused_count": 0,
+        "not_found_count": 0,
+        "failed_count": 0,
+        "skipped_cancelled_count": 0,
+        "failure_threshold": FAILURE_THRESHOLD,
+        "preview_token": preview_token,
+    }
+    report_repo.put_recovery_job(job, targets)
+    audit_metadata = {
+        "source_job_id": source_job_id,
+        "resumed_job_id": job_id,
+        "job_type": job_type,
+        "result_filters": preview["result_filters"],
+        "target_count": len(targets),
+    }
+    _write_job_audit(
+        source_job_id,
+        action="create_resume_job",
+        actor=operator,
+        reason=reason,
+        result="queued",
+        source="admin_api",
+        metadata=audit_metadata,
+    )
+    _write_job_audit(
+        job_id,
+        action="create_resume_job",
+        actor=operator,
+        reason=reason,
+        result="queued",
+        source="admin_api",
+        metadata=audit_metadata,
+    )
+    invoke_weekly_report_job(job_id, job_type=job_type)
+    return job
 
 
 def _create_job(
@@ -531,6 +687,80 @@ def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int
 
 def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tuple[list[dict[str, Any]], int]:
     return _collect_targets(job_type=RESEND_JOB_TYPE, filters=filters, max_targets=max_targets)
+
+
+def _get_resumable_source_job(source_job_id: str) -> dict[str, Any]:
+    source_job = report_repo.get_recovery_job(source_job_id)
+    if not source_job:
+        raise RecoveryJobError(404, "Source recovery job not found")
+    if str(source_job.get("job_type") or RESEND_JOB_TYPE) not in {RESEND_JOB_TYPE, GENERATION_RETRY_JOB_TYPE}:
+        raise RecoveryJobError(422, "Source recovery job type cannot be resumed")
+    if source_job.get("status") not in RESUMABLE_SOURCE_STATUSES:
+        raise RecoveryJobError(409, "Source recovery job is not terminal")
+    return source_job
+
+
+def _normalized_resume_results(results: list[str] | None) -> list[str]:
+    raw = list(results or DEFAULT_RESUME_RESULTS)
+    normalized = sorted({str(item) for item in raw if str(item)})
+    if not normalized:
+        raise RecoveryJobError(422, "At least one resume result filter is required")
+    unsupported = [item for item in normalized if item not in RESUMABLE_TARGET_RESULTS]
+    if unsupported:
+        raise RecoveryJobError(422, f"Unsupported resume result filter: {unsupported[0]}")
+    return normalized
+
+
+def _collect_resume_targets(
+    source_job_id: str,
+    *,
+    result_filters: list[str],
+    max_targets: int,
+) -> list[dict[str, Any]]:
+    max_targets = min(max(1, int(max_targets)), MAX_TARGETS)
+    targets: list[dict[str, Any]] = []
+    for target in _list_all_job_targets(source_job_id):
+        if target.get("result") not in result_filters:
+            continue
+        targets.append(_resume_target_preview(target))
+        if len(targets) >= max_targets:
+            break
+    return targets
+
+
+def _resume_target_preview(target: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "target_id": str(target.get("target_id") or uuid4().hex),
+        "report_id": target.get("report_id"),
+        "parent_id": target.get("parent_id"),
+        "student_id": target.get("student_id"),
+        "student_name": target.get("student_name"),
+        "week_start": target.get("week_start"),
+        "status": target.get("status"),
+        "email_status": target.get("email_status"),
+        "source_result": target.get("result"),
+        "detail": report_recovery_service.redact_private_artifact_text(target.get("detail")),
+        "error_class": target.get("error_class"),
+        "artifacts": {"html_available": False, "json_available": False},
+        "eligibility": "eligible",
+        "refusal_reason": None,
+    }
+
+
+def _target_snapshot_hash(targets: list[dict[str, Any]]) -> str:
+    payload = [
+        {
+            "target_id": target.get("target_id"),
+            "source_result": target.get("source_result"),
+            "report_id": target.get("report_id"),
+            "parent_id": target.get("parent_id"),
+            "student_id": target.get("student_id"),
+            "week_start": target.get("week_start"),
+        }
+        for target in targets
+    ]
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _target_preview(report: dict, *, job_type: str = RESEND_JOB_TYPE) -> dict[str, Any]:

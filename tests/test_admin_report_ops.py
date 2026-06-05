@@ -1025,6 +1025,125 @@ def test_create_generation_retry_recovery_job_persists_snapshot_and_invokes_work
     _assert_no_private_artifact_markers(persisted)
 
 
+def test_resume_recovery_job_preview_and_create_persist_linked_job(monkeypatch):
+    persisted = []
+    audits = []
+    invoked = []
+    source_job = {
+        "job_id": "job-source",
+        "job_type": "retry_generation",
+        "status": "completed_with_failures",
+        "reason": "source incident",
+        "target_count": 3,
+    }
+    source_targets = [
+        {
+            "SK": "TARGET#00000#target-1",
+            "target_id": "target-1",
+            "report_id": "report-1",
+            "parent_id": "parent-1",
+            "student_id": "student-1",
+            "student_name": "Student One",
+            "week_start": "2026-06-01",
+            "status": "generation_failed",
+            "email_status": "not_sent",
+            "result": "failed",
+            "detail": "provider failed weekly-reports/private/report.json",
+        },
+        {
+            "SK": "TARGET#00001#target-2",
+            "target_id": "target-2",
+            "report_id": "report-2",
+            "parent_id": "parent-2",
+            "student_id": "student-2",
+            "week_start": "2026-06-01",
+            "status": "generation_failed",
+            "email_status": "not_sent",
+            "result": "refused",
+        },
+        {
+            "SK": "TARGET#00002#target-3",
+            "target_id": "target-3",
+            "report_id": "report-3",
+            "parent_id": "parent-3",
+            "student_id": "student-3",
+            "week_start": "2026-06-01",
+            "status": "generated",
+            "email_status": "sent",
+            "result": "success",
+        },
+    ]
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: source_job if job_id == "job-source" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": source_targets})
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda job, targets: persisted.append((job, targets)))
+    monkeypatch.setattr(
+        report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    monkeypatch.setattr(
+        report_recovery_job_service,
+        "invoke_weekly_report_job",
+        lambda job_id, **kwargs: invoked.append((job_id, kwargs.get("job_type"))),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    preview = client.post(
+        "/admin/reports/recovery-jobs/job-source/resume/preview",
+        json={"reason": "resume failed subset", "results": ["failed", "refused"], "max_targets": 25},
+    )
+    assert preview.status_code == 200
+    preview_data = preview.json()
+    assert preview_data["operation"] == "resume_recovery_job"
+    assert preview_data["source_job_id"] == "job-source"
+    assert preview_data["job_type"] == "retry_generation"
+    assert preview_data["eligible_count"] == 2
+    assert preview_data["sample"][0]["source_result"] == "failed"
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/job-source/resume",
+        json={
+            "reason": "resume failed subset",
+            "results": ["failed", "refused"],
+            "preview_token": preview_data["preview_token"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["job_type"] == "retry_generation"
+    assert data["source_job_id"] == "job-source"
+    assert data["resume_result_filters"] == ["failed", "refused"]
+    assert persisted[0][0]["source_job_id"] == "job-source"
+    assert persisted[0][0]["resume_from"] == {"job_id": "job-source", "job_type": "retry_generation"}
+    assert [target["result"] for target in persisted[0][1]] == ["pending", "pending"]
+    assert [target["source_target_result"] for target in persisted[0][1]] == ["failed", "refused"]
+    assert audits[0][0] == "job-source"
+    assert audits[0][1]["action"] == "create_resume_job"
+    assert audits[1][0] == persisted[0][0]["job_id"]
+    assert invoked == [(persisted[0][0]["job_id"], "retry_generation")]
+    _assert_no_private_artifact_markers(preview_data)
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(persisted)
+
+
+def test_resume_recovery_job_rejects_non_terminal_source(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_recovery_job",
+        lambda job_id: {"job_id": job_id, "job_type": "resend_email", "status": "running"},
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/job-running/resume/preview",
+        json={"reason": "resume failed subset", "results": ["failed"]},
+    )
+
+    assert response.status_code == 409
+
+
 def test_recovery_job_list_detail_results_and_cancel(monkeypatch):
     updates = []
     audits = []
@@ -1191,6 +1310,93 @@ def test_recovery_evidence_job_export_returns_metadata_only_and_read_only(monkey
     assert data["job_audit"][0]["after"]["artifact_url"] == "[report-artifact-url]"
     assert report_repo.decode_recovery_job_page_token(data["next_tokens"]["targets"]) == target_next_key
     assert report_repo.decode_audit_page_token(data["next_tokens"]["job_audit"]) == audit_next_key
+    assert mutations == []
+    _assert_no_private_artifact_markers(data)
+
+
+def test_recovery_job_support_package_returns_metadata_only_and_read_only(monkeypatch):
+    mutations = []
+    job = {
+        "job_id": "job-resume",
+        "job_type": "retry_generation",
+        "status": "completed_with_failures",
+        "reason": "resume support weekly-reports/private/report.html",
+        "source_job_id": "job-source",
+        "resume_result_filters": ["failed"],
+        "target_count": 1,
+        "failed_count": 1,
+    }
+    source_job = {
+        "job_id": "job-source",
+        "job_type": "retry_generation",
+        "status": "completed_with_failures",
+        "reason": "source support",
+        "target_count": 1,
+        "failed_count": 1,
+    }
+    target = {
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "student_name": "Student",
+        "week_start": "2026-06-01",
+        "result": "failed",
+        "source_job_id": "job-source",
+        "source_target_result": "failed",
+        "detail": "failed weekly-reports/private/report.html html_s3_key",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    event = {
+        "event_id": "event-1",
+        "event_at": "2026-06-04T10:00:00+00:00",
+        "action": "create_resume_job",
+        "actor": "admin-sub",
+        "source": "admin_api",
+        "result": "queued",
+        "metadata": {"html_s3_key": "weekly-reports/private/report.html"},
+    }
+    report_event = {
+        "event_id": "report-event-1",
+        "event_at": "2026-06-04T10:00:00+00:00",
+        "report_id": "report-1",
+        "action": "retry_generation",
+        "actor": "admin-sub",
+        "source": "recovery_job",
+        "result": "failed",
+        "error_message": "provider weekly-reports/private/report.html",
+    }
+
+    def get_job(job_id):
+        return {"job-resume": job, "job-source": source_job}.get(job_id)
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", get_job)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": [target]})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": [event]})
+    monkeypatch.setattr(report_repo, "list_report_audit_events", lambda report_id, **kwargs: {"Items": [report_event]})
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda *args, **kwargs: mutations.append("put_job"))
+    monkeypatch.setattr(report_repo, "update_recovery_job_status", lambda *args, **kwargs: mutations.append("job"))
+    monkeypatch.setattr(report_repo, "update_recovery_job_target", lambda *args, **kwargs: mutations.append("target"))
+    monkeypatch.setattr(report_repo, "update_report_status", lambda *args, **kwargs: mutations.append("report"))
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/recovery-jobs/job-resume/support-package",
+        params={"include_report_audit": True, "note": "support weekly-reports/private/report.html"},
+        headers={"x-request-id": "req-support"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"] == "support_package"
+    assert data["request_id"] == "req-support"
+    assert data["job"]["job_id"] == "job-resume"
+    assert data["source_job"]["job_id"] == "job-source"
+    assert data["rollup"]["failed_count"] == 1
+    assert data["targets"][0]["source_job_id"] == "job-source"
+    assert data["targets"][0]["source_target_result"] == "failed"
+    assert data["operator_note"] == "support [report-artifact-key]"
+    assert data["privacy"]["metadata_only"] is True
     assert mutations == []
     _assert_no_private_artifact_markers(data)
 

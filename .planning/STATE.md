@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.8
-milestone_name: Incident Generation Retry Jobs
+milestone: v1.9
+milestone_name: Recovery Resume And Support Evidence Packages
 status: active
-last_updated: "2026-06-05T13:18:19+02:00"
+last_updated: "2026-06-05T13:48:00+02:00"
 last_activity: 2026-06-05
 progress:
   total_phases: 4
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v1.8 starts bounded async `generation_failed` retry jobs.
+**Current focus:** v1.9 starts recovery subset resume and support-safe evidence packages.
 
 ## Current Position
 
-Phase: 45 of 45 (3 of 4 for v1.8)
-Plan: 45-01
+Phase: 49 of 49 (3 of 4 for v1.9)
+Plan: 49-01
 Status: Active
-Last activity: 2026-06-05 - Phase 44 admin generation retry job UI completed.
+Last activity: 2026-06-05 - Phase 48 support evidence package UI completed.
 
 Progress: [████████--] 75%
 
@@ -35,8 +35,7 @@ Progress: [████████--] 75%
 
 **Velocity:**
 
-- Historical plans completed through v1.5: 33
-- Historical plans completed through v1.6: 38
+- Historical plans completed through v1.8: 49
 - Active milestone plans created: 3
 - Active milestone plans completed: 3
 - Average duration: -
@@ -46,15 +45,15 @@ Progress: [████████--] 75%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 42 | 1/1 complete | - | - |
-| 43 | 1/1 complete | - | - |
-| 44 | 1/1 complete | - | - |
-| 45 | 0/1 planned | - | - |
+| 46 | 1/1 complete | - | - |
+| 47 | 1/1 complete | - | - |
+| 48 | 1/1 complete | - | - |
+| 49 | 0/1 planned | - | - |
 
 **Recent Trend:**
 
-- Last completed milestone: v1.6 shipped 5/5 phases and 28/28 requirements.
-- Trend: Production verification is now strong enough to turn metadata-only operational evidence into a reusable release gate.
+- Last completed milestone: v1.8 shipped 4/4 phases and 6/6 requirements.
+- Trend: Recovery jobs now support both resend and generation retry; the next operational gap is resumability and support evidence packaging.
 
 ## Accumulated Context
 
@@ -62,28 +61,26 @@ Progress: [████████--] 75%
 
 Decisions are logged in PROJECT.md Key Decisions table.
 
-- v1.7 starts at Phase 38 because v1.6 ended at Phase 37.
-- v1.7 selects metadata-only recovery target/job/audit export from deferred follow-ups before larger mutation or orchestration work.
-- Production admin credential ownership/rotation is included because v1.6 created the long-lived secret-backed admin path but left operational ownership as follow-up.
-- Existing Lambda/DynamoDB/admin UI resources should be reused unless Phase 38 proves a concrete missing access pattern.
-- Export payloads must use explicit metadata allowlists and preserve the no-private-artifact boundary proven in v1.6 production browser smoke.
-- Phase 38 decided that exact `job_id` export is the preferred Phase 39 implementation path and no CDK change is required for the MVP.
-- Phase 39 implemented the admin-only `GET /admin/reports/recovery-evidence` backend without CDK changes.
-- Phase 40 added frontend export controls in `/admin/report-operations` and verified local browser smoke without production calls.
-- Phase 41 release gate passed with backend/frontend deploy evidence, Lambda manifest evidence, production API/browser smoke, and no production recovery mutation.
-- v1.8 promotes incident-wide `generation_failed` retry as the next bounded recovery expansion and keeps new AWS orchestration deferred unless evidence requires it.
+- v1.8 promoted incident-wide `generation_failed` retry and reused existing Lambda/DynamoDB/admin UI resources.
+- Phase 42 proved no new Step Functions, SQS, Lambda, table, bucket, or GSI was needed for generation retry jobs.
 - Phase 43 added `retry_generation` as a second async recovery job type without CDK changes.
 - Phase 44 added shared resend/generation retry controls to the admin report operations UI and verified frontend e2e privacy coverage.
+- Phase 45 release gate passed with backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, production API/browser smoke, and no production recovery mutation.
+- v1.9 selects failed/refused/not_found/skipped subset resume and support evidence packages as the next highest-value operational expansion.
+- Phase 46 confirmed resume jobs and support packages can reuse existing recovery job partitions, target snapshots, audit records, and worker routing without new AWS resources.
+- Phase 47 implemented backend resume preview/create and support package export without new infrastructure.
+- Phase 48 added resume/support package controls to the admin report operations UI and verified frontend e2e coverage.
 
 ### Pending Todos
 
-- Execute Phase 45 release gate and read-only production verification.
+- Execute Phase 49 release gate and live verification.
 
 ### Blockers/Concerns
 
-- CDK deploys package `../stoa-backend/dist`; Phase 33 added manifest and fail-fast guard, but CI must still prove the GitHub checkout layout after merge.
-- Production admin credential ownership and rotation cadence must be assigned by operations before routine support use.
-- Export scans must remain bounded; avoid introducing broad table scans into the admin UI.
+- CDK deploys package `../stoa-backend/dist`; release gates must continue recording manifest evidence and expected Lambda code asset drift.
+- Production admin credential ownership and rotation cadence must remain operationally maintained.
+- Resume previews must stay bounded and metadata-only.
+- Production browser smoke for v1.9 must not create a production resume job unless an approved safe fixture is explicitly named.
 
 ## Deferred Items
 
@@ -91,16 +88,17 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Infrastructure | Step Functions/SQS/new table/new bucket/new Lambda/new GSI | Deferred unless existing resources prove insufficient | v1.6 requirements |
-| Audit storage | Compliance-grade WORM evidence | Future security/compliance decision | v1.6 requirements |
-| Product expansion | Report editing, PDF, multilingual delivery, billing, analytics, ticket integration | Out of scope for v1.7 | v1.6 requirements |
+| Infrastructure | Step Functions/SQS/new table/new bucket/new Lambda/new GSI | Deferred unless existing resources prove insufficient | v1.8 |
+| Audit storage | Compliance-grade WORM evidence | Future security/compliance decision | v1.8 |
+| Support integration | External support ticket destination | Future connector/credential decision | v1.8 |
+| Product expansion | Report editing, PDF, multilingual delivery, billing, analytics | Out of scope for v1.9 | v1.8 |
 
 ## Session Continuity
 
-Last session: 2026-06-05 10:39 +02:00
-Stopped at: Phase 44 complete; Phase 45 release gate is next.
+Last session: 2026-06-05 13:26 +02:00
+Stopped at: Phase 48 complete; Phase 49 release gate is next.
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute v1.8 Phase 45, then archive and continue with v1.9.
+- Execute v1.9 Phases 46-49, then archive and continue with v2.0.

@@ -52,6 +52,44 @@ def build_export_response(
     }
 
 
+def build_support_package_response(
+    *,
+    request_id: str | None,
+    job: dict,
+    source_job: dict | None = None,
+    targets: list[dict] | None = None,
+    job_audit: list[dict] | None = None,
+    report_audit: list[dict] | None = None,
+    operator_note: str | None = None,
+    next_tokens: dict[str, str | None] | None = None,
+) -> dict[str, Any]:
+    tokens = {
+        "targets": None,
+        "job_audit": None,
+        "report_audit": None,
+        **(next_tokens or {}),
+    }
+    return {
+        "exported_at": now_iso(),
+        "request_id": request_id,
+        "scope": "support_package",
+        "complete": all(value is None for value in tokens.values()),
+        "job": job_summary(job),
+        "source_job": job_summary(source_job) if source_job else None,
+        "rollup": job_rollup(job),
+        "targets": [target_summary(item) for item in (targets or [])],
+        "job_audit": [audit_summary(item) for item in (job_audit or [])],
+        "report_audit": [audit_summary(item) for item in (report_audit or [])],
+        "operator_note": _redact_text(operator_note),
+        "next_tokens": tokens,
+        "privacy": {
+            "metadata_only": True,
+            "private_artifact_fields_omitted": True,
+            "redacted_operator_note": operator_note is not None,
+        },
+    }
+
+
 def log_export_access(
     *,
     actor: str,
@@ -98,6 +136,21 @@ def job_summary(job: dict) -> dict[str, Any]:
         "failed_count": _int_or_zero(job.get("failed_count")),
         "skipped_cancelled_count": _int_or_zero(job.get("skipped_cancelled_count")),
         "stop_reason": _redact_text(job.get("stop_reason")),
+        "source_job_id": _string_or_none(job.get("source_job_id")),
+        "resume_result_filters": _sanitize_value(job.get("resume_result_filters")),
+    }
+
+
+def job_rollup(job: dict) -> dict[str, int]:
+    return {
+        "target_count": _int_or_zero(job.get("target_count")),
+        "pending_count": _int_or_zero(job.get("pending_count")),
+        "attempted_count": _int_or_zero(job.get("attempted_count")),
+        "success_count": _int_or_zero(job.get("success_count")),
+        "refused_count": _int_or_zero(job.get("refused_count")),
+        "not_found_count": _int_or_zero(job.get("not_found_count")),
+        "failed_count": _int_or_zero(job.get("failed_count")),
+        "skipped_cancelled_count": _int_or_zero(job.get("skipped_cancelled_count")),
     }
 
 
@@ -116,6 +169,8 @@ def target_summary(target: dict) -> dict[str, Any]:
         "error_class": _string_or_none(target.get("error_class")),
         "attempted_at": _string_or_none(target.get("attempted_at")),
         "completed_at": _string_or_none(target.get("completed_at")),
+        "source_job_id": _string_or_none(target.get("source_job_id")),
+        "source_target_result": _string_or_none(target.get("source_target_result")),
     }
 
 

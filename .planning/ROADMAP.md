@@ -10,127 +10,129 @@
 - [x] **v1.5 Report Recovery Production Rollout & Live Smoke** - Shipped 2026-06-04. Archive: `.planning/milestones/v1.5-ROADMAP.md`.
 - [x] **v1.6 Report Recovery Operations Hardening** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.6-ROADMAP.md`.
 - [x] **v1.7 Recovery Evidence Export & Admin Credential Operations** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.7-ROADMAP.md`.
+- [x] **v1.8 Incident Generation Retry Jobs** - Shipped 2026-06-05. Archive: `.planning/milestones/v1.8-ROADMAP.md`.
 
 ## Current Milestone
 
-### v1.8 Incident Generation Retry Jobs
+### v1.9 Recovery Resume And Support Evidence Packages
 
-**Milestone Goal:** Admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda without expanding production mutation scope beyond approved admin actions.
+**Milestone Goal:** Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages without exposing private report artifacts or creating unbounded scans.
 
-This milestone promotes the highest-value deferred recovery expansion from v1.7: incident-wide generation retry. It deliberately reuses existing Lambda, DynamoDB, Cognito, admin UI, and audit/export resources unless implementation evidence proves a gap.
+This milestone builds on v1.8 by turning recovery jobs into restartable incident workflows. It deliberately reuses existing recovery job, target, audit, and evidence export resources unless implementation evidence proves a gap.
 
 ## Phases
 
 **Phase Numbering:**
 
 - Integer phases continue from previous milestones.
-- v1.7 ended at Phase 41, so v1.8 starts at Phase 42.
+- v1.8 ended at Phase 45, so v1.9 starts at Phase 46.
 - Decimal phases are reserved for urgent insertions.
 
-- [x] **Phase 42: Recovery Job Type Contract And CDK Readiness** - Prove `retry_generation` can reuse existing recovery job resources and define the job contract.
-- [x] **Phase 43: Async Generation Retry Backend** - Add preview/create/execute/cancel/result/audit support for `retry_generation` jobs.
-- [x] **Phase 44: Admin Generation Retry Job UI** - Add generation retry job controls to `/admin/report-operations`.
-- [ ] **Phase 45: v1.8 Release Gate And Read-only Production Verification** - Consolidate build/deploy/CDK/API/UI evidence and production read-only smoke.
+- [x] **Phase 46: Resume Contract And Evidence Package Design** - Define subset resume semantics, safety bounds, audit actions, and support package schema.
+- [x] **Phase 47: Failed/Skipped Subset Resume Backend** - Add backend preview/create support for resume-from-job recovery jobs.
+- [x] **Phase 48: Support Evidence Package UI** - Add UI controls for resume preview/start and support evidence packages.
+- [ ] **Phase 49: v1.9 Release Gate And Live Verification** - Consolidate build/deploy/CDK/API/UI evidence and production read-only smoke.
 
 ## Phase Details
 
-### Phase 42: Recovery Job Type Contract And CDK Readiness
+### Phase 46: Resume Contract And Evidence Package Design
 
-**Goal**: Implementers have a precise `retry_generation` job contract and evidence that existing resources can support the MVP.
-**Depends on**: Phase 41
-**Requirements**: GENJOB-01, GENJOB-04
+**Goal**: Implementers have a precise contract for creating a new recovery job from failed/refused/not_found/skipped targets of an existing job, plus a support-safe evidence package schema.
+**Depends on**: Phase 45
+**Requirements**: RESUME-01, EVIDENCE-01, RESUME-04
 **Success Criteria** (what must be TRUE):
 
-1. Contract defines job type, target eligibility, preview token binding, state transitions, cancellation, stop conditions, audit actions, and privacy boundary.
-2. Existing API Lambda, weekly report Lambda, DynamoDB job/target/audit records, Cognito admin auth, and admin UI route are reviewed before implementation.
+1. Contract defines eligible source job statuses, target result filters, inherited job type behavior, preview token binding, limits, cancellation, audit actions, and privacy boundary.
+2. Support evidence package schema defines job summary, target result rollups, audit timeline, request IDs, redacted operator notes, and denylisted fields.
 3. CDK readiness states whether new Step Functions, SQS, Lambda, table, bucket, or GSI resources are required.
-4. Phase 43 backend plan identifies exact files and tests to change.
+4. Phase 47 backend plan identifies exact files and tests to change.
 
 **Plans**: 1 complete
 
-### Phase 43: Async Generation Retry Backend
+### Phase 47: Failed/Skipped Subset Resume Backend
 
-**Goal**: Admins can preview, create, execute, cancel, inspect, and audit bounded async `retry_generation` recovery jobs.
-**Depends on**: Phase 42
-**Requirements**: GENJOB-01, GENJOB-02, GENJOB-03, GENJOB-04
+**Goal**: Admins can preview and create bounded resume jobs from failed/refused/not_found/skipped targets of a prior recovery job.
+**Depends on**: Phase 46
+**Requirements**: RESUME-01, RESUME-02, RESUME-03, RESUME-04
 **Success Criteria** (what must be TRUE):
 
-1. Preview/create APIs support `retry_generation` jobs with bounded filters and operation-bound preview tokens.
-2. Weekly report worker executes `report_recovery_retry_generation` events through existing single-report retry service.
-3. Job counters, statuses, target results, cancellation, failure threshold, and time-floor behavior work for generation retry jobs.
-4. Tests cover admin-only auth, non-admin rejection, bounds, stale preview token, no eligible targets, success/refused/not_found/failed/skipped outcomes, audit, and privacy denylist.
+1. Preview API returns metadata-only source target samples filtered by allowed target results.
+2. Create API writes a new recovery job with `source_job_id`, inherited `job_type`, stable target snapshots, audit events, and bounded limits.
+3. Existing worker execution paths can process resumed resend and generation retry jobs without new infrastructure.
+4. Tests cover admin-only auth, non-admin rejection, bounds, stale preview token, no eligible targets, source job mismatch, privacy denylist, and audit linkage.
 
 **Plans**: 1 complete
 
-### Phase 44: Admin Generation Retry Job UI
+### Phase 48: Support Evidence Package UI
 
-**Goal**: Admins can operate async generation retry jobs from `/admin/report-operations` without confusing them with resend jobs.
-**Depends on**: Phase 43
-**Requirements**: GENJOB-05
+**Goal**: Admins can inspect failed recovery jobs, preview/start a resume job, and export a support-safe evidence package from `/admin/report-operations`.
+**Depends on**: Phase 47
+**Requirements**: EVIDENCE-01, EVIDENCE-02, UI-06
 **Success Criteria** (what must be TRUE):
 
-1. UI exposes a job type selector for resend email versus retry generation.
-2. Preview/start controls call the correct backend endpoints and show operation-specific counts, labels, disabled states, and mutation warnings.
-3. Job/result/audit panels render generation retry jobs and target outcomes without private artifact markers.
-4. Frontend tests cover both job types, error states, and metadata-only rendering.
+1. UI exposes resume controls only when a selected recovery job has resumable target results.
+2. UI distinguishes source job, resumed job, job type, target result filters, and operator reason.
+3. Support package export shows metadata-only evidence, redacted notes, request IDs, and privacy markers omitted.
+4. Frontend tests cover resume preview/create, package export, disabled states, and privacy denylist.
 
 **Plans**: 1 complete
 **UI hint**: yes
 
-### Phase 45: v1.8 Release Gate And Read-only Production Verification
+### Phase 49: v1.9 Release Gate And Live Verification
 
-**Goal**: v1.8 closes with release evidence proving generation retry jobs are deployed, bounded, admin-only, auditable, and production-smokeable without mutation.
-**Depends on**: Phase 44
-**Requirements**: GENJOB-06
+**Goal**: v1.9 closes with release evidence proving subset resume and support packages are deployed, bounded, admin-only, auditable, and production-smokeable without mutation.
+**Depends on**: Phase 48
+**Requirements**: VERIFY-02
 **Success Criteria** (what must be TRUE):
 
 1. Release gate records Lambda build manifest, backend/frontend deploy runs, commit SHAs, Lambda runtime state, and local quality gates.
 2. CDK diff/deploy evidence is recorded, with no-new-infra or exact required infra changes classified.
-3. Production API checks include request IDs for health, auth gate, list jobs, and read-only UI APIs.
-4. Production browser smoke verifies `/admin/report-operations` generation retry job UI without creating a production job or invoking retry mutation.
-5. Final v1.8 audit records implementation evidence, live verification, residual risks, deferred follow-up, and archive readiness.
+3. Production API checks include request IDs for health, auth gate, list jobs, and read-only support package APIs.
+4. Production browser smoke verifies `/admin/report-operations` resume/support package UI without creating a production resume job.
+5. Final v1.9 audit records implementation evidence, live verification, residual risks, deferred follow-up, and archive readiness.
 
 **Plans**: 0 complete
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 42 -> 43 -> 44 -> 45
+Phases execute in numeric order: 46 -> 47 -> 48 -> 49
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 42. Recovery Job Type Contract And CDK Readiness | v1.8 | 1/1 | Complete | 2026-06-05 |
-| 43. Async Generation Retry Backend | v1.8 | 1/1 | Complete | 2026-06-05 |
-| 44. Admin Generation Retry Job UI | v1.8 | 1/1 | Complete | 2026-06-05 |
-| 45. v1.8 Release Gate And Read-only Production Verification | v1.8 | 0/1 | Not Started | - |
+| 46. Resume Contract And Evidence Package Design | v1.9 | 1/1 | Complete | 2026-06-05 |
+| 47. Failed/Skipped Subset Resume Backend | v1.9 | 1/1 | Complete | 2026-06-05 |
+| 48. Support Evidence Package UI | v1.9 | 1/1 | Complete | 2026-06-05 |
+| 49. v1.9 Release Gate And Live Verification | v1.9 | 0/1 | Not Started | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GENJOB-01 | Phase 42/43 | Complete |
-| GENJOB-02 | Phase 43 | Complete |
-| GENJOB-03 | Phase 43 | Complete |
-| GENJOB-04 | Phase 43/45 | In Progress |
-| GENJOB-05 | Phase 44 | Complete |
-| GENJOB-06 | Phase 45 | Planned |
+| RESUME-01 | Phase 46/47 | Complete |
+| RESUME-02 | Phase 47 | Complete |
+| RESUME-03 | Phase 47 | Complete |
+| RESUME-04 | Phase 46/47/49 | In Progress |
+| EVIDENCE-01 | Phase 46/48 | Complete |
+| EVIDENCE-02 | Phase 48 | Complete |
+| UI-06 | Phase 48 | Complete |
+| VERIFY-02 | Phase 49 | Planned |
 
 **Coverage:**
 
-- v1.8 requirements: 6 total
-- Complete: 3
-- Mapped to phases: 6
+- v1.9 requirements: 8 total
+- Complete: 0
+- Mapped to phases: 8
 - Unmapped: 0
 
 ## Next Candidates
 
-Deferred from v1.6:
+Deferred from v1.8:
 
-- Resume failed/skipped recovery subsets as a new audit-linked job.
-- Support ticket or incident note integration.
-- Stronger orchestration resources if evidence requires Step Functions, SQS, a dedicated worker Lambda, a new table, a new bucket, or a new GSI.
+- Step Functions/SQS/new table/new bucket/new Lambda/new GSI if existing Lambda flow becomes insufficient.
 - Compliance-grade WORM audit storage if legal/security requires it.
+- External support ticket integration when an approved connector/credential path exists.
 - Report editing, PDF generation, multilingual delivery, billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after completing Phase 44*
+*Last updated: 2026-06-05 after completing Phase 48*

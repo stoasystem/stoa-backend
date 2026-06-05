@@ -169,23 +169,46 @@ Key accomplishments:
 
 Known deferred items at close: incident-wide generation retry, failed/skipped subset resume, Step Functions/SQS or dedicated worker orchestration, WORM audit storage, support ticket/export destination integration, report editing, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
 
+### v1.8 Incident Generation Retry Jobs
+
+**Status:** Shipped 2026-06-05
+**Audit:** `.planning/milestones/v1.8-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.8-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.8-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v1.8-phases/`
+**Goal:** Admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda without expanding production mutation scope beyond approved admin actions.
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 6/6 complete
+
+Key accomplishments:
+
+- Defined the `retry_generation` recovery job contract and confirmed existing Lambda/DynamoDB/admin resources are sufficient.
+- Added backend preview/create/execute/cancel/result/audit support for async `retry_generation` jobs.
+- Routed weekly worker events through `report_recovery_retry_generation` without new infrastructure.
+- Added admin report operations UI controls for resend versus generation retry job types.
+- Verified backend/frontend deploys, Lambda manifest, Lambda runtime state, CDK diff classification, API request IDs, and production read-only browser smoke.
+- Confirmed production smoke exposed the `Retry generation` UI, used the secret-backed admin path, exposed no private markers, and performed no production recovery mutation.
+
+Known deferred items at close: failed/skipped subset resume, support evidence packages, Step Functions/SQS or dedicated worker orchestration if existing Lambda flow becomes insufficient, WORM audit storage, support ticket integration, report editing, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
+
 ## Current
 
-### v1.8 Incident Generation Retry Jobs
+### v1.9 Recovery Resume And Support Evidence Packages
 
 **Status:** Active
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Roadmap:** `.planning/ROADMAP.md`
-**Goal:** Admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda without expanding production mutation scope beyond approved admin actions.
+**Goal:** Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages.
 **Phases:** 4 planned
-**Requirements:** 6 active
+**Requirements:** active
 
 Planned work:
 
-- Phase 42: Recovery Job Type Contract and CDK Readiness.
-- Phase 43: Async Generation Retry Backend.
-- Phase 44: Admin Generation Retry Job UI.
-- Phase 45: v1.8 Release Gate and Read-only Production Verification.
+- Phase 46: Resume Contract And Evidence Package Design.
+- Phase 47: Failed/Skipped Subset Resume Backend.
+- Phase 48: Support Evidence Package UI.
+- Phase 49: v1.9 Release Gate And Live Verification.
 
 ---
-*Last updated: 2026-06-05 after starting v1.8*
+*Last updated: 2026-06-05 after archiving v1.8 and starting v1.9*

@@ -1,113 +1,119 @@
-# Requirements: v1.8 Incident Generation Retry Jobs
+# Requirements: v1.9 Recovery Resume And Support Evidence Packages
 
+**Milestone:** v1.9
+**Status:** Active
 **Created:** 2026-06-05
-**Status:** Active milestone requirements
-**Source:** v1.7 final audit deferred items and autonomous next-milestone selection
 
-## Milestone Goal
+## Goal
 
-Allow admins to run bounded async `generation_failed` recovery jobs through the existing recovery job platform, while preserving metadata-only evidence, cancellation, auditability, and production safety.
+Admins can resume failed/refused/not_found/skipped recovery subsets from prior jobs and generate support-safe incident evidence packages without exposing private report artifacts or creating unbounded scans.
 
-## Success Criteria
+## Requirements
 
-- Admins can preview eligible `generation_failed` targets before creating a mutation job.
-- Admins can create a bounded async `retry_generation` job after preview confirmation.
-- The weekly report Lambda can execute `retry_generation` jobs target-by-target with stable target snapshots, cancellation, stop conditions, and per-target results.
-- Job list/detail/result/audit/export surfaces distinguish `resend_email` from `retry_generation`.
-- Tests prove admin-only authorization, bounds, privacy boundary, idempotent claims, cancellation, and no new infrastructure requirement.
-- Release gate records deploy/build/CDK evidence and production read-only UI/API smoke without creating a production mutation job.
+### RESUME-01 Resume Preview
 
-## Functional Requirements
-
-### GENJOB-01 Generation Retry Preview
-
-Admins can preview a bounded `generation_failed` retry job from filters before any mutation.
+Admins can preview a bounded target subset from a prior recovery job before creating a resume job.
 
 Acceptance criteria:
 
-- Preview accepts status, week, parent, student, reason, and max target bounds.
-- Preview only allows `generation_failed` scope.
-- Preview returns eligible/refused/missing counts and metadata-only samples.
-- Preview token binds filters, reason, operation, and target IDs.
+- Preview requires admin authorization.
+- Preview requires a source `job_id`.
+- Preview supports only allowed target results: `failed`, `refused`, `not_found`, `skipped_cancelled`.
+- Preview returns metadata-only target samples.
+- Preview records source job type and eligible/refused/missing counts.
+- Preview token binds to source job, job type, result filters, operator reason, max targets, and target snapshot hash.
 
-### GENJOB-02 Generation Retry Job Creation
+### RESUME-02 Resume Job Creation
 
-Admins can create a `retry_generation` job only after confirming a current preview.
-
-Acceptance criteria:
-
-- Create rejects stale/mismatched preview tokens.
-- Create rejects empty eligible scopes.
-- Created job has `job_type=retry_generation`.
-- Target snapshot includes only metadata-safe report IDs, parent/student IDs, week, status, and result state.
-- Create writes append-only job audit evidence and invokes the weekly report Lambda asynchronously.
-
-### GENJOB-03 Generation Retry Worker Execution
-
-The worker executes stable targets with cancellation and stop conditions.
+Admins can create a new recovery job from a valid preview of a prior job's resumable target subset.
 
 Acceptance criteria:
 
-- Worker accepts event `job=report_recovery_retry_generation`.
-- Worker uses existing report recovery service to retry one target at a time.
-- Worker records `success`, `refused`, `not_found`, `failed`, or `skipped_cancelled` per target.
-- Worker updates job counters and terminal status.
-- Worker respects Lambda time floor and failure threshold.
+- Create requires a valid preview token.
+- Create writes `source_job_id`, inherited `job_type`, reason, filters, counters, and stable target snapshots.
+- Create refuses source jobs without eligible targets.
+- Create invokes the existing weekly worker event for the inherited job type.
+- Create writes an audit event linking source and resumed jobs.
 
-### GENJOB-04 Authorization, Privacy, And Audit
+### RESUME-03 Resume Worker Execution
 
-Generation retry jobs preserve existing admin-only and metadata-only boundaries.
-
-Acceptance criteria:
-
-- Preview/create/list/detail/results/audit reject non-admin callers.
-- Responses omit `weekly-reports/`, S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and customer-sensitive artifact payloads.
-- Audit events redact private artifact markers and include actor, action, reason, source, result, target metadata, and job correlation ID.
-
-### GENJOB-05 Admin UI
-
-The admin report operations UI supports async generation retry jobs without confusing them with resend jobs.
+Resumed jobs execute through existing recovery worker paths.
 
 Acceptance criteria:
 
-- UI lets admins choose job type `Resend email` or `Retry generation`.
-- UI adjusts status defaults and labels for the selected job type.
-- UI can preview/start generation retry jobs, poll jobs, view results/audit, and export evidence.
+- Resumed `resend_email` jobs reuse the resend worker target execution path.
+- Resumed `retry_generation` jobs reuse the generation retry worker target execution path.
+- Target results and counters update the same way as normal recovery jobs.
+- Cancellation and failure thresholds still apply.
+- Source job linkage is preserved in job metadata and audit events.
+
+### RESUME-04 Authorization, Privacy, And Audit
+
+Resume operations are admin-only, metadata-only, and audit-linked.
+
+Acceptance criteria:
+
+- Non-admin users cannot preview/create resume jobs.
+- Responses omit private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
+- Audit includes actor, source, source job id, resumed job id, result filters, counts, request id/correlation id, and result.
+- Production live smoke remains read-only unless an approved safe fixture is explicitly named.
+
+### EVIDENCE-01 Support Evidence Package
+
+Admins can generate a support-safe evidence package for a recovery job.
+
+Acceptance criteria:
+
+- Package includes job summary, target result rollups, selected target metadata, job audit timeline, report audit references, request IDs, and redacted operator notes.
+- Package supports optional `source_job_id` / resumed job linkage.
+- Package remains metadata-only.
+- Package has bounded limits for targets and audit events.
+
+### EVIDENCE-02 Evidence Package Observability
+
+Evidence package generation is observable without mutating report recovery state.
+
+Acceptance criteria:
+
+- Package response includes request id and export timestamp.
+- Package generation does not create or mutate recovery jobs.
+- Package can indicate partial results when limits truncate target/audit sections.
+- Package privacy metadata records that private artifact fields are omitted.
+
+### UI-06 Resume And Evidence Package UI
+
+The admin report operations UI supports resume preview/start and support evidence package export.
+
+Acceptance criteria:
+
+- UI exposes resume controls for selected jobs with resumable target results.
+- UI shows source job, inherited job type, target result filters, counts, and operator reason.
+- UI can preview/start resume jobs and select the resumed job.
+- UI can export/view/copy/download support-safe evidence packages.
 - UI copy preserves read-only versus mutation distinction.
 
-### GENJOB-06 v1.8 Release Gate
+### VERIFY-02 v1.9 Release Gate
 
-v1.8 closes with release evidence and read-only production verification.
+v1.9 closes with release and live verification evidence.
 
 Acceptance criteria:
 
-- Release gate records backend/frontend deploy evidence when performed.
-- Lambda manifest and runtime state are recorded.
-- CDK diff is recorded and any Lambda code asset drift is classified.
-- Production browser smoke loads `/admin/report-operations`, verifies generation retry job UI presence, calls only GET APIs, and performs no production mutation.
-
-## Non-Functional Requirements
-
-- Reuse existing API Lambda, weekly report Lambda, DynamoDB table, Cognito admin auth, and admin route by default.
-- Do not add Step Functions, SQS, new tables, new buckets, new Lambdas, or new GSIs in v1.8 unless current implementation cannot satisfy bounded generation retry jobs.
-- Keep target caps conservative.
-- Keep production verification read-only unless a named safe fixture and explicit mutation approval path exists.
-
-## Out of Scope
-
-- Resume failed/skipped subsets as a new job - v1.9.
-- Support ticket integration or evidence packages - v1.9.
-- Report editing - v2.0.
-- WORM audit storage.
-- PDF generation, multilingual delivery, billing, analytics, and broader admin expansion.
+- Backend and frontend deploy run IDs, commit SHAs, job IDs, timestamps, and outcomes are recorded.
+- Lambda build manifest and runtime state are recorded.
+- CDK diff/deploy evidence is classified.
+- Production API checks record request IDs and admin authorization behavior.
+- Production browser smoke verifies UI presence and support package read-only behavior without creating a production resume job.
+- Final milestone audit records residual risks and future requirements.
 
 ## Traceability
 
-| Requirement | Primary Phase | Status |
-|-------------|---------------|--------|
-| GENJOB-01 | Phase 42/43 | Planned |
-| GENJOB-02 | Phase 43 | Planned |
-| GENJOB-03 | Phase 43 | Planned |
-| GENJOB-04 | Phase 43/45 | Planned |
-| GENJOB-05 | Phase 44 | Complete |
-| GENJOB-06 | Phase 45 | Planned |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| RESUME-01 | Phase 46/47 | Complete |
+| RESUME-02 | Phase 47 | Complete |
+| RESUME-03 | Phase 47 | Complete |
+| RESUME-04 | Phase 46/47/49 | In Progress |
+| EVIDENCE-01 | Phase 46/48 | Complete |
+| EVIDENCE-02 | Phase 48 | Complete |
+| UI-06 | Phase 48 | Complete |
+| VERIFY-02 | Phase 49 | Planned |
