@@ -6,7 +6,7 @@ STOA is a learning platform backend for students, teachers/tutors, parents, and 
 
 The shipped report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, run bounded async `email_failed` resend jobs, inspect append-only audit evidence, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
 
-The active v1.7 milestone turns that platform into a cleaner operational release gate by formalizing production admin credential ownership/rotation and adding metadata-only recovery evidence export.
+The completed v1.7 milestone turns that platform into a cleaner operational release gate by formalizing production admin credential ownership/rotation and adding metadata-only recovery evidence export.
 
 ## Core Value
 
@@ -14,7 +14,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v1.6 Report Recovery Operations Hardening on 2026-06-05
+**Shipped version:** v1.7 Recovery Evidence Export & Admin Credential Operations on 2026-06-05
 
 Delivered:
 
@@ -54,14 +54,15 @@ Delivered:
 - v1.6 runbook, release gate, live verification evidence, and final audit are complete.
 - Backend admin-only `GET /admin/reports/recovery-evidence` exports bounded metadata-only recovery job, target, and audit evidence without private artifact exposure or recovery mutation.
 - Frontend `/admin/report-operations` exposes read-only recovery evidence export controls with metadata-only JSON preview, copy, and download.
+- v1.7 release gate captured backend/frontend deploy evidence, Lambda manifest evidence, CDK diff classification, admin-only API request IDs, Cognito group membership, and production read-only browser smoke for evidence export with no production mutation.
 
-## Current Milestone
+## Last Shipped Milestone
 
-**v1.7 Recovery Evidence Export & Admin Credential Operations** started on 2026-06-05.
+**v1.7 Recovery Evidence Export & Admin Credential Operations** shipped on 2026-06-05.
 
 Goal: make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
 
-Planned phases:
+Archived phases:
 
 - Phase 38: Credential Ops Contract and Export Design.
 - Phase 39: Metadata-only Export Backend.
@@ -97,13 +98,9 @@ Shipped requirements:
 - Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
 - Report recovery production rollout, live admin-auth API verification, safe non-customer retry/resend/bulk smoke, scoped API SES permission, operations runbook, and final CDK diff verification shipped - v1.5.
 
-### Active
+### Completed
 
-Milestone v1.7 requirements are tracked in `.planning/REQUIREMENTS.md`:
-
-- VERIFY-01: release gate and live evidence package for v1.7 closeout.
-
-Completed in v1.7:
+Milestone v1.7 requirements are archived in `.planning/milestones/v1.7-REQUIREMENTS.md` and are complete:
 
 - ADMIN-01: production admin credential ownership, rotation, emergency disable, and access review procedure - Phase 38.
 - ADMIN-02: Cognito admins group verification procedure that avoids exposing passwords, tokens, or session secrets - Phase 38.
@@ -111,6 +108,7 @@ Completed in v1.7:
 - EXPORT-02: export privacy boundary that omits private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads - Phase 39.
 - EXPORT-03: read-only export observability and evidence logging - Phase 39.
 - UI-01: read-only admin evidence export UI on `/admin/report-operations` - Phase 40.
+- VERIFY-01: release gate and live evidence package for v1.7 closeout - Phase 41.
 
 ### Out of Scope
 
@@ -225,7 +223,7 @@ Known current resources:
 | Treat stale `../stoa-backend/dist` as a deployment risk | CDK deploys Lambda assets from local build output and can overwrite current code if not rebuilt | Good - documented in v1.5 runbook |
 | Keep v1.6 browser smoke read-only by default | Production browser verification should prove route/auth/privacy without mutating customer report data | Good - verified in Phase 36 |
 | Use secret-backed long-lived production admin credentials for smoke | v1.6 forbids temporary production admin smoke accounts but needs real admin auth | Good - credential path created in Phase 36; ownership/rotation remains operational follow-up |
-| Start v1.7 with credential operations and metadata-only export | v1.6 proved the recovery workflow works; the next low-risk value is reusable evidence and credential lifecycle hygiene before larger mutation/orchestration work | Active - planned in Phases 38-41 |
+| Start v1.7 with credential operations and metadata-only export | v1.6 proved the recovery workflow works; the next low-risk value is reusable evidence and credential lifecycle hygiene before larger mutation/orchestration work | Good - shipped in v1.7 |
 
 ## Evolution
 

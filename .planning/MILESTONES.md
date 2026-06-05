@@ -147,23 +147,31 @@ Key accomplishments:
 
 Known deferred items at close: incident-wide generation retry, resume failed/skipped subset, metadata-only export, support ticket integration, stronger orchestration resources if evidence requires them, compliance-grade WORM audit storage, report editing, PDF/multilingual/billing/analytics expansion, and production admin credential ownership/rotation policy.
 
-## Current
-
 ### v1.7 Recovery Evidence Export & Admin Credential Operations
 
-**Status:** Phase 40 complete, Phase 41 next
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Roadmap:** `.planning/ROADMAP.md`
+**Status:** Shipped 2026-06-05
+**Audit:** `.planning/milestones/v1.7-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v1.7-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v1.7-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v1.7-phases/`
 **Goal:** Make production report recovery easier to operate, audit, and hand off without expanding production mutation scope.
-**Phases:** 3 complete, 1 planned
-**Requirements:** 6 complete, 1 active
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 7/7 complete
 
-Planned work:
+Key accomplishments:
 
-- Phase 38: Credential Ops Contract and Export Design.
-- Phase 39: Metadata-only Export Backend.
-- Phase 40: Admin Export UI and Read-only Smoke.
-- Phase 41: Release Gate and v1.7 Audit.
+- Documented long-lived production admin credential ownership, rotation, access review, emergency disable, and Cognito group verification.
+- Added admin-only bounded metadata-only recovery evidence export without private artifact exposure or recovery mutation.
+- Added read-only recovery evidence export controls to `/admin/report-operations`.
+- Verified backend/frontend deploys, Lambda manifest, Lambda runtime state, CDK diff classification, API request IDs, and production browser smoke.
+- Confirmed production smoke used the secret-backed admin path, exposed no private markers, and performed no production recovery mutation.
+
+Known deferred items at close: incident-wide generation retry, failed/skipped subset resume, Step Functions/SQS or dedicated worker orchestration, WORM audit storage, support ticket/export destination integration, report editing, PDF/multilingual delivery, billing, analytics, and broader admin operations expansion.
+
+## Current
+
+No active milestone. Next milestone should promote selected deferred items through `$gsd-new-milestone`.
 
 ---
-*Last updated: 2026-06-05 after completing Phase 40*
+*Last updated: 2026-06-05 after archiving v1.7*

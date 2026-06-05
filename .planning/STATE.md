@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Recovery Evidence Export & Admin Credential Operations
-status: active
-last_updated: "2026-06-05T11:22:05+02:00"
+status: archived
+last_updated: "2026-06-05T11:47:31+02:00"
 last_activity: 2026-06-05
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 75
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v1.7 starts production admin credential operations and metadata-only recovery evidence export.
+**Current focus:** v1.7 is archived. No active milestone is selected.
 
 ## Current Position
 
-Phase: 40 of 41 (3 of 4 for v1.7)
-Plan: 40-01
-Status: Complete
-Last activity: 2026-06-05 - Phase 40 admin export UI and local read-only smoke completed.
+Phase: none active
+Plan: none active
+Status: Archived
+Last activity: 2026-06-05 - v1.7 archived after Phase 41 release gate and final audit.
 
-Progress: [████████--] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -37,8 +37,8 @@ Progress: [████████--] 75%
 
 - Historical plans completed through v1.5: 33
 - Historical plans completed through v1.6: 38
-- Active milestone plans created: 3
-- Active milestone plans completed: 3
+- Active milestone plans created: 4
+- Active milestone plans completed: 4
 - Average duration: -
 - Total execution time this milestone: 0.0 hours
 
@@ -49,7 +49,7 @@ Progress: [████████--] 75%
 | 38 | 1/1 complete | - | - |
 | 39 | 1/1 complete | - | - |
 | 40 | 1/1 complete | - | - |
-| 41 | 0 complete | - | - |
+| 41 | 1/1 complete | - | - |
 
 **Recent Trend:**
 
@@ -70,10 +70,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 38 decided that exact `job_id` export is the preferred Phase 39 implementation path and no CDK change is required for the MVP.
 - Phase 39 implemented the admin-only `GET /admin/reports/recovery-evidence` backend without CDK changes.
 - Phase 40 added frontend export controls in `/admin/report-operations` and verified local browser smoke without production calls.
+- Phase 41 release gate passed with backend/frontend deploy evidence, Lambda manifest evidence, production API/browser smoke, and no production recovery mutation.
 
 ### Pending Todos
 
-- Execute Phase 41 release gate, production read-only smoke, and v1.7 final audit.
+- Start the next milestone and carry selected deferred items into future requirements.
 
 ### Blockers/Concerns
 
@@ -95,11 +96,10 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-05 10:39 +02:00
-Stopped at: Phase 40 complete; Phase 41 is next.
+Stopped at: v1.7 archived; next milestone is not selected.
 Resume file: None
 
 ## Operator Next Steps
 
-- Assemble Phase 41 release gate evidence.
-- Run production read-only UI smoke after deploy evidence is confirmed.
-- Complete final v1.7 audit and archive.
+- Select deferred future requirements to promote.
+- Start the next milestone with `$gsd-new-milestone`.
