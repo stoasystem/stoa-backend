@@ -5,7 +5,8 @@
 
 ## Commits
 
-- Backend: `dff3a41d2e4ef66535cc21333e406be4ecbf6efb` (`feat: add controlled report editing APIs`)
+- Backend feature commit: `dff3a41d2e4ef66535cc21333e406be4ecbf6efb` (`feat: add controlled report editing APIs`)
+- Backend final archive commit: `3c1135f3caa10bb0b01ec94705b9ffad9c106cfc` (`docs: archive v2.0 release gate`)
 - Frontend: `094b72cdda46ea9df8fea8ca64162d0c3c37b81c` (`feat: add report editing admin UI`)
 
 ## Deploy Evidence
@@ -20,6 +21,18 @@
 - Status: success
 - Created: `2026-06-05T13:14:33Z`
 - Completed: `2026-06-05T13:15:28Z`
+
+Post-archive backend deploy:
+
+- Workflow: Deploy Backend
+- Run ID: `27017714970`
+- Run URL: `https://github.com/stoasystem/stoa-backend/actions/runs/27017714970`
+- Job: Build Lambda package & Update function
+- Job ID: `79737047317`
+- Head SHA: `3c1135f3caa10bb0b01ec94705b9ffad9c106cfc`
+- Status: success
+- Created: `2026-06-05T13:28:56Z`
+- Completed: `2026-06-05T13:29:57Z`
 
 ### Frontend
 
@@ -95,7 +108,7 @@ python scripts/build_lambda_dist.py --zip lambda.zip
 
 Manifest:
 
-- `source_git_sha`: `dff3a41d2e4ef66535cc21333e406be4ecbf6efb`
+- `source_git_sha`: `3c1135f3caa10bb0b01ec94705b9ffad9c106cfc`
 - `source_git_dirty`: `false`
 - `source_tree_hash`: `9c5bdf507867da39f9ff0fe2b1c675edc1edd9c732d0ca656c20960c5901429f`
 - `cdk_asset_hash`: `f5ea358d88e2e8287a4fadcffc446e7d0ba9cdffb4c6c6fc075a72592f66b0e5`
@@ -113,16 +126,16 @@ Region: `eu-central-2`
 
 - State: `Active`
 - LastUpdateStatus: `Successful`
-- LastModified: `2026-06-05T13:15:16.000+0000`
-- CodeSha256: `Ux9PZak6KmILoeToHGweMAZelb7x7PI6iUw190H+gv4=`
+- LastModified: `2026-06-05T13:29:40.000+0000`
+- CodeSha256: `Mn8FDna8bMpYQC97OIGR28HOSw0r7wGyMal7eYbuzn8=`
 - Runtime: `python3.12`
 
 `stoa-weekly-report`:
 
 - State: `Active`
 - LastUpdateStatus: `Successful`
-- LastModified: `2026-06-05T13:15:23.000+0000`
-- CodeSha256: `Ux9PZak6KmILoeToHGweMAZelb7x7PI6iUw190H+gv4=`
+- LastModified: `2026-06-05T13:29:46.000+0000`
+- CodeSha256: `Mn8FDna8bMpYQC97OIGR28HOSw0r7wGyMal7eYbuzn8=`
 - Runtime: `python3.12`
 
 ## CDK Diff
