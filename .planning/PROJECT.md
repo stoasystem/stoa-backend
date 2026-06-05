@@ -8,6 +8,8 @@ The shipped report operations platform gives admins a production-verified, backe
 
 The completed v1.7 milestone turns that platform into a cleaner operational release gate by formalizing production admin credential ownership/rotation and adding metadata-only recovery evidence export.
 
+The active v1.8 milestone extends the same recovery platform to bounded async `generation_failed` retry jobs using existing recovery job and weekly report Lambda resources.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -69,6 +71,19 @@ Archived phases:
 - Phase 40: Admin Export UI and Read-only Smoke.
 - Phase 41: Release Gate and v1.7 Audit.
 
+## Current Milestone
+
+**v1.8 Incident Generation Retry Jobs** started on 2026-06-05.
+
+Goal: admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda without adding infrastructure by default.
+
+Planned phases:
+
+- Phase 42: Recovery Job Type Contract and CDK Readiness.
+- Phase 43: Async Generation Retry Backend.
+- Phase 44: Admin Generation Retry Job UI.
+- Phase 45: v1.8 Release Gate and Read-only Production Verification.
+
 ## Requirements
 
 ### Validated
@@ -109,6 +124,17 @@ Milestone v1.7 requirements are archived in `.planning/milestones/v1.7-REQUIREME
 - EXPORT-03: read-only export observability and evidence logging - Phase 39.
 - UI-01: read-only admin evidence export UI on `/admin/report-operations` - Phase 40.
 - VERIFY-01: release gate and live evidence package for v1.7 closeout - Phase 41.
+
+### Active
+
+Milestone v1.8 requirements are tracked in `.planning/REQUIREMENTS.md`:
+
+- GENJOB-01: generation retry preview - Phase 42/43.
+- GENJOB-02: generation retry job creation - Phase 43.
+- GENJOB-03: generation retry worker execution - Phase 43.
+- GENJOB-04: authorization, privacy, and audit - Phase 43/45.
+- GENJOB-05: admin UI - Phase 44.
+- GENJOB-06: release gate - Phase 45.
 
 ### Out of Scope
 
@@ -224,6 +250,7 @@ Known current resources:
 | Keep v1.6 browser smoke read-only by default | Production browser verification should prove route/auth/privacy without mutating customer report data | Good - verified in Phase 36 |
 | Use secret-backed long-lived production admin credentials for smoke | v1.6 forbids temporary production admin smoke accounts but needs real admin auth | Good - credential path created in Phase 36; ownership/rotation remains operational follow-up |
 | Start v1.7 with credential operations and metadata-only export | v1.6 proved the recovery workflow works; the next low-risk value is reusable evidence and credential lifecycle hygiene before larger mutation/orchestration work | Good - shipped in v1.7 |
+| Start v1.8 with async generation retry jobs | v1.7 proved reusable evidence/export and credential operations; the next highest-value recovery expansion is bounded incident-wide generation retry using existing job infrastructure | Active - planned in Phases 42-45 |
 
 ## Evolution
 

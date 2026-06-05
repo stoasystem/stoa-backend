@@ -171,7 +171,21 @@ Known deferred items at close: incident-wide generation retry, failed/skipped su
 
 ## Current
 
-No active milestone. Next milestone should promote selected deferred items through `$gsd-new-milestone`.
+### v1.8 Incident Generation Retry Jobs
+
+**Status:** Active
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/ROADMAP.md`
+**Goal:** Admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda without expanding production mutation scope beyond approved admin actions.
+**Phases:** 4 planned
+**Requirements:** 6 active
+
+Planned work:
+
+- Phase 42: Recovery Job Type Contract and CDK Readiness.
+- Phase 43: Async Generation Retry Backend.
+- Phase 44: Admin Generation Retry Job UI.
+- Phase 45: v1.8 Release Gate and Read-only Production Verification.
 
 ---
-*Last updated: 2026-06-05 after archiving v1.7*
+*Last updated: 2026-06-05 after starting v1.8*

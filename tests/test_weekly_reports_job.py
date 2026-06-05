@@ -74,6 +74,26 @@ def test_handler_routes_report_recovery_resend_job(monkeypatch):
     assert calls == [("job-1", context)]
 
 
+def test_handler_routes_report_recovery_retry_generation_job(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service,
+        "execute_generation_retry_job",
+        lambda job_id, **kwargs: calls.append((job_id, kwargs.get("context"))) or {"status": "completed"},
+    )
+    monkeypatch.setattr(
+        weekly_reports,
+        "run_weekly_report_job",
+        lambda event: (_ for _ in ()).throw(AssertionError("weekly job should not run")),
+    )
+    context = object()
+
+    result = weekly_reports.handler({"job": "report_recovery_retry_generation", "job_id": "job-1"}, context)
+
+    assert result == {"status": "completed"}
+    assert calls == [("job-1", context)]
+
+
 def test_handler_rejects_unknown_report_recovery_job(monkeypatch):
     monkeypatch.setattr(
         weekly_reports,
@@ -478,3 +498,97 @@ def test_report_recovery_resend_worker_marks_cancelled_pending_targets(monkeypat
     assert target_updates[0][2] == "skipped_cancelled"
     assert job_updates[0][1] == "cancelled"
     assert audits[0][1]["result"] == "cancelled"
+
+
+def test_report_recovery_retry_generation_worker_completes_target(monkeypatch):
+    target_updates = []
+    job_updates = []
+    audits = []
+    retry_calls = []
+    job = {
+        "job_id": "job-1",
+        "job_type": "retry_generation",
+        "status": "queued",
+        "reason": "incident generation retry",
+        "created_by": "admin-sub",
+        "target_count": 1,
+        "failure_threshold": 5,
+    }
+    target = {
+        "PK": "REPORT_RECOVERY_JOB#job-1",
+        "SK": "TARGET#00000#report-1",
+        "target_id": "report-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "pending",
+    }
+    report = {
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "status": "generation_failed",
+    }
+    result_obj = weekly_reports.report_recovery_job_service.report_recovery_service.ReportRecoveryResult(
+        report_id="report-1",
+        status="email_sent",
+        email_status="sent",
+        operation="retry_generation",
+        operation_result="success",
+        updated_at="2026-06-05T10:00:00+00:00",
+        artifacts={"json_available": True, "html_available": True},
+    )
+    monkeypatch.setattr(weekly_reports.report_recovery_job_service.report_repo, "get_recovery_job", lambda job_id: job)
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "try_claim_recovery_job",
+        lambda job_id, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "list_recovery_job_targets",
+        lambda job_id, **kwargs: {"Items": [target]},
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "try_claim_recovery_job_target",
+        lambda job_id, target_sk, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: report,
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_target",
+        lambda job_id, target_sk, result, **fields: target_updates.append((job_id, target_sk, result, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "update_recovery_job_status",
+        lambda job_id, status, **fields: job_updates.append((job_id, status, fields)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    monkeypatch.setattr(
+        weekly_reports.report_recovery_job_service.report_recovery_service,
+        "retry_report_generation",
+        lambda *args, **kwargs: retry_calls.append((args, kwargs)) or result_obj,
+    )
+
+    result = weekly_reports.report_recovery_job_service.execute_generation_retry_job("job-1")
+
+    assert result["status"] == "completed"
+    assert retry_calls[0][1]["source"] == "recovery_job"
+    assert retry_calls[0][1]["correlation_id"] == "job-1"
+    assert target_updates[0][2] == "success"
+    assert job_updates[0][1] == "completed"
+    assert job_updates[0][2]["success_count"] == 1
+    assert audits[0][1]["action"] == "run_retry_generation_job"
+    assert audits[-1][1]["action"] == "complete_retry_generation_job"

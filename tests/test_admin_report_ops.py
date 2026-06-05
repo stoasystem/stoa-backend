@@ -871,7 +871,11 @@ def test_create_resend_recovery_job_persists_snapshot_and_invokes_worker(monkeyp
         "put_recovery_job_audit_event",
         lambda job_id, event: audits.append((job_id, event)),
     )
-    monkeypatch.setattr(report_recovery_job_service, "invoke_weekly_report_job", lambda job_id: invoked.append(job_id))
+    monkeypatch.setattr(
+        report_recovery_job_service,
+        "invoke_weekly_report_job",
+        lambda job_id, **kwargs: invoked.append((job_id, kwargs.get("job_type"))),
+    )
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     preview = client.post(
@@ -894,7 +898,7 @@ def test_create_resend_recovery_job_persists_snapshot_and_invokes_worker(monkeyp
     assert persisted[0][0]["created_by"] == "admin-sub"
     assert persisted[0][1][0]["result"] == "pending"
     assert persisted[0][1][0]["parent_id"] == "parent-1"
-    assert invoked == [persisted[0][0]["job_id"]]
+    assert invoked == [(persisted[0][0]["job_id"], "resend_email")]
     assert audits[0][1]["action"] == "create_resend_job"
     serialized = str(data) + str(persisted)
     assert "weekly-reports/" not in serialized
@@ -914,6 +918,111 @@ def test_create_resend_recovery_job_requires_matching_preview(monkeypatch):
     )
 
     assert response.status_code == 409
+
+
+def test_generation_retry_recovery_job_preview_returns_metadata_only(monkeypatch):
+    calls = []
+
+    def list_reports_for_admin(**kwargs):
+        calls.append(kwargs)
+        return {"Items": [_report(status="generation_failed", email_status="not_sent")]}
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", list_reports_for_admin)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/retry-generation/preview",
+        json={
+            "reason": "incident generation retry",
+            "filters": {"status": "generation_failed", "week_start": "2026-06-01"},
+            "max_targets": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "retry_generation"
+    assert data["eligible_count"] == 1
+    assert data["refused_count"] == 0
+    assert data["sample"][0]["status"] == "generation_failed"
+    assert data["sample"][0]["artifacts"] == {"html_available": True, "json_available": True}
+    assert data["preview_token"]
+    assert calls == [
+        {
+            "status": "generation_failed",
+            "week_start": "2026-06-01",
+            "parent_id": None,
+            "student_id": None,
+            "limit": 5,
+            "last_key": None,
+        }
+    ]
+    _assert_no_private_artifact_markers(data)
+
+
+def test_generation_retry_recovery_job_preview_rejects_wrong_status(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("wrong status should be rejected before querying reports")
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/retry-generation/preview",
+        json={"reason": "incident generation retry", "filters": {"status": "email_failed"}},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_generation_retry_recovery_job_persists_snapshot_and_invokes_worker(monkeypatch):
+    persisted = []
+    audits = []
+    invoked = []
+    monkeypatch.setattr(
+        report_repo,
+        "list_reports_for_admin",
+        lambda **kwargs: {"Items": [_report(status="generation_failed", email_status="not_sent")]},
+    )
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda job, targets: persisted.append((job, targets)))
+    monkeypatch.setattr(
+        report_repo,
+        "put_recovery_job_audit_event",
+        lambda job_id, event: audits.append((job_id, event)),
+    )
+    monkeypatch.setattr(
+        report_recovery_job_service,
+        "invoke_weekly_report_job",
+        lambda job_id, **kwargs: invoked.append((job_id, kwargs.get("job_type"))),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    preview = client.post(
+        "/admin/reports/recovery-jobs/retry-generation/preview",
+        json={"reason": "incident generation retry", "filters": {"status": "generation_failed"}},
+    ).json()
+    response = client.post(
+        "/admin/reports/recovery-jobs/retry-generation",
+        json={
+            "reason": "incident generation retry",
+            "filters": {"status": "generation_failed"},
+            "preview_token": preview["preview_token"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["job_type"] == "retry_generation"
+    assert data["status"] == "queued"
+    assert data["target_count"] == 1
+    assert persisted[0][0]["created_by"] == "admin-sub"
+    assert persisted[0][0]["job_type"] == "retry_generation"
+    assert persisted[0][1][0]["result"] == "pending"
+    assert persisted[0][1][0]["status"] == "generation_failed"
+    assert invoked == [(persisted[0][0]["job_id"], "retry_generation")]
+    assert audits[0][1]["action"] == "create_retry_generation_job"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(persisted)
 
 
 def test_recovery_job_list_detail_results_and_cancel(monkeypatch):

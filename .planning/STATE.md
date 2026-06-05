@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: Recovery Evidence Export & Admin Credential Operations
-status: archived
-last_updated: "2026-06-05T11:47:31+02:00"
+milestone: v1.8
+milestone_name: Incident Generation Retry Jobs
+status: active
+last_updated: "2026-06-05T13:18:19+02:00"
 last_activity: 2026-06-05
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v1.7 is archived. No active milestone is selected.
+**Current focus:** v1.8 starts bounded async `generation_failed` retry jobs.
 
 ## Current Position
 
-Phase: none active
-Plan: none active
-Status: Archived
-Last activity: 2026-06-05 - v1.7 archived after Phase 41 release gate and final audit.
+Phase: 45 of 45 (3 of 4 for v1.8)
+Plan: 45-01
+Status: Active
+Last activity: 2026-06-05 - Phase 44 admin generation retry job UI completed.
 
-Progress: [██████████] 100%
+Progress: [████████--] 75%
 
 ## Performance Metrics
 
@@ -37,8 +37,8 @@ Progress: [██████████] 100%
 
 - Historical plans completed through v1.5: 33
 - Historical plans completed through v1.6: 38
-- Active milestone plans created: 4
-- Active milestone plans completed: 4
+- Active milestone plans created: 3
+- Active milestone plans completed: 3
 - Average duration: -
 - Total execution time this milestone: 0.0 hours
 
@@ -46,10 +46,10 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 38 | 1/1 complete | - | - |
-| 39 | 1/1 complete | - | - |
-| 40 | 1/1 complete | - | - |
-| 41 | 1/1 complete | - | - |
+| 42 | 1/1 complete | - | - |
+| 43 | 1/1 complete | - | - |
+| 44 | 1/1 complete | - | - |
+| 45 | 0/1 planned | - | - |
 
 **Recent Trend:**
 
@@ -71,10 +71,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Phase 39 implemented the admin-only `GET /admin/reports/recovery-evidence` backend without CDK changes.
 - Phase 40 added frontend export controls in `/admin/report-operations` and verified local browser smoke without production calls.
 - Phase 41 release gate passed with backend/frontend deploy evidence, Lambda manifest evidence, production API/browser smoke, and no production recovery mutation.
+- v1.8 promotes incident-wide `generation_failed` retry as the next bounded recovery expansion and keeps new AWS orchestration deferred unless evidence requires it.
+- Phase 43 added `retry_generation` as a second async recovery job type without CDK changes.
+- Phase 44 added shared resend/generation retry controls to the admin report operations UI and verified frontend e2e privacy coverage.
 
 ### Pending Todos
 
-- Start the next milestone and carry selected deferred items into future requirements.
+- Execute Phase 45 release gate and read-only production verification.
 
 ### Blockers/Concerns
 
@@ -88,7 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Recovery expansion | Incident-wide generation retry | Future candidate after evidence export | v1.6 requirements |
 | Infrastructure | Step Functions/SQS/new table/new bucket/new Lambda/new GSI | Deferred unless existing resources prove insufficient | v1.6 requirements |
 | Audit storage | Compliance-grade WORM evidence | Future security/compliance decision | v1.6 requirements |
 | Product expansion | Report editing, PDF, multilingual delivery, billing, analytics, ticket integration | Out of scope for v1.7 | v1.6 requirements |
@@ -96,10 +98,9 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-05 10:39 +02:00
-Stopped at: v1.7 archived; next milestone is not selected.
+Stopped at: Phase 44 complete; Phase 45 release gate is next.
 Resume file: None
 
 ## Operator Next Steps
 
-- Select deferred future requirements to promote.
-- Start the next milestone with `$gsd-new-milestone`.
+- Execute v1.8 Phase 45, then archive and continue with v1.9.

@@ -25,6 +25,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         if not job_id:
             return {"status": "failed", "detail": "job_id is required"}
         return report_recovery_job_service.execute_resend_job(job_id, context=context)
+    if event.get("job") == "report_recovery_retry_generation":
+        job_id = str(event.get("job_id") or "")
+        if not job_id:
+            return {"status": "failed", "detail": "job_id is required"}
+        return report_recovery_job_service.execute_generation_retry_job(job_id, context=context)
     if str(event.get("job", "")).startswith("report_recovery_"):
         return {"status": "failed", "detail": "Unsupported report recovery job"}
     return run_weekly_report_job(event)

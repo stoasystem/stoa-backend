@@ -20,6 +20,8 @@ MAX_TARGETS = 25
 MAX_SCAN_PAGES = 5
 FAILURE_THRESHOLD = 5
 TIME_REMAINING_FLOOR_MS = 30_000
+RESEND_JOB_TYPE = "resend_email"
+GENERATION_RETRY_JOB_TYPE = "retry_generation"
 
 
 @dataclass(frozen=True)
@@ -35,31 +37,29 @@ def preview_resend_job(
     filters: dict[str, Any],
     max_targets: int = MAX_TARGETS,
 ) -> dict[str, Any]:
-    if not reason.strip():
-        raise RecoveryJobError(422, "Recovery reason is required")
-    targets, scanned_pages = _collect_resend_targets(filters=filters, max_targets=max_targets)
-    eligible = [target for target in targets if target["eligibility"] == "eligible"]
-    refused = [target for target in targets if target["eligibility"] != "eligible"]
-    token = _encode_preview_token(
-        {
-            "filters": _normalized_filters(filters),
-            "reason": reason,
-            "target_ids": [target["target_id"] for target in eligible],
-        }
+    return _preview_job(
+        job_type=RESEND_JOB_TYPE,
+        reason=reason,
+        operator=operator,
+        filters=filters,
+        max_targets=max_targets,
     )
-    return {
-        "operation": "resend_email",
-        "reason": reason,
-        "requested_by": operator,
-        "filters": _normalized_filters(filters),
-        "max_targets": max_targets,
-        "scanned_pages": scanned_pages,
-        "eligible_count": len(eligible),
-        "refused_count": len(refused),
-        "missing_count": 0,
-        "sample": targets[:10],
-        "preview_token": token,
-    }
+
+
+def preview_generation_retry_job(
+    *,
+    reason: str,
+    operator: str,
+    filters: dict[str, Any],
+    max_targets: int = MAX_TARGETS,
+) -> dict[str, Any]:
+    return _preview_job(
+        job_type=GENERATION_RETRY_JOB_TYPE,
+        reason=reason,
+        operator=operator,
+        filters=filters,
+        max_targets=max_targets,
+    )
 
 
 def create_resend_job(
@@ -71,11 +71,55 @@ def create_resend_job(
     max_targets: int = MAX_TARGETS,
 ) -> dict[str, Any]:
     preview = preview_resend_job(reason=reason, operator=operator, filters=filters, max_targets=max_targets)
+    return _create_job(
+        job_type=RESEND_JOB_TYPE,
+        audit_action="create_resend_job",
+        reason=reason,
+        operator=operator,
+        filters=filters,
+        preview=preview,
+        preview_token=preview_token,
+        max_targets=max_targets,
+    )
+
+
+def create_generation_retry_job(
+    *,
+    reason: str,
+    operator: str,
+    filters: dict[str, Any],
+    preview_token: str,
+    max_targets: int = MAX_TARGETS,
+) -> dict[str, Any]:
+    preview = preview_generation_retry_job(reason=reason, operator=operator, filters=filters, max_targets=max_targets)
+    return _create_job(
+        job_type=GENERATION_RETRY_JOB_TYPE,
+        audit_action="create_retry_generation_job",
+        reason=reason,
+        operator=operator,
+        filters=filters,
+        preview=preview,
+        preview_token=preview_token,
+        max_targets=max_targets,
+    )
+
+
+def _create_job(
+    *,
+    job_type: str,
+    audit_action: str,
+    reason: str,
+    operator: str,
+    filters: dict[str, Any],
+    preview: dict[str, Any],
+    preview_token: str,
+    max_targets: int,
+) -> dict[str, Any]:
     if preview["preview_token"] != preview_token:
         raise RecoveryJobError(409, "Preview token no longer matches current recovery scope")
     if preview["eligible_count"] == 0:
         raise RecoveryJobError(422, "Recovery job has no eligible targets")
-    collected, _ = _collect_resend_targets(filters=filters, max_targets=max_targets)
+    collected, _ = _collect_targets(job_type=job_type, filters=filters, max_targets=max_targets)
     eligible_targets = [item for item in collected if item["eligibility"] == "eligible"]
 
     now = _now_iso()
@@ -98,7 +142,7 @@ def create_resend_job(
     ]
     job = {
         "job_id": job_id,
-        "job_type": "resend_email",
+        "job_type": job_type,
         "status": "queued",
         "reason": reason,
         "created_by": operator,
@@ -119,19 +163,19 @@ def create_resend_job(
     report_repo.put_recovery_job(job, targets)
     _write_job_audit(
         job_id,
-        action="create_resend_job",
+        action=audit_action,
         actor=operator,
         reason=reason,
         result="queued",
         source="admin_api",
-        metadata={"target_count": len(targets), "filters": preview["filters"]},
+        metadata={"job_type": job_type, "target_count": len(targets), "filters": preview["filters"]},
     )
-    invoke_weekly_report_job(job_id)
+    invoke_weekly_report_job(job_id, job_type=job_type)
     return job
 
 
-def invoke_weekly_report_job(job_id: str) -> dict[str, Any]:
-    payload = {"job": "report_recovery_resend_email", "job_id": job_id}
+def invoke_weekly_report_job(job_id: str, *, job_type: str = RESEND_JOB_TYPE) -> dict[str, Any]:
+    payload = {"job": _worker_event_name(job_type), "job_id": job_id}
     client = boto3.client("lambda", region_name=settings.aws_region)
     response = client.invoke(
         FunctionName=settings.weekly_report_function_name,
@@ -142,13 +186,51 @@ def invoke_weekly_report_job(job_id: str) -> dict[str, Any]:
 
 
 def execute_resend_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
+    return _execute_job(
+        job_id,
+        expected_job_type=RESEND_JOB_TYPE,
+        run_action="run_resend_job",
+        complete_action="complete_resend_job",
+        target_executor=_execute_resend_target,
+        context=context,
+    )
+
+
+def execute_generation_retry_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
+    return _execute_job(
+        job_id,
+        expected_job_type=GENERATION_RETRY_JOB_TYPE,
+        run_action="run_retry_generation_job",
+        complete_action="complete_retry_generation_job",
+        target_executor=_execute_generation_retry_target,
+        context=context,
+    )
+
+
+def _execute_job(
+    job_id: str,
+    *,
+    expected_job_type: str,
+    run_action: str,
+    complete_action: str,
+    target_executor: Any,
+    context: Any = None,
+) -> dict[str, Any]:
     job = report_repo.get_recovery_job(job_id)
     if not job:
         return {"status": "not_found", "job_id": job_id}
+    actual_job_type = str(job.get("job_type") or RESEND_JOB_TYPE)
+    if actual_job_type != expected_job_type:
+        return {
+            "status": "ignored",
+            "job_id": job_id,
+            "job_type": actual_job_type,
+            "expected_job_type": expected_job_type,
+        }
 
     now = _now_iso()
     if job.get("status") == "cancellation_requested":
-        return _cancel_job(job, "cancelled_before_start", now)
+        return _cancel_job(job, "cancelled_before_start", now, complete_action=complete_action)
     if job.get("status") == "queued" and not report_repo.try_claim_recovery_job(job_id, started_at=now):
         job = report_repo.get_recovery_job(job_id) or job
     if job.get("status") not in {"queued", "running"}:
@@ -156,11 +238,12 @@ def execute_resend_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
 
     _write_job_audit(
         job_id,
-        action="run_resend_job",
+        action=run_action,
         actor="weekly-report-worker",
         reason=job.get("reason"),
         result="started",
         source="weekly_report_lambda",
+        metadata={"job_type": expected_job_type},
     )
     targets = _list_all_job_targets(job_id)
     counts = {
@@ -194,7 +277,7 @@ def execute_resend_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
         if not report_repo.try_claim_recovery_job_target(job_id, target["SK"], attempted_at=attempted_at):
             continue
         counts["attempted_count"] += 1
-        outcome = _execute_resend_target(job, target, attempted_at=attempted_at)
+        outcome = target_executor(job, target, attempted_at=attempted_at)
         counts[f"{outcome}_count"] += 1
         if counts["failed_count"] >= int(job.get("failure_threshold") or FAILURE_THRESHOLD):
             stop_reason = "failure_threshold"
@@ -220,7 +303,7 @@ def execute_resend_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
     report_repo.update_recovery_job_status(job_id, final_status, **fields)
     _write_job_audit(
         job_id,
-        action="complete_resend_job",
+        action=complete_action,
         actor="weekly-report-worker",
         reason=job.get("reason"),
         result=final_status,
@@ -231,6 +314,10 @@ def execute_resend_job(job_id: str, *, context: Any = None) -> dict[str, Any]:
 
 
 def cancel_resend_job(job_id: str, *, operator: str) -> dict[str, Any]:
+    return cancel_recovery_job(job_id, operator=operator)
+
+
+def cancel_recovery_job(job_id: str, *, operator: str) -> dict[str, Any]:
     job = report_repo.get_recovery_job(job_id)
     if not job:
         raise RecoveryJobError(404, "Recovery job not found")
@@ -296,6 +383,48 @@ def _execute_resend_target(job: dict, target: dict, *, attempted_at: str) -> str
     return "success"
 
 
+def _execute_generation_retry_target(job: dict, target: dict, *, attempted_at: str) -> str:
+    report = report_repo.get_report_for_child_by_week(
+        target["parent_id"],
+        target["student_id"],
+        target["week_start"],
+    )
+    if not report:
+        _finish_target(job, target, "not_found", detail="Report not found")
+        return "not_found"
+    try:
+        result = report_recovery_service.retry_report_generation(
+            report,
+            parent_id=str(target["parent_id"]),
+            student_id=str(target["student_id"]),
+            week_start=str(target["week_start"]),
+            operator=str(job.get("created_by") or "recovery-job"),
+            reason=str(job.get("reason") or "recovery_job_retry_generation"),
+            source="recovery_job",
+            correlation_id=str(job["job_id"]),
+        )
+    except report_recovery_service.ReportRecoveryError as exc:
+        outcome = "failed" if exc.status_code >= 500 else "refused"
+        _finish_target(
+            job,
+            target,
+            outcome,
+            report_id=report.get("report_id"),
+            detail=report_recovery_service.redact_private_artifact_text(exc.detail),
+            error_class=exc.error_class,
+        )
+        return outcome
+    _finish_target(
+        job,
+        target,
+        "success",
+        report_id=result.report_id,
+        status=result.status,
+        email_status=result.email_status,
+    )
+    return "success"
+
+
 def _finish_target(
     job: dict,
     target: dict,
@@ -320,7 +449,7 @@ def _finish_target(
     report_repo.update_recovery_job_target(job["job_id"], target["SK"], result, **fields)
     _write_job_audit(
         job["job_id"],
-        action="resend_target",
+        action=_target_audit_action(str(job.get("job_type") or RESEND_JOB_TYPE)),
         actor="weekly-report-worker",
         reason=job.get("reason"),
         result=result,
@@ -335,10 +464,46 @@ def _finish_target(
     )
 
 
-def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tuple[list[dict[str, Any]], int]:
-    filters = _normalized_filters(filters)
-    if filters.get("status") != "email_failed":
-        raise RecoveryJobError(422, "Only email_failed resend recovery is supported")
+def _preview_job(
+    *,
+    job_type: str,
+    reason: str,
+    operator: str,
+    filters: dict[str, Any],
+    max_targets: int,
+) -> dict[str, Any]:
+    if not reason.strip():
+        raise RecoveryJobError(422, "Recovery reason is required")
+    targets, scanned_pages = _collect_targets(job_type=job_type, filters=filters, max_targets=max_targets)
+    eligible = [target for target in targets if target["eligibility"] == "eligible"]
+    refused = [target for target in targets if target["eligibility"] != "eligible"]
+    token = _encode_preview_token(
+        {
+            "operation": job_type,
+            "filters": _normalized_filters(filters, job_type=job_type),
+            "reason": reason,
+            "target_ids": [target["target_id"] for target in eligible],
+        }
+    )
+    return {
+        "operation": job_type,
+        "reason": reason,
+        "requested_by": operator,
+        "filters": _normalized_filters(filters, job_type=job_type),
+        "max_targets": min(max(1, int(max_targets)), MAX_TARGETS),
+        "scanned_pages": scanned_pages,
+        "eligible_count": len(eligible),
+        "refused_count": len(refused),
+        "missing_count": 0,
+        "sample": targets[:10],
+        "preview_token": token,
+    }
+
+
+def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int) -> tuple[list[dict[str, Any]], int]:
+    filters = _normalized_filters(filters, job_type=job_type)
+    if filters.get("status") != _required_status(job_type):
+        raise RecoveryJobError(422, _unsupported_status_detail(job_type))
     max_targets = min(max(1, int(max_targets)), MAX_TARGETS)
     targets: list[dict[str, Any]] = []
     last_key = None
@@ -354,7 +519,7 @@ def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tup
         )
         pages += 1
         for report in result.get("Items", []):
-            target = _target_preview(report)
+            target = _target_preview(report, job_type=job_type)
             targets.append(target)
             if len(targets) >= max_targets:
                 break
@@ -364,10 +529,22 @@ def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tup
     return targets, pages
 
 
-def _target_preview(report: dict) -> dict[str, Any]:
+def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tuple[list[dict[str, Any]], int]:
+    return _collect_targets(job_type=RESEND_JOB_TYPE, filters=filters, max_targets=max_targets)
+
+
+def _target_preview(report: dict, *, job_type: str = RESEND_JOB_TYPE) -> dict[str, Any]:
     html_available = bool(report.get("html_s3_key") or report.get("s3_key"))
-    email_available = bool(report.get("parent_email"))
-    eligible = (report.get("status") == "email_failed" or report.get("email_status") == "failed") and html_available and email_available
+    json_available = bool(report.get("json_s3_key"))
+    if job_type == GENERATION_RETRY_JOB_TYPE:
+        eligible = report.get("status") == "generation_failed"
+        refusal_reason = "Report is not in generation_failed state"
+    else:
+        email_available = bool(report.get("parent_email"))
+        eligible = (
+            report.get("status") == "email_failed" or report.get("email_status") == "failed"
+        ) and html_available and email_available
+        refusal_reason = "Report is missing failed delivery state, parent email, or HTML artifact"
     return {
         "target_id": str(report.get("report_id") or uuid4().hex),
         "report_id": report.get("report_id"),
@@ -377,9 +554,9 @@ def _target_preview(report: dict) -> dict[str, Any]:
         "week_start": report.get("week_start"),
         "status": report.get("status"),
         "email_status": report.get("email_status"),
-        "artifacts": {"html_available": html_available, "json_available": bool(report.get("json_s3_key"))},
+        "artifacts": {"html_available": html_available, "json_available": json_available},
         "eligibility": "eligible" if eligible else "refused",
-        "refusal_reason": None if eligible else "Report is missing failed delivery state, parent email, or HTML artifact",
+        "refusal_reason": None if eligible else refusal_reason,
     }
 
 
@@ -394,7 +571,7 @@ def _list_all_job_targets(job_id: str) -> list[dict]:
             return targets
 
 
-def _cancel_job(job: dict, reason: str, cancelled_at: str) -> dict[str, Any]:
+def _cancel_job(job: dict, reason: str, cancelled_at: str, *, complete_action: str = "complete_resend_job") -> dict[str, Any]:
     targets = _list_all_job_targets(job["job_id"])
     skipped = 0
     for target in targets:
@@ -418,7 +595,7 @@ def _cancel_job(job: dict, reason: str, cancelled_at: str) -> dict[str, Any]:
     report_repo.update_recovery_job_status(job["job_id"], "cancelled", **fields)
     _write_job_audit(
         job["job_id"],
-        action="complete_resend_job",
+        action=complete_action,
         actor="weekly-report-worker",
         reason=job.get("reason"),
         result="cancelled",
@@ -473,13 +650,37 @@ def _redact_metadata(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalized_filters(filters: dict[str, Any]) -> dict[str, Any]:
+def _normalized_filters(filters: dict[str, Any], *, job_type: str = RESEND_JOB_TYPE) -> dict[str, Any]:
     return {
-        "status": filters.get("status") or "email_failed",
+        "status": filters.get("status") or _required_status(job_type),
         "week_start": filters.get("week_start"),
         "parent_id": filters.get("parent_id"),
         "student_id": filters.get("student_id"),
     }
+
+
+def _required_status(job_type: str) -> str:
+    if job_type == GENERATION_RETRY_JOB_TYPE:
+        return "generation_failed"
+    return "email_failed"
+
+
+def _unsupported_status_detail(job_type: str) -> str:
+    if job_type == GENERATION_RETRY_JOB_TYPE:
+        return "Only generation_failed retry recovery is supported"
+    return "Only email_failed resend recovery is supported"
+
+
+def _worker_event_name(job_type: str) -> str:
+    if job_type == GENERATION_RETRY_JOB_TYPE:
+        return "report_recovery_retry_generation"
+    return "report_recovery_resend_email"
+
+
+def _target_audit_action(job_type: str) -> str:
+    if job_type == GENERATION_RETRY_JOB_TYPE:
+        return "retry_generation_target"
+    return "resend_target"
 
 
 def _encode_preview_token(payload: dict[str, Any]) -> str:

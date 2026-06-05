@@ -484,6 +484,48 @@ async def create_resend_recovery_job(
     return _recovery_job_response(job)
 
 
+@router.post(
+    "/reports/recovery-jobs/retry-generation/preview",
+    response_model=RecoveryJobPreviewResponse,
+)
+async def preview_generation_retry_recovery_job(
+    request: RecoveryJobPreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Preview a bounded async generation retry recovery job before mutation."""
+    try:
+        return report_recovery_job_service.preview_generation_retry_job(
+            reason=request.reason,
+            operator=_operator_id(user),
+            filters=request.filters.model_dump(),
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+
+
+@router.post(
+    "/reports/recovery-jobs/retry-generation",
+    response_model=RecoveryJobResponse,
+)
+async def create_generation_retry_recovery_job(
+    request: RecoveryJobCreateRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded async generation retry recovery job after preview confirmation."""
+    try:
+        job = report_recovery_job_service.create_generation_retry_job(
+            reason=request.reason,
+            operator=_operator_id(user),
+            filters=request.filters.model_dump(),
+            preview_token=request.preview_token,
+            max_targets=request.max_targets,
+        )
+    except report_recovery_job_service.RecoveryJobError as exc:
+        raise _recovery_job_http_error(exc) from exc
+    return _recovery_job_response(job)
+
+
 @router.get("/reports/recovery-evidence")
 async def export_recovery_evidence(
     request: Request,
@@ -602,7 +644,7 @@ async def cancel_recovery_job(
 ):
     """Request cooperative cancellation for an async report recovery job."""
     try:
-        job = report_recovery_job_service.cancel_resend_job(job_id, operator=_operator_id(user))
+        job = report_recovery_job_service.cancel_recovery_job(job_id, operator=_operator_id(user))
     except report_recovery_job_service.RecoveryJobError as exc:
         raise _recovery_job_http_error(exc) from exc
     return _recovery_job_response(job)
