@@ -233,6 +233,176 @@ def apply_artifact_edit_preview(
     }
 
 
+def create_artifact_rollback_preview(
+    report: dict,
+    *,
+    operator: str,
+    reason: str,
+    source: str = "admin_api",
+    correlation_id: str | None = None,
+) -> dict:
+    current = _rollback_current_metadata(report)
+    target = _rollback_target_metadata(report)
+    _assert_rollback_target(current, target)
+    event_at = _now_iso()
+    preview = {
+        "preview_id": uuid4().hex,
+        "report_id": report["report_id"],
+        "parent_id": report.get("parent_id"),
+        "student_id": report.get("student_id"),
+        "week_start": report.get("week_start"),
+        "source_updated_at": report.get("updated_at"),
+        "source_artifact_version_id": current["artifact_version_id"],
+        "source_json_s3_key": current["json_s3_key"],
+        "source_html_s3_key": current["html_s3_key"],
+        "target_artifact_version_id": target["artifact_version_id"],
+        "target_json_s3_key": target["json_s3_key"],
+        "target_html_s3_key": target["html_s3_key"],
+        "created_by": operator,
+        "created_at": event_at,
+        "updated_at": event_at,
+        "reason": _safe_text(reason, max_length=500),
+        "status": "draft",
+        "validation_result": "passed",
+    }
+    report_repo.put_report_artifact_rollback_preview(report["report_id"], preview)
+    _write_artifact_edit_audit(
+        report,
+        action="create_report_artifact_rollback_preview",
+        actor=operator,
+        reason=reason,
+        source=source,
+        result="draft",
+        before=_metadata_snapshot(report),
+        after={
+            "rollback_preview_id": preview["preview_id"],
+            "status": "draft",
+            "source_artifact_version_id": current["artifact_version_id"],
+            "target_artifact_version_id": target["artifact_version_id"],
+            "validation_result": "passed",
+        },
+        event_at=event_at,
+        correlation_id=correlation_id,
+    )
+    return sanitize_artifact_rollback_preview(preview)
+
+
+def get_artifact_rollback_preview(report: dict, preview_id: str) -> dict:
+    preview = report_repo.get_report_artifact_rollback_preview(report["report_id"], preview_id)
+    if not preview:
+        raise ReportArtifactEditError(status_code=404, detail="Report artifact rollback preview not found")
+    _assert_draft_matches_report(report, preview)
+    return sanitize_artifact_rollback_preview(preview)
+
+
+def apply_artifact_rollback_preview(
+    report: dict,
+    *,
+    preview_id: str,
+    operator: str,
+    reason: str,
+    source: str = "admin_api",
+    correlation_id: str | None = None,
+) -> dict:
+    preview = report_repo.get_report_artifact_rollback_preview(report["report_id"], preview_id)
+    if not preview:
+        raise ReportArtifactEditError(status_code=404, detail="Report artifact rollback preview not found")
+    _assert_draft_matches_report(report, preview)
+    if preview.get("status") != "draft":
+        raise ReportArtifactEditError(status_code=409, detail="Report artifact rollback preview is not applyable")
+    _assert_rollback_not_stale(report, preview, operator, source, correlation_id)
+
+    applied_at = _now_iso()
+    source_version_id = preview.get("source_artifact_version_id")
+    target_version_id = preview.get("target_artifact_version_id")
+    target_json_key = str(preview.get("target_json_s3_key") or "")
+    target_html_key = str(preview.get("target_html_s3_key") or "")
+    update_fields = {
+        "artifact_version_id": target_version_id,
+        "artifact_version_created_at": applied_at,
+        "artifact_version_created_by": operator,
+        "json_s3_key": target_json_key,
+        "html_s3_key": target_html_key,
+        "s3_key": target_html_key,
+        "previous_artifact_version_id": source_version_id,
+        "previous_json_s3_key": preview.get("source_json_s3_key"),
+        "previous_html_s3_key": preview.get("source_html_s3_key"),
+        "last_operation": "rollback_report_artifact",
+        "last_operation_at": applied_at,
+        "last_operation_by": operator,
+        "last_operation_result": "success",
+        "updated_at": applied_at,
+    }
+    current_status = str(report.get("status") or "generated")
+    if not report_repo.try_apply_report_artifact_edit(
+        report["report_id"],
+        expected_updated_at=report.get("updated_at"),
+        expected_artifact_version_id=report.get("artifact_version_id"),
+        expected_json_s3_key=preview.get("source_json_s3_key"),
+        expected_html_s3_key=preview.get("source_html_s3_key"),
+        status=current_status,
+        fields=update_fields,
+    ):
+        _write_refused_rollback(
+            report,
+            preview,
+            operator,
+            source,
+            "Report artifact changed after rollback preview creation",
+            correlation_id,
+        )
+        raise ReportArtifactEditError(
+            status_code=409,
+            detail="Report artifact changed after rollback preview creation",
+        )
+    if not report_repo.mark_report_artifact_rollback_preview_applied(
+        report["report_id"],
+        preview_id,
+        applied_at=applied_at,
+        applied_by=operator,
+        artifact_version_id=str(target_version_id) if target_version_id else None,
+    ):
+        raise ReportArtifactEditError(
+            status_code=409,
+            detail="Report artifact rollback preview is not applyable",
+        )
+
+    before = _metadata_snapshot(report)
+    after = {
+        **before,
+        "status": current_status,
+        **update_fields,
+        "rollback_preview_id": preview_id,
+        "validation_result": "passed",
+        "source_artifact_version_id": source_version_id,
+        "target_artifact_version_id": target_version_id,
+    }
+    _write_artifact_edit_audit(
+        report,
+        action="apply_report_artifact_rollback",
+        actor=operator,
+        reason=reason,
+        source=source,
+        result="success",
+        before=before,
+        after=after,
+        event_at=applied_at,
+        correlation_id=correlation_id,
+    )
+    applied_preview = {
+        **preview,
+        "status": "applied",
+        "applied_at": applied_at,
+        "applied_by": operator,
+        "artifact_version_id": target_version_id,
+        "updated_at": applied_at,
+    }
+    return {
+        "preview": sanitize_artifact_rollback_preview(applied_preview),
+        "report": sanitize_artifact_edit_result(after),
+    }
+
+
 def sanitize_artifact_edit_preview(draft: dict) -> dict:
     return {
         "draft_id": str(draft.get("draft_id") or ""),
@@ -252,6 +422,28 @@ def sanitize_artifact_edit_preview(draft: dict) -> dict:
         "applied_by": draft.get("applied_by"),
         "applied_at": draft.get("applied_at"),
         "artifact_version_id": draft.get("artifact_version_id"),
+    }
+
+
+def sanitize_artifact_rollback_preview(preview: dict) -> dict:
+    return {
+        "preview_id": str(preview.get("preview_id") or ""),
+        "report_id": str(preview.get("report_id") or ""),
+        "parent_id": preview.get("parent_id"),
+        "student_id": preview.get("student_id"),
+        "week_start": preview.get("week_start"),
+        "source_updated_at": preview.get("source_updated_at"),
+        "source_artifact_version_id": preview.get("source_artifact_version_id"),
+        "target_artifact_version_id": preview.get("target_artifact_version_id"),
+        "created_by": preview.get("created_by"),
+        "created_at": preview.get("created_at"),
+        "updated_at": preview.get("updated_at"),
+        "reason": report_recovery_service.redact_private_artifact_text(preview.get("reason")),
+        "status": str(preview.get("status") or ""),
+        "validation_result": str(preview.get("validation_result") or ""),
+        "applied_by": preview.get("applied_by"),
+        "applied_at": preview.get("applied_at"),
+        "artifact_version_id": preview.get("artifact_version_id"),
     }
 
 
@@ -531,6 +723,38 @@ def _write_refused_apply(
     )
 
 
+def _write_refused_rollback(
+    report: dict,
+    preview: dict,
+    operator: str,
+    source: str,
+    detail: str,
+    correlation_id: str | None,
+) -> None:
+    event_at = _now_iso()
+    before = _metadata_snapshot(report)
+    _write_artifact_edit_audit(
+        report,
+        action="apply_report_artifact_rollback",
+        actor=operator,
+        reason=str(preview.get("reason") or "admin_report_artifact_rollback"),
+        source=source,
+        result="refused",
+        before=before,
+        after={
+            "rollback_preview_id": preview.get("preview_id"),
+            "validation_result": "failed",
+            "refusal_reason": detail,
+            "source_artifact_version_id": preview.get("source_artifact_version_id"),
+            "target_artifact_version_id": preview.get("target_artifact_version_id"),
+            **before,
+        },
+        event_at=event_at,
+        error_message=detail,
+        correlation_id=correlation_id,
+    )
+
+
 def _write_artifact_edit_audit(
     report: dict,
     *,
@@ -612,6 +836,63 @@ def _required_artifact_key(report: dict, key: str, *, fallback_key: str | None =
 def _current_artifact_version_id(report: dict) -> str | None:
     value = report.get("artifact_version_id")
     return str(value) if value else None
+
+
+def _rollback_current_metadata(report: dict) -> dict[str, str | None]:
+    return {
+        "artifact_version_id": _current_artifact_version_id(report),
+        "json_s3_key": _required_artifact_key(report, "json_s3_key"),
+        "html_s3_key": _required_artifact_key(report, "html_s3_key", fallback_key="s3_key"),
+    }
+
+
+def _rollback_target_metadata(report: dict) -> dict[str, str | None]:
+    target_json_key = report.get("previous_json_s3_key")
+    target_html_key = report.get("previous_html_s3_key")
+    if not target_json_key or not target_html_key:
+        raise ReportArtifactEditError(status_code=422, detail="Report artifact rollback target is unavailable")
+    return {
+        "artifact_version_id": str(report.get("previous_artifact_version_id") or "original"),
+        "json_s3_key": str(target_json_key),
+        "html_s3_key": str(target_html_key),
+    }
+
+
+def _assert_rollback_target(current: dict[str, str | None], target: dict[str, str | None]) -> None:
+    if (
+        current.get("artifact_version_id") == target.get("artifact_version_id")
+        or current.get("json_s3_key") == target.get("json_s3_key")
+        or current.get("html_s3_key") == target.get("html_s3_key")
+    ):
+        raise ReportArtifactEditError(status_code=409, detail="Report artifact is already at target version")
+
+
+def _assert_rollback_not_stale(
+    report: dict,
+    preview: dict,
+    operator: str,
+    source: str,
+    correlation_id: str | None,
+) -> None:
+    stale = (
+        preview.get("source_updated_at") != report.get("updated_at")
+        or preview.get("source_artifact_version_id") != _current_artifact_version_id(report)
+        or preview.get("source_json_s3_key") != report.get("json_s3_key")
+        or preview.get("source_html_s3_key") != (report.get("html_s3_key") or report.get("s3_key"))
+    )
+    if stale:
+        _write_refused_rollback(
+            report,
+            preview,
+            operator,
+            source,
+            "Report artifact changed after rollback preview creation",
+            correlation_id,
+        )
+        raise ReportArtifactEditError(
+            status_code=409,
+            detail="Report artifact changed after rollback preview creation",
+        )
 
 
 def _new_version_id() -> str:

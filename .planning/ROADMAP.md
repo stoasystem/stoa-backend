@@ -26,7 +26,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 ## Phases
 
 - [x] **Phase 58: Artifact Rollback Contract And Safe Fixture Plan** - Define rollback contract, target-version model, safe-fixture protocol, and CDK readiness.
-- [ ] **Phase 59: Backend Artifact Rollback APIs And Fixture Harness** - Add admin-only rollback preview/apply APIs and safe-fixture smoke harness.
+- [x] **Phase 59: Backend Artifact Rollback APIs And Fixture Harness** - Add admin-only rollback preview/apply APIs and safe-fixture smoke harness.
 - [ ] **Phase 60: Admin Artifact Rollback UI** - Add selected-report rollback preview/apply controls to `/admin/report-operations`.
 - [ ] **Phase 61: v2.2 Release Gate And Safe Fixture Verification** - Record deploy/CDK/API/UI evidence and verify read-only plus named safe-fixture mutation/cleanup behavior.
 
@@ -59,7 +59,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 4. Safe-fixture harness refuses to mutate without explicit fixture name/mutation mode and records cleanup/restore evidence without secrets or private artifact keys.
 5. Tests cover auth, validation failures, stale rejection, no-op rejection, sanitized responses, audit privacy, and fixture harness safety.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ### Phase 60: Admin Artifact Rollback UI
 
@@ -95,7 +95,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 58. Artifact Rollback Contract And Safe Fixture Plan | v2.2 | 1/1 | Complete | 2026-06-06 |
-| 59. Backend Artifact Rollback APIs And Fixture Harness | v2.2 | 0/1 | Not Started | - |
+| 59. Backend Artifact Rollback APIs And Fixture Harness | v2.2 | 1/1 | Complete | 2026-06-06 |
 | 60. Admin Artifact Rollback UI | v2.2 | 0/1 | Not Started | - |
 | 61. v2.2 Release Gate And Safe Fixture Verification | v2.2 | 0/1 | Not Started | - |
 
@@ -104,11 +104,11 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ROLLBACK-01 | Phase 58 | Complete |
-| ROLLBACK-02 | Phase 59 | Planned |
-| ROLLBACK-03 | Phase 59 | Planned |
-| FIXTURE-01 | Phase 58/59 | In Progress |
+| ROLLBACK-02 | Phase 59 | Complete |
+| ROLLBACK-03 | Phase 59 | Complete |
+| FIXTURE-01 | Phase 58/59 | Complete |
 | UI-09 | Phase 60 | Planned |
 | VERIFY-05 | Phase 61 | Planned |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 58*
+*Last updated: 2026-06-06 after completing Phase 59*

@@ -180,6 +180,41 @@ class ReportArtifactEditApplyResponse(BaseModel):
     report: dict[str, Any]
 
 
+class ReportArtifactRollbackPreviewRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class ReportArtifactRollbackPreviewResponse(BaseModel):
+    preview_id: str
+    report_id: str
+    parent_id: str | None = None
+    student_id: str | None = None
+    week_start: str | None = None
+    source_updated_at: str | None = None
+    source_artifact_version_id: str | None = None
+    target_artifact_version_id: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    reason: str | None = None
+    status: str
+    validation_result: str
+    applied_by: str | None = None
+    applied_at: str | None = None
+    artifact_version_id: str | None = None
+
+
+class ReportArtifactRollbackApplyRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class ReportArtifactRollbackApplyResponse(BaseModel):
+    operation: str
+    operation_result: str
+    preview: ReportArtifactRollbackPreviewResponse
+    report: dict[str, Any]
+
+
 class ReportAuditEventResponse(BaseModel):
     event_id: str
     event_at: str
@@ -1099,6 +1134,85 @@ async def apply_report_artifact_edit_preview(
     )
 
 
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews",
+    response_model=ReportArtifactRollbackPreviewResponse,
+)
+async def create_report_artifact_rollback_preview(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    body: ReportArtifactRollbackPreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded report artifact rollback preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        preview = report_artifact_edit_service.create_artifact_rollback_preview(
+            report,
+            operator=_operator_id(user),
+            reason=body.reason,
+            correlation_id=_request_id(request),
+        )
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactRollbackPreviewResponse(**preview)
+
+
+@router.get(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}",
+    response_model=ReportArtifactRollbackPreviewResponse,
+)
+async def get_report_artifact_rollback_preview(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    preview_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Read a bounded report artifact rollback preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        preview = report_artifact_edit_service.get_artifact_rollback_preview(report, preview_id)
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactRollbackPreviewResponse(**preview)
+
+
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}/apply",
+    response_model=ReportArtifactRollbackApplyResponse,
+)
+async def apply_report_artifact_rollback_preview(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    preview_id: str,
+    body: ReportArtifactRollbackApplyRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Apply one bounded report artifact rollback preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        result = report_artifact_edit_service.apply_artifact_rollback_preview(
+            report,
+            preview_id=preview_id,
+            operator=_operator_id(user),
+            reason=body.reason,
+            correlation_id=_request_id(request),
+        )
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactRollbackApplyResponse(
+        operation="rollback_report_artifact",
+        operation_result="success",
+        preview=ReportArtifactRollbackPreviewResponse(**result["preview"]),
+        report=result["report"],
+    )
+
+
 @router.get(
     "/reports/{parent_id}/{student_id}/{week_start}/audit",
     response_model=ReportAuditListResponse,
@@ -1390,6 +1504,22 @@ def _report_action_eligibility(report: dict) -> dict[str, dict[str, str | bool |
             "reason": None
             if report.get("json_s3_key") and (report.get("html_s3_key") or report.get("s3_key"))
             else "Report is missing editable artifacts",
+        },
+        "rollback_artifact": {
+            "enabled": bool(
+                report.get("json_s3_key")
+                and (report.get("html_s3_key") or report.get("s3_key"))
+                and report.get("previous_json_s3_key")
+                and report.get("previous_html_s3_key")
+            ),
+            "reason": None
+            if (
+                report.get("json_s3_key")
+                and (report.get("html_s3_key") or report.get("s3_key"))
+                and report.get("previous_json_s3_key")
+                and report.get("previous_html_s3_key")
+            )
+            else "Report is missing rollback artifact metadata",
         },
     }
 

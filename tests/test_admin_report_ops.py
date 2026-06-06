@@ -1226,6 +1226,243 @@ def test_apply_report_artifact_edit_preview_rejects_stale_source_and_audits(
     _assert_no_private_artifact_markers(audit_events)
 
 
+def test_report_artifact_rollback_preview_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin artifact rollback preview should not mutate")
+
+    monkeypatch.setattr(report_repo, "put_report_artifact_rollback_preview", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews",
+        json={"reason": "restore previous artifact version"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_report_artifact_rollback_preview_returns_sanitized_metadata_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    previews = []
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:05:00+00:00",
+        "artifact_version_id": "v2",
+        "json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.json",
+        "html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.html",
+        "previous_artifact_version_id": "v1",
+        "previous_json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.json",
+        "previous_html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.html",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(
+        report_repo,
+        "put_report_artifact_rollback_preview",
+        lambda report_id, preview: previews.append((report_id, preview)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews",
+        json={"reason": "restore prior approved version"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "draft"
+    assert data["validation_result"] == "passed"
+    assert data["source_artifact_version_id"] == "v2"
+    assert data["target_artifact_version_id"] == "v1"
+    assert previews[0][0] == report["report_id"]
+    assert previews[0][1]["source_json_s3_key"] == report["json_s3_key"]
+    assert previews[0][1]["target_json_s3_key"] == report["previous_json_s3_key"]
+    assert audit_events[0][1]["action"] == "create_report_artifact_rollback_preview"
+    assert audit_events[0][1]["result"] == "draft"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_events)
+
+
+def test_create_report_artifact_rollback_preview_rejects_missing_target(monkeypatch):
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:05:00+00:00",
+        "artifact_version_id": "v2",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid rollback preview should not persist")
+
+    monkeypatch.setattr(report_repo, "put_report_artifact_rollback_preview", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews",
+        json={"reason": "restore prior approved version"},
+    )
+
+    assert response.status_code == 422
+    _assert_no_private_artifact_markers(response.json())
+
+
+def test_create_report_artifact_rollback_preview_rejects_noop_target(monkeypatch):
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:05:00+00:00",
+        "artifact_version_id": "v1",
+        "json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.json",
+        "html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.html",
+        "previous_artifact_version_id": "v1",
+        "previous_json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.json",
+        "previous_html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.html",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("no-op rollback preview should not persist")
+
+    monkeypatch.setattr(report_repo, "put_report_artifact_rollback_preview", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews",
+        json={"reason": "restore prior approved version"},
+    )
+
+    assert response.status_code == 409
+    _assert_no_private_artifact_markers(response.json())
+
+
+def test_apply_report_artifact_rollback_preview_updates_metadata_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    updates = []
+    marked = []
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:05:00+00:00",
+        "artifact_version_id": "v2",
+        "json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.json",
+        "html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.html",
+        "previous_artifact_version_id": "v1",
+        "previous_json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.json",
+        "previous_html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.html",
+    }
+    preview = {
+        "preview_id": "rollback-1",
+        "report_id": report["report_id"],
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "source_updated_at": report["updated_at"],
+        "source_artifact_version_id": "v2",
+        "source_json_s3_key": report["json_s3_key"],
+        "source_html_s3_key": report["html_s3_key"],
+        "target_artifact_version_id": "v1",
+        "target_json_s3_key": report["previous_json_s3_key"],
+        "target_html_s3_key": report["previous_html_s3_key"],
+        "created_by": "admin-sub",
+        "created_at": "2026-06-05T10:06:00+00:00",
+        "updated_at": "2026-06-05T10:06:00+00:00",
+        "reason": "restore prior version",
+        "status": "draft",
+        "validation_result": "passed",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(report_repo, "get_report_artifact_rollback_preview", lambda report_id, preview_id: preview)
+    monkeypatch.setattr(
+        report_repo,
+        "try_apply_report_artifact_edit",
+        lambda report_id, **kwargs: updates.append((report_id, kwargs)) or True,
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "mark_report_artifact_rollback_preview_applied",
+        lambda report_id, preview_id, **kwargs: marked.append((report_id, preview_id, kwargs)) or True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews/rollback-1/apply",
+        json={"reason": "approve rollback"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "rollback_report_artifact"
+    assert data["operation_result"] == "success"
+    assert data["preview"]["status"] == "applied"
+    assert data["report"]["artifact_version_id"] == "v1"
+    assert data["report"]["previous_artifact_version_id"] == "v2"
+    assert updates[0][0] == report["report_id"]
+    assert updates[0][1]["expected_artifact_version_id"] == "v2"
+    assert updates[0][1]["fields"]["json_s3_key"] == report["previous_json_s3_key"]
+    assert updates[0][1]["fields"]["previous_json_s3_key"] == report["json_s3_key"]
+    assert updates[0][1]["fields"]["last_operation"] == "rollback_report_artifact"
+    assert marked[0][0] == report["report_id"]
+    assert marked[0][1] == "rollback-1"
+    event = audit_events[0][1]
+    assert event["action"] == "apply_report_artifact_rollback"
+    assert event["result"] == "success"
+    assert event["after"]["rollback_preview_id"] == "rollback-1"
+    assert event["after"]["validation_result"] == "passed"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_events)
+
+
+def test_apply_report_artifact_rollback_preview_rejects_stale_source_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("stale rollback should not update report")
+
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:10:00+00:00",
+        "artifact_version_id": "v2",
+        "json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.json",
+        "html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v2/report.html",
+    }
+    preview = {
+        "preview_id": "rollback-1",
+        "report_id": report["report_id"],
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "source_updated_at": "2026-06-05T10:05:00+00:00",
+        "source_artifact_version_id": "v2",
+        "source_json_s3_key": report["json_s3_key"],
+        "source_html_s3_key": report["html_s3_key"],
+        "target_artifact_version_id": "v1",
+        "target_json_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.json",
+        "target_html_s3_key": "weekly-reports/parent-1/student-1/2026-06-01/versions/v1/report.html",
+        "reason": "restore prior version",
+        "status": "draft",
+        "validation_result": "passed",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(report_repo, "get_report_artifact_rollback_preview", lambda report_id, preview_id: preview)
+    monkeypatch.setattr(report_repo, "try_apply_report_artifact_edit", fail)
+    monkeypatch.setattr(report_repo, "mark_report_artifact_rollback_preview_applied", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-rollback-previews/rollback-1/apply",
+        json={"reason": "approve rollback"},
+    )
+
+    assert response.status_code == 409
+    assert audit_events[0][1]["action"] == "apply_report_artifact_rollback"
+    assert audit_events[0][1]["result"] == "refused"
+    assert audit_events[0][1]["after"]["validation_result"] == "failed"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(audit_events)
+
+
 def test_recovery_job_audit_timeline_returns_job_scope(monkeypatch):
     calls = []
     monkeypatch.setattr(

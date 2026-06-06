@@ -181,6 +181,64 @@ def mark_report_artifact_edit_draft_applied(
     return True
 
 
+def put_report_artifact_rollback_preview(report_id: str, preview: dict) -> None:
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT#{report_id}",
+            "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview['preview_id']}",
+            "entity_type": "REPORT_ARTIFACT_ROLLBACK_PREVIEW",
+            **preview,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def get_report_artifact_rollback_preview(report_id: str, preview_id: str) -> dict | None:
+    table = get_table()
+    response = table.get_item(
+        Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"}
+    )
+    return response.get("Item")
+
+
+def mark_report_artifact_rollback_preview_applied(
+    report_id: str,
+    preview_id: str,
+    *,
+    applied_at: str,
+    applied_by: str,
+    artifact_version_id: str | None,
+) -> bool:
+    table = get_table()
+    values = {
+        ":applied": "applied",
+        ":draft": "draft",
+        ":applied_at": applied_at,
+        ":applied_by": applied_by,
+    }
+    update_expression = (
+        "SET #status = :applied, applied_at = :applied_at, "
+        "applied_by = :applied_by, updated_at = :applied_at"
+    )
+    if artifact_version_id is not None:
+        update_expression += ", artifact_version_id = :artifact_version_id"
+        values[":artifact_version_id"] = artifact_version_id
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"},
+            UpdateExpression=update_expression,
+            ConditionExpression="#status = :draft",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
 def try_apply_report_artifact_edit(
     report_id: str,
     *,
