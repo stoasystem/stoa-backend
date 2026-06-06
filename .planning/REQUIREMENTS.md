@@ -100,5 +100,5 @@ Acceptance criteria:
 | ARTEDIT-02 | Phase 55 | Complete |
 | ARTEDIT-03 | Phase 55 | Complete |
 | ARTEDIT-04 | Phase 55 | Complete |
-| UI-08 | Phase 56 | Planned |
+| UI-08 | Phase 56 | Complete |
 | VERIFY-04 | Phase 57 | Planned |

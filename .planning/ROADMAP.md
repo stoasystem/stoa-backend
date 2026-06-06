@@ -26,7 +26,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 - [x] **Phase 54: Artifact Editing Contract And CDK Readiness** - Define versioned artifact edit contract, storage layout, rollback boundary, privacy model, and infra requirements.
 - [x] **Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs** - Add admin-only preview/apply APIs that produce sanitized previews and versioned artifact writes.
-- [ ] **Phase 56: Admin Artifact Edit Preview UI** - Add selected-report artifact edit preview/diff/apply controls to `/admin/report-operations`.
+- [x] **Phase 56: Admin Artifact Edit Preview UI** - Add selected-report artifact edit preview/diff/apply controls to `/admin/report-operations`.
 - [ ] **Phase 57: v2.1 Release Gate And Safe Live Verification** - Record deploy/CDK/API/UI evidence and verify production read-only plus safe-fixture mutation behavior.
 
 ## Phase Details
@@ -71,7 +71,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 3. UI renders sanitized diff/preview and apply outcome without private artifact markers.
 4. Playwright covers preview/apply controls, stale/error states, and privacy denylist.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 **UI hint**: yes
 
 ### Phase 57: v2.1 Release Gate And Safe Live Verification
@@ -94,7 +94,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 |-------|-----------|----------------|--------|-----------|
 | 54. Artifact Editing Contract And CDK Readiness | v2.1 | 1/1 | Complete | 2026-06-06 |
 | 55. Backend Artifact Edit Preview And Versioned Apply APIs | v2.1 | 1/1 | Complete | 2026-06-06 |
-| 56. Admin Artifact Edit Preview UI | v2.1 | 0/1 | Not Started | - |
+| 56. Admin Artifact Edit Preview UI | v2.1 | 1/1 | Complete | 2026-06-06 |
 | 57. v2.1 Release Gate And Safe Live Verification | v2.1 | 0/1 | Not Started | - |
 
 ## Traceability
@@ -106,8 +106,8 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 | ARTEDIT-02 | Phase 55 | Complete |
 | ARTEDIT-03 | Phase 55 | Complete |
 | ARTEDIT-04 | Phase 55 | Complete |
-| UI-08 | Phase 56 | Planned |
+| UI-08 | Phase 56 | Complete |
 | VERIFY-04 | Phase 57 | Planned |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 55*
+*Last updated: 2026-06-06 after completing Phase 56*
