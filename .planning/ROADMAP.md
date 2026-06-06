@@ -28,7 +28,7 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 
 - [x] **Phase 62: Release Evidence Contract And Safe Fixture Lifecycle Plan** - Define evidence bundle schema, redaction rules, fixture lifecycle, CDK readiness, and implementation constraints.
 - [x] **Phase 63: Backend Release Evidence And Fixture Inventory Tooling** - Add backend-side CLI/tooling to collect release evidence, inspect safe fixture state, and refuse unapproved production mutation.
-- [ ] **Phase 64: Admin Release Evidence And Fixture Status UI** - Add admin-only evidence/fixture status controls to `/admin/report-operations` without exposing private artifact markers.
+- [x] **Phase 64: Admin Release Evidence And Fixture Status UI** - Add admin-only evidence/fixture status controls to `/admin/report-operations` without exposing private artifact markers.
 - [ ] **Phase 65: v2.3 Release Gate And Milestone Audit** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.3 with final audit.
 
 ## Phase Details
@@ -75,7 +75,8 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 3. UI never renders private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, or raw artifact payloads.
 4. Playwright covers evidence/status rendering, error states, admin-only gating, and privacy denylist.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
+**Completed**: 2026-06-06
 **UI hint**: yes
 
 ### Phase 65: v2.3 Release Gate And Milestone Audit
@@ -98,7 +99,7 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 |-------|-----------|----------------|--------|-----------|
 | 62. Release Evidence Contract And Safe Fixture Lifecycle Plan | v2.3 | 1/1 | Complete | 2026-06-06 |
 | 63. Backend Release Evidence And Fixture Inventory Tooling | v2.3 | 1/1 | Complete | 2026-06-06 |
-| 64. Admin Release Evidence And Fixture Status UI | v2.3 | 0/1 | Not started | - |
+| 64. Admin Release Evidence And Fixture Status UI | v2.3 | 1/1 | Complete | 2026-06-06 |
 | 65. v2.3 Release Gate And Milestone Audit | v2.3 | 0/1 | Not started | - |
 
 ## Traceability
@@ -108,8 +109,8 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 | EVIDENCE-AUTO-01 | Phase 62 | Complete |
 | EVIDENCE-AUTO-02 | Phase 63 | Complete |
 | FIXTURE-02 | Phase 62/63 | Complete |
-| UI-10 | Phase 64 | Not started |
+| UI-10 | Phase 64 | Complete |
 | VERIFY-06 | Phase 65 | Not started |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 63 backend release evidence tooling*
+*Last updated: 2026-06-06 after completing Phase 64 admin release evidence UI*

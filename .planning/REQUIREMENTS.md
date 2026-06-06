@@ -88,5 +88,5 @@ Acceptance criteria:
 | EVIDENCE-AUTO-01 | Phase 62 | Complete |
 | EVIDENCE-AUTO-02 | Phase 63 | Complete |
 | FIXTURE-02 | Phase 62/63 | Complete |
-| UI-10 | Phase 64 | Not started |
+| UI-10 | Phase 64 | Complete |
 | VERIFY-06 | Phase 65 | Not started |
