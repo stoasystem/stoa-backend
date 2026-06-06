@@ -238,32 +238,32 @@ Key accomplishments:
 
 Known deferred items at close: raw report artifact editing/rewrite, rich preview/diff approval workflow, WORM audit storage, support ticket/export destination integrations, PDF/multilingual delivery, billing, analytics, broader admin operations expansion, and stronger recovery orchestration if existing Lambda flow becomes insufficient.
 
-## Current
-
 ### v2.1 Report Artifact Versioning And Safe Edit Preview
 
-**Status:** Active
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Roadmap:** `.planning/ROADMAP.md`
+**Status:** Shipped 2026-06-06
+**Audit:** `.planning/milestones/v2.1-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.1-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.1-REQUIREMENTS.md`
 **Goal:** Admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
-**Phases:** 4 planned
-**Requirements:** active
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 7/7 complete
 
-Planned work:
+Key accomplishments:
 
-- Phase 54: Artifact Editing Contract And CDK Readiness.
-- Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs.
-- Phase 56: Admin Artifact Edit Preview UI.
-- Phase 57: v2.1 Release Gate And Safe Live Verification.
+- Defined the versioned artifact editing contract, rollback boundary, privacy model, and CDK readiness decision.
+- Added admin-only artifact edit preview/read/apply APIs with sanitized diffs, versioned artifact writes, stale-source rejection, rollback metadata, and redacted audit evidence.
+- Added selected-report artifact edit preview/apply controls to `/admin/report-operations`.
+- Verified backend/frontend deploys, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, production bundle markers, and production read-only browser smoke.
+- Confirmed production smoke exposed no private markers and performed no production artifact edit mutation.
 
-Still deferred:
+Known deferred items at close: rollback endpoint/UI, rich WYSIWYG editor, safe-fixture artifact mutation smoke, WORM audit storage, support ticket/export destination integrations, PDF/multilingual delivery, billing, analytics, broader admin operations expansion, and stronger recovery orchestration if existing Lambda flow becomes insufficient.
 
-- Freeform WYSIWYG report editor.
-- WORM audit storage.
-- Support ticket/export destination integrations.
-- Step Functions/SQS or dedicated recovery orchestration.
-- PDF/multilingual delivery.
-- Billing, analytics, and broader admin operations expansion.
+## Current
+
+### No Active Milestone
+
+Start the next milestone with `$gsd-new-milestone`.
 
 ---
-*Last updated: 2026-06-06 after starting v2.1*
+*Last updated: 2026-06-06 after archiving v2.1*

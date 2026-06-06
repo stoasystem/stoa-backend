@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Report Artifact Versioning And Safe Edit Preview
-status: complete
-last_updated: "2026-06-06T12:05:00+02:00"
-last_activity: 2026-06-06
+status: Awaiting next milestone
+last_updated: "2026-06-06T10:10:38.639Z"
+last_activity: 2026-06-06 — Milestone v2.1 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -20,16 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.1 complete; ready for archive.
+**Current focus:** v2.1 archived; awaiting next milestone.
 
 ## Current Position
 
-Phase: 57 of 57 (4 of 4 for v2.1)
+Phase: Milestone v2.1 complete
 Plan: —
-Status: Phase 57 complete; v2.1 ready for archive
-Last activity: 2026-06-06 - Phase 57 release gate and safe live verification completed.
-
-Progress: [##########] 100%
+Status: Awaiting next milestone
+Last activity: 2026-06-06 — Milestone v2.1 completed and archived
 
 ## Accumulated Context
 
@@ -47,7 +45,7 @@ Progress: [##########] 100%
 
 ### Pending Todos
 
-- Archive v2.1 milestone.
+- None.
 
 ### Blockers/Concerns
 
@@ -57,4 +55,4 @@ Progress: [##########] 100%
 
 ## Operator Next Steps
 
-- Archive v2.1 milestone.
+- Start the next milestone with /gsd-new-milestone
