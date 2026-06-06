@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
-milestone_name: Release Evidence Automation And Fixture Lifecycle
-status: Awaiting next milestone
-last_updated: "2026-06-06T22:40:55.447Z"
-last_activity: 2026-06-06 — Milestone v2.3 completed and archived
+milestone: v2.4
+milestone_name: Support Evidence Export Destinations And Ticket Handoff
+status: active
+last_updated: "2026-06-07T01:04:33+02:00"
+last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-06)
+See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** awaiting next milestone definition.
+**Current focus:** v2.4 Support Evidence Export Destinations And Ticket Handoff.
 
 ## Current Position
 
-Phase: Milestone v2.3 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-06 — Milestone v2.3 completed and archived
+Phase: 66 - Support Destination Contract And CDK Readiness
+Plan: 66-01
+Status: Planned; ready to execute Phase 66.
+Last activity: 2026-06-07 — planned v2.4 and created Phase 66 support handoff contract/readiness documents.
 
 ## Accumulated Context
 
@@ -50,10 +50,13 @@ Last activity: 2026-06-06 — Milestone v2.3 completed and archived
 - Phase 61 found and fixed a selected-report lookup bug where artifact edit draft child entities could be returned from `GSI-ParentId` instead of the report summary row.
 - v2.3 should turn manually assembled release evidence into a repeatable redacted evidence workflow before expanding any production mutation capability.
 - Phase 62 starts with release evidence schema, redaction rules, fixture lifecycle, and CDK readiness.
+- v2.4 should turn support-safe recovery/release/rollback evidence into manual ticket handoff packages before any direct third-party integration.
+- Phase 66 starts with support handoff schema, destination refusal policy, privacy model, audit requirements, and CDK readiness.
 
 ### Pending Todos
 
-- Start the next milestone when requirements are defined.
+- Execute Phase 66 and finalize support handoff package/destination contracts.
+- Use Phase 66 output to implement Phase 67 backend support handoff package APIs.
 
 ### Blockers/Concerns
 
@@ -67,7 +70,8 @@ Last activity: 2026-06-06 — Milestone v2.3 completed and archived
 - Phase 63 added backend release evidence validation, safe-fixture inventory, mutation refusal checks, CLI tooling, admin validate/status endpoints, and focused tests.
 - Phase 64 added admin report operations release evidence validation and safe-fixture status UI controls in the frontend without adding mutation actions.
 - Phase 65 completed with deploy evidence, Lambda runtime state, CDK diff classification, local quality gates, production read-only API/browser smoke, safe-fixture refusal checks, and final milestone audit.
+- Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
 
 ## Operator Next Steps
 
-- Start the next milestone with `$gsd-new-milestone`.
+- Execute Phase 66.

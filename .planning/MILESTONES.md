@@ -311,5 +311,21 @@ Key accomplishments:
 
 Known deferred items at close: compliance-grade WORM audit storage, support ticket/export integrations, richer editor/report delivery/product expansion, and dedicated orchestration if the Lambda flow becomes insufficient.
 
+### v2.4 Support Evidence Export Destinations And Ticket Handoff
+
+**Status:** Active
+**Roadmap:** `.planning/milestones/v2.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.4-REQUIREMENTS.md`
+**Goal:** Operators can turn redacted recovery, rollback, fixture, and release evidence into support-safe handoff packages for tickets or external support workflows without exposing private report artifacts or requiring unapproved third-party credentials.
+**Phases:** 4
+**Plans:** 1/4 planned
+
+Planned phases:
+
+- Phase 66: Support Destination Contract And CDK Readiness.
+- Phase 67: Backend Support Handoff Package APIs.
+- Phase 68: Admin Support Handoff UI.
+- Phase 69: v2.4 Release Gate And Live Verification.
+
 ---
-*Last updated: 2026-06-07 after archiving v2.3*
+*Last updated: 2026-06-07 after planning v2.4 Phase 66*

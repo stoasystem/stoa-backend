@@ -20,6 +20,8 @@ The completed v2.2 milestone closes the remaining artifact-editing operations ga
 
 The completed v2.3 milestone turns manually assembled release evidence and safe-fixture verification into a repeatable, redacted operator workflow without expanding production mutation scope.
 
+The active v2.4 milestone turns support-safe recovery, rollback, fixture, and release evidence into manual ticket handoff packages without exposing private report artifacts or requiring unapproved third-party credentials.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -27,7 +29,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Shipped version:** v2.3 Release Evidence Automation And Fixture Lifecycle on 2026-06-06
-**Active milestone:** pending next milestone definition
+**Active milestone:** v2.4 Support Evidence Export Destinations And Ticket Handoff
 
 Delivered:
 
@@ -106,7 +108,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Next milestone requirements are pending.
+### v2.4 Support Evidence Export Destinations And Ticket Handoff
+
+Goal: operators can turn redacted recovery, rollback, fixture, and release evidence into support-safe handoff packages for tickets or external support workflows without exposing private report artifacts or requiring unapproved third-party credentials.
+
+Planned phases:
+
+- Phase 66: Support Destination Contract And CDK Readiness.
+- Phase 67: Backend Support Handoff Package APIs.
+- Phase 68: Admin Support Handoff UI.
+- Phase 69: v2.4 Release Gate And Live Verification.
 
 ## Requirements
 
@@ -139,7 +150,14 @@ Shipped requirements:
 
 ### Active
 
-No active milestone requirements. The next milestone will create a fresh `.planning/REQUIREMENTS.md`.
+Milestone v2.4 requirements are defined in `.planning/REQUIREMENTS.md` and `.planning/milestones/v2.4-REQUIREMENTS.md`:
+
+- HANDOFF-01: support handoff package contract - Phase 66.
+- HANDOFF-02: destination policy, privacy model, and CDK readiness - Phase 66.
+- HANDOFF-03: backend support handoff package APIs - Phase 67.
+- HANDOFF-04: handoff observability and audit - Phase 67.
+- UI-12: admin support handoff UI - Phase 68.
+- VERIFY-07: v2.4 release gate and live verification - Phase 69.
 
 ### Completed
 
@@ -329,6 +347,7 @@ Known current resources:
 | Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Good - shipped in v2.1 |
 | Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Good - shipped in v2.2 |
 | Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Good - shipped in v2.3 |
+| Start v2.4 with support evidence handoff packages | v2.3 made release and fixture evidence repeatable; the next support gap is package handoff into tickets without exposing private artifacts or adding unapproved integrations | Active - Phase 66 planned |
 
 ## Evolution
 
@@ -348,4 +367,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after archiving milestone v2.3*
+*Last updated: 2026-06-07 after planning milestone v2.4*
