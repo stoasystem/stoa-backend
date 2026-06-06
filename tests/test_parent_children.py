@@ -440,6 +440,7 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
         {
             "IndexName": "GSI-ParentId",
             "KeyConditionExpression": table.calls[0]["KeyConditionExpression"],
+            "FilterExpression": table.calls[0]["FilterExpression"],
             "Limit": 7,
             "ScanIndexForward": False,
             "ExclusiveStartKey": {"PK": "REPORT#0"},
@@ -908,8 +909,8 @@ def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(mon
         def __init__(self):
             self.calls = []
             self.pages = [
-                {"Items": [_report("sibling")], "LastEvaluatedKey": {"PK": "REPORT#sibling"}},
-                {"Items": [_report("child-1")]},
+                {"Items": [{**_report("sibling"), "SK": "SUMMARY"}], "LastEvaluatedKey": {"PK": "REPORT#sibling"}},
+                {"Items": [{**_report("child-1"), "SK": "SUMMARY"}]},
             ]
 
         def query(self, **kwargs):
@@ -924,6 +925,26 @@ def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(mon
     assert report["student_id"] == "child-1"
     assert table.calls[0]["IndexName"] == "GSI-ParentId"
     assert table.calls[1]["ExclusiveStartKey"] == {"PK": "REPORT#sibling"}
+
+
+def test_report_repo_get_report_for_child_by_week_ignores_child_entities(monkeypatch):
+    draft = {
+        **_report("child-1"),
+        "SK": "ARTIFACT_EDIT_DRAFT#draft-1",
+        "entity_type": "REPORT_ARTIFACT_EDIT_DRAFT",
+        "updated_at": "2026-06-06T18:41:08+00:00",
+    }
+    summary = {**_report("child-1"), "SK": "SUMMARY"}
+
+    monkeypatch.setattr(
+        report_repo,
+        "list_reports_for_parent_week",
+        lambda parent_id, week_start, last_key=None: {"Items": [draft, summary]},
+    )
+
+    report = report_repo.get_report_for_child_by_week("parent-local", "child-1", "2026-06-01")
+
+    assert report == summary
 
 
 def test_parent_child_week_report_available_when_same_week_sibling_first(monkeypatch):

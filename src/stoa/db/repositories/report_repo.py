@@ -587,7 +587,7 @@ def get_report_for_child_by_week(parent_id: str, student_id: str, week_start: st
     while True:
         result = list_reports_for_parent_week(parent_id, week_start, last_key=last_key)
         for item in result.get("Items", []):
-            if item.get("student_id") == student_id:
+            if item.get("SK") == "SUMMARY" and item.get("student_id") == student_id:
                 return item
         last_key = result.get("LastEvaluatedKey")
         if not last_key:
@@ -872,6 +872,7 @@ def list_reports_for_parent_week(
     kwargs = {
         "IndexName": "GSI-ParentId",
         "KeyConditionExpression": Key("parent_id").eq(parent_id) & Key("week_start").eq(week_start),
+        "FilterExpression": Attr("SK").eq("SUMMARY"),
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
@@ -887,6 +888,7 @@ def list_reports_for_parent(
     kwargs = {
         "IndexName": "GSI-ParentId",
         "KeyConditionExpression": Key("parent_id").eq(parent_id),
+        "FilterExpression": Attr("SK").eq("SUMMARY"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
