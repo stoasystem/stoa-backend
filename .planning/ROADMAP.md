@@ -24,7 +24,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 ## Phases
 
-- [ ] **Phase 54: Artifact Editing Contract And CDK Readiness** - Define versioned artifact edit contract, storage layout, rollback boundary, privacy model, and infra requirements.
+- [x] **Phase 54: Artifact Editing Contract And CDK Readiness** - Define versioned artifact edit contract, storage layout, rollback boundary, privacy model, and infra requirements.
 - [ ] **Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs** - Add admin-only preview/apply APIs that produce sanitized previews and versioned artifact writes.
 - [ ] **Phase 56: Admin Artifact Edit Preview UI** - Add selected-report artifact edit preview/diff/apply controls to `/admin/report-operations`.
 - [ ] **Phase 57: v2.1 Release Gate And Safe Live Verification** - Record deploy/CDK/API/UI evidence and verify production read-only plus safe-fixture mutation behavior.
@@ -43,7 +43,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 3. Privacy model proves frontend receives only sanitized preview/diff metadata and never private S3 keys or presigned URLs.
 4. CDK readiness classifies whether existing reports bucket/IAM/table resources are sufficient or exactly what CDK change is required.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ### Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs
 
@@ -92,7 +92,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 54. Artifact Editing Contract And CDK Readiness | v2.1 | 0/1 | Not Started | - |
+| 54. Artifact Editing Contract And CDK Readiness | v2.1 | 1/1 | Complete | 2026-06-06 |
 | 55. Backend Artifact Edit Preview And Versioned Apply APIs | v2.1 | 0/1 | Not Started | - |
 | 56. Admin Artifact Edit Preview UI | v2.1 | 0/1 | Not Started | - |
 | 57. v2.1 Release Gate And Safe Live Verification | v2.1 | 0/1 | Not Started | - |
@@ -101,7 +101,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFETY-01 | Phase 54 | Planned |
+| SAFETY-01 | Phase 54 | Complete |
 | ARTEDIT-01 | Phase 55 | Planned |
 | ARTEDIT-02 | Phase 55 | Planned |
 | ARTEDIT-03 | Phase 55 | Planned |
@@ -110,4 +110,4 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 | VERIFY-04 | Phase 57 | Planned |
 
 ---
-*Last updated: 2026-06-06 after starting v2.1*
+*Last updated: 2026-06-06 after completing Phase 54*

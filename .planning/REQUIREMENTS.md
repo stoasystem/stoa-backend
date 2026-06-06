@@ -95,7 +95,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFETY-01 | Phase 54 | Planned |
+| SAFETY-01 | Phase 54 | Complete |
 | ARTEDIT-01 | Phase 55 | Planned |
 | ARTEDIT-02 | Phase 55 | Planned |
 | ARTEDIT-03 | Phase 55 | Planned |
