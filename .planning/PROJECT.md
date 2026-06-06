@@ -18,7 +18,7 @@ The completed v2.1 milestone upgrades report editing toward backend-mediated ver
 
 The completed v2.2 milestone closes the remaining artifact-editing operations gap by adding backend-mediated rollback, admin rollback controls, and a named safe-fixture production mutation verification path with cleanup evidence.
 
-The active v2.3 milestone turns manually assembled release evidence and safe-fixture verification into a repeatable, redacted operator workflow without expanding production mutation scope.
+The completed v2.3 milestone turns manually assembled release evidence and safe-fixture verification into a repeatable, redacted operator workflow without expanding production mutation scope.
 
 ## Core Value
 
@@ -26,8 +26,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v2.2 Report Artifact Rollback And Safe Fixture Verification on 2026-06-06
-**Active milestone:** v2.3 Release Evidence Automation And Fixture Lifecycle
+**Shipped version:** v2.3 Release Evidence Automation And Fixture Lifecycle on 2026-06-06
+**Active milestone:** pending next milestone definition
 
 Delivered:
 
@@ -87,32 +87,26 @@ Delivered:
 - The safe-fixture harness refuses mutation by default and passed production mutation/rollback/cleanup verification for `stoa-safe-fixture-v2-2-rollback-2026-06-06`.
 - v2.2 release gate captured backend/frontend deploy evidence, Lambda runtime evidence, CDK diff classification, production read-only API/browser smoke, and named safe-fixture mutation evidence.
 - Phase 61 found and fixed a report lookup bug where artifact edit child entities could be returned from the parent GSI instead of the report summary row.
+- Backend release evidence tooling validates redacted release bundles, reports missing required fields, inspects the approved safe fixture, and refuses unapproved production mutation.
+- Frontend `/admin/report-operations` exposes read-only release evidence validation and safe-fixture status controls without rendering private artifact data.
+- v2.3 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, production API/browser smoke for release evidence endpoints/UI, privacy denylist results, and safe-fixture refusal evidence with no production mutation.
 
 ## Last Shipped Milestone
 
-**v2.2 Report Artifact Rollback And Safe Fixture Verification** shipped on 2026-06-06.
-
-Goal: admins can safely roll back report artifact versions and production verification can exercise artifact mutation only through a named non-customer safe fixture with cleanup evidence.
-
-Archived phases:
-
-- Phase 58: Artifact Rollback Contract And Safe Fixture Plan.
-- Phase 59: Backend Artifact Rollback APIs And Fixture Harness.
-- Phase 60: Admin Artifact Rollback UI.
-- Phase 61: v2.2 Release Gate And Safe Fixture Verification.
-
-## Current Milestone
-
-### v2.3 Release Evidence Automation And Fixture Lifecycle
+**v2.3 Release Evidence Automation And Fixture Lifecycle** shipped on 2026-06-06.
 
 Goal: operators can produce repeatable, redacted release evidence bundles and manage the named non-customer safe fixture lifecycle without expanding production mutation scope.
 
-Planned phases:
+Completed phases:
 
 - Phase 62: Release Evidence Contract And Safe Fixture Lifecycle Plan.
 - Phase 63: Backend Release Evidence And Fixture Inventory Tooling.
 - Phase 64: Admin Release Evidence And Fixture Status UI.
 - Phase 65: v2.3 Release Gate And Milestone Audit.
+
+## Current Milestone
+
+No active milestone. Next milestone requirements are pending.
 
 ## Requirements
 
@@ -145,15 +139,17 @@ Shipped requirements:
 
 ### Active
 
-Milestone v2.3 requirements are defined in `.planning/REQUIREMENTS.md` and archived in `.planning/milestones/v2.3-REQUIREMENTS.md`:
-
-- EVIDENCE-AUTO-01: release evidence contract and redaction model - Phase 62 complete.
-- EVIDENCE-AUTO-02: backend release evidence collection tooling - Phase 63 complete.
-- FIXTURE-02: safe fixture lifecycle and inventory - Phase 62/63 complete.
-- UI-10: admin release evidence and fixture status UI - Phase 64 complete.
-- VERIFY-06: v2.3 release gate and milestone audit - Phase 65.
+No active milestone requirements. The next milestone will create a fresh `.planning/REQUIREMENTS.md`.
 
 ### Completed
+
+Milestone v2.3 requirements are archived in `.planning/milestones/v2.3-REQUIREMENTS.md` and are complete:
+
+- EVIDENCE-AUTO-01: release evidence contract and redaction model - Phase 62.
+- EVIDENCE-AUTO-02: backend release evidence collection tooling - Phase 63.
+- FIXTURE-02: safe fixture lifecycle and inventory - Phases 62/63.
+- UI-10: admin release evidence and fixture status UI - Phase 64.
+- VERIFY-06: v2.3 release gate and milestone audit - Phase 65.
 
 Milestone v1.7 requirements are archived in `.planning/milestones/v1.7-REQUIREMENTS.md` and are complete:
 
@@ -332,7 +328,7 @@ Known current resources:
 | Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
 | Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Good - shipped in v2.1 |
 | Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Good - shipped in v2.2 |
-| Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Active - Phase 64 complete |
+| Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Good - shipped in v2.3 |
 
 ## Evolution
 
@@ -352,4 +348,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 after planning milestone v2.3*
+*Last updated: 2026-06-07 after archiving milestone v2.3*

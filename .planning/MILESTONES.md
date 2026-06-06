@@ -291,19 +291,25 @@ Still deferred:
 
 ### v2.3 Release Evidence Automation And Fixture Lifecycle
 
-**Status:** Active
-**Roadmap:** `.planning/milestones/v2.3-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.3-REQUIREMENTS.md`
+**Status:** Shipped 2026-06-06
+**Audit:** `.planning/milestones/v2.3-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.3-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.3-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.3-phases/`
 **Goal:** Operators can produce repeatable, redacted release evidence bundles and manage the named non-customer safe fixture lifecycle without expanding production mutation scope.
 **Phases:** 4
-**Plans:** 4/4 planned, 3/4 complete
+**Plans:** 4
+**Requirements:** 5/5 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 62: Release Evidence Contract And Safe Fixture Lifecycle Plan.
-- Phase 63: Backend Release Evidence And Fixture Inventory Tooling.
-- Phase 64: Admin Release Evidence And Fixture Status UI.
-- Phase 65: v2.3 Release Gate And Milestone Audit.
+- Defined the release evidence bundle contract, redaction model, and safe-fixture lifecycle.
+- Added backend release evidence validation, fixture inventory, mutation refusal checks, CLI tooling, admin validate/status endpoints, and focused tests.
+- Added read-only release evidence and safe-fixture status controls to `/admin/report-operations`.
+- Verified backend/frontend deploys, Lambda manifest/runtime evidence, CDK diff classification, local quality gates, production API/browser smoke, and privacy denylist results.
+- Confirmed safe-fixture mutation paths refuse by default and skipped optional mutation smoke without explicit mutation approval.
+
+Known deferred items at close: compliance-grade WORM audit storage, support ticket/export integrations, richer editor/report delivery/product expansion, and dedicated orchestration if the Lambda flow becomes insufficient.
 
 ---
-*Last updated: 2026-06-07 after planning Phase 65 release gate*
+*Last updated: 2026-06-07 after archiving v2.3*
