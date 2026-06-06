@@ -175,10 +175,11 @@ Milestone v2.0 requirements are archived in `.planning/milestones/v2.0-REQUIREME
 
 Milestone v2.1 requirements are tracked in `.planning/REQUIREMENTS.md`:
 
-- ARTEDIT-01: artifact edit draft and preview - Phase 54/55.
-- ARTEDIT-02: versioned artifact apply - Phase 54/55.
+- SAFETY-01: artifact editing contract and CDK readiness - Phase 54.
+- ARTEDIT-01: artifact edit draft and preview - Phase 55.
+- ARTEDIT-02: versioned artifact apply - Phase 55.
 - ARTEDIT-03: audit and rollback evidence - Phase 55.
-- ARTEDIT-04: privacy and storage safety - Phase 54/55/57.
+- ARTEDIT-04: privacy and storage safety - Phase 55.
 - UI-08: admin artifact edit preview UI - Phase 56.
 - VERIFY-04: v2.1 release gate - Phase 57.
 

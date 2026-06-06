@@ -35,7 +35,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 **Goal**: Implementers have a precise artifact editing contract and infrastructure decision before any artifact mutation code.
 **Depends on**: Phase 53
-**Requirements**: ARTEDIT-01, ARTEDIT-02, ARTEDIT-04
+**Requirements**: SAFETY-01
 **Success Criteria**:
 
 1. Contract defines editable artifact fields/sections, validation, version IDs, rollback metadata, audit events, and operator reason requirements.
@@ -101,10 +101,11 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARTEDIT-01 | Phase 54/55 | Planned |
-| ARTEDIT-02 | Phase 54/55 | Planned |
+| SAFETY-01 | Phase 54 | Planned |
+| ARTEDIT-01 | Phase 55 | Planned |
+| ARTEDIT-02 | Phase 55 | Planned |
 | ARTEDIT-03 | Phase 55 | Planned |
-| ARTEDIT-04 | Phase 54/55/57 | Planned |
+| ARTEDIT-04 | Phase 55 | Planned |
 | UI-08 | Phase 56 | Planned |
 | VERIFY-04 | Phase 57 | Planned |
 

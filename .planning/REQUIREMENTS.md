@@ -10,6 +10,17 @@ Admins can preview and apply bounded report artifact edits through backend-media
 
 ## Requirements
 
+### SAFETY-01 Artifact Editing Contract And CDK Readiness
+
+Implementers have a precise artifact editing contract and infrastructure decision before any artifact mutation code.
+
+Acceptance criteria:
+
+- Contract defines editable artifact fields/sections, validation, version IDs, rollback metadata, audit events, and operator reason requirements.
+- Storage model defines where versioned JSON/HTML artifacts are written and how current artifact pointers are updated.
+- Privacy model proves frontend receives only sanitized preview/diff metadata and never private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
+- CDK readiness classifies whether existing reports bucket/IAM/table resources are sufficient or exactly what CDK change is required.
+
 ### ARTEDIT-01 Artifact Edit Draft And Preview
 
 Admins can create or request a bounded artifact edit preview for an existing report.
@@ -84,9 +95,10 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARTEDIT-01 | Phase 54/55 | Planned |
-| ARTEDIT-02 | Phase 54/55 | Planned |
+| SAFETY-01 | Phase 54 | Planned |
+| ARTEDIT-01 | Phase 55 | Planned |
+| ARTEDIT-02 | Phase 55 | Planned |
 | ARTEDIT-03 | Phase 55 | Planned |
-| ARTEDIT-04 | Phase 54/55/57 | Planned |
+| ARTEDIT-04 | Phase 55 | Planned |
 | UI-08 | Phase 56 | Planned |
 | VERIFY-04 | Phase 57 | Planned |
