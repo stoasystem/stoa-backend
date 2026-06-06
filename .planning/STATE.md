@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Report Artifact Versioning And Safe Edit Preview
-status: Awaiting next milestone
-last_updated: "2026-06-06T10:10:38.639Z"
-last_activity: 2026-06-06 — Milestone v2.1 completed and archived
+milestone: v2.2
+milestone_name: Report Artifact Rollback And Safe Fixture Verification
+status: planning
+last_updated: "2026-06-06T10:28:31.079Z"
+last_activity: 2026-06-06
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.1 archived; awaiting next milestone.
+**Current focus:** Phase 58 artifact rollback contract and safe fixture plan.
 
 ## Current Position
 
-Phase: Milestone v2.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-06 — Milestone v2.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-06 — Milestone v2.2 started
 
 ## Accumulated Context
 
@@ -42,6 +42,7 @@ Last activity: 2026-06-06 — Milestone v2.1 completed and archived
 - Phase 55 added admin-only artifact edit preview/read/apply APIs with versioned artifact writes, stale-source rejection, rollback metadata, and redacted report audit evidence.
 - Phase 56 added selected-report admin artifact edit preview/apply UI, kept preview separate from mutation, and verified frontend privacy denylist coverage with lint, build, and Playwright.
 - Phase 57 deployed backend/frontend v2.1, confirmed Lambda runtime state and CDK code-asset-only drift, and passed production read-only API/browser smoke with artifact edit bundle markers and no private marker exposure.
+- v2.2 will add artifact rollback and a named non-customer safe-fixture mutation verification path before broader artifact editing use.
 
 ### Pending Todos
 
@@ -52,7 +53,8 @@ Last activity: 2026-06-06 — Milestone v2.1 completed and archived
 - Production smoke must remain read-only unless a named non-customer safe fixture and cleanup path are documented.
 - Artifact apply must not overwrite prior report artifact versions in place; Phase 55 writes new versioned objects before metadata pointer update.
 - Frontend must never receive S3 keys, presigned URLs, raw report JSON, or raw unreviewed HTML.
+- Rollback must preserve prior artifact versions and switch only validated current metadata pointers.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Begin Phase 58 with `$gsd-discuss-phase 58` or `$gsd-plan-phase 58`.

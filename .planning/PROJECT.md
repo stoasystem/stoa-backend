@@ -14,7 +14,9 @@ The completed v1.9 milestone adds failed/refused/not_found/skipped subset resume
 
 The completed v2.0 milestone adds a controlled, metadata-only report edit draft/apply workflow for admins, with append-only audit evidence and no direct S3 artifact exposure.
 
-The active v2.1 milestone upgrades report editing toward backend-mediated versioned artifact edits with sanitized preview/diff, rollback metadata, and explicit CDK readiness before any artifact mutation implementation.
+The completed v2.1 milestone upgrades report editing toward backend-mediated versioned artifact edits with sanitized preview/diff, rollback metadata, and explicit CDK readiness before any artifact mutation implementation.
+
+The active v2.2 milestone closes the remaining artifact-editing operations gap by adding backend-mediated rollback, admin rollback controls, and a named safe-fixture production mutation verification path with cleanup evidence.
 
 ## Core Value
 
@@ -22,7 +24,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v2.0 Controlled Report Editing MVP on 2026-06-05
+**Shipped version:** v2.1 Report Artifact Versioning And Safe Edit Preview on 2026-06-06
 
 Delivered:
 
@@ -74,32 +76,35 @@ Delivered:
 - Report edit apply rejects stale drafts and writes append-only `apply_report_edit` audit evidence.
 - Frontend `/admin/report-operations` exposes selected-report edit draft/apply controls.
 - v2.0 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, Cognito group membership, production bundle markers, and production read-only browser smoke for edit draft/apply UI with no production mutation.
+- Backend artifact editing supports admin-only sanitized preview/read/apply APIs with versioned JSON/HTML artifact writes, stale-source rejection, rollback metadata, and redacted audit evidence.
+- Frontend `/admin/report-operations` exposes selected-report artifact edit preview/apply controls without private S3 keys, presigned URLs, raw JSON, or raw unreviewed HTML.
+- v2.1 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, production bundle markers, and production read-only browser smoke for artifact edit preview/apply UI with no production mutation.
 
 ## Last Shipped Milestone
 
-**v2.0 Controlled Report Editing MVP** shipped on 2026-06-05.
-
-Goal: admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
-
-Archived phases:
-
-- Phase 50: Report Editing Contract And Safety Model.
-- Phase 51: Backend Report Edit Draft And Apply APIs.
-- Phase 52: Admin Report Editing UI.
-- Phase 53: v2.0 Release Gate And Final Verification.
-
-## Current Milestone
-
-**v2.1 Report Artifact Versioning And Safe Edit Preview** started on 2026-06-06.
+**v2.1 Report Artifact Versioning And Safe Edit Preview** shipped on 2026-06-06.
 
 Goal: admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
 
-Planned phases:
+Archived phases:
 
 - Phase 54: Artifact Editing Contract And CDK Readiness.
 - Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs.
 - Phase 56: Admin Artifact Edit Preview UI.
 - Phase 57: v2.1 Release Gate And Safe Live Verification.
+
+## Current Milestone
+
+**v2.2 Report Artifact Rollback And Safe Fixture Verification** started on 2026-06-06.
+
+Goal: admins can safely roll back report artifact versions and production verification can exercise artifact mutation only through a named non-customer safe fixture with cleanup evidence.
+
+Planned phases:
+
+- Phase 58: Artifact Rollback Contract And Safe Fixture Plan.
+- Phase 59: Backend Artifact Rollback APIs And Fixture Harness.
+- Phase 60: Admin Artifact Rollback UI.
+- Phase 61: v2.2 Release Gate And Safe Fixture Verification.
 
 ## Requirements
 
@@ -171,9 +176,7 @@ Milestone v2.0 requirements are archived in `.planning/milestones/v2.0-REQUIREME
 - UI-07: admin editing UI - Phase 52.
 - VERIFY-03: v2.0 release gate - Phase 53.
 
-### Active
-
-Milestone v2.1 requirements are tracked in `.planning/REQUIREMENTS.md`:
+Milestone v2.1 requirements are archived in `.planning/milestones/v2.1-REQUIREMENTS.md` and are complete:
 
 - SAFETY-01: artifact editing contract and CDK readiness - Phase 54.
 - ARTEDIT-01: artifact edit draft and preview - Phase 55.
@@ -183,6 +186,17 @@ Milestone v2.1 requirements are tracked in `.planning/REQUIREMENTS.md`:
 - UI-08: admin artifact edit preview UI - Phase 56.
 - VERIFY-04: v2.1 release gate - Phase 57.
 
+### Active
+
+Milestone v2.2 requirements are tracked in `.planning/REQUIREMENTS.md`:
+
+- ROLLBACK-01: artifact rollback contract and CDK readiness - Phase 58.
+- ROLLBACK-02: backend artifact rollback preview/apply APIs - Phase 59.
+- ROLLBACK-03: rollback audit and safety evidence - Phase 59.
+- FIXTURE-01: named safe artifact fixture protocol and harness - Phase 58/59.
+- UI-09: admin artifact rollback UI - Phase 60.
+- VERIFY-05: v2.2 release gate and safe fixture verification - Phase 61.
+
 ### Out of Scope
 
 - Billing or paid subscription enforcement - not part of report automation MVP.
@@ -191,7 +205,7 @@ Milestone v2.1 requirements are tracked in `.planning/REQUIREMENTS.md`:
 - Stripe or billing integration - unrelated to parent real-data integration.
 - Organization/school portal work - separate product surface.
 - Real-time report generation on every parent page load - scheduled generation is the intended model.
-- Freeform WYSIWYG report editor - v2.1 remains bounded artifact editing with sanitized preview/diff.
+- Freeform WYSIWYG report editor - v2.2 remains bounded artifact operations with sanitized preview/rollback controls.
 - Live classroom work - separate product surface.
 - Full admin analytics - separate admin analytics scope.
 - Broad frontend redesign - v1.0 was integration and state correctness.
@@ -300,7 +314,8 @@ Known current resources:
 | Start v1.8 with async generation retry jobs | v1.7 proved reusable evidence/export and credential operations; the next highest-value recovery expansion is bounded incident-wide generation retry using existing job infrastructure | Good - shipped in v1.8 |
 | Start v1.9 with recovery subset resume and support evidence packages | v1.8 proved both resend and generation retry async jobs; the next operational gap is restarting failed subsets and packaging metadata-only support evidence | Good - shipped in v1.9 |
 | Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
-| Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Active - planned in Phases 54-57 |
+| Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Good - shipped in v2.1 |
+| Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Active - planned in Phases 58-61 |
 
 ## Evolution
 
@@ -320,4 +335,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 after starting milestone v2.1*
+*Last updated: 2026-06-06 after starting milestone v2.2*

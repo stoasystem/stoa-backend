@@ -261,9 +261,30 @@ Known deferred items at close: rollback endpoint/UI, rich WYSIWYG editor, safe-f
 
 ## Current
 
-### No Active Milestone
+### v2.2 Report Artifact Rollback And Safe Fixture Verification
 
-Start the next milestone with `$gsd-new-milestone`.
+**Status:** Active
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/ROADMAP.md`
+**Goal:** Admins can safely roll back report artifact versions and production verification can exercise artifact mutation only through a named non-customer safe fixture with cleanup evidence.
+**Phases:** 4 planned
+**Requirements:** active
+
+Planned work:
+
+- Phase 58: Artifact Rollback Contract And Safe Fixture Plan.
+- Phase 59: Backend Artifact Rollback APIs And Fixture Harness.
+- Phase 60: Admin Artifact Rollback UI.
+- Phase 61: v2.2 Release Gate And Safe Fixture Verification.
+
+Still deferred:
+
+- Freeform WYSIWYG report editor.
+- WORM audit storage.
+- Support ticket/export destination integrations.
+- Step Functions/SQS or dedicated recovery orchestration.
+- PDF/multilingual delivery.
+- Billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-06 after archiving v2.1*
+*Last updated: 2026-06-06 after starting v2.2*
