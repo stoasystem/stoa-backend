@@ -25,7 +25,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 ## Phases
 
 - [x] **Phase 54: Artifact Editing Contract And CDK Readiness** - Define versioned artifact edit contract, storage layout, rollback boundary, privacy model, and infra requirements.
-- [ ] **Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs** - Add admin-only preview/apply APIs that produce sanitized previews and versioned artifact writes.
+- [x] **Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs** - Add admin-only preview/apply APIs that produce sanitized previews and versioned artifact writes.
 - [ ] **Phase 56: Admin Artifact Edit Preview UI** - Add selected-report artifact edit preview/diff/apply controls to `/admin/report-operations`.
 - [ ] **Phase 57: v2.1 Release Gate And Safe Live Verification** - Record deploy/CDK/API/UI evidence and verify production read-only plus safe-fixture mutation behavior.
 
@@ -57,7 +57,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 3. Audit includes editor, reason, source artifact version, new artifact version, before/after metadata, validation result, and correlation ID.
 4. Tests cover admin-only auth, validation failures, stale source rejection, private marker denylist, versioned writes, rollback metadata, and audit evidence.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ### Phase 56: Admin Artifact Edit Preview UI
 
@@ -93,7 +93,7 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 54. Artifact Editing Contract And CDK Readiness | v2.1 | 1/1 | Complete | 2026-06-06 |
-| 55. Backend Artifact Edit Preview And Versioned Apply APIs | v2.1 | 0/1 | Not Started | - |
+| 55. Backend Artifact Edit Preview And Versioned Apply APIs | v2.1 | 1/1 | Complete | 2026-06-06 |
 | 56. Admin Artifact Edit Preview UI | v2.1 | 0/1 | Not Started | - |
 | 57. v2.1 Release Gate And Safe Live Verification | v2.1 | 0/1 | Not Started | - |
 
@@ -102,12 +102,12 @@ This milestone upgrades v2.0 metadata-only report editing toward real artifact e
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SAFETY-01 | Phase 54 | Complete |
-| ARTEDIT-01 | Phase 55 | Planned |
-| ARTEDIT-02 | Phase 55 | Planned |
-| ARTEDIT-03 | Phase 55 | Planned |
-| ARTEDIT-04 | Phase 55 | Planned |
+| ARTEDIT-01 | Phase 55 | Complete |
+| ARTEDIT-02 | Phase 55 | Complete |
+| ARTEDIT-03 | Phase 55 | Complete |
+| ARTEDIT-04 | Phase 55 | Complete |
 | UI-08 | Phase 56 | Planned |
 | VERIFY-04 | Phase 57 | Planned |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 54*
+*Last updated: 2026-06-06 after completing Phase 55*

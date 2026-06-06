@@ -43,6 +43,27 @@ def build_report_artifact_keys(
     )
 
 
+def build_report_artifact_version_keys(
+    parent_id: str,
+    student_id: str,
+    week_start: str | date,
+    version_id: str,
+) -> ReportArtifactKeys:
+    """Build private S3 keys for a versioned weekly report artifact."""
+    parent_segment = _validate_backend_id_segment(parent_id, "parent_id")
+    student_segment = _validate_backend_id_segment(student_id, "student_id")
+    week_segment = _validate_week_start(week_start)
+    version_segment = _validate_backend_id_segment(version_id, "version_id")
+    prefix = (
+        f"{REPORT_ARTIFACT_PREFIX}/{parent_segment}/{student_segment}/"
+        f"{week_segment}/versions/{version_segment}"
+    )
+    return ReportArtifactKeys(
+        json_key=f"{prefix}/report.json",
+        html_key=f"{prefix}/report.html",
+    )
+
+
 def write_report_artifacts(
     keys: ReportArtifactKeys,
     json_artifact: dict[str, Any],
@@ -72,6 +93,14 @@ def write_report_artifacts(
         except Exception:
             pass
         raise
+
+
+def delete_report_artifacts(keys: ReportArtifactKeys, *, s3_client: Any | None = None) -> None:
+    """Best-effort delete both JSON and HTML artifacts from the private reports bucket."""
+    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    bucket = settings.report_artifacts_bucket
+    for key in (keys.json_key, keys.html_key):
+        _delete_report_artifact(bucket, key, s3_client=s3)
 
 
 def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, Any]:

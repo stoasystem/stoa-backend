@@ -10,6 +10,7 @@ from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
+    report_artifact_edit_service,
     report_edit_service,
     report_recovery_evidence_service,
     report_recovery_job_service,
@@ -133,6 +134,49 @@ class ReportEditApplyResponse(BaseModel):
     operation: str
     operation_result: str
     draft: ReportEditDraftResponse
+    report: dict[str, Any]
+
+
+class ReportArtifactEditPreviewRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    proposed_fields: dict[str, Any] = Field(..., min_length=1)
+
+
+class ReportArtifactEditDiffItem(BaseModel):
+    field: str
+    before: Any = None
+    after: Any = None
+    changed: bool
+
+
+class ReportArtifactEditPreviewResponse(BaseModel):
+    draft_id: str
+    report_id: str
+    parent_id: str | None = None
+    student_id: str | None = None
+    week_start: str | None = None
+    source_updated_at: str | None = None
+    source_artifact_version_id: str | None = None
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    reason: str | None = None
+    proposed_fields: dict[str, Any]
+    diff: list[ReportArtifactEditDiffItem]
+    status: str
+    applied_by: str | None = None
+    applied_at: str | None = None
+    artifact_version_id: str | None = None
+
+
+class ReportArtifactEditApplyRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class ReportArtifactEditApplyResponse(BaseModel):
+    operation: str
+    operation_result: str
+    draft: ReportArtifactEditPreviewResponse
     report: dict[str, Any]
 
 
@@ -975,6 +1019,86 @@ async def apply_report_edit_draft(
     )
 
 
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews",
+    response_model=ReportArtifactEditPreviewResponse,
+)
+async def create_report_artifact_edit_preview(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    body: ReportArtifactEditPreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Create a bounded report artifact edit preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        preview = report_artifact_edit_service.create_artifact_edit_preview(
+            report,
+            operator=_operator_id(user),
+            reason=body.reason,
+            proposed_fields=body.proposed_fields,
+            correlation_id=_request_id(request),
+        )
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactEditPreviewResponse(**preview)
+
+
+@router.get(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}",
+    response_model=ReportArtifactEditPreviewResponse,
+)
+async def get_report_artifact_edit_preview(
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    draft_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Read a bounded report artifact edit preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        preview = report_artifact_edit_service.get_artifact_edit_preview(report, draft_id)
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactEditPreviewResponse(**preview)
+
+
+@router.post(
+    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}/apply",
+    response_model=ReportArtifactEditApplyResponse,
+)
+async def apply_report_artifact_edit_preview(
+    request: Request,
+    parent_id: str,
+    student_id: str,
+    week_start: str,
+    draft_id: str,
+    body: ReportArtifactEditApplyRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Apply one bounded report artifact edit preview."""
+    report = _get_report_or_404(parent_id, student_id, week_start)
+    try:
+        result = report_artifact_edit_service.apply_artifact_edit_preview(
+            report,
+            draft_id=draft_id,
+            operator=_operator_id(user),
+            reason=body.reason,
+            correlation_id=_request_id(request),
+        )
+    except report_artifact_edit_service.ReportArtifactEditError as exc:
+        raise _report_artifact_edit_http_error(exc) from exc
+    return ReportArtifactEditApplyResponse(
+        operation="edit_report_artifact",
+        operation_result="success",
+        draft=ReportArtifactEditPreviewResponse(**result["draft"]),
+        report=result["report"],
+    )
+
+
 @router.get(
     "/reports/{parent_id}/{student_id}/{week_start}/audit",
     response_model=ReportAuditListResponse,
@@ -1261,6 +1385,12 @@ def _report_action_eligibility(report: dict) -> dict[str, dict[str, str | bool |
             "enabled": can_retry_generation,
             "reason": None if can_retry_generation else _disabled_reason(status, "generation_failed"),
         },
+        "edit_artifact": {
+            "enabled": bool(report.get("json_s3_key") and (report.get("html_s3_key") or report.get("s3_key"))),
+            "reason": None
+            if report.get("json_s3_key") and (report.get("html_s3_key") or report.get("s3_key"))
+            else "Report is missing editable artifacts",
+        },
     }
 
 
@@ -1291,6 +1421,16 @@ def _recovery_job_http_error(exc: report_recovery_job_service.RecoveryJobError) 
 
 def _report_edit_http_error(exc: report_edit_service.ReportEditError) -> HTTPException:
     detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report edit operation failed"
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _report_artifact_edit_http_error(
+    exc: report_artifact_edit_service.ReportArtifactEditError,
+) -> HTTPException:
+    detail = (
+        report_recovery_service.redact_private_artifact_text(exc.detail)
+        or "Report artifact edit operation failed"
+    )
     return HTTPException(status_code=exc.status_code, detail=detail)
 
 

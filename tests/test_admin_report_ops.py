@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
+from stoa.services import report_artifact_edit_service
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 
@@ -50,6 +51,32 @@ def _assert_no_private_artifact_markers(data):
     assert "access_token" not in serialized
     assert "id_token" not in serialized
     assert "refresh_token" not in serialized
+
+
+def _report_json_artifact() -> dict:
+    return {
+        "report": {
+            "reportId": "report-parent-1-student-1-2026-06-01",
+            "parentId": "parent-1",
+            "studentId": "student-1",
+            "studentName": "Student",
+            "weekStart": "2026-06-01",
+            "weekEnd": "2026-06-07",
+            "generatedAt": "2026-06-01T08:00:00+00:00",
+            "status": "email_sent",
+            "emailStatus": "sent",
+        },
+        "stats": {},
+        "content": {
+            "summary": "Original summary",
+            "strengths": ["Original strength"],
+            "weakTopics": [{"topic": "fractions", "note": "Review this."}],
+            "recommendations": ["Original recommendation"],
+            "teacherNote": None,
+        },
+        "sourceCounts": {},
+        "activities": [],
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -980,6 +1007,223 @@ def test_apply_report_edit_draft_rejects_stale_source_and_audits(monkeypatch, au
     assert audit_events[0][1]["action"] == "apply_report_edit"
     assert audit_events[0][1]["result"] == "refused"
     assert audit_events[0][1]["after"]["validation_result"] == "failed"
+
+
+def test_report_artifact_edit_preview_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin artifact edit preview should not mutate")
+
+    monkeypatch.setattr(report_repo, "put_report_artifact_edit_draft", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-edit-previews",
+        json={"reason": "fix typo", "proposed_fields": {"summary": "Updated"}},
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_report_artifact_edit_preview_returns_sanitized_diff_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    drafts = []
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:00:00+00:00",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(
+        report_artifact_edit_service.report_artifact_service,
+        "get_report_json",
+        lambda key, **kwargs: _report_json_artifact(),
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_report_artifact_edit_draft",
+        lambda report_id, draft: drafts.append((report_id, draft)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-edit-previews",
+        json={
+            "reason": "parent requested wording adjustment",
+            "proposed_fields": {
+                "summary": "Updated summary",
+                "recommendations": ["Practice fractions twice this week."],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "draft"
+    assert data["source_updated_at"] == "2026-06-05T10:00:00+00:00"
+    assert data["created_by"] == "admin-sub"
+    assert {item["field"] for item in data["diff"]} == {"summary", "recommendations"}
+    assert drafts[0][0] == report["report_id"]
+    assert drafts[0][1]["source_json_s3_key"] == report["json_s3_key"]
+    assert audit_events[0][1]["action"] == "create_report_artifact_edit_preview"
+    assert audit_events[0][1]["result"] == "draft"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_events)
+
+
+def test_create_report_artifact_edit_preview_rejects_private_markers(monkeypatch):
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:00:00+00:00",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid artifact edit preview should not persist")
+
+    monkeypatch.setattr(report_repo, "put_report_artifact_edit_draft", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-edit-previews",
+        json={
+            "reason": "bad",
+            "proposed_fields": {"summary": "weekly-reports/parent/student/week/report.json"},
+        },
+    )
+
+    assert response.status_code == 422
+    _assert_no_private_artifact_markers(response.json())
+
+
+def test_apply_report_artifact_edit_preview_writes_versioned_artifacts_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    writes = []
+    updates = []
+    marked = []
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:00:00+00:00",
+    }
+    draft = {
+        "draft_id": "draft-1",
+        "report_id": report["report_id"],
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "source_updated_at": report["updated_at"],
+        "source_artifact_version_id": None,
+        "source_json_s3_key": report["json_s3_key"],
+        "source_html_s3_key": report["html_s3_key"],
+        "created_by": "admin-sub",
+        "created_at": "2026-06-05T10:01:00+00:00",
+        "updated_at": "2026-06-05T10:01:00+00:00",
+        "reason": "fix summary",
+        "proposed_fields": {"summary": "Updated summary"},
+        "diff": [{"field": "summary", "before": "Original summary", "after": "Updated summary", "changed": True}],
+        "status": "draft",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(report_repo, "get_report_artifact_edit_draft", lambda report_id, draft_id: draft)
+    monkeypatch.setattr(
+        report_artifact_edit_service.report_artifact_service,
+        "get_report_json",
+        lambda key, **kwargs: _report_json_artifact(),
+    )
+    monkeypatch.setattr(
+        report_artifact_edit_service.report_artifact_service,
+        "write_report_artifacts",
+        lambda keys, json_artifact, html_artifact, **kwargs: writes.append(
+            (keys, json_artifact, html_artifact)
+        ),
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "try_apply_report_artifact_edit",
+        lambda report_id, **kwargs: updates.append((report_id, kwargs)) or True,
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "mark_report_artifact_edit_draft_applied",
+        lambda report_id, draft_id, **kwargs: marked.append((report_id, draft_id, kwargs)) or True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-edit-previews/draft-1/apply",
+        json={"reason": "approve updated summary"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "edit_report_artifact"
+    assert data["operation_result"] == "success"
+    assert data["draft"]["status"] == "applied"
+    assert data["report"]["artifact_version_id"].startswith("v")
+    assert writes[0][0].json_key.startswith("weekly-reports/parent-1/student-1/2026-06-01/versions/v")
+    assert writes[0][0].html_key.endswith("/report.html")
+    assert writes[0][1]["content"]["summary"] == "Updated summary"
+    assert "Updated summary" in writes[0][2]
+    assert updates[0][0] == report["report_id"]
+    assert updates[0][1]["expected_updated_at"] == report["updated_at"]
+    assert updates[0][1]["fields"]["last_operation"] == "edit_report_artifact"
+    assert updates[0][1]["fields"]["previous_json_s3_key"] == report["json_s3_key"]
+    assert marked[0][0] == report["report_id"]
+    assert marked[0][1] == "draft-1"
+    event = audit_events[0][1]
+    assert event["action"] == "apply_report_artifact_edit"
+    assert event["result"] == "success"
+    assert event["after"]["draft_id"] == "draft-1"
+    assert event["after"]["validation_result"] == "passed"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_events)
+
+
+def test_apply_report_artifact_edit_preview_rejects_stale_source_and_audits(
+    monkeypatch,
+    audit_events,
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("stale artifact edit should not write artifacts or update report")
+
+    report = {
+        **_report(status="email_sent", email_status="sent"),
+        "updated_at": "2026-06-05T10:10:00+00:00",
+    }
+    draft = {
+        "draft_id": "draft-1",
+        "report_id": report["report_id"],
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "source_updated_at": "2026-06-05T10:00:00+00:00",
+        "source_artifact_version_id": None,
+        "source_json_s3_key": report["json_s3_key"],
+        "source_html_s3_key": report["html_s3_key"],
+        "reason": "fix summary",
+        "proposed_fields": {"summary": "Updated summary"},
+        "status": "draft",
+    }
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda parent_id, student_id, week_start: report)
+    monkeypatch.setattr(report_repo, "get_report_artifact_edit_draft", lambda report_id, draft_id: draft)
+    monkeypatch.setattr(report_artifact_edit_service.report_artifact_service, "write_report_artifacts", fail)
+    monkeypatch.setattr(report_repo, "try_apply_report_artifact_edit", fail)
+    monkeypatch.setattr(report_repo, "mark_report_artifact_edit_draft_applied", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/parent-1/student-1/2026-06-01/artifact-edit-previews/draft-1/apply",
+        json={"reason": "approve updated summary"},
+    )
+
+    assert response.status_code == 409
+    assert audit_events[0][1]["action"] == "apply_report_artifact_edit"
+    assert audit_events[0][1]["result"] == "refused"
+    assert audit_events[0][1]["after"]["validation_result"] == "failed"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(audit_events)
 
 
 def test_recovery_job_audit_timeline_returns_job_scope(monkeypatch):

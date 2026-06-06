@@ -126,6 +126,109 @@ def mark_report_edit_draft_applied(
     return True
 
 
+def put_report_artifact_edit_draft(report_id: str, draft: dict) -> None:
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"REPORT#{report_id}",
+            "SK": f"ARTIFACT_EDIT_DRAFT#{draft['draft_id']}",
+            "entity_type": "REPORT_ARTIFACT_EDIT_DRAFT",
+            **draft,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def get_report_artifact_edit_draft(report_id: str, draft_id: str) -> dict | None:
+    table = get_table()
+    response = table.get_item(
+        Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"}
+    )
+    return response.get("Item")
+
+
+def mark_report_artifact_edit_draft_applied(
+    report_id: str,
+    draft_id: str,
+    *,
+    applied_at: str,
+    applied_by: str,
+    artifact_version_id: str,
+) -> bool:
+    table = get_table()
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"},
+            UpdateExpression=(
+                "SET #status = :applied, applied_at = :applied_at, "
+                "applied_by = :applied_by, artifact_version_id = :artifact_version_id, "
+                "updated_at = :applied_at"
+            ),
+            ConditionExpression="#status = :draft",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":applied": "applied",
+                ":draft": "draft",
+                ":applied_at": applied_at,
+                ":applied_by": applied_by,
+                ":artifact_version_id": artifact_version_id,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def try_apply_report_artifact_edit(
+    report_id: str,
+    *,
+    expected_updated_at: str | None,
+    expected_artifact_version_id: str | None,
+    expected_json_s3_key: str | None,
+    expected_html_s3_key: str | None,
+    status: str,
+    fields: dict,
+) -> bool:
+    table = get_table()
+    update_fields = {"status": status, **fields}
+    names = {f"#f{index}": key for index, key in enumerate(update_fields)}
+    values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
+    conditions = []
+    if expected_updated_at is None:
+        conditions.append("attribute_not_exists(updated_at)")
+    else:
+        conditions.append("updated_at = :expected_updated_at")
+        values[":expected_updated_at"] = expected_updated_at
+    if expected_artifact_version_id is None:
+        conditions.append("attribute_not_exists(artifact_version_id)")
+    else:
+        conditions.append("artifact_version_id = :expected_artifact_version_id")
+        values[":expected_artifact_version_id"] = expected_artifact_version_id
+    if expected_json_s3_key is not None:
+        conditions.append("json_s3_key = :expected_json_s3_key")
+        values[":expected_json_s3_key"] = expected_json_s3_key
+    if expected_html_s3_key is not None:
+        conditions.append("html_s3_key = :expected_html_s3_key")
+        values[":expected_html_s3_key"] = expected_html_s3_key
+    try:
+        table.update_item(
+            Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
+            UpdateExpression="SET " + ", ".join(
+                f"{name} = :v{index}" for index, name in enumerate(names)
+            ),
+            ConditionExpression=" AND ".join(conditions),
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
 def put_report_audit_event(report_id: str, event: dict) -> None:
     """Append one immutable report audit event."""
     table = get_table()
