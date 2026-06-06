@@ -99,9 +99,9 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ROLLBACK-01 | Phase 58 | Planned |
+| ROLLBACK-01 | Phase 58 | Complete |
 | ROLLBACK-02 | Phase 59 | Planned |
 | ROLLBACK-03 | Phase 59 | Planned |
-| FIXTURE-01 | Phase 58/59 | Planned |
+| FIXTURE-01 | Phase 58/59 | In Progress |
 | UI-09 | Phase 60 | Planned |
 | VERIFY-05 | Phase 61 | Planned |
