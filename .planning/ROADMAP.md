@@ -27,7 +27,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 
 - [x] **Phase 58: Artifact Rollback Contract And Safe Fixture Plan** - Define rollback contract, target-version model, safe-fixture protocol, and CDK readiness.
 - [x] **Phase 59: Backend Artifact Rollback APIs And Fixture Harness** - Add admin-only rollback preview/apply APIs and safe-fixture smoke harness.
-- [ ] **Phase 60: Admin Artifact Rollback UI** - Add selected-report rollback preview/apply controls to `/admin/report-operations`.
+- [x] **Phase 60: Admin Artifact Rollback UI** - Add selected-report rollback preview/apply controls to `/admin/report-operations`.
 - [ ] **Phase 61: v2.2 Release Gate And Safe Fixture Verification** - Record deploy/CDK/API/UI evidence and verify read-only plus named safe-fixture mutation/cleanup behavior.
 
 ## Phase Details
@@ -73,7 +73,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 3. UI renders sanitized current/target version metadata, validation state, apply outcome, and audit reference without private artifact markers.
 4. Playwright covers rollback preview/apply controls, stale/error states, and privacy denylist.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 **UI hint**: yes
 
 ### Phase 61: v2.2 Release Gate And Safe Fixture Verification
@@ -96,7 +96,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 |-------|-----------|----------------|--------|-----------|
 | 58. Artifact Rollback Contract And Safe Fixture Plan | v2.2 | 1/1 | Complete | 2026-06-06 |
 | 59. Backend Artifact Rollback APIs And Fixture Harness | v2.2 | 1/1 | Complete | 2026-06-06 |
-| 60. Admin Artifact Rollback UI | v2.2 | 0/1 | Not Started | - |
+| 60. Admin Artifact Rollback UI | v2.2 | 1/1 | Complete | 2026-06-06 |
 | 61. v2.2 Release Gate And Safe Fixture Verification | v2.2 | 0/1 | Not Started | - |
 
 ## Traceability
@@ -107,8 +107,8 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 | ROLLBACK-02 | Phase 59 | Complete |
 | ROLLBACK-03 | Phase 59 | Complete |
 | FIXTURE-01 | Phase 58/59 | Complete |
-| UI-09 | Phase 60 | Planned |
+| UI-09 | Phase 60 | Complete |
 | VERIFY-05 | Phase 61 | Planned |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 59*
+*Last updated: 2026-06-06 after completing Phase 60*
