@@ -289,9 +289,21 @@ Still deferred:
 - PDF/multilingual delivery.
 - Billing, analytics, and broader admin operations expansion.
 
-## Current
+### v2.3 Release Evidence Automation And Fixture Lifecycle
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+**Status:** Active
+**Roadmap:** `.planning/milestones/v2.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.3-REQUIREMENTS.md`
+**Goal:** Operators can produce repeatable, redacted release evidence bundles and manage the named non-customer safe fixture lifecycle without expanding production mutation scope.
+**Phases:** 4
+**Plans:** 1/4 planned
+
+Planned phases:
+
+- Phase 62: Release Evidence Contract And Safe Fixture Lifecycle Plan.
+- Phase 63: Backend Release Evidence And Fixture Inventory Tooling.
+- Phase 64: Admin Release Evidence And Fixture Status UI.
+- Phase 65: v2.3 Release Gate And Milestone Audit.
 
 ---
-*Last updated: 2026-06-06 after archiving v2.2*
+*Last updated: 2026-06-06 after planning v2.3 Phase 62*

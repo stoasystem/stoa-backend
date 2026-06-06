@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Report Artifact Rollback And Safe Fixture Verification
-status: archived
-last_updated: "2026-06-06T18:53:00Z"
+milestone: v2.3
+milestone_name: Release Evidence Automation And Fixture Lifecycle
+status: active
+last_updated: "2026-06-06T19:35:37Z"
 last_activity: 2026-06-06
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** No active milestone.
+**Current focus:** v2.3 Release Evidence Automation And Fixture Lifecycle.
 
 ## Current Position
 
-Phase: —
-Plan: —
-Status: v2.2 archived; ready to start the next milestone.
-Last activity: 2026-06-06 — archived v2.2 after safe-fixture mutation/cleanup smoke passed and the report lookup fix deployed.
+Phase: 62 - Release Evidence Contract And Safe Fixture Lifecycle Plan
+Plan: 62-01
+Status: Planned; ready to execute Phase 62.
+Last activity: 2026-06-06 — planned v2.3 and created Phase 62 evidence/fixture lifecycle documents.
 
 ## Accumulated Context
 
@@ -48,10 +48,13 @@ Last activity: 2026-06-06 — archived v2.2 after safe-fixture mutation/cleanup 
 - Phase 60 added selected-report artifact rollback preview/apply UI, required operator reasons, rendered only sanitized version metadata, and verified privacy denylist coverage with lint, build, and Playwright.
 - Phase 61 confirmed backend/frontend deploys, Lambda runtime state, CDK diff, production read-only API/browser smoke, safe-fixture harness default refusal, and approved safe-fixture mutation/cleanup.
 - Phase 61 found and fixed a selected-report lookup bug where artifact edit draft child entities could be returned from `GSI-ParentId` instead of the report summary row.
+- v2.3 should turn manually assembled release evidence into a repeatable redacted evidence workflow before expanding any production mutation capability.
+- Phase 62 starts with release evidence schema, redaction rules, fixture lifecycle, and CDK readiness.
 
 ### Pending Todos
 
-- Start the next milestone with `$gsd-new-milestone` when ready.
+- Execute Phase 62 and finalize evidence/fixture lifecycle contracts.
+- Use Phase 62 output to implement Phase 63 backend evidence and fixture inventory tooling.
 
 ### Blockers/Concerns
 
@@ -60,7 +63,8 @@ Last activity: 2026-06-06 — archived v2.2 after safe-fixture mutation/cleanup 
 - Frontend must never receive S3 keys, presigned URLs, raw report JSON, or raw unreviewed HTML.
 - Rollback must preserve prior artifact versions and switch only validated current metadata pointers.
 - The synthetic safe fixture remains in production as a named non-customer verification target.
+- Release evidence automation must fail closed on private marker denylist hits.
 
 ## Operator Next Steps
 
-- Start the next milestone.
+- Execute Phase 62.
