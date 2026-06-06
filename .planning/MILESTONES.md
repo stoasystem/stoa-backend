@@ -296,7 +296,7 @@ Still deferred:
 **Requirements:** `.planning/milestones/v2.3-REQUIREMENTS.md`
 **Goal:** Operators can produce repeatable, redacted release evidence bundles and manage the named non-customer safe fixture lifecycle without expanding production mutation scope.
 **Phases:** 4
-**Plans:** 1/4 planned
+**Plans:** 4/4 planned, 3/4 complete
 
 Planned phases:
 
@@ -306,4 +306,4 @@ Planned phases:
 - Phase 65: v2.3 Release Gate And Milestone Audit.
 
 ---
-*Last updated: 2026-06-06 after planning v2.3 Phase 62*
+*Last updated: 2026-06-07 after planning Phase 65 release gate*

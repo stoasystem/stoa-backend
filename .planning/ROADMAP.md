@@ -91,7 +91,7 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 3. Any fixture mutation verification uses only the approved named non-customer fixture and records cleanup/restore evidence.
 4. Final v2.3 audit records residual risks, rollback path, and future requirements.
 
-**Plans**: 0 complete
+**Plans**: 1 planned
 
 ## Progress
 
@@ -100,7 +100,7 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 | 62. Release Evidence Contract And Safe Fixture Lifecycle Plan | v2.3 | 1/1 | Complete | 2026-06-06 |
 | 63. Backend Release Evidence And Fixture Inventory Tooling | v2.3 | 1/1 | Complete | 2026-06-06 |
 | 64. Admin Release Evidence And Fixture Status UI | v2.3 | 1/1 | Complete | 2026-06-06 |
-| 65. v2.3 Release Gate And Milestone Audit | v2.3 | 0/1 | Not started | - |
+| 65. v2.3 Release Gate And Milestone Audit | v2.3 | 1/1 | Planned | - |
 
 ## Traceability
 
@@ -110,7 +110,7 @@ This milestone turns the manually assembled v2.1/v2.2 release evidence into a do
 | EVIDENCE-AUTO-02 | Phase 63 | Complete |
 | FIXTURE-02 | Phase 62/63 | Complete |
 | UI-10 | Phase 64 | Complete |
-| VERIFY-06 | Phase 65 | Not started |
+| VERIFY-06 | Phase 65 | Planned |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 64 admin release evidence UI*
+*Last updated: 2026-06-07 after planning Phase 65 release gate*
