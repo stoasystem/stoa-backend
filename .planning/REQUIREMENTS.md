@@ -104,4 +104,4 @@ Acceptance criteria:
 | ROLLBACK-03 | Phase 59 | Complete |
 | FIXTURE-01 | Phase 58/59 | Complete |
 | UI-09 | Phase 60 | Complete |
-| VERIFY-05 | Phase 61 | Planned |
+| VERIFY-05 | Phase 61 | Blocked |

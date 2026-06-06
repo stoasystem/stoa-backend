@@ -88,7 +88,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 3. Safe-fixture mutation smoke uses a named non-customer fixture and records request IDs, artifact version metadata, rollback metadata, cleanup/restore evidence, and privacy denylist results.
 4. Final v2.2 audit records residual risks, rollback path, and future requirements.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ## Progress
 
@@ -97,7 +97,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 | 58. Artifact Rollback Contract And Safe Fixture Plan | v2.2 | 1/1 | Complete | 2026-06-06 |
 | 59. Backend Artifact Rollback APIs And Fixture Harness | v2.2 | 1/1 | Complete | 2026-06-06 |
 | 60. Admin Artifact Rollback UI | v2.2 | 1/1 | Complete | 2026-06-06 |
-| 61. v2.2 Release Gate And Safe Fixture Verification | v2.2 | 0/1 | Not Started | - |
+| 61. v2.2 Release Gate And Safe Fixture Verification | v2.2 | 1/1 | Blocked | - |
 
 ## Traceability
 
@@ -108,7 +108,7 @@ This milestone closes the operational safety gap left intentionally by v2.1: ver
 | ROLLBACK-03 | Phase 59 | Complete |
 | FIXTURE-01 | Phase 58/59 | Complete |
 | UI-09 | Phase 60 | Complete |
-| VERIFY-05 | Phase 61 | Planned |
+| VERIFY-05 | Phase 61 | Blocked |
 
 ---
-*Last updated: 2026-06-06 after completing Phase 60*
+*Last updated: 2026-06-06 after recording Phase 61 release/read-only evidence and safe-fixture blocker*
