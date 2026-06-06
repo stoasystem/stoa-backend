@@ -145,7 +145,7 @@ Shipped requirements:
 
 ### Active
 
-Milestone v2.3 requirements are defined in `.planning/milestones/v2.3-REQUIREMENTS.md`:
+Milestone v2.3 requirements are defined in `.planning/REQUIREMENTS.md` and archived in `.planning/milestones/v2.3-REQUIREMENTS.md`:
 
 - EVIDENCE-AUTO-01: release evidence contract and redaction model - Phase 62.
 - EVIDENCE-AUTO-02: backend release evidence collection tooling - Phase 63.
