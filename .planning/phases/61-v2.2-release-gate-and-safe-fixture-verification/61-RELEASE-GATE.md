@@ -6,7 +6,8 @@
 ## Commits
 
 - Backend rollback API commit: `1d3b434` (`feat: add report artifact rollback APIs`)
-- Backend release evidence commit at deploy time: `5e1c673109a5f851ea64e730f9e5826a8fb0c0ae` (`docs(60): record artifact rollback UI`)
+- Backend release evidence commit at primary deploy time: `5e1c673109a5f851ea64e730f9e5826a8fb0c0ae` (`docs(60): record artifact rollback UI`)
+- Backend Phase 61 evidence commit: `7a53f32e4952ed7e839c13e6a4414a54c4be680e` (`docs(61): record release gate blocker`)
 - Frontend rollback UI commit: `6062b5dd13274a778abd52874ad3f72d828a7287` (`feat: add artifact rollback UI`)
 
 ## Deploy Evidence
@@ -24,6 +25,20 @@
 - Completed: `2026-06-06T16:08:54Z`
 
 Passed steps included Linux arm64 Lambda package build, provenance verification, package summary, OIDC AWS credentials, preflight update permissions, Lambda code update, and Lambda update wait.
+
+Post-evidence docs-only backend deploy:
+
+- Workflow: Deploy Backend
+- Run ID: `27069363195`
+- Run URL: `https://github.com/stoasystem/stoa-backend/actions/runs/27069363195`
+- Job: Build Lambda package & Update function
+- Job ID: `79895730781`
+- Head SHA: `7a53f32e4952ed7e839c13e6a4414a54c4be680e`
+- Status: success
+- Created: `2026-06-06T17:42:31Z`
+- Completed: `2026-06-06T17:43:31Z`
+
+This run was triggered by the Phase 61 evidence/blocker commit after read-only verification. It passed the same package build, provenance verification, preflight, update, and waiter steps.
 
 ### Frontend
 
