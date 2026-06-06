@@ -240,14 +240,25 @@ Known deferred items at close: raw report artifact editing/rewrite, rich preview
 
 ## Current
 
-### No Active Milestone
+### v2.1 Report Artifact Versioning And Safe Edit Preview
 
-**Status:** Idle
-**Goal:** Select the next milestone from deferred future requirements when ready.
+**Status:** Active
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/ROADMAP.md`
+**Goal:** Admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
+**Phases:** 4 planned
+**Requirements:** active
 
-Deferred candidates:
+Planned work:
 
-- Raw report artifact editing/rewrite.
+- Phase 54: Artifact Editing Contract And CDK Readiness.
+- Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs.
+- Phase 56: Admin Artifact Edit Preview UI.
+- Phase 57: v2.1 Release Gate And Safe Live Verification.
+
+Still deferred:
+
+- Freeform WYSIWYG report editor.
 - WORM audit storage.
 - Support ticket/export destination integrations.
 - Step Functions/SQS or dedicated recovery orchestration.
@@ -255,4 +266,4 @@ Deferred candidates:
 - Billing, analytics, and broader admin operations expansion.
 
 ---
-*Last updated: 2026-06-05 after archiving v2.0*
+*Last updated: 2026-06-06 after starting v2.1*

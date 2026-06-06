@@ -1,35 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: Controlled Report Editing MVP
-status: complete
-last_updated: "2026-06-05T15:24:00+02:00"
-last_activity: 2026-06-05
+milestone: v2.1
+milestone_name: Report Artifact Versioning And Safe Edit Preview
+status: active
+last_updated: "2026-06-06T00:00:00+02:00"
+last_activity: 2026-06-06
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-05)
+See: .planning/PROJECT.md (updated 2026-06-06)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.0 archived; next milestone not selected.
+**Current focus:** v2.1 starts safe report artifact versioning and edit preview.
 
 ## Current Position
 
-Phase: 53 of 53 (4 of 4 for v2.0)
-Plan: 53-01
-Status: Complete
-Last activity: 2026-06-05 - Phase 53 release gate, live verification, final audit, and archive completed.
+Phase: 54 of 57 (0 of 4 for v2.1)
+Plan: 54-01
+Status: Active
+Last activity: 2026-06-06 - v2.1 project documents created from deferred raw artifact editing requirement.
 
-Progress: [##########] 100%
+Progress: [----------] 0%
 
 ## Accumulated Context
 
@@ -37,22 +37,21 @@ Progress: [##########] 100%
 
 - v1.8 shipped async generation retry jobs.
 - v1.9 shipped recovery subset resume and support-safe evidence packages.
-- v2.0 starts controlled report editing as a metadata-only MVP first; raw artifact editing is deferred unless safety evidence requires it.
-- Phase 50 accepted editable fields `admin_note`, `editor_summary`, and `status_note` only.
-- Phase 51 added admin-only edit draft create/read/apply APIs with metadata-only responses and append-only audit evidence.
-- Phase 52 added selected-report edit draft/apply UI and Playwright coverage.
-- Phase 53 deployed and verified v2.0 with read-only production API/browser smoke and no production mutation.
+- v2.0 shipped controlled metadata-only report editing.
+- Raw report artifact editing remains higher risk than metadata editing and must start with contract/CDK readiness before implementation.
+- v2.1 must preserve backend-mediated artifact access and must not expose S3 keys, presigned URLs, raw JSON, or raw unreviewed HTML to frontend.
 
 ### Pending Todos
 
-- Select the next milestone from deferred future requirements when ready.
+- Execute Phase 54 artifact editing contract and CDK readiness.
 
 ### Blockers/Concerns
 
-- Production smoke must remain read-only and must not create/apply production edit drafts.
-- Frontend must never receive S3 keys, presigned URLs, raw report JSON, or raw report HTML.
-- Artifact rewrite is deferred for MVP unless proven safe.
+- Existing reports bucket may or may not be sufficient for versioned artifact storage; Phase 54 must prove this before implementation.
+- Production smoke must remain read-only unless a named non-customer safe fixture and cleanup path are documented.
+- Artifact apply must not overwrite prior report artifact versions in place.
+- Frontend must never receive S3 keys, presigned URLs, raw report JSON, or raw unreviewed HTML.
 
 ## Operator Next Steps
 
-- v2.0 is archived.
+- Execute v2.1 Phases 54-57, then archive.

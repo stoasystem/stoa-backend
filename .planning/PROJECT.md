@@ -14,6 +14,8 @@ The completed v1.9 milestone adds failed/refused/not_found/skipped subset resume
 
 The completed v2.0 milestone adds a controlled, metadata-only report edit draft/apply workflow for admins, with append-only audit evidence and no direct S3 artifact exposure.
 
+The active v2.1 milestone upgrades report editing toward backend-mediated versioned artifact edits with sanitized preview/diff, rollback metadata, and explicit CDK readiness before any artifact mutation implementation.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -88,7 +90,16 @@ Archived phases:
 
 ## Current Milestone
 
-No active milestone. The next milestone should be selected from deferred future requirements.
+**v2.1 Report Artifact Versioning And Safe Edit Preview** started on 2026-06-06.
+
+Goal: admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
+
+Planned phases:
+
+- Phase 54: Artifact Editing Contract And CDK Readiness.
+- Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs.
+- Phase 56: Admin Artifact Edit Preview UI.
+- Phase 57: v2.1 Release Gate And Safe Live Verification.
 
 ## Requirements
 
@@ -162,7 +173,14 @@ Milestone v2.0 requirements are archived in `.planning/milestones/v2.0-REQUIREME
 
 ### Active
 
-No active milestone requirements.
+Milestone v2.1 requirements are tracked in `.planning/REQUIREMENTS.md`:
+
+- ARTEDIT-01: artifact edit draft and preview - Phase 54/55.
+- ARTEDIT-02: versioned artifact apply - Phase 54/55.
+- ARTEDIT-03: audit and rollback evidence - Phase 55.
+- ARTEDIT-04: privacy and storage safety - Phase 54/55/57.
+- UI-08: admin artifact edit preview UI - Phase 56.
+- VERIFY-04: v2.1 release gate - Phase 57.
 
 ### Out of Scope
 
@@ -172,7 +190,7 @@ No active milestone requirements.
 - Stripe or billing integration - unrelated to parent real-data integration.
 - Organization/school portal work - separate product surface.
 - Real-time report generation on every parent page load - scheduled generation is the intended model.
-- Manual admin report editor - follow-up operational feature.
+- Freeform WYSIWYG report editor - v2.1 remains bounded artifact editing with sanitized preview/diff.
 - Live classroom work - separate product surface.
 - Full admin analytics - separate admin analytics scope.
 - Broad frontend redesign - v1.0 was integration and state correctness.
@@ -281,6 +299,7 @@ Known current resources:
 | Start v1.8 with async generation retry jobs | v1.7 proved reusable evidence/export and credential operations; the next highest-value recovery expansion is bounded incident-wide generation retry using existing job infrastructure | Good - shipped in v1.8 |
 | Start v1.9 with recovery subset resume and support evidence packages | v1.8 proved both resend and generation retry async jobs; the next operational gap is restarting failed subsets and packaging metadata-only support evidence | Good - shipped in v1.9 |
 | Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
+| Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Active - planned in Phases 54-57 |
 
 ## Evolution
 
@@ -300,4 +319,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 after archiving milestone v2.0*
+*Last updated: 2026-06-06 after starting milestone v2.1*

@@ -1,87 +1,92 @@
-# Requirements: v2.0 Controlled Report Editing MVP
+# Requirements: v2.1 Report Artifact Versioning And Safe Edit Preview
 
-**Milestone:** v2.0
-**Status:** Complete
-**Created:** 2026-06-05
+**Milestone:** v2.1
+**Status:** Active
+**Created:** 2026-06-06
 
 ## Goal
 
-Admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
+Admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
 
 ## Requirements
 
-### EDIT-01 Edit Draft Lifecycle
+### ARTEDIT-01 Artifact Edit Draft And Preview
 
-Admins can create and read report edit drafts.
-
-Acceptance criteria:
-
-- Draft APIs require admin authorization.
-- Drafts bind to parent id, student id, week start, report id, source updated timestamp, editor, reason, and proposed fields.
-- Draft responses omit private S3 keys, presigned URLs, raw report JSON/HTML, auth tokens, and artifact payloads.
-- Drafts are bounded to a small allowlist of editable metadata/content fields for the MVP.
-
-### EDIT-02 Apply Edit
-
-Admins can apply a valid draft to a report through the backend.
+Admins can create or request a bounded artifact edit preview for an existing report.
 
 Acceptance criteria:
 
-- Apply requires admin authorization and a valid draft id.
-- Apply rejects stale drafts when source report metadata changed.
-- Apply validates proposed fields before mutation.
-- Apply writes updated report metadata and append-only audit.
+- Preview APIs require admin authorization.
+- Preview binds to parent id, student id, week start, report id, source artifact metadata, editor, reason, and proposed edit fields.
+- Preview validates a small allowlist of report artifact sections/fields defined in Phase 54.
+- Preview responses return sanitized diff/preview data only.
+- Preview responses omit private S3 keys, presigned URLs, raw report JSON, raw unreviewed HTML, auth tokens, and artifact payloads.
 
-### EDIT-03 Audit Evidence
+### ARTEDIT-02 Versioned Artifact Apply
 
-Report edits produce audit evidence.
+Admins can apply a valid artifact edit through the backend and produce versioned artifacts.
 
 Acceptance criteria:
 
-- Audit includes editor, reason, draft id, before/after metadata, validation result, and source/apply timestamps.
+- Apply requires admin authorization, a valid preview/draft reference, and a non-empty operator reason.
+- Apply rejects stale source reports or stale source artifact metadata.
+- Apply writes new versioned JSON/HTML artifacts without overwriting the prior version in place.
+- Apply updates report metadata to point at the new current artifact version only after versioned artifact writes pass.
+- Apply records enough rollback metadata to identify the prior current artifact version.
+
+### ARTEDIT-03 Audit And Rollback Evidence
+
+Artifact edits produce append-only audit evidence and rollback metadata.
+
+Acceptance criteria:
+
+- Audit includes editor, reason, draft/preview id, source artifact version, new artifact version, before/after metadata, validation result, and source/apply timestamps.
 - Audit remains metadata-only and redacted.
-- Existing report audit APIs show edit events.
+- Existing report audit APIs show artifact edit events.
+- Rollback metadata identifies the previous artifact version but does not expose private S3 keys to the frontend.
 
-### EDIT-04 Privacy And Storage Safety
+### ARTEDIT-04 Privacy And Storage Safety
 
-Report editing does not expose or directly manipulate private artifacts from the frontend.
+Artifact editing remains backend-mediated and storage-safe.
 
 Acceptance criteria:
 
-- Frontend never receives S3 keys, presigned URLs, raw HTML, or raw JSON.
+- Frontend never receives private S3 keys, presigned URLs, raw JSON, raw unreviewed HTML, or auth/session tokens.
 - Backend does not perform broad S3 scans.
-- MVP may update report metadata fields only; artifact rewrite is deferred unless safety evidence requires it.
-- CDK diff remains no-new-infra unless explicitly justified.
+- CDK readiness determines whether existing reports bucket/table/IAM resources are sufficient before implementation.
+- Any required infrastructure change is CDK-managed and documented before deployment.
+- Production verification is read-only unless using a named non-customer safe fixture with cleanup evidence.
 
-### UI-07 Admin Editing UI
+### UI-08 Admin Artifact Edit Preview UI
 
-Admin report operations UI supports draft/apply editing controls.
-
-Acceptance criteria:
-
-- UI exposes draft controls for selected reports.
-- UI distinguishes draft creation from apply mutation.
-- UI shows validation/audit outcome and private marker denylist remains clean.
-- Playwright covers draft/apply flow.
-
-### VERIFY-03 v2.0 Release Gate
-
-v2.0 closes with release and live verification evidence.
+Admin report operations UI supports artifact edit preview and apply controls.
 
 Acceptance criteria:
 
-- Backend/frontend deploy evidence, commit SHAs, Lambda manifest/runtime, and quality gates are recorded.
-- CDK diff/deploy evidence is classified.
-- Production smoke is read-only and does not create/apply production edits.
+- UI exposes artifact edit controls only for selected reports.
+- UI distinguishes preview from apply mutation.
+- UI shows sanitized diff/preview, validation state, apply outcome, and audit reference.
+- UI denylist remains clean for private artifact markers.
+- Playwright covers preview/apply flow and privacy denylist.
+
+### VERIFY-04 v2.1 Release Gate
+
+v2.1 closes with release and live verification evidence.
+
+Acceptance criteria:
+
+- Backend/frontend deploy evidence, commit SHAs, Lambda manifest/runtime, CDK diff/deploy evidence, and quality gates are recorded.
+- Production smoke is read-only by default and does not edit customer report artifacts.
+- Safe-fixture mutation smoke, if performed, records fixture identity, request IDs, artifact version metadata, rollback metadata, and cleanup.
 - Final audit records residual risks and future requirements.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | Phase 50/51 | Complete |
-| EDIT-02 | Phase 50/51 | Complete |
-| EDIT-03 | Phase 51 | Complete |
-| EDIT-04 | Phase 50/51/53 | Complete |
-| UI-07 | Phase 52 | Complete |
-| VERIFY-03 | Phase 53 | Complete |
+| ARTEDIT-01 | Phase 54/55 | Planned |
+| ARTEDIT-02 | Phase 54/55 | Planned |
+| ARTEDIT-03 | Phase 55 | Planned |
+| ARTEDIT-04 | Phase 54/55/57 | Planned |
+| UI-08 | Phase 56 | Planned |
+| VERIFY-04 | Phase 57 | Planned |

@@ -16,95 +16,97 @@
 
 ## Current Milestone
 
-### No Active Milestone
+### v2.1 Report Artifact Versioning And Safe Edit Preview
 
-**Milestone Goal:** Select the next milestone from deferred future requirements when ready.
+**Milestone Goal:** Admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
+
+This milestone upgrades v2.0 metadata-only report editing toward real artifact editing, but keeps the workflow deliberately constrained: no freeform WYSIWYG editor, no direct S3 access, no production mutation before a named safe fixture, and no new infrastructure unless Phase 54 proves current resources cannot safely support versioned artifact storage.
 
 ## Phases
 
-- [x] **Phase 50: Report Editing Contract And Safety Model** - Define draft/apply contract, validation, privacy, audit, and CDK readiness.
-- [x] **Phase 51: Backend Report Edit Draft And Apply APIs** - Add admin-only draft/apply/read APIs and audit evidence.
-- [x] **Phase 52: Admin Report Editing UI** - Add report edit draft/apply controls to `/admin/report-operations`.
-- [x] **Phase 53: v2.0 Release Gate And Final Verification** - Record deploy/CDK/API/UI/live read-only evidence and archive v2.0.
+- [ ] **Phase 54: Artifact Editing Contract And CDK Readiness** - Define versioned artifact edit contract, storage layout, rollback boundary, privacy model, and infra requirements.
+- [ ] **Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs** - Add admin-only preview/apply APIs that produce sanitized previews and versioned artifact writes.
+- [ ] **Phase 56: Admin Artifact Edit Preview UI** - Add selected-report artifact edit preview/diff/apply controls to `/admin/report-operations`.
+- [ ] **Phase 57: v2.1 Release Gate And Safe Live Verification** - Record deploy/CDK/API/UI evidence and verify production read-only plus safe-fixture mutation behavior.
 
 ## Phase Details
 
-### Phase 50: Report Editing Contract And Safety Model
+### Phase 54: Artifact Editing Contract And CDK Readiness
 
-**Goal**: Implementers have a precise report editing contract and safety model.
-**Depends on**: Phase 49
-**Requirements**: EDIT-01, EDIT-02, EDIT-04
+**Goal**: Implementers have a precise artifact editing contract and infrastructure decision before any artifact mutation code.
+**Depends on**: Phase 53
+**Requirements**: ARTEDIT-01, ARTEDIT-02, ARTEDIT-04
 **Success Criteria**:
 
-1. Contract defines draft fields, apply behavior, validation, artifact versioning, audit actions, and rollback boundary.
-2. Privacy model states raw S3 keys/presigned URLs never leave backend.
-3. CDK readiness states whether new buckets/tables/GSIs/IAM permissions are required.
-4. Phase 51 backend plan identifies exact files and tests.
+1. Contract defines editable artifact fields/sections, validation, version IDs, rollback metadata, audit events, and operator reason requirements.
+2. Storage model defines where versioned JSON/HTML artifacts are written and how current artifact pointers are updated.
+3. Privacy model proves frontend receives only sanitized preview/diff metadata and never private S3 keys or presigned URLs.
+4. CDK readiness classifies whether existing reports bucket/IAM/table resources are sufficient or exactly what CDK change is required.
 
-**Plans**: 1 complete
+**Plans**: 0 complete
 
-### Phase 51: Backend Report Edit Draft And Apply APIs
+### Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs
 
-**Goal**: Admins can create/read/apply bounded report edit drafts through backend APIs.
-**Depends on**: Phase 50
-**Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04
+**Goal**: Admins can preview and apply bounded report artifact edits through backend APIs.
+**Depends on**: Phase 54
+**Requirements**: ARTEDIT-01, ARTEDIT-02, ARTEDIT-03, ARTEDIT-04
 **Success Criteria**:
 
-1. Admin-only APIs create draft metadata without exposing private S3 keys.
-2. Apply validates source report state and writes updated metadata/audit.
-3. Apply records before/after metadata, editor, reason, validation result, and artifact version references.
-4. Tests cover auth, validation, privacy denylist, audit, stale draft/source mismatch, and read-only draft retrieval.
+1. Preview API validates allowlisted edit payloads and returns sanitized diff/preview without raw private artifact payload exposure.
+2. Apply API rejects stale drafts/source artifacts, writes versioned artifacts, updates report metadata pointers atomically enough for the current DynamoDB/S3 model, and records rollback metadata.
+3. Audit includes editor, reason, source artifact version, new artifact version, before/after metadata, validation result, and correlation ID.
+4. Tests cover admin-only auth, validation failures, stale source rejection, private marker denylist, versioned writes, rollback metadata, and audit evidence.
 
-**Plans**: 1 complete
+**Plans**: 0 complete
 
-### Phase 52: Admin Report Editing UI
+### Phase 56: Admin Artifact Edit Preview UI
 
-**Goal**: Admins can draft and apply report metadata edits from `/admin/report-operations`.
-**Depends on**: Phase 51
-**Requirements**: UI-07
+**Goal**: Admins can review sanitized artifact edit previews and apply versioned edits from `/admin/report-operations`.
+**Depends on**: Phase 55
+**Requirements**: UI-08
 **Success Criteria**:
 
-1. UI shows edit controls only for selected reports.
-2. UI distinguishes draft creation from apply mutation.
-3. UI renders validation/audit outcome without private artifact markers.
-4. Frontend e2e covers draft/apply flow and privacy denylist.
+1. UI exposes artifact edit preview controls only for a selected report.
+2. UI distinguishes preview from apply mutation and requires an operator reason.
+3. UI renders sanitized diff/preview and apply outcome without private artifact markers.
+4. Playwright covers preview/apply controls, stale/error states, and privacy denylist.
 
-**Plans**: 1 complete
+**Plans**: 0 complete
 **UI hint**: yes
 
-### Phase 53: v2.0 Release Gate And Final Verification
+### Phase 57: v2.1 Release Gate And Safe Live Verification
 
-**Goal**: v2.0 closes with release evidence proving report editing is deployed, admin-only, auditable, and production-smokeable without mutation.
-**Depends on**: Phase 52
-**Requirements**: VERIFY-03
+**Goal**: v2.1 closes with evidence proving artifact editing is deployed, admin-only, auditable, privacy-safe, and production-verified without customer-impacting mutation.
+**Depends on**: Phase 56
+**Requirements**: VERIFY-04
 **Success Criteria**:
 
-1. Release gate records backend/frontend deploy runs, commit SHAs, Lambda manifest/runtime state, and local quality gates.
-2. CDK diff/deploy evidence is recorded and classified.
-3. Production API/browser smoke is read-only and creates no production edit draft/apply mutation.
-4. Final v2.0 audit records residual risks and future requirements.
+1. Release gate records backend/frontend deploy runs, commit SHAs, Lambda manifest/runtime state, CDK diff/deploy evidence, and local quality gates.
+2. Production API/browser smoke is read-only by default and verifies route/auth/privacy/bundle markers without creating customer artifact edits.
+3. Any production mutation smoke uses a named non-customer safe fixture with cleanup and explicit evidence.
+4. Final v2.1 audit records residual risks, rollback path, and future requirements.
 
-**Plans**: 1 complete
+**Plans**: 0 complete
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 50. Report Editing Contract And Safety Model | v2.0 | 1/1 | Complete | 2026-06-05 |
-| 51. Backend Report Edit Draft And Apply APIs | v2.0 | 1/1 | Complete | 2026-06-05 |
-| 52. Admin Report Editing UI | v2.0 | 1/1 | Complete | 2026-06-05 |
-| 53. v2.0 Release Gate And Final Verification | v2.0 | 1/1 | Complete | 2026-06-05 |
+| 54. Artifact Editing Contract And CDK Readiness | v2.1 | 0/1 | Not Started | - |
+| 55. Backend Artifact Edit Preview And Versioned Apply APIs | v2.1 | 0/1 | Not Started | - |
+| 56. Admin Artifact Edit Preview UI | v2.1 | 0/1 | Not Started | - |
+| 57. v2.1 Release Gate And Safe Live Verification | v2.1 | 0/1 | Not Started | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EDIT-01 | Phase 50/51 | Complete |
-| EDIT-02 | Phase 50/51 | Complete |
-| EDIT-03 | Phase 51 | Complete |
-| EDIT-04 | Phase 50/51/53 | Complete |
-| UI-07 | Phase 52 | Complete |
-| VERIFY-03 | Phase 53 | Complete |
+| ARTEDIT-01 | Phase 54/55 | Planned |
+| ARTEDIT-02 | Phase 54/55 | Planned |
+| ARTEDIT-03 | Phase 55 | Planned |
+| ARTEDIT-04 | Phase 54/55/57 | Planned |
+| UI-08 | Phase 56 | Planned |
+| VERIFY-04 | Phase 57 | Planned |
 
 ---
-*Last updated: 2026-06-05 after archiving v2.0*
+*Last updated: 2026-06-06 after starting v2.1*
