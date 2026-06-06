@@ -259,23 +259,26 @@ Key accomplishments:
 
 Known deferred items at close: rollback endpoint/UI, rich WYSIWYG editor, safe-fixture artifact mutation smoke, WORM audit storage, support ticket/export destination integrations, PDF/multilingual delivery, billing, analytics, broader admin operations expansion, and stronger recovery orchestration if existing Lambda flow becomes insufficient.
 
-## Current
-
 ### v2.2 Report Artifact Rollback And Safe Fixture Verification
 
-**Status:** Active
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Roadmap:** `.planning/ROADMAP.md`
+**Status:** Shipped 2026-06-06
+**Audit:** `.planning/milestones/v2.2-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.2-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.2-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.2-phases/`
 **Goal:** Admins can safely roll back report artifact versions and production verification can exercise artifact mutation only through a named non-customer safe fixture with cleanup evidence.
-**Phases:** 4 planned
-**Requirements:** active
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 6/6 complete
 
-Planned work:
+Key accomplishments:
 
-- Phase 58: Artifact Rollback Contract And Safe Fixture Plan.
-- Phase 59: Backend Artifact Rollback APIs And Fixture Harness.
-- Phase 60: Admin Artifact Rollback UI.
-- Phase 61: v2.2 Release Gate And Safe Fixture Verification.
+- Defined the artifact rollback contract, safe-fixture protocol, privacy model, and CDK readiness decision.
+- Added admin-only artifact rollback preview/read/apply APIs with sanitized metadata, stale-source rejection, no-op rejection, and redacted audit evidence.
+- Added selected-report artifact rollback preview/apply controls to `/admin/report-operations`.
+- Added an explicit safe-fixture smoke harness that refuses mutation unless a fixture name and mutation mode are provided.
+- Verified backend/frontend deploys, Lambda runtime state, CDK diff, production read-only API/browser smoke, and the named safe-fixture mutation/rollback/cleanup flow.
+- Found and fixed a report lookup bug where artifact edit child entities could be returned from the parent GSI instead of the report summary row.
 
 Still deferred:
 
@@ -286,5 +289,9 @@ Still deferred:
 - PDF/multilingual delivery.
 - Billing, analytics, and broader admin operations expansion.
 
+## Current
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
+
 ---
-*Last updated: 2026-06-06 after starting v2.2*
+*Last updated: 2026-06-06 after archiving v2.2*

@@ -16,7 +16,7 @@ The completed v2.0 milestone adds a controlled, metadata-only report edit draft/
 
 The completed v2.1 milestone upgrades report editing toward backend-mediated versioned artifact edits with sanitized preview/diff, rollback metadata, and explicit CDK readiness before any artifact mutation implementation.
 
-The active v2.2 milestone closes the remaining artifact-editing operations gap by adding backend-mediated rollback, admin rollback controls, and a named safe-fixture production mutation verification path with cleanup evidence.
+The completed v2.2 milestone closes the remaining artifact-editing operations gap by adding backend-mediated rollback, admin rollback controls, and a named safe-fixture production mutation verification path with cleanup evidence.
 
 ## Core Value
 
@@ -24,7 +24,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v2.1 Report Artifact Versioning And Safe Edit Preview on 2026-06-06
+**Shipped version:** v2.2 Report Artifact Rollback And Safe Fixture Verification on 2026-06-06
 
 Delivered:
 
@@ -79,32 +79,28 @@ Delivered:
 - Backend artifact editing supports admin-only sanitized preview/read/apply APIs with versioned JSON/HTML artifact writes, stale-source rejection, rollback metadata, and redacted audit evidence.
 - Frontend `/admin/report-operations` exposes selected-report artifact edit preview/apply controls without private S3 keys, presigned URLs, raw JSON, or raw unreviewed HTML.
 - v2.1 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, API request IDs, production bundle markers, and production read-only browser smoke for artifact edit preview/apply UI with no production mutation.
+- Backend artifact rollback supports admin-only preview/read/apply APIs that switch current report artifact metadata pointers to validated prior versions while preserving version history.
+- Frontend `/admin/report-operations` exposes selected-report artifact rollback preview/apply controls with required operator reason and sanitized version metadata.
+- The safe-fixture harness refuses mutation by default and passed production mutation/rollback/cleanup verification for `stoa-safe-fixture-v2-2-rollback-2026-06-06`.
+- v2.2 release gate captured backend/frontend deploy evidence, Lambda runtime evidence, CDK diff classification, production read-only API/browser smoke, and named safe-fixture mutation evidence.
+- Phase 61 found and fixed a report lookup bug where artifact edit child entities could be returned from the parent GSI instead of the report summary row.
 
 ## Last Shipped Milestone
 
-**v2.1 Report Artifact Versioning And Safe Edit Preview** shipped on 2026-06-06.
-
-Goal: admins can preview and apply bounded report artifact edits through backend-mediated versioned artifacts, with rollback metadata, append-only audit evidence, and no frontend exposure of private S3 keys, presigned URLs, raw JSON, or unreviewed HTML.
-
-Archived phases:
-
-- Phase 54: Artifact Editing Contract And CDK Readiness.
-- Phase 55: Backend Artifact Edit Preview And Versioned Apply APIs.
-- Phase 56: Admin Artifact Edit Preview UI.
-- Phase 57: v2.1 Release Gate And Safe Live Verification.
-
-## Current Milestone
-
-**v2.2 Report Artifact Rollback And Safe Fixture Verification** started on 2026-06-06.
+**v2.2 Report Artifact Rollback And Safe Fixture Verification** shipped on 2026-06-06.
 
 Goal: admins can safely roll back report artifact versions and production verification can exercise artifact mutation only through a named non-customer safe fixture with cleanup evidence.
 
-Planned phases:
+Archived phases:
 
 - Phase 58: Artifact Rollback Contract And Safe Fixture Plan.
 - Phase 59: Backend Artifact Rollback APIs And Fixture Harness.
 - Phase 60: Admin Artifact Rollback UI.
 - Phase 61: v2.2 Release Gate And Safe Fixture Verification.
+
+## Current Milestone
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -186,9 +182,7 @@ Milestone v2.1 requirements are archived in `.planning/milestones/v2.1-REQUIREME
 - UI-08: admin artifact edit preview UI - Phase 56.
 - VERIFY-04: v2.1 release gate - Phase 57.
 
-### Active
-
-Milestone v2.2 requirements are tracked in `.planning/REQUIREMENTS.md`:
+Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREMENTS.md` and are complete:
 
 - ROLLBACK-01: artifact rollback contract and CDK readiness - Phase 58.
 - ROLLBACK-02: backend artifact rollback preview/apply APIs - Phase 59.
@@ -315,7 +309,7 @@ Known current resources:
 | Start v1.9 with recovery subset resume and support evidence packages | v1.8 proved both resend and generation retry async jobs; the next operational gap is restarting failed subsets and packaging metadata-only support evidence | Good - shipped in v1.9 |
 | Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
 | Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Good - shipped in v2.1 |
-| Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Active - planned in Phases 58-61 |
+| Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Good - shipped in v2.2 |
 
 ## Evolution
 
@@ -335,4 +329,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 after starting milestone v2.2*
+*Last updated: 2026-06-06 after archiving milestone v2.2*

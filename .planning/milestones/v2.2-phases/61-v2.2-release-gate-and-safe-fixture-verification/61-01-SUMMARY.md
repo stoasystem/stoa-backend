@@ -11,11 +11,20 @@
 - Ran production read-only API smoke with admin auth and privacy denylist.
 - Ran production read-only browser smoke with GET-only report mutation guard and rollback bundle marker checks.
 - Ran safe-fixture harness default refusal and confirmed it refuses before login or mutation without explicit fixture inputs.
+- Created an approved synthetic non-customer production safe fixture.
+- Found and fixed a selected-report lookup bug where `GSI-ParentId` child entities could be returned as report rows.
+- Deployed the lookup fix and verified artifact edit apply no longer misclassifies the report as stale.
+- Ran safe-fixture artifact edit → rollback mutation smoke successfully.
 
-## Not Complete
+## Verification Result
 
-Named safe-fixture mutation/cleanup verification was not executed because no non-customer fixture name and parent/student/week identifiers were provided, and the production report operations list returned zero rows.
+- Fixture: `stoa-safe-fixture-v2-2-rollback-2026-06-06`
+- Initial artifact version: `original`
+- Edited artifact version: `v20260606T184730Z-cb0b33d1`
+- Restored artifact version: `original`
+- Cleanup: passed
+- Privacy denylist: passed
 
 ## Current Status
 
-Phase 61 is blocked on explicit safe-fixture identity. VERIFY-05 remains incomplete until the fixture mutation smoke records edit, rollback, cleanup/restore, request ID, artifact version, and privacy evidence.
+Phase 61 is complete. v2.2 is ready for final audit and milestone archive.

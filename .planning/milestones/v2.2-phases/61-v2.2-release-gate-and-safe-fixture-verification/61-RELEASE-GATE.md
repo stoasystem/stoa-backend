@@ -1,13 +1,14 @@
 # Phase 61 Release Gate
 
-**Status:** Partial - deploy/read-only evidence passed; safe-fixture mutation blocked.
-**Recorded at:** 2026-06-06T17:39:46Z
+**Status:** Passed
+**Recorded at:** 2026-06-06T18:49:03Z
 
 ## Commits
 
 - Backend rollback API commit: `1d3b434` (`feat: add report artifact rollback APIs`)
 - Backend release evidence commit at primary deploy time: `5e1c673109a5f851ea64e730f9e5826a8fb0c0ae` (`docs(60): record artifact rollback UI`)
 - Backend Phase 61 evidence commit: `7a53f32e4952ed7e839c13e6a4414a54c4be680e` (`docs(61): record release gate blocker`)
+- Backend safe-fixture lookup fix commit: `123faad299d0fc6051b7677c8b75cb96df63c9e3` (`fix: ignore report child entities in parent lookups`)
 - Frontend rollback UI commit: `6062b5dd13274a778abd52874ad3f72d828a7287` (`feat: add artifact rollback UI`)
 
 ## Deploy Evidence
@@ -39,6 +40,20 @@ Post-evidence docs-only backend deploy:
 - Completed: `2026-06-06T17:43:31Z`
 
 This run was triggered by the Phase 61 evidence/blocker commit after read-only verification. It passed the same package build, provenance verification, preflight, update, and waiter steps.
+
+Safe-fixture blocker fix backend deploy:
+
+- Workflow: Deploy Backend
+- Run ID: `27070767161`
+- Run URL: `https://github.com/stoasystem/stoa-backend/actions/runs/27070767161`
+- Job: Build Lambda package & Update function
+- Job ID: `79899468017`
+- Head SHA: `123faad299d0fc6051b7677c8b75cb96df63c9e3`
+- Status: success
+- Created: `2026-06-06T18:45:59Z`
+- Completed: `2026-06-06T18:47:04Z`
+
+This run deployed the report lookup fix that prevents `GSI-ParentId` child entities such as artifact edit drafts from being returned as report summary rows during selected-report operations.
 
 ### Frontend
 
@@ -86,7 +101,25 @@ Result: 79 passed.
 .venv/bin/python -m pytest -q
 ```
 
-Result: 208 passed.
+Result before lookup fix: 208 passed.
+
+```text
+.venv/bin/python -m ruff check src/stoa/db/repositories/report_repo.py tests/test_parent_children.py
+```
+
+Result after lookup fix: passed.
+
+```text
+.venv/bin/python -m pytest tests/test_parent_children.py tests/test_admin_report_ops.py -q
+```
+
+Result after lookup fix: 141 passed.
+
+```text
+.venv/bin/python -m pytest -q
+```
+
+Result after lookup fix: 209 passed.
 
 Frontend:
 
@@ -119,8 +152,9 @@ Local dist was rebuilt after the stale-dist guard blocked the first CDK diff att
 
 Manifest summary:
 
-- `source_git_sha`: `5e1c673109a5f851ea64e730f9e5826a8fb0c0ae`
-- `source_tree_hash`: `7d3069f3bcc988dc79182fe3d6c481bf63f6a645df7a21120786fa8d55e43d83`
+- `source_git_sha`: `123faad299d0fc6051b7677c8b75cb96df63c9e3`
+- `source_tree_hash`: `9e18eaa0f101e064aa57c5f2cfb152e0e32c07382156111847bb409beaf4ba63`
+- `cdk_asset_hash`: `e4a87d2c057a5a43d35fd33ecca8e5c9f3dc97931899d6e69713ef8d4cea8928`
 - runtime target: `python3.12`
 - architecture: `arm64`
 
@@ -130,8 +164,8 @@ Live runtime in `eu-central-2`:
 
 - State: `Active`
 - LastUpdateStatus: `Successful`
-- LastModified: `2026-06-06T16:08:41.000+0000`
-- CodeSha256: `NFVfqKLX/2TVsEn48ZSBBRMVxNAeeDpeB40W9MfIqgI=`
+- LastModified: `2026-06-06T18:46:49.000+0000`
+- CodeSha256: `IHtuyeT+hxuWa8CT7sycmCKVslWWbKzZe6qhiVjHp/k=`
 - Runtime: `python3.12`
 - Architecture: `arm64`
 
@@ -139,8 +173,8 @@ Live runtime in `eu-central-2`:
 
 - State: `Active`
 - LastUpdateStatus: `Successful`
-- LastModified: `2026-06-06T16:08:48.000+0000`
-- CodeSha256: `NFVfqKLX/2TVsEn48ZSBBRMVxNAeeDpeB40W9MfIqgI=`
+- LastModified: `2026-06-06T18:46:57.000+0000`
+- CodeSha256: `IHtuyeT+hxuWa8CT7sycmCKVslWWbKzZe6qhiVjHp/k=`
 - Runtime: `python3.12`
 - Architecture: `arm64`
 
