@@ -1,7 +1,7 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from stoa.db.dynamodb import get_table
@@ -12,6 +12,7 @@ from stoa.models.user import SubscriptionTier
 from stoa.services import (
     report_artifact_edit_service,
     report_edit_service,
+    release_evidence_service,
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
@@ -821,6 +822,50 @@ async def export_recovery_job_support_package(
         status="success",
     )
     return response
+
+
+@router.post("/reports/release-evidence/validate")
+async def validate_release_evidence(
+    bundle: dict[str, Any] = Body(...),
+    user: dict = Depends(require_role("admin")),
+):
+    """Validate and redact a release evidence bundle without mutating reports."""
+    return release_evidence_service.validate_release_bundle(bundle)
+
+
+@router.get("/reports/release-evidence/fixture-status")
+async def get_release_fixture_status(
+    fixture_name: str = Query(..., min_length=1),
+    parent_id: Optional[str] = Query(default=None),
+    student_id: Optional[str] = Query(default=None),
+    week_start: Optional[str] = Query(default=None),
+    expected_artifact_version: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect one approved safe fixture without exposing private artifact metadata."""
+    approved = release_evidence_service.approved_fixture_config(fixture_name)
+    resolved_parent_id = parent_id or approved.get("parent_id")
+    resolved_student_id = student_id or approved.get("student_id")
+    resolved_week_start = week_start or approved.get("week_start")
+    report = None
+    audit_events: list[dict[str, Any]] = []
+
+    if resolved_parent_id and resolved_student_id and resolved_week_start:
+        report = report_repo.get_report_for_child_by_week(
+            resolved_parent_id,
+            resolved_student_id,
+            resolved_week_start,
+        )
+        if report:
+            audit_result = report_repo.list_report_audit_events(report["report_id"], limit=10)
+            audit_events = audit_result.get("Items", [])
+
+    return release_evidence_service.build_fixture_inventory_response(
+        fixture_name=fixture_name,
+        report=report,
+        audit_events=audit_events,
+        expected_artifact_version_id=expected_artifact_version,
+    )
 
 
 @router.get("/reports/recovery-jobs", response_model=RecoveryJobListResponse)

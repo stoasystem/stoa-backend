@@ -1,6 +1,6 @@
 # Phase 62 Release Evidence Contract
 
-**Status:** Planned
+**Status:** Complete
 **Created:** 2026-06-06
 
 ## Purpose
@@ -52,3 +52,9 @@ Committed evidence, CLI output intended for docs, API responses, and UI renderin
 - Fail closed on missing required fields or denylist hits.
 - Avoid network mutation by default; production checks should be read-only unless explicit safe-fixture mutation flags are supplied.
 - Store request IDs and deploy run IDs as identifiers, not full response payloads.
+
+## Phase 63 Implementation Result
+
+- `src/stoa/services/release_evidence_service.py` implements the v1 schema validator, redaction denylist, fixture inventory response, and mutation refusal checks.
+- `scripts/release_evidence.py` exposes `validate`, `fixture-status`, and `check-mutation` operator commands.
+- Admin-only backend endpoints expose release evidence validation and fixture status for Phase 64 UI rendering.

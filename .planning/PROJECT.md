@@ -147,9 +147,9 @@ Shipped requirements:
 
 Milestone v2.3 requirements are defined in `.planning/REQUIREMENTS.md` and archived in `.planning/milestones/v2.3-REQUIREMENTS.md`:
 
-- EVIDENCE-AUTO-01: release evidence contract and redaction model - Phase 62.
-- EVIDENCE-AUTO-02: backend release evidence collection tooling - Phase 63.
-- FIXTURE-02: safe fixture lifecycle and inventory - Phase 62/63.
+- EVIDENCE-AUTO-01: release evidence contract and redaction model - Phase 62 complete.
+- EVIDENCE-AUTO-02: backend release evidence collection tooling - Phase 63 complete.
+- FIXTURE-02: safe fixture lifecycle and inventory - Phase 62/63 complete.
 - UI-10: admin release evidence and fixture status UI - Phase 64.
 - VERIFY-06: v2.3 release gate and milestone audit - Phase 65.
 
@@ -332,7 +332,7 @@ Known current resources:
 | Start v2.0 with metadata-only controlled report editing | Report editing is useful for support, but raw artifact rewrite needs a stronger safety model; bounded metadata fields give an auditable MVP without S3 exposure | Good - shipped in v2.0 |
 | Start v2.1 with versioned artifact edit preview before freeform editing | v2.0 proved metadata edits; raw artifact editing needs versioned storage, rollback metadata, sanitized preview, and CDK readiness before customer-impacting mutation | Good - shipped in v2.1 |
 | Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Good - shipped in v2.2 |
-| Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Active - Phase 62 planned |
+| Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Active - Phase 63 complete |
 
 ## Evolution
 
