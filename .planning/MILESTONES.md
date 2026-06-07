@@ -401,21 +401,25 @@ Known deferred items at close: compliance-grade WORM/Object Lock storage, CDK-ma
 
 ### v2.8 CDK-Managed Immutable Evidence Storage Deployment
 
-**Status:** Active
-**Started:** 2026-06-07
-**Roadmap:** `.planning/milestones/v2.8-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.8-REQUIREMENTS.md`
-**Goal:** Deploy and enable CDK-managed immutable evidence storage for report operations retention manifests while preserving metadata-only privacy boundaries and fail-closed behavior.
+**Status:** Shipped 2026-06-07
+**Audit:** `.planning/milestones/v2.8-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.8-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.8-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.8-phases/`
+**Goal:** Deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
-- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
-- Phase 81: Backend Immutable Manifest Persistence Enablement.
-- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
+- Defined the CDK-managed immutable evidence storage design, deploy readiness, backend configuration contract, and production verification boundary.
+- Deployed a retained, versioned, Object Lock-enabled immutable evidence metadata bucket through `stoa-infra` commit `c3d0d60` and workflow run `27098074719`.
+- Injected immutable storage runtime settings into `stoa-api` and verified API IAM is limited to `s3:GetObject`/`s3:PutObject` on the approved metadata prefix.
+- Added backend coverage for CDK env readiness and duplicate/reference-exists refusal while preserving create-only object writer and privacy guarantees.
+- Persisted one approved metadata-only immutable manifest in production and verified API, DynamoDB, S3 Object Lock headers, and browser smoke.
+
+Known deferred items at close: formal legal/compliance approval of the 365-day GOVERNANCE retention period and operational legal-hold procedure.
 
 ---
-*Last updated: 2026-06-07 after planning v2.8*
+*Last updated: 2026-06-07 after archiving v2.8*

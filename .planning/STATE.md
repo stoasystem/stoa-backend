@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.8
-milestone_name: CDK-Managed Immutable Evidence Storage Deployment
-status: complete
-last_updated: "2026-06-07T19:15:07+02:00"
+milestone: none
+milestone_name: none
+status: archived
+last_updated: "2026-06-07T19:20:00+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.8 CDK-managed immutable evidence storage deployment.
+**Current focus:** No active milestone.
 
 ## Current Position
 
-Phase: 82 v2.8 Release Gate And Live Immutable Storage Verification
-Plan: Complete
-Status: v2.8 complete; ready to archive.
-Last activity: 2026-06-07 — passed v2.8 release gate with live metadata-only immutable persistence, S3 Object Lock metadata verification, DynamoDB verification, and browser smoke.
+Phase: none
+Plan: none
+Status: v2.8 archived; ready for the next milestone when requested.
+Last activity: 2026-06-07 — archived v2.8 CDK-managed immutable evidence storage deployment.
 
 ## Accumulated Context
 
@@ -86,7 +86,7 @@ Last activity: 2026-06-07 — passed v2.8 release gate with live metadata-only i
 
 ### Pending Todos
 
-- Archive v2.8 milestone.
+- Start the next milestone when requested.
 
 ### Blockers/Concerns
 
@@ -107,4 +107,4 @@ Last activity: 2026-06-07 — passed v2.8 release gate with live metadata-only i
 
 ## Operator Next Steps
 
-- Archive v2.8 and prepare the next milestone when requested.
+- Use `$gsd-new-milestone` to start the next milestone.

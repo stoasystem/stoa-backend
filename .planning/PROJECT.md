@@ -28,7 +28,7 @@ The completed v2.6 milestone makes report operations audit evidence ready for st
 
 The completed v2.7 milestone turns that readiness into a CDK-governed immutable audit storage and legal hold foundation, starting with contracts and CDK readiness before any production write path is implemented.
 
-The active v2.8 milestone turns the v2.7 fail-closed foundation into CDK-managed immutable evidence storage deployment and configured metadata-only manifest object persistence.
+The completed v2.8 milestone turns the v2.7 fail-closed foundation into CDK-managed immutable evidence storage deployment and configured metadata-only manifest object persistence.
 
 ## Core Value
 
@@ -36,9 +36,9 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Production-verified shipped version:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
-**Latest completed milestone:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
-**Active milestone:** v2.8 CDK-Managed Immutable Evidence Storage Deployment
+**Production-verified shipped version:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
+**Latest completed milestone:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
+**Active milestone:** None
 
 Delivered:
 
@@ -115,45 +115,37 @@ Delivered:
 - Backend legal hold APIs expose metadata-only status/apply/release behavior with append-only audit evidence, compare-and-set current-state writes, and no audit row deletion.
 - Frontend `/admin/report-operations` exposes immutable evidence and legal hold controls with separate read-only status and explicit operator-reason mutation actions.
 - v2.7 release verification captured backend/frontend deploy evidence, Lambda runtime state, CDK diff classification, production API smoke, guarded production browser smoke, and integration-audit remediation evidence with no report artifact mutation, audit deletion, immutable write, legal-hold mutation, or external write during smoke.
+- v2.8 deployed CDK-managed immutable evidence storage with S3 Object Lock GOVERNANCE retention, API-only runtime configuration, scoped metadata-prefix S3 permissions, live immutable manifest persistence, DynamoDB metadata verification, S3 Object Lock header verification, and production browser smoke.
 
 ## Last Production-Verified Milestone
 
-**v2.7 Immutable Audit Storage And Legal Hold Foundation** shipped on 2026-06-07.
-
-Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
-
-Completed phases:
-
-- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
-- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
-- Phase 77: Admin Immutable Evidence And Legal Hold UI.
-- Phase 78: v2.7 Release Gate And Live Verification.
-
-## Latest Completed Milestone
-
-### v2.7 Immutable Audit Storage And Legal Hold Foundation
-
-Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
-
-Completed phases:
-
-- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
-- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
-- Phase 77: Admin Immutable Evidence And Legal Hold UI.
-- Phase 78: v2.7 Release Gate And Live Verification.
-
-## Current Milestone
-
-### v2.8 CDK-Managed Immutable Evidence Storage Deployment
+**v2.8 CDK-Managed Immutable Evidence Storage Deployment** shipped on 2026-06-07.
 
 Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
 
-Planned phases:
+Completed phases:
 
 - Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
 - Phase 80: CDK Immutable Evidence Storage Resource Deployment.
 - Phase 81: Backend Immutable Manifest Persistence Enablement.
 - Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
+
+## Latest Completed Milestone
+
+### v2.8 CDK-Managed Immutable Evidence Storage Deployment
+
+Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
+
+Completed phases:
+
+- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
+- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
+- Phase 81: Backend Immutable Manifest Persistence Enablement.
+- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
+
+## Current Milestone
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -186,12 +178,16 @@ Shipped requirements:
 
 ### Active
 
+No active milestone requirements.
+
+### Completed
+
+Milestone v2.8 requirements are archived in `.planning/milestones/v2.8-REQUIREMENTS.md` and are complete:
+
 - IMSTORE-01: immutable evidence storage CDK design and deploy readiness - Phase 79.
 - IMSTORE-02: CDK-managed immutable evidence storage resource - Phase 80.
 - IMSTORE-03: backend immutable manifest object persistence enablement - Phase 81.
 - VERIFY-11: v2.8 release gate and live immutable storage verification - Phase 82.
-
-### Completed
 
 Milestone v2.7 requirements are archived in `.planning/milestones/v2.7-REQUIREMENTS.md` and are complete:
 
@@ -415,7 +411,7 @@ Known current resources:
 | Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Good - shipped in v2.5 |
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
-| Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Active - Phase 79 planned |
+| Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Good - shipped in v2.8 |
 
 ## Evolution
 
@@ -435,4 +431,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after planning milestone v2.8*
+*Last updated: 2026-06-07 after archiving milestone v2.8*
