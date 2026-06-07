@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.7
 milestone_name: Immutable Audit Storage And Legal Hold Foundation
 status: planning
-last_updated: "2026-06-07T17:15:00+02:00"
+last_updated: "2026-06-07T17:45:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 77 Admin Immutable Evidence And Legal Hold UI
+Phase: 78 v2.7 Release Gate And Live Verification
 Plan: Not started
-Status: Phase 76 complete; ready to discuss/plan Phase 77.
-Last activity: 2026-06-07 — completed Phase 76 backend immutable persistence and legal hold metadata.
+Status: Phase 77 complete; ready to discuss/plan Phase 78.
+Last activity: 2026-06-07 — completed Phase 77 admin immutable evidence and legal hold UI.
 
 ## Accumulated Context
 
@@ -71,10 +71,11 @@ Last activity: 2026-06-07 — completed Phase 76 backend immutable persistence a
 - Phase 75 must define immutable storage, legal hold, privacy, and CDK readiness contracts before any backend production write path is implemented.
 - Phase 75 completed with metadata-only immutable storage and legal hold contracts, CDK readiness evidence, and a decision that Phase 76 must fail closed while CDK-managed immutable storage configuration is absent.
 - Phase 76 added admin-only immutable evidence status/persist and legal hold status/apply APIs, with immutable persistence refusing `not_configured` until CDK-managed storage settings exist.
+- Phase 77 added frontend admin immutable evidence and legal hold controls in stoa-frontend commit c1e2676.
 
 ### Pending Todos
 
-- Start Phase 77 admin immutable evidence and legal hold UI.
+- Start Phase 78 release gate and live verification.
 
 ### Blockers/Concerns
 
@@ -94,4 +95,4 @@ Last activity: 2026-06-07 — completed Phase 76 backend immutable persistence a
 
 ## Operator Next Steps
 
-- Discuss/plan Phase 77 admin immutable evidence and legal hold UI.
+- Discuss/plan Phase 78 release gate and live verification.

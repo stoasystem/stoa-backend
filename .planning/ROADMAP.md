@@ -32,7 +32,7 @@ Goal: implement the foundation for CDK-managed immutable audit evidence storage 
 |-------|------|--------|-------------|
 | 75 | Immutable Audit Storage Contract And CDK Readiness | Complete | IMMUTABLE-01 |
 | 76 | Backend Immutable Retention Persistence And Legal Hold Metadata | Complete | IMMUTABLE-02, LEGALHOLD-01 |
-| 77 | Admin Immutable Evidence And Legal Hold UI | Planned | UI-14 |
+| 77 | Admin Immutable Evidence And Legal Hold UI | Complete | UI-14 |
 | 78 | v2.7 Release Gate And Live Verification | Planned | VERIFY-10 |
 
 ## Progress
@@ -41,7 +41,7 @@ Goal: implement the foundation for CDK-managed immutable audit evidence storage 
 |-------|-----------|----------------|--------|-----------|
 | 75 | v2.7 | 1/1 | Complete | 2026-06-07 |
 | 76 | v2.7 | 1/1 | Complete | 2026-06-07 |
-| 77 | v2.7 | 0/1 | Planned | - |
+| 77 | v2.7 | 1/1 | Complete | 2026-06-07 |
 | 78 | v2.7 | 0/1 | Planned | - |
 
 ## Traceability
@@ -51,8 +51,8 @@ Goal: implement the foundation for CDK-managed immutable audit evidence storage 
 | IMMUTABLE-01 | Phase 75 | Complete |
 | IMMUTABLE-02 | Phase 76 | Complete |
 | LEGALHOLD-01 | Phase 76 | Complete |
-| UI-14 | Phase 77 | Planned |
+| UI-14 | Phase 77 | Complete |
 | VERIFY-10 | Phase 78 | Planned |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 76*
+*Last updated: 2026-06-07 after completing Phase 77*

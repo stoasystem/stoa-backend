@@ -91,5 +91,5 @@ Acceptance criteria:
 | IMMUTABLE-01 | Phase 75 | Complete |
 | IMMUTABLE-02 | Phase 76 | Complete |
 | LEGALHOLD-01 | Phase 76 | Complete |
-| UI-14 | Phase 77 | Planned |
+| UI-14 | Phase 77 | Complete |
 | VERIFY-10 | Phase 78 | Planned |
