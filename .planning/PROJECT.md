@@ -28,6 +28,8 @@ The completed v2.6 milestone makes report operations audit evidence ready for st
 
 The completed v2.7 milestone turns that readiness into a CDK-governed immutable audit storage and legal hold foundation, starting with contracts and CDK readiness before any production write path is implemented.
 
+The active v2.8 milestone turns the v2.7 fail-closed foundation into CDK-managed immutable evidence storage deployment and configured metadata-only manifest object persistence.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -36,7 +38,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
 **Latest completed milestone:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
-**Active milestone:** None
+**Active milestone:** v2.8 CDK-Managed Immutable Evidence Storage Deployment
 
 Delivered:
 
@@ -142,7 +144,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+### v2.8 CDK-Managed Immutable Evidence Storage Deployment
+
+Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
+
+Planned phases:
+
+- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
+- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
+- Phase 81: Backend Immutable Manifest Persistence Enablement.
+- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
 
 ## Requirements
 
@@ -175,7 +186,10 @@ Shipped requirements:
 
 ### Active
 
-None.
+- IMSTORE-01: immutable evidence storage CDK design and deploy readiness - Phase 79.
+- IMSTORE-02: CDK-managed immutable evidence storage resource - Phase 80.
+- IMSTORE-03: backend immutable manifest object persistence enablement - Phase 81.
+- VERIFY-11: v2.8 release gate and live immutable storage verification - Phase 82.
 
 ### Completed
 
@@ -401,6 +415,7 @@ Known current resources:
 | Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Good - shipped in v2.5 |
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
+| Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Active - Phase 79 planned |
 
 ## Evolution
 
@@ -420,4 +435,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after shipping milestone v2.7*
+*Last updated: 2026-06-07 after planning milestone v2.8*

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.7
-milestone_name: Immutable Audit Storage And Legal Hold Foundation
-status: complete
-last_updated: "2026-06-07T17:20:00+02:00"
+milestone: v2.8
+milestone_name: CDK-Managed Immutable Evidence Storage Deployment
+status: planning
+last_updated: "2026-06-07T18:04:31+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** No active milestone. v2.7 shipped on 2026-06-07.
+**Current focus:** v2.8 CDK-managed immutable evidence storage deployment.
 
 ## Current Position
 
-Phase: 78 v2.7 Release Gate And Live Verification
-Plan: Complete
-Status: v2.7 shipped and archived.
-Last activity: 2026-06-07 — completed Phase 78 release gate, production live verification, milestone audit, integration blocker remediation, and phase archive.
+Phase: 79 Immutable Evidence Storage CDK Design And Deploy Readiness
+Plan: 79-01 Immutable Evidence Storage CDK Design And Deploy Readiness
+Status: Planned.
+Last activity: 2026-06-07 — planned v2.8 CDK-Managed Immutable Evidence Storage Deployment.
 
 ## Accumulated Context
 
@@ -75,10 +75,13 @@ Last activity: 2026-06-07 — completed Phase 78 release gate, production live v
 - Phase 78 deployed and production-verified v2.7 with backend/frontend Actions evidence, Lambda runtime metadata, CDK diff, API smoke, browser smoke, and final audit.
 - Integration audit blockers were fixed in backend commit 2e2d942: configured immutable persistence now writes a create-only metadata object before marking the manifest reference persisted, and legal-hold writes now use compare-and-set semantics.
 - v2.7 shipped as a metadata-only, admin-only, fail-closed immutable evidence/legal hold foundation; compliance-grade WORM/Object Lock storage remains future scope.
+- v2.8 starts with CDK-managed immutable evidence storage deployment because v2.7 left WORM/Object Lock resource deployment and full immutable manifest object persistence as residual gaps.
+- Phase 79 must define CDK design, deploy readiness, backend configuration contract, and live verification boundary before Phase 80 creates infrastructure.
 
 ### Pending Todos
 
-- Start the next milestone with `$gsd-new-milestone` when ready.
+- Complete Phase 79 by inspecting v2.7 artifacts and infra CDK stacks.
+- Record immutable storage CDK design, deploy readiness, backend config contract, and Phase 80 entry criteria.
 
 ### Blockers/Concerns
 
@@ -95,7 +98,8 @@ Last activity: 2026-06-07 — completed Phase 78 release gate, production live v
 - Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
 - Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
 - Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
+- v2.8 infrastructure work must avoid manual AWS console changes and must document rollback/no-rollback expectations before deployment.
 
 ## Operator Next Steps
 
-- Start the next milestone when scope is known.
+- Execute Phase 79 plan and complete the immutable storage CDK design/deploy readiness verification documents.

@@ -23,37 +23,36 @@
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+**v2.8 CDK-Managed Immutable Evidence Storage Deployment** - Active.
 
-Latest shipped goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
+Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 75 | Immutable Audit Storage Contract And CDK Readiness | Complete | IMMUTABLE-01 |
-| 76 | Backend Immutable Retention Persistence And Legal Hold Metadata | Complete | IMMUTABLE-02, LEGALHOLD-01 |
-| 77 | Admin Immutable Evidence And Legal Hold UI | Complete | UI-14 |
-| 78 | v2.7 Release Gate And Live Verification | Complete | VERIFY-10 |
+| 79 | Immutable Evidence Storage CDK Design And Deploy Readiness | Planned | IMSTORE-01 |
+| 80 | CDK Immutable Evidence Storage Resource Deployment | Planned | IMSTORE-02 |
+| 81 | Backend Immutable Manifest Persistence Enablement | Planned | IMSTORE-03 |
+| 82 | v2.8 Release Gate And Live Immutable Storage Verification | Planned | VERIFY-11 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 75 | v2.7 | 1/1 | Complete | 2026-06-07 |
-| 76 | v2.7 | 1/1 | Complete | 2026-06-07 |
-| 77 | v2.7 | 1/1 | Complete | 2026-06-07 |
-| 78 | v2.7 | 1/1 | Complete | 2026-06-07 |
+| 79 | v2.8 | 1/1 | Planned | - |
+| 80 | v2.8 | 0/1 | Planned | - |
+| 81 | v2.8 | 0/1 | Planned | - |
+| 82 | v2.8 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMMUTABLE-01 | Phase 75 | Complete |
-| IMMUTABLE-02 | Phase 76 | Complete |
-| LEGALHOLD-01 | Phase 76 | Complete |
-| UI-14 | Phase 77 | Complete |
-| VERIFY-10 | Phase 78 | Complete |
+| IMSTORE-01 | Phase 79 | Planned |
+| IMSTORE-02 | Phase 80 | Planned |
+| IMSTORE-03 | Phase 81 | Planned |
+| VERIFY-11 | Phase 82 | Planned |
 
 ---
-*Last updated: 2026-06-07 after shipping v2.7*
+*Last updated: 2026-06-07 after planning v2.8*

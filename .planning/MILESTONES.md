@@ -399,5 +399,23 @@ Key accomplishments:
 
 Known deferred items at close: compliance-grade WORM/Object Lock storage, CDK-managed immutable storage resource deployment, legal/compliance retention-period review, and full immutable manifest object persistence remain future scope.
 
+### v2.8 CDK-Managed Immutable Evidence Storage Deployment
+
+**Status:** Active
+**Started:** 2026-06-07
+**Roadmap:** `.planning/milestones/v2.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.8-REQUIREMENTS.md`
+**Goal:** Deploy and enable CDK-managed immutable evidence storage for report operations retention manifests while preserving metadata-only privacy boundaries and fail-closed behavior.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
+- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
+- Phase 81: Backend Immutable Manifest Persistence Enablement.
+- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
+
 ---
-*Last updated: 2026-06-07 after shipping v2.7*
+*Last updated: 2026-06-07 after planning v2.8*

@@ -1,77 +1,66 @@
-# Requirements: v2.7 Immutable Audit Storage And Legal Hold Foundation
+# Requirements: v2.8 CDK-Managed Immutable Evidence Storage Deployment
 
-**Milestone:** v2.7
-**Status:** Complete
+**Milestone:** v2.8
+**Status:** Active
 **Created:** 2026-06-07
 
 ## Goal
 
-Implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
+Deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
 
 ## Requirements
 
-### IMMUTABLE-01 Immutable Audit Storage Contract And CDK Readiness
+### IMSTORE-01 Immutable Evidence Storage CDK Design And Deploy Readiness
 
-Implementers have a precise immutable audit storage contract, legal hold boundary, retention policy model, migration plan, and CDK decision before adding production writes.
-
-Acceptance criteria:
-
-- Contract defines immutable object shape, object identity, digest/signature metadata, retention clocks, legal hold states, policy ownership, verification metadata, and operator-visible status.
-- Contract distinguishes current application-enforced append-only audit rows, v2.6 metadata-only retention manifests, and v2.7 CDK-managed immutable object persistence.
-- Privacy model forbids raw report artifacts, S3 keys, presigned URLs, auth tokens, passwords, cookies, AWS secrets, raw unreviewed report JSON, and raw report HTML in immutable objects or committed evidence.
-- CDK readiness classifies whether a new CDK-managed immutable resource is required and records the exact stack/resource/env-var/deploy evidence required before backend production writes are allowed.
-- Plan explicitly refuses manual AWS console changes and destructive audit deletion.
-
-### IMMUTABLE-02 Backend Immutable Retention Manifest Persistence
-
-Admins can persist metadata-only retention manifests to an approved immutable storage path after CDK readiness is satisfied.
+Implementers have a verified CDK design, safety model, retention policy boundary, deploy plan, rollback/no-rollback expectations, and production verification plan before creating immutable storage resources.
 
 Acceptance criteria:
 
-- Backend writer persists canonical metadata-only retention manifests with stable object identity and digest metadata.
-- Writer refuses persistence when immutable storage configuration is missing, not CDK-approved, or privacy validation fails.
-- Backend exposes admin-only read/status APIs for immutable manifest references without returning private storage identifiers or raw object payloads.
-- Tests cover admin-only authorization, schema validation, digest stability, privacy denylist, configuration refusal, and append-only audit rows.
+- Design identifies the exact CDK stack/resource path, environment variables, IAM permissions, encryption, retention/object-lock posture, removal policy, and deploy evidence required.
+- Design records AWS/CDK constraints that affect resource creation, update, rollback, retention periods, legal hold, and object deletion semantics.
+- Design preserves v2.7 fail-closed behavior until backend runtime configuration and deploy evidence are present.
+- Privacy model continues to forbid raw report artifacts, S3 keys, presigned URLs, auth tokens, cookies, passwords, AWS secrets, raw report JSON, and raw report HTML in immutable objects, logs, UI, API responses, and committed evidence.
+- Phase 79 records production safety boundaries and a release gate that avoids customer report mutation.
 
-### LEGALHOLD-01 Legal Hold And Retention Policy Metadata
+### IMSTORE-02 CDK-Managed Immutable Evidence Storage Resource
 
-Admins can apply and inspect legal hold/retention policy metadata for supported report operations evidence scopes.
-
-Acceptance criteria:
-
-- Backend models legal hold states, policy IDs, retention clocks, reason fields, actor metadata, and release/refusal semantics.
-- Legal hold changes are metadata-only, append-only audited, and do not delete or mutate prior audit rows.
-- Unsupported scopes and destructive retention actions are refused with operator-safe reasons.
-- Tests cover policy metadata, hold/release validation, refusal behavior, authorization, and audit evidence.
-
-### UI-14 Admin Immutable Evidence And Legal Hold UI
-
-Admin report operations UI exposes immutable evidence status and legal hold controls.
+Infrastructure defines and deploys the approved immutable evidence storage resource and API Lambda configuration.
 
 Acceptance criteria:
 
-- UI exposes immutable evidence status, manifest persistence status, legal hold status, policy metadata, validation failures, and copy/download controls only to admins.
-- UI uses allowlisted fields and does not render secrets, S3 keys, presigned URLs, raw report JSON/HTML, or raw artifact payloads.
-- UI separates read-only status from any persistence/hold action and requires explicit operator reason fields for state-changing actions.
-- Playwright covers status rendering, legal hold controls, refusal states, admin gating, and privacy denylist.
+- CDK creates the immutable evidence storage resource and injects required backend environment variables.
+- API Lambda permissions are scoped to the approved immutable evidence resource/prefix and do not broaden report artifact access.
+- CDK diff/deploy evidence, workflow run IDs, commit SHAs, and timestamps are recorded.
+- Tests or static checks prove the stack exports/injects the expected settings and does not weaken existing report bucket privacy.
 
-### VERIFY-10 v2.7 Release Gate And Live Verification
+### IMSTORE-03 Backend Immutable Manifest Object Persistence Enablement
 
-v2.7 closes with release evidence proving immutable storage and legal hold behavior are correctly gated and privacy-safe.
+Backend immutable manifest persistence is enabled against the CDK-managed resource and remains metadata-only.
 
 Acceptance criteria:
 
-- Release gate records Lambda build manifest, backend deploy evidence, frontend deploy evidence, CDK diff/deploy evidence, commit SHAs, timestamps, admin-only API request IDs, and production read-only browser smoke.
-- Evidence proves production UI/API do not expose raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, or AWS secrets.
-- Evidence proves no production audit deletion and no customer report artifact mutation.
-- Any production state-changing smoke uses only a named non-customer safe fixture or a metadata-only approved immutable/hold path with cleanup/rollback expectations documented.
-- Final audit records whether compliance-grade WORM storage is deployed and what residual gaps remain.
+- Backend status changes from `not_configured` to configured only when CDK-injected settings are present.
+- Persist API writes create-only metadata objects with stable identity, canonical digest metadata, and append-only audit rows.
+- Read/status APIs return operator-safe references and verification metadata, not private storage identifiers or raw object payloads.
+- Tests cover configured writes, duplicate/idempotency behavior, object-write failure, privacy denylist, audit rows, and missing-config refusal.
+
+### VERIFY-11 v2.8 Release Gate And Live Immutable Storage Verification
+
+v2.8 closes with deploy and live verification evidence proving immutable storage is configured, privacy-safe, and correctly gated.
+
+Acceptance criteria:
+
+- Release evidence records Lambda build manifest, backend deploy evidence, infra deploy evidence, CDK diff/deploy evidence, commit SHAs, timestamps, admin-only API request IDs, and production browser smoke.
+- Production smoke proves immutable evidence status is configured and manifest persistence works only for approved metadata-only evidence or an approved non-customer safe fixture.
+- Evidence proves no raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets are exposed.
+- Evidence proves no production audit deletion, no customer report artifact mutation, and no external support-system write.
+- Final audit records any residual compliance/legal gaps, including retention-period approval and operational legal-hold procedure.
 
 ## Future Requirements
 
+- Compliance/legal approval of exact retention periods and legal hold operating procedure.
 - Direct support ticket/evidence retention integrations after an approved connector or secret-backed credential path exists.
 - Dedicated Step Functions/SQS orchestration if immutable verification becomes asynchronous or long-running.
-- Compliance/legal review of WORM retention periods and legal hold operating procedure.
 - Rich/WYSIWYG report editor.
 - PDF/multilingual report delivery.
 - Billing and analytics product expansion.
@@ -82,14 +71,14 @@ Acceptance criteria:
 - Deleting existing audit rows.
 - Retaining raw report artifacts or private storage identifiers in committed evidence.
 - Direct third-party support-system writes.
-- Claiming compliance-grade WORM/Object Lock storage before CDK-managed deploy and live verification evidence are recorded.
+- Customer report artifact mutation during smoke.
+- Claiming broad regulatory compliance beyond the specific CDK-managed immutable storage behavior that release evidence proves.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMMUTABLE-01 | Phase 75 | Complete |
-| IMMUTABLE-02 | Phase 76 | Complete |
-| LEGALHOLD-01 | Phase 76 | Complete |
-| UI-14 | Phase 77 | Complete |
-| VERIFY-10 | Phase 78 | Complete |
+| IMSTORE-01 | Phase 79 | Planned |
+| IMSTORE-02 | Phase 80 | Planned |
+| IMSTORE-03 | Phase 81 | Planned |
+| VERIFY-11 | Phase 82 | Planned |
