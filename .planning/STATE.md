@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: none
-milestone_name: none
-status: archived
-last_updated: "2026-06-07T19:20:00+02:00"
+milestone: v2.9
+milestone_name: Retention Governance And Legal Hold Operations
+status: planning
+last_updated: "2026-06-07T19:27:21+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** No active milestone.
+**Current focus:** v2.9 retention governance and legal-hold operations.
 
 ## Current Position
 
-Phase: none
-Plan: none
-Status: v2.8 archived; ready for the next milestone when requested.
-Last activity: 2026-06-07 — archived v2.8 CDK-managed immutable evidence storage deployment.
+Phase: 83 Retention Policy And Legal Hold Governance Readiness
+Plan: 83-01 Retention Policy And Legal Hold Governance Readiness
+Status: Planned.
+Last activity: 2026-06-07 — planned v2.9 Retention Governance And Legal Hold Operations.
 
 ## Accumulated Context
 
@@ -83,10 +83,12 @@ Last activity: 2026-06-07 — archived v2.8 CDK-managed immutable evidence stora
 - Phase 81 added env-driven immutable readiness coverage and duplicate/reference-exists refusal coverage.
 - Phase 81 production read-only smoke verified `stoa-api` immutable storage public status is `ready`, `cdk_managed=true`, `resource_configured=true`, and `prefix_configured=true` without exposing private storage identifiers.
 - Phase 82 persisted one approved metadata-only release evidence immutable manifest in production and verified API, DynamoDB, S3 Object Lock headers, and browser smoke without customer report artifact mutation.
+- v2.9 starts with retention governance and legal-hold operations because v2.8 left the 365-day GOVERNANCE retention period and operational legal-hold procedure pending formal approval.
+- Phase 83 must define the governance contract, approval packet, runbook specification, and privacy-safe verification boundary before backend/UI governance metadata is implemented.
 
 ### Pending Todos
 
-- Start the next milestone when requested.
+- Complete Phase 83 by finalizing governance contract, approval packet, legal-hold runbook spec, and Phase 84 entry criteria.
 
 ### Blockers/Concerns
 
@@ -104,7 +106,8 @@ Last activity: 2026-06-07 — archived v2.8 CDK-managed immutable evidence stora
 - Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
 - Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
 - The 365-day GOVERNANCE retention period and operational legal-hold procedure still need formal compliance/legal approval before broad compliance claims.
+- v2.9 must not provide legal advice or fabricate approval; it can only create and verify the approval workflow and record actual approval metadata if supplied through an approved path.
 
 ## Operator Next Steps
 
-- Use `$gsd-new-milestone` to start the next milestone.
+- Execute Phase 83 plan and complete retention governance/legal-hold readiness documentation.

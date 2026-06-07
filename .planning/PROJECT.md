@@ -30,6 +30,8 @@ The completed v2.7 milestone turns that readiness into a CDK-governed immutable 
 
 The completed v2.8 milestone turns the v2.7 fail-closed foundation into CDK-managed immutable evidence storage deployment and configured metadata-only manifest object persistence.
 
+The active v2.9 milestone turns the v2.8 technical retention evidence into governance-ready retention policy approval and legal-hold operations.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -38,7 +40,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
 **Latest completed milestone:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
-**Active milestone:** None
+**Active milestone:** v2.9 Retention Governance And Legal Hold Operations
 
 Delivered:
 
@@ -145,7 +147,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+### v2.9 Retention Governance And Legal Hold Operations
+
+Goal: make immutable evidence retention and legal-hold operations governable by defining the approval packet, owner model, runbook, review cadence, break-glass policy, backend metadata recording, admin evidence workflow, and release gate needed before broad compliance claims are made.
+
+Planned phases:
+
+- Phase 83: Retention Policy And Legal Hold Governance Readiness.
+- Phase 84: Backend Retention Approval And Legal Hold Review Metadata.
+- Phase 85: Admin Retention Governance And Legal Hold Runbook UI.
+- Phase 86: v2.9 Release Gate And Governance Verification.
 
 ## Requirements
 
@@ -178,7 +189,10 @@ Shipped requirements:
 
 ### Active
 
-No active milestone requirements.
+- GOV-01: retention policy and legal hold governance readiness - Phase 83.
+- GOV-02: backend retention approval and legal-hold review metadata - Phase 84.
+- UI-15: admin retention governance and legal-hold runbook UI - Phase 85.
+- VERIFY-12: v2.9 release gate and governance verification - Phase 86.
 
 ### Completed
 
@@ -412,6 +426,7 @@ Known current resources:
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
 | Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Good - shipped in v2.8 |
+| Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Active - Phase 83 planned |
 
 ## Evolution
 
@@ -431,4 +446,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after archiving milestone v2.8*
+*Last updated: 2026-06-07 after planning milestone v2.9*

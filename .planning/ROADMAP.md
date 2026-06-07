@@ -24,21 +24,36 @@
 
 ## Current Milestone
 
-No active milestone.
+**v2.9 Retention Governance And Legal Hold Operations** - Active.
 
-Start the next milestone with `$gsd-new-milestone`.
+Goal: make immutable evidence retention and legal-hold operations governable before broad compliance claims are made.
 
 ## Phases
 
-No active phases.
+| Phase | Name | Status | Requirement |
+|-------|------|--------|-------------|
+| 83 | Retention Policy And Legal Hold Governance Readiness | Planned | GOV-01 |
+| 84 | Backend Retention Approval And Legal Hold Review Metadata | Planned | GOV-02 |
+| 85 | Admin Retention Governance And Legal Hold Runbook UI | Planned | UI-15 |
+| 86 | v2.9 Release Gate And Governance Verification | Planned | VERIFY-12 |
 
 ## Progress
 
-No active milestone progress.
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 83 | v2.9 | 1/1 | Planned | - |
+| 84 | v2.9 | 0/1 | Planned | - |
+| 85 | v2.9 | 0/1 | Planned | - |
+| 86 | v2.9 | 0/1 | Planned | - |
 
 ## Traceability
 
-Active requirements are cleared until the next milestone is started.
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GOV-01 | Phase 83 | Planned |
+| GOV-02 | Phase 84 | Planned |
+| UI-15 | Phase 85 | Planned |
+| VERIFY-12 | Phase 86 | Planned |
 
 ---
-*Last updated: 2026-06-07 after archiving v2.8*
+*Last updated: 2026-06-07 after planning v2.9*

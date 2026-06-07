@@ -421,5 +421,23 @@ Key accomplishments:
 
 Known deferred items at close: formal legal/compliance approval of the 365-day GOVERNANCE retention period and operational legal-hold procedure.
 
+### v2.9 Retention Governance And Legal Hold Operations
+
+**Status:** Active
+**Started:** 2026-06-07
+**Roadmap:** `.planning/milestones/v2.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.9-REQUIREMENTS.md`
+**Goal:** Make immutable evidence retention and legal-hold operations governable before broad compliance claims are made.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 83: Retention Policy And Legal Hold Governance Readiness.
+- Phase 84: Backend Retention Approval And Legal Hold Review Metadata.
+- Phase 85: Admin Retention Governance And Legal Hold Runbook UI.
+- Phase 86: v2.9 Release Gate And Governance Verification.
+
 ---
-*Last updated: 2026-06-07 after archiving v2.8*
+*Last updated: 2026-06-07 after planning v2.9*
