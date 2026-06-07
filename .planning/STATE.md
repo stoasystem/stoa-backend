@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.6
-milestone_name: Audit Retention And Immutable Evidence Readiness
-status: active
-last_updated: "2026-06-07T15:36:00+02:00"
+milestone: none
+milestone_name: none
+status: idle
+last_updated: "2026-06-07T15:50:00+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.6 Audit Retention And Immutable Evidence Readiness.
+**Current focus:** none; v2.6 is archived.
 
 ## Current Position
 
-Phase: 74 - v2.6 Release Gate And Live Verification
-Plan: 74-01
-Status: Complete; ready to archive milestone.
-Last activity: 2026-06-07 — completed v2.6 release gate and live verification.
+Phase: none
+Plan: none
+Status: No active milestone.
+Last activity: 2026-06-07 — archived v2.6 Audit Retention And Immutable Evidence Readiness.
 
 ## Accumulated Context
 
@@ -66,10 +66,11 @@ Last activity: 2026-06-07 — completed v2.6 release gate and live verification.
 - Phase 72 added admin-only metadata retention status and manifest APIs with canonical digests, privacy validation, refusal behavior, and redacted append-only audit metadata.
 - Phase 73 added admin audit retention controls on `/admin/report-operations` with status, manifest, copy/download, digest preview, refusal reasons, and e2e privacy assertions.
 - Phase 74 deployed and production-verified v2.6 with backend/frontend Actions evidence, Lambda runtime metadata, CDK diff, API smoke, browser smoke, and final audit.
+- v2.6 milestone closeout archived audit, roadmap, requirements, and phase records.
 
 ### Pending Todos
 
-- Archive v2.6 milestone.
+- Start next milestone when ready.
 
 ### Blockers/Concerns
 
@@ -88,4 +89,4 @@ Last activity: 2026-06-07 — completed v2.6 release gate and live verification.
 
 ## Operator Next Steps
 
-- Complete milestone lifecycle.
+- Start the next milestone with `$gsd-new-milestone` when ready.

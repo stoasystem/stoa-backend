@@ -356,19 +356,25 @@ Known deferred items at close: direct support-system integrations, compliance-gr
 
 ### v2.6 Audit Retention And Immutable Evidence Readiness
 
-**Status:** Active
-**Roadmap:** `.planning/milestones/v2.6-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.6-REQUIREMENTS.md`
+**Status:** Shipped 2026-06-07
+**Audit:** `.planning/milestones/v2.6-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.6-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.6-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.6-phases/`
 **Goal:** Make report operations audit evidence ready for stronger retention and future immutable storage without weakening privacy boundaries.
 **Phases:** 4
-**Plans:** 1/4 planned
+**Plans:** 4
+**Requirements:** 5/5 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 71: Audit Retention Contract And CDK Readiness.
-- Phase 72: Backend Audit Retention Manifest APIs.
-- Phase 73: Admin Audit Retention UI.
-- Phase 74: v2.6 Release Gate And Live Verification.
+- Defined a metadata-only audit retention contract, immutability boundary, privacy model, and no-new-CDK-resource readiness decision.
+- Added admin-only backend audit retention status and manifest APIs with canonical digests, privacy validation, destructive action refusal, and redacted audit metadata.
+- Added frontend `/admin/report-operations` audit retention controls for status, manifest preview, copy, download, digest rendering, and refusal states.
+- Verified backend/frontend deploys, Lambda runtime state, CDK diff classification, production API smoke, and production browser smoke.
+- Confirmed no report artifact mutation, no audit deletion, and no external write during production smoke; only a metadata-only audit retention refusal row was written.
+
+Known deferred items at close: compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence remain future scope.
 
 ---
-*Last updated: 2026-06-07 after planning v2.6 Phase 71*
+*Last updated: 2026-06-07 after closing v2.6*
