@@ -1,3 +1,5 @@
+import hashlib
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -2681,6 +2683,8 @@ def test_immutable_manifest_persistence_refuses_without_cdk_config(monkeypatch):
 def test_immutable_manifest_persistence_writes_reference_when_configured(monkeypatch):
     audit_rows = []
     manifest_rows = []
+    manifest_updates = []
+    object_writes = []
     monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
     monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
     monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
@@ -2693,6 +2697,19 @@ def test_immutable_manifest_persistence_writes_reference_when_configured(monkeyp
         report_repo,
         "put_audit_retention_manifest",
         lambda manifest_id, manifest: manifest_rows.append((manifest_id, manifest)) or True,
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "update_audit_retention_manifest_status",
+        lambda manifest_id, fields, expected_status: manifest_updates.append((manifest_id, fields, expected_status)) or True,
+    )
+    monkeypatch.setattr(
+        report_audit_retention_service,
+        "_write_immutable_manifest_object",
+        lambda manifest, immutable_ref_id, storage_status: object_writes.append(
+            (manifest, immutable_ref_id, storage_status)
+        )
+        or {"object_digest": "sha256:object-digest", "object_key_digest": "sha256:key-digest"},
     )
     monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_mode", "cdk_managed")
     monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_cdk_managed", True)
@@ -2714,10 +2731,26 @@ def test_immutable_manifest_persistence_writes_reference_when_configured(monkeyp
     assert data["immutable_storage"]["status"] == "persisted"
     assert data["immutable_storage"]["immutable_ref_id"].startswith("immutable-")
     assert data["immutable_storage"]["storage"]["status"] == "ready"
+    assert data["immutable_storage"]["object_digest"] == "sha256:object-digest"
+    assert len(object_writes) == 1
+    assert object_writes[0][1] == data["immutable_storage"]["immutable_ref_id"]
+    assert object_writes[0][2]["status"] == "ready"
     assert len(manifest_rows) == 1
     assert manifest_rows[0][0] == data["manifest_id"]
-    assert manifest_rows[0][1]["status"] == "persisted"
+    assert manifest_rows[0][1]["status"] == "pending_object_write"
     assert manifest_rows[0][1]["manifest_digest"] == data["manifest_digest"]
+    assert manifest_updates == [
+        (
+            data["manifest_id"],
+            {
+                "object_digest": "sha256:object-digest",
+                "object_key_digest": "sha256:key-digest",
+                "status": "persisted",
+                "updated_at": manifest_updates[0][1]["updated_at"],
+            },
+            "pending_object_write",
+        )
+    ]
     assert "configured-resource" not in str(data)
     assert "immutable-audit/" not in str(data)
     assert audit_rows[-1][1]["result"] == "persisted"
@@ -2725,12 +2758,101 @@ def test_immutable_manifest_persistence_writes_reference_when_configured(monkeyp
     _assert_no_private_artifact_markers(manifest_rows)
 
 
+def test_immutable_manifest_persistence_refuses_when_object_write_fails(monkeypatch):
+    audit_rows = []
+    manifest_rows = []
+    manifest_updates = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_manifest",
+        lambda manifest_id, manifest: manifest_rows.append((manifest_id, manifest)) or True,
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "update_audit_retention_manifest_status",
+        lambda manifest_id, fields, expected_status: manifest_updates.append((manifest_id, fields, expected_status)) or True,
+    )
+    monkeypatch.setattr(
+        report_audit_retention_service,
+        "_write_immutable_manifest_object",
+        lambda manifest, immutable_ref_id, storage_status: (_ for _ in ()).throw(RuntimeError("write failed")),
+    )
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_mode", "cdk_managed")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_cdk_managed", True)
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_resource", "configured-resource")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_prefix", "immutable-audit/")
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/persist",
+        json={"reason": "persist metadata", "references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["immutable_storage"]["status"] == "refused"
+    assert data["immutable_storage"]["reason"] == "immutable object write failed"
+    assert manifest_rows[0][1]["status"] == "pending_object_write"
+    assert manifest_updates[0][1]["status"] == "refused"
+    assert manifest_updates[0][2] == "pending_object_write"
+    assert audit_rows[-1][1]["result"] == "refused"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_immutable_manifest_object_writer_uses_create_only_s3_and_byte_digest(monkeypatch):
+    put_calls = []
+
+    class FakeS3:
+        def put_object(self, **kwargs):
+            put_calls.append(kwargs)
+
+    monkeypatch.setattr(report_audit_retention_service.boto3, "client", lambda *args, **kwargs: FakeS3())
+    monkeypatch.setattr(report_audit_retention_service.settings, "aws_region", "eu-central-2")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_resource", "immutable-bucket")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_prefix", "immutable-audit/")
+    manifest = {
+        "schema_version": "v1",
+        "manifest_id": "manifest-1",
+        "generated_at": "2026-06-07T00:00:00+00:00",
+        "generated_by": "admin-sub",
+        "retention_category": "incident",
+        "verification": {"manifest_digest": "sha256:manifest-digest"},
+        "items": [],
+    }
+
+    result = report_audit_retention_service._write_immutable_manifest_object(
+        manifest,
+        immutable_ref_id="immutable-ref-1",
+        storage_status={"status": "ready"},
+    )
+
+    assert len(put_calls) == 1
+    put_call = put_calls[0]
+    assert put_call["Bucket"] == "immutable-bucket"
+    assert put_call["Key"] == "immutable-audit/immutable-ref-1.json"
+    assert put_call["IfNoneMatch"] == "*"
+    assert put_call["ServerSideEncryption"] == "AES256"
+    assert put_call["ContentType"] == "application/vnd.stoa.audit-retention-manifest+json"
+    assert result["object_digest"] == "sha256:" + hashlib.sha256(put_call["Body"]).hexdigest()
+    assert result["object_key_digest"].startswith("sha256:")
+
+
 def test_legal_hold_metadata_apply_and_status(monkeypatch):
     holds = {}
     hold_audits = []
 
-    def put_hold(scope_key, hold):
+    def put_hold(scope_key, hold, **kwargs):
         holds[scope_key] = hold
+        return True
 
     monkeypatch.setattr(report_repo, "put_legal_hold_metadata", put_hold)
     monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: holds.get(scope_key))
@@ -2756,6 +2878,7 @@ def test_legal_hold_metadata_apply_and_status(monkeypatch):
     assert apply_data["items"][0]["status"] == "active"
     assert apply_data["items"][0]["policy_id"] == "policy-incident"
     assert apply_data["items"][0]["reason"] == "case hold [private-credential]"
+    assert apply_data["items"][0]["hold_version"] == 1
     assert len(holds) == 1
     assert hold_audits[0][1]["result"] == "recorded"
 
@@ -2804,8 +2927,9 @@ def test_legal_hold_release_preserves_hold_identity(monkeypatch):
     holds = {}
     hold_audits = []
 
-    def put_hold(scope_key, hold):
+    def put_hold(scope_key, hold, **kwargs):
         holds[scope_key] = hold
+        return True
 
     monkeypatch.setattr(report_repo, "put_legal_hold_metadata", put_hold)
     monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: holds.get(scope_key))
@@ -2844,9 +2968,49 @@ def test_legal_hold_release_preserves_hold_identity(monkeypatch):
     assert stored["created_by"] == "admin-sub"
     assert stored["state"] == "released"
     assert stored["released_by"] == "admin-sub"
+    assert stored["hold_version"] == 2
     assert hold_audits[-1][1]["result"] == "recorded"
     _assert_no_private_artifact_markers(release_data)
     _assert_no_private_artifact_markers(holds)
+    _assert_no_private_artifact_markers(hold_audits)
+
+
+def test_legal_hold_metadata_refuses_stale_compare_and_set(monkeypatch):
+    hold_audits = []
+    existing = {
+        "hold_id": "legal-hold-existing",
+        "state": "active",
+        "policy_id": "policy-incident",
+        "reason": "case hold",
+        "created_by": "admin-sub",
+        "created_at": "2026-06-07T00:00:00+00:00",
+        "updated_at": "2026-06-07T00:00:00+00:00",
+        "hold_version": 3,
+    }
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: existing)
+    monkeypatch.setattr(report_repo, "put_legal_hold_metadata", lambda scope_key, hold, **kwargs: False)
+    monkeypatch.setattr(
+        report_repo,
+        "put_legal_hold_audit_event",
+        lambda scope_key, event: hold_audits.append((scope_key, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/legal-holds",
+        json={
+            "reason": "case hold update",
+            "policy_id": "policy-incident",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"][0]["status"] == "refused"
+    assert data["items"][0]["reason"] == "legal hold metadata changed; refresh status and retry"
+    assert hold_audits[-1][1]["result"] == "refused"
+    _assert_no_private_artifact_markers(data)
     _assert_no_private_artifact_markers(hold_audits)
 
 

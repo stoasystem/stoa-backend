@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import boto3
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -305,30 +306,94 @@ def persist_immutable_manifest(
 
     manifest_digest = manifest.get("verification", {}).get("manifest_digest")
     immutable_ref_id = _immutable_ref_id(manifest)
-    persisted = report_repo.put_audit_retention_manifest(
+    pending_reference = {
+        "immutable_ref_id": immutable_ref_id,
+        "manifest_id": manifest["manifest_id"],
+        "manifest_digest": manifest_digest,
+        "digest_algorithm": "sha256",
+        "status": "pending_object_write",
+        "scope": manifest.get("scope"),
+        "retention_category": manifest.get("retention_category"),
+        "retention_clock": manifest.get("retention_clock"),
+        "item_count": manifest.get("verification", {}).get("item_count"),
+        "privacy": privacy,
+        "created_at": now_iso(),
+        "created_by": _redact_text(generated_by),
+        "source_request_id": request_id,
+        "storage_mode": storage_status["mode"],
+        "storage_cdk_managed": storage_status["cdk_managed"],
+    }
+    pending_created = report_repo.put_audit_retention_manifest(
         str(manifest["manifest_id"]),
-        {
-            "immutable_ref_id": immutable_ref_id,
+        pending_reference,
+    )
+    if not pending_created:
+        persist_status = {
+            "status": "refused",
+            "immutable_ref_id": None,
             "manifest_id": manifest["manifest_id"],
             "manifest_digest": manifest_digest,
-            "digest_algorithm": "sha256",
-            "status": "persisted",
-            "scope": manifest.get("scope"),
-            "retention_category": manifest.get("retention_category"),
-            "retention_clock": manifest.get("retention_clock"),
-            "item_count": manifest.get("verification", {}).get("item_count"),
+            "reason": "immutable manifest reference already exists",
+            "storage": _immutable_storage_public_status(storage_status),
             "privacy": privacy,
-            "created_at": now_iso(),
-            "created_by": _redact_text(generated_by),
-            "source_request_id": request_id,
+        }
+        write_immutable_persistence_audit_event(
+            manifest,
+            actor=generated_by,
+            request_id=request_id,
+            reason=reason,
+            result="refused",
+            metadata=persist_status,
+        )
+        return _immutable_manifest_response(manifest, persist_status)
+
+    try:
+        object_write = _write_immutable_manifest_object(
+            manifest,
+            immutable_ref_id=immutable_ref_id,
+            storage_status=storage_status,
+        )
+    except Exception as exc:
+        persist_status = _immutable_refusal_status(
+            "immutable object write failed",
+            storage_status=storage_status,
+        )
+        persist_status["error_code"] = _redact_text(exc.__class__.__name__)
+        report_repo.update_audit_retention_manifest_status(
+            str(manifest["manifest_id"]),
+            {
+                "status": "refused",
+                "reason": "immutable object write failed",
+                "updated_at": now_iso(),
+            },
+            expected_status="pending_object_write",
+        )
+        write_immutable_persistence_audit_event(
+            manifest,
+            actor=generated_by,
+            request_id=request_id,
+            reason=reason,
+            result="refused",
+            metadata=persist_status,
+        )
+        return _immutable_manifest_response(manifest, persist_status)
+    persisted = report_repo.update_audit_retention_manifest_status(
+        str(manifest["manifest_id"]),
+        {
+            "object_digest": object_write["object_digest"],
+            "object_key_digest": object_write["object_key_digest"],
+            "status": "persisted",
+            "updated_at": now_iso(),
         },
+        expected_status="pending_object_write",
     )
     persist_status = {
         "status": "persisted" if persisted else "refused",
         "immutable_ref_id": immutable_ref_id if persisted else None,
         "manifest_id": manifest["manifest_id"],
         "manifest_digest": manifest_digest,
-        "reason": None if persisted else "immutable manifest reference already exists",
+        "object_digest": object_write["object_digest"] if persisted else None,
+        "reason": None if persisted else "immutable manifest reference status changed; reconcile pending object",
         "storage": _immutable_storage_public_status(storage_status),
         "privacy": privacy,
     }
@@ -448,7 +513,12 @@ def apply_legal_hold_metadata(
             _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
             items.append(item)
             continue
-        hold_id = str(existing.get("hold_id")) if safe_action == "release" and existing else f"legal-hold-{uuid4().hex}"
+        existing_version = _hold_version(existing)
+        hold_id = (
+            str(existing.get("hold_id"))
+            if existing and (safe_action == "release" or existing.get("state") == "active")
+            else f"legal-hold-{uuid4().hex}"
+        )
         state = "active" if safe_action == "apply" else "released"
         current = {
             "hold_id": hold_id,
@@ -461,12 +531,34 @@ def apply_legal_hold_metadata(
             "created_at": _redact_text(existing.get("created_at")) if existing else now,
             "updated_by": _redact_text(actor),
             "updated_at": now,
+            "hold_version": existing_version + 1,
             "source_request_id": request_id,
         }
         if safe_action == "release":
             current["released_by"] = _redact_text(actor)
             current["released_at"] = now
-        report_repo.put_legal_hold_metadata(scope_key, current)
+        expected_hold_version = existing_version if existing and "hold_version" in existing else None
+        expected_updated_at = (
+            str(existing.get("updated_at"))
+            if existing and expected_hold_version is None and existing.get("updated_at")
+            else None
+        )
+        recorded = report_repo.put_legal_hold_metadata(
+            scope_key,
+            current,
+            expected_hold_version=expected_hold_version,
+            expected_updated_at=expected_updated_at,
+        )
+        if not recorded:
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": "legal hold metadata changed; refresh status and retry",
+            }
+            _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
         item = {
             "reference": safe_ref,
             "scope_key": scope_key,
@@ -475,6 +567,7 @@ def apply_legal_hold_metadata(
             "policy_id": current["policy_id"],
             "reason": safe_reason,
             "updated_at": now,
+            "hold_version": current["hold_version"],
         }
         _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
         items.append(item)
@@ -603,6 +696,64 @@ def _immutable_manifest_response(
 def _immutable_ref_id(manifest: dict[str, Any]) -> str:
     digest = str(manifest.get("verification", {}).get("manifest_digest") or _digest(manifest))
     return "immutable-" + digest.split(":", 1)[-1][:24]
+
+
+def _write_immutable_manifest_object(
+    manifest: dict[str, Any],
+    *,
+    immutable_ref_id: str,
+    storage_status: dict[str, Any],
+) -> dict[str, str]:
+    resource = str(settings.immutable_audit_storage_resource or "").strip()
+    prefix = str(settings.immutable_audit_storage_prefix or "").strip().strip("/")
+    if storage_status["status"] != "ready" or not resource or not prefix:
+        raise ImmutableEvidenceError(500, "immutable storage writer called before storage is ready")
+    object_key = f"{prefix}/{immutable_ref_id}.json"
+    immutable_object = {
+        "schema_version": SCHEMA_VERSION,
+        "immutable_ref_id": immutable_ref_id,
+        "manifest_id": manifest["manifest_id"],
+        "manifest_version": manifest.get("schema_version"),
+        "canonical_digest": manifest.get("verification", {}).get("manifest_digest"),
+        "digest_algorithm": "sha256",
+        "created_at": manifest.get("generated_at"),
+        "created_by": manifest.get("generated_by"),
+        "source_request_id": manifest.get("request_id"),
+        "policy_id": manifest.get("retention_category"),
+        "retention_until": None,
+        "legal_hold_state": "metadata_only",
+        "payload": manifest,
+    }
+    body = json.dumps(immutable_object, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    privacy = _privacy_result(immutable_object)
+    if not privacy["passed"]:
+        raise ImmutableEvidenceError(422, "privacy denylist check failed before immutable object write")
+    boto3.client("s3", region_name=settings.aws_region).put_object(
+        Bucket=resource,
+        Key=object_key,
+        Body=body,
+        ContentType="application/vnd.stoa.audit-retention-manifest+json",
+        Metadata={
+            "immutable-ref-id": immutable_ref_id,
+            "manifest-id": str(manifest["manifest_id"]),
+            "manifest-digest": str(manifest.get("verification", {}).get("manifest_digest") or ""),
+        },
+        IfNoneMatch="*",
+        ServerSideEncryption="AES256",
+    )
+    return {
+        "object_digest": "sha256:" + hashlib.sha256(body).hexdigest(),
+        "object_key_digest": _digest(object_key),
+    }
+
+
+def _hold_version(existing: dict[str, Any] | None) -> int:
+    if not existing:
+        return 0
+    try:
+        return max(int(existing.get("hold_version") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _legal_hold_reference(reference: dict[str, Any]) -> dict[str, Any]:

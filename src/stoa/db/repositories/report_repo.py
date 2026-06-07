@@ -371,22 +371,77 @@ def get_audit_retention_manifest(manifest_id: str) -> dict | None:
     return response.get("Item")
 
 
-def put_legal_hold_metadata(scope_key: str, hold: dict) -> None:
-    """Store current metadata-only legal hold state for an evidence scope."""
-    get_table().put_item(
-        Item={
+def update_audit_retention_manifest_status(
+    manifest_id: str,
+    fields: dict,
+    *,
+    expected_status: str,
+) -> bool:
+    """Conditionally transition one immutable-evidence manifest reference."""
+    update_fields = dict(fields)
+    names = {f"#f{index}": key for index, key in enumerate(update_fields)}
+    values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
+    names["#status"] = "status"
+    values[":expected_status"] = expected_status
+    try:
+        get_table().update_item(
+            Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"},
+            UpdateExpression="SET " + ", ".join(
+                f"{name} = :v{index}" for index, name in enumerate(names) if name != "#status"
+            ),
+            ConditionExpression="#status = :expected_status",
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def put_legal_hold_metadata(
+    scope_key: str,
+    hold: dict,
+    *,
+    expected_hold_version: int | None = None,
+    expected_updated_at: str | None = None,
+) -> bool:
+    """Conditionally store current metadata-only legal hold state for an evidence scope."""
+    values = {}
+    if expected_hold_version is not None:
+        condition = "hold_version = :expected_hold_version"
+        values[":expected_hold_version"] = expected_hold_version
+    elif expected_updated_at is not None:
+        condition = "updated_at = :expected_updated_at"
+        values[":expected_updated_at"] = expected_updated_at
+    else:
+        condition = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+    put_kwargs = {
+        "Item": {
             "PK": f"LEGAL_HOLD#{scope_key}",
             "SK": "SUMMARY",
             "entity_type": "LEGAL_HOLD_METADATA",
             **hold,
         },
-    )
+        "ConditionExpression": condition,
+    }
+    if values:
+        put_kwargs["ExpressionAttributeValues"] = values
+    try:
+        get_table().put_item(**put_kwargs)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
 
 
 def get_legal_hold_metadata(scope_key: str) -> dict | None:
     """Read current metadata-only legal hold state for an evidence scope."""
     response = get_table().get_item(
-        Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "SUMMARY"}
+        Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "SUMMARY"},
+        ConsistentRead=True,
     )
     return response.get("Item")
 
