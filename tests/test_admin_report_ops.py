@@ -6,6 +6,7 @@ from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import report_artifact_edit_service
+from stoa.services import report_audit_retention_service
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 
@@ -2512,6 +2513,7 @@ def test_audit_retention_manifest_redacts_private_free_text(monkeypatch):
     monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
     monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
     monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: None)
     monkeypatch.setattr(
         report_repo,
         "put_audit_retention_audit_event",
@@ -2564,6 +2566,288 @@ def test_audit_retention_manifest_refuses_failed_release_evidence(monkeypatch):
     assert audit_rows[0][1]["result"] == "refused"
     _assert_no_private_artifact_markers(data)
     _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_immutable_evidence_status_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin immutable status should not read evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_immutable_evidence_status_reports_missing_cdk_config(monkeypatch):
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+        headers={"x-request-id": "req-immutable-status"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["request_id"] == "req-immutable-status"
+    assert data["immutable_storage"]["status"] == "not_configured"
+    assert data["immutable_storage"]["resource_configured"] is False
+    assert data["audit_retention"]["items"][0]["status"] == "unsealed"
+    assert data["legal_hold"]["items"][0]["status"] == "none"
+    assert data["privacy"]["passed"] is True
+    _assert_no_private_artifact_markers(data)
+
+
+def test_immutable_evidence_status_redacts_sensitive_request_id(monkeypatch):
+    audit_rows = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: None)
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    status_response = client.post(
+        "/admin/reports/immutable-evidence/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+        headers={"x-request-id": "access_token=abc123"},
+    )
+    persist_response = client.post(
+        "/admin/reports/immutable-evidence/persist",
+        json={"reason": "persist metadata", "references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+        headers={"x-request-id": "cookie=session123"},
+    )
+
+    assert status_response.status_code == 200
+    assert persist_response.status_code == 200
+    assert status_response.json()["request_id"] == "[private-credential]"
+    assert audit_rows[-1][1]["correlation_id"] == "[private-credential]"
+    _assert_no_private_artifact_markers(status_response.json())
+    _assert_no_private_artifact_markers(persist_response.json())
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_immutable_manifest_persistence_refuses_without_cdk_config(monkeypatch):
+    audit_rows = []
+    manifest_rows = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_manifest",
+        lambda manifest_id, manifest: manifest_rows.append((manifest_id, manifest)) or True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/persist",
+        json={
+            "reason": "persist metadata weekly-reports/private/report.html",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+        headers={"x-request-id": "req-immutable-persist"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["immutable_storage"]["status"] == "not_configured"
+    assert data["immutable_storage"]["reason"] == "immutable storage is not configured by CDK"
+    assert data["reason"] == "persist metadata [report-artifact-key]"
+    assert manifest_rows == []
+    assert len(audit_rows) == 2
+    assert audit_rows[-1][1]["action"] == "immutable_evidence_persist"
+    assert audit_rows[-1][1]["result"] == "refused"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_immutable_manifest_persistence_writes_reference_when_configured(monkeypatch):
+    audit_rows = []
+    manifest_rows = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_manifest",
+        lambda manifest_id, manifest: manifest_rows.append((manifest_id, manifest)) or True,
+    )
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_mode", "cdk_managed")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_cdk_managed", True)
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_resource", "configured-resource")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_prefix", "immutable-audit/")
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/persist",
+        json={
+            "reason": "persist metadata",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+            "retention_category": "incident",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["immutable_storage"]["status"] == "persisted"
+    assert data["immutable_storage"]["immutable_ref_id"].startswith("immutable-")
+    assert data["immutable_storage"]["storage"]["status"] == "ready"
+    assert len(manifest_rows) == 1
+    assert manifest_rows[0][0] == data["manifest_id"]
+    assert manifest_rows[0][1]["status"] == "persisted"
+    assert manifest_rows[0][1]["manifest_digest"] == data["manifest_digest"]
+    assert "configured-resource" not in str(data)
+    assert "immutable-audit/" not in str(data)
+    assert audit_rows[-1][1]["result"] == "persisted"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(manifest_rows)
+
+
+def test_legal_hold_metadata_apply_and_status(monkeypatch):
+    holds = {}
+    hold_audits = []
+
+    def put_hold(scope_key, hold):
+        holds[scope_key] = hold
+
+    monkeypatch.setattr(report_repo, "put_legal_hold_metadata", put_hold)
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: holds.get(scope_key))
+    monkeypatch.setattr(
+        report_repo,
+        "put_legal_hold_audit_event",
+        lambda scope_key, event: hold_audits.append((scope_key, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    apply_response = client.post(
+        "/admin/reports/legal-holds",
+        json={
+            "reason": "case hold access_token=abc",
+            "policy_id": "policy-incident",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+        headers={"x-request-id": "req-hold-apply"},
+    )
+
+    assert apply_response.status_code == 200
+    apply_data = apply_response.json()
+    assert apply_data["items"][0]["status"] == "active"
+    assert apply_data["items"][0]["policy_id"] == "policy-incident"
+    assert apply_data["items"][0]["reason"] == "case hold [private-credential]"
+    assert len(holds) == 1
+    assert hold_audits[0][1]["result"] == "recorded"
+
+    status_response = client.post(
+        "/admin/reports/legal-holds/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert status_response.status_code == 200
+    status_data = status_response.json()
+    assert status_data["items"][0]["status"] == "active"
+    assert status_data["items"][0]["policy_id"] == "policy-incident"
+    _assert_no_private_artifact_markers(apply_data)
+    _assert_no_private_artifact_markers(status_data)
+    _assert_no_private_artifact_markers(holds)
+    _assert_no_private_artifact_markers(hold_audits)
+
+
+def test_legal_hold_status_redacts_persisted_private_metadata(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_legal_hold_metadata",
+        lambda scope_key: {
+            "state": "active",
+            "policy_id": "policy weekly-reports/private/report.html",
+            "hold_id": "hold-1",
+            "reason": "password=hunter2",
+            "updated_at": "2026-06-07T00:00:00+00:00",
+        },
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/legal-holds/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"][0]["policy_id"] == "policy [report-artifact-key]"
+    assert data["items"][0]["reason"] == "[private-credential]"
+    _assert_no_private_artifact_markers(data)
+
+
+def test_legal_hold_release_preserves_hold_identity(monkeypatch):
+    holds = {}
+    hold_audits = []
+
+    def put_hold(scope_key, hold):
+        holds[scope_key] = hold
+
+    monkeypatch.setattr(report_repo, "put_legal_hold_metadata", put_hold)
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: holds.get(scope_key))
+    monkeypatch.setattr(
+        report_repo,
+        "put_legal_hold_audit_event",
+        lambda scope_key, event: hold_audits.append((scope_key, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    apply_response = client.post(
+        "/admin/reports/legal-holds",
+        json={
+            "reason": "case hold",
+            "policy_id": "policy-incident",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+    hold_id = apply_response.json()["items"][0]["hold_id"]
+    release_response = client.post(
+        "/admin/reports/legal-holds",
+        json={
+            "reason": "case released",
+            "policy_id": "policy-incident",
+            "action": "release",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert release_response.status_code == 200
+    release_data = release_response.json()
+    assert release_data["items"][0]["status"] == "released"
+    assert release_data["items"][0]["hold_id"] == hold_id
+    stored = next(iter(holds.values()))
+    assert stored["hold_id"] == hold_id
+    assert stored["created_by"] == "admin-sub"
+    assert stored["state"] == "released"
+    assert stored["released_by"] == "admin-sub"
+    assert hold_audits[-1][1]["result"] == "recorded"
+    _assert_no_private_artifact_markers(release_data)
+    _assert_no_private_artifact_markers(holds)
+    _assert_no_private_artifact_markers(hold_audits)
 
 
 def test_recovery_evidence_recent_jobs_export_is_bounded(monkeypatch):

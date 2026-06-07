@@ -89,7 +89,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | IMMUTABLE-01 | Phase 75 | Complete |
-| IMMUTABLE-02 | Phase 76 | Planned |
-| LEGALHOLD-01 | Phase 76 | Planned |
+| IMMUTABLE-02 | Phase 76 | Complete |
+| LEGALHOLD-01 | Phase 76 | Complete |
 | UI-14 | Phase 77 | Planned |
 | VERIFY-10 | Phase 78 | Planned |

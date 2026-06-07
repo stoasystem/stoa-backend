@@ -421,6 +421,21 @@ class AuditRetentionManifestRequest(BaseModel):
     audit_limit: int = Field(default=25, ge=1, le=100)
 
 
+class ImmutableEvidencePersistRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    references: list[AuditRetentionReference] = Field(..., min_length=1, max_length=10)
+    retention_category: str = Field(default="operational", min_length=1, max_length=50)
+    target_limit: int = Field(default=25, ge=1, le=100)
+    audit_limit: int = Field(default=25, ge=1, le=100)
+
+
+class LegalHoldMetadataRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    references: list[AuditRetentionReference] = Field(..., min_length=1, max_length=10)
+    action: str = Field(default="apply", min_length=1, max_length=50)
+    policy_id: str = Field(default="operational-default", min_length=1, max_length=100)
+
+
 @router.get("/users")
 async def list_users(
     limit: int = Query(default=50, ge=1, le=200),
@@ -964,6 +979,76 @@ async def create_audit_retention_manifest(
             audit_limit=body.audit_limit,
         )
     except report_audit_retention_service.AuditRetentionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/reports/immutable-evidence/status")
+async def get_immutable_evidence_status(
+    request: Request,
+    body: AuditRetentionStatusRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect immutable evidence and legal hold metadata status for allowlisted scopes."""
+    return report_audit_retention_service.build_immutable_status_response(
+        references=[ref.model_dump(exclude_none=True) for ref in body.references],
+        request_id=_request_id(request),
+        limit=body.limit,
+    )
+
+
+@router.post("/reports/immutable-evidence/persist")
+async def persist_immutable_evidence_manifest(
+    request: Request,
+    body: ImmutableEvidencePersistRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Persist a metadata-only manifest reference when CDK-managed immutable storage is configured."""
+    try:
+        return report_audit_retention_service.persist_immutable_manifest(
+            reason=body.reason,
+            generated_by=_operator_id(user),
+            request_id=_request_id(request),
+            references=[ref.model_dump(exclude_none=True) for ref in body.references],
+            retention_category=body.retention_category,
+            target_limit=body.target_limit,
+            audit_limit=body.audit_limit,
+        )
+    except report_audit_retention_service.ImmutableEvidenceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/reports/legal-holds/status")
+async def get_legal_hold_status(
+    request: Request,
+    body: AuditRetentionStatusRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect metadata-only legal hold state for allowlisted evidence scopes."""
+    return report_audit_retention_service.build_legal_hold_status_response(
+        references=[ref.model_dump(exclude_none=True) for ref in body.references],
+        request_id=_request_id(request),
+        limit=body.limit,
+    )
+
+
+@router.post("/reports/legal-holds")
+async def apply_legal_hold_metadata(
+    request: Request,
+    body: LegalHoldMetadataRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Apply or release metadata-only legal hold state without deleting audit evidence."""
+    try:
+        return report_audit_retention_service.apply_legal_hold_metadata(
+            references=[ref.model_dump(exclude_none=True) for ref in body.references],
+            action=body.action,
+            reason=body.reason,
+            actor=_operator_id(user),
+            request_id=_request_id(request),
+            policy_id=body.policy_id,
+            limit=10,
+        )
+    except report_audit_retention_service.ImmutableEvidenceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
@@ -1681,7 +1766,7 @@ def _request_id(request: Request) -> str | None:
     for header in ("x-request-id", "x-amzn-requestid", "x-amzn-trace-id", "x-correlation-id"):
         value = request.headers.get(header)
         if value:
-            return report_recovery_service.redact_private_artifact_text(value)[:240]
+            return report_audit_retention_service.sanitize_request_id(value)
     return None
 
 

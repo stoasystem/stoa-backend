@@ -343,6 +343,67 @@ def put_audit_retention_audit_event(manifest_id: str, event: dict) -> None:
     )
 
 
+def put_audit_retention_manifest(manifest_id: str, manifest: dict) -> bool:
+    """Persist one immutable-evidence manifest reference without overwriting."""
+    table = get_table()
+    try:
+        table.put_item(
+            Item={
+                "PK": f"AUDIT_RETENTION#{manifest_id}",
+                "SK": "IMMUTABLE_MANIFEST",
+                "entity_type": "AUDIT_RETENTION_IMMUTABLE_MANIFEST",
+                **manifest,
+            },
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def get_audit_retention_manifest(manifest_id: str) -> dict | None:
+    """Read one persisted immutable-evidence manifest reference."""
+    response = get_table().get_item(
+        Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"}
+    )
+    return response.get("Item")
+
+
+def put_legal_hold_metadata(scope_key: str, hold: dict) -> None:
+    """Store current metadata-only legal hold state for an evidence scope."""
+    get_table().put_item(
+        Item={
+            "PK": f"LEGAL_HOLD#{scope_key}",
+            "SK": "SUMMARY",
+            "entity_type": "LEGAL_HOLD_METADATA",
+            **hold,
+        },
+    )
+
+
+def get_legal_hold_metadata(scope_key: str) -> dict | None:
+    """Read current metadata-only legal hold state for an evidence scope."""
+    response = get_table().get_item(
+        Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "SUMMARY"}
+    )
+    return response.get("Item")
+
+
+def put_legal_hold_audit_event(scope_key: str, event: dict) -> None:
+    """Append one metadata-only legal hold audit event."""
+    get_table().put_item(
+        Item={
+            "PK": f"LEGAL_HOLD#{scope_key}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "LEGAL_HOLD_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
 def put_recovery_job(job: dict, targets: list[dict]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = get_table()

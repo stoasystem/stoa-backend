@@ -9,6 +9,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
+from stoa.config import settings
 from stoa.db.repositories import report_repo
 from stoa.services import release_evidence_service, report_recovery_evidence_service, report_recovery_service
 
@@ -47,8 +48,21 @@ class AuditRetentionError(Exception):
         self.detail = detail
 
 
+class ImmutableEvidenceError(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def sanitize_request_id(value: object) -> str | None:
+    text = _redact_text(value)
+    if not text:
+        return None
+    return text[:240]
 
 
 def build_status_response(
@@ -57,6 +71,7 @@ def build_status_response(
     request_id: str | None,
     limit: int = 25,
 ) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
     items = []
     for reference in references[:limit]:
         resolved = _resolve_reference(reference, include_evidence=False, target_limit=0, audit_limit=0)
@@ -90,6 +105,7 @@ def build_manifest(
     target_limit: int = 25,
     audit_limit: int = 25,
 ) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
     manifest_id = f"audit-retention-{uuid4().hex}"
     generated_at = now_iso()
     safe_reason = _redact_text(reason) or ""
@@ -189,6 +205,291 @@ def build_manifest(
     return manifest_body
 
 
+def build_immutable_status_response(
+    *,
+    references: list[dict[str, Any]],
+    request_id: str | None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    retention_status = build_status_response(
+        references=references,
+        request_id=request_id,
+        limit=limit,
+    )
+    hold_status = build_legal_hold_status_response(
+        references=references,
+        request_id=request_id,
+        limit=limit,
+    )
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "checked_at": now_iso(),
+        "request_id": request_id,
+        "immutable_storage": _immutable_storage_public_status(),
+        "audit_retention": retention_status,
+        "legal_hold": hold_status,
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
+def persist_immutable_manifest(
+    *,
+    reason: str,
+    generated_by: str,
+    request_id: str | None,
+    references: list[dict[str, Any]],
+    retention_category: str = "operational",
+    target_limit: int = 25,
+    audit_limit: int = 25,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    manifest = build_manifest(
+        reason=reason,
+        generated_by=generated_by,
+        request_id=request_id,
+        references=references,
+        retention_category=retention_category,
+        retention_action="seal_metadata",
+        target_limit=target_limit,
+        audit_limit=audit_limit,
+    )
+    storage_status = _immutable_storage_status()
+    if manifest.get("status") == "refused":
+        persist_status = _immutable_refusal_status(
+            "manifest refused before immutable persistence",
+            storage_status=storage_status,
+        )
+        write_immutable_persistence_audit_event(
+            manifest,
+            actor=generated_by,
+            request_id=request_id,
+            reason=reason,
+            result="refused",
+            metadata=persist_status,
+        )
+        return _immutable_manifest_response(manifest, persist_status)
+
+    privacy = _privacy_result(manifest)
+    if not privacy["passed"]:
+        persist_status = _immutable_refusal_status(
+            "privacy denylist check failed before immutable persistence",
+            storage_status=storage_status,
+            privacy=privacy,
+        )
+        write_immutable_persistence_audit_event(
+            manifest,
+            actor=generated_by,
+            request_id=request_id,
+            reason=reason,
+            result="refused",
+            metadata=persist_status,
+        )
+        return _immutable_manifest_response(manifest, persist_status)
+
+    if storage_status["status"] != "ready":
+        persist_status = _immutable_refusal_status(
+            "immutable storage is not configured by CDK",
+            storage_status=storage_status,
+        )
+        write_immutable_persistence_audit_event(
+            manifest,
+            actor=generated_by,
+            request_id=request_id,
+            reason=reason,
+            result="refused",
+            metadata=persist_status,
+        )
+        return _immutable_manifest_response(manifest, persist_status)
+
+    manifest_digest = manifest.get("verification", {}).get("manifest_digest")
+    immutable_ref_id = _immutable_ref_id(manifest)
+    persisted = report_repo.put_audit_retention_manifest(
+        str(manifest["manifest_id"]),
+        {
+            "immutable_ref_id": immutable_ref_id,
+            "manifest_id": manifest["manifest_id"],
+            "manifest_digest": manifest_digest,
+            "digest_algorithm": "sha256",
+            "status": "persisted",
+            "scope": manifest.get("scope"),
+            "retention_category": manifest.get("retention_category"),
+            "retention_clock": manifest.get("retention_clock"),
+            "item_count": manifest.get("verification", {}).get("item_count"),
+            "privacy": privacy,
+            "created_at": now_iso(),
+            "created_by": _redact_text(generated_by),
+            "source_request_id": request_id,
+        },
+    )
+    persist_status = {
+        "status": "persisted" if persisted else "refused",
+        "immutable_ref_id": immutable_ref_id if persisted else None,
+        "manifest_id": manifest["manifest_id"],
+        "manifest_digest": manifest_digest,
+        "reason": None if persisted else "immutable manifest reference already exists",
+        "storage": _immutable_storage_public_status(storage_status),
+        "privacy": privacy,
+    }
+    write_immutable_persistence_audit_event(
+        manifest,
+        actor=generated_by,
+        request_id=request_id,
+        reason=reason,
+        result="persisted" if persisted else "refused",
+        metadata=persist_status,
+    )
+    return _immutable_manifest_response(manifest, persist_status)
+
+
+def write_immutable_persistence_audit_event(
+    manifest: dict[str, Any],
+    *,
+    actor: str,
+    request_id: str | None,
+    reason: str,
+    result: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    event = {
+        "event_id": uuid4().hex,
+        "event_at": now_iso(),
+        "manifest_id": manifest["manifest_id"],
+        "actor": _redact_text(actor),
+        "action": "immutable_evidence_persist",
+        "reason": _redact_text(reason),
+        "source": "admin_api",
+        "result": _redact_text(result),
+        "correlation_id": request_id,
+        "metadata": _sanitize_value(metadata),
+    }
+    report_repo.put_audit_retention_audit_event(manifest["manifest_id"], event)
+    return event
+
+
+def build_legal_hold_status_response(
+    *,
+    references: list[dict[str, Any]],
+    request_id: str | None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    items = []
+    for reference in references[:limit]:
+        safe_ref = _legal_hold_reference(reference)
+        scope_key = _scope_key(safe_ref)
+        current = report_repo.get_legal_hold_metadata(scope_key)
+        items.append(
+            {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": _redact_text(current.get("state")) if current else "none",
+                "policy_id": _redact_text(current.get("policy_id")) if current else None,
+                "hold_id": _redact_text(current.get("hold_id")) if current else None,
+                "reason": _redact_text(current.get("reason")) if current else None,
+                "updated_at": _redact_text(current.get("updated_at")) if current else None,
+            }
+        )
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "checked_at": now_iso(),
+        "request_id": request_id,
+        "scope_count": len(items),
+        "items": items,
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
+def apply_legal_hold_metadata(
+    *,
+    references: list[dict[str, Any]],
+    action: str,
+    reason: str,
+    actor: str,
+    request_id: str | None,
+    policy_id: str = "operational-default",
+    limit: int = 10,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    safe_action = str(action or "apply").strip().lower()
+    if safe_action not in {"apply", "release"}:
+        raise ImmutableEvidenceError(422, "legal hold action must be apply or release")
+    safe_reason = _redact_text(reason) or ""
+    if not safe_reason:
+        raise ImmutableEvidenceError(422, "legal hold reason is required")
+
+    now = now_iso()
+    items = []
+    for reference in references[:limit]:
+        safe_ref = _legal_hold_reference(reference)
+        scope = safe_ref.get("scope")
+        scope_key = _scope_key(safe_ref)
+        if scope not in SUPPORTED_SCOPES:
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": f"unsupported scope: {scope or 'missing'}",
+            }
+            _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
+        existing = report_repo.get_legal_hold_metadata(scope_key)
+        if safe_action == "release" and (not existing or existing.get("state") != "active"):
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": "no active legal hold exists for this scope",
+            }
+            _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
+        hold_id = str(existing.get("hold_id")) if safe_action == "release" and existing else f"legal-hold-{uuid4().hex}"
+        state = "active" if safe_action == "apply" else "released"
+        current = {
+            "hold_id": hold_id,
+            "scope_key": scope_key,
+            "reference": safe_ref,
+            "state": state,
+            "policy_id": _redact_text(policy_id) or "operational-default",
+            "reason": safe_reason,
+            "created_by": _redact_text(existing.get("created_by")) if existing else _redact_text(actor),
+            "created_at": _redact_text(existing.get("created_at")) if existing else now,
+            "updated_by": _redact_text(actor),
+            "updated_at": now,
+            "source_request_id": request_id,
+        }
+        if safe_action == "release":
+            current["released_by"] = _redact_text(actor)
+            current["released_at"] = now
+        report_repo.put_legal_hold_metadata(scope_key, current)
+        item = {
+            "reference": safe_ref,
+            "scope_key": scope_key,
+            "status": state,
+            "hold_id": hold_id,
+            "policy_id": current["policy_id"],
+            "reason": safe_reason,
+            "updated_at": now,
+        }
+        _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+        items.append(item)
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": now,
+        "request_id": request_id,
+        "action": safe_action,
+        "scope_count": len(items),
+        "items": items,
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
 def write_manifest_audit_event(
     manifest: dict[str, Any],
     *,
@@ -197,6 +498,7 @@ def write_manifest_audit_event(
     reason: str,
     retention_action: str,
 ) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
     event = {
         "event_id": uuid4().hex,
         "event_at": now_iso(),
@@ -220,6 +522,121 @@ def write_manifest_audit_event(
         },
     }
     report_repo.put_audit_retention_audit_event(manifest["manifest_id"], event)
+    return event
+
+
+def _immutable_storage_status() -> dict[str, Any]:
+    mode = str(settings.immutable_audit_storage_mode or "disabled").strip().lower()
+    resource = str(settings.immutable_audit_storage_resource or "").strip()
+    prefix = str(settings.immutable_audit_storage_prefix or "").strip()
+    cdk_managed = bool(settings.immutable_audit_storage_cdk_managed)
+    ready = mode == "cdk_managed" and cdk_managed and bool(resource) and bool(prefix)
+    missing = []
+    if mode != "cdk_managed":
+        missing.append("immutable_audit_storage_mode")
+    if not cdk_managed:
+        missing.append("immutable_audit_storage_cdk_managed")
+    if not resource:
+        missing.append("immutable_audit_storage_resource")
+    if not prefix:
+        missing.append("immutable_audit_storage_prefix")
+    return {
+        "status": "ready" if ready else "not_configured",
+        "mode": mode or "disabled",
+        "cdk_managed": cdk_managed,
+        "resource_configured": bool(resource),
+        "prefix_configured": bool(prefix),
+        "missing": missing,
+    }
+
+
+def _immutable_storage_public_status(status: dict[str, Any] | None = None) -> dict[str, Any]:
+    raw = status or _immutable_storage_status()
+    return {
+        "status": raw["status"],
+        "mode": raw["mode"],
+        "cdk_managed": raw["cdk_managed"],
+        "resource_configured": raw["resource_configured"],
+        "prefix_configured": raw["prefix_configured"],
+        "missing": list(raw.get("missing") or []),
+    }
+
+
+def _immutable_refusal_status(
+    reason: str,
+    *,
+    storage_status: dict[str, Any],
+    privacy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": "not_configured" if storage_status["status"] == "not_configured" else "refused",
+        "reason": _redact_text(reason),
+        "storage": _immutable_storage_public_status(storage_status),
+        "privacy": privacy or {"metadata_only": True, "private_artifact_fields_omitted": True, "passed": True, "violation_count": 0, "violations": []},
+    }
+
+
+def _immutable_manifest_response(
+    manifest: dict[str, Any],
+    persist_status: dict[str, Any],
+) -> dict[str, Any]:
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "manifest_id": manifest["manifest_id"],
+        "generated_at": manifest["generated_at"],
+        "generated_by": manifest["generated_by"],
+        "reason": manifest["reason"],
+        "retention_category": manifest["retention_category"],
+        "manifest_status": manifest.get("status"),
+        "manifest_digest": manifest.get("verification", {}).get("manifest_digest"),
+        "item_count": manifest.get("verification", {}).get("item_count"),
+        "immutable_storage": _sanitize_value(persist_status),
+        "verification": {
+            "privacy": manifest.get("verification", {}).get("privacy"),
+            "refusal_reasons": manifest.get("verification", {}).get("refusal_reasons", []),
+        },
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
+def _immutable_ref_id(manifest: dict[str, Any]) -> str:
+    digest = str(manifest.get("verification", {}).get("manifest_digest") or _digest(manifest))
+    return "immutable-" + digest.split(":", 1)[-1][:24]
+
+
+def _legal_hold_reference(reference: dict[str, Any]) -> dict[str, Any]:
+    scope = _redact_text(reference.get("scope"))
+    if scope == "release_evidence" and isinstance(reference.get("release_evidence"), dict):
+        return {"scope": "release_evidence", "release": _release_reference_id(reference["release_evidence"])}
+    return _sanitize_reference(reference)
+
+
+def _scope_key(reference: dict[str, Any]) -> str:
+    return _digest(reference).split(":", 1)[1][:32]
+
+
+def _write_legal_hold_audit(
+    scope_key: str,
+    item: dict[str, Any],
+    *,
+    actor: str,
+    request_id: str | None,
+    reason: str,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    event = {
+        "event_id": uuid4().hex,
+        "event_at": now_iso(),
+        "actor": _redact_text(actor),
+        "action": "legal_hold_metadata",
+        "reason": _redact_text(reason),
+        "source": "admin_api",
+        "result": "refused" if item.get("status") == "refused" else "recorded",
+        "correlation_id": request_id,
+        "metadata": _sanitize_value(item),
+    }
+    report_repo.put_legal_hold_audit_event(scope_key, event)
     return event
 
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.7
 milestone_name: Immutable Audit Storage And Legal Hold Foundation
 status: planning
-last_updated: "2026-06-07T16:45:00+02:00"
+last_updated: "2026-06-07T17:15:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 76 Backend Immutable Retention Persistence And Legal Hold Metadata
+Phase: 77 Admin Immutable Evidence And Legal Hold UI
 Plan: Not started
-Status: Phase 75 complete; ready to discuss/plan Phase 76.
-Last activity: 2026-06-07 — completed Phase 75 immutable storage/legal hold/CDK readiness.
+Status: Phase 76 complete; ready to discuss/plan Phase 77.
+Last activity: 2026-06-07 — completed Phase 76 backend immutable persistence and legal hold metadata.
 
 ## Accumulated Context
 
@@ -70,10 +70,11 @@ Last activity: 2026-06-07 — completed Phase 75 immutable storage/legal hold/CD
 - v2.7 starts with immutable audit storage and legal hold foundation because v2.6 explicitly deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence.
 - Phase 75 must define immutable storage, legal hold, privacy, and CDK readiness contracts before any backend production write path is implemented.
 - Phase 75 completed with metadata-only immutable storage and legal hold contracts, CDK readiness evidence, and a decision that Phase 76 must fail closed while CDK-managed immutable storage configuration is absent.
+- Phase 76 added admin-only immutable evidence status/persist and legal hold status/apply APIs, with immutable persistence refusing `not_configured` until CDK-managed storage settings exist.
 
 ### Pending Todos
 
-- Start Phase 76 backend immutable retention persistence and legal hold metadata.
+- Start Phase 77 admin immutable evidence and legal hold UI.
 
 ### Blockers/Concerns
 
@@ -93,4 +94,4 @@ Last activity: 2026-06-07 — completed Phase 75 immutable storage/legal hold/CD
 
 ## Operator Next Steps
 
-- Discuss/plan Phase 76 backend immutable retention persistence and legal hold metadata.
+- Discuss/plan Phase 77 admin immutable evidence and legal hold UI.

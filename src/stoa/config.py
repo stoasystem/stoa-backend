@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     s3_images_bucket: str = "stoa-images"
     s3_reports_bucket: str = LOCAL_REPORTS_BUCKET_PLACEHOLDER
     s3_presign_expiry_seconds: int = 300
+    immutable_audit_storage_mode: str = "disabled"
+    immutable_audit_storage_cdk_managed: bool = False
+    immutable_audit_storage_resource: str = ""
+    immutable_audit_storage_prefix: str = ""
 
     # Cognito
     cognito_user_pool_id: str = ""
