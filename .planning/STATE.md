@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.5 production support handoff verification complete.
+**Current focus:** v2.5 complete; no active milestone.
 
 ## Current Position
 
-Phase: 70 - Production Support Handoff Verification Closeout
-Plan: 70-01
-Status: Complete.
-Last activity: 2026-06-07 — completed production deploy/runtime/CDK evidence, read-only support handoff API smoke, browser smoke, and v2.5 audit.
+Phase: none active
+Plan: none active
+Status: v2.5 milestone closed.
+Last activity: 2026-06-07 — archived v2.5 after production deploy/runtime/CDK evidence, read-only support handoff API smoke, browser smoke, and audit.
 
 ## Accumulated Context
 
@@ -59,10 +59,11 @@ Last activity: 2026-06-07 — completed production deploy/runtime/CDK evidence, 
 - v2.4 milestone closeout archived audit, roadmap, requirements, and phase records with production live verification deferred.
 - v2.5 should close only the deferred v2.4 production deployment/read-only verification gap without adding product scope.
 - Phase 70 closed the deferred v2.4 production verification gap with backend/frontend deploy evidence, Lambda runtime metadata, CDK diff classification, production API smoke, production browser smoke, and final audit.
+- v2.5 milestone closeout archived audit, roadmap, requirements, and phase records.
 
 ### Pending Todos
 
-- Archive v2.5 milestone after final lifecycle closeout.
+- Define the next milestone when ready.
 
 ### Blockers/Concerns
 
@@ -80,4 +81,4 @@ Last activity: 2026-06-07 — completed production deploy/runtime/CDK evidence, 
 
 ## Operator Next Steps
 
-- Complete v2.5 milestone archive.
+- Start the next milestone when ready.

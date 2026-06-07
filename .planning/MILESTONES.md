@@ -313,7 +313,7 @@ Known deferred items at close: compliance-grade WORM audit storage, support tick
 
 ### v2.4 Support Evidence Export Destinations And Ticket Handoff
 
-**Status:** Local release gate complete 2026-06-07; production live smoke deferred
+**Status:** Shipped 2026-06-07; production verification closed by v2.5
 **Audit:** `.planning/milestones/v2.4-MILESTONE-AUDIT.md`
 **Roadmap archive:** `.planning/milestones/v2.4-ROADMAP.md`
 **Requirements archive:** `.planning/milestones/v2.4-REQUIREMENTS.md`
@@ -331,20 +331,28 @@ Key accomplishments:
 - Added frontend `/admin/report-operations` support handoff controls for preview, copy, download, and refusal states.
 - Verified backend and frontend quality gates, privacy denylist coverage, release evidence validation, and mutation/refusal behavior locally.
 
-Known deferred items at close: production deployment and read-only live API/browser smoke for v2.4 support handoff endpoints/UI; direct support-system writes remain out of scope until an approved connector or secret-backed credential path exists.
+Known deferred items at close: direct support-system writes remain out of scope until an approved connector or secret-backed credential path exists.
 
 ### v2.5 Production Support Handoff Verification Closeout
 
-**Status:** Active
-**Roadmap:** `.planning/milestones/v2.5-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.5-REQUIREMENTS.md`
+**Status:** Shipped 2026-06-07
+**Audit:** `.planning/milestones/v2.5-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.5-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.5-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.5-phases/`
 **Goal:** Close the v2.4 production verification gap by deploying support handoff changes and recording read-only production evidence.
 **Phases:** 1
-**Plans:** 1/1 planned
+**Plans:** 1
+**Requirements:** 4/4 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 70: Production Support Handoff Verification Closeout.
+- Verified backend deploy workflow `27091480178` for commit `875a8fbe2a56c89169ba52cdf469777f72a866b7`.
+- Verified frontend CI `27091612903` and deploy workflow `27091612893` for commit `9171de6109e102185dc65f41c6294f644cad72de`.
+- Recorded Lambda runtime state and CDK diff classification.
+- Passed production support handoff API and browser smoke with no report artifact mutation, no external support-system write, and no privacy denylist hits.
+
+Known deferred items at close: direct support-system integrations, compliance-grade WORM audit storage, and broader report product expansion remain future work.
 
 ---
-*Last updated: 2026-06-07 after planning v2.5 Phase 70*
+*Last updated: 2026-06-07 after closing v2.5*
