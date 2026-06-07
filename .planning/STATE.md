@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Retention Governance And Legal Hold Operations
 status: planning
-last_updated: "2026-06-07T20:20:00+02:00"
+last_updated: "2026-06-07T20:40:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 85 Admin Retention Governance And Legal Hold Runbook UI
+Phase: 86 v2.9 Release Gate And Governance Verification
 Plan: Not started
 Status: Ready for planning.
-Last activity: 2026-06-07 — completed Phase 84 backend retention approval and legal-hold review metadata.
+Last activity: 2026-06-07 — completed Phase 85 admin retention governance and legal-hold runbook UI.
 
 ## Accumulated Context
 
@@ -87,10 +87,11 @@ Last activity: 2026-06-07 — completed Phase 84 backend retention approval and 
 - Phase 83 must define the governance contract, approval packet, runbook specification, and privacy-safe verification boundary before backend/UI governance metadata is implemented.
 - Phase 83 completed the governance contract, approval packet, legal-hold runbook specification, and Phase 84 entry criteria without production mutation.
 - Phase 84 added admin-only metadata retention governance status, retention approval recording, and legal-hold review recording endpoints with append-only audit evidence, stale-write refusal, and privacy denylist tests.
+- Phase 85 added frontend admin report-operations controls for retention governance status, approval metadata recording, legal-hold review recording, copy/download evidence payloads, and Playwright privacy coverage in stoa-frontend commit `b88c673`.
 
 ### Pending Todos
 
-- Execute Phase 85 admin retention governance and legal-hold runbook UI.
+- Execute Phase 86 release gate and governance verification.
 
 ### Blockers/Concerns
 
@@ -112,4 +113,4 @@ Last activity: 2026-06-07 — completed Phase 84 backend retention approval and 
 
 ## Operator Next Steps
 
-- Plan and execute Phase 85 admin retention governance and legal-hold runbook UI.
+- Plan and execute Phase 86 v2.9 release gate and governance verification.
