@@ -31,7 +31,7 @@ Goal: deploy and enable CDK-managed immutable evidence storage for report operat
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 79 | Immutable Evidence Storage CDK Design And Deploy Readiness | Planned | IMSTORE-01 |
+| 79 | Immutable Evidence Storage CDK Design And Deploy Readiness | Complete | IMSTORE-01 |
 | 80 | CDK Immutable Evidence Storage Resource Deployment | Planned | IMSTORE-02 |
 | 81 | Backend Immutable Manifest Persistence Enablement | Planned | IMSTORE-03 |
 | 82 | v2.8 Release Gate And Live Immutable Storage Verification | Planned | VERIFY-11 |
@@ -40,7 +40,7 @@ Goal: deploy and enable CDK-managed immutable evidence storage for report operat
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 79 | v2.8 | 1/1 | Planned | - |
+| 79 | v2.8 | 1/1 | Complete | 2026-06-07 |
 | 80 | v2.8 | 0/1 | Planned | - |
 | 81 | v2.8 | 0/1 | Planned | - |
 | 82 | v2.8 | 0/1 | Planned | - |
@@ -49,10 +49,10 @@ Goal: deploy and enable CDK-managed immutable evidence storage for report operat
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMSTORE-01 | Phase 79 | Planned |
+| IMSTORE-01 | Phase 79 | Complete |
 | IMSTORE-02 | Phase 80 | Planned |
 | IMSTORE-03 | Phase 81 | Planned |
 | VERIFY-11 | Phase 82 | Planned |
 
 ---
-*Last updated: 2026-06-07 after planning v2.8*
+*Last updated: 2026-06-07 after completing Phase 79*

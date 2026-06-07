@@ -7,10 +7,10 @@ last_updated: "2026-06-07T18:04:31+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 79 Immutable Evidence Storage CDK Design And Deploy Readiness
-Plan: 79-01 Immutable Evidence Storage CDK Design And Deploy Readiness
-Status: Planned.
-Last activity: 2026-06-07 — planned v2.8 CDK-Managed Immutable Evidence Storage Deployment.
+Phase: 80 CDK Immutable Evidence Storage Resource Deployment
+Plan: Not started
+Status: Phase 79 complete; ready to plan Phase 80.
+Last activity: 2026-06-07 — completed immutable evidence storage CDK design and deploy readiness.
 
 ## Accumulated Context
 
@@ -77,11 +77,11 @@ Last activity: 2026-06-07 — planned v2.8 CDK-Managed Immutable Evidence Storag
 - v2.7 shipped as a metadata-only, admin-only, fail-closed immutable evidence/legal hold foundation; compliance-grade WORM/Object Lock storage remains future scope.
 - v2.8 starts with CDK-managed immutable evidence storage deployment because v2.7 left WORM/Object Lock resource deployment and full immutable manifest object persistence as residual gaps.
 - Phase 79 must define CDK design, deploy readiness, backend configuration contract, and live verification boundary before Phase 80 creates infrastructure.
+- Phase 79 selected a dedicated retained, versioned, Object Lock-enabled immutable evidence S3 bucket in `StorageStack`, API Lambda env vars, and scoped `audit-retention/*` S3 permissions for Phase 80.
 
 ### Pending Todos
 
-- Complete Phase 79 by inspecting v2.7 artifacts and infra CDK stacks.
-- Record immutable storage CDK design, deploy readiness, backend config contract, and Phase 80 entry criteria.
+- Start Phase 80 CDK immutable evidence storage resource deployment.
 
 ### Blockers/Concerns
 
@@ -102,4 +102,4 @@ Last activity: 2026-06-07 — planned v2.8 CDK-Managed Immutable Evidence Storag
 
 ## Operator Next Steps
 
-- Execute Phase 79 plan and complete the immutable storage CDK design/deploy readiness verification documents.
+- Plan and execute Phase 80 CDK immutable evidence storage resource deployment.
