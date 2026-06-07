@@ -3083,7 +3083,190 @@ def test_legal_hold_metadata_refuses_stale_compare_and_set(monkeypatch):
     assert data["items"][0]["status"] == "refused"
     assert data["items"][0]["reason"] == "legal hold metadata changed; refresh status and retry"
     assert hold_audits[-1][1]["result"] == "refused"
+
+
+def test_retention_governance_status_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin governance status should not read metadata")
+
+    monkeypatch.setattr(report_repo, "get_retention_approval_metadata", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/retention-governance/status",
+        json={"policy_version": "retention-policy-v1"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_retention_governance_records_approval_and_status(monkeypatch):
+    approvals = {}
+    approval_audits = []
+    monkeypatch.setattr(report_repo, "get_legal_hold_metadata", lambda scope_key: None)
+    monkeypatch.setattr(report_repo, "get_legal_hold_review_metadata", lambda scope_key: None)
+    monkeypatch.setattr(report_repo, "get_retention_approval_metadata", lambda policy_version: approvals.get(policy_version))
+
+    def put_approval(policy_version, approval, **kwargs):
+        approvals[policy_version] = approval
+        return True
+
+    monkeypatch.setattr(report_repo, "put_retention_approval_metadata", put_approval)
+    monkeypatch.setattr(
+        report_repo,
+        "put_retention_approval_audit_event",
+        lambda policy_version, event: approval_audits.append((policy_version, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    record_response = client.post(
+        "/admin/reports/retention-governance/approval",
+        json={
+            "policy_version": "retention-policy-v1",
+            "retention_mode": "GOVERNANCE",
+            "retention_days": 365,
+            "policy_owner": "ops-owner weekly-reports/private/report.html",
+            "legal_compliance_approver": "legal@example.com",
+            "approval_state": "approved",
+            "reason": "approved with access_token=abc",
+            "next_review_due_at": "2027-06-07",
+            "evidence_references": [{"type": "object_lock", "run_id": "27098074719", "s3_key": "private"}],
+        },
+        headers={"x-request-id": "req-governance-approval"},
+    )
+    status_response = client.post(
+        "/admin/reports/retention-governance/status",
+        json={
+            "policy_version": "retention-policy-v1",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert record_response.status_code == 200
+    record_data = record_response.json()
+    assert record_data["status"] == "recorded"
+    assert record_data["retention_approval"]["approval_state"] == "approved"
+    assert record_data["retention_approval"]["retention_days"] == 365
+    assert record_data["retention_approval"]["policy_owner"] == "ops-owner [report-artifact-key]"
+    assert record_data["retention_approval"]["formal_approval_recorded"] is True
+    assert record_data["retention_approval"]["broad_compliance_claims_allowed"] is False
+    assert record_data["retention_approval"]["evidence_references"][0] == {
+        "type": "object_lock",
+        "run_id": "27098074719",
+    }
+    assert status_response.status_code == 200
+    status_data = status_response.json()
+    assert status_data["retention_approval"]["approval_state"] == "approved"
+    assert status_data["legal_hold_reviews"]["items"][0]["review_status"] == "none"
+    assert approval_audits[-1][1]["result"] == "recorded"
+    _assert_no_private_artifact_markers(record_data)
+    _assert_no_private_artifact_markers(status_data)
+    _assert_no_private_artifact_markers(approval_audits)
+
+
+def test_retention_governance_refuses_stale_approval_write(monkeypatch):
+    approval_audits = []
+    monkeypatch.setattr(
+        report_repo,
+        "get_retention_approval_metadata",
+        lambda policy_version: {
+            "approval_id": "retention-approval-existing",
+            "policy_version": policy_version,
+            "approval_version": 2,
+            "created_by": "admin-sub",
+            "created_at": "2026-06-07T00:00:00+00:00",
+        },
+    )
+    monkeypatch.setattr(report_repo, "put_retention_approval_metadata", lambda policy_version, approval, **kwargs: False)
+    monkeypatch.setattr(
+        report_repo,
+        "put_retention_approval_audit_event",
+        lambda policy_version, event: approval_audits.append((policy_version, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/retention-governance/approval",
+        json={
+            "policy_version": "retention-policy-v1",
+            "retention_mode": "GOVERNANCE",
+            "retention_days": 365,
+            "policy_owner": "ops-owner",
+            "legal_compliance_approver": "legal@example.com",
+            "approval_state": "changes_requested",
+            "reason": "needs review",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "refused"
+    assert data["retention_approval"]["reason"] == "retention approval metadata changed; refresh status and retry"
+    assert approval_audits[-1][1]["result"] == "refused"
     _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(approval_audits)
+
+
+def test_legal_hold_review_records_metadata_and_status(monkeypatch):
+    reviews = {}
+    hold_audits = []
+    monkeypatch.setattr(
+        report_repo,
+        "get_legal_hold_metadata",
+        lambda scope_key: {"hold_id": "legal-hold-1", "state": "active"},
+    )
+    monkeypatch.setattr(report_repo, "get_legal_hold_review_metadata", lambda scope_key: reviews.get(scope_key))
+
+    def put_review(scope_key, review, **kwargs):
+        reviews[scope_key] = review
+        return True
+
+    monkeypatch.setattr(report_repo, "put_legal_hold_review_metadata", put_review)
+    monkeypatch.setattr(
+        report_repo,
+        "put_legal_hold_audit_event",
+        lambda scope_key, event: hold_audits.append((scope_key, event)),
+    )
+    monkeypatch.setattr(report_repo, "get_retention_approval_metadata", lambda policy_version: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    review_response = client.post(
+        "/admin/reports/legal-holds/review",
+        json={
+            "reason": "monthly review cookie=session",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+            "owner": "ops-owner",
+            "reviewer": "legal-reviewer",
+            "review_cadence": "monthly",
+            "outcome": "reviewed",
+            "next_review_due_at": "2026-07-07",
+            "break_glass": {"used": True, "approver": "incident-lead", "s3_key": "private"},
+        },
+    )
+    status_response = client.post(
+        "/admin/reports/retention-governance/status",
+        json={
+            "policy_version": "retention-policy-v1",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert review_response.status_code == 200
+    review_data = review_response.json()
+    assert review_data["items"][0]["status"] == "recorded"
+    assert review_data["items"][0]["outcome"] == "reviewed"
+    assert review_data["items"][0]["owner"] == "ops-owner"
+    assert review_data["items"][0]["review_version"] == 1
+    assert next(iter(reviews.values()))["break_glass"] == {"used": True, "approver": "incident-lead"}
+    assert status_response.status_code == 200
+    status_data = status_response.json()
+    assert status_data["legal_hold_reviews"]["items"][0]["review_status"] == "reviewed"
+    assert status_data["legal_hold_reviews"]["items"][0]["legal_hold_status"] == "active"
+    assert hold_audits[-1][1]["action"] == "legal_hold_review_metadata"
+    assert hold_audits[-1][1]["result"] == "recorded"
+    _assert_no_private_artifact_markers(review_data)
+    _assert_no_private_artifact_markers(status_data)
+    _assert_no_private_artifact_markers(reviews)
     _assert_no_private_artifact_markers(hold_audits)
 
 

@@ -459,6 +459,103 @@ def put_legal_hold_audit_event(scope_key: str, event: dict) -> None:
     )
 
 
+def put_retention_approval_metadata(
+    policy_version: str,
+    approval: dict,
+    *,
+    expected_approval_version: int | None = None,
+) -> bool:
+    """Conditionally store current metadata-only retention approval state."""
+    values = {}
+    if expected_approval_version is not None:
+        condition = "approval_version = :expected_approval_version"
+        values[":expected_approval_version"] = expected_approval_version
+    else:
+        condition = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+    put_kwargs = {
+        "Item": {
+            "PK": f"RETENTION_APPROVAL#{policy_version}",
+            "SK": "SUMMARY",
+            "entity_type": "RETENTION_APPROVAL_METADATA",
+            **approval,
+        },
+        "ConditionExpression": condition,
+    }
+    if values:
+        put_kwargs["ExpressionAttributeValues"] = values
+    try:
+        get_table().put_item(**put_kwargs)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def get_retention_approval_metadata(policy_version: str) -> dict | None:
+    """Read current metadata-only retention approval state."""
+    response = get_table().get_item(
+        Key={"PK": f"RETENTION_APPROVAL#{policy_version}", "SK": "SUMMARY"},
+        ConsistentRead=True,
+    )
+    return response.get("Item")
+
+
+def put_retention_approval_audit_event(policy_version: str, event: dict) -> None:
+    """Append one metadata-only retention approval audit event."""
+    get_table().put_item(
+        Item={
+            "PK": f"RETENTION_APPROVAL#{policy_version}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "RETENTION_APPROVAL_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
+def put_legal_hold_review_metadata(
+    scope_key: str,
+    review: dict,
+    *,
+    expected_review_version: int | None = None,
+) -> bool:
+    """Store latest metadata-only legal-hold review state for an evidence scope."""
+    values = {}
+    if expected_review_version is not None:
+        condition = "review_version = :expected_review_version"
+        values[":expected_review_version"] = expected_review_version
+    else:
+        condition = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+    put_kwargs = {
+        "Item": {
+            "PK": f"LEGAL_HOLD#{scope_key}",
+            "SK": "REVIEW_SUMMARY",
+            "entity_type": "LEGAL_HOLD_REVIEW_METADATA",
+            **review,
+        },
+        "ConditionExpression": condition,
+    }
+    if values:
+        put_kwargs["ExpressionAttributeValues"] = values
+    try:
+        get_table().put_item(**put_kwargs)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True
+
+
+def get_legal_hold_review_metadata(scope_key: str) -> dict | None:
+    """Read latest metadata-only legal-hold review state for an evidence scope."""
+    response = get_table().get_item(
+        Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "REVIEW_SUMMARY"},
+        ConsistentRead=True,
+    )
+    return response.get("Item")
+
+
 def put_recovery_job(job: dict, targets: list[dict]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = get_table()

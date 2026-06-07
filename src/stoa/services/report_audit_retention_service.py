@@ -17,6 +17,23 @@ from stoa.services import release_evidence_service, report_recovery_evidence_ser
 
 SCHEMA_VERSION = "v1"
 SUPPORTED_SCOPES = {"recovery_job", "report", "support_handoff", "release_evidence"}
+SUPPORTED_APPROVAL_STATES = {
+    "not_requested",
+    "pending_review",
+    "approved",
+    "changes_requested",
+    "rejected",
+    "expired",
+    "superseded",
+}
+SUPPORTED_REVIEW_OUTCOMES = {
+    "reviewed",
+    "approved",
+    "changes_requested",
+    "escalated",
+    "expired",
+    "superseded",
+}
 REFUSED_ACTIONS = {
     "delete",
     "expire",
@@ -232,6 +249,155 @@ def build_immutable_status_response(
         "legal_hold": hold_status,
     }
     response["privacy"] = _privacy_result(response)
+    return response
+
+
+def build_governance_status_response(
+    *,
+    policy_version: str,
+    references: list[dict[str, Any]],
+    request_id: str | None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    safe_policy_version = _safe_policy_version(policy_version)
+    approval = report_repo.get_retention_approval_metadata(safe_policy_version)
+    review_items = []
+    for reference in references[:limit]:
+        safe_ref = _legal_hold_reference(reference)
+        scope_key = _scope_key(safe_ref)
+        hold = report_repo.get_legal_hold_metadata(scope_key)
+        review = report_repo.get_legal_hold_review_metadata(scope_key)
+        review_items.append(
+            {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "legal_hold_status": _redact_text(hold.get("state")) if hold else "none",
+                "review_status": _redact_text(review.get("outcome")) if review else "none",
+                "owner": _redact_text(review.get("owner")) if review else None,
+                "reviewer": _redact_text(review.get("reviewer")) if review else None,
+                "review_cadence": _redact_text(review.get("review_cadence")) if review else None,
+                "next_review_due_at": _redact_text(review.get("next_review_due_at")) if review else None,
+                "review_version": review.get("review_version") if review else None,
+            }
+        )
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "checked_at": now_iso(),
+        "request_id": request_id,
+        "immutable_storage": _immutable_storage_public_status(),
+        "retention_approval": _approval_public_status(approval, safe_policy_version),
+        "legal_hold_reviews": {
+            "scope_count": len(review_items),
+            "items": review_items,
+        },
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
+def record_retention_approval_metadata(
+    *,
+    policy_version: str,
+    retention_mode: str,
+    retention_days: int,
+    policy_owner: str,
+    legal_compliance_approver: str,
+    approval_state: str,
+    reason: str,
+    actor: str,
+    request_id: str | None,
+    evidence_references: list[dict[str, Any]] | None = None,
+    next_review_due_at: str | None = None,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    safe_policy_version = _safe_policy_version(policy_version)
+    state = str(approval_state or "").strip().lower()
+    if state not in SUPPORTED_APPROVAL_STATES:
+        raise ImmutableEvidenceError(422, "unsupported retention approval state")
+    mode = str(retention_mode or "").strip().upper()
+    if mode not in {"GOVERNANCE", "COMPLIANCE", "METADATA_ONLY"}:
+        raise ImmutableEvidenceError(422, "unsupported retention mode")
+    safe_reason = _redact_text(reason) or ""
+    if not safe_reason:
+        raise ImmutableEvidenceError(422, "retention approval reason is required")
+    existing = report_repo.get_retention_approval_metadata(safe_policy_version)
+    existing_version = _approval_version(existing)
+    now = now_iso()
+    approval = {
+        "approval_id": _redact_text(existing.get("approval_id")) if existing else f"retention-approval-{uuid4().hex}",
+        "policy_version": safe_policy_version,
+        "retention_mode": mode,
+        "retention_days": int(retention_days),
+        "approval_state": state,
+        "policy_owner": _redact_text(policy_owner) or "unknown-owner",
+        "legal_compliance_approver": _redact_text(legal_compliance_approver) or "unknown-approver",
+        "reason": safe_reason,
+        "evidence_references": _sanitize_value(evidence_references or []),
+        "next_review_due_at": _redact_text(next_review_due_at),
+        "approval_version": existing_version + 1,
+        "created_by": _redact_text(existing.get("created_by")) if existing else _redact_text(actor),
+        "created_at": _redact_text(existing.get("created_at")) if existing else now,
+        "updated_by": _redact_text(actor),
+        "updated_at": now,
+        "source_request_id": request_id,
+        "compliance_language": {
+            "technical_object_lock_verified": mode in {"GOVERNANCE", "COMPLIANCE"},
+            "formal_approval_recorded": state == "approved",
+            "broad_compliance_claims_allowed": False,
+        },
+    }
+    privacy = _privacy_result(approval)
+    if not privacy["passed"]:
+        response = _approval_refusal_response(
+            safe_policy_version,
+            reason="privacy denylist check failed",
+            privacy=privacy,
+            request_id=request_id,
+        )
+        _write_retention_approval_audit(
+            safe_policy_version,
+            response,
+            actor=actor,
+            request_id=request_id,
+            reason=safe_reason,
+        )
+        return response
+    recorded = report_repo.put_retention_approval_metadata(
+        safe_policy_version,
+        approval,
+        expected_approval_version=existing_version if existing else None,
+    )
+    if not recorded:
+        response = _approval_refusal_response(
+            safe_policy_version,
+            reason="retention approval metadata changed; refresh status and retry",
+            privacy=privacy,
+            request_id=request_id,
+        )
+        _write_retention_approval_audit(
+            safe_policy_version,
+            response,
+            actor=actor,
+            request_id=request_id,
+            reason=safe_reason,
+        )
+        return response
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": now,
+        "request_id": request_id,
+        "status": "recorded",
+        "retention_approval": _approval_public_status(approval, safe_policy_version),
+        "privacy": privacy,
+    }
+    _write_retention_approval_audit(
+        safe_policy_version,
+        response,
+        actor=actor,
+        request_id=request_id,
+        reason=safe_reason,
+    )
     return response
 
 
@@ -460,6 +626,118 @@ def build_legal_hold_status_response(
     response = {
         "schema_version": SCHEMA_VERSION,
         "checked_at": now_iso(),
+        "request_id": request_id,
+        "scope_count": len(items),
+        "items": items,
+    }
+    response["privacy"] = _privacy_result(response)
+    return response
+
+
+def record_legal_hold_review_metadata(
+    *,
+    references: list[dict[str, Any]],
+    owner: str,
+    reviewer: str,
+    review_cadence: str,
+    outcome: str,
+    reason: str,
+    actor: str,
+    request_id: str | None,
+    next_review_due_at: str | None = None,
+    break_glass: dict[str, Any] | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    safe_outcome = str(outcome or "").strip().lower()
+    if safe_outcome not in SUPPORTED_REVIEW_OUTCOMES:
+        raise ImmutableEvidenceError(422, "unsupported legal hold review outcome")
+    safe_reason = _redact_text(reason) or ""
+    if not safe_reason:
+        raise ImmutableEvidenceError(422, "legal hold review reason is required")
+    now = now_iso()
+    items = []
+    for reference in references[:limit]:
+        safe_ref = _legal_hold_reference(reference)
+        scope = safe_ref.get("scope")
+        scope_key = _scope_key(safe_ref)
+        if scope not in SUPPORTED_SCOPES:
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": f"unsupported scope: {scope or 'missing'}",
+            }
+            _write_legal_hold_review_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
+        existing = report_repo.get_legal_hold_review_metadata(scope_key)
+        existing_version = _review_version(existing)
+        hold = report_repo.get_legal_hold_metadata(scope_key)
+        review = {
+            "review_id": f"legal-hold-review-{uuid4().hex}",
+            "scope_key": scope_key,
+            "reference": safe_ref,
+            "hold_id": _redact_text(hold.get("hold_id")) if hold else None,
+            "legal_hold_status": _redact_text(hold.get("state")) if hold else "none",
+            "owner": _redact_text(owner) or "unknown-owner",
+            "reviewer": _redact_text(reviewer) or "unknown-reviewer",
+            "review_cadence": _redact_text(review_cadence) or "unspecified",
+            "outcome": safe_outcome,
+            "reason": safe_reason,
+            "next_review_due_at": _redact_text(next_review_due_at),
+            "break_glass": _sanitize_value(break_glass or {"used": False}),
+            "review_version": existing_version + 1,
+            "created_by": _redact_text(existing.get("created_by")) if existing else _redact_text(actor),
+            "created_at": _redact_text(existing.get("created_at")) if existing else now,
+            "updated_by": _redact_text(actor),
+            "updated_at": now,
+            "source_request_id": request_id,
+        }
+        privacy = _privacy_result(review)
+        if not privacy["passed"]:
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": "privacy denylist check failed",
+                "privacy": privacy,
+            }
+            _write_legal_hold_review_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
+        recorded = report_repo.put_legal_hold_review_metadata(
+            scope_key,
+            review,
+            expected_review_version=existing_version if existing else None,
+        )
+        if not recorded:
+            item = {
+                "reference": safe_ref,
+                "scope_key": scope_key,
+                "status": "refused",
+                "reason": "legal hold review metadata changed; refresh status and retry",
+            }
+            _write_legal_hold_review_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+            items.append(item)
+            continue
+        item = {
+            "reference": safe_ref,
+            "scope_key": scope_key,
+            "status": "recorded",
+            "review_id": review["review_id"],
+            "outcome": safe_outcome,
+            "owner": review["owner"],
+            "reviewer": review["reviewer"],
+            "next_review_due_at": review["next_review_due_at"],
+            "review_version": review["review_version"],
+            "privacy": privacy,
+        }
+        _write_legal_hold_review_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
+        items.append(item)
+    response = {
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": now,
         "request_id": request_id,
         "scope_count": len(items),
         "items": items,
@@ -754,6 +1032,137 @@ def _hold_version(existing: dict[str, Any] | None) -> int:
         return max(int(existing.get("hold_version") or 0), 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _approval_version(existing: dict[str, Any] | None) -> int:
+    if not existing:
+        return 0
+    try:
+        return max(int(existing.get("approval_version") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _review_version(existing: dict[str, Any] | None) -> int:
+    if not existing:
+        return 0
+    try:
+        return max(int(existing.get("review_version") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_policy_version(policy_version: str) -> str:
+    value = _redact_text(policy_version) or "retention-policy-v1"
+    return value[:120]
+
+
+def _approval_public_status(
+    approval: dict[str, Any] | None,
+    policy_version: str,
+) -> dict[str, Any]:
+    if not approval:
+        return {
+            "policy_version": policy_version,
+            "approval_state": "not_requested",
+            "retention_mode": None,
+            "retention_days": None,
+            "policy_owner": None,
+            "legal_compliance_approver": None,
+            "next_review_due_at": None,
+            "approval_version": None,
+            "updated_at": None,
+            "formal_approval_recorded": False,
+            "broad_compliance_claims_allowed": False,
+        }
+    language = approval.get("compliance_language") or {}
+    return {
+        "approval_id": _redact_text(approval.get("approval_id")),
+        "policy_version": _redact_text(approval.get("policy_version")) or policy_version,
+        "approval_state": _redact_text(approval.get("approval_state")),
+        "retention_mode": _redact_text(approval.get("retention_mode")),
+        "retention_days": approval.get("retention_days"),
+        "policy_owner": _redact_text(approval.get("policy_owner")),
+        "legal_compliance_approver": _redact_text(approval.get("legal_compliance_approver")),
+        "reason": _redact_text(approval.get("reason")),
+        "evidence_references": _sanitize_value(approval.get("evidence_references") or []),
+        "next_review_due_at": _redact_text(approval.get("next_review_due_at")),
+        "approval_version": approval.get("approval_version"),
+        "updated_at": _redact_text(approval.get("updated_at")),
+        "formal_approval_recorded": bool(language.get("formal_approval_recorded")),
+        "technical_object_lock_verified": bool(language.get("technical_object_lock_verified")),
+        "broad_compliance_claims_allowed": False,
+    }
+
+
+def _approval_refusal_response(
+    policy_version: str,
+    *,
+    reason: str,
+    privacy: dict[str, Any],
+    request_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "updated_at": now_iso(),
+        "request_id": request_id,
+        "status": "refused",
+        "retention_approval": {
+            "policy_version": policy_version,
+            "approval_state": "refused",
+            "reason": _redact_text(reason),
+            "broad_compliance_claims_allowed": False,
+        },
+        "privacy": privacy,
+    }
+
+
+def _write_retention_approval_audit(
+    policy_version: str,
+    response: dict[str, Any],
+    *,
+    actor: str,
+    request_id: str | None,
+    reason: str,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    event = {
+        "event_id": uuid4().hex,
+        "event_at": now_iso(),
+        "actor": _redact_text(actor),
+        "action": "retention_approval_metadata",
+        "reason": _redact_text(reason),
+        "source": "admin_api",
+        "result": "refused" if response.get("status") == "refused" else "recorded",
+        "correlation_id": request_id,
+        "metadata": _sanitize_value(response),
+    }
+    report_repo.put_retention_approval_audit_event(policy_version, event)
+    return event
+
+
+def _write_legal_hold_review_audit(
+    scope_key: str,
+    item: dict[str, Any],
+    *,
+    actor: str,
+    request_id: str | None,
+    reason: str,
+) -> dict[str, Any]:
+    request_id = sanitize_request_id(request_id)
+    event = {
+        "event_id": uuid4().hex,
+        "event_at": now_iso(),
+        "actor": _redact_text(actor),
+        "action": "legal_hold_review_metadata",
+        "reason": _redact_text(reason),
+        "source": "admin_api",
+        "result": "refused" if item.get("status") == "refused" else "recorded",
+        "correlation_id": request_id,
+        "metadata": _sanitize_value(item),
+    }
+    report_repo.put_legal_hold_audit_event(scope_key, event)
+    return event
 
 
 def _legal_hold_reference(reference: dict[str, Any]) -> dict[str, Any]:

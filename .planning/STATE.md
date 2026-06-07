@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Retention Governance And Legal Hold Operations
 status: planning
-last_updated: "2026-06-07T20:05:00+02:00"
+last_updated: "2026-06-07T20:20:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 84 Backend Retention Approval And Legal Hold Review Metadata
+Phase: 85 Admin Retention Governance And Legal Hold Runbook UI
 Plan: Not started
 Status: Ready for planning.
-Last activity: 2026-06-07 — completed Phase 83 retention governance readiness.
+Last activity: 2026-06-07 — completed Phase 84 backend retention approval and legal-hold review metadata.
 
 ## Accumulated Context
 
@@ -86,10 +86,11 @@ Last activity: 2026-06-07 — completed Phase 83 retention governance readiness.
 - v2.9 starts with retention governance and legal-hold operations because v2.8 left the 365-day GOVERNANCE retention period and operational legal-hold procedure pending formal approval.
 - Phase 83 must define the governance contract, approval packet, runbook specification, and privacy-safe verification boundary before backend/UI governance metadata is implemented.
 - Phase 83 completed the governance contract, approval packet, legal-hold runbook specification, and Phase 84 entry criteria without production mutation.
+- Phase 84 added admin-only metadata retention governance status, retention approval recording, and legal-hold review recording endpoints with append-only audit evidence, stale-write refusal, and privacy denylist tests.
 
 ### Pending Todos
 
-- Execute Phase 84 backend retention approval and legal-hold review metadata.
+- Execute Phase 85 admin retention governance and legal-hold runbook UI.
 
 ### Blockers/Concerns
 
@@ -111,4 +112,4 @@ Last activity: 2026-06-07 — completed Phase 83 retention governance readiness.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 84 backend retention approval and legal-hold review metadata.
+- Plan and execute Phase 85 admin retention governance and legal-hold runbook UI.

@@ -33,7 +33,7 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 83 | Retention Policy And Legal Hold Governance Readiness | Complete | GOV-01 |
-| 84 | Backend Retention Approval And Legal Hold Review Metadata | Planned | GOV-02 |
+| 84 | Backend Retention Approval And Legal Hold Review Metadata | Complete | GOV-02 |
 | 85 | Admin Retention Governance And Legal Hold Runbook UI | Planned | UI-15 |
 | 86 | v2.9 Release Gate And Governance Verification | Planned | VERIFY-12 |
 
@@ -42,7 +42,7 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 83 | v2.9 | 1/1 | Complete | 2026-06-07 |
-| 84 | v2.9 | 0/1 | Planned | - |
+| 84 | v2.9 | 1/1 | Complete | 2026-06-07 |
 | 85 | v2.9 | 0/1 | Planned | - |
 | 86 | v2.9 | 0/1 | Planned | - |
 
@@ -51,9 +51,9 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GOV-01 | Phase 83 | Complete |
-| GOV-02 | Phase 84 | Planned |
+| GOV-02 | Phase 84 | Complete |
 | UI-15 | Phase 85 | Planned |
 | VERIFY-12 | Phase 86 | Planned |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 83*
+*Last updated: 2026-06-07 after completing Phase 84*

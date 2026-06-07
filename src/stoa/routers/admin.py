@@ -436,6 +436,35 @@ class LegalHoldMetadataRequest(BaseModel):
     policy_id: str = Field(default="operational-default", min_length=1, max_length=100)
 
 
+class RetentionGovernanceStatusRequest(BaseModel):
+    policy_version: str = Field(default="retention-policy-v1", min_length=1, max_length=120)
+    references: list[AuditRetentionReference] = Field(default_factory=list, max_length=10)
+    limit: int = Field(default=10, ge=1, le=10)
+
+
+class RetentionApprovalMetadataRequest(BaseModel):
+    policy_version: str = Field(..., min_length=1, max_length=120)
+    retention_mode: str = Field(..., min_length=1, max_length=50)
+    retention_days: int = Field(..., ge=1, le=3650)
+    policy_owner: str = Field(..., min_length=1, max_length=200)
+    legal_compliance_approver: str = Field(..., min_length=1, max_length=200)
+    approval_state: str = Field(..., min_length=1, max_length=50)
+    reason: str = Field(..., min_length=1, max_length=500)
+    evidence_references: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    next_review_due_at: str | None = Field(default=None, max_length=80)
+
+
+class LegalHoldReviewMetadataRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    references: list[AuditRetentionReference] = Field(..., min_length=1, max_length=10)
+    owner: str = Field(..., min_length=1, max_length=200)
+    reviewer: str = Field(..., min_length=1, max_length=200)
+    review_cadence: str = Field(..., min_length=1, max_length=100)
+    outcome: str = Field(default="reviewed", min_length=1, max_length=50)
+    next_review_due_at: str | None = Field(default=None, max_length=80)
+    break_glass: dict[str, Any] | None = None
+
+
 @router.get("/users")
 async def list_users(
     limit: int = Query(default=50, ge=1, le=200),
@@ -1017,6 +1046,46 @@ async def persist_immutable_evidence_manifest(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@router.post("/reports/retention-governance/status")
+async def get_retention_governance_status(
+    request: Request,
+    body: RetentionGovernanceStatusRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect metadata-only retention approval and legal-hold review status."""
+    return report_audit_retention_service.build_governance_status_response(
+        policy_version=body.policy_version,
+        references=[ref.model_dump(exclude_none=True) for ref in body.references],
+        request_id=_request_id(request),
+        limit=body.limit,
+    )
+
+
+@router.post("/reports/retention-governance/approval")
+async def record_retention_governance_approval(
+    request: Request,
+    body: RetentionApprovalMetadataRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Record metadata-only retention approval or refusal evidence."""
+    try:
+        return report_audit_retention_service.record_retention_approval_metadata(
+            policy_version=body.policy_version,
+            retention_mode=body.retention_mode,
+            retention_days=body.retention_days,
+            policy_owner=body.policy_owner,
+            legal_compliance_approver=body.legal_compliance_approver,
+            approval_state=body.approval_state,
+            reason=body.reason,
+            actor=_operator_id(user),
+            request_id=_request_id(request),
+            evidence_references=body.evidence_references,
+            next_review_due_at=body.next_review_due_at,
+        )
+    except report_audit_retention_service.ImmutableEvidenceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @router.post("/reports/legal-holds/status")
 async def get_legal_hold_status(
     request: Request,
@@ -1046,6 +1115,31 @@ async def apply_legal_hold_metadata(
             actor=_operator_id(user),
             request_id=_request_id(request),
             policy_id=body.policy_id,
+            limit=10,
+        )
+    except report_audit_retention_service.ImmutableEvidenceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.post("/reports/legal-holds/review")
+async def record_legal_hold_review_metadata(
+    request: Request,
+    body: LegalHoldReviewMetadataRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Record metadata-only legal-hold review evidence without deleting audit rows."""
+    try:
+        return report_audit_retention_service.record_legal_hold_review_metadata(
+            references=[ref.model_dump(exclude_none=True) for ref in body.references],
+            owner=body.owner,
+            reviewer=body.reviewer,
+            review_cadence=body.review_cadence,
+            outcome=body.outcome,
+            reason=body.reason,
+            actor=_operator_id(user),
+            request_id=_request_id(request),
+            next_review_due_at=body.next_review_due_at,
+            break_glass=body.break_glass,
             limit=10,
         )
     except report_audit_retention_service.ImmutableEvidenceError as exc:
