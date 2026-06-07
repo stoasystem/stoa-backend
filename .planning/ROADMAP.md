@@ -31,7 +31,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 
 - [x] **Phase 71: Audit Retention Contract And CDK Readiness** - Define retention/sealing contract, WORM boundary, privacy model, and infrastructure decision.
 - [x] **Phase 72: Backend Audit Retention Manifest APIs** - Add admin-only retention manifest/status APIs with metadata-only drift evidence and refusal behavior.
-- [ ] **Phase 73: Admin Audit Retention UI** - Add `/admin/report-operations` controls to inspect retention status and preview/download manifests.
+- [x] **Phase 73: Admin Audit Retention UI** - Add `/admin/report-operations` controls to inspect retention status and preview/download manifests.
 - [ ] **Phase 74: v2.6 Release Gate And Live Verification** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.6.
 
 ## Phase Details
@@ -78,7 +78,8 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 3. UI does not perform destructive retention deletion or direct WORM mutation.
 4. Playwright covers retention status, manifest preview/download, error states, admin-only gating, and privacy denylist.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
+**Completed**: 2026-06-07
 **UI hint**: yes
 
 ### Phase 74: v2.6 Release Gate And Live Verification
@@ -101,7 +102,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 |-------|-----------|----------------|--------|-----------|
 | 71. Audit Retention Contract And CDK Readiness | v2.6 | 1/1 | Complete | 2026-06-07 |
 | 72. Backend Audit Retention Manifest APIs | v2.6 | 1/1 | Complete | 2026-06-07 |
-| 73. Admin Audit Retention UI | v2.6 | 0/1 | Not started | - |
+| 73. Admin Audit Retention UI | v2.6 | 1/1 | Complete | 2026-06-07 |
 | 74. v2.6 Release Gate And Live Verification | v2.6 | 0/1 | Not started | - |
 
 ## Traceability
@@ -111,8 +112,8 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 | AUDITRET-01 | Phase 71 | Complete |
 | AUDITRET-02 | Phase 72 | Complete |
 | AUDITRET-03 | Phase 72 | Complete |
-| UI-13 | Phase 73 | Not started |
+| UI-13 | Phase 73 | Complete |
 | VERIFY-09 | Phase 74 | Not started |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 72*
+*Last updated: 2026-06-07 after completing Phase 73*

@@ -90,5 +90,5 @@ Acceptance criteria:
 | AUDITRET-01 | Phase 71 | Complete |
 | AUDITRET-02 | Phase 72 | Complete |
 | AUDITRET-03 | Phase 72 | Complete |
-| UI-13 | Phase 73 | Not started |
+| UI-13 | Phase 73 | Complete |
 | VERIFY-09 | Phase 74 | Not started |

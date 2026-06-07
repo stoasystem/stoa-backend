@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Audit Retention And Immutable Evidence Readiness
 status: active
-last_updated: "2026-06-07T14:51:00+02:00"
+last_updated: "2026-06-07T15:22:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 73 - Admin Audit Retention UI
+Phase: 74 - v2.6 Release Gate And Live Verification
 Plan: —
-Status: Ready to discuss and plan Phase 73.
-Last activity: 2026-06-07 — completed Phase 72 backend audit retention manifest/status APIs.
+Status: Ready to discuss and plan Phase 74.
+Last activity: 2026-06-07 — completed Phase 73 admin audit retention UI.
 
 ## Accumulated Context
 
@@ -64,10 +64,11 @@ Last activity: 2026-06-07 — completed Phase 72 backend audit retention manifes
 - Phase 71 starts with retention contract, immutability boundary, privacy model, and CDK readiness.
 - Phase 71 completed with metadata-only retention manifest/status contracts, a no-new-CDK-resource readiness decision, and explicit future-scope boundaries for compliance-grade WORM storage.
 - Phase 72 added admin-only metadata retention status and manifest APIs with canonical digests, privacy validation, refusal behavior, and redacted append-only audit metadata.
+- Phase 73 added admin audit retention controls on `/admin/report-operations` with status, manifest, copy/download, digest preview, refusal reasons, and e2e privacy assertions.
 
 ### Pending Todos
 
-- Add Phase 73 admin UI controls for audit retention status and manifest preview/download.
+- Complete Phase 74 release gate and live verification.
 
 ### Blockers/Concerns
 
@@ -86,4 +87,4 @@ Last activity: 2026-06-07 — completed Phase 72 backend audit retention manifes
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 73.
+- Discuss and plan Phase 74.
