@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.8
 milestone_name: CDK-Managed Immutable Evidence Storage Deployment
 status: executing
-last_updated: "2026-06-07T18:28:17+02:00"
+last_updated: "2026-06-07T18:54:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 81 Backend Immutable Manifest Persistence Enablement
+Phase: 82 v2.8 Release Gate And Live Immutable Storage Verification
 Plan: Not started
-Status: Phase 80 complete; ready to verify backend immutable manifest persistence against CDK-managed production storage.
-Last activity: 2026-06-07 — deployed CDK-managed immutable evidence storage and API runtime configuration through stoa-infra workflow 27098074719.
+Status: Phase 81 complete; ready for v2.8 release gate and one approved live metadata-only immutable persistence verification.
+Last activity: 2026-06-07 — verified backend immutable storage readiness from CDK env, duplicate refusal coverage, and read-only production status smoke.
 
 ## Accumulated Context
 
@@ -80,10 +80,12 @@ Last activity: 2026-06-07 — deployed CDK-managed immutable evidence storage an
 - Phase 79 selected a dedicated retained, versioned, Object Lock-enabled immutable evidence S3 bucket in `StorageStack`, API Lambda env vars, and scoped `audit-retention/*` S3 permissions for Phase 80.
 - Phase 80 deployed the dedicated retained, versioned, Object Lock-enabled immutable evidence bucket through stoa-infra commit `c3d0d60` and workflow run `27098074719`.
 - Phase 80 verified live Object Lock default retention in GOVERNANCE mode for 365 days, public access block, AES256 encryption, server access logging, API-only immutable env vars, and API IAM limited to `s3:GetObject`/`s3:PutObject` on the approved prefix.
+- Phase 81 added env-driven immutable readiness coverage and duplicate/reference-exists refusal coverage.
+- Phase 81 production read-only smoke verified `stoa-api` immutable storage public status is `ready`, `cdk_managed=true`, `resource_configured=true`, and `prefix_configured=true` without exposing private storage identifiers.
 
 ### Pending Todos
 
-- Start Phase 81 backend immutable manifest persistence enablement.
+- Start Phase 82 v2.8 release gate and live immutable storage verification.
 
 ### Blockers/Concerns
 
@@ -100,8 +102,8 @@ Last activity: 2026-06-07 — deployed CDK-managed immutable evidence storage an
 - Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
 - Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
 - Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
-- Phase 81/82 production smoke must prove persistence with approved metadata-only evidence or a named non-customer safe fixture without mutating customer report artifacts.
+- Phase 82 production smoke must prove persistence with approved metadata-only evidence or a named non-customer safe fixture without mutating customer report artifacts.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 81 backend immutable manifest persistence enablement.
+- Plan and execute Phase 82 v2.8 release gate and live immutable storage verification.

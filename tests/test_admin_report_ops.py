@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
@@ -2607,6 +2608,35 @@ def test_immutable_evidence_status_reports_missing_cdk_config(monkeypatch):
     _assert_no_private_artifact_markers(data)
 
 
+def test_immutable_storage_status_reads_cdk_env_without_leaking_resource(monkeypatch):
+    monkeypatch.setenv("IMMUTABLE_AUDIT_STORAGE_MODE", "cdk_managed")
+    monkeypatch.setenv("IMMUTABLE_AUDIT_STORAGE_CDK_MANAGED", "true")
+    monkeypatch.setenv("IMMUTABLE_AUDIT_STORAGE_RESOURCE", "private-immutable-bucket")
+    monkeypatch.setenv("IMMUTABLE_AUDIT_STORAGE_PREFIX", "audit-retention/")
+    env_settings = Settings()
+    monkeypatch.setattr(report_audit_retention_service, "settings", env_settings)
+
+    status = report_audit_retention_service._immutable_storage_status()
+    public = report_audit_retention_service._immutable_storage_public_status(status)
+
+    assert status["status"] == "ready"
+    assert status["mode"] == "cdk_managed"
+    assert status["cdk_managed"] is True
+    assert status["resource_configured"] is True
+    assert status["prefix_configured"] is True
+    assert status["missing"] == []
+    assert public == {
+        "status": "ready",
+        "mode": "cdk_managed",
+        "cdk_managed": True,
+        "resource_configured": True,
+        "prefix_configured": True,
+        "missing": [],
+    }
+    assert "private-immutable-bucket" not in str(public)
+    assert "audit-retention/" not in str(public)
+
+
 def test_immutable_evidence_status_redacts_sensitive_request_id(monkeypatch):
     audit_rows = []
     monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
@@ -2756,6 +2786,49 @@ def test_immutable_manifest_persistence_writes_reference_when_configured(monkeyp
     assert audit_rows[-1][1]["result"] == "persisted"
     _assert_no_private_artifact_markers(data)
     _assert_no_private_artifact_markers(manifest_rows)
+
+
+def test_immutable_manifest_persistence_refuses_duplicate_reference(monkeypatch):
+    audit_rows = []
+    object_writes = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    monkeypatch.setattr(report_repo, "put_audit_retention_manifest", lambda manifest_id, manifest: False)
+    monkeypatch.setattr(
+        report_audit_retention_service,
+        "_write_immutable_manifest_object",
+        lambda manifest, immutable_ref_id, storage_status: object_writes.append(
+            (manifest, immutable_ref_id, storage_status)
+        ),
+    )
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_mode", "cdk_managed")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_cdk_managed", True)
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_resource", "configured-resource")
+    monkeypatch.setattr(report_audit_retention_service.settings, "immutable_audit_storage_prefix", "immutable-audit/")
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/immutable-evidence/persist",
+        json={"reason": "persist metadata", "references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["immutable_storage"]["status"] == "refused"
+    assert data["immutable_storage"]["reason"] == "immutable manifest reference already exists"
+    assert data["immutable_storage"]["storage"]["status"] == "ready"
+    assert object_writes == []
+    assert audit_rows[-1][1]["result"] == "refused"
+    assert "configured-resource" not in str(data)
+    assert "immutable-audit/" not in str(data)
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
 
 
 def test_immutable_manifest_persistence_refuses_when_object_write_fails(monkeypatch):
