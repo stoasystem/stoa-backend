@@ -7,10 +7,10 @@ last_updated: "2026-06-07T01:04:33+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 68 Admin Support Handoff UI.
+**Current focus:** Phase 69 v2.4 Release Gate And Live Verification.
 
 ## Current Position
 
-Phase: 68 - Admin Support Handoff UI
+Phase: 69 - v2.4 Release Gate And Live Verification
 Plan: Not started
-Status: Ready to discuss and plan Phase 68.
-Last activity: 2026-06-07 — completed Phase 67 backend support handoff package APIs.
+Status: Ready to discuss and plan Phase 69.
+Last activity: 2026-06-07 — completed Phase 68 admin support handoff UI.
 
 ## Accumulated Context
 
@@ -54,10 +54,11 @@ Last activity: 2026-06-07 — completed Phase 67 backend support handoff package
 - Phase 66 starts with support handoff schema, destination refusal policy, privacy model, audit requirements, and CDK readiness.
 - Phase 66 completed with a metadata-only support handoff package contract, manual preview/copy/download destination policy, explicit `external_write` refusal, privacy denylist, redacted audit metadata rules, and a no-new-CDK-resource readiness decision.
 - Phase 67 completed admin-only backend support handoff package generation with metadata-only recovery/release/fixture/operator-note sections, direct external write refusal, append-only support handoff audit rows, privacy validation, and focused backend tests.
+- Phase 68 completed frontend admin support handoff controls on `/admin/report-operations` with preview/copy/download/refusal states and focused Playwright coverage.
 
 ### Pending Todos
 
-- Use Phase 67 output to implement Phase 68 admin support handoff UI.
+- Run Phase 69 release gate and live verification for v2.4.
 
 ### Blockers/Concerns
 
@@ -75,4 +76,4 @@ Last activity: 2026-06-07 — completed Phase 67 backend support handoff package
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 68 admin support handoff UI.
+- Discuss and plan Phase 69 release gate and live verification.
