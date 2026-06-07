@@ -23,3 +23,73 @@ def get_user_by_email(email: str) -> dict | None:
     )
     items = resp.get("Items", [])
     return items[0] if items else None
+
+
+def put_parent_student_binding(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str = "child",
+    status: str = "active",
+    source: str = "admin_repair",
+    actor: str = "system",
+    created_at: str,
+) -> dict:
+    """Persist the formal parent/student binding and a reverse lookup row."""
+    table = get_table()
+    binding = {
+        "entity_type": "parent_student_binding",
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "relationship": relationship,
+        "status": status,
+        "source": source,
+        "actor": actor,
+        "created_at": created_at,
+        "updated_at": created_at,
+    }
+    table.put_item(
+        Item={
+            "PK": f"USER#{parent_id}",
+            "SK": f"CHILD#{student_id}",
+            **binding,
+        }
+    )
+    table.put_item(
+        Item={
+            "PK": f"USER#{student_id}",
+            "SK": f"PARENT#{parent_id}",
+            **binding,
+        }
+    )
+    return binding
+
+
+def get_parent_student_binding(parent_id: str, student_id: str) -> dict | None:
+    table = get_table()
+    resp = table.get_item(Key={"PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}"})
+    return resp.get("Item")
+
+
+def list_parent_student_bindings(parent_id: str) -> list[dict]:
+    table = get_table()
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"USER#{parent_id}") & Key("SK").begins_with("CHILD#"),
+    )
+    return resp.get("Items", [])
+
+
+def update_student_parent_link(student_id: str, parent_id: str, relationship: str = "child") -> None:
+    table = get_table()
+    table.update_item(
+        Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
+        UpdateExpression=(
+            "SET parent_id = :parent_id, relationship = :relationship, "
+            "parent_binding_status = :status"
+        ),
+        ExpressionAttributeValues={
+            ":parent_id": parent_id,
+            ":relationship": relationship,
+            ":status": "active",
+        },
+    )

@@ -44,6 +44,8 @@ Acceptance criteria:
 - Parent-student binding is formalized beyond best-effort registration profile fields, with admin-safe repair/inspection behavior where needed.
 - Tests cover auth edge cases, parent-child binding authorization, and no credential/token leakage.
 
+Status: Complete in Phase 89. Forgot/reset endpoints, explicit email verification metadata, formal parent-student binding records, admin binding inspection/repair, and focused tests were added.
+
 ### QUESTION-07 OCR Correction And Daily Question Quota Hardening
 
 Question intake matches `stoa_docs` more closely and daily quota enforcement is robust.
@@ -89,6 +91,6 @@ Acceptance criteria:
 |-------------|-------|--------|
 | DOCGAP-01 | Phase 87 | Complete |
 | PRODVERIFY-13 | Phase 88 | Complete |
-| AUTH-05 | Phase 89 | Planned |
+| AUTH-05 | Phase 89 | Complete |
 | QUESTION-07 | Phase 90 | Planned |
 | VERIFY-13 | Phase 91 | Planned |

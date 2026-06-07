@@ -35,7 +35,7 @@ Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the h
 |-------|------|--------|-------------|
 | 87 | STOA Docs Gap Audit And v3 Scope Readiness | Complete | DOCGAP-01 |
 | 88 | v2.9 Governance Production Verification Closeout | Complete | PRODVERIFY-13 |
-| 89 | Account Lifecycle And Parent Binding Gap Closeout | Planned | AUTH-05 |
+| 89 | Account Lifecycle And Parent Binding Gap Closeout | Complete | AUTH-05 |
 | 90 | OCR Correction And Daily Question Quota Hardening | Planned | QUESTION-07 |
 | 91 | v3.0 Release Gate And Docs Alignment | Planned | VERIFY-13 |
 
@@ -45,7 +45,7 @@ Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the h
 |-------|-----------|----------------|--------|-----------|
 | 87 | v3.0 | 1/1 | Complete | 2026-06-07 |
 | 88 | v3.0 | 1/1 | Complete | 2026-06-07 |
-| 89 | v3.0 | 0/1 | Planned | - |
+| 89 | v3.0 | 1/1 | Complete | 2026-06-07 |
 | 90 | v3.0 | 0/1 | Planned | - |
 | 91 | v3.0 | 0/1 | Planned | - |
 
@@ -55,9 +55,9 @@ Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the h
 |-------------|-------|--------|
 | DOCGAP-01 | Phase 87 | Complete |
 | PRODVERIFY-13 | Phase 88 | Complete |
-| AUTH-05 | Phase 89 | Planned |
+| AUTH-05 | Phase 89 | Complete |
 | QUESTION-07 | Phase 90 | Planned |
 | VERIFY-13 | Phase 91 | Planned |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 88*
+*Last updated: 2026-06-07 after completing Phase 89*

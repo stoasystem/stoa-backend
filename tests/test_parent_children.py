@@ -37,6 +37,12 @@ class FakeTable:
         return self.pages.pop(0)
 
 
+@pytest.fixture(autouse=True)
+def _no_formal_bindings(monkeypatch):
+    monkeypatch.setattr(parents.user_repo, "list_parent_student_bindings", lambda parent_id: [])
+    monkeypatch.setattr(parents.user_repo, "get_parent_student_binding", lambda parent_id, student_id: None)
+
+
 def _resolved_parent() -> parents.ResolvedParent:
     return parents.ResolvedParent(
         claims_sub="cognito-sub",
@@ -190,6 +196,44 @@ def test_scan_children_for_parent_empty(monkeypatch):
     monkeypatch.setattr(parents, "get_table", lambda: FakeTable([{"Items": []}]))
 
     assert parents._scan_children_for_parent("parent") == []
+
+
+def test_list_children_for_parent_uses_formal_bindings(monkeypatch):
+    monkeypatch.setattr(
+        parents.user_repo,
+        "list_parent_student_bindings",
+        lambda parent_id: [
+            {
+                "parent_id": parent_id,
+                "student_id": "child-1",
+                "relationship": "guardian",
+                "status": "active",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "name": "Anna Keller",
+            "email": "anna@example.com",
+        },
+    )
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_id: [])
+
+    children = parents._list_children_for_parent("parent-local")
+
+    assert children == [
+        {
+            "user_id": "child-1",
+            "role": "student",
+            "name": "Anna Keller",
+            "email": "anna@example.com",
+            "relationship": "guardian",
+        }
+    ]
 
 
 def test_parents_me_children_returns_items(monkeypatch):

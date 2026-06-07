@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
 status: planning
-last_updated: "2026-06-07T23:52:47+02:00"
+last_updated: "2026-06-08T00:00:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 89 Account Lifecycle And Parent Binding Gap Closeout
+Phase: 90 OCR Correction And Daily Question Quota Hardening
 Plan: Not started
 Status: Ready for planning.
-Last activity: 2026-06-07 — completed Phase 88 v2.9 governance production verification closeout.
+Last activity: 2026-06-07 — completed Phase 89 account lifecycle and parent binding gap closeout.
 
 ## Accumulated Context
 
@@ -92,10 +92,11 @@ Last activity: 2026-06-07 — completed Phase 88 v2.9 governance production veri
 - v3.0 starts by reconciling `stoa_docs` against the shipped backend/frontend state; the highest-priority remaining MVP gaps are account lifecycle hardening, parent-student binding, OCR correction, robust daily question quota enforcement, and v2.9 production governance verification.
 - Phase 87 completed the `stoa_docs` feature gap audit and confirmed v3.0 scope is limited to v2.9 production verification, account lifecycle/parent binding, OCR correction/quota hardening, and final docs alignment.
 - Phase 88 deployed and production-verified v2.9 retention governance/legal-hold operations with backend deploy run `27105695299`, frontend CI run `27105696540`, frontend deploy run `27105696551`, active `stoa-api` runtime state, read-only API smoke, browser smoke, privacy denylist, admin-only gating, and no production mutation.
+- Phase 89 added Cognito forgot/reset endpoints, explicit admin-marked email verification metadata, formal parent-student binding records, admin binding inspection/repair, parent portal binding preference with legacy fallback, weekly report binding discovery, and tests covering token non-leakage and one-sided binding claims staying pending.
 
 ### Pending Todos
 
-- Plan and execute Phase 89 account lifecycle and parent binding gap closeout.
+- Plan and execute Phase 90 OCR correction and daily question quota hardening.
 
 ### Blockers/Concerns
 
@@ -118,4 +119,4 @@ Last activity: 2026-06-07 — completed Phase 88 v2.9 governance production veri
 
 ## Operator Next Steps
 
-- Plan and execute Phase 89 account lifecycle and parent binding gap closeout.
+- Plan and execute Phase 90 OCR correction and daily question quota hardening.

@@ -121,22 +121,41 @@ def previous_zurich_week_start(now: datetime | None = None) -> date:
 
 
 def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
-    """Discover linked parent/student pairs from student profiles."""
+    """Discover linked parent/student pairs from formal bindings and legacy student profiles."""
     table = get_table()
     scan_kwargs: dict[str, Any] = {
         "FilterExpression": "#role = :role AND attribute_exists(#pid)",
         "ExpressionAttributeNames": {"#role": "role", "#pid": "parent_id"},
         "ExpressionAttributeValues": {":role": "student"},
     }
-    pairs: list[dict[str, str]] = []
+    pairs_by_key: dict[tuple[str, str], dict[str, str]] = {}
+    binding_scan_kwargs: dict[str, Any] = {
+        "FilterExpression": "#entity = :entity AND #status = :status",
+        "ExpressionAttributeNames": {"#entity": "entity_type", "#status": "status"},
+        "ExpressionAttributeValues": {":entity": "parent_student_binding", ":status": "active"},
+    }
+    while True:
+        result = table.scan(**binding_scan_kwargs)
+        for item in result.get("Items", []):
+            if not str(item.get("SK", "")).startswith("CHILD#"):
+                continue
+            parent_id = item.get("parent_id")
+            student_id = item.get("student_id")
+            if parent_id and student_id:
+                pairs_by_key[(parent_id, student_id)] = {"parent_id": parent_id, "student_id": student_id}
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        binding_scan_kwargs["ExclusiveStartKey"] = last_key
+
     while True:
         result = table.scan(**scan_kwargs)
         for item in result.get("Items", []):
             parent_id = item.get("parent_id")
             student_id = item.get("user_id") or item.get("id")
             if parent_id and student_id:
-                pairs.append({"parent_id": parent_id, "student_id": student_id})
+                pairs_by_key.setdefault((parent_id, student_id), {"parent_id": parent_id, "student_id": student_id})
         last_key = result.get("LastEvaluatedKey")
         if not last_key:
-            return pairs
+            return list(pairs_by_key.values())
         scan_kwargs["ExclusiveStartKey"] = last_key

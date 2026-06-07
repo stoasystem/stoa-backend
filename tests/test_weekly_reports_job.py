@@ -109,6 +109,7 @@ def test_handler_rejects_unknown_report_recovery_job(monkeypatch):
 def test_discover_linked_parent_student_pairs_pages(monkeypatch):
     table = FakeTable(
         [
+            {"Items": []},
             {
                 "Items": [
                     {"user_id": "student-1", "parent_id": "parent-1", "role": "student"},
@@ -127,7 +128,40 @@ def test_discover_linked_parent_student_pairs_pages(monkeypatch):
         {"parent_id": "parent-1", "student_id": "student-1"},
         {"parent_id": "parent-2", "student_id": "student-2"},
     ]
-    assert table.calls[1]["ExclusiveStartKey"] == {"PK": "USER#student-1"}
+    assert table.calls[2]["ExclusiveStartKey"] == {"PK": "USER#student-1"}
+
+
+def test_discover_linked_parent_student_pairs_prefers_formal_bindings(monkeypatch):
+    table = FakeTable(
+        [
+            {
+                "Items": [
+                    {
+                        "PK": "USER#parent-1",
+                        "SK": "CHILD#student-1",
+                        "entity_type": "parent_student_binding",
+                        "parent_id": "parent-1",
+                        "student_id": "student-1",
+                        "status": "active",
+                    },
+                    {
+                        "PK": "USER#student-1",
+                        "SK": "PARENT#parent-1",
+                        "entity_type": "parent_student_binding",
+                        "parent_id": "parent-1",
+                        "student_id": "student-1",
+                        "status": "active",
+                    },
+                ],
+            },
+            {"Items": [{"user_id": "student-1", "parent_id": "parent-1", "role": "student"}]},
+        ]
+    )
+    monkeypatch.setattr(weekly_reports, "get_table", lambda: table)
+
+    pairs = weekly_reports.discover_linked_parent_student_pairs()
+
+    assert pairs == [{"parent_id": "parent-1", "student_id": "student-1"}]
 
 
 @pytest.mark.parametrize("status", ["generated", "email_sent"])

@@ -187,6 +187,25 @@ def _scan_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
         scan_kwargs["ExclusiveStartKey"] = last_key
 
 
+def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
+    children: dict[str, dict[str, Any]] = {}
+    for binding in user_repo.list_parent_student_bindings(parent_user_id):
+        if binding.get("status", "active") != "active":
+            continue
+        student_id = binding.get("student_id")
+        if not student_id:
+            continue
+        profile = user_repo.get_user(student_id)
+        if profile and profile.get("role") == "student":
+            profile = {**profile, "relationship": binding.get("relationship", profile.get("relationship", "child"))}
+            children[student_id] = profile
+    for profile in _scan_children_for_parent(parent_user_id):
+        student_id = profile.get("user_id") or profile.get("id")
+        if student_id and student_id not in children:
+            children[student_id] = profile
+    return list(children.values())
+
+
 def _subjects_from_profile(profile: dict[str, Any]) -> list[str]:
     subjects = profile.get("primary_subjects")
     if subjects is None:
@@ -245,6 +264,11 @@ def _is_current_week(value: Any) -> bool:
 
 
 def _get_owned_child_profile(resolved: ResolvedParent, child_id: str) -> dict[str, Any]:
+    binding = user_repo.get_parent_student_binding(resolved.parent_user_id, child_id)
+    if binding and binding.get("status", "active") == "active":
+        child = user_repo.get_user(child_id)
+        if child and child.get("role") == "student":
+            return {**child, "relationship": binding.get("relationship", child.get("relationship", "child"))}
     for child in _scan_children_for_parent(resolved.parent_user_id):
         if child.get("user_id") == child_id or child.get("id") == child_id:
             return child
@@ -493,7 +517,7 @@ async def list_my_children(
 ):
     """Return children linked to the authenticated parent."""
     resolved = _resolve_parent_profile(user, settings)
-    children = _scan_children_for_parent(resolved.parent_user_id)
+    children = _list_children_for_parent(resolved.parent_user_id)
     return ChildListResponse(items=[_child_summary_from_profile(child) for child in children])
 
 
@@ -633,7 +657,7 @@ async def list_children(
         if resolved.parent_user_id != parent_id:
             raise HTTPException(status_code=403, detail="Cannot view another parent's children")
 
-    children = _scan_children_for_parent(parent_id)
+    children = _list_children_for_parent(parent_id)
     return [_legacy_child_summary_from_profile(child) for child in children]
 
 

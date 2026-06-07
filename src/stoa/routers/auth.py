@@ -1,11 +1,11 @@
 """Authentication routes — aligned with frontend API contract."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
@@ -50,6 +50,7 @@ class AuthResponse(BaseModel):
     user: UserOut
     onboardingStatus: str | None = None
     verificationStatus: str | None = None
+    emailVerificationStatus: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -59,6 +60,23 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     access_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    role: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    confirmationCode: str = Field(..., min_length=1, max_length=100)
+    newPassword: str = Field(..., min_length=1, max_length=256)
+    role: str | None = None
+
+
+class PasswordResetResponse(BaseModel):
+    status: str
+    delivery: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +125,93 @@ def _build_user_out(profile: dict) -> UserOut:
         preferredLanguage=profile.get("language") or profile.get("preferredLanguage"),
         subscriptionStatus="trial",
         plan="free_trial",
+    )
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _role_for_password_flow(email: str, role: str | None) -> str | None:
+    if role:
+        return _normalise_role(role)
+    profile = user_repo.get_user_by_email(email)
+    if not profile:
+        return None
+    return profile.get("role", "student")
+
+
+def _email_verification_status(profile: dict) -> str:
+    return profile.get("email_verification_status") or "admin_marked_verified"
+
+
+def _norm_email(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def _profile_child_email(profile: dict) -> str:
+    return _norm_email(
+        profile.get("child_email")
+        or profile.get("childEmail")
+        or profile.get("student_email")
+        or profile.get("studentEmail")
+    )
+
+
+def _bind_parent_student_if_possible(parent_email: str | None, student_profile: dict) -> dict | None:
+    if not parent_email:
+        return None
+    parent = user_repo.get_user_by_email(parent_email)
+    if not parent or parent.get("role") != "parent":
+        student_profile["parent_binding_status"] = "pending_parent_profile"
+        student_profile["parent_email"] = parent_email
+        return None
+    if _profile_child_email(parent) != _norm_email(student_profile.get("email")):
+        student_profile["parent_binding_status"] = "pending_parent_confirmation"
+        student_profile["parent_email"] = parent_email
+        return None
+    parent_id = parent.get("user_id")
+    student_id = student_profile.get("user_id")
+    if not parent_id or not student_id:
+        return None
+    student_profile["parent_id"] = parent_id
+    student_profile["parent_binding_status"] = "active"
+    return user_repo.put_parent_student_binding(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship="child",
+        status="active",
+        source="student_registration",
+        actor="system",
+        created_at=_utc_now_iso(),
+    )
+
+
+def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | None) -> dict | None:
+    if not child_email:
+        return None
+    child = user_repo.get_user_by_email(child_email)
+    if not child or child.get("role") != "student":
+        parent_profile["child_binding_status"] = "pending_student_profile"
+        parent_profile["child_email"] = child_email
+        return None
+    if _norm_email(child.get("parent_email")) != _norm_email(parent_profile.get("email")):
+        parent_profile["child_binding_status"] = "pending_student_confirmation"
+        parent_profile["child_email"] = child_email
+        return None
+    parent_id = parent_profile.get("user_id")
+    student_id = child.get("user_id")
+    if not parent_id or not student_id:
+        return None
+    user_repo.update_student_parent_link(student_id, parent_id, child.get("relationship", "child"))
+    return user_repo.put_parent_student_binding(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=child.get("relationship", "child"),
+        status="active",
+        source="parent_registration",
+        actor="system",
+        created_at=_utc_now_iso(),
     )
 
 
@@ -216,11 +321,24 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         "subjects": subjects,
         "parent_name": parent_name,
         "parent_email": parent_email,
+        "email_verification_status": "admin_marked_verified",
+        "email_verification_policy": "cognito_email_verified_by_backend_admin_create_user",
+        "email_verification_required": False,
+        "email_verification_decision_at": _utc_now_iso(),
         "subscription_tier": "free",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": _utc_now_iso(),
     }
     if age is not None:
         profile["age"] = int(age)
+    if role == "student":
+        _bind_parent_student_if_possible(parent_email, profile)
+    if role == "parent":
+        child_email = (
+            parent_profile.get("childEmail")
+            or parent_profile.get("studentEmail")
+            or parent_profile.get("child_email")
+        )
+        _bind_existing_child_if_possible(profile, child_email)
     user_repo.put_user(profile)
 
     # Log the user in immediately to return tokens
@@ -243,6 +361,7 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         user=_build_user_out(profile),
         onboardingStatus="completed" if role != "teacher" else "pending_review",
         verificationStatus=verification_status,
+        emailVerificationStatus=_email_verification_status(profile),
     )
 
 
@@ -287,7 +406,60 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
         accessToken=access_token,
         user=_build_user_out(profile),
         onboardingStatus="completed",
+        emailVerificationStatus=_email_verification_status(profile),
     )
+
+
+@router.post("/forgot-password", response_model=PasswordResetResponse)
+async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depends(get_settings)):
+    """Start Cognito's forgot-password flow without exposing account existence."""
+    role = _role_for_password_flow(body.email, body.role)
+    if role is None:
+        return PasswordResetResponse(status="accepted")
+    cognito = _get_cognito(settings)
+    client_id = _client_id_for_role(role, settings)
+    try:
+        resp = cognito.forgot_password(ClientId=client_id, Username=body.email)
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code in ("UserNotFoundException", "ResourceNotFoundException"):
+            return PasswordResetResponse(status="accepted")
+        if code in ("LimitExceededException", "TooManyRequestsException"):
+            raise HTTPException(status_code=429, detail="Password reset request rate limit exceeded")
+        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+    delivery = resp.get("CodeDeliveryDetails")
+    return PasswordResetResponse(status="accepted", delivery=delivery)
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password(body: ResetPasswordRequest, settings: Settings = Depends(get_settings)):
+    """Confirm a Cognito forgot-password code and set a new password."""
+    role = _role_for_password_flow(body.email, body.role)
+    if role is None:
+        raise HTTPException(status_code=400, detail="Invalid password reset request")
+    cognito = _get_cognito(settings)
+    client_id = _client_id_for_role(role, settings)
+    try:
+        cognito.confirm_forgot_password(
+            ClientId=client_id,
+            Username=body.email,
+            ConfirmationCode=body.confirmationCode,
+            Password=body.newPassword,
+        )
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code in (
+            "CodeMismatchException",
+            "ExpiredCodeException",
+            "InvalidPasswordException",
+            "InvalidParameterException",
+            "UserNotFoundException",
+        ):
+            raise HTTPException(status_code=400, detail="Invalid password reset request")
+        if code in ("LimitExceededException", "TooManyRequestsException"):
+            raise HTTPException(status_code=429, detail="Password reset request rate limit exceeded")
+        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+    return PasswordResetResponse(status="confirmed")
 
 
 @router.get("/me", response_model=UserOut)

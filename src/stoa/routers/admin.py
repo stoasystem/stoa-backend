@@ -28,6 +28,27 @@ class UserUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ParentStudentBindingResponse(BaseModel):
+    parent_id: str
+    student_id: str
+    relationship: str = "child"
+    status: str = "active"
+    source: str | None = None
+    updated_at: str | None = None
+
+
+class ParentStudentBindingListResponse(BaseModel):
+    items: list[ParentStudentBindingResponse]
+    count: int
+
+
+class ParentStudentBindingRepairRequest(BaseModel):
+    parent_id: str = Field(..., min_length=1, max_length=200)
+    student_id: str = Field(..., min_length=1, max_length=200)
+    relationship: str = Field(default="child", min_length=1, max_length=50)
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
 class StatsResponse(BaseModel):
     total_users: int
     total_students: int
@@ -580,6 +601,56 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         teacher_resolved=teacher_resolved,
         escalated=escalated,
     )
+
+
+def _binding_response(item: dict[str, Any]) -> ParentStudentBindingResponse:
+    return ParentStudentBindingResponse(
+        parent_id=item.get("parent_id", ""),
+        student_id=item.get("student_id", ""),
+        relationship=item.get("relationship", "child"),
+        status=item.get("status", "active"),
+        source=item.get("source"),
+        updated_at=item.get("updated_at"),
+    )
+
+
+@router.get("/parent-bindings", response_model=ParentStudentBindingListResponse)
+async def list_parent_bindings(
+    parent_id: str = Query(..., min_length=1),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect formal parent/student bindings for admin repair."""
+    items = [
+        _binding_response(item)
+        for item in user_repo.list_parent_student_bindings(parent_id)
+    ]
+    return ParentStudentBindingListResponse(items=items, count=len(items))
+
+
+@router.post("/parent-bindings/repair", response_model=ParentStudentBindingResponse)
+async def repair_parent_binding(
+    body: ParentStudentBindingRepairRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Repair a parent/student binding and mirror the legacy student parent_id."""
+    parent = user_repo.get_user(body.parent_id)
+    if not parent or parent.get("role") != "parent":
+        raise HTTPException(status_code=404, detail="Parent profile not found")
+    student = user_repo.get_user(body.student_id)
+    if not student or student.get("role") != "student":
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    now = report_audit_retention_service.now_iso()
+    user_repo.update_student_parent_link(body.student_id, body.parent_id, body.relationship)
+    binding = user_repo.put_parent_student_binding(
+        parent_id=body.parent_id,
+        student_id=body.student_id,
+        relationship=body.relationship,
+        status="active",
+        source="admin_repair",
+        actor=str(user.get("sub") or user.get("username") or "admin"),
+        created_at=now,
+    )
+    return _binding_response(binding)
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)

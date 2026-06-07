@@ -24,6 +24,10 @@ class FakeDataTable:
         self.scans.append(kwargs)
         names = kwargs["ExpressionAttributeNames"]
         values = kwargs["ExpressionAttributeValues"]
+        if names.get("#entity") == "entity_type":
+            assert values[":entity"] == "parent_student_binding"
+            assert values[":status"] == "active"
+            return {"Items": []}
         assert names["#role"] == "role"
         assert values[":role"] == "student"
         if "#pid" in names:
@@ -227,7 +231,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         "failed": 0,
     }
     assert question_last_keys == [None, {"PK": "QUESTION#q1"}]
-    assert len(data_table.scans) == 2
+    assert len(data_table.scans) == 3
     assert len(data_table.queries) == 1
     assert [event[0] for event in events] == [
         "claim",
