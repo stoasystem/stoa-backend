@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-07T23:11:06+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 0
   total_plans: 5
   completed_plans: 1
