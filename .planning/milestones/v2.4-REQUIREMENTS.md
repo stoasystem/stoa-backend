@@ -99,8 +99,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HANDOFF-01 | Phase 66 | Planned |
-| HANDOFF-02 | Phase 66 | Planned |
+| HANDOFF-01 | Phase 66 | Complete |
+| HANDOFF-02 | Phase 66 | Complete |
 | HANDOFF-03 | Phase 67 | Not started |
 | HANDOFF-04 | Phase 67 | Not started |
 | UI-12 | Phase 68 | Not started |

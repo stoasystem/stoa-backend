@@ -1,6 +1,6 @@
 # Phase 66 Support Handoff Contract
 
-**Status:** Planned
+**Status:** Complete
 **Created:** 2026-06-07
 
 ## Purpose
@@ -48,3 +48,14 @@ Required top-level fields:
 - Do not include raw report artifact contents.
 - Do not include private storage locations or presigned URLs.
 - Include validation failures as structured metadata instead of throwing away partial safe context.
+
+## Existing Shape Alignment
+
+Phase 67 should build on these existing backend shapes:
+
+- `report_recovery_evidence_service.build_export_response` already returns bounded recovery evidence with `exported_at`, `request_id`, `scope`, sanitized filters, jobs, targets, audit summaries, pagination tokens, and a metadata-only privacy block.
+- `report_recovery_evidence_service.build_support_package_response` already returns a job-scoped support package with source job linkage, rollup, targets, job/report audit summaries, redacted operator note, pagination tokens, and privacy metadata.
+- `release_evidence_service.validate_release_bundle` already validates release evidence bundles and returns sanitized bundles plus privacy denylist results.
+- `release_evidence_service.build_fixture_inventory_response` already returns safe-fixture identity, artifact version metadata, report metadata, audit refs, mutation refusal metadata, and privacy validation.
+
+The v2.4 handoff package should compose these safe projections by reference. It should not bypass their redaction helpers or introduce a parallel raw evidence model.

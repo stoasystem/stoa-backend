@@ -1,6 +1,6 @@
 # Phase 66 Destination Policy And Privacy Model
 
-**Status:** Planned
+**Status:** Complete
 **Created:** 2026-06-07
 
 ## Destination Modes
@@ -47,3 +47,12 @@ Audit metadata should include:
 - Correlation id/request id.
 
 Audit metadata must not store raw package payloads when operator notes or customer context could exceed allowlisted identifiers.
+
+## Phase 67 Implementation Rules
+
+- `preview`, `copy`, and `download` are backend-mediated package generation modes. They may return redacted package content to the authenticated admin, but audit should store only metadata and references.
+- `external_write` must return a refused package result in v2.4. The refusal should be explicit, test-covered, and privacy-safe.
+- Unknown destination modes must be rejected before evidence reads.
+- Missing operator reason must be rejected or refused before package generation.
+- Existing redaction helpers must remain authoritative for text fields and nested metadata.
+- Release evidence privacy validation should be reused as the denylist check for generated handoff packages.

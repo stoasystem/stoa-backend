@@ -3,15 +3,15 @@
 **Status:** Existing resources are expected to be sufficient for Phase 67 and Phase 68.
 **Checked:** 2026-06-07
 
-## Resources To Verify During Phase 66 Execution
+## Resources Verified During Phase 66 Execution
 
-| Area | Current Expected Source | Required For | Expected Decision |
+| Area | Reviewed Source | Required For | Decision |
 |------|-------------------------|--------------|-------------------|
-| Admin authorization | Existing Cognito/admin dependencies | Handoff API access control | No new resource |
-| Evidence source reads | Existing report/recovery/release evidence repositories and services | Package composition | No new resource |
-| Audit writes | Existing DynamoDB single-table audit patterns | Package generated/refused events | No new resource |
-| API hosting | Existing FastAPI Lambda/API Gateway | Handoff preview/copy/download APIs | No new resource |
-| Frontend controls | Existing `/admin/report-operations` admin page | Handoff UI | No new resource |
+| Admin authorization | `src/stoa/routers/admin.py` admin router dependencies and existing JWT-authorized API Gateway proxy routes | Handoff API access control | No new resource |
+| Evidence source reads | `report_recovery_evidence_service`, release evidence helpers, recovery job/report audit repository reads | Package composition | No new resource |
+| Audit writes | `report_repo.put_report_audit_event` and `put_recovery_job_audit_event` conditional append rows | Package generated/refused events | No new table or GSI |
+| API hosting | Existing FastAPI Lambda/API Gateway in `stoa-api` | Handoff preview/copy/download APIs | No new Lambda/API resource |
+| Frontend controls | Existing `/admin/report-operations` admin page and frontend stack | Handoff UI | No new frontend infrastructure |
 | External support systems | Not currently configured | Direct ticket writes | Out of scope/refused by default |
 
 ## Default Decision
@@ -29,3 +29,13 @@ Implementation constraints:
 ## Residual Risk
 
 Direct ticket-system integration may need new secrets, outbound network assumptions, vendor-specific API retries, and support ownership. That should be a later milestone or phase only after credentials and destination ownership are explicit.
+
+## Phase 67/68 Readiness Decision
+
+Existing resources are sufficient for v2.4 manual handoff packages:
+
+- API Lambda already has the required DynamoDB access through existing backend configuration.
+- Report artifact S3 permissions remain scoped to `weekly-reports/*`; Phase 67 should not add broad S3 permissions and should not read raw artifacts for handoff package generation.
+- Existing DynamoDB audit rows can record metadata-only package generation/refusal events with conditional append semantics.
+- Existing release evidence denylist logic can validate package privacy without new infrastructure.
+- Existing frontend hosting can serve the Phase 68 UI controls without stack changes.

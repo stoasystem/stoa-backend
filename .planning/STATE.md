@@ -7,10 +7,10 @@ last_updated: "2026-06-07T01:04:33+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.4 Support Evidence Export Destinations And Ticket Handoff.
+**Current focus:** Phase 67 Backend Support Handoff Package APIs.
 
 ## Current Position
 
-Phase: 66 - Support Destination Contract And CDK Readiness
-Plan: 66-01
-Status: Planned; ready to execute Phase 66.
-Last activity: 2026-06-07 — planned v2.4 and created Phase 66 support handoff contract/readiness documents.
+Phase: 67 - Backend Support Handoff Package APIs
+Plan: Not started
+Status: Ready to discuss and plan Phase 67.
+Last activity: 2026-06-07 — completed Phase 66 support handoff contract, destination policy, privacy model, audit requirements, and CDK readiness.
 
 ## Accumulated Context
 
@@ -52,10 +52,10 @@ Last activity: 2026-06-07 — planned v2.4 and created Phase 66 support handoff 
 - Phase 62 starts with release evidence schema, redaction rules, fixture lifecycle, and CDK readiness.
 - v2.4 should turn support-safe recovery/release/rollback evidence into manual ticket handoff packages before any direct third-party integration.
 - Phase 66 starts with support handoff schema, destination refusal policy, privacy model, audit requirements, and CDK readiness.
+- Phase 66 completed with a metadata-only support handoff package contract, manual preview/copy/download destination policy, explicit `external_write` refusal, privacy denylist, redacted audit metadata rules, and a no-new-CDK-resource readiness decision.
 
 ### Pending Todos
 
-- Execute Phase 66 and finalize support handoff package/destination contracts.
 - Use Phase 66 output to implement Phase 67 backend support handoff package APIs.
 
 ### Blockers/Concerns
@@ -74,4 +74,4 @@ Last activity: 2026-06-07 — planned v2.4 and created Phase 66 support handoff 
 
 ## Operator Next Steps
 
-- Execute Phase 66.
+- Discuss and plan Phase 67 backend support handoff package APIs.
