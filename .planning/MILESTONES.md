@@ -354,5 +354,21 @@ Key accomplishments:
 
 Known deferred items at close: direct support-system integrations, compliance-grade WORM audit storage, and broader report product expansion remain future work.
 
+### v2.6 Audit Retention And Immutable Evidence Readiness
+
+**Status:** Active
+**Roadmap:** `.planning/milestones/v2.6-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.6-REQUIREMENTS.md`
+**Goal:** Make report operations audit evidence ready for stronger retention and future immutable storage without weakening privacy boundaries.
+**Phases:** 4
+**Plans:** 1/4 planned
+
+Planned phases:
+
+- Phase 71: Audit Retention Contract And CDK Readiness.
+- Phase 72: Backend Audit Retention Manifest APIs.
+- Phase 73: Admin Audit Retention UI.
+- Phase 74: v2.6 Release Gate And Live Verification.
+
 ---
-*Last updated: 2026-06-07 after closing v2.5*
+*Last updated: 2026-06-07 after planning v2.6 Phase 71*

@@ -24,6 +24,8 @@ The completed v2.4 milestone turns support-safe recovery, rollback, fixture, and
 
 The completed v2.5 milestone closes the deferred production verification gap for v2.4 support handoff by capturing deploy/runtime/CDK evidence and read-only production API/browser smoke.
 
+The active v2.6 milestone makes report operations audit evidence ready for stronger retention and future immutable storage without weakening privacy boundaries.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -32,7 +34,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.5 Production Support Handoff Verification Closeout on 2026-06-07
 **Latest completed milestone:** v2.5 Production Support Handoff Verification Closeout on 2026-06-07
-**Active milestone:** none
+**Active milestone:** v2.6 Audit Retention And Immutable Evidence Readiness
 
 Delivered:
 
@@ -123,7 +125,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone is defined.
+### v2.6 Audit Retention And Immutable Evidence Readiness
+
+Goal: make report operations audit evidence ready for stronger retention and future immutable storage by defining contracts, CDK decisions, backend manifests/status, admin visibility, and release verification.
+
+Planned phases:
+
+- Phase 71: Audit Retention Contract And CDK Readiness.
+- Phase 72: Backend Audit Retention Manifest APIs.
+- Phase 73: Admin Audit Retention UI.
+- Phase 74: v2.6 Release Gate And Live Verification.
 
 ## Requirements
 
@@ -156,7 +167,13 @@ Shipped requirements:
 
 ### Active
 
-No active milestone requirements are defined.
+Milestone v2.6 requirements are defined in `.planning/REQUIREMENTS.md` and `.planning/milestones/v2.6-REQUIREMENTS.md`:
+
+- AUDITRET-01: audit retention contract and CDK readiness - Phase 71.
+- AUDITRET-02: backend audit evidence sealing and retention manifest - Phase 72.
+- AUDITRET-03: audit retention observability - Phase 72.
+- UI-13: admin audit retention UI - Phase 73.
+- VERIFY-09: v2.6 release gate and live verification - Phase 74.
 
 ### Completed
 
@@ -364,6 +381,7 @@ Known current resources:
 | Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Good - shipped in v2.3 |
 | Start v2.4 with support evidence handoff packages | v2.3 made release and fixture evidence repeatable; the next support gap is package handoff into tickets without exposing private artifacts or adding unapproved integrations | Good - shipped in v2.4 |
 | Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Good - shipped in v2.5 |
+| Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Active - Phase 71 planned |
 
 ## Evolution
 
@@ -383,4 +401,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after closing milestone v2.5*
+*Last updated: 2026-06-07 after planning milestone v2.6*

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.5
-milestone_name: Production Support Handoff Verification Closeout
-status: complete
-last_updated: "2026-06-07T13:52:01+02:00"
+milestone: v2.6
+milestone_name: Audit Retention And Immutable Evidence Readiness
+status: active
+last_updated: "2026-06-07T14:07:36+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 4
   completed_plans: 1
-  percent: 100
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.5 complete; no active milestone.
+**Current focus:** v2.6 Audit Retention And Immutable Evidence Readiness.
 
 ## Current Position
 
-Phase: none active
-Plan: none active
-Status: v2.5 milestone closed.
-Last activity: 2026-06-07 — archived v2.5 after production deploy/runtime/CDK evidence, read-only support handoff API smoke, browser smoke, and audit.
+Phase: 71 - Audit Retention Contract And CDK Readiness
+Plan: 71-01
+Status: Planned; ready to execute Phase 71.
+Last activity: 2026-06-07 — planned v2.6 and created Phase 71 audit retention contract/readiness documents.
 
 ## Accumulated Context
 
@@ -60,10 +60,13 @@ Last activity: 2026-06-07 — archived v2.5 after production deploy/runtime/CDK 
 - v2.5 should close only the deferred v2.4 production deployment/read-only verification gap without adding product scope.
 - Phase 70 closed the deferred v2.4 production verification gap with backend/frontend deploy evidence, Lambda runtime metadata, CDK diff classification, production API smoke, production browser smoke, and final audit.
 - v2.5 milestone closeout archived audit, roadmap, requirements, and phase records.
+- v2.6 should start with audit retention and immutability readiness before claiming WORM/compliance-grade storage.
+- Phase 71 starts with retention contract, immutability boundary, privacy model, and CDK readiness.
 
 ### Pending Todos
 
-- Define the next milestone when ready.
+- Execute Phase 71 and finalize audit retention/immutability readiness contracts.
+- Use Phase 71 output to implement Phase 72 backend retention manifest/status APIs.
 
 ### Blockers/Concerns
 
@@ -78,7 +81,8 @@ Last activity: 2026-06-07 — archived v2.5 after production deploy/runtime/CDK 
 - Phase 64 added admin report operations release evidence validation and safe-fixture status UI controls in the frontend without adding mutation actions.
 - Phase 65 completed with deploy evidence, Lambda runtime state, CDK diff classification, local quality gates, production read-only API/browser smoke, safe-fixture refusal checks, and final milestone audit.
 - Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
+- Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
 
 ## Operator Next Steps
 
-- Start the next milestone when ready.
+- Execute Phase 71.
