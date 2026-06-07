@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Production Support Handoff Verification Closeout
-status: active
-last_updated: "2026-06-07T13:35:05+02:00"
+status: complete
+last_updated: "2026-06-07T13:52:01+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 1
   completed_plans: 1
-  percent: 0
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.5 Production Support Handoff Verification Closeout.
+**Current focus:** v2.5 production support handoff verification complete.
 
 ## Current Position
 
 Phase: 70 - Production Support Handoff Verification Closeout
 Plan: 70-01
-Status: Planned; ready to execute production deploy/read-only verification closeout.
-Last activity: 2026-06-07 — planned v2.5 Phase 70 to close deferred v2.4 production verification.
+Status: Complete.
+Last activity: 2026-06-07 — completed production deploy/runtime/CDK evidence, read-only support handoff API smoke, browser smoke, and v2.5 audit.
 
 ## Accumulated Context
 
@@ -58,11 +58,11 @@ Last activity: 2026-06-07 — planned v2.5 Phase 70 to close deferred v2.4 produ
 - Phase 69 completed local release gate evidence and milestone audit; production deployment and read-only live smoke are deferred because v2.4 commits were not deployed from this thread.
 - v2.4 milestone closeout archived audit, roadmap, requirements, and phase records with production live verification deferred.
 - v2.5 should close only the deferred v2.4 production deployment/read-only verification gap without adding product scope.
+- Phase 70 closed the deferred v2.4 production verification gap with backend/frontend deploy evidence, Lambda runtime metadata, CDK diff classification, production API smoke, production browser smoke, and final audit.
 
 ### Pending Todos
 
-- Execute Phase 70 production deploy/read-only verification closeout.
-- Record backend/frontend deploy evidence, Lambda runtime, CDK diff, API request IDs, browser markers, and privacy results.
+- Archive v2.5 milestone after final lifecycle closeout.
 
 ### Blockers/Concerns
 
@@ -80,4 +80,4 @@ Last activity: 2026-06-07 — planned v2.5 Phase 70 to close deferred v2.4 produ
 
 ## Operator Next Steps
 
-- Execute Phase 70.
+- Complete v2.5 milestone archive.

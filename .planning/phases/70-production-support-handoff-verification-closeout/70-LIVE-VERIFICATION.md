@@ -1,7 +1,7 @@
 # Phase 70 Live Verification
 
-**Status:** Planned
-**Recorded at:** TBD
+**Status:** Passed
+**Recorded at:** 2026-06-07T11:52:01Z
 
 ## Production API Smoke
 
@@ -12,24 +12,30 @@ Safety:
 - Do not mutate report artifacts.
 - Do not write to external support systems.
 
-Planned checks:
+Result:
 
 | Method | Path | Expected | Request ID |
 |--------|------|----------|------------|
-| POST | `/auth/login` | 200 | TBD |
-| GET | `/health` | 200 | TBD |
-| POST | `/admin/reports/support-handoff-package` without token | 401 or 403 | TBD |
-| POST | `/admin/reports/support-handoff-package` preview | 200 metadata-only package | TBD |
-| POST | `/admin/reports/support-handoff-package` external_write | 200 refused, no external write | TBD |
+| POST | `/auth/login` | 200 | `elso0i9u5icEMog=` |
+| GET | `/health` | 200 | `elso4iEIZicEMKg=` |
+| POST | `/admin/reports/support-handoff-package` without token | 401 | `elso5jYg5icEMBA=` |
+| POST | `/admin/reports/support-handoff-package` preview | 200 metadata-only package, destination `ready`, validation `passed` | `elso5j-b5icEMqw=` |
+| POST | `/admin/reports/support-handoff-package` external_write | 200 refused, no external write, zero sections | `elso7htbZicEMLA=` |
 
-Expected result:
+Summary:
 
 - `mutationAttempted`: `false`
 - `externalWriteAttempted`: `false`
-- `authGatePassed`: TBD
-- `previewPassed`: TBD
-- `externalWriteRefused`: TBD
-- `privacyPassed`: TBD
+- `authGatePassed`: `true`
+- `healthPassed`: `true`
+- `previewPassed`: `true`
+- `externalWriteRefused`: `true`
+- `privacyPassed`: `true`
+
+Notes:
+
+- The support handoff endpoint records its own metadata-only audit events for preview/refusal. No report artifact mutation and no external support-system write occurred.
+- Evidence file: `/private/tmp/stoa_phase70_api_smoke.json`.
 
 ## Production Browser Smoke
 
@@ -39,15 +45,26 @@ Safety:
 - Install a request guard that blocks report mutation endpoints and external write attempts.
 - Do not click mutation controls.
 
-Planned result fields:
+Result:
 
 - Final URL: `https://app.stoaedu.ch/admin/report-operations`
-- Route loaded: TBD
-- Support handoff marker observed: TBD
+- Admin role: `admin`
+- Route loaded: `true`
+- Support handoff marker observed: `true`
 - `mutationAttempted`: `false`
-- `blockedMutations`: TBD
-- Visible privacy hits: TBD
-- Screenshot or marker evidence: TBD
+- `externalWriteAttempted`: `false`
+- `blockedMutations`: `[]`
+- Visible privacy hits: `[]`
+- Screenshot: `/private/tmp/stoa-phase70-production-report-operations.png`
+
+Browser API requests:
+
+| Method | Path | Status | Request ID |
+|--------|------|--------|------------|
+| GET | `/admin/reports/recovery-jobs` | 200 | `els3qh7H5icEMLA=` |
+| GET | `/admin/reports/ops?status=email_failed&limit=25` | 200 | `els3qjTrZicEMpQ=` |
+
+Evidence file: `/private/tmp/stoa_phase70_browser_smoke.json`.
 
 ## Privacy Denylist
 
@@ -60,3 +77,5 @@ Recorded API/browser evidence must not include:
 - `presigned`
 - raw report JSON/HTML payloads
 - access tokens, passwords, cookies, or AWS secrets.
+
+Result: Passed for both API and browser smoke.

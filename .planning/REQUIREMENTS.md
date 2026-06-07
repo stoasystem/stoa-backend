@@ -1,7 +1,7 @@
 # Requirements: v2.5 Production Support Handoff Verification Closeout
 
 **Milestone:** v2.5
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-07
 
 ## Goal
@@ -69,7 +69,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PRODVERIFY-01 | Phase 70 | Planned |
-| PRODVERIFY-02 | Phase 70 | Planned |
-| PRODVERIFY-03 | Phase 70 | Planned |
-| VERIFY-08 | Phase 70 | Planned |
+| PRODVERIFY-01 | Phase 70 | Complete |
+| PRODVERIFY-02 | Phase 70 | Complete |
+| PRODVERIFY-03 | Phase 70 | Complete |
+| VERIFY-08 | Phase 70 | Complete |

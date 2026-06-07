@@ -28,7 +28,7 @@ This milestone intentionally contains one release-verification phase. It should 
 
 ## Phases
 
-- [ ] **Phase 70: Production Support Handoff Verification Closeout** - Capture deploy/runtime/CDK evidence, run production read-only API/browser smoke, and close the deferred v2.4 verification gap.
+- [x] **Phase 70: Production Support Handoff Verification Closeout** - Capture deploy/runtime/CDK evidence, run production read-only API/browser smoke, and close the deferred v2.4 verification gap.
 
 ## Phase Details
 
@@ -45,22 +45,22 @@ This milestone intentionally contains one release-verification phase. It should 
 4. Production browser smoke verifies `/admin/report-operations` support handoff UI markers and privacy boundary with mutation/external-write guards.
 5. Final audit closes the v2.4 deferred production verification gap or records a blocker with owner/follow-up.
 
-**Plans**: 1 planned
+**Plans**: 1 complete
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 70. Production Support Handoff Verification Closeout | v2.5 | 1/1 | Planned | - |
+| 70. Production Support Handoff Verification Closeout | v2.5 | 1/1 | Complete | 2026-06-07 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PRODVERIFY-01 | Phase 70 | Planned |
-| PRODVERIFY-02 | Phase 70 | Planned |
-| PRODVERIFY-03 | Phase 70 | Planned |
-| VERIFY-08 | Phase 70 | Planned |
+| PRODVERIFY-01 | Phase 70 | Complete |
+| PRODVERIFY-02 | Phase 70 | Complete |
+| PRODVERIFY-03 | Phase 70 | Complete |
+| VERIFY-08 | Phase 70 | Complete |
 
 ---
-*Last updated: 2026-06-07 after planning v2.5 Phase 70*
+*Last updated: 2026-06-07 after completing v2.5 Phase 70*
