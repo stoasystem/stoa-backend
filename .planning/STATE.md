@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.4
-milestone_name: Support Evidence Export Destinations And Ticket Handoff
-status: complete
-last_updated: "2026-06-07T01:04:33+02:00"
+milestone: v2.5
+milestone_name: Production Support Handoff Verification Closeout
+status: active
+last_updated: "2026-06-07T13:35:05+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.4 milestone closed locally; production live smoke deferred.
+**Current focus:** v2.5 Production Support Handoff Verification Closeout.
 
 ## Current Position
 
-Phase: none active
-Plan: none active
-Status: v2.4 local milestone closeout complete; production deploy/live smoke deferred.
-Last activity: 2026-06-07 — closed v2.4 after local release gate, release evidence validation, refusal evidence, and milestone audit.
+Phase: 70 - Production Support Handoff Verification Closeout
+Plan: 70-01
+Status: Planned; ready to execute production deploy/read-only verification closeout.
+Last activity: 2026-06-07 — planned v2.5 Phase 70 to close deferred v2.4 production verification.
 
 ## Accumulated Context
 
@@ -57,10 +57,12 @@ Last activity: 2026-06-07 — closed v2.4 after local release gate, release evid
 - Phase 68 completed frontend admin support handoff controls on `/admin/report-operations` with preview/copy/download/refusal states and focused Playwright coverage.
 - Phase 69 completed local release gate evidence and milestone audit; production deployment and read-only live smoke are deferred because v2.4 commits were not deployed from this thread.
 - v2.4 milestone closeout archived audit, roadmap, requirements, and phase records with production live verification deferred.
+- v2.5 should close only the deferred v2.4 production deployment/read-only verification gap without adding product scope.
 
 ### Pending Todos
 
-- Push/deploy backend and frontend v2.4 commits, then run read-only production support handoff API/browser smoke.
+- Execute Phase 70 production deploy/read-only verification closeout.
+- Record backend/frontend deploy evidence, Lambda runtime, CDK diff, API request IDs, browser markers, and privacy results.
 
 ### Blockers/Concerns
 
@@ -78,4 +80,4 @@ Last activity: 2026-06-07 — closed v2.4 after local release gate, release evid
 
 ## Operator Next Steps
 
-- Deploy v2.4 and complete deferred production live verification.
+- Execute Phase 70.

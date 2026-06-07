@@ -333,5 +333,18 @@ Key accomplishments:
 
 Known deferred items at close: production deployment and read-only live API/browser smoke for v2.4 support handoff endpoints/UI; direct support-system writes remain out of scope until an approved connector or secret-backed credential path exists.
 
+### v2.5 Production Support Handoff Verification Closeout
+
+**Status:** Active
+**Roadmap:** `.planning/milestones/v2.5-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.5-REQUIREMENTS.md`
+**Goal:** Close the v2.4 production verification gap by deploying support handoff changes and recording read-only production evidence.
+**Phases:** 1
+**Plans:** 1/1 planned
+
+Planned phases:
+
+- Phase 70: Production Support Handoff Verification Closeout.
+
 ---
-*Last updated: 2026-06-07 after closing v2.4 local release gate*
+*Last updated: 2026-06-07 after planning v2.5 Phase 70*

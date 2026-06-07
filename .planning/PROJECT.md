@@ -22,6 +22,8 @@ The completed v2.3 milestone turns manually assembled release evidence and safe-
 
 The completed v2.4 milestone turns support-safe recovery, rollback, fixture, and release evidence into manual ticket handoff packages without exposing private report artifacts or requiring unapproved third-party credentials. v2.4 passed local release gates; production deployment and read-only live smoke remain deferred.
 
+The active v2.5 milestone closes the deferred production verification gap for v2.4 support handoff by capturing deploy/runtime/CDK evidence and read-only production API/browser smoke.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -30,6 +32,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.3 Release Evidence Automation And Fixture Lifecycle on 2026-06-06
 **Latest completed milestone:** v2.4 Support Evidence Export Destinations And Ticket Handoff on 2026-06-07, local release gate complete; production live smoke deferred
+**Active milestone:** v2.5 Production Support Handoff Verification Closeout
 
 Delivered:
 
@@ -125,6 +128,16 @@ Completed phases:
 
 Production follow-up: push/deploy backend and frontend v2.4 commits, capture deploy/runtime evidence, and run read-only support handoff API/browser smoke.
 
+## Current Milestone
+
+### v2.5 Production Support Handoff Verification Closeout
+
+Goal: close the v2.4 production verification gap by deploying support handoff changes and recording deploy/runtime/CDK evidence plus read-only production API/browser smoke.
+
+Planned phases:
+
+- Phase 70: Production Support Handoff Verification Closeout.
+
 ## Requirements
 
 ### Validated
@@ -156,7 +169,12 @@ Shipped requirements:
 
 ### Active
 
-No active milestone requirements are defined. Next operational step is deferred v2.4 production deploy and read-only live verification.
+Milestone v2.5 requirements are defined in `.planning/REQUIREMENTS.md` and `.planning/milestones/v2.5-REQUIREMENTS.md`:
+
+- PRODVERIFY-01: v2.4 deploy evidence - Phase 70.
+- PRODVERIFY-02: read-only production support handoff API smoke - Phase 70.
+- PRODVERIFY-03: read-only production browser smoke - Phase 70.
+- VERIFY-08: v2.5 closeout audit - Phase 70.
 
 ### Completed
 
@@ -356,6 +374,7 @@ Known current resources:
 | Start v2.2 with rollback and safe-fixture verification | v2.1 shipped versioned artifact apply but intentionally skipped production mutation smoke; rollback and named fixture cleanup are the next safety boundary before broader artifact editing use | Good - shipped in v2.2 |
 | Start v2.3 with release evidence automation and fixture lifecycle | v2.2 proved safe-fixture mutation/cleanup, but the evidence workflow remains manually assembled and the production fixture needs repeatable lifecycle controls | Good - shipped in v2.3 |
 | Start v2.4 with support evidence handoff packages | v2.3 made release and fixture evidence repeatable; the next support gap is package handoff into tickets without exposing private artifacts or adding unapproved integrations | Active - Phase 66 planned |
+| Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Active - Phase 70 planned |
 
 ## Evolution
 
@@ -375,4 +394,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after planning milestone v2.4*
+*Last updated: 2026-06-07 after planning milestone v2.5*
