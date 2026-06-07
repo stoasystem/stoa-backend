@@ -79,7 +79,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GOV-01 | Phase 83 | Planned |
+| GOV-01 | Phase 83 | Complete |
 | GOV-02 | Phase 84 | Planned |
 | UI-15 | Phase 85 | Planned |
 | VERIFY-12 | Phase 86 | Planned |

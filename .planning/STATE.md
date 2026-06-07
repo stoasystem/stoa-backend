@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Retention Governance And Legal Hold Operations
 status: planning
-last_updated: "2026-06-07T19:27:21+02:00"
+last_updated: "2026-06-07T20:05:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 83 Retention Policy And Legal Hold Governance Readiness
-Plan: 83-01 Retention Policy And Legal Hold Governance Readiness
-Status: Planned.
-Last activity: 2026-06-07 — planned v2.9 Retention Governance And Legal Hold Operations.
+Phase: 84 Backend Retention Approval And Legal Hold Review Metadata
+Plan: Not started
+Status: Ready for planning.
+Last activity: 2026-06-07 — completed Phase 83 retention governance readiness.
 
 ## Accumulated Context
 
@@ -85,10 +85,11 @@ Last activity: 2026-06-07 — planned v2.9 Retention Governance And Legal Hold O
 - Phase 82 persisted one approved metadata-only release evidence immutable manifest in production and verified API, DynamoDB, S3 Object Lock headers, and browser smoke without customer report artifact mutation.
 - v2.9 starts with retention governance and legal-hold operations because v2.8 left the 365-day GOVERNANCE retention period and operational legal-hold procedure pending formal approval.
 - Phase 83 must define the governance contract, approval packet, runbook specification, and privacy-safe verification boundary before backend/UI governance metadata is implemented.
+- Phase 83 completed the governance contract, approval packet, legal-hold runbook specification, and Phase 84 entry criteria without production mutation.
 
 ### Pending Todos
 
-- Complete Phase 83 by finalizing governance contract, approval packet, legal-hold runbook spec, and Phase 84 entry criteria.
+- Execute Phase 84 backend retention approval and legal-hold review metadata.
 
 ### Blockers/Concerns
 
@@ -110,4 +111,4 @@ Last activity: 2026-06-07 — planned v2.9 Retention Governance And Legal Hold O
 
 ## Operator Next Steps
 
-- Execute Phase 83 plan and complete retention governance/legal-hold readiness documentation.
+- Plan and execute Phase 84 backend retention approval and legal-hold review metadata.

@@ -1,7 +1,7 @@
 # Governance Contract: Retention Policy And Legal Hold Operations
 
 **Phase:** 83
-**Status:** Planned
+**Status:** Complete
 
 ## Scope
 

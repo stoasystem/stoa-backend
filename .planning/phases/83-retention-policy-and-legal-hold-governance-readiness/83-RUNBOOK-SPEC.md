@@ -1,7 +1,7 @@
 # Runbook Spec: Legal Hold Operations
 
 **Phase:** 83
-**Status:** Planned
+**Status:** Complete
 
 ## Operator Workflows
 
