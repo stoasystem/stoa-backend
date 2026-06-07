@@ -1,7 +1,7 @@
 # Legal Hold And Retention Policy Contract
 
 **Phase:** 75
-**Status:** Planned
+**Status:** Complete
 
 ## Scope
 
@@ -16,8 +16,12 @@ Required policy fields:
 - `retention_category`
 - `retention_clock_start`
 - `minimum_retention_until`
+- `applies_to_scope_types`
+- `default_action`
 - `created_by`
 - `created_at`
+- `updated_by`
+- `updated_at`
 - `status`
 
 Policy metadata must be backend-owned and audit logged. Manual AWS console policy edits are out of scope.
@@ -53,6 +57,19 @@ Required hold fields:
 - Destructive retention actions are refused.
 - Every hold state change writes append-only audit metadata.
 - Prior audit rows and immutable evidence references are not deleted or overwritten.
+- Hold state changes must use compare-and-set semantics against the current hold metadata version when a hold already exists.
+- Releasing a hold changes metadata state only; it does not delete retained evidence or shorten an already-enforced retention clock.
+
+## Backend Integration Contract
+
+Phase 76 should model legal hold records separately from immutable evidence object payloads:
+
+- `LEGAL_HOLD#{hold_id}` or equivalent metadata row for current hold state.
+- Append-only audit event for each apply/release/refusal.
+- Optional immutable evidence reference list by scope and digest.
+- Admin-only read/status APIs that return allowlisted policy and hold metadata.
+
+The first implementation should support report operations evidence scopes already covered by v2.6 retention manifests: recovery jobs, report audit refs, release evidence refs, support handoff refs, and retention manifests. Unsupported scopes must return a refusal rather than falling back to generic storage.
 
 ## Privacy Boundary
 
@@ -61,3 +78,5 @@ Legal hold and policy APIs may return only allowlisted metadata. Responses must 
 ## Operator Visibility
 
 Admin UI should show policy ID/name, hold state, timestamps, actor metadata, refusal reasons, and digest/reference metadata. It should not show storage internals or private object paths.
+
+State-changing UI actions must be separated from read-only status and require explicit operator reason fields.
