@@ -31,6 +31,8 @@ Acceptance criteria:
 - Production smoke verifies retention governance status, approval metadata, legal-hold review controls, privacy denylist, and admin-only gating.
 - Smoke does not delete audit rows, delete immutable objects, mutate customer report artifacts, write external support-system data, expose private storage identifiers, or fabricate legal/compliance approval.
 
+Status: Complete in Phase 88. Production deploy, Lambda runtime state, read-only admin API smoke, browser smoke, privacy denylist, and admin-only gating evidence are recorded in `.planning/phases/88-v2-9-governance-production-verification-closeout/88-LIVE-VERIFICATION.md`.
+
 ### AUTH-05 Account Lifecycle And Parent Binding Gap Closeout
 
 The auth/account lifecycle covers remaining `stoa_docs` MVP gaps without weakening Cognito security.
@@ -86,7 +88,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DOCGAP-01 | Phase 87 | Complete |
-| PRODVERIFY-13 | Phase 88 | Planned |
+| PRODVERIFY-13 | Phase 88 | Complete |
 | AUTH-05 | Phase 89 | Planned |
 | QUESTION-07 | Phase 90 | Planned |
 | VERIFY-13 | Phase 91 | Planned |

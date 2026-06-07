@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
 status: planning
-last_updated: "2026-06-07T23:11:06+02:00"
+last_updated: "2026-06-07T23:52:47+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 88 v2.9 Governance Production Verification Closeout
+Phase: 89 Account Lifecycle And Parent Binding Gap Closeout
 Plan: Not started
 Status: Ready for planning.
-Last activity: 2026-06-07 — completed Phase 87 stoa_docs gap audit and v3.0 scope readiness.
+Last activity: 2026-06-07 — completed Phase 88 v2.9 governance production verification closeout.
 
 ## Accumulated Context
 
@@ -91,10 +91,11 @@ Last activity: 2026-06-07 — completed Phase 87 stoa_docs gap audit and v3.0 sc
 - Phase 86 completed local-only release gate verification with backend full pytest, focused backend ruff, frontend lint/build, frontend targeted Playwright, and explicit production deploy/live smoke deferral. Broad compliance claims remain out of scope.
 - v3.0 starts by reconciling `stoa_docs` against the shipped backend/frontend state; the highest-priority remaining MVP gaps are account lifecycle hardening, parent-student binding, OCR correction, robust daily question quota enforcement, and v2.9 production governance verification.
 - Phase 87 completed the `stoa_docs` feature gap audit and confirmed v3.0 scope is limited to v2.9 production verification, account lifecycle/parent binding, OCR correction/quota hardening, and final docs alignment.
+- Phase 88 deployed and production-verified v2.9 retention governance/legal-hold operations with backend deploy run `27105695299`, frontend CI run `27105696540`, frontend deploy run `27105696551`, active `stoa-api` runtime state, read-only API smoke, browser smoke, privacy denylist, admin-only gating, and no production mutation.
 
 ### Pending Todos
 
-- Plan and execute Phase 88 v2.9 governance production verification closeout.
+- Plan and execute Phase 89 account lifecycle and parent binding gap closeout.
 
 ### Blockers/Concerns
 
@@ -113,9 +114,8 @@ Last activity: 2026-06-07 — completed Phase 87 stoa_docs gap audit and v3.0 sc
 - Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
 - The 365-day GOVERNANCE retention period and operational legal-hold procedure still need formal compliance/legal approval before broad compliance claims.
 - v2.9 must not provide legal advice or fabricate approval; it can only create and verify the approval workflow and record actual approval metadata if supplied through an approved path.
-- Phase 86 local-only closeout did not deploy backend/frontend changes or run production API/browser smoke; production verification remains a deferred residual gap.
 - `stoa_docs` Phase 2 items such as Stripe/TWINT payments, broad multi-subject rollout, student memory, AI teacher tools, WebSocket notifications, and multilingual/mobile polish remain future scope unless explicitly selected.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 88 production verification closeout.
+- Plan and execute Phase 89 account lifecycle and parent binding gap closeout.
