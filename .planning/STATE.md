@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Audit Retention And Immutable Evidence Readiness
 status: active
-last_updated: "2026-06-07T15:22:00+02:00"
+last_updated: "2026-06-07T15:36:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 74 - v2.6 Release Gate And Live Verification
-Plan: —
-Status: Ready to discuss and plan Phase 74.
-Last activity: 2026-06-07 — completed Phase 73 admin audit retention UI.
+Plan: 74-01
+Status: Complete; ready to archive milestone.
+Last activity: 2026-06-07 — completed v2.6 release gate and live verification.
 
 ## Accumulated Context
 
@@ -65,10 +65,11 @@ Last activity: 2026-06-07 — completed Phase 73 admin audit retention UI.
 - Phase 71 completed with metadata-only retention manifest/status contracts, a no-new-CDK-resource readiness decision, and explicit future-scope boundaries for compliance-grade WORM storage.
 - Phase 72 added admin-only metadata retention status and manifest APIs with canonical digests, privacy validation, refusal behavior, and redacted append-only audit metadata.
 - Phase 73 added admin audit retention controls on `/admin/report-operations` with status, manifest, copy/download, digest preview, refusal reasons, and e2e privacy assertions.
+- Phase 74 deployed and production-verified v2.6 with backend/frontend Actions evidence, Lambda runtime metadata, CDK diff, API smoke, browser smoke, and final audit.
 
 ### Pending Todos
 
-- Complete Phase 74 release gate and live verification.
+- Archive v2.6 milestone.
 
 ### Blockers/Concerns
 
@@ -87,4 +88,4 @@ Last activity: 2026-06-07 — completed Phase 73 admin audit retention UI.
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 74.
+- Complete milestone lifecycle.

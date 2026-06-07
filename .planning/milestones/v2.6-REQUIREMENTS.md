@@ -91,4 +91,4 @@ Acceptance criteria:
 | AUDITRET-02 | Phase 72 | Complete |
 | AUDITRET-03 | Phase 72 | Complete |
 | UI-13 | Phase 73 | Complete |
-| VERIFY-09 | Phase 74 | Not started |
+| VERIFY-09 | Phase 74 | Complete |
