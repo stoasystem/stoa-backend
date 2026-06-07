@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Support Evidence Export Destinations And Ticket Handoff
-status: active
+status: complete
 last_updated: "2026-06-07T01:04:33+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 69 v2.4 Release Gate And Live Verification.
+**Current focus:** v2.4 local release gate complete; production live smoke deferred.
 
 ## Current Position
 
 Phase: 69 - v2.4 Release Gate And Live Verification
-Plan: Not started
-Status: Ready to discuss and plan Phase 69.
-Last activity: 2026-06-07 — completed Phase 68 admin support handoff UI.
+Plan: 69-01
+Status: Complete for local release gate; production deploy/live smoke deferred.
+Last activity: 2026-06-07 — completed Phase 69 local release gate, release evidence validation, refusal evidence, and milestone audit.
 
 ## Accumulated Context
 
@@ -55,10 +55,11 @@ Last activity: 2026-06-07 — completed Phase 68 admin support handoff UI.
 - Phase 66 completed with a metadata-only support handoff package contract, manual preview/copy/download destination policy, explicit `external_write` refusal, privacy denylist, redacted audit metadata rules, and a no-new-CDK-resource readiness decision.
 - Phase 67 completed admin-only backend support handoff package generation with metadata-only recovery/release/fixture/operator-note sections, direct external write refusal, append-only support handoff audit rows, privacy validation, and focused backend tests.
 - Phase 68 completed frontend admin support handoff controls on `/admin/report-operations` with preview/copy/download/refusal states and focused Playwright coverage.
+- Phase 69 completed local release gate evidence and milestone audit; production deployment and read-only live smoke are deferred because v2.4 commits were not deployed from this thread.
 
 ### Pending Todos
 
-- Run Phase 69 release gate and live verification for v2.4.
+- Push/deploy backend and frontend v2.4 commits, then run read-only production support handoff API/browser smoke.
 
 ### Blockers/Concerns
 
@@ -76,4 +77,4 @@ Last activity: 2026-06-07 — completed Phase 68 admin support handoff UI.
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 69 release gate and live verification.
+- Deploy v2.4 and complete deferred production live verification.

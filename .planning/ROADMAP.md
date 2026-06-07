@@ -30,7 +30,7 @@ This milestone builds on v1.9 support evidence packages and v2.3 release evidenc
 - [x] **Phase 66: Support Destination Contract And CDK Readiness** - Define support handoff package schema, destination policy, privacy model, audit requirements, and infrastructure decision.
 - [x] **Phase 67: Backend Support Handoff Package APIs** - Add admin-only APIs/CLI to generate redacted support handoff packages from existing recovery/release evidence.
 - [x] **Phase 68: Admin Support Handoff UI** - Add `/admin/report-operations` controls to preview, copy, and download support-safe handoff packages.
-- [ ] **Phase 69: v2.4 Release Gate And Live Verification** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.4.
+- [x] **Phase 69: v2.4 Release Gate And Live Verification** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.4.
 
 ## Phase Details
 
@@ -89,7 +89,7 @@ This milestone builds on v1.9 support evidence packages and v2.3 release evidenc
 3. Direct external destination writes are verified as refused unless an approved credential path is configured.
 4. Final v2.4 audit records residual risks, rollback path, and future requirements.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
 
 ## Progress
 
@@ -98,7 +98,7 @@ This milestone builds on v1.9 support evidence packages and v2.3 release evidenc
 | 66. Support Destination Contract And CDK Readiness | v2.4 | 1/1 | Complete | 2026-06-07 |
 | 67. Backend Support Handoff Package APIs | v2.4 | 1/1 | Complete | 2026-06-07 |
 | 68. Admin Support Handoff UI | v2.4 | 1/1 | Complete | 2026-06-07 |
-| 69. v2.4 Release Gate And Live Verification | v2.4 | 0/1 | Not started | - |
+| 69. v2.4 Release Gate And Live Verification | v2.4 | 1/1 | Complete; production live smoke deferred | 2026-06-07 |
 
 ## Traceability
 
@@ -109,7 +109,7 @@ This milestone builds on v1.9 support evidence packages and v2.3 release evidenc
 | HANDOFF-03 | Phase 67 | Complete |
 | HANDOFF-04 | Phase 67 | Complete |
 | UI-12 | Phase 68 | Complete |
-| VERIFY-07 | Phase 69 | Not started |
+| VERIFY-07 | Phase 69 | Complete; production live smoke deferred |
 
 ---
-*Last updated: 2026-06-07 after completing v2.4 Phase 68*
+*Last updated: 2026-06-07 after completing v2.4 Phase 69 local release gate*
