@@ -101,7 +101,7 @@ Acceptance criteria:
 |-------------|-------|--------|
 | HANDOFF-01 | Phase 66 | Complete |
 | HANDOFF-02 | Phase 66 | Complete |
-| HANDOFF-03 | Phase 67 | Not started |
-| HANDOFF-04 | Phase 67 | Not started |
+| HANDOFF-03 | Phase 67 | Complete |
+| HANDOFF-04 | Phase 67 | Complete |
 | UI-12 | Phase 68 | Not started |
 | VERIFY-07 | Phase 69 | Not started |

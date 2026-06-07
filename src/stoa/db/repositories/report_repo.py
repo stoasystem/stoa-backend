@@ -315,6 +315,20 @@ def put_recovery_job_audit_event(job_id: str, event: dict) -> None:
     )
 
 
+def put_support_handoff_audit_event(package_id: str, event: dict) -> None:
+    """Append one immutable support handoff audit event."""
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"SUPPORT_HANDOFF#{package_id}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "SUPPORT_HANDOFF_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
 def put_recovery_job(job: dict, targets: list[dict]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = get_table()

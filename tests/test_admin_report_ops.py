@@ -2077,6 +2077,268 @@ def test_recovery_job_support_package_returns_metadata_only_and_read_only(monkey
     _assert_no_private_artifact_markers(data)
 
 
+def _minimal_release_bundle() -> dict:
+    section = {"status": "passed", "summary": "ok"}
+    return {
+        "schema_version": "v1",
+        "milestone": "v2.4",
+        "phase": 67,
+        "generated_at": "2026-06-07T10:00:00+00:00",
+        "environment": "production",
+        "backend": {"status": "passed", "commit_sha": "abc123", "deploy_run_id": "run-1"},
+        "frontend": {"status": "skipped", "summary": "backend phase"},
+        "infra": {"status": "passed", "cdk_diff": "no resource changes"},
+        "api_checks": [section],
+        "browser_smoke": {"status": "skipped", "summary": "backend phase"},
+        "privacy": {"status": "passed", "denylist_checked": True},
+        "quality_gates": [section],
+    }
+
+
+def test_support_handoff_package_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin handoff should not query evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={"reason": "support", "recovery_job_ids": ["job-1"]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):
+    audit_rows = []
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "completed",
+        "reason": "support weekly-reports/private/report.html",
+        "target_count": 1,
+        "success_count": 1,
+    }
+    target = {
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "success",
+        "detail": "sent weekly-reports/private/report.html html_s3_key",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    event = {
+        "event_id": "event-1",
+        "event_at": "2026-06-07T10:00:00+00:00",
+        "action": "create_resend_job",
+        "actor": "admin-sub",
+        "source": "admin_api",
+        "result": "success",
+        "after": {"html_s3_key": "weekly-reports/private/report.html"},
+    }
+    fixture_report = {
+        **_report(status="email_sent", email_status="sent"),
+        "artifact_version_id": "original",
+        "previous_artifact_version_id": "v1",
+    }
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: job if job_id == "job-1" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": [target]})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": [event]})
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda *args: fixture_report)
+    monkeypatch.setattr(report_repo, "list_report_audit_events", lambda report_id, limit=10, last_key=None: {"Items": [event]})
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={
+            "reason": "ticket weekly-reports/private/report.html",
+            "destination_mode": "copy",
+            "recovery_job_ids": ["job-1"],
+            "release_evidence": _minimal_release_bundle(),
+            "fixture": {"fixture_name": "stoa-safe-fixture-v2-2-rollback-2026-06-06"},
+            "operator_note": "copy weekly-reports/private/report.html",
+        },
+        headers={"x-request-id": "req-handoff"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema_version"] == "v1"
+    assert data["generated_by"] == "admin-sub"
+    assert data["reason"] == "ticket [report-artifact-key]"
+    assert data["destination"]["mode"] == "copy"
+    assert data["destination"]["status"] == "ready"
+    assert data["validation"]["status"] == "passed"
+    assert data["validation"]["privacy"]["passed"] is True
+    assert {section["type"] for section in data["sections"]} == {
+        "recovery_job_support_package",
+        "release_evidence_validation",
+        "safe_fixture_status",
+        "operator_note",
+    }
+    assert data["copy"]["format"] == "markdown"
+    assert data["audit"]["correlation_id"] == "req-handoff"
+    assert len(audit_rows) == 1
+    assert audit_rows[0][0] == data["package_id"]
+    audit = audit_rows[0][1]
+    assert audit["result"] == "generated"
+    assert audit["metadata"]["destination_mode"] == "copy"
+    assert audit["metadata"]["validation_result"] == "passed"
+    assert "job-1" in audit["metadata"]["evidence_reference_ids"]
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_support_handoff_package_records_missing_references(monkeypatch):
+    audit_rows = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: None)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={"reason": "support", "recovery_job_ids": ["missing-job"]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["validation"]["status"] == "refused"
+    assert data["validation"]["missing_references"] == [{"type": "recovery_job", "id": "missing-job"}]
+    assert data["sections"] == []
+    assert audit_rows[0][1]["result"] == "refused"
+    assert audit_rows[0][1]["metadata"]["evidence_reference_ids"] == ["missing-job"]
+    _assert_no_private_artifact_markers(data)
+
+
+def test_support_handoff_package_redacts_free_text_credentials(monkeypatch):
+    audit_rows = []
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={
+            "reason": "support access_token=abc123",
+            "operator_note": "password=hunter2 refresh_token=rt id_token=it cookie=session secret=value",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["reason"] == "support [private-credential]"
+    assert data["sections"][0]["data"]["note"] == (
+        "[private-credential] [private-credential] [private-credential] "
+        "[private-credential] [private-credential]"
+    )
+    assert audit_rows[0][1]["reason"] == "support [private-credential]"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_support_handoff_package_refuses_failed_release_evidence(monkeypatch):
+    audit_rows = []
+    bundle = _minimal_release_bundle()
+    bundle["backend"]["json_s3_key"] = "weekly-reports/private/report.json"
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={"reason": "support", "release_evidence": bundle},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["destination"]["status"] == "refused"
+    assert data["validation"]["status"] == "refused"
+    assert data["sections"][0]["type"] == "release_evidence_validation"
+    assert data["sections"][0]["status"] == "failed"
+    assert "bundle" not in data["sections"][0]["data"]
+    assert data["sections"][0]["data"]["privacy"]["passed"] is False
+    assert audit_rows[0][1]["result"] == "refused"
+    assert audit_rows[0][1]["metadata"]["validation_result"] == "refused"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_support_handoff_external_write_is_refused_without_evidence_reads(monkeypatch):
+    audit_rows = []
+
+    def fail(*args, **kwargs):
+        raise AssertionError("external_write refusal should not read evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={
+            "reason": "support",
+            "destination_mode": "external_write",
+            "recovery_job_ids": ["job-1"],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["destination"]["status"] == "refused"
+    assert data["validation"]["status"] == "refused"
+    assert data["sections"] == []
+    assert audit_rows[0][1]["result"] == "refused"
+    assert "direct external writes require approved connector" in data["destination"]["refusal_reasons"][0]
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_support_handoff_unknown_destination_rejects_before_evidence_reads(monkeypatch):
+    audit_rows = []
+
+    def fail(*args, **kwargs):
+        raise AssertionError("unknown destination should stop before evidence reads")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: audit_rows.append((package_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-package",
+        json={"reason": "support", "destination_mode": "zendesk", "recovery_job_ids": ["job-1"]},
+    )
+
+    assert response.status_code == 422
+    assert audit_rows == []
+
+
 def test_recovery_evidence_recent_jobs_export_is_bounded(monkeypatch):
     calls = []
     next_key = {"PK": "REPORT_RECOVERY_JOB#job-2", "SK": "SUMMARY"}

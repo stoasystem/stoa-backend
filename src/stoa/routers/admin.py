@@ -16,6 +16,7 @@ from stoa.services import (
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
+    support_handoff_service,
 )
 
 router = APIRouter()
@@ -371,6 +372,28 @@ class RecoveryJobTargetsResponse(BaseModel):
     items: list[RecoveryJobTargetResponse]
     count: int
     next_token: str | None = None
+
+
+class SupportHandoffFixtureReference(BaseModel):
+    fixture_name: str = Field(..., min_length=1, max_length=200)
+    parent_id: str | None = None
+    student_id: str | None = None
+    week_start: str | None = None
+    expected_artifact_version: str | None = None
+
+
+class SupportHandoffPackageRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    destination_mode: str = Field(default="preview", min_length=1, max_length=50)
+    recovery_job_ids: list[str] = Field(default_factory=list, max_length=5)
+    include_targets: bool = True
+    include_job_audit: bool = True
+    include_report_audit: bool = False
+    target_limit: int = Field(default=50, ge=1, le=100)
+    audit_limit: int = Field(default=50, ge=1, le=100)
+    release_evidence: dict[str, Any] | None = None
+    fixture: SupportHandoffFixtureReference | None = None
+    operator_note: str | None = Field(default=None, max_length=1000)
 
 
 @router.get("/users")
@@ -822,6 +845,65 @@ async def export_recovery_job_support_package(
         status="success",
     )
     return response
+
+
+@router.post("/reports/support-handoff-package")
+async def create_support_handoff_package(
+    request: Request,
+    body: SupportHandoffPackageRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Generate a support-safe handoff package without direct external writes."""
+    request_id = _request_id(request)
+    operator = _operator_id(user)
+    destination = body.destination_mode.strip()
+    if destination not in support_handoff_service.ALLOWED_DESTINATIONS | support_handoff_service.REFUSED_DESTINATIONS:
+        raise HTTPException(status_code=422, detail=f"Unsupported destination mode: {destination or 'missing'}")
+
+    recovery_sections: list[dict[str, Any]] = []
+    fixture_response: dict[str, Any] | None = None
+
+    if destination not in support_handoff_service.REFUSED_DESTINATIONS:
+        try:
+            recovery_sections = [
+                _support_handoff_recovery_section(
+                    job_id=job_id,
+                    request_id=request_id,
+                    include_targets=body.include_targets,
+                    include_job_audit=body.include_job_audit,
+                    include_report_audit=body.include_report_audit,
+                    target_limit=body.target_limit,
+                    audit_limit=body.audit_limit,
+                )
+                for job_id in body.recovery_job_ids
+            ]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+        if body.fixture:
+            fixture_response = _support_handoff_fixture_response(body.fixture)
+
+    try:
+        package = support_handoff_service.build_package(
+            reason=body.reason,
+            destination_mode=destination,
+            generated_by=operator,
+            request_id=request_id,
+            recovery_sections=recovery_sections,
+            release_evidence=body.release_evidence,
+            fixture=fixture_response,
+            operator_note=body.operator_note,
+        )
+    except support_handoff_service.SupportHandoffError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    support_handoff_service.write_audit_event(
+        package,
+        actor=operator,
+        reason=body.reason,
+        request_id=request_id,
+    )
+    return package
 
 
 @router.post("/reports/release-evidence/validate")
@@ -1451,6 +1533,60 @@ def _export_recovery_job_support_package(
             "job_audit": audit_next_token,
             "report_audit": None,
         },
+    )
+
+
+def _support_handoff_recovery_section(
+    *,
+    job_id: str,
+    request_id: str | None,
+    include_targets: bool,
+    include_job_audit: bool,
+    include_report_audit: bool,
+    target_limit: int,
+    audit_limit: int,
+) -> dict[str, Any]:
+    try:
+        data = _export_recovery_job_support_package(
+            job_id=job_id,
+            request_id=request_id,
+            include_targets=include_targets,
+            include_job_audit=include_job_audit,
+            include_report_audit=include_report_audit,
+            target_limit=target_limit,
+            audit_limit=audit_limit,
+            next_target_token=None,
+            next_audit_token=None,
+            operator_note=None,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"job_id": job_id, "missing": True}
+        raise
+    return {"job_id": job_id, "data": data}
+
+
+def _support_handoff_fixture_response(fixture: SupportHandoffFixtureReference) -> dict[str, Any]:
+    approved = release_evidence_service.approved_fixture_config(fixture.fixture_name)
+    resolved_parent_id = fixture.parent_id or approved.get("parent_id")
+    resolved_student_id = fixture.student_id or approved.get("student_id")
+    resolved_week_start = fixture.week_start or approved.get("week_start")
+    report = None
+    audit_events: list[dict[str, Any]] = []
+    if resolved_parent_id and resolved_student_id and resolved_week_start:
+        report = report_repo.get_report_for_child_by_week(
+            resolved_parent_id,
+            resolved_student_id,
+            resolved_week_start,
+        )
+        if report:
+            audit_result = report_repo.list_report_audit_events(report["report_id"], limit=10)
+            audit_events = audit_result.get("Items", [])
+    return release_evidence_service.build_fixture_inventory_response(
+        fixture_name=fixture.fixture_name,
+        report=report,
+        audit_events=audit_events,
+        expected_artifact_version_id=fixture.expected_artifact_version,
     )
 
 
