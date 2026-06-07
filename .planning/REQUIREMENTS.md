@@ -1,85 +1,92 @@
-# Requirements: v2.9 Retention Governance And Legal Hold Operations
+# Requirements: v3.0 STOA Docs Gap Closeout And Account Intake Hardening
 
-**Milestone:** v2.9
-**Status:** Complete local-only
+**Milestone:** v3.0
+**Status:** Active
 **Created:** 2026-06-07
 
 ## Goal
 
-Make immutable evidence retention and legal-hold operations governable: define the approval packet, owner model, runbook, review cadence, break-glass policy, backend metadata recording, admin evidence workflow, and release gate needed before broad compliance claims are made.
+Reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
 
 ## Requirements
 
-### GOV-01 Retention Policy And Legal Hold Governance Readiness
+### DOCGAP-01 STOA Docs Feature Gap Audit And Scope Readiness
 
-Implementers and operators have a precise governance contract before recording retention-policy approval or legal-hold operating decisions.
-
-Acceptance criteria:
-
-- Contract defines retention policy owner, legal/compliance approver roles, approval evidence fields, review cadence, expiry/reapproval behavior, emergency break-glass expectations, and audit requirements.
-- Contract distinguishes technical proof of S3 Object Lock behavior from formal legal/compliance approval.
-- Approval packet includes v2.8 deploy evidence, Object Lock mode/days, immutable manifest privacy guarantees, smoke evidence, residual risk statements, and required signoff fields.
-- Runbook specification covers applying/releasing legal holds, reviewing active holds, handling refused/destructive actions, incident escalation, and evidence export.
-- Privacy boundary forbids raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, AWS secrets, and broad compliance claims not backed by approval evidence.
-
-### GOV-02 Backend Retention Approval And Legal Hold Review Metadata
-
-Admins can record and inspect metadata-only retention approval and legal-hold review evidence.
+Implementers have a current, source-linked feature gap audit that maps `stoa_docs` PRD/HLD/PLAN requirements to shipped code, completed milestones, active gaps, and future scope.
 
 Acceptance criteria:
 
-- Backend models retention approval status, approver metadata, policy version, approval evidence references, review due dates, and approval/refusal reasons.
-- Backend models legal-hold review records, owner assignment, review cadence, break-glass metadata, and append-only audit events.
-- APIs are admin-only and metadata-only; they never return private storage identifiers, raw object payloads, raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, tokens, cookies, passwords, or AWS secrets.
-- Tests cover authorization, schema validation, stale/conflicting updates, privacy denylist, refusal behavior, and append-only audit rows.
+- Audit lists completed MVP capabilities, partially complete capabilities, open MVP gaps, and Phase 2/future expansion items.
+- Audit cites the relevant `stoa_docs` files and current backend route/service evidence.
+- Audit identifies v2.9 production deploy/live-smoke deferral as a release gap separate from product feature gaps.
+- Scope recommendation selects a small v3.0 implementation slice and defers Stripe, broad multi-subject rollout, WebSocket, student memory, AI tutor tools, rich WYSIWYG editor, PDF/multilingual delivery, billing, analytics, and support-ticket integrations unless separately approved.
 
-### UI-15 Admin Retention Governance And Legal Hold Runbook UI
+### PRODVERIFY-13 v2.9 Governance Production Verification Closeout
 
-Admin report operations UI exposes retention approval status, legal-hold review status, and runbook evidence controls.
-
-Acceptance criteria:
-
-- UI displays approval state, policy version, review due date, owner metadata, legal-hold review status, refusal reasons, and runbook links using allowlisted fields only.
-- UI separates read-only governance status from explicit state-changing actions.
-- UI requires operator reasons and confirmation for approval recording, review completion, and break-glass metadata actions.
-- UI does not render raw artifacts, S3 keys, presigned URLs, raw JSON/HTML, secrets, cookies, or tokens.
-- Playwright covers status rendering, admin gating, refusal states, reason validation, and privacy denylist.
-
-### VERIFY-12 v2.9 Release Gate And Governance Verification
-
-v2.9 closes with release evidence proving retention governance and legal-hold operations are documented, metadata-only, and correctly gated.
+v2.9 retention governance backend/frontend changes are deployed and production-verified before v3.0 claims production readiness.
 
 Acceptance criteria:
 
-- Release evidence records backend/frontend deploy evidence, commit SHAs, timestamps, local quality gates, admin-only API request IDs, browser smoke, and privacy denylist results.
-- Evidence includes the retention approval packet template and clearly marks whether formal legal/compliance approval has or has not been recorded.
-- Production smoke is read-only by default; any state-changing verification uses only approved metadata-only governance records or a named non-customer safe fixture.
-- Evidence proves no audit deletion, no customer report artifact mutation, no immutable object deletion, no external support-system write, and no private marker exposure.
-- Final audit records residual legal/compliance gaps and future requirements without overstating compliance coverage.
+- Backend/frontend deploy evidence, commit SHAs, timestamps, Lambda runtime state, admin API request IDs, and browser smoke results are recorded.
+- Production smoke verifies retention governance status, approval metadata, legal-hold review controls, privacy denylist, and admin-only gating.
+- Smoke does not delete audit rows, delete immutable objects, mutate customer report artifacts, write external support-system data, expose private storage identifiers, or fabricate legal/compliance approval.
+
+### AUTH-05 Account Lifecycle And Parent Binding Gap Closeout
+
+The auth/account lifecycle covers remaining `stoa_docs` MVP gaps without weakening Cognito security.
+
+Acceptance criteria:
+
+- Forgot-password/reset flow is implemented or explicitly integrated through Cognito-hosted/secret-backed approved flow.
+- Email verification behavior is made explicit: either real verification is enabled, or registration response/docs/admin status clearly record the operational decision and risk.
+- Parent-student binding is formalized beyond best-effort registration profile fields, with admin-safe repair/inspection behavior where needed.
+- Tests cover auth edge cases, parent-child binding authorization, and no credential/token leakage.
+
+### QUESTION-07 OCR Correction And Daily Question Quota Hardening
+
+Question intake matches `stoa_docs` more closely and daily quota enforcement is robust.
+
+Acceptance criteria:
+
+- OCR correction flow is defined and implemented as either preview-before-submit or edit-before-AI behavior.
+- Question submission preserves the final corrected text and the OCR source metadata needed for audit/debug without exposing private image keys to unauthorized users.
+- Daily question limit no longer depends on a bounded question-history scan that can miss records beyond pagination.
+- Tests cover OCR correction, image/text submission, quota boundaries, and authorization.
+
+### VERIFY-13 v3.0 Release Gate And Docs Alignment
+
+v3.0 closes with deploy/test evidence and an updated feature gap ledger.
+
+Acceptance criteria:
+
+- Local quality gates, backend/frontend deploy evidence, production smoke, commit SHAs, request IDs, and timestamps are recorded.
+- `stoa_docs` gap audit is updated with v3.0 outcomes and remaining future requirements.
+- Final audit confirms no production customer data mutation beyond explicitly approved flows and no private marker exposure.
 
 ## Future Requirements
 
-- Formal legal/compliance approval of exact retention periods if not completed during v2.9.
-- Direct support ticket/evidence retention integrations after an approved connector or secret-backed credential path exists.
-- Dedicated Step Functions/SQS orchestration if immutable verification or legal-hold workflows become asynchronous.
-- Rich/WYSIWYG report editor.
-- PDF/multilingual report delivery.
-- Billing and analytics product expansion.
+- Stripe/TWINT subscription payments.
+- Broad multi-subject rollout beyond current subject fields/content.
+- Student memory/personalization.
+- AI teacher assistance tools such as summaries and exercise generation.
+- WebSocket realtime notifications.
+- Mobile responsive polish and frontend multilingual rollout.
+- Content moderation workflow.
+- Direct support ticket/evidence integrations after an approved connector or credential path exists.
 
 ## Out of Scope
 
-- Providing legal advice or fabricating legal/compliance approval.
-- Manual AWS console changes.
-- Deleting audit rows or immutable evidence objects.
-- Mutating customer report artifacts during smoke.
+- Legal advice or fabricated compliance approval.
+- Direct production customer data mutation without named approval and rollback/cleanup path.
 - Direct third-party support-system writes.
-- Broad compliance claims beyond recorded approval and verified technical behavior.
+- Broad Phase 2 expansion in the same milestone.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GOV-01 | Phase 83 | Complete |
-| GOV-02 | Phase 84 | Complete |
-| UI-15 | Phase 85 | Complete |
-| VERIFY-12 | Phase 86 | Complete |
+| DOCGAP-01 | Phase 87 | Planned |
+| PRODVERIFY-13 | Phase 88 | Planned |
+| AUTH-05 | Phase 89 | Planned |
+| QUESTION-07 | Phase 90 | Planned |
+| VERIFY-13 | Phase 91 | Planned |

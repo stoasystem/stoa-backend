@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.9
-milestone_name: Retention Governance And Legal Hold Operations
-status: complete
-last_updated: "2026-06-07T21:05:00+02:00"
+milestone: v3.0
+milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
+status: planning
+last_updated: "2026-06-07T23:11:06+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_phases: 0
+  total_plans: 5
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.9 retention governance and legal-hold operations are complete locally; production deploy/live smoke remains deferred.
+**Current focus:** v3.0 stoa_docs gap closeout and account/intake hardening.
 
 ## Current Position
 
-Phase: Milestone complete
-Plan: None active
-Status: v2.9 archived locally with deferred production verification.
-Last activity: 2026-06-07 — completed v2.9 local-only release gate; production deploy/live smoke deferred by user decision.
+Phase: 87 STOA Docs Gap Audit And v3 Scope Readiness
+Plan: 87-01 STOA Docs Gap Audit And v3 Scope Readiness
+Status: Planned.
+Last activity: 2026-06-07 — reviewed `/Users/zhdeng/stoa-docs` and planned v3.0 around remaining MVP gaps.
 
 ## Accumulated Context
 
@@ -89,10 +89,11 @@ Last activity: 2026-06-07 — completed v2.9 local-only release gate; production
 - Phase 84 added admin-only metadata retention governance status, retention approval recording, and legal-hold review recording endpoints with append-only audit evidence, stale-write refusal, and privacy denylist tests.
 - Phase 85 added frontend admin report-operations controls for retention governance status, approval metadata recording, legal-hold review recording, copy/download evidence payloads, and Playwright privacy coverage in stoa-frontend commit `b88c673`.
 - Phase 86 completed local-only release gate verification with backend full pytest, focused backend ruff, frontend lint/build, frontend targeted Playwright, and explicit production deploy/live smoke deferral. Broad compliance claims remain out of scope.
+- v3.0 starts by reconciling `stoa_docs` against the shipped backend/frontend state; the highest-priority remaining MVP gaps are account lifecycle hardening, parent-student binding, OCR correction, robust daily question quota enforcement, and v2.9 production governance verification.
 
 ### Pending Todos
 
-- None.
+- Complete Phase 87 documentation checks and proceed to v2.9 production verification closeout.
 
 ### Blockers/Concerns
 
@@ -112,7 +113,8 @@ Last activity: 2026-06-07 — completed v2.9 local-only release gate; production
 - The 365-day GOVERNANCE retention period and operational legal-hold procedure still need formal compliance/legal approval before broad compliance claims.
 - v2.9 must not provide legal advice or fabricate approval; it can only create and verify the approval workflow and record actual approval metadata if supplied through an approved path.
 - Phase 86 local-only closeout did not deploy backend/frontend changes or run production API/browser smoke; production verification remains a deferred residual gap.
+- `stoa_docs` Phase 2 items such as Stripe/TWINT payments, broad multi-subject rollout, student memory, AI teacher tools, WebSocket notifications, and multilingual/mobile polish remain future scope unless explicitly selected.
 
 ## Operator Next Steps
 
-- Start the next milestone or production verification closeout from the deferred v2.9 deploy/live-smoke gap.
+- Execute Phase 87 verification, then start Phase 88 production verification closeout.

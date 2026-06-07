@@ -25,36 +25,39 @@
 
 ## Current Milestone
 
-None.
+**v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Active.
 
-Latest completed milestone is v2.9 Retention Governance And Legal Hold Operations, closed locally with production deploy/live smoke deferred by user decision.
+Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 83 | Retention Policy And Legal Hold Governance Readiness | Complete | GOV-01 |
-| 84 | Backend Retention Approval And Legal Hold Review Metadata | Complete | GOV-02 |
-| 85 | Admin Retention Governance And Legal Hold Runbook UI | Complete | UI-15 |
-| 86 | v2.9 Release Gate And Governance Verification | Complete | VERIFY-12 |
+| 87 | STOA Docs Gap Audit And v3 Scope Readiness | Planned | DOCGAP-01 |
+| 88 | v2.9 Governance Production Verification Closeout | Planned | PRODVERIFY-13 |
+| 89 | Account Lifecycle And Parent Binding Gap Closeout | Planned | AUTH-05 |
+| 90 | OCR Correction And Daily Question Quota Hardening | Planned | QUESTION-07 |
+| 91 | v3.0 Release Gate And Docs Alignment | Planned | VERIFY-13 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 83 | v2.9 | 1/1 | Complete | 2026-06-07 |
-| 84 | v2.9 | 1/1 | Complete | 2026-06-07 |
-| 85 | v2.9 | 1/1 | Complete | 2026-06-07 |
-| 86 | v2.9 | 1/1 | Complete | 2026-06-07 |
+| 87 | v3.0 | 1/1 | Planned | - |
+| 88 | v3.0 | 0/1 | Planned | - |
+| 89 | v3.0 | 0/1 | Planned | - |
+| 90 | v3.0 | 0/1 | Planned | - |
+| 91 | v3.0 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GOV-01 | Phase 83 | Complete |
-| GOV-02 | Phase 84 | Complete |
-| UI-15 | Phase 85 | Complete |
-| VERIFY-12 | Phase 86 | Complete |
+| DOCGAP-01 | Phase 87 | Planned |
+| PRODVERIFY-13 | Phase 88 | Planned |
+| AUTH-05 | Phase 89 | Planned |
+| QUESTION-07 | Phase 90 | Planned |
+| VERIFY-13 | Phase 91 | Planned |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 86 local-only release gate*
+*Last updated: 2026-06-07 after planning v3.0*

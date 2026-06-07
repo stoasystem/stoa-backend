@@ -443,5 +443,25 @@ Key accomplishments:
 
 Known deferred items at close: backend/frontend production deployment, production admin API smoke for governance endpoints, production browser smoke for governance controls, and formal legal/compliance approval of the exact retention period and legal-hold operating procedure. Broad compliance claims remain out of scope.
 
+### v3.0 STOA Docs Gap Closeout And Account Intake Hardening
+
+**Status:** Active
+**Started:** 2026-06-07
+**Roadmap:** `.planning/milestones/v3.0-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.0-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before broader Phase 2 expansion.
+**Phases:** 5
+**Plans:** 1/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 87: STOA Docs Gap Audit And v3 Scope Readiness.
+- Phase 88: v2.9 Governance Production Verification Closeout.
+- Phase 89: Account Lifecycle And Parent Binding Gap Closeout.
+- Phase 90: OCR Correction And Daily Question Quota Hardening.
+- Phase 91: v3.0 Release Gate And Docs Alignment.
+
 ---
-*Last updated: 2026-06-07 after completing v2.9 local-only closeout*
+*Last updated: 2026-06-07 after planning v3.0*

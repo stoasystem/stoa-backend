@@ -32,6 +32,8 @@ The completed v2.8 milestone turns the v2.7 fail-closed foundation into CDK-mana
 
 The completed-local v2.9 milestone turns the v2.8 technical retention evidence into governance-ready retention policy approval and legal-hold operations, with production deploy/live smoke deferred.
 
+The active v3.0 milestone reconciles the original `stoa_docs` product baseline with the shipped system and closes the highest-priority MVP account/intake gaps before broader Phase 2 expansion.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -40,7 +42,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
 **Latest completed milestone:** v2.9 Retention Governance And Legal Hold Operations local-only closeout on 2026-06-07
-**Active milestone:** None
+**Active milestone:** v3.0 STOA Docs Gap Closeout And Account Intake Hardening
 
 Delivered:
 
@@ -148,9 +150,17 @@ Completed phases:
 
 ## Current Milestone
 
-### None
+### v3.0 STOA Docs Gap Closeout And Account Intake Hardening
 
-Next milestone is not selected. A production verification closeout for v2.9 remains a valid follow-up if backend/frontend deploy and read-only production smoke are desired.
+Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
+
+Planned phases:
+
+- Phase 87: STOA Docs Gap Audit And v3 Scope Readiness.
+- Phase 88: v2.9 Governance Production Verification Closeout.
+- Phase 89: Account Lifecycle And Parent Binding Gap Closeout.
+- Phase 90: OCR Correction And Daily Question Quota Hardening.
+- Phase 91: v3.0 Release Gate And Docs Alignment.
 
 ## Requirements
 
@@ -183,7 +193,11 @@ Shipped requirements:
 
 ### Active
 
-None.
+- DOCGAP-01: STOA docs feature gap audit and scope readiness - Phase 87.
+- PRODVERIFY-13: v2.9 governance production verification closeout - Phase 88.
+- AUTH-05: account lifecycle and parent binding gap closeout - Phase 89.
+- QUESTION-07: OCR correction and daily question quota hardening - Phase 90.
+- VERIFY-13: v3.0 release gate and docs alignment - Phase 91.
 
 ### Completed
 
@@ -425,6 +439,7 @@ Known current resources:
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
 | Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Good - shipped in v2.8 |
 | Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Complete locally; production deploy/live smoke deferred |
+| Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Active - Phase 87 planned |
 
 ## Evolution
 
@@ -444,4 +459,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after completing milestone v2.9 local-only closeout*
+*Last updated: 2026-06-07 after planning milestone v3.0*
