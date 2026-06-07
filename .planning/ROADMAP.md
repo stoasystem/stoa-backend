@@ -29,7 +29,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 
 ## Phases
 
-- [ ] **Phase 71: Audit Retention Contract And CDK Readiness** - Define retention/sealing contract, WORM boundary, privacy model, and infrastructure decision.
+- [x] **Phase 71: Audit Retention Contract And CDK Readiness** - Define retention/sealing contract, WORM boundary, privacy model, and infrastructure decision.
 - [ ] **Phase 72: Backend Audit Retention Manifest APIs** - Add admin-only retention manifest/status APIs with metadata-only drift evidence and refusal behavior.
 - [ ] **Phase 73: Admin Audit Retention UI** - Add `/admin/report-operations` controls to inspect retention status and preview/download manifests.
 - [ ] **Phase 74: v2.6 Release Gate And Live Verification** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.6.
@@ -48,7 +48,8 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 3. Privacy model forbids raw report artifacts, S3 keys, presigned URLs, auth tokens, passwords, cookies, AWS secrets, and raw unreviewed report JSON/HTML in retained evidence.
 4. CDK readiness classifies whether existing resources are sufficient for metadata-only manifests/status or exactly what CDK-managed resource change would be required for future WORM storage.
 
-**Plans**: 1 planned
+**Plans**: 1 complete
+**Completed**: 2026-06-07
 
 ### Phase 72: Backend Audit Retention Manifest APIs
 
@@ -97,7 +98,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 71. Audit Retention Contract And CDK Readiness | v2.6 | 1/1 | Planned | - |
+| 71. Audit Retention Contract And CDK Readiness | v2.6 | 1/1 | Complete | 2026-06-07 |
 | 72. Backend Audit Retention Manifest APIs | v2.6 | 0/1 | Not started | - |
 | 73. Admin Audit Retention UI | v2.6 | 0/1 | Not started | - |
 | 74. v2.6 Release Gate And Live Verification | v2.6 | 0/1 | Not started | - |
@@ -106,11 +107,11 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUDITRET-01 | Phase 71 | Planned |
+| AUDITRET-01 | Phase 71 | Complete |
 | AUDITRET-02 | Phase 72 | Not started |
 | AUDITRET-03 | Phase 72 | Not started |
 | UI-13 | Phase 73 | Not started |
 | VERIFY-09 | Phase 74 | Not started |
 
 ---
-*Last updated: 2026-06-07 after planning v2.6 Phase 71*
+*Last updated: 2026-06-07 after completing Phase 71*

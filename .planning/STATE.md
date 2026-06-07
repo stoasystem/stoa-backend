@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Audit Retention And Immutable Evidence Readiness
 status: active
-last_updated: "2026-06-07T14:07:36+02:00"
+last_updated: "2026-06-07T14:26:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 71 - Audit Retention Contract And CDK Readiness
-Plan: 71-01
-Status: Planned; ready to execute Phase 71.
-Last activity: 2026-06-07 — planned v2.6 and created Phase 71 audit retention contract/readiness documents.
+Phase: 72 - Backend Audit Retention Manifest APIs
+Plan: —
+Status: Ready to discuss and plan Phase 72.
+Last activity: 2026-06-07 — completed Phase 71 audit retention contract and CDK readiness.
 
 ## Accumulated Context
 
@@ -62,11 +62,12 @@ Last activity: 2026-06-07 — planned v2.6 and created Phase 71 audit retention 
 - v2.5 milestone closeout archived audit, roadmap, requirements, and phase records.
 - v2.6 should start with audit retention and immutability readiness before claiming WORM/compliance-grade storage.
 - Phase 71 starts with retention contract, immutability boundary, privacy model, and CDK readiness.
+- Phase 71 completed with metadata-only retention manifest/status contracts, a no-new-CDK-resource readiness decision, and explicit future-scope boundaries for compliance-grade WORM storage.
 
 ### Pending Todos
 
-- Execute Phase 71 and finalize audit retention/immutability readiness contracts.
 - Use Phase 71 output to implement Phase 72 backend retention manifest/status APIs.
+- Keep Phase 72 manifests ephemeral plus redacted append-only audit metadata; do not persist full manifest objects or claim WORM storage.
 
 ### Blockers/Concerns
 
@@ -85,4 +86,4 @@ Last activity: 2026-06-07 — planned v2.6 and created Phase 71 audit retention 
 
 ## Operator Next Steps
 
-- Execute Phase 71.
+- Discuss and plan Phase 72.

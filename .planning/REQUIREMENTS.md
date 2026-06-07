@@ -87,7 +87,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUDITRET-01 | Phase 71 | Planned |
+| AUDITRET-01 | Phase 71 | Complete |
 | AUDITRET-02 | Phase 72 | Not started |
 | AUDITRET-03 | Phase 72 | Not started |
 | UI-13 | Phase 73 | Not started |
