@@ -79,6 +79,6 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | IMSTORE-01 | Phase 79 | Complete |
-| IMSTORE-02 | Phase 80 | Planned |
+| IMSTORE-02 | Phase 80 | Complete |
 | IMSTORE-03 | Phase 81 | Planned |
 | VERIFY-11 | Phase 82 | Planned |
