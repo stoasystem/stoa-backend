@@ -1,7 +1,7 @@
 # Requirements: v2.4 Support Evidence Export Destinations And Ticket Handoff
 
 **Milestone:** v2.4
-**Status:** Active
+**Status:** Complete; production live smoke deferred
 **Created:** 2026-06-07
 
 ## Goal

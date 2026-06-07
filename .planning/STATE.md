@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.4 local release gate complete; production live smoke deferred.
+**Current focus:** v2.4 milestone closed locally; production live smoke deferred.
 
 ## Current Position
 
-Phase: 69 - v2.4 Release Gate And Live Verification
-Plan: 69-01
-Status: Complete for local release gate; production deploy/live smoke deferred.
-Last activity: 2026-06-07 — completed Phase 69 local release gate, release evidence validation, refusal evidence, and milestone audit.
+Phase: none active
+Plan: none active
+Status: v2.4 local milestone closeout complete; production deploy/live smoke deferred.
+Last activity: 2026-06-07 — closed v2.4 after local release gate, release evidence validation, refusal evidence, and milestone audit.
 
 ## Accumulated Context
 
@@ -56,6 +56,7 @@ Last activity: 2026-06-07 — completed Phase 69 local release gate, release evi
 - Phase 67 completed admin-only backend support handoff package generation with metadata-only recovery/release/fixture/operator-note sections, direct external write refusal, append-only support handoff audit rows, privacy validation, and focused backend tests.
 - Phase 68 completed frontend admin support handoff controls on `/admin/report-operations` with preview/copy/download/refusal states and focused Playwright coverage.
 - Phase 69 completed local release gate evidence and milestone audit; production deployment and read-only live smoke are deferred because v2.4 commits were not deployed from this thread.
+- v2.4 milestone closeout archived audit, roadmap, requirements, and phase records with production live verification deferred.
 
 ### Pending Todos
 

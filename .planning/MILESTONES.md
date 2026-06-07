@@ -313,19 +313,25 @@ Known deferred items at close: compliance-grade WORM audit storage, support tick
 
 ### v2.4 Support Evidence Export Destinations And Ticket Handoff
 
-**Status:** Active
-**Roadmap:** `.planning/milestones/v2.4-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.4-REQUIREMENTS.md`
+**Status:** Local release gate complete 2026-06-07; production live smoke deferred
+**Audit:** `.planning/milestones/v2.4-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.4-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.4-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.4-phases/`
 **Goal:** Operators can turn redacted recovery, rollback, fixture, and release evidence into support-safe handoff packages for tickets or external support workflows without exposing private report artifacts or requiring unapproved third-party credentials.
 **Phases:** 4
-**Plans:** 1/4 planned
+**Plans:** 4
+**Requirements:** 6/6 complete locally
 
-Planned phases:
+Key accomplishments:
 
-- Phase 66: Support Destination Contract And CDK Readiness.
-- Phase 67: Backend Support Handoff Package APIs.
-- Phase 68: Admin Support Handoff UI.
-- Phase 69: v2.4 Release Gate And Live Verification.
+- Defined the support handoff package contract, destination refusal policy, privacy model, audit metadata, and no-new-CDK-resource readiness decision.
+- Added admin-only backend support handoff package generation with metadata-only recovery, release, fixture, and operator-note sections.
+- Added append-only support handoff audit rows and refusal behavior for direct external writes.
+- Added frontend `/admin/report-operations` support handoff controls for preview, copy, download, and refusal states.
+- Verified backend and frontend quality gates, privacy denylist coverage, release evidence validation, and mutation/refusal behavior locally.
+
+Known deferred items at close: production deployment and read-only live API/browser smoke for v2.4 support handoff endpoints/UI; direct support-system writes remain out of scope until an approved connector or secret-backed credential path exists.
 
 ---
-*Last updated: 2026-06-07 after planning v2.4 Phase 66*
+*Last updated: 2026-06-07 after closing v2.4 local release gate*

@@ -20,7 +20,7 @@ The completed v2.2 milestone closes the remaining artifact-editing operations ga
 
 The completed v2.3 milestone turns manually assembled release evidence and safe-fixture verification into a repeatable, redacted operator workflow without expanding production mutation scope.
 
-The active v2.4 milestone turns support-safe recovery, rollback, fixture, and release evidence into manual ticket handoff packages without exposing private report artifacts or requiring unapproved third-party credentials.
+The completed v2.4 milestone turns support-safe recovery, rollback, fixture, and release evidence into manual ticket handoff packages without exposing private report artifacts or requiring unapproved third-party credentials. v2.4 passed local release gates; production deployment and read-only live smoke remain deferred.
 
 ## Core Value
 
@@ -28,8 +28,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Shipped version:** v2.3 Release Evidence Automation And Fixture Lifecycle on 2026-06-06
-**Active milestone:** v2.4 Support Evidence Export Destinations And Ticket Handoff
+**Production-verified shipped version:** v2.3 Release Evidence Automation And Fixture Lifecycle on 2026-06-06
+**Latest completed milestone:** v2.4 Support Evidence Export Destinations And Ticket Handoff on 2026-06-07, local release gate complete; production live smoke deferred
 
 Delivered:
 
@@ -92,8 +92,12 @@ Delivered:
 - Backend release evidence tooling validates redacted release bundles, reports missing required fields, inspects the approved safe fixture, and refuses unapproved production mutation.
 - Frontend `/admin/report-operations` exposes read-only release evidence validation and safe-fixture status controls without rendering private artifact data.
 - v2.3 release gate captured backend/frontend deploy evidence, Lambda manifest/runtime evidence, CDK diff classification, production API/browser smoke for release evidence endpoints/UI, privacy denylist results, and safe-fixture refusal evidence with no production mutation.
+- Backend support handoff package APIs generate metadata-only, redacted handoff packages from recovery, release, fixture, and operator-note evidence.
+- Support handoff package generation records append-only audit rows and refuses unapproved direct external support-system writes.
+- Frontend `/admin/report-operations` exposes support handoff preview, copy, download, and refusal controls without rendering private artifact data.
+- v2.4 local release gate captured backend/frontend quality gates, release evidence validation, privacy/refusal evidence, and milestone audit; production deploy/live smoke remains deferred.
 
-## Last Shipped Milestone
+## Last Production-Verified Milestone
 
 **v2.3 Release Evidence Automation And Fixture Lifecycle** shipped on 2026-06-06.
 
@@ -106,18 +110,20 @@ Completed phases:
 - Phase 64: Admin Release Evidence And Fixture Status UI.
 - Phase 65: v2.3 Release Gate And Milestone Audit.
 
-## Current Milestone
+## Latest Completed Milestone
 
 ### v2.4 Support Evidence Export Destinations And Ticket Handoff
 
 Goal: operators can turn redacted recovery, rollback, fixture, and release evidence into support-safe handoff packages for tickets or external support workflows without exposing private report artifacts or requiring unapproved third-party credentials.
 
-Planned phases:
+Completed phases:
 
 - Phase 66: Support Destination Contract And CDK Readiness.
 - Phase 67: Backend Support Handoff Package APIs.
 - Phase 68: Admin Support Handoff UI.
 - Phase 69: v2.4 Release Gate And Live Verification.
+
+Production follow-up: push/deploy backend and frontend v2.4 commits, capture deploy/runtime evidence, and run read-only support handoff API/browser smoke.
 
 ## Requirements
 
@@ -150,16 +156,18 @@ Shipped requirements:
 
 ### Active
 
-Milestone v2.4 requirements are defined in `.planning/REQUIREMENTS.md` and `.planning/milestones/v2.4-REQUIREMENTS.md`:
+No active milestone requirements are defined. Next operational step is deferred v2.4 production deploy and read-only live verification.
+
+### Completed
+
+Milestone v2.4 requirements are archived in `.planning/milestones/v2.4-REQUIREMENTS.md` and are complete locally:
 
 - HANDOFF-01: support handoff package contract - Phase 66.
 - HANDOFF-02: destination policy, privacy model, and CDK readiness - Phase 66.
 - HANDOFF-03: backend support handoff package APIs - Phase 67.
 - HANDOFF-04: handoff observability and audit - Phase 67.
 - UI-12: admin support handoff UI - Phase 68.
-- VERIFY-07: v2.4 release gate and live verification - Phase 69.
-
-### Completed
+- VERIFY-07: v2.4 release gate and live verification - Phase 69; production live smoke deferred.
 
 Milestone v2.3 requirements are archived in `.planning/milestones/v2.3-REQUIREMENTS.md` and are complete:
 
