@@ -1,7 +1,7 @@
 # Requirements: v2.9 Retention Governance And Legal Hold Operations
 
 **Milestone:** v2.9
-**Status:** Active
+**Status:** Complete local-only
 **Created:** 2026-06-07
 
 ## Goal
@@ -82,4 +82,4 @@ Acceptance criteria:
 | GOV-01 | Phase 83 | Complete |
 | GOV-02 | Phase 84 | Complete |
 | UI-15 | Phase 85 | Complete |
-| VERIFY-12 | Phase 86 | Planned |
+| VERIFY-12 | Phase 86 | Complete |

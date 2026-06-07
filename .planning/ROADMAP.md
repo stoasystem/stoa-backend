@@ -21,12 +21,13 @@
 - [x] **v2.6 Audit Retention And Immutable Evidence Readiness** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.6-ROADMAP.md`.
 - [x] **v2.7 Immutable Audit Storage And Legal Hold Foundation** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.7-ROADMAP.md`.
 - [x] **v2.8 CDK-Managed Immutable Evidence Storage Deployment** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.8-ROADMAP.md`.
+- [x] **v2.9 Retention Governance And Legal Hold Operations** - Complete local-only 2026-06-07; production verification deferred. Archive: `.planning/milestones/v2.9-ROADMAP.md`.
 
 ## Current Milestone
 
-**v2.9 Retention Governance And Legal Hold Operations** - Active.
+None.
 
-Goal: make immutable evidence retention and legal-hold operations governable before broad compliance claims are made.
+Latest completed milestone is v2.9 Retention Governance And Legal Hold Operations, closed locally with production deploy/live smoke deferred by user decision.
 
 ## Phases
 
@@ -35,7 +36,7 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | 83 | Retention Policy And Legal Hold Governance Readiness | Complete | GOV-01 |
 | 84 | Backend Retention Approval And Legal Hold Review Metadata | Complete | GOV-02 |
 | 85 | Admin Retention Governance And Legal Hold Runbook UI | Complete | UI-15 |
-| 86 | v2.9 Release Gate And Governance Verification | Planned | VERIFY-12 |
+| 86 | v2.9 Release Gate And Governance Verification | Complete | VERIFY-12 |
 
 ## Progress
 
@@ -44,7 +45,7 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | 83 | v2.9 | 1/1 | Complete | 2026-06-07 |
 | 84 | v2.9 | 1/1 | Complete | 2026-06-07 |
 | 85 | v2.9 | 1/1 | Complete | 2026-06-07 |
-| 86 | v2.9 | 0/1 | Planned | - |
+| 86 | v2.9 | 1/1 | Complete | 2026-06-07 |
 
 ## Traceability
 
@@ -53,7 +54,7 @@ Goal: make immutable evidence retention and legal-hold operations governable bef
 | GOV-01 | Phase 83 | Complete |
 | GOV-02 | Phase 84 | Complete |
 | UI-15 | Phase 85 | Complete |
-| VERIFY-12 | Phase 86 | Planned |
+| VERIFY-12 | Phase 86 | Complete |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 85*
+*Last updated: 2026-06-07 after completing Phase 86 local-only release gate*

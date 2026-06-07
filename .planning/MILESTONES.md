@@ -423,21 +423,25 @@ Known deferred items at close: formal legal/compliance approval of the 365-day G
 
 ### v2.9 Retention Governance And Legal Hold Operations
 
-**Status:** Active
+**Status:** Complete local-only 2026-06-07; production verification deferred
 **Started:** 2026-06-07
-**Roadmap:** `.planning/milestones/v2.9-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.9-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v2.9-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.9-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.9-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.9-phases/`
 **Goal:** Make immutable evidence retention and legal-hold operations governable before broad compliance claims are made.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 83: Retention Policy And Legal Hold Governance Readiness.
-- Phase 84: Backend Retention Approval And Legal Hold Review Metadata.
-- Phase 85: Admin Retention Governance And Legal Hold Runbook UI.
-- Phase 86: v2.9 Release Gate And Governance Verification.
+- Defined the retention governance contract, approval packet, legal-hold runbook specification, owner model, review cadence, break-glass expectations, and privacy boundary.
+- Added admin-only backend retention governance status, retention approval metadata recording, and legal-hold review metadata recording with append-only audit evidence, stale-write refusal, and privacy denylist tests.
+- Added frontend `/admin/report-operations` governance controls for approval status, approval recording, legal-hold review recording, copy/download evidence payloads, and Playwright privacy coverage in `stoa-frontend` commit `b88c673`.
+- Completed a local-only release gate with backend focused ruff, backend full pytest, frontend lint/build, targeted Playwright, and explicit production deploy/live smoke deferral.
+
+Known deferred items at close: backend/frontend production deployment, production admin API smoke for governance endpoints, production browser smoke for governance controls, and formal legal/compliance approval of the exact retention period and legal-hold operating procedure. Broad compliance claims remain out of scope.
 
 ---
-*Last updated: 2026-06-07 after planning v2.9*
+*Last updated: 2026-06-07 after completing v2.9 local-only closeout*

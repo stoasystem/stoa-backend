@@ -30,7 +30,7 @@ The completed v2.7 milestone turns that readiness into a CDK-governed immutable 
 
 The completed v2.8 milestone turns the v2.7 fail-closed foundation into CDK-managed immutable evidence storage deployment and configured metadata-only manifest object persistence.
 
-The active v2.9 milestone turns the v2.8 technical retention evidence into governance-ready retention policy approval and legal-hold operations.
+The completed-local v2.9 milestone turns the v2.8 technical retention evidence into governance-ready retention policy approval and legal-hold operations, with production deploy/live smoke deferred.
 
 ## Core Value
 
@@ -39,8 +39,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
-**Latest completed milestone:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
-**Active milestone:** v2.9 Retention Governance And Legal Hold Operations
+**Latest completed milestone:** v2.9 Retention Governance And Legal Hold Operations local-only closeout on 2026-06-07
+**Active milestone:** None
 
 Delivered:
 
@@ -118,6 +118,7 @@ Delivered:
 - Frontend `/admin/report-operations` exposes immutable evidence and legal hold controls with separate read-only status and explicit operator-reason mutation actions.
 - v2.7 release verification captured backend/frontend deploy evidence, Lambda runtime state, CDK diff classification, production API smoke, guarded production browser smoke, and integration-audit remediation evidence with no report artifact mutation, audit deletion, immutable write, legal-hold mutation, or external write during smoke.
 - v2.8 deployed CDK-managed immutable evidence storage with S3 Object Lock GOVERNANCE retention, API-only runtime configuration, scoped metadata-prefix S3 permissions, live immutable manifest persistence, DynamoDB metadata verification, S3 Object Lock header verification, and production browser smoke.
+- v2.9 locally completed retention governance and legal-hold operations with governance contracts, backend metadata recording APIs, admin UI controls, local quality gates, and explicit production deploy/live smoke deferral.
 
 ## Last Production-Verified Milestone
 
@@ -134,29 +135,22 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v2.8 CDK-Managed Immutable Evidence Storage Deployment
-
-Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
-
-Completed phases:
-
-- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
-- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
-- Phase 81: Backend Immutable Manifest Persistence Enablement.
-- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
-
-## Current Milestone
-
 ### v2.9 Retention Governance And Legal Hold Operations
 
 Goal: make immutable evidence retention and legal-hold operations governable by defining the approval packet, owner model, runbook, review cadence, break-glass policy, backend metadata recording, admin evidence workflow, and release gate needed before broad compliance claims are made.
 
-Planned phases:
+Completed phases:
 
 - Phase 83: Retention Policy And Legal Hold Governance Readiness.
 - Phase 84: Backend Retention Approval And Legal Hold Review Metadata.
 - Phase 85: Admin Retention Governance And Legal Hold Runbook UI.
 - Phase 86: v2.9 Release Gate And Governance Verification.
+
+## Current Milestone
+
+### None
+
+Next milestone is not selected. A production verification closeout for v2.9 remains a valid follow-up if backend/frontend deploy and read-only production smoke are desired.
 
 ## Requirements
 
@@ -189,12 +183,16 @@ Shipped requirements:
 
 ### Active
 
+None.
+
+### Completed
+
+Milestone v2.9 requirements are archived in `.planning/milestones/v2.9-REQUIREMENTS.md` and are complete locally with production deploy/live smoke deferred:
+
 - GOV-01: retention policy and legal hold governance readiness - Phase 83.
 - GOV-02: backend retention approval and legal-hold review metadata - Phase 84.
 - UI-15: admin retention governance and legal-hold runbook UI - Phase 85.
 - VERIFY-12: v2.9 release gate and governance verification - Phase 86.
-
-### Completed
 
 Milestone v2.8 requirements are archived in `.planning/milestones/v2.8-REQUIREMENTS.md` and are complete:
 
@@ -426,7 +424,7 @@ Known current resources:
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
 | Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Good - shipped in v2.8 |
-| Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Active - Phase 83 planned |
+| Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Complete locally; production deploy/live smoke deferred |
 
 ## Evolution
 
@@ -446,4 +444,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after planning milestone v2.9*
+*Last updated: 2026-06-07 after completing milestone v2.9 local-only closeout*
