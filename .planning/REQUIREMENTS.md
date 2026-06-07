@@ -1,7 +1,7 @@
 # Requirements: v2.8 CDK-Managed Immutable Evidence Storage Deployment
 
 **Milestone:** v2.8
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-07
 
 ## Goal
@@ -81,4 +81,4 @@ Acceptance criteria:
 | IMSTORE-01 | Phase 79 | Complete |
 | IMSTORE-02 | Phase 80 | Complete |
 | IMSTORE-03 | Phase 81 | Complete |
-| VERIFY-11 | Phase 82 | Planned |
+| VERIFY-11 | Phase 82 | Complete |

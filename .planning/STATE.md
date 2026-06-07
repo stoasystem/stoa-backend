@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.8
 milestone_name: CDK-Managed Immutable Evidence Storage Deployment
-status: executing
-last_updated: "2026-06-07T18:54:00+02:00"
+status: complete
+last_updated: "2026-06-07T19:15:07+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 ## Current Position
 
 Phase: 82 v2.8 Release Gate And Live Immutable Storage Verification
-Plan: Not started
-Status: Phase 81 complete; ready for v2.8 release gate and one approved live metadata-only immutable persistence verification.
-Last activity: 2026-06-07 — verified backend immutable storage readiness from CDK env, duplicate refusal coverage, and read-only production status smoke.
+Plan: Complete
+Status: v2.8 complete; ready to archive.
+Last activity: 2026-06-07 — passed v2.8 release gate with live metadata-only immutable persistence, S3 Object Lock metadata verification, DynamoDB verification, and browser smoke.
 
 ## Accumulated Context
 
@@ -82,10 +82,11 @@ Last activity: 2026-06-07 — verified backend immutable storage readiness from 
 - Phase 80 verified live Object Lock default retention in GOVERNANCE mode for 365 days, public access block, AES256 encryption, server access logging, API-only immutable env vars, and API IAM limited to `s3:GetObject`/`s3:PutObject` on the approved prefix.
 - Phase 81 added env-driven immutable readiness coverage and duplicate/reference-exists refusal coverage.
 - Phase 81 production read-only smoke verified `stoa-api` immutable storage public status is `ready`, `cdk_managed=true`, `resource_configured=true`, and `prefix_configured=true` without exposing private storage identifiers.
+- Phase 82 persisted one approved metadata-only release evidence immutable manifest in production and verified API, DynamoDB, S3 Object Lock headers, and browser smoke without customer report artifact mutation.
 
 ### Pending Todos
 
-- Start Phase 82 v2.8 release gate and live immutable storage verification.
+- Archive v2.8 milestone.
 
 ### Blockers/Concerns
 
@@ -102,8 +103,8 @@ Last activity: 2026-06-07 — verified backend immutable storage readiness from 
 - Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
 - Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
 - Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
-- Phase 82 production smoke must prove persistence with approved metadata-only evidence or a named non-customer safe fixture without mutating customer report artifacts.
+- The 365-day GOVERNANCE retention period and operational legal-hold procedure still need formal compliance/legal approval before broad compliance claims.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 82 v2.8 release gate and live immutable storage verification.
+- Archive v2.8 and prepare the next milestone when requested.
