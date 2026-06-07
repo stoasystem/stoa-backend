@@ -10,6 +10,7 @@ from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
+    report_audit_retention_service,
     report_artifact_edit_service,
     report_edit_service,
     release_evidence_service,
@@ -394,6 +395,30 @@ class SupportHandoffPackageRequest(BaseModel):
     release_evidence: dict[str, Any] | None = None
     fixture: SupportHandoffFixtureReference | None = None
     operator_note: str | None = Field(default=None, max_length=1000)
+
+
+class AuditRetentionReference(BaseModel):
+    scope: str = Field(..., min_length=1, max_length=50)
+    job_id: str | None = Field(default=None, max_length=200)
+    parent_id: str | None = Field(default=None, max_length=200)
+    student_id: str | None = Field(default=None, max_length=200)
+    week_start: str | None = Field(default=None, max_length=50)
+    package_id: str | None = Field(default=None, max_length=200)
+    release_evidence: dict[str, Any] | None = None
+
+
+class AuditRetentionStatusRequest(BaseModel):
+    references: list[AuditRetentionReference] = Field(..., min_length=1, max_length=10)
+    limit: int = Field(default=10, ge=1, le=10)
+
+
+class AuditRetentionManifestRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+    references: list[AuditRetentionReference] = Field(..., min_length=1, max_length=10)
+    retention_category: str = Field(default="operational", min_length=1, max_length=50)
+    retention_action: str = Field(default="seal_metadata", min_length=1, max_length=50)
+    target_limit: int = Field(default=25, ge=1, le=100)
+    audit_limit: int = Field(default=25, ge=1, le=100)
 
 
 @router.get("/users")
@@ -904,6 +929,42 @@ async def create_support_handoff_package(
         request_id=request_id,
     )
     return package
+
+
+@router.post("/reports/audit-retention/status")
+async def get_audit_retention_status(
+    request: Request,
+    body: AuditRetentionStatusRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect metadata-only audit retention status for allowlisted scopes."""
+    return report_audit_retention_service.build_status_response(
+        references=[ref.model_dump(exclude_none=True) for ref in body.references],
+        request_id=_request_id(request),
+        limit=body.limit,
+    )
+
+
+@router.post("/reports/audit-retention/manifest")
+async def create_audit_retention_manifest(
+    request: Request,
+    body: AuditRetentionManifestRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Generate a metadata-only sealed audit retention manifest."""
+    try:
+        return report_audit_retention_service.build_manifest(
+            reason=body.reason,
+            generated_by=_operator_id(user),
+            request_id=_request_id(request),
+            references=[ref.model_dump(exclude_none=True) for ref in body.references],
+            retention_category=body.retention_category,
+            retention_action=body.retention_action,
+            target_limit=body.target_limit,
+            audit_limit=body.audit_limit,
+        )
+    except report_audit_retention_service.AuditRetentionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/reports/release-evidence/validate")

@@ -30,7 +30,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 ## Phases
 
 - [x] **Phase 71: Audit Retention Contract And CDK Readiness** - Define retention/sealing contract, WORM boundary, privacy model, and infrastructure decision.
-- [ ] **Phase 72: Backend Audit Retention Manifest APIs** - Add admin-only retention manifest/status APIs with metadata-only drift evidence and refusal behavior.
+- [x] **Phase 72: Backend Audit Retention Manifest APIs** - Add admin-only retention manifest/status APIs with metadata-only drift evidence and refusal behavior.
 - [ ] **Phase 73: Admin Audit Retention UI** - Add `/admin/report-operations` controls to inspect retention status and preview/download manifests.
 - [ ] **Phase 74: v2.6 Release Gate And Live Verification** - Record deploy/CDK/API/UI evidence, run production read-only smoke, and close v2.6.
 
@@ -63,7 +63,8 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 3. Backend refuses destructive retention actions and unsupported WORM claims.
 4. Tests cover admin-only auth, manifest schema, status states, privacy denylist, drift metadata, refusal behavior, and audit rows.
 
-**Plans**: 0 complete
+**Plans**: 1 complete
+**Completed**: 2026-06-07
 
 ### Phase 73: Admin Audit Retention UI
 
@@ -99,7 +100,7 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 71. Audit Retention Contract And CDK Readiness | v2.6 | 1/1 | Complete | 2026-06-07 |
-| 72. Backend Audit Retention Manifest APIs | v2.6 | 0/1 | Not started | - |
+| 72. Backend Audit Retention Manifest APIs | v2.6 | 1/1 | Complete | 2026-06-07 |
 | 73. Admin Audit Retention UI | v2.6 | 0/1 | Not started | - |
 | 74. v2.6 Release Gate And Live Verification | v2.6 | 0/1 | Not started | - |
 
@@ -108,10 +109,10 @@ This milestone starts with a contract/readiness phase. It should not claim compl
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | AUDITRET-01 | Phase 71 | Complete |
-| AUDITRET-02 | Phase 72 | Not started |
-| AUDITRET-03 | Phase 72 | Not started |
+| AUDITRET-02 | Phase 72 | Complete |
+| AUDITRET-03 | Phase 72 | Complete |
 | UI-13 | Phase 73 | Not started |
 | VERIFY-09 | Phase 74 | Not started |
 
 ---
-*Last updated: 2026-06-07 after completing Phase 71*
+*Last updated: 2026-06-07 after completing Phase 72*

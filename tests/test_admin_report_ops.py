@@ -2339,6 +2339,233 @@ def test_support_handoff_unknown_destination_rejects_before_evidence_reads(monke
     assert audit_rows == []
 
 
+def test_audit_retention_status_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin retention status should not read evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/status",
+        json={"references": [{"scope": "recovery_job", "job_id": "job-1"}]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_audit_retention_status_returns_metadata_states(monkeypatch):
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/status",
+        json={
+            "references": [
+                {"scope": "recovery_job", "job_id": "job-1"},
+                {"scope": "unknown_scope", "job_id": "job-2"},
+            ]
+        },
+        headers={"x-request-id": "req-ret-status"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["request_id"] == "req-ret-status"
+    assert data["scope_count"] == 2
+    assert data["items"][0]["status"] == "unsealed"
+    assert data["items"][0]["counts"] == {"jobs": 1}
+    assert data["items"][1]["status"] == "unsupported"
+    assert data["privacy"]["passed"] is True
+    _assert_no_private_artifact_markers(data)
+
+
+def test_audit_retention_status_propagates_release_privacy_failure(monkeypatch):
+    bundle = _minimal_release_bundle()
+    bundle["backend"]["presigned_url"] = "https://s3.amazonaws.com/private?X-Amz-Signature=secret"
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/status",
+        json={"references": [{"scope": "release_evidence", "release_evidence": bundle}]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"][0]["status"] == "refused"
+    assert data["items"][0]["privacy"]["passed"] is False
+    assert data["items"][0]["privacy"]["violation_count"] >= 1
+    _assert_no_private_artifact_markers(data)
+
+
+def test_audit_retention_manifest_generates_digests_and_audits(monkeypatch):
+    audit_rows = []
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "completed",
+        "reason": "incident weekly-reports/private/report.html",
+        "target_count": 1,
+        "success_count": 1,
+    }
+    target = {
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "success",
+        "detail": "sent weekly-reports/private/report.html html_s3_key",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    event = {
+        "event_id": "event-1",
+        "event_at": "2026-06-07T10:00:00+00:00",
+        "action": "create_resend_job",
+        "actor": "admin-sub",
+        "source": "admin_api",
+        "result": "success",
+        "after": {"html_s3_key": "weekly-reports/private/report.html"},
+    }
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: job if job_id == "job-1" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": [target]})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": [event]})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/manifest",
+        json={
+            "reason": "seal incident weekly-reports/private/report.html",
+            "retention_category": "incident",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+            "target_limit": 5,
+            "audit_limit": 5,
+        },
+        headers={"x-request-id": "req-ret-manifest"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema_version"] == "v1"
+    assert data["generated_by"] == "admin-sub"
+    assert data["reason"] == "seal incident [report-artifact-key]"
+    assert data["retention_category"] == "incident"
+    assert data["status"] == "sealed"
+    assert data["verification"]["item_count"] == 1
+    assert data["verification"]["manifest_digest"].startswith("sha256:")
+    assert data["items"][0]["digest"].startswith("sha256:")
+    assert data["items"][0]["summary"]["jobs"][0]["reason"] == "incident [report-artifact-key]"
+    assert data["verification"]["privacy"]["passed"] is True
+    assert len(audit_rows) == 1
+    assert audit_rows[0][0] == data["manifest_id"]
+    audit = audit_rows[0][1]
+    assert audit["result"] == "generated"
+    assert audit["metadata"]["manifest_digest"] == data["verification"]["manifest_digest"]
+    assert audit["metadata"]["item_count"] == 1
+    assert audit["metadata"]["privacy_passed"] is True
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_audit_retention_manifest_refuses_destructive_actions_without_reads(monkeypatch):
+    audit_rows = []
+
+    def fail(*args, **kwargs):
+        raise AssertionError("destructive retention action should not read evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/manifest",
+        json={
+            "reason": "delete audit",
+            "retention_action": "delete",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "refused"
+    assert data["items"] == []
+    assert "not supported" in data["verification"]["refusal_reasons"][0]
+    assert audit_rows[0][1]["result"] == "refused"
+    assert audit_rows[0][1]["metadata"]["retention_action"] == "delete"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_audit_retention_manifest_redacts_private_free_text(monkeypatch):
+    audit_rows = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: {"job_id": job_id, "status": "completed"})
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": []})
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/manifest",
+        json={
+            "reason": "seal <html> access_token=abc123 password=hunter2",
+            "references": [{"scope": "recovery_job", "job_id": "job-1"}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["reason"] == "[REDACTED]"
+    assert data["verification"]["privacy"]["passed"] is True
+    assert audit_rows[0][1]["reason"] == "[REDACTED]"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
+def test_audit_retention_manifest_refuses_failed_release_evidence(monkeypatch):
+    audit_rows = []
+    bundle = _minimal_release_bundle()
+    bundle["backend"]["presigned_url"] = "https://s3.amazonaws.com/private?X-Amz-Signature=secret"
+    monkeypatch.setattr(
+        report_repo,
+        "put_audit_retention_audit_event",
+        lambda manifest_id, event: audit_rows.append((manifest_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/audit-retention/manifest",
+        json={
+            "reason": "seal release",
+            "retention_category": "release",
+            "references": [{"scope": "release_evidence", "release_evidence": bundle}],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "refused"
+    assert data["items"] == []
+    assert "release evidence validation failed" in data["verification"]["refusal_reasons"]
+    assert audit_rows[0][1]["result"] == "refused"
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(audit_rows)
+
+
 def test_recovery_evidence_recent_jobs_export_is_bounded(monkeypatch):
     calls = []
     next_key = {"PK": "REPORT_RECOVERY_JOB#job-2", "SK": "SUMMARY"}
