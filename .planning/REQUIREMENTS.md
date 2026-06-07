@@ -1,7 +1,7 @@
 # Requirements: v2.7 Immutable Audit Storage And Legal Hold Foundation
 
 **Milestone:** v2.7
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-07
 
 ## Goal
@@ -92,4 +92,4 @@ Acceptance criteria:
 | IMMUTABLE-02 | Phase 76 | Complete |
 | LEGALHOLD-01 | Phase 76 | Complete |
 | UI-14 | Phase 77 | Complete |
-| VERIFY-10 | Phase 78 | Planned |
+| VERIFY-10 | Phase 78 | Complete |

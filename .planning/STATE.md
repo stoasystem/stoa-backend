@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.7
 milestone_name: Immutable Audit Storage And Legal Hold Foundation
-status: planning
-last_updated: "2026-06-07T17:45:00+02:00"
+status: complete
+last_updated: "2026-06-07T17:20:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v2.7 immutable audit storage and legal hold foundation.
+**Current focus:** No active milestone. v2.7 shipped on 2026-06-07.
 
 ## Current Position
 
 Phase: 78 v2.7 Release Gate And Live Verification
-Plan: Not started
-Status: Phase 77 complete; ready to discuss/plan Phase 78.
-Last activity: 2026-06-07 — completed Phase 77 admin immutable evidence and legal hold UI.
+Plan: Complete
+Status: v2.7 shipped and archived.
+Last activity: 2026-06-07 — completed Phase 78 release gate, production live verification, milestone audit, integration blocker remediation, and phase archive.
 
 ## Accumulated Context
 
@@ -72,10 +72,13 @@ Last activity: 2026-06-07 — completed Phase 77 admin immutable evidence and le
 - Phase 75 completed with metadata-only immutable storage and legal hold contracts, CDK readiness evidence, and a decision that Phase 76 must fail closed while CDK-managed immutable storage configuration is absent.
 - Phase 76 added admin-only immutable evidence status/persist and legal hold status/apply APIs, with immutable persistence refusing `not_configured` until CDK-managed storage settings exist.
 - Phase 77 added frontend admin immutable evidence and legal hold controls in stoa-frontend commit c1e2676.
+- Phase 78 deployed and production-verified v2.7 with backend/frontend Actions evidence, Lambda runtime metadata, CDK diff, API smoke, browser smoke, and final audit.
+- Integration audit blockers were fixed in backend commit 2e2d942: configured immutable persistence now writes a create-only metadata object before marking the manifest reference persisted, and legal-hold writes now use compare-and-set semantics.
+- v2.7 shipped as a metadata-only, admin-only, fail-closed immutable evidence/legal hold foundation; compliance-grade WORM/Object Lock storage remains future scope.
 
 ### Pending Todos
 
-- Start Phase 78 release gate and live verification.
+- Start the next milestone with `$gsd-new-milestone` when ready.
 
 ### Blockers/Concerns
 
@@ -95,4 +98,4 @@ Last activity: 2026-06-07 — completed Phase 77 admin immutable evidence and le
 
 ## Operator Next Steps
 
-- Discuss/plan Phase 78 release gate and live verification.
+- Start the next milestone when scope is known.

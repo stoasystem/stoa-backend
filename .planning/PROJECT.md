@@ -26,7 +26,7 @@ The completed v2.5 milestone closes the deferred production verification gap for
 
 The completed v2.6 milestone makes report operations audit evidence ready for stronger retention and future immutable storage without weakening privacy boundaries.
 
-The active v2.7 milestone turns that readiness into a CDK-governed immutable audit storage and legal hold foundation, starting with contracts and CDK readiness before any production write path is implemented.
+The completed v2.7 milestone turns that readiness into a CDK-governed immutable audit storage and legal hold foundation, starting with contracts and CDK readiness before any production write path is implemented.
 
 ## Core Value
 
@@ -34,9 +34,9 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Production-verified shipped version:** v2.6 Audit Retention And Immutable Evidence Readiness on 2026-06-07
-**Latest completed milestone:** v2.6 Audit Retention And Immutable Evidence Readiness on 2026-06-07
-**Active milestone:** v2.7 Immutable Audit Storage And Legal Hold Foundation
+**Production-verified shipped version:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
+**Latest completed milestone:** v2.7 Immutable Audit Storage And Legal Hold Foundation on 2026-06-07
+**Active milestone:** None
 
 Delivered:
 
@@ -108,45 +108,41 @@ Delivered:
 - Backend audit retention APIs expose admin-only status and manifest generation with canonical digests, privacy validation, destructive action refusal, and redacted append-only audit metadata.
 - Frontend `/admin/report-operations` exposes audit retention status, manifest preview, copy, download, digest rendering, and refusal controls without rendering private artifact data.
 - v2.6 release verification captured backend/frontend deploy evidence, Lambda runtime state, CDK diff classification, production API smoke, and production browser smoke with no report artifact mutation, no audit deletion, and no external write.
+- v2.7 defined immutable audit storage and legal hold contracts with CDK as the source of truth for future WORM/Object Lock storage.
+- Backend immutable evidence APIs expose admin-only status/persist metadata behavior, fail closed with `not_configured` while CDK-managed immutable storage is absent, and write create-only metadata objects before marking manifest references persisted when storage is configured.
+- Backend legal hold APIs expose metadata-only status/apply/release behavior with append-only audit evidence, compare-and-set current-state writes, and no audit row deletion.
+- Frontend `/admin/report-operations` exposes immutable evidence and legal hold controls with separate read-only status and explicit operator-reason mutation actions.
+- v2.7 release verification captured backend/frontend deploy evidence, Lambda runtime state, CDK diff classification, production API smoke, guarded production browser smoke, and integration-audit remediation evidence with no report artifact mutation, audit deletion, immutable write, legal-hold mutation, or external write during smoke.
 
 ## Last Production-Verified Milestone
 
-**v2.6 Audit Retention And Immutable Evidence Readiness** shipped on 2026-06-07.
-
-Goal: make report operations audit evidence ready for stronger retention and future immutable storage by defining contracts, CDK decisions, backend manifests/status, admin visibility, and release verification without weakening privacy boundaries.
-
-Completed phases:
-
-- Phase 71: Audit Retention Contract And CDK Readiness.
-- Phase 72: Backend Audit Retention Manifest APIs.
-- Phase 73: Admin Audit Retention UI.
-- Phase 74: v2.6 Release Gate And Live Verification.
-
-## Latest Completed Milestone
-
-### v2.6 Audit Retention And Immutable Evidence Readiness
-
-Goal: make report operations audit evidence ready for stronger retention and future immutable storage by defining contracts, CDK decisions, backend manifests/status, admin visibility, and release verification without weakening privacy boundaries.
-
-Completed phases:
-
-- Phase 71: Audit Retention Contract And CDK Readiness.
-- Phase 72: Backend Audit Retention Manifest APIs.
-- Phase 73: Admin Audit Retention UI.
-- Phase 74: v2.6 Release Gate And Live Verification.
-
-## Current Milestone
-
-### v2.7 Immutable Audit Storage And Legal Hold Foundation
+**v2.7 Immutable Audit Storage And Legal Hold Foundation** shipped on 2026-06-07.
 
 Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
 
-Planned phases:
+Completed phases:
 
 - Phase 75: Immutable Audit Storage Contract And CDK Readiness.
 - Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
 - Phase 77: Admin Immutable Evidence And Legal Hold UI.
 - Phase 78: v2.7 Release Gate And Live Verification.
+
+## Latest Completed Milestone
+
+### v2.7 Immutable Audit Storage And Legal Hold Foundation
+
+Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
+
+Completed phases:
+
+- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
+- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
+- Phase 77: Admin Immutable Evidence And Legal Hold UI.
+- Phase 78: v2.7 Release Gate And Live Verification.
+
+## Current Milestone
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -179,13 +175,17 @@ Shipped requirements:
 
 ### Active
 
+None.
+
+### Completed
+
+Milestone v2.7 requirements are archived in `.planning/milestones/v2.7-REQUIREMENTS.md` and are complete:
+
 - IMMUTABLE-01: immutable audit storage contract and CDK readiness - Phase 75.
 - IMMUTABLE-02: backend immutable retention manifest persistence - Phase 76.
 - LEGALHOLD-01: legal hold and retention policy metadata - Phase 76.
 - UI-14: admin immutable evidence and legal hold UI - Phase 77.
 - VERIFY-10: v2.7 release gate and live verification - Phase 78.
-
-### Completed
 
 Milestone v2.6 requirements are archived in `.planning/milestones/v2.6-REQUIREMENTS.md` and are complete:
 
@@ -400,7 +400,7 @@ Known current resources:
 | Start v2.4 with support evidence handoff packages | v2.3 made release and fixture evidence repeatable; the next support gap is package handoff into tickets without exposing private artifacts or adding unapproved integrations | Good - shipped in v2.4 |
 | Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Good - shipped in v2.5 |
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
-| Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Active - Phase 75 planned |
+| Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
 
 ## Evolution
 
@@ -420,4 +420,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after planning milestone v2.7*
+*Last updated: 2026-06-07 after shipping milestone v2.7*

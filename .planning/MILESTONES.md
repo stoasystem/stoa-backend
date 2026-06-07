@@ -378,21 +378,26 @@ Known deferred items at close: compliance-grade WORM/Object Lock storage, legal 
 
 ### v2.7 Immutable Audit Storage And Legal Hold Foundation
 
-**Status:** Active
-**Started:** 2026-06-07
-**Roadmap:** `.planning/milestones/v2.7-ROADMAP.md`
-**Requirements:** `.planning/milestones/v2.7-REQUIREMENTS.md`
+**Status:** Shipped 2026-06-07
+**Audit:** `.planning/milestones/v2.7-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v2.7-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v2.7-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v2.7-phases/`
 **Goal:** Implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence while preserving metadata-only privacy boundaries.
 **Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/5 complete
+**Plans:** 4/4 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Key accomplishments:
 
-- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
-- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
-- Phase 77: Admin Immutable Evidence And Legal Hold UI.
-- Phase 78: v2.7 Release Gate And Live Verification.
+- Defined immutable audit storage and legal hold contracts with CDK-managed resources as the only approved path to compliance-grade immutability.
+- Added backend admin-only immutable evidence status/persist and legal hold status/apply/release metadata APIs, with immutable persistence failing closed while CDK-managed immutable storage is absent and create-only metadata object writes when configured.
+- Added legal-hold compare-and-set current-state writes and consistent reads after integration audit identified the missing contract behavior.
+- Added frontend `/admin/report-operations` immutable evidence and legal hold controls with separate read-only status and explicit operator-reason mutation actions.
+- Verified backend/frontend deploys, Lambda runtime state, CDK diff classification, production API smoke, guarded production browser smoke, and remediation code review.
+- Confirmed no report artifact mutation, no audit deletion, no immutable write, no legal-hold mutation, and no external write during production smoke.
+
+Known deferred items at close: compliance-grade WORM/Object Lock storage, CDK-managed immutable storage resource deployment, legal/compliance retention-period review, and full immutable manifest object persistence remain future scope.
 
 ---
-*Last updated: 2026-06-07 after planning v2.7*
+*Last updated: 2026-06-07 after shipping v2.7*
