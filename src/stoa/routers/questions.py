@@ -1,6 +1,7 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -25,18 +26,58 @@ def _check_daily_limit(student_id: str, subscription_tier: str, settings: Settin
         "standard": settings.standard_tier_daily_question_limit,
         "premium": settings.premium_tier_daily_question_limit,
     }
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    result = question_repo.list_by_student(student_id, limit=200)
-    questions_today = [
-        q for q in result.get("Items", [])
-        if q.get("created_at", "").startswith(today)
-    ]
     limit = limits.get(subscription_tier, settings.free_tier_daily_question_limit)
-    if len(questions_today) >= limit:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + 172800
+    count = question_repo.record_daily_question_usage(student_id, today, limit, expires_at)
+    if count is None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily question limit ({limit}) reached for your plan",
         )
+
+
+def _question_response(item: dict[str, Any]) -> QuestionResponse:
+    public_item = dict(item)
+    public_item["image_s3_key"] = None
+    public_item["has_image"] = bool(item.get("image_s3_key") or item.get("has_image"))
+    public_item["ocr_metadata"] = item.get("ocr_metadata") or {
+        "status": "not_requested",
+        "source": None,
+        "text_length": 0,
+        "correction_applied": False,
+        "failure_class": None,
+    }
+    return QuestionResponse(**public_item)
+
+
+def _build_question_content(body: SubmitQuestionRequest, settings: Settings) -> tuple[str, dict[str, Any], str | None]:
+    corrected = body.corrected_text.strip() if body.corrected_text else None
+    content = corrected or body.content
+    ocr_text: str | None = None
+    metadata: dict[str, Any] = {
+        "status": "not_requested",
+        "source": None,
+        "text_length": 0,
+        "correction_applied": corrected is not None,
+        "failure_class": None,
+    }
+
+    if not body.image_s3_key:
+        return content, metadata, ocr_text
+
+    metadata["source"] = "rekognition_s3"
+    try:
+        extracted = ocr_service.extract_text_from_s3(settings.s3_images_bucket, body.image_s3_key)
+        ocr_text = extracted.strip()
+        metadata["text_length"] = len(ocr_text)
+        metadata["status"] = "succeeded" if ocr_text else "no_text"
+        if ocr_text and corrected is None:
+            content = f"{body.content}\n\n[Image text: {ocr_text}]" if body.content else ocr_text
+    except Exception as exc:
+        metadata["status"] = "failed"
+        metadata["failure_class"] = type(exc).__name__
+    return content, metadata, ocr_text
 
 
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
@@ -54,26 +95,22 @@ async def submit_question(
 
     _check_daily_limit(student_id, subscription_tier, settings)
 
-    content = body.content
-
-    # OCR: extract text from uploaded image if provided
-    if body.image_s3_key:
-        try:
-            extracted = ocr_service.extract_text_from_s3(settings.s3_images_bucket, body.image_s3_key)
-            if extracted.strip():
-                content = f"{content}\n\n[Image text: {extracted}]" if content else extracted
-        except Exception:
-            pass  # OCR failure is non-fatal; proceed with text content
+    content, ocr_metadata, ocr_text = _build_question_content(body, settings)
 
     question_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     item = {
         "question_id": question_id,
         "student_id": student_id,
         "subject": body.subject,
         "content": content,
+        "original_content": body.content,
+        "corrected_text": body.corrected_text,
         "image_s3_key": body.image_s3_key,
+        "has_image": bool(body.image_s3_key),
+        "ocr_text": ocr_text,
+        "ocr_metadata": ocr_metadata,
         "status": QuestionStatus.PENDING.value,
         "ai_response": None,
         "teacher_id": None,
@@ -101,11 +138,11 @@ async def submit_question(
         )
         item["status"] = QuestionStatus.AI_ANSWERED.value
         item["ai_response"] = ai_resp
-    except Exception as exc:
+    except Exception:
         # AI call failed — leave as PENDING; client can poll
         pass
 
-    return QuestionResponse(**item)
+    return _question_response(item)
 
 
 @router.get("/{question_id}", response_model=QuestionResponse)
@@ -122,7 +159,7 @@ async def get_question(
     if user.get("role") == "student" and item.get("student_id") != user["sub"]:
         raise HTTPException(status_code=403, detail="Not your question")
 
-    return QuestionResponse(**item)
+    return _question_response(item)
 
 
 @router.post("/{question_id}/request-teacher", status_code=status.HTTP_202_ACCEPTED)

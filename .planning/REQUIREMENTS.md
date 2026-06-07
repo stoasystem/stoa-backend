@@ -57,6 +57,8 @@ Acceptance criteria:
 - Daily question limit no longer depends on a bounded question-history scan that can miss records beyond pagination.
 - Tests cover OCR correction, image/text submission, quota boundaries, and authorization.
 
+Status: Complete in Phase 90. OCR correction is implemented as edit-before-AI, question responses suppress private image keys, OCR metadata is preserved, and quota uses atomic daily counters.
+
 ### VERIFY-13 v3.0 Release Gate And Docs Alignment
 
 v3.0 closes with deploy/test evidence and an updated feature gap ledger.
@@ -92,5 +94,5 @@ Acceptance criteria:
 | DOCGAP-01 | Phase 87 | Complete |
 | PRODVERIFY-13 | Phase 88 | Complete |
 | AUTH-05 | Phase 89 | Complete |
-| QUESTION-07 | Phase 90 | Planned |
+| QUESTION-07 | Phase 90 | Complete |
 | VERIFY-13 | Phase 91 | Planned |

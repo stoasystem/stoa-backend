@@ -452,16 +452,16 @@ Known deferred items at close: backend/frontend production deployment, productio
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before broader Phase 2 expansion.
 **Phases:** 5
-**Plans:** 3/5 complete
-**Requirements:** 3/5 complete
+**Plans:** 4/5 complete
+**Requirements:** 4/5 complete
 
 Planned phases:
 
 - Phase 87: STOA Docs Gap Audit And v3 Scope Readiness - Complete.
 - Phase 88: v2.9 Governance Production Verification Closeout - Complete.
 - Phase 89: Account Lifecycle And Parent Binding Gap Closeout - Complete.
-- Phase 90: OCR Correction And Daily Question Quota Hardening.
+- Phase 90: OCR Correction And Daily Question Quota Hardening - Complete.
 - Phase 91: v3.0 Release Gate And Docs Alignment.
 
 ---
-*Last updated: 2026-06-07 after completing Phase 89*
+*Last updated: 2026-06-07 after completing Phase 90*

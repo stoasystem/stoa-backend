@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
 status: planning
-last_updated: "2026-06-08T00:00:00+02:00"
+last_updated: "2026-06-08T00:10:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 90 OCR Correction And Daily Question Quota Hardening
+Phase: 91 v3.0 Release Gate And Docs Alignment
 Plan: Not started
 Status: Ready for planning.
-Last activity: 2026-06-07 — completed Phase 89 account lifecycle and parent binding gap closeout.
+Last activity: 2026-06-07 — completed Phase 90 OCR correction and daily question quota hardening.
 
 ## Accumulated Context
 
@@ -93,10 +93,11 @@ Last activity: 2026-06-07 — completed Phase 89 account lifecycle and parent bi
 - Phase 87 completed the `stoa_docs` feature gap audit and confirmed v3.0 scope is limited to v2.9 production verification, account lifecycle/parent binding, OCR correction/quota hardening, and final docs alignment.
 - Phase 88 deployed and production-verified v2.9 retention governance/legal-hold operations with backend deploy run `27105695299`, frontend CI run `27105696540`, frontend deploy run `27105696551`, active `stoa-api` runtime state, read-only API smoke, browser smoke, privacy denylist, admin-only gating, and no production mutation.
 - Phase 89 added Cognito forgot/reset endpoints, explicit admin-marked email verification metadata, formal parent-student binding records, admin binding inspection/repair, parent portal binding preference with legacy fallback, weekly report binding discovery, and tests covering token non-leakage and one-sided binding claims staying pending.
+- Phase 90 added edit-before-AI OCR correction, stored OCR/debug metadata, sanitized private image keys from question responses, and replaced bounded daily question-history quota checks with atomic daily usage counters.
 
 ### Pending Todos
 
-- Plan and execute Phase 90 OCR correction and daily question quota hardening.
+- Plan and execute Phase 91 v3.0 release gate and docs alignment.
 
 ### Blockers/Concerns
 
@@ -119,4 +120,4 @@ Last activity: 2026-06-07 — completed Phase 89 account lifecycle and parent bi
 
 ## Operator Next Steps
 
-- Plan and execute Phase 90 OCR correction and daily question quota hardening.
+- Plan and execute Phase 91 v3.0 release gate and docs alignment.
