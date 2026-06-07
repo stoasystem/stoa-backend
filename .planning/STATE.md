@@ -7,10 +7,10 @@ last_updated: "2026-06-07T23:11:06+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
   completed_plans: 1
-  percent: 0
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 87 STOA Docs Gap Audit And v3 Scope Readiness
-Plan: 87-01 STOA Docs Gap Audit And v3 Scope Readiness
-Status: Planned.
-Last activity: 2026-06-07 — reviewed `/Users/zhdeng/stoa-docs` and planned v3.0 around remaining MVP gaps.
+Phase: 88 v2.9 Governance Production Verification Closeout
+Plan: Not started
+Status: Ready for planning.
+Last activity: 2026-06-07 — completed Phase 87 stoa_docs gap audit and v3.0 scope readiness.
 
 ## Accumulated Context
 
@@ -90,10 +90,11 @@ Last activity: 2026-06-07 — reviewed `/Users/zhdeng/stoa-docs` and planned v3.
 - Phase 85 added frontend admin report-operations controls for retention governance status, approval metadata recording, legal-hold review recording, copy/download evidence payloads, and Playwright privacy coverage in stoa-frontend commit `b88c673`.
 - Phase 86 completed local-only release gate verification with backend full pytest, focused backend ruff, frontend lint/build, frontend targeted Playwright, and explicit production deploy/live smoke deferral. Broad compliance claims remain out of scope.
 - v3.0 starts by reconciling `stoa_docs` against the shipped backend/frontend state; the highest-priority remaining MVP gaps are account lifecycle hardening, parent-student binding, OCR correction, robust daily question quota enforcement, and v2.9 production governance verification.
+- Phase 87 completed the `stoa_docs` feature gap audit and confirmed v3.0 scope is limited to v2.9 production verification, account lifecycle/parent binding, OCR correction/quota hardening, and final docs alignment.
 
 ### Pending Todos
 
-- Complete Phase 87 documentation checks and proceed to v2.9 production verification closeout.
+- Plan and execute Phase 88 v2.9 governance production verification closeout.
 
 ### Blockers/Concerns
 
@@ -117,4 +118,4 @@ Last activity: 2026-06-07 — reviewed `/Users/zhdeng/stoa-docs` and planned v3.
 
 ## Operator Next Steps
 
-- Execute Phase 87 verification, then start Phase 88 production verification closeout.
+- Plan and execute Phase 88 production verification closeout.

@@ -85,7 +85,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCGAP-01 | Phase 87 | Planned |
+| DOCGAP-01 | Phase 87 | Complete |
 | PRODVERIFY-13 | Phase 88 | Planned |
 | AUTH-05 | Phase 89 | Planned |
 | QUESTION-07 | Phase 90 | Planned |
