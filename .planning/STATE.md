@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: none
-milestone_name: none
-status: idle
-last_updated: "2026-06-07T15:50:00+02:00"
+milestone: v2.7
+milestone_name: Immutable Audit Storage And Legal Hold Foundation
+status: planning
+last_updated: "2026-06-07T16:20:21+02:00"
 last_activity: 2026-06-07
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** none; v2.6 is archived.
+**Current focus:** v2.7 immutable audit storage and legal hold foundation.
 
 ## Current Position
 
-Phase: none
-Plan: none
-Status: No active milestone.
-Last activity: 2026-06-07 — archived v2.6 Audit Retention And Immutable Evidence Readiness.
+Phase: 75 Immutable Audit Storage Contract And CDK Readiness
+Plan: 75-01 Immutable Audit Storage Contract And CDK Readiness
+Status: Planned.
+Last activity: 2026-06-07 — planned v2.7 Immutable Audit Storage And Legal Hold Foundation.
 
 ## Accumulated Context
 
@@ -67,10 +67,13 @@ Last activity: 2026-06-07 — archived v2.6 Audit Retention And Immutable Eviden
 - Phase 73 added admin audit retention controls on `/admin/report-operations` with status, manifest, copy/download, digest preview, refusal reasons, and e2e privacy assertions.
 - Phase 74 deployed and production-verified v2.6 with backend/frontend Actions evidence, Lambda runtime metadata, CDK diff, API smoke, browser smoke, and final audit.
 - v2.6 milestone closeout archived audit, roadmap, requirements, and phase records.
+- v2.7 starts with immutable audit storage and legal hold foundation because v2.6 explicitly deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence.
+- Phase 75 must define immutable storage, legal hold, privacy, and CDK readiness contracts before any backend production write path is implemented.
 
 ### Pending Todos
 
-- Start next milestone when ready.
+- Complete Phase 75 by inspecting v2.6 contracts, backend audit models, and CDK storage/API stacks.
+- Record CDK readiness evidence before Phase 76 backend immutable persistence work.
 
 ### Blockers/Concerns
 
@@ -86,7 +89,8 @@ Last activity: 2026-06-07 — archived v2.6 Audit Retention And Immutable Eviden
 - Phase 65 completed with deploy evidence, Lambda runtime state, CDK diff classification, local quality gates, production read-only API/browser smoke, safe-fixture refusal checks, and final milestone audit.
 - Direct external ticket writes must remain refused until an approved connector or secret-backed credential path exists.
 - Compliance-grade WORM audit storage must not be claimed without deployed CDK-managed immutable storage evidence.
+- Immutable evidence objects must remain metadata-only and must not include raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, passwords, or AWS secrets.
 
 ## Operator Next Steps
 
-- Start the next milestone with `$gsd-new-milestone` when ready.
+- Execute Phase 75 plan and complete the immutable storage/legal hold/CDK readiness verification documents.

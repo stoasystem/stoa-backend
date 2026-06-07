@@ -1,95 +1,95 @@
-# Requirements: v2.6 Audit Retention And Immutable Evidence Readiness
+# Requirements: v2.7 Immutable Audit Storage And Legal Hold Foundation
 
-**Milestone:** v2.6
-**Status:** Complete
+**Milestone:** v2.7
+**Status:** Active
 **Created:** 2026-06-07
-**Completed:** 2026-06-07
 
 ## Goal
 
-Make report operations audit evidence ready for stronger retention and future immutable storage by defining retention contracts, CDK decisions, backend evidence sealing/manifest behavior, admin visibility, and release verification without weakening existing privacy boundaries.
+Implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
 
 ## Requirements
 
-### AUDITRET-01 Audit Retention Contract And CDK Readiness
+### IMMUTABLE-01 Immutable Audit Storage Contract And CDK Readiness
 
-Implementers have a precise audit retention contract and infrastructure decision before adding retention/sealing behavior.
-
-Acceptance criteria:
-
-- Contract defines audit event classes, retention categories, retention clocks, sealing metadata, verification metadata, deletion/expiry semantics, and operator-facing status.
-- Contract distinguishes application-enforced append-only audit, retained evidence manifests, and compliance-grade immutable/WORM storage.
-- Privacy model forbids retaining raw report artifacts, S3 keys, presigned URLs, auth tokens, passwords, cookies, AWS secrets, or raw unreviewed report JSON/HTML in audit retention evidence.
-- CDK readiness classifies whether existing DynamoDB/S3/resources are sufficient for v2.6, or exactly what CDK-managed resource change would be required for future WORM storage.
-
-### AUDITRET-02 Backend Audit Evidence Sealing And Retention Manifest
-
-Admins and operators can generate metadata-only retention manifests for audit evidence without exposing private artifacts.
+Implementers have a precise immutable audit storage contract, legal hold boundary, retention policy model, migration plan, and CDK decision before adding production writes.
 
 Acceptance criteria:
 
-- Backend can produce a bounded retention manifest for selected report operation/recovery/release/support-handoff audit evidence.
-- Manifest includes hashes or stable metadata sufficient to detect evidence drift without storing raw payloads.
-- Manifest generation writes redacted audit metadata and refuses unsupported destructive retention actions.
-- Tests cover admin-only auth, manifest schema, privacy denylist, drift metadata, refusal behavior, and audit rows.
+- Contract defines immutable object shape, object identity, digest/signature metadata, retention clocks, legal hold states, policy ownership, verification metadata, and operator-visible status.
+- Contract distinguishes current application-enforced append-only audit rows, v2.6 metadata-only retention manifests, and v2.7 CDK-managed immutable object persistence.
+- Privacy model forbids raw report artifacts, S3 keys, presigned URLs, auth tokens, passwords, cookies, AWS secrets, raw unreviewed report JSON, and raw report HTML in immutable objects or committed evidence.
+- CDK readiness classifies whether a new CDK-managed immutable resource is required and records the exact stack/resource/env-var/deploy evidence required before backend production writes are allowed.
+- Plan explicitly refuses manual AWS console changes and destructive audit deletion.
 
-### AUDITRET-03 Audit Retention Observability
+### IMMUTABLE-02 Backend Immutable Retention Manifest Persistence
 
-Operators can inspect retained/sealed audit evidence status without private artifact exposure.
-
-Acceptance criteria:
-
-- Backend exposes admin-only retention status for supported audit scopes.
-- Status distinguishes sealed, unsealed, expired/skipped, refused, and unsupported scopes.
-- Status output remains metadata-only and release-evidence validation can check its privacy boundary.
-- Tests cover status output, failure states, and denylist behavior.
-
-### UI-13 Admin Audit Retention UI
-
-Admin report operations UI exposes audit retention manifest/status controls.
+Admins can persist metadata-only retention manifests to an approved immutable storage path after CDK readiness is satisfied.
 
 Acceptance criteria:
 
-- UI exposes retention status/manifest controls only to admins.
-- UI renders allowlisted retention metadata, evidence references, validation failures, and copy/download controls.
-- UI does not perform destructive retention deletion or direct WORM mutation.
-- UI does not render secrets, S3 keys, presigned URLs, raw report JSON/HTML, or raw artifact payloads.
-- Playwright covers retention status, manifest preview/download, error states, admin-only gating, and privacy denylist.
+- Backend writer persists canonical metadata-only retention manifests with stable object identity and digest metadata.
+- Writer refuses persistence when immutable storage configuration is missing, not CDK-approved, or privacy validation fails.
+- Backend exposes admin-only read/status APIs for immutable manifest references without returning private storage identifiers or raw object payloads.
+- Tests cover admin-only authorization, schema validation, digest stability, privacy denylist, configuration refusal, and append-only audit rows.
 
-### VERIFY-09 v2.6 Release Gate And Live Verification
+### LEGALHOLD-01 Legal Hold And Retention Policy Metadata
 
-v2.6 closes with release and live verification evidence for audit retention readiness.
+Admins can apply and inspect legal hold/retention policy metadata for supported report operations evidence scopes.
 
 Acceptance criteria:
 
-- Backend/frontend deploy evidence, commit SHAs, Lambda manifest/runtime, CDK diff/deploy evidence, local quality gates, API request IDs, and browser smoke results are recorded.
-- Production smoke is read-only by default and does not mutate report artifacts, delete audit records, or write to external systems.
-- Any retention/sealing operation is metadata-only unless a CDK-approved immutable storage path exists.
-- Final audit records residual risks and future requirements, including whether WORM storage remains future scope.
+- Backend models legal hold states, policy IDs, retention clocks, reason fields, actor metadata, and release/refusal semantics.
+- Legal hold changes are metadata-only, append-only audited, and do not delete or mutate prior audit rows.
+- Unsupported scopes and destructive retention actions are refused with operator-safe reasons.
+- Tests cover policy metadata, hold/release validation, refusal behavior, authorization, and audit evidence.
+
+### UI-14 Admin Immutable Evidence And Legal Hold UI
+
+Admin report operations UI exposes immutable evidence status and legal hold controls.
+
+Acceptance criteria:
+
+- UI exposes immutable evidence status, manifest persistence status, legal hold status, policy metadata, validation failures, and copy/download controls only to admins.
+- UI uses allowlisted fields and does not render secrets, S3 keys, presigned URLs, raw report JSON/HTML, or raw artifact payloads.
+- UI separates read-only status from any persistence/hold action and requires explicit operator reason fields for state-changing actions.
+- Playwright covers status rendering, legal hold controls, refusal states, admin gating, and privacy denylist.
+
+### VERIFY-10 v2.7 Release Gate And Live Verification
+
+v2.7 closes with release evidence proving immutable storage and legal hold behavior are correctly gated and privacy-safe.
+
+Acceptance criteria:
+
+- Release gate records Lambda build manifest, backend deploy evidence, frontend deploy evidence, CDK diff/deploy evidence, commit SHAs, timestamps, admin-only API request IDs, and production read-only browser smoke.
+- Evidence proves production UI/API do not expose raw report artifacts, S3 keys, presigned URLs, raw JSON/HTML, auth tokens, cookies, or AWS secrets.
+- Evidence proves no production audit deletion and no customer report artifact mutation.
+- Any production state-changing smoke uses only a named non-customer safe fixture or a metadata-only approved immutable/hold path with cleanup/rollback expectations documented.
+- Final audit records whether compliance-grade WORM storage is deployed and what residual gaps remain.
 
 ## Future Requirements
 
-- Compliance-grade WORM audit storage with CDK-managed resources if approved.
-- Legal hold and retention policy administration.
-- Cross-system support ticket/evidence retention integrations.
-- Dedicated orchestration if retention verification needs asynchronous workflows.
+- Direct support ticket/evidence retention integrations after an approved connector or secret-backed credential path exists.
+- Dedicated Step Functions/SQS orchestration if immutable verification becomes asynchronous or long-running.
+- Compliance/legal review of WORM retention periods and legal hold operating procedure.
 - Rich/WYSIWYG report editor.
-- PDF/multilingual delivery.
+- PDF/multilingual report delivery.
+- Billing and analytics product expansion.
 
 ## Out of Scope
 
 - Manual AWS console changes.
 - Deleting existing audit rows.
 - Retaining raw report artifacts or private storage identifiers in committed evidence.
-- New AWS resources unless Phase 71 proves they are required and defines the CDK path.
-- Claiming compliance-grade immutability without deployed CDK-managed immutable storage evidence.
+- Direct third-party support-system writes.
+- Claiming compliance-grade WORM/Object Lock storage before CDK-managed deploy and live verification evidence are recorded.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUDITRET-01 | Phase 71 | Complete |
-| AUDITRET-02 | Phase 72 | Complete |
-| AUDITRET-03 | Phase 72 | Complete |
-| UI-13 | Phase 73 | Complete |
-| VERIFY-09 | Phase 74 | Complete |
+| IMMUTABLE-01 | Phase 75 | Planned |
+| IMMUTABLE-02 | Phase 76 | Planned |
+| LEGALHOLD-01 | Phase 76 | Planned |
+| UI-14 | Phase 77 | Planned |
+| VERIFY-10 | Phase 78 | Planned |

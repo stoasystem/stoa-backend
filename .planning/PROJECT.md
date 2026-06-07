@@ -26,6 +26,8 @@ The completed v2.5 milestone closes the deferred production verification gap for
 
 The completed v2.6 milestone makes report operations audit evidence ready for stronger retention and future immutable storage without weakening privacy boundaries.
 
+The active v2.7 milestone turns that readiness into a CDK-governed immutable audit storage and legal hold foundation, starting with contracts and CDK readiness before any production write path is implemented.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -34,7 +36,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v2.6 Audit Retention And Immutable Evidence Readiness on 2026-06-07
 **Latest completed milestone:** v2.6 Audit Retention And Immutable Evidence Readiness on 2026-06-07
-**Active milestone:** none
+**Active milestone:** v2.7 Immutable Audit Storage And Legal Hold Foundation
 
 Delivered:
 
@@ -135,7 +137,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone.
+### v2.7 Immutable Audit Storage And Legal Hold Foundation
+
+Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
+
+Planned phases:
+
+- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
+- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
+- Phase 77: Admin Immutable Evidence And Legal Hold UI.
+- Phase 78: v2.7 Release Gate And Live Verification.
 
 ## Requirements
 
@@ -168,7 +179,11 @@ Shipped requirements:
 
 ### Active
 
-No active milestone requirements.
+- IMMUTABLE-01: immutable audit storage contract and CDK readiness - Phase 75.
+- IMMUTABLE-02: backend immutable retention manifest persistence - Phase 76.
+- LEGALHOLD-01: legal hold and retention policy metadata - Phase 76.
+- UI-14: admin immutable evidence and legal hold UI - Phase 77.
+- VERIFY-10: v2.7 release gate and live verification - Phase 78.
 
 ### Completed
 
@@ -385,6 +400,7 @@ Known current resources:
 | Start v2.4 with support evidence handoff packages | v2.3 made release and fixture evidence repeatable; the next support gap is package handoff into tickets without exposing private artifacts or adding unapproved integrations | Good - shipped in v2.4 |
 | Start v2.5 with production support handoff verification closeout | v2.4 closed locally with production live smoke deferred; the next priority is deploy evidence and read-only production verification before support use | Good - shipped in v2.5 |
 | Start v2.6 with audit retention and immutable evidence readiness | Support and release evidence are now production-verified; recurring deferred risk is stronger audit retention/WORM readiness without exposing private artifacts | Good - shipped in v2.6 |
+| Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Active - Phase 75 planned |
 
 ## Evolution
 
@@ -404,4 +420,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after archiving milestone v2.6*
+*Last updated: 2026-06-07 after planning milestone v2.7*

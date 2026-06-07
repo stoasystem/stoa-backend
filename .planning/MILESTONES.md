@@ -376,5 +376,23 @@ Key accomplishments:
 
 Known deferred items at close: compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence remain future scope.
 
+### v2.7 Immutable Audit Storage And Legal Hold Foundation
+
+**Status:** Active
+**Started:** 2026-06-07
+**Roadmap:** `.planning/milestones/v2.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v2.7-REQUIREMENTS.md`
+**Goal:** Implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence while preserving metadata-only privacy boundaries.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 75: Immutable Audit Storage Contract And CDK Readiness.
+- Phase 76: Backend Immutable Retention Persistence And Legal Hold Metadata.
+- Phase 77: Admin Immutable Evidence And Legal Hold UI.
+- Phase 78: v2.7 Release Gate And Live Verification.
+
 ---
-*Last updated: 2026-06-07 after closing v2.6*
+*Last updated: 2026-06-07 after planning v2.7*

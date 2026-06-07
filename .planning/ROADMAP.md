@@ -22,23 +22,37 @@
 
 ## Current Milestone
 
-No active milestone.
+**v2.7 Immutable Audit Storage And Legal Hold Foundation** - Active.
+
+Goal: implement the foundation for CDK-managed immutable audit evidence storage and legal hold/retention policy administration for report operations audit evidence, without exposing private report artifacts, deleting existing audit rows, or claiming compliance-grade immutability before deploy evidence proves it.
 
 ## Phases
 
-No active phases. Start the next milestone with `$gsd-new-milestone` when ready.
+| Phase | Name | Status | Requirement |
+|-------|------|--------|-------------|
+| 75 | Immutable Audit Storage Contract And CDK Readiness | Planned | IMMUTABLE-01 |
+| 76 | Backend Immutable Retention Persistence And Legal Hold Metadata | Planned | IMMUTABLE-02, LEGALHOLD-01 |
+| 77 | Admin Immutable Evidence And Legal Hold UI | Planned | UI-14 |
+| 78 | v2.7 Release Gate And Live Verification | Planned | VERIFY-10 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| _No active phase_ | - | - | Idle | - |
+| 75 | v2.7 | 0/1 | Planned | - |
+| 76 | v2.7 | 0/1 | Planned | - |
+| 77 | v2.7 | 0/1 | Planned | - |
+| 78 | v2.7 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _No active requirement_ | - | - |
+| IMMUTABLE-01 | Phase 75 | Planned |
+| IMMUTABLE-02 | Phase 76 | Planned |
+| LEGALHOLD-01 | Phase 76 | Planned |
+| UI-14 | Phase 77 | Planned |
+| VERIFY-10 | Phase 78 | Planned |
 
 ---
-*Last updated: 2026-06-07 after archiving v2.6*
+*Last updated: 2026-06-07 after planning v2.7*
