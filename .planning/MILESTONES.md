@@ -445,8 +445,9 @@ Known deferred items at close: backend/frontend production deployment, productio
 
 ### v3.0 STOA Docs Gap Closeout And Account Intake Hardening
 
-**Status:** Active
+**Status:** Shipped 2026-06-08
 **Started:** 2026-06-07
+**Audit:** `.planning/milestones/v3.0-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.0-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
@@ -464,4 +465,15 @@ Planned phases:
 - Phase 91: v3.0 Release Gate And Docs Alignment - Complete.
 
 ---
-*Last updated: 2026-06-08 after completing Phase 91*
+Key accomplishments:
+
+- Produced a source-linked `stoa_docs` feature gap audit and updated it after closeout.
+- Production-verified v2.9 retention governance/legal-hold operations.
+- Added Cognito forgot/reset endpoints, explicit email verification metadata, formal parent-student bindings, and admin repair.
+- Added edit-before-AI OCR correction, safe OCR metadata, private image-key suppression, and atomic daily question quota counters.
+- Deployed backend changes, fixed API Gateway public route coverage for password reset endpoints, and passed final non-mutating production smoke.
+
+Known deferred items at close: real email verification policy change, teacher rich text/formula polish, SLA tracking, content moderation, broad Phase 2 expansion, and unrelated `StoaNotificationStack` SES identity drift.
+
+---
+*Last updated: 2026-06-08 after completing v3.0*

@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
-status: verifying
-last_updated: "2026-06-08T00:16:18+02:00"
+status: complete
+last_updated: "2026-06-08T00:20:00+02:00"
 last_activity: 2026-06-07
 progress:
   total_phases: 5
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 91 v3.0 Release Gate And Docs Alignment
-Plan: Complete
-Status: Ready for milestone audit.
-Last activity: 2026-06-08 — completed Phase 91 release gate and docs alignment.
+Phase: none
+Plan: none
+Status: v3.0 complete; no active milestone.
+Last activity: 2026-06-08 — completed v3.0 milestone audit and closeout.
 
 ## Accumulated Context
 
@@ -98,7 +98,7 @@ Last activity: 2026-06-08 — completed Phase 91 release gate and docs alignment
 
 ### Pending Todos
 
-- Run milestone audit and complete v3.0 closeout.
+- Review backlog and select next milestone.
 
 ### Blockers/Concerns
 
@@ -121,4 +121,4 @@ Last activity: 2026-06-08 — completed Phase 91 release gate and docs alignment
 
 ## Operator Next Steps
 
-- Run milestone audit and complete v3.0 closeout.
+- Review backlog and select next milestone.

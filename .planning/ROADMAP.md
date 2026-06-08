@@ -22,12 +22,13 @@
 - [x] **v2.7 Immutable Audit Storage And Legal Hold Foundation** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.7-ROADMAP.md`.
 - [x] **v2.8 CDK-Managed Immutable Evidence Storage Deployment** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.8-ROADMAP.md`.
 - [x] **v2.9 Retention Governance And Legal Hold Operations** - Complete local-only 2026-06-07; production verification deferred. Archive: `.planning/milestones/v2.9-ROADMAP.md`.
+- [x] **v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Shipped 2026-06-08. Archive: `.planning/milestones/v3.0-ROADMAP.md`.
 
 ## Current Milestone
 
-**v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Active.
+No active milestone.
 
-Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
+Next step: review backlog and select the next small milestone before broad Phase 2 expansion.
 
 ## Phases
 
@@ -60,4 +61,4 @@ Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the h
 | VERIFY-13 | Phase 91 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 91*
+*Last updated: 2026-06-08 after completing v3.0*
