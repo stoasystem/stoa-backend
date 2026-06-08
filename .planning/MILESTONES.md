@@ -505,8 +505,6 @@ Key accomplishments:
 
 Known deferred items at close: content moderation workflow, production mutation verification for teacher rich replies with a named fixture, realtime/WebSocket teacher notifications, and broad Phase 2 expansion.
 
-## Active
-
 ### v3.2 Content Moderation And Internal Operations
 
 **Status:** Shipped 2026-06-08
@@ -529,4 +527,35 @@ Completed phases:
 - Phase 99: v3.2 Functional Release Gate And Docs Alignment.
 
 ---
-*Last updated: 2026-06-08 after shipping v3.2*
+Key accomplishments:
+
+- Defined the moderation case contract, lifecycle, data model, and API/UI workflow.
+- Added backend report creation and admin moderation list/detail/action APIs.
+- Added student/tutor report actions and admin moderation queue/detail/actions UI.
+- Completed backend/frontend deploys, production-safe smoke, and gap audit update.
+
+Known deferred items at close: manual subscription operations, Stripe/TWINT payment-provider integration, broad multi-subject rollout, student memory/personalization, AI teacher tools, WebSocket realtime notifications, and mobile/multilingual polish.
+
+## Active
+
+### v3.3 Subscription Operations MVP
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.3-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Make the MVP manual subscription model usable before Stripe/TWINT integration.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 100: Subscription Operations Contract And Entitlement Model.
+- Phase 101: Backend Subscription Request And Admin Tier APIs.
+- Phase 102: Parent Subscription Management UI And Admin Queue.
+- Phase 103: v3.3 Functional Release Gate And Billing Readiness.
+
+---
+*Last updated: 2026-06-08 after planning v3.3*

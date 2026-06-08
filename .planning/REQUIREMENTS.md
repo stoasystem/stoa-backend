@@ -1,86 +1,83 @@
-# Requirements: v3.2 Content Moderation And Internal Operations
+# Requirements: v3.3 Subscription Operations MVP
 
-**Milestone:** v3.2
-**Status:** Complete
+**Milestone:** v3.3
+**Status:** Active
 **Created:** 2026-06-08
 
 ## Goal
 
-Close the remaining MVP admin workflow gap from `stoa_docs`: content moderation for reported or abnormal learning content. This milestone prioritizes product functionality for internal development: user-facing report actions, admin moderation queue/detail/actions, and operational visibility. Security testing stays limited to basic role gating and privacy sanity checks.
+Make the MVP manual subscription model usable for internal operations before Stripe/TWINT integration. Parents should see plans and submit upgrade/cancel intents; admins should process those requests and update tiers with an auditable operational trail. This is a product-building milestone, so verification focuses on functional flows and basic role gating.
 
 ## Requirements
 
-### MOD-01 Content Moderation Contract And Data Model Readiness
+### SUBOPS-01 Subscription Operations Contract And Entitlement Model
 
-Implementers have a precise moderation case contract, data model, and API plan before backend changes.
-
-Acceptance criteria:
-
-- Contract defines reportable surfaces: student question content, AI answer, teacher reply, and optional freeform user note.
-- Contract defines moderation case status lifecycle: `open`, `in_review`, `actioned`, `dismissed`, and `closed`.
-- Contract defines reason/severity fields, reporter identity, subject identifiers, assigned admin, timestamps, resolution notes, and audit history.
-- Contract confirms whether the existing DynamoDB single-table patterns support queue/list/detail access without new infrastructure.
-- Functional verification plan focuses on happy path, role gating, status transitions, pagination/filtering, and UI usability.
-
-### MOD-02 Backend Moderation Reporting And Admin APIs
-
-Backend supports creating moderation cases and managing them from admin APIs.
+Implementers have a precise subscription request, entitlement, and admin workflow contract before backend changes.
 
 Acceptance criteria:
 
-- Students and teachers/tutors can create a bounded report against an existing question or teacher reply they are allowed to view.
-- Admins can list moderation cases with filters for status, severity, reason, reporter role, assignee, and date.
-- Admins can open a case detail with the relevant question context and existing AI/teacher response summaries.
-- Admins can assign, update status, add resolution notes, and close/dismiss/action a case.
-- Focused tests cover case creation, admin list/detail/actions, invalid target handling, and non-admin rejection.
+- Contract defines plan tiers: Free, Standard, Premium.
+- Contract defines parent-facing intents: request upgrade, request downgrade, request cancellation, and view current plan.
+- Contract defines admin-facing lifecycle: `requested`, `in_review`, `approved`, `applied`, `rejected`, `cancelled`.
+- Contract defines entitlement effects for daily AI quota, teacher support eligibility/priority, and weekly report access.
+- Contract confirms whether existing user profile and DynamoDB single-table patterns support the MVP without new infrastructure.
 
-### UI-17 Moderation Reporting And Admin Queue UI
+### SUBOPS-02 Backend Subscription Request And Admin Tier APIs
 
-Frontend exposes practical moderation workflows for internal operations.
-
-Acceptance criteria:
-
-- Student question/detail UI offers a report action with reason, severity, and optional note.
-- Teacher/tutor question detail UI offers a report action for abnormal student content or answer context.
-- Admin UI includes moderation queue, filters, case detail, assignment/status actions, and resolution note controls.
-- UI handles empty, loading, error, submitted, actioned, dismissed, and closed states.
-- Targeted browser verification confirms the internal workflow is usable without requiring production customer mutations.
-
-### VERIFY-15 v3.2 Functional Release Gate And STOA Docs Alignment
-
-v3.2 closes with lightweight functional evidence and updated `stoa_docs` gap tracking.
+Backend supports manual subscription operations.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to moderation pass.
+- Parent users can read their current plan and submit bounded subscription requests.
+- Admins can list/filter subscription requests by status, tier, parent, and date.
+- Admins can approve/reject/apply/cancel a request and update the target user's `subscription_tier` when applying.
+- Backend records request metadata, operator, reason/note, status history, and effective date.
+- Focused tests cover parent request creation, admin list/detail/actions, tier apply behavior, invalid transitions, and non-admin rejection.
+
+### UI-18 Parent Subscription Management And Admin Queue
+
+Frontend exposes practical subscription operations for internal development.
+
+Acceptance criteria:
+
+- Parent UI shows current plan, tier limits, teacher support/weekly report benefits, and request actions.
+- Parent UI supports upgrade/downgrade/cancel intent submission with status feedback.
+- Admin UI includes subscription request queue, filters, detail, status actions, tier apply controls, and notes.
+- UI handles empty, loading, error, submitted, rejected, applied, and cancelled states.
+- Targeted browser verification confirms the parent/admin workflow is usable.
+
+### VERIFY-16 v3.3 Functional Release Gate And Billing Readiness
+
+v3.3 closes with lightweight functional evidence and updated Phase 2 gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to subscription operations pass.
 - Deploy/build evidence and commit SHAs are recorded if code ships in this milestone.
-- `STOA_DOCS_FEATURE_GAP_AUDIT.md` marks content moderation as closed or accurately records residuals.
-- Final audit lists remaining Phase 2 product expansions: payments, multi-subject, student memory, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
+- Gap audit marks manual subscription operations as active/closed and keeps Stripe/TWINT as future provider integration.
+- Final audit lists remaining Phase 2 product expansions: payment-provider integration, multi-subject, student memory, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
-- Stripe/TWINT subscription payments.
-- Parent-facing subscription management beyond manual admin tier updates.
+- Stripe/TWINT payment-provider integration.
 - Broad multi-subject rollout for physics, German, and English.
 - Student memory/personalization.
 - AI teacher assistance tools such as summaries and exercise generation.
 - WebSocket realtime notifications.
 - Mobile responsive polish and full multilingual rollout.
-- Real user email verification policy change if product/legal requires it.
 
 ## Out of Scope
 
-- Payment-provider integration.
+- Charging cards, handling TWINT payments, invoices, refunds, taxes, or payment webhooks.
+- Automated subscription provisioning from a payment provider.
 - Broad Phase 2 curriculum expansion.
-- Compliance-grade moderation/legal workflows.
-- New AWS infrastructure unless Phase 96 proves the existing table/access patterns cannot support the MVP.
-- Extensive security audit beyond basic authorization/privacy checks.
+- Extensive security/compliance testing beyond functional role gating and data sanity checks.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOD-01 | Phase 96 | Complete |
-| MOD-02 | Phase 97 | Complete |
-| UI-17 | Phase 98 | Complete |
-| VERIFY-15 | Phase 99 | Complete |
+| SUBOPS-01 | Phase 100 | Planned |
+| SUBOPS-02 | Phase 101 | Planned |
+| UI-18 | Phase 102 | Planned |
+| VERIFY-16 | Phase 103 | Planned |

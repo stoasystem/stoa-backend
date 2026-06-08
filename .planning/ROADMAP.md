@@ -24,38 +24,40 @@
 - [x] **v2.9 Retention Governance And Legal Hold Operations** - Complete local-only 2026-06-07; production verification closed by v3.0.
 - [x] **v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Shipped 2026-06-08.
 - [x] **v3.1 Teacher Reply Quality And SLA Operations** - Shipped 2026-06-08.
-- [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08. Archive: `.planning/milestones/v3.2-ROADMAP.md`.
+- [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08.
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+**v3.3 Subscription Operations MVP** - Active.
+
+Goal: make the manual MVP subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 96 | Content Moderation Contract And Data Model | Complete | MOD-01 |
-| 97 | Backend Moderation Reporting And Admin APIs | Complete | MOD-02 |
-| 98 | Moderation Reporting And Admin Queue UI | Complete | UI-17 |
-| 99 | v3.2 Functional Release Gate And Docs Alignment | Complete | VERIFY-15 |
+| 100 | Subscription Operations Contract And Entitlement Model | Planned | SUBOPS-01 |
+| 101 | Backend Subscription Request And Admin Tier APIs | Planned | SUBOPS-02 |
+| 102 | Parent Subscription Management UI And Admin Queue | Planned | UI-18 |
+| 103 | v3.3 Functional Release Gate And Billing Readiness | Planned | VERIFY-16 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 96 | v3.2 | 1/1 | Complete | 2026-06-08 |
-| 97 | v3.2 | 1/1 | Complete | 2026-06-08 |
-| 98 | v3.2 | 1/1 | Complete | 2026-06-08 |
-| 99 | v3.2 | 1/1 | Complete | 2026-06-08 |
+| 100 | v3.3 | 1/1 | Planned | - |
+| 101 | v3.3 | 0/1 | Planned | - |
+| 102 | v3.3 | 0/1 | Planned | - |
+| 103 | v3.3 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOD-01 | Phase 96 | Complete |
-| MOD-02 | Phase 97 | Complete |
-| UI-17 | Phase 98 | Complete |
-| VERIFY-15 | Phase 99 | Complete |
+| SUBOPS-01 | Phase 100 | Planned |
+| SUBOPS-02 | Phase 101 | Planned |
+| UI-18 | Phase 102 | Planned |
+| VERIFY-16 | Phase 103 | Planned |
 
 ---
-*Last updated: 2026-06-08 after shipping v3.2*
+*Last updated: 2026-06-08 after planning v3.3*

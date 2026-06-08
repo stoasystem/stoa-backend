@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after completing v3.2
+**Updated:** 2026-06-08 after planning v3.3
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -13,6 +13,8 @@ v3.0 closed the highest-priority account/intake MVP gaps identified in this audi
 v3.1 closed the remaining teacher-takeover MVP gaps selected for that cycle: safe rich text/formula teacher replies, response-time SLA tracking, teacher queue/session visibility, admin aggregate SLA visibility, and production-safe release verification.
 
 v3.2 closed the remaining visible MVP admin workflow gap: content moderation for reported or abnormal learning content. The release added report actions, moderation cases, admin queue/detail/actions, deploy evidence, and production-safe smoke.
+
+v3.3 is planned to make the MVP manual subscription process usable in-product before Stripe/TWINT: parent plan/request UI, admin processing queue, and tier application workflow. Payment-provider integration remains future scope.
 
 ## Completed Or Largely Complete
 
@@ -54,7 +56,8 @@ v3.2 closed the remaining visible MVP admin workflow gap: content moderation for
 
 ## Phase 2 / Future Expansion
 
-- Stripe/TWINT subscription payments.
+- Manual subscription operations: active v3.3.
+- Stripe/TWINT subscription payments after manual operations are usable.
 - Multi-subject rollout for physics, German, English beyond current subject fields/content.
 - Student memory/personalization.
 - AI teacher assistance tools such as automatic summaries and exercise generation.
@@ -89,3 +92,12 @@ v3.2 completed the remaining MVP admin moderation workflow before Phase 2 expans
 2. Add backend report creation and admin moderation list/detail/action APIs.
 3. Add student/teacher report actions and admin moderation queue/detail UI.
 4. Close with lightweight functional checks and update this gap audit with the outcome.
+
+## v3.3 Scope Recommendation
+
+v3.3 should build the manual subscription operations MVP before payment-provider integration:
+
+1. Define plan tiers, entitlement effects, request lifecycle, and manual billing boundaries.
+2. Add parent subscription plan/request APIs and admin subscription request processing APIs.
+3. Add parent subscription management UI and admin subscription queue/detail UI.
+4. Close with lightweight functional checks and keep Stripe/TWINT as a later provider integration.

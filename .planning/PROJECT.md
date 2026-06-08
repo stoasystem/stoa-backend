@@ -38,6 +38,8 @@ The completed v3.1 milestone closed the remaining teacher-takeover MVP gaps: ric
 
 The completed v3.2 milestone closed the remaining visible MVP admin workflow from `stoa_docs`: content moderation for reported or abnormal learning content.
 
+The active v3.3 milestone makes the MVP manual subscription model usable before Stripe/TWINT integration.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -46,7 +48,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Active milestone:** None.
+**Active milestone:** v3.3 Subscription Operations MVP
 
 Delivered:
 
@@ -127,6 +129,7 @@ Delivered:
 - v2.9 locally completed retention governance and legal-hold operations with governance contracts, backend metadata recording APIs, admin UI controls, local quality gates, and explicit production deploy/live smoke deferral.
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
 - v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
+- v3.3 is planned to add parent subscription plan/request workflows and admin subscription request processing for the manual MVP billing model.
 
 ## Last Production-Verified Milestone
 
@@ -156,7 +159,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+### v3.3 Subscription Operations MVP
+
+Goal: make the MVP manual subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
+
+Planned phases:
+
+- Phase 100: Subscription Operations Contract And Entitlement Model.
+- Phase 101: Backend Subscription Request And Admin Tier APIs.
+- Phase 102: Parent Subscription Management UI And Admin Queue.
+- Phase 103: v3.3 Functional Release Gate And Billing Readiness.
 
 ## Requirements
 
@@ -189,7 +201,10 @@ Shipped requirements:
 
 ### Active
 
-No active requirements.
+- SUBOPS-01: subscription operations contract and entitlement model - Phase 100.
+- SUBOPS-02: backend subscription request and admin tier APIs - Phase 101.
+- UI-18: parent subscription management and admin queue - Phase 102.
+- VERIFY-16: v3.3 functional release gate and billing readiness - Phase 103.
 
 ### Completed
 
@@ -456,6 +471,7 @@ Known current resources:
 | Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Good - shipped in v3.0 |
 | Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Good - shipped in v3.1 |
 | Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Good - shipped in v3.2 |
+| Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Active - Phase 100 planned |
 
 ## Evolution
 
@@ -475,4 +491,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after shipping milestone v3.2*
+*Last updated: 2026-06-08 after planning milestone v3.3*
