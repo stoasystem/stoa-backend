@@ -80,7 +80,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOD-01 | Phase 96 | Planned |
+| MOD-01 | Phase 96 | Complete |
 | MOD-02 | Phase 97 | Planned |
 | UI-17 | Phase 98 | Planned |
 | VERIFY-15 | Phase 99 | Planned |
