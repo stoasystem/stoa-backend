@@ -28,6 +28,7 @@ from stoa.services import (
     report_recovery_job_service,
     report_recovery_service,
     support_handoff_service,
+    subscription_service,
     teacher_reply_service,
 )
 
@@ -37,6 +38,41 @@ router = APIRouter()
 class UserUpdateRequest(BaseModel):
     subscription_tier: Optional[SubscriptionTier] = None
     is_active: Optional[bool] = None
+
+
+class SubscriptionRequestResponse(BaseModel):
+    requestId: str
+    parentId: str
+    studentId: str | None = None
+    currentTier: str
+    requestedTier: str
+    requestType: str
+    status: str
+    source: str
+    parentNote: str | None = None
+    adminNote: str | None = None
+    createdAt: str
+    updatedAt: str
+    effectiveAt: str | None = None
+    appliedAt: str | None = None
+    appliedBy: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SubscriptionRequestListResponse(BaseModel):
+    items: list[SubscriptionRequestResponse]
+    count: int
+
+
+class SubscriptionRequestUpdateRequest(BaseModel):
+    status: str = Field(..., min_length=1, max_length=50)
+    admin_note: str | None = Field(default=None, max_length=500)
+    effective_at: str | None = Field(default=None, max_length=80)
+
+
+class SubscriptionRequestApplyRequest(BaseModel):
+    admin_note: str | None = Field(default=None, max_length=500)
+    effective_at: str | None = Field(default=None, max_length=80)
 
 
 class ParentStudentBindingResponse(BaseModel):
@@ -617,6 +653,68 @@ async def update_user(
         ExpressionAttributeValues=attr_values,
     )
     return {"user_id": user_id, "updated": {k.lstrip(":"): v for k, v in attr_values.items()}}
+
+
+@router.get("/subscriptions/requests", response_model=SubscriptionRequestListResponse)
+async def list_subscription_requests(
+    limit: int = Query(default=50, ge=1, le=100),
+    status: Optional[str] = Query(default=None),
+    requested_tier: Optional[str] = Query(default=None),
+    parent_id: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List manual subscription requests for admin processing."""
+    items = subscription_service.list_admin_requests(
+        limit=limit,
+        status=status,
+        requested_tier=requested_tier,
+        parent_id=parent_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return SubscriptionRequestListResponse(items=items, count=len(items))
+
+
+@router.get("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)
+async def get_subscription_request(
+    request_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Open one manual subscription request with lifecycle history."""
+    return subscription_service.get_request(request_id)
+
+
+@router.patch("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)
+async def update_subscription_request(
+    request_id: str,
+    body: SubscriptionRequestUpdateRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Move a subscription request through review lifecycle states."""
+    return subscription_service.update_request_status(
+        request_id=request_id,
+        status=body.status,
+        admin_note=body.admin_note,
+        effective_at=body.effective_at,
+        user=user,
+    )
+
+
+@router.post("/subscriptions/requests/{request_id}/apply", response_model=SubscriptionRequestResponse)
+async def apply_subscription_request(
+    request_id: str,
+    body: SubscriptionRequestApplyRequest = Body(default_factory=SubscriptionRequestApplyRequest),
+    user: dict = Depends(require_role("admin")),
+):
+    """Apply an approved manual request and update the parent's subscription tier."""
+    return subscription_service.apply_request(
+        request_id=request_id,
+        admin_note=body.admin_note,
+        effective_at=body.effective_at,
+        user=user,
+    )
 
 
 @router.get("/stats", response_model=StatsResponse)

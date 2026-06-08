@@ -37,7 +37,7 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 100 | Subscription Operations Contract And Entitlement Model | Complete | SUBOPS-01 |
-| 101 | Backend Subscription Request And Admin Tier APIs | Planned | SUBOPS-02 |
+| 101 | Backend Subscription Request And Admin Tier APIs | Complete | SUBOPS-02 |
 | 102 | Parent Subscription Management UI And Admin Queue | Planned | UI-18 |
 | 103 | v3.3 Functional Release Gate And Billing Readiness | Planned | VERIFY-16 |
 
@@ -46,7 +46,7 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 100 | v3.3 | 1/1 | Complete | 2026-06-08 |
-| 101 | v3.3 | 0/1 | Planned | - |
+| 101 | v3.3 | 1/1 | Complete | 2026-06-08 |
 | 102 | v3.3 | 0/1 | Planned | - |
 | 103 | v3.3 | 0/1 | Planned | - |
 
@@ -55,9 +55,9 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SUBOPS-01 | Phase 100 | Complete |
-| SUBOPS-02 | Phase 101 | Planned |
+| SUBOPS-02 | Phase 101 | Complete |
 | UI-18 | Phase 102 | Planned |
 | VERIFY-16 | Phase 103 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 100*
+*Last updated: 2026-06-08 after completing Phase 101*

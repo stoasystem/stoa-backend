@@ -78,6 +78,6 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SUBOPS-01 | Phase 100 | Complete |
-| SUBOPS-02 | Phase 101 | Planned |
+| SUBOPS-02 | Phase 101 | Complete |
 | UI-18 | Phase 102 | Planned |
 | VERIFY-16 | Phase 103 | Planned |

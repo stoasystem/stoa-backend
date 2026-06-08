@@ -8,13 +8,15 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
 from stoa.deps import get_current_user, require_role
 from stoa.models.report import WeeklyReportResponse
+from stoa.models.user import SubscriptionTier
+from stoa.services import subscription_service
 
 router = APIRouter()
 
@@ -129,6 +131,45 @@ class ParentChildReportState(BaseModel):
     status: str
     report: ParentChildReportDetail | None
     message: str | None = None
+
+
+class ParentSubscriptionRequestCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    request_type: str = Field(..., alias="requestType", min_length=1, max_length=50)
+    requested_tier: SubscriptionTier | None = Field(default=None, alias="requestedTier")
+    parent_note: str | None = Field(default=None, alias="parentNote", max_length=500)
+
+
+class ParentSubscriptionRequestResponse(BaseModel):
+    requestId: str
+    parentId: str
+    studentId: str | None = None
+    currentTier: str
+    requestedTier: str
+    requestType: str
+    status: str
+    source: str
+    parentNote: str | None = None
+    adminNote: str | None = None
+    createdAt: str
+    updatedAt: str
+    effectiveAt: str | None = None
+    appliedAt: str | None = None
+    appliedBy: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ParentSubscriptionRequestListResponse(BaseModel):
+    items: list[ParentSubscriptionRequestResponse]
+    count: int
+
+
+class ParentSubscriptionResponse(BaseModel):
+    parentId: str
+    currentTier: str
+    plans: dict[str, dict[str, Any]]
+    pendingRequest: ParentSubscriptionRequestResponse | None = None
 
 
 def _resolve_parent_profile(user: dict, settings: Settings) -> ResolvedParent:
@@ -519,6 +560,48 @@ async def list_my_children(
     resolved = _resolve_parent_profile(user, settings)
     children = _list_children_for_parent(resolved.parent_user_id)
     return ChildListResponse(items=[_child_summary_from_profile(child) for child in children])
+
+
+@router.get("/me/subscription", response_model=ParentSubscriptionResponse)
+async def get_my_subscription(
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the authenticated parent's current plan and MVP plan options."""
+    resolved = _resolve_parent_profile(user, settings)
+    return subscription_service.get_parent_subscription(resolved.parent_user_id)
+
+
+@router.post(
+    "/me/subscription/requests",
+    response_model=ParentSubscriptionRequestResponse,
+    status_code=201,
+)
+async def create_my_subscription_request(
+    body: ParentSubscriptionRequestCreate,
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Submit a manual subscription request for internal admin processing."""
+    resolved = _resolve_parent_profile(user, settings)
+    return subscription_service.create_parent_request(
+        parent_id=resolved.parent_user_id,
+        request_type=body.request_type,
+        requested_tier=body.requested_tier.value if body.requested_tier else None,
+        parent_note=body.parent_note,
+    )
+
+
+@router.get("/me/subscription/requests", response_model=ParentSubscriptionRequestListResponse)
+async def list_my_subscription_requests(
+    limit: int = Query(default=25, ge=1, le=50),
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the authenticated parent's recent manual subscription requests."""
+    resolved = _resolve_parent_profile(user, settings)
+    items = subscription_service.list_parent_requests(resolved.parent_user_id, limit=limit)
+    return ParentSubscriptionRequestListResponse(items=items, count=len(items))
 
 
 @router.get("/me/children/{child_id}/summary", response_model=ParentChildSummaryResponse)
