@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.5
+**Updated:** 2026-06-08 after closing v3.5
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -18,7 +18,7 @@ v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent p
 
 v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout and automatic exercise generation remain future scope.
 
-v3.5 is planned to prepare realtime notification and AI teacher assistance foundations with bounded notification events and teacher summary seeds. Full WebSocket rollout, push notifications, and automatic exercise generation remain future scope.
+v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout, push notifications, email digests, and automatic exercise generation remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -35,6 +35,7 @@ v3.5 is planned to prepare realtime notification and AI teacher assistance found
 - Content moderation operations: user/tutor report actions, moderation case storage/history, admin list/detail/update/note APIs, admin moderation queue/detail/actions UI, and production-safe verification.
 - Manual subscription operations: parent subscription plan/request APIs, admin request processing/apply APIs, parent plan/request UI, admin subscription queue/detail/actions UI, and focused local verification.
 - Learning expansion foundation: subject taxonomy, subject-specific prompt context, topic seeds, student/parent learning profile APIs, and student/parent learning profile UI.
+- Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
 
 ## v3.0 Closed MVP Gaps
 
@@ -72,14 +73,20 @@ v3.5 is planned to prepare realtime notification and AI teacher assistance found
 |-----|--------|------------------|----------|
 | Multi-subject foundation and student profile seeds | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 104 defined subject/topic/prompt contract; Phase 105 added backend subject/topic/profile seed APIs; Phase 106 added student/parent UI and E2E; Phase 107 captured local release-gate evidence. | Closed for foundation scope |
 
+## v3.5 Closed Phase 2 Foundation Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Realtime notification and AI teacher assistance foundation | `PRD.md` / `PLAN.md` Phase 2 teacher support and realtime expansion | Phase 108 defined notification event and assistance seed contracts; Phase 109 added backend notification events, list/read/archive/admin APIs, and tutor summary seeds; Phase 110 added notification center, admin operational notification, and tutor assistance seed UI; Phase 111 captured local release-gate evidence. | Closed for foundation scope |
+
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
-- Notification and AI teacher assistance foundation: active v3.5.
 - Automatic exercise generation and richer AI teacher tools.
 - Full WebSocket realtime notifications.
+- Push notifications, native notifications, and email notification digests.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
@@ -129,11 +136,11 @@ v3.4 completed the learning expansion foundation before broad curriculum rollout
 3. Added student/parent learning profile UI backed by backend-shaped data.
 4. Closed with lightweight functional checks and recorded residual full-curriculum, AI teacher tooling, and personalization scope.
 
-## v3.5 Scope Recommendation
+## v3.5 Scope Outcome
 
-v3.5 should build notification and teacher-assistance foundations before full realtime rollout:
+v3.5 completed notification and teacher-assistance foundations before full realtime rollout:
 
-1. Define notification event types, recipient rules, lifecycle, and API/UI behavior.
-2. Define teacher assistance summary seed inputs and output shape.
-3. Add backend event list/read/archive and tutor summary seed support.
-4. Add tutor/admin notification and summary UI, then record residual WebSocket, push, and exercise-generation scope.
+1. Defined notification event types, recipient rules, lifecycle, and API/UI behavior.
+2. Defined teacher assistance summary seed inputs and output shape.
+3. Added backend event list/read/archive, admin notification list, and tutor summary seed support.
+4. Added tutor/admin notification and summary UI and recorded residual WebSocket, push/email, and exercise-generation scope.

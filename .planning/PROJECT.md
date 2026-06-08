@@ -42,7 +42,7 @@ The completed v3.3 milestone makes the MVP manual subscription model usable befo
 
 The completed v3.4 milestone prepared Phase 2 learning expansion with subject taxonomy, prompt behavior, topic metadata, student profile seeds, and learning profile UI foundations.
 
-The active v3.5 milestone prepares notification and teacher-assistance foundations before full WebSocket rollout or automatic exercise generation.
+The completed v3.5 milestone prepared notification and teacher-assistance foundations before full WebSocket rollout or automatic exercise generation.
 
 ## Core Value
 
@@ -51,8 +51,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v3.4 Learning Expansion Foundation on 2026-06-08 (local release gate)
-**Active milestone:** v3.5 Realtime And Teacher Assistance Foundation
+**Latest completed milestone:** v3.5 Realtime And Teacher Assistance Foundation on 2026-06-08 (local release gate)
+**Active milestone:** None
 
 Delivered:
 
@@ -135,7 +135,7 @@ Delivered:
 - v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
 - v3.3 completed parent subscription plan/request workflows, admin subscription request processing, tier application, parent/admin UI, and local release-gate verification for the manual MVP billing model.
 - v3.4 added subject taxonomy, prompt behavior by subject, subject/topic backend support, student profile seeds, and learning profile UI foundations.
-- v3.5 is planned to add notification event contracts, backend event surfaces, teacher assistance summary seeds, and tutor/admin notification/summary UI foundations.
+- v3.5 completed notification event contracts, backend event surfaces, teacher assistance summary seeds, and tutor/admin notification/summary UI foundations.
 
 ## Last Production-Verified Milestone
 
@@ -152,29 +152,20 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v3.3 Subscription Operations MVP
-
-Goal: make the MVP manual subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
-
-Completed phases:
-
-- Phase 100: Subscription Operations Contract And Entitlement Model.
-- Phase 101: Backend Subscription Request And Admin Tier APIs.
-- Phase 102: Parent Subscription Management UI And Admin Queue.
-- Phase 103: v3.3 Functional Release Gate And Billing Readiness.
-
-## Current Milestone
-
 ### v3.5 Realtime And Teacher Assistance Foundation
 
 Goal: prepare notification and teacher-assistance expansion with event contracts, backend event surfaces, teacher summary seeds, tutor/admin UI, and lightweight functional verification.
 
-Planned phases:
+Completed phases:
 
 - Phase 108: Realtime Notification And Teacher Assistance Contract.
 - Phase 109: Backend Notification Events And Teacher Summary Seeds.
 - Phase 110: Tutor/Admin Notification And Summary UI.
 - Phase 111: v3.5 Functional Release Gate And Expansion Audit.
+
+## Current Milestone
+
+No active milestone. Next milestone selection is pending after the v3.5 local release gate.
 
 ## Requirements
 
@@ -205,14 +196,21 @@ Shipped requirements:
 - Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
 - Report recovery production rollout, live admin-auth API verification, safe non-customer retry/resend/bulk smoke, scoped API SES permission, operations runbook, and final CDK diff verification shipped - v1.5.
 
-### Active
+### Completed
+
+Milestone v3.5 requirements are archived in `.planning/milestones/v3.5-REQUIREMENTS.md` and are complete:
 
 - NOTIFY-01: realtime notification and teacher assistance contract - Phase 108.
 - NOTIFY-02: backend notification events and teacher summary seeds - Phase 109.
 - UI-20: tutor/admin notification and summary UI - Phase 110.
 - VERIFY-18: v3.5 functional release gate and expansion audit - Phase 111.
 
-### Completed
+Milestone v3.4 requirements are archived in `.planning/milestones/v3.4-REQUIREMENTS.md` and are complete:
+
+- LEARN-01: multi-subject taxonomy and prompt contract - Phase 104.
+- LEARN-02: backend subject/topic support and student profile seeds - Phase 105.
+- UI-19: student and parent learning profile UI - Phase 106.
+- VERIFY-17: v3.4 functional release gate and expansion audit - Phase 107.
 
 Milestone v3.3 requirements are archived in `.planning/milestones/v3.3-REQUIREMENTS.md` and are complete:
 
@@ -486,7 +484,7 @@ Known current resources:
 | Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Good - shipped in v3.2 |
 | Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Good - local release gate complete |
 | Start v3.4 with learning expansion foundation | `stoa_docs` Phase 2 calls for multi-subject support, student memory, and AI teacher tools; taxonomy and profile seeds should precede broad curriculum or exercise generation | Good - local release gate complete |
-| Start v3.5 with notification and teacher assistance foundation | `stoa_docs` Phase 2 calls for realtime notifications and AI teacher tools; event and summary foundations should precede WebSocket rollout or automatic exercise generation | Active - Phase 108 planned |
+| Start v3.5 with notification and teacher assistance foundation | `stoa_docs` Phase 2 calls for realtime notifications and AI teacher tools; event and summary foundations should precede WebSocket rollout or automatic exercise generation | Good - local release gate complete |
 
 ## Evolution
 
@@ -506,4 +504,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after planning milestone v3.5*
+*Last updated: 2026-06-08 after closing milestone v3.5*

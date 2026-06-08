@@ -585,26 +585,40 @@ Completed phases:
 
 Known deferred items at close: Stripe/TWINT payment-provider integration, full multi-subject curriculum content and exercises, student memory/personalization beyond profile seeds, AI teacher assistance tools, WebSocket realtime notifications, mobile responsive polish, full multilingual rollout, and support integrations.
 
-## Active
-
 ### v3.5 Realtime And Teacher Assistance Foundation
 
-**Status:** Active
+**Status:** Complete
 **Started:** 2026-06-08
+**Completed:** 2026-06-08
+**Audit:** `.planning/milestones/v3.5-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.5-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Prepare realtime and teacher-assistance expansion without jumping directly into a broad WebSocket rollout or automatic exercise generation.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 108: Realtime Notification And Teacher Assistance Contract.
 - Phase 109: Backend Notification Events And Teacher Summary Seeds.
 - Phase 110: Tutor/Admin Notification And Summary UI.
 - Phase 111: v3.5 Functional Release Gate And Expansion Audit.
 
+Key accomplishments:
+
+- Defined bounded notification event and teacher assistance summary seed contracts.
+- Added backend notification event persistence, recipient list/read/archive APIs, admin notification listing, and teacher assistance summary seeds.
+- Emitted notification events from teacher request/takeover/reply, moderation, and subscription workflows without changing their core behavior.
+- Added frontend notification center, admin operational notifications, and tutor assistance seed UI.
+- Completed local release-gate evidence with backend tests, focused lint, frontend lint/build, and targeted Playwright evidence.
+
+Known deferred items at close: Stripe/TWINT payment-provider integration, production WebSocket realtime delivery, push/email notification delivery, automatic exercise generation, richer AI teacher tools, mobile responsive polish, full multilingual rollout, and support integrations.
+
+## Active
+
+No active milestone. v3.5 closed on 2026-06-08; next milestone selection is pending.
+
 ---
-*Last updated: 2026-06-08 after planning v3.5*
+*Last updated: 2026-06-08 after closing v3.5*

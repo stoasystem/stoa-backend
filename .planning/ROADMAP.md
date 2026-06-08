@@ -27,12 +27,11 @@
 - [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08.
 - [x] **v3.3 Subscription Operations MVP** - Completed local release gate 2026-06-08.
 - [x] **v3.4 Learning Expansion Foundation** - Completed local release gate 2026-06-08.
+- [x] **v3.5 Realtime And Teacher Assistance Foundation** - Completed local release gate 2026-06-08.
 
 ## Current Milestone
 
-**v3.5 Realtime And Teacher Assistance Foundation** - Active.
-
-Goal: prepare notification and teacher-assistance expansion with event contracts, backend event surfaces, teacher summary seeds, tutor/admin UI, and lightweight functional verification.
+No active milestone. v3.5 closed with local release-gate evidence on 2026-06-08.
 
 ## Phases
 
@@ -41,7 +40,7 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 | 108 | Realtime Notification And Teacher Assistance Contract | Complete | NOTIFY-01 |
 | 109 | Backend Notification Events And Teacher Summary Seeds | Complete | NOTIFY-02 |
 | 110 | Tutor/Admin Notification And Summary UI | Complete | UI-20 |
-| 111 | v3.5 Functional Release Gate And Expansion Audit | Planned | VERIFY-18 |
+| 111 | v3.5 Functional Release Gate And Expansion Audit | Complete | VERIFY-18 |
 
 ## Progress
 
@@ -50,7 +49,7 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 | 108 | v3.5 | 1/1 | Complete | 2026-06-08 |
 | 109 | v3.5 | 1/1 | Complete | 2026-06-08 |
 | 110 | v3.5 | 1/1 | Complete | 2026-06-08 |
-| 111 | v3.5 | 0/1 | Planned | - |
+| 111 | v3.5 | 1/1 | Complete | 2026-06-08 |
 
 ## Traceability
 
@@ -59,7 +58,7 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 | NOTIFY-01 | Phase 108 | Complete |
 | NOTIFY-02 | Phase 109 | Complete |
 | UI-20 | Phase 110 | Complete |
-| VERIFY-18 | Phase 111 | Planned |
+| VERIFY-18 | Phase 111 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 110*
+*Last updated: 2026-06-08 after completing Phase 111 and closing v3.5*

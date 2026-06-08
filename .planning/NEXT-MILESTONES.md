@@ -3,23 +3,6 @@
 **Updated:** 2026-06-08
 **Mode:** product functionality first
 
-## v3.5 Realtime And Teacher Assistance Foundation
-
-Goal: prepare the next teacher-support expansion after moderation, subscriptions, and learning-profile foundations.
-
-Planned phases:
-
-- Phase 108: Realtime Notification And Teacher Assistance Contract.
-- Phase 109: Backend Notification Events And Teacher Summary Seeds.
-- Phase 110: Tutor/Admin Notification And Summary UI.
-- Phase 111: v3.5 Functional Release Gate And Expansion Audit.
-
-Scope:
-
-- Add a bounded notification event model before any broad WebSocket rollout.
-- Prepare teacher assistance summaries from existing question/conversation context.
-- Keep automatic exercise generation, full personalization, mobile polish, and multilingual rollout out of scope unless a later milestone explicitly promotes them.
-
 ## v3.6 Payment Provider Readiness
 
 Goal: prepare Stripe/TWINT integration after manual subscription operations are proven.
@@ -53,3 +36,20 @@ Scope:
 - Improve mobile ergonomics for parent/student/tutor core flows without redesigning the product.
 - Expand frontend translation coverage around high-traffic workflows.
 - Keep native mobile apps and full localization operations out of scope unless promoted by a later milestone.
+
+## v3.8 Support Integrations Foundation
+
+Goal: prepare support-ticket and evidence handoff integrations after product-facing expansion foundations.
+
+Planned phases:
+
+- Phase 120: Support Integration Contract And Credential Boundary.
+- Phase 121: Backend Support Destination Adapter Readiness.
+- Phase 122: Admin Support Integration UI Signals.
+- Phase 123: v3.8 Functional Release Gate And Integration Audit.
+
+Scope:
+
+- Define connector policy, credential ownership, external-write refusal states, and metadata-only payload boundaries.
+- Reuse existing support evidence package and notification foundations where possible.
+- Keep live third-party writes disabled unless an approved connector or credential path exists.
