@@ -618,7 +618,24 @@ Known deferred items at close: Stripe/TWINT payment-provider integration, produc
 
 ## Active
 
-No active milestone. v3.5 closed on 2026-06-08; next milestone selection is pending.
+### v3.6 Full WebSocket Realtime Notifications
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.6-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.6-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Turn the v3.5 in-product notification foundation into full WebSocket realtime notifications for core learning and operations workflows.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 112: Full WebSocket Transport Contract And Infra Readiness.
+- Phase 113: Backend WebSocket Connection And Event Delivery.
+- Phase 114: Realtime Notification Client And UX.
+- Phase 115: v3.6 Functional Release Gate And Realtime Audit.
 
 ---
-*Last updated: 2026-06-08 after closing v3.5*
+*Last updated: 2026-06-08 after planning v3.6*

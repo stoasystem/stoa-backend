@@ -1,84 +1,84 @@
-# Requirements: v3.5 Realtime And Teacher Assistance Foundation
+# Requirements: v3.6 Full WebSocket Realtime Notifications
 
-**Milestone:** v3.5
-**Status:** Complete
+**Milestone:** v3.6
+**Status:** Active
 **Created:** 2026-06-08
 
 ## Goal
 
-Prepare realtime and teacher-assistance expansion without jumping directly into a broad WebSocket rollout or automatic exercise generation. This milestone adds a bounded notification event model, backend event surfaces, teacher assistance summary seeds, tutor/admin UI surfaces, and lightweight functional verification.
+Turn the v3.5 in-product notification foundation into full WebSocket realtime notifications for core learning and operations workflows. This milestone focuses on functional realtime delivery: connection lifecycle, authenticated subscriptions, backend event fanout, frontend realtime client behavior, and graceful fallback to the existing notification center.
 
 ## Requirements
 
-### NOTIFY-01 Realtime Notification And Teacher Assistance Contract
+### WS-01 Full WebSocket Transport Contract And Infra Readiness
 
-Implementers have a precise notification event contract, delivery boundary, and teacher assistance seed contract before backend changes.
-
-Acceptance criteria:
-
-- Contract defines notification events for teacher request, teacher takeover, teacher reply, moderation update, subscription request update, and learning profile update.
-- Contract defines delivery states: `created`, `read`, `archived`, and `failed`.
-- Contract defines recipient roles, target ids, event payload shape, retention expectations, and UI display rules.
-- Contract defines teacher assistance summary seed inputs from question content, AI response, teacher replies, topic/profile metadata, and conversation context.
-- Contract explicitly keeps full WebSocket streaming and automatic exercise generation out of v3.5 unless later promoted.
-
-### NOTIFY-02 Backend Notification Events And Teacher Summary Seeds
-
-Backend records and exposes notification events and teacher assistance seed summaries.
+Implementers have a precise WebSocket transport contract, connection model, authorization model, and infrastructure readiness decision before backend changes.
 
 Acceptance criteria:
 
-- Backend creates notification events for selected existing workflows without changing their core behavior.
-- Users can list and mark their notification events read/archived.
-- Tutor/admin surfaces can request teacher assistance summary seeds for visible questions/sessions.
-- Backend stores minimal summary seed metadata and avoids generating full autonomous exercise content.
-- Focused tests cover event creation/list/read/archive, recipient filtering, and summary seed generation from existing data.
+- Contract defines WebSocket connection lifecycle: connect, authenticate, subscribe, heartbeat, reconnect, disconnect, and stale connection cleanup.
+- Contract defines event envelope for existing notification events and per-role channel/target authorization.
+- Contract defines supported realtime event categories: teacher request/takeover/reply, moderation updates, subscription updates, learning profile updates, and system notices.
+- Contract defines fallback behavior to polling/notification center when WebSocket is unavailable.
+- Infrastructure readiness compares API Gateway WebSocket, existing Lambda/API shape, DynamoDB connection records, and CDK changes required for v3.6.
 
-### UI-20 Tutor/Admin Notification And Summary UI
+### WS-02 Backend WebSocket Connection And Event Delivery
 
-Frontend exposes notification and teacher-assistance foundations.
-
-Acceptance criteria:
-
-- Student/parent/tutor/admin shell can display notification counts and event list states where relevant.
-- Tutor question/session UI shows a teacher assistance summary seed panel.
-- Admin UI shows selected operational notification events for moderation/subscription workflows.
-- UI handles empty, loading, error, read, archived, and unavailable summary states.
-- Targeted browser verification confirms the workflow is usable.
-
-### VERIFY-18 v3.5 Functional Release Gate And Expansion Audit
-
-v3.5 closes with lightweight functional evidence and updated Phase 2 gap tracking.
+Backend supports authenticated WebSocket connections and realtime delivery from existing notification events.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to notifications and teacher assistance pass.
-- Deploy/build evidence and commit SHAs are recorded if code ships in this milestone.
-- Gap audit marks notification foundation and teacher assistance seeds as active/closed and records residual full WebSocket/exercise-generation scope.
-- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, full personalization, production WebSocket rollout, mobile/multilingual polish, and support integrations.
+- Backend stores active connection records with user id, role, subscribed channels, heartbeat/update timestamps, and expiry.
+- Backend authenticates connection/subscription requests using the existing Cognito/JWT model or an approved equivalent path.
+- Backend publishes selected notification events to active authorized WebSocket connections and records delivery attempts/results.
+- Backend supports disconnect cleanup and stale connection cleanup.
+- Focused tests cover connection lifecycle, authorization, event fanout, stale cleanup, and fallback-safe event persistence.
+
+### UI-21 Realtime Notification Client And UX
+
+Frontend consumes WebSocket notifications while preserving existing notification center fallback.
+
+Acceptance criteria:
+
+- Frontend establishes an authenticated WebSocket session after login where enabled.
+- Frontend handles reconnect, heartbeat, offline/unavailable state, and fallback to existing notification list polling.
+- Student/parent/tutor/admin shells show realtime notification count/list updates for supported events.
+- Tutor workflows receive teacher-session events without page refresh where supported.
+- Targeted browser verification confirms realtime/fallback UX for local or safe test fixtures.
+
+### VERIFY-19 v3.6 Functional Release Gate And Realtime Audit
+
+v3.6 closes with functional evidence and updated Phase 2 gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to WebSocket delivery pass.
+- CDK/diff/deploy evidence is recorded if infrastructure changes are required.
+- Gap audit marks full WebSocket realtime notifications as active/closed and records residual push/email/native notification scope.
+- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, richer AI teacher tools/exercise generation, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
-- Full WebSocket realtime delivery.
-- Automatic exercise generation and richer AI teacher tools.
+- Push notifications and native mobile notification delivery.
+- Email notification digests.
 - Stripe/TWINT payment-provider integration.
+- Automatic exercise generation and richer AI teacher tools.
 - Full multi-subject curriculum content and exercises.
-- Student memory/personalization beyond profile and summary seeds.
 - Mobile responsive polish and full multilingual rollout.
 
 ## Out of Scope
 
-- Full WebSocket infrastructure or streaming UX.
-- Push notifications, native mobile notifications, or email notification digests.
+- Native mobile push notifications.
+- Email notification digests.
+- Production charging/payment-provider work.
 - Automatic exercise generation.
-- Payment-provider implementation.
-- Extensive security/compliance testing beyond functional role gating and data sanity checks.
+- Broad security/compliance program beyond required WebSocket auth/authorization and functional correctness.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFY-01 | Phase 108 | Complete |
-| NOTIFY-02 | Phase 109 | Complete |
-| UI-20 | Phase 110 | Complete |
-| VERIFY-18 | Phase 111 | Complete |
+| WS-01 | Phase 112 | Planned |
+| WS-02 | Phase 113 | Planned |
+| UI-21 | Phase 114 | Planned |
+| VERIFY-19 | Phase 115 | Planned |

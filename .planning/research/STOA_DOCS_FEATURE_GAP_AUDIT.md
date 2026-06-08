@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after closing v3.5
+**Updated:** 2026-06-08 after planning v3.6
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -19,6 +19,8 @@ v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent p
 v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout and automatic exercise generation remain future scope.
 
 v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout, push notifications, email digests, and automatic exercise generation remain future scope.
+
+v3.6 is planned to complete full WebSocket realtime notifications by adding authenticated WebSocket transport, connection lifecycle, event fanout, frontend realtime client behavior, and fallback to the existing notification center.
 
 ## Completed Or Largely Complete
 
@@ -85,7 +87,7 @@ v3.5 completed the realtime notification and AI teacher assistance foundation sc
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
 - Automatic exercise generation and richer AI teacher tools.
-- Full WebSocket realtime notifications.
+- Full WebSocket realtime notifications: active v3.6.
 - Push notifications, native notifications, and email notification digests.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
@@ -144,3 +146,12 @@ v3.5 completed notification and teacher-assistance foundations before full realt
 2. Defined teacher assistance summary seed inputs and output shape.
 3. Added backend event list/read/archive, admin notification list, and tutor summary seed support.
 4. Added tutor/admin notification and summary UI and recorded residual WebSocket, push/email, and exercise-generation scope.
+
+## v3.6 Scope Recommendation
+
+v3.6 should complete full WebSocket realtime notifications:
+
+1. Define WebSocket connection lifecycle, auth/subscription model, event envelope, and fallback behavior.
+2. Add backend connection records, authenticated WebSocket route handling, event fanout, and stale cleanup.
+3. Add frontend realtime client, reconnect behavior, notification center sync, and fallback UX.
+4. Close with functional realtime evidence and record residual push/native/email notification scope.

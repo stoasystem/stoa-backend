@@ -44,6 +44,8 @@ The completed v3.4 milestone prepared Phase 2 learning expansion with subject ta
 
 The completed v3.5 milestone prepared notification and teacher-assistance foundations before full WebSocket rollout or automatic exercise generation.
 
+The active v3.6 milestone turns the notification foundation into full WebSocket realtime notifications.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -52,7 +54,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v3.5 Realtime And Teacher Assistance Foundation on 2026-06-08 (local release gate)
-**Active milestone:** None
+**Active milestone:** v3.6 Full WebSocket Realtime Notifications
 
 Delivered:
 
@@ -136,6 +138,7 @@ Delivered:
 - v3.3 completed parent subscription plan/request workflows, admin subscription request processing, tier application, parent/admin UI, and local release-gate verification for the manual MVP billing model.
 - v3.4 added subject taxonomy, prompt behavior by subject, subject/topic backend support, student profile seeds, and learning profile UI foundations.
 - v3.5 completed notification event contracts, backend event surfaces, teacher assistance summary seeds, and tutor/admin notification/summary UI foundations.
+- v3.6 is planned to add full WebSocket realtime transport, authenticated connection lifecycle, event fanout, realtime frontend client behavior, and fallback to the existing notification center.
 
 ## Last Production-Verified Milestone
 
@@ -165,7 +168,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Next milestone selection is pending after the v3.5 local release gate.
+### v3.6 Full WebSocket Realtime Notifications
+
+Goal: turn the v3.5 notification foundation into full authenticated WebSocket realtime delivery for core learning and operations events.
+
+Planned phases:
+
+- Phase 112: Full WebSocket Transport Contract And Infra Readiness.
+- Phase 113: Backend WebSocket Connection And Event Delivery.
+- Phase 114: Realtime Notification Client And UX.
+- Phase 115: v3.6 Functional Release Gate And Realtime Audit.
 
 ## Requirements
 
@@ -195,6 +207,13 @@ Shipped requirements:
 - Admin report operations list/detail APIs, single generation retry, selected bulk resend, and admin UI shipped - v1.4.
 - Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
 - Report recovery production rollout, live admin-auth API verification, safe non-customer retry/resend/bulk smoke, scoped API SES permission, operations runbook, and final CDK diff verification shipped - v1.5.
+
+### Active
+
+- WS-01: full WebSocket transport contract and infrastructure readiness - Phase 112.
+- WS-02: backend WebSocket connection and event delivery - Phase 113.
+- UI-21: realtime notification client and UX - Phase 114.
+- VERIFY-19: v3.6 functional release gate and realtime audit - Phase 115.
 
 ### Completed
 
@@ -485,6 +504,7 @@ Known current resources:
 | Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Good - local release gate complete |
 | Start v3.4 with learning expansion foundation | `stoa_docs` Phase 2 calls for multi-subject support, student memory, and AI teacher tools; taxonomy and profile seeds should precede broad curriculum or exercise generation | Good - local release gate complete |
 | Start v3.5 with notification and teacher assistance foundation | `stoa_docs` Phase 2 calls for realtime notifications and AI teacher tools; event and summary foundations should precede WebSocket rollout or automatic exercise generation | Good - local release gate complete |
+| Start v3.6 with full WebSocket realtime notifications | User explicitly selected full WebSocket realtime notifications after v3.5 foundation; existing durable notification events can now become realtime transport payloads | Active - Phase 112 planned |
 
 ## Evolution
 
@@ -504,4 +524,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after closing milestone v3.5*
+*Last updated: 2026-06-08 after planning milestone v3.6*

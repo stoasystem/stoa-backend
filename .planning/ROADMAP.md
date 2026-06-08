@@ -31,34 +31,36 @@
 
 ## Current Milestone
 
-No active milestone. v3.5 closed with local release-gate evidence on 2026-06-08.
+**v3.6 Full WebSocket Realtime Notifications** - Active.
+
+Goal: turn the v3.5 notification foundation into full authenticated WebSocket realtime delivery for core learning and operations events.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 108 | Realtime Notification And Teacher Assistance Contract | Complete | NOTIFY-01 |
-| 109 | Backend Notification Events And Teacher Summary Seeds | Complete | NOTIFY-02 |
-| 110 | Tutor/Admin Notification And Summary UI | Complete | UI-20 |
-| 111 | v3.5 Functional Release Gate And Expansion Audit | Complete | VERIFY-18 |
+| 112 | Full WebSocket Transport Contract And Infra Readiness | Planned | WS-01 |
+| 113 | Backend WebSocket Connection And Event Delivery | Planned | WS-02 |
+| 114 | Realtime Notification Client And UX | Planned | UI-21 |
+| 115 | v3.6 Functional Release Gate And Realtime Audit | Planned | VERIFY-19 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 108 | v3.5 | 1/1 | Complete | 2026-06-08 |
-| 109 | v3.5 | 1/1 | Complete | 2026-06-08 |
-| 110 | v3.5 | 1/1 | Complete | 2026-06-08 |
-| 111 | v3.5 | 1/1 | Complete | 2026-06-08 |
+| 112 | v3.6 | 1/1 | Planned | - |
+| 113 | v3.6 | 0/1 | Planned | - |
+| 114 | v3.6 | 0/1 | Planned | - |
+| 115 | v3.6 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFY-01 | Phase 108 | Complete |
-| NOTIFY-02 | Phase 109 | Complete |
-| UI-20 | Phase 110 | Complete |
-| VERIFY-18 | Phase 111 | Complete |
+| WS-01 | Phase 112 | Planned |
+| WS-02 | Phase 113 | Planned |
+| UI-21 | Phase 114 | Planned |
+| VERIFY-19 | Phase 115 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 111 and closing v3.5*
+*Last updated: 2026-06-08 after planning v3.6*
