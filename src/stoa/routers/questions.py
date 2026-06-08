@@ -14,7 +14,8 @@ from stoa.models.question import (
     QuestionStatus,
     SubmitQuestionRequest,
 )
-from stoa.services import ai_service, notify_service, ocr_service
+from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
+from stoa.services import ai_service, moderation_service, notify_service, ocr_service
 
 router = APIRouter()
 
@@ -207,3 +208,17 @@ async def submit_feedback(
 
     question_repo.update_status(question_id, item["status"], student_feedback=body.rating)
     return {"question_id": question_id, "rating": body.rating}
+
+
+@router.post(
+    "/{question_id}/reports",
+    response_model=ModerationCaseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def report_question_content(
+    question_id: str,
+    body: ModerationReportRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Create a moderation case for reportable question content."""
+    return moderation_service.create_case(question_id, body, user)

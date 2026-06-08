@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Content Moderation And Internal Operations
 status: planning
-last_updated: "2026-06-08T13:45:00+02:00"
+last_updated: "2026-06-08T14:10:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 
 ## Current Position
 
-Phase: 97 Backend Moderation Reporting And Admin APIs
+Phase: 98 Moderation Reporting And Admin Queue UI
 Plan: Not started
-Status: Ready for backend implementation.
-Last activity: 2026-06-08 - completed Phase 96 moderation contract, case lifecycle, API shape, data access plan, and functional verification priorities.
+Status: Ready for frontend implementation.
+Last activity: 2026-06-08 - completed Phase 97 backend moderation case creation, admin list/detail/action APIs, focused tests, and privacy sanity checks.
 
 ## Accumulated Context
 
@@ -48,7 +48,6 @@ Last activity: 2026-06-08 - completed Phase 96 moderation contract, case lifecyc
 
 ### Pending Todos
 
-- Implement backend moderation case creation/list/detail/action APIs in Phase 97.
 - Implement student/teacher report actions and admin moderation queue/detail UI in Phase 98.
 - Run a lightweight functional release gate and update the `stoa_docs` gap audit in Phase 99.
 
@@ -61,4 +60,4 @@ Last activity: 2026-06-08 - completed Phase 96 moderation contract, case lifecyc
 
 ## Operator Next Steps
 
-- Execute Phase 97 backend moderation APIs.
+- Execute Phase 98 moderation reporting and admin queue UI.

@@ -8,8 +8,18 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
+from stoa.models.moderation import (
+    ModerationCaseListResponse,
+    ModerationCaseNoteRequest,
+    ModerationCaseResponse,
+    ModerationCaseUpdateRequest,
+    ModerationReason,
+    ModerationSeverity,
+    ModerationStatus,
+)
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
+    moderation_service,
     report_audit_retention_service,
     report_artifact_edit_service,
     report_edit_service,
@@ -60,6 +70,61 @@ class StatsResponse(BaseModel):
     teacher_resolved: int
     escalated: int
     teacher_sla: dict[str, Any]
+
+
+@router.get("/moderation/cases", response_model=ModerationCaseListResponse)
+async def list_moderation_cases(
+    limit: int = Query(default=50, ge=1, le=100),
+    status: ModerationStatus | None = Query(default=None),
+    severity: ModerationSeverity | None = Query(default=None),
+    reason: ModerationReason | None = Query(default=None),
+    reporter_role: Optional[str] = Query(default=None),
+    assignee: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None),
+    date_to: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List moderation cases for internal operations."""
+    items = moderation_service.list_cases(
+        limit=limit,
+        status=status.value if status else None,
+        severity=severity.value if severity else None,
+        reason=reason.value if reason else None,
+        reporter_role=reporter_role,
+        assignee=assignee,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return ModerationCaseListResponse(items=items, count=len(items))
+
+
+@router.get("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)
+async def get_moderation_case(
+    case_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Open a moderation case with context and audit history."""
+    return moderation_service.get_case(case_id)
+
+
+@router.patch("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)
+async def update_moderation_case(
+    case_id: str,
+    body: ModerationCaseUpdateRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Assign, transition, or resolve a moderation case."""
+    return moderation_service.update_case(case_id, body, user)
+
+
+@router.post("/moderation/cases/{case_id}/notes", response_model=ModerationCaseResponse)
+async def add_moderation_case_note(
+    case_id: str,
+    body: ModerationCaseNoteRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Append an internal moderation note."""
+    return moderation_service.add_note(case_id, body, user)
 
 
 class ReportOperationResponse(BaseModel):
