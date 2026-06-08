@@ -1,7 +1,7 @@
 # Requirements: v3.3 Subscription Operations MVP
 
 **Milestone:** v3.3
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-08
 
 ## Goal
@@ -80,4 +80,4 @@ Acceptance criteria:
 | SUBOPS-01 | Phase 100 | Complete |
 | SUBOPS-02 | Phase 101 | Complete |
 | UI-18 | Phase 102 | Complete |
-| VERIFY-16 | Phase 103 | Planned |
+| VERIFY-16 | Phase 103 | Complete |

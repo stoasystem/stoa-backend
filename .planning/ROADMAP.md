@@ -25,10 +25,11 @@
 - [x] **v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Shipped 2026-06-08.
 - [x] **v3.1 Teacher Reply Quality And SLA Operations** - Shipped 2026-06-08.
 - [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08.
+- [x] **v3.3 Subscription Operations MVP** - Completed local release gate 2026-06-08.
 
 ## Current Milestone
 
-**v3.3 Subscription Operations MVP** - Active.
+**v3.3 Subscription Operations MVP** - Complete.
 
 Goal: make the manual MVP subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
 
@@ -39,7 +40,7 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | 100 | Subscription Operations Contract And Entitlement Model | Complete | SUBOPS-01 |
 | 101 | Backend Subscription Request And Admin Tier APIs | Complete | SUBOPS-02 |
 | 102 | Parent Subscription Management UI And Admin Queue | Complete | UI-18 |
-| 103 | v3.3 Functional Release Gate And Billing Readiness | Planned | VERIFY-16 |
+| 103 | v3.3 Functional Release Gate And Billing Readiness | Complete | VERIFY-16 |
 
 ## Progress
 
@@ -48,7 +49,7 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | 100 | v3.3 | 1/1 | Complete | 2026-06-08 |
 | 101 | v3.3 | 1/1 | Complete | 2026-06-08 |
 | 102 | v3.3 | 1/1 | Complete | 2026-06-08 |
-| 103 | v3.3 | 0/1 | Planned | - |
+| 103 | v3.3 | 1/1 | Complete | 2026-06-08 |
 
 ## Traceability
 
@@ -57,7 +58,7 @@ Goal: make the manual MVP subscription model usable before Stripe/TWINT integrat
 | SUBOPS-01 | Phase 100 | Complete |
 | SUBOPS-02 | Phase 101 | Complete |
 | UI-18 | Phase 102 | Complete |
-| VERIFY-16 | Phase 103 | Planned |
+| VERIFY-16 | Phase 103 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 102*
+*Last updated: 2026-06-08 after completing v3.3*

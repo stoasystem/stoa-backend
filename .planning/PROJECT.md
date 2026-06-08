@@ -38,7 +38,7 @@ The completed v3.1 milestone closed the remaining teacher-takeover MVP gaps: ric
 
 The completed v3.2 milestone closed the remaining visible MVP admin workflow from `stoa_docs`: content moderation for reported or abnormal learning content.
 
-The active v3.3 milestone makes the MVP manual subscription model usable before Stripe/TWINT integration.
+The completed v3.3 milestone makes the MVP manual subscription model usable before Stripe/TWINT integration.
 
 ## Core Value
 
@@ -47,8 +47,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Active milestone:** v3.3 Subscription Operations MVP
+**Latest completed milestone:** v3.3 Subscription Operations MVP on 2026-06-08 (local release gate)
+**Active milestone:** None selected
 
 Delivered:
 
@@ -129,7 +129,7 @@ Delivered:
 - v2.9 locally completed retention governance and legal-hold operations with governance contracts, backend metadata recording APIs, admin UI controls, local quality gates, and explicit production deploy/live smoke deferral.
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
 - v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
-- v3.3 is planned to add parent subscription plan/request workflows and admin subscription request processing for the manual MVP billing model.
+- v3.3 completed parent subscription plan/request workflows, admin subscription request processing, tier application, parent/admin UI, and local release-gate verification for the manual MVP billing model.
 
 ## Last Production-Verified Milestone
 
@@ -146,29 +146,22 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v3.2 Content Moderation And Internal Operations
-
-Goal: close the remaining MVP admin content moderation workflow from `stoa_docs` with report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification.
-
-Completed phases:
-
-- Phase 96: Content Moderation Contract And Data Model.
-- Phase 97: Backend Moderation Reporting And Admin APIs.
-- Phase 98: Moderation Reporting And Admin Queue UI.
-- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
-
-## Current Milestone
-
 ### v3.3 Subscription Operations MVP
 
 Goal: make the MVP manual subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
 
-Planned phases:
+Completed phases:
 
 - Phase 100: Subscription Operations Contract And Entitlement Model.
 - Phase 101: Backend Subscription Request And Admin Tier APIs.
 - Phase 102: Parent Subscription Management UI And Admin Queue.
 - Phase 103: v3.3 Functional Release Gate And Billing Readiness.
+
+## Current Milestone
+
+None selected.
+
+Next candidates are Stripe/TWINT provider integration or another Phase 2 expansion from the gap audit.
 
 ## Requirements
 
@@ -201,12 +194,16 @@ Shipped requirements:
 
 ### Active
 
+- None selected.
+
+### Completed
+
+Milestone v3.3 requirements are archived in `.planning/milestones/v3.3-REQUIREMENTS.md` and are complete:
+
 - SUBOPS-01: subscription operations contract and entitlement model - Phase 100.
 - SUBOPS-02: backend subscription request and admin tier APIs - Phase 101.
 - UI-18: parent subscription management and admin queue - Phase 102.
 - VERIFY-16: v3.3 functional release gate and billing readiness - Phase 103.
-
-### Completed
 
 Milestone v3.2 requirements are archived in `.planning/milestones/v3.2-REQUIREMENTS.md` and are complete:
 

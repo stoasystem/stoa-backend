@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.3
+**Updated:** 2026-06-08 after completing v3.3
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -14,7 +14,7 @@ v3.1 closed the remaining teacher-takeover MVP gaps selected for that cycle: saf
 
 v3.2 closed the remaining visible MVP admin workflow gap: content moderation for reported or abnormal learning content. The release added report actions, moderation cases, admin queue/detail/actions, deploy evidence, and production-safe smoke.
 
-v3.3 is planned to make the MVP manual subscription process usable in-product before Stripe/TWINT: parent plan/request UI, admin processing queue, and tier application workflow. Payment-provider integration remains future scope.
+v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
 
 ## Completed Or Largely Complete
 
@@ -29,6 +29,7 @@ v3.3 is planned to make the MVP manual subscription process usable in-product be
 - Report operations hardening: recovery jobs, evidence export, support handoff, artifact editing/rollback, immutable evidence, retention governance.
 - Teacher reply quality and SLA operations: versioned rich reply/formula payload, backend sanitization/refusal, first-reply/takeover/resolve SLA fields, tutor SLA badges/composer, and admin aggregate Teacher SLA stats.
 - Content moderation operations: user/tutor report actions, moderation case storage/history, admin list/detail/update/note APIs, admin moderation queue/detail/actions UI, and production-safe verification.
+- Manual subscription operations: parent subscription plan/request APIs, admin request processing/apply APIs, parent plan/request UI, admin subscription queue/detail/actions UI, and focused local verification.
 
 ## v3.0 Closed MVP Gaps
 
@@ -54,9 +55,14 @@ v3.3 is planned to make the MVP manual subscription process usable in-product be
 |-----|--------|------------------|----------|
 | Content moderation | `PRD.md` 3.5 P2 | Phase 96 defined the contract; Phase 97 added backend report creation/admin APIs; Phase 98 added student/tutor report actions and admin moderation UI; Phase 99 deployed and production-smoked read-only/auth-gated surfaces. | Closed |
 
+## v3.3 Closed MVP Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Manual subscription operations before payment-provider integration | `PLAN.md` manual paid onboarding model | Phase 100 defined plan/lifecycle/entitlement contract; Phase 101 added backend parent/admin APIs; Phase 102 added parent/admin UI and E2E; Phase 103 captured local release-gate evidence. | Closed |
+
 ## Phase 2 / Future Expansion
 
-- Manual subscription operations: active v3.3.
 - Stripe/TWINT subscription payments after manual operations are usable.
 - Multi-subject rollout for physics, German, English beyond current subject fields/content.
 - Student memory/personalization.
@@ -93,9 +99,9 @@ v3.2 completed the remaining MVP admin moderation workflow before Phase 2 expans
 3. Add student/teacher report actions and admin moderation queue/detail UI.
 4. Close with lightweight functional checks and update this gap audit with the outcome.
 
-## v3.3 Scope Recommendation
+## v3.3 Scope Outcome
 
-v3.3 should build the manual subscription operations MVP before payment-provider integration:
+v3.3 completed the manual subscription operations MVP before payment-provider integration:
 
 1. Define plan tiers, entitlement effects, request lifecycle, and manual billing boundaries.
 2. Add parent subscription plan/request APIs and admin subscription request processing APIs.
