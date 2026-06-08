@@ -475,5 +475,24 @@ Key accomplishments:
 
 Known deferred items at close: real email verification policy change, teacher rich text/formula polish, SLA tracking, content moderation, broad Phase 2 expansion, and unrelated `StoaNotificationStack` SES identity drift.
 
+### v3.1 Teacher Reply Quality And SLA Operations
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.1-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.1-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula replies and response-time SLA tracking.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
+- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
+- Phase 94: Teacher Reply Composer And SLA Visibility UI.
+- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
+
 ---
-*Last updated: 2026-06-08 after completing v3.0*
+*Last updated: 2026-06-08 after planning v3.1*

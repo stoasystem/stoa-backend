@@ -32,7 +32,9 @@ The completed v2.8 milestone turns the v2.7 fail-closed foundation into CDK-mana
 
 The completed-local v2.9 milestone turns the v2.8 technical retention evidence into governance-ready retention policy approval and legal-hold operations, with production deploy/live smoke deferred.
 
-The active v3.0 milestone reconciles the original `stoa_docs` product baseline with the shipped system and closes the highest-priority MVP account/intake gaps before broader Phase 2 expansion.
+The completed v3.0 milestone reconciled the original `stoa_docs` product baseline with the shipped system and closed the highest-priority MVP account/intake gaps before broader Phase 2 expansion.
+
+The active v3.1 milestone closes the remaining teacher-takeover MVP gaps: rich text/formula replies and response-time SLA tracking.
 
 ## Core Value
 
@@ -40,9 +42,9 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Production-verified shipped version:** v2.8 CDK-Managed Immutable Evidence Storage Deployment on 2026-06-07
-**Latest completed milestone:** v2.9 Retention Governance And Legal Hold Operations local-only closeout on 2026-06-07
-**Active milestone:** v3.0 STOA Docs Gap Closeout And Account Intake Hardening
+**Production-verified shipped version:** v3.0 STOA Docs Gap Closeout And Account Intake Hardening on 2026-06-08
+**Latest completed milestone:** v3.0 STOA Docs Gap Closeout And Account Intake Hardening on 2026-06-08
+**Active milestone:** v3.1 Teacher Reply Quality And SLA Operations
 
 Delivered:
 
@@ -150,17 +152,16 @@ Completed phases:
 
 ## Current Milestone
 
-### v3.0 STOA Docs Gap Closeout And Account Intake Hardening
+### v3.1 Teacher Reply Quality And SLA Operations
 
-Goal: reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
+Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
 
 Planned phases:
 
-- Phase 87: STOA Docs Gap Audit And v3 Scope Readiness.
-- Phase 88: v2.9 Governance Production Verification Closeout.
-- Phase 89: Account Lifecycle And Parent Binding Gap Closeout.
-- Phase 90: OCR Correction And Daily Question Quota Hardening.
-- Phase 91: v3.0 Release Gate And Docs Alignment.
+- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
+- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
+- Phase 94: Teacher Reply Composer And SLA Visibility UI.
+- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
 
 ## Requirements
 
@@ -193,13 +194,20 @@ Shipped requirements:
 
 ### Active
 
+- TEACHOPS-01: teacher reply and SLA contract readiness - Phase 92.
+- TEACHOPS-02: backend rich reply metadata and SLA tracking - Phase 93.
+- UI-16: teacher reply composer and SLA visibility - Phase 94.
+- VERIFY-14: v3.1 release gate and STOA docs alignment - Phase 95.
+
+### Completed
+
+Milestone v3.0 requirements are archived in `.planning/milestones/v3.0-REQUIREMENTS.md` and are complete:
+
 - DOCGAP-01: STOA docs feature gap audit and scope readiness - Phase 87.
 - PRODVERIFY-13: v2.9 governance production verification closeout - Phase 88.
 - AUTH-05: account lifecycle and parent binding gap closeout - Phase 89.
 - QUESTION-07: OCR correction and daily question quota hardening - Phase 90.
 - VERIFY-13: v3.0 release gate and docs alignment - Phase 91.
-
-### Completed
 
 Milestone v2.9 requirements are archived in `.planning/milestones/v2.9-REQUIREMENTS.md` and are complete locally with production deploy/live smoke deferred:
 
@@ -439,7 +447,8 @@ Known current resources:
 | Start v2.7 with immutable audit storage and legal hold foundation | v2.6 proved metadata-only readiness but deferred compliance-grade WORM/Object Lock storage, legal hold administration, retention policy administration, and full manifest object persistence | Good - shipped in v2.7 |
 | Start v2.8 with CDK-managed immutable evidence storage deployment | v2.7 shipped fail-closed backend/UI foundations but left CDK-managed immutable storage resource deployment and full immutable manifest object persistence as residual gaps | Good - shipped in v2.8 |
 | Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Complete locally; production deploy/live smoke deferred |
-| Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Active - Phase 87 planned |
+| Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Good - shipped in v3.0 |
+| Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Active - Phase 92 planned |
 
 ## Evolution
 
@@ -459,4 +468,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after planning milestone v3.0*
+*Last updated: 2026-06-08 after planning milestone v3.1*

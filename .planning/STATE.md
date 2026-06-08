@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: STOA Docs Gap Closeout And Account Intake Hardening
-status: complete
-last_updated: "2026-06-08T00:20:00+02:00"
-last_activity: 2026-06-07
+milestone: v3.1
+milestone_name: Teacher Reply Quality And SLA Operations
+status: planning
+last_updated: "2026-06-08T10:08:43+02:00"
+last_activity: 2026-06-08
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-07)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.0 stoa_docs gap closeout and account/intake hardening.
+**Current focus:** v3.1 teacher reply quality and SLA operations.
 
 ## Current Position
 
-Phase: none
-Plan: none
-Status: v3.0 complete; no active milestone.
-Last activity: 2026-06-08 — completed v3.0 milestone audit and closeout.
+Phase: 92 Teacher Rich Reply And SLA Contract Readiness
+Plan: 92-01 Teacher Rich Reply And SLA Contract Readiness
+Status: Planned.
+Last activity: 2026-06-08 — reviewed `stoa_docs` residual gaps and planned v3.1 around teacher rich replies and SLA tracking.
 
 ## Accumulated Context
 
@@ -95,10 +95,11 @@ Last activity: 2026-06-08 — completed v3.0 milestone audit and closeout.
 - Phase 89 added Cognito forgot/reset endpoints, explicit admin-marked email verification metadata, formal parent-student binding records, admin binding inspection/repair, parent portal binding preference with legacy fallback, weekly report binding discovery, and tests covering token non-leakage and one-sided binding claims staying pending.
 - Phase 90 added edit-before-AI OCR correction, stored OCR/debug metadata, sanitized private image keys from question responses, and replaced bounded daily question-history quota checks with atomic daily usage counters.
 - Phase 91 completed v3.0 release gate with full backend tests, deploy run `27106207390`, API Gateway route fix in stoa-infra commit `a4d5cfe`, exclusive `StoaApiStack` deploy, backend restore deploy run `27107587269`, final Lambda runtime state, non-mutating production smoke, and gap audit updates.
+- v3.1 starts with teacher reply quality and SLA operations because `stoa_docs` remaining MVP gaps are teacher rich text/formula replies and response-time tracking.
 
 ### Pending Todos
 
-- Review backlog and select next milestone.
+- Complete Phase 92 contract/readiness docs, then implement backend rich reply metadata and SLA tracking.
 
 ### Blockers/Concerns
 
@@ -118,7 +119,8 @@ Last activity: 2026-06-08 — completed v3.0 milestone audit and closeout.
 - The 365-day GOVERNANCE retention period and operational legal-hold procedure still need formal compliance/legal approval before broad compliance claims.
 - v2.9 must not provide legal advice or fabricate approval; it can only create and verify the approval workflow and record actual approval metadata if supplied through an approved path.
 - `stoa_docs` Phase 2 items such as Stripe/TWINT payments, broad multi-subject rollout, student memory, AI teacher tools, WebSocket notifications, and multilingual/mobile polish remain future scope unless explicitly selected.
+- Teacher rich replies must not render unsafe raw HTML or expose private image keys, report artifact keys, presigned URLs, tokens, cookies, passwords, or AWS secrets.
 
 ## Operator Next Steps
 
-- Review backlog and select next milestone.
+- Execute Phase 92 and proceed to backend teacher reply/SLA implementation.

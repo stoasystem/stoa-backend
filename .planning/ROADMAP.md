@@ -26,39 +26,36 @@
 
 ## Current Milestone
 
-No active milestone.
+**v3.1 Teacher Reply Quality And SLA Operations** - Active.
 
-Next step: review backlog and select the next small milestone before broad Phase 2 expansion.
+Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 87 | STOA Docs Gap Audit And v3 Scope Readiness | Complete | DOCGAP-01 |
-| 88 | v2.9 Governance Production Verification Closeout | Complete | PRODVERIFY-13 |
-| 89 | Account Lifecycle And Parent Binding Gap Closeout | Complete | AUTH-05 |
-| 90 | OCR Correction And Daily Question Quota Hardening | Complete | QUESTION-07 |
-| 91 | v3.0 Release Gate And Docs Alignment | Complete | VERIFY-13 |
+| 92 | Teacher Rich Reply And SLA Contract Readiness | Planned | TEACHOPS-01 |
+| 93 | Backend Rich Reply Metadata And SLA Tracking | Planned | TEACHOPS-02 |
+| 94 | Teacher Reply Composer And SLA Visibility UI | Planned | UI-16 |
+| 95 | v3.1 Release Gate And STOA Docs Alignment | Planned | VERIFY-14 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 87 | v3.0 | 1/1 | Complete | 2026-06-07 |
-| 88 | v3.0 | 1/1 | Complete | 2026-06-07 |
-| 89 | v3.0 | 1/1 | Complete | 2026-06-07 |
-| 90 | v3.0 | 1/1 | Complete | 2026-06-07 |
-| 91 | v3.0 | 1/1 | Complete | 2026-06-08 |
+| 92 | v3.1 | 1/1 | Planned | - |
+| 93 | v3.1 | 0/1 | Planned | - |
+| 94 | v3.1 | 0/1 | Planned | - |
+| 95 | v3.1 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCGAP-01 | Phase 87 | Complete |
-| PRODVERIFY-13 | Phase 88 | Complete |
-| AUTH-05 | Phase 89 | Complete |
-| QUESTION-07 | Phase 90 | Complete |
-| VERIFY-13 | Phase 91 | Complete |
+| TEACHOPS-01 | Phase 92 | Planned |
+| TEACHOPS-02 | Phase 93 | Planned |
+| UI-16 | Phase 94 | Planned |
+| VERIFY-14 | Phase 95 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing v3.0*
+*Last updated: 2026-06-08 after planning v3.1*

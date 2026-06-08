@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after v3.0 closeout
+**Updated:** 2026-06-08 after planning v3.1
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -37,8 +37,8 @@ v3.0 closed the highest-priority remaining MVP gaps identified in this audit: ac
 
 | Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| Teacher rich text/formula reply polish | `PRD.md` 3.3 P0 | Teacher reply endpoint exists; rich text/formula contract needs explicit verification. | Medium |
-| SLA response tracking | `PRD.md` 3.3 P1 | Queue/takeover exists; SLA reporting should be verified in admin stats or added. | Medium |
+| Teacher rich text/formula reply polish | `PRD.md` 3.3 P0 | Teacher reply endpoint exists; v3.1 plans the rich reply/formula contract and implementation. | Active v3.1 |
+| SLA response tracking | `PRD.md` 3.3 P1 | Queue/takeover exists; v3.1 plans SLA event tracking and admin/teacher visibility. | Active v3.1 |
 | Content moderation | `PRD.md` 3.5 P2 | Not currently a visible admin workflow. | Low |
 
 ## Phase 2 / Future Expansion
@@ -60,3 +60,12 @@ v3.0 scope was completed:
 2. Implemented account lifecycle gaps: forgot password, reset password, explicit email verification policy metadata, and parent-student binding.
 3. Implemented OCR correction and hardened daily question quota.
 4. Updated this gap audit and release evidence after verification.
+
+## v3.1 Scope Recommendation
+
+v3.1 should close the remaining teacher-takeover MVP gaps before Phase 2 expansion:
+
+1. Define the safe rich text/formula reply contract.
+2. Add backend metadata and sanitization for rich replies.
+3. Add SLA timestamping and aggregate response metrics.
+4. Expose teacher/admin SLA visibility and update release evidence.

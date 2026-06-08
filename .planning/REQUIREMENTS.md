@@ -1,100 +1,84 @@
-# Requirements: v3.0 STOA Docs Gap Closeout And Account Intake Hardening
+# Requirements: v3.1 Teacher Reply Quality And SLA Operations
 
-**Milestone:** v3.0
+**Milestone:** v3.1
 **Status:** Active
-**Created:** 2026-06-07
+**Created:** 2026-06-08
 
 ## Goal
 
-Reconcile `stoa_docs` with the shipped backend/frontend state, close the highest-priority MVP product gaps that remain, and production-verify the v2.9 governance work before taking on broader Phase 2 expansion.
+Close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
 
 ## Requirements
 
-### DOCGAP-01 STOA Docs Feature Gap Audit And Scope Readiness
+### TEACHOPS-01 Teacher Reply And SLA Contract Readiness
 
-Implementers have a current, source-linked feature gap audit that maps `stoa_docs` PRD/HLD/PLAN requirements to shipped code, completed milestones, active gaps, and future scope.
-
-Acceptance criteria:
-
-- Audit lists completed MVP capabilities, partially complete capabilities, open MVP gaps, and Phase 2/future expansion items.
-- Audit cites the relevant `stoa_docs` files and current backend route/service evidence.
-- Audit identifies v2.9 production deploy/live-smoke deferral as a release gap separate from product feature gaps.
-- Scope recommendation selects a small v3.0 implementation slice and defers Stripe, broad multi-subject rollout, WebSocket, student memory, AI tutor tools, rich WYSIWYG editor, PDF/multilingual delivery, billing, analytics, and support-ticket integrations unless separately approved.
-
-### PRODVERIFY-13 v2.9 Governance Production Verification Closeout
-
-v2.9 retention governance backend/frontend changes are deployed and production-verified before v3.0 claims production readiness.
+Implementers have a precise teacher reply content contract, SLA event model, privacy boundary, and verification plan before changing teacher reply behavior.
 
 Acceptance criteria:
 
-- Backend/frontend deploy evidence, commit SHAs, timestamps, Lambda runtime state, admin API request IDs, and browser smoke results are recorded.
-- Production smoke verifies retention governance status, approval metadata, legal-hold review controls, privacy denylist, and admin-only gating.
-- Smoke does not delete audit rows, delete immutable objects, mutate customer report artifacts, write external support-system data, expose private storage identifiers, or fabricate legal/compliance approval.
+- Contract defines allowed rich text/formula input shape, safe rendering/output shape, markdown/HTML/LaTeX handling, validation limits, and refusal behavior.
+- Contract defines teacher-request, queue-visible, takeover, first-reply, resolve, and timeout SLA timestamps.
+- Contract defines SLA metrics for teacher queue, admin stats, and future compensation/operations reporting without exposing private student content.
+- Privacy model forbids leaking private image keys, report artifact keys, presigned URLs, auth tokens, cookies, passwords, AWS secrets, or raw unsafe HTML.
+- CDK/infrastructure readiness confirms no new resource is needed, or records any exact required change.
 
-Status: Complete in Phase 88. Production deploy, Lambda runtime state, read-only admin API smoke, browser smoke, privacy denylist, and admin-only gating evidence are recorded in `.planning/phases/88-v2-9-governance-production-verification-closeout/88-LIVE-VERIFICATION.md`.
+### TEACHOPS-02 Backend Rich Reply Metadata And SLA Tracking
 
-### AUTH-05 Account Lifecycle And Parent Binding Gap Closeout
-
-The auth/account lifecycle covers remaining `stoa_docs` MVP gaps without weakening Cognito security.
-
-Acceptance criteria:
-
-- Forgot-password/reset flow is implemented or explicitly integrated through Cognito-hosted/secret-backed approved flow.
-- Email verification behavior is made explicit: either real verification is enabled, or registration response/docs/admin status clearly record the operational decision and risk.
-- Parent-student binding is formalized beyond best-effort registration profile fields, with admin-safe repair/inspection behavior where needed.
-- Tests cover auth edge cases, parent-child binding authorization, and no credential/token leakage.
-
-Status: Complete in Phase 89. Forgot/reset endpoints, explicit email verification metadata, formal parent-student binding records, admin binding inspection/repair, and focused tests were added.
-
-### QUESTION-07 OCR Correction And Daily Question Quota Hardening
-
-Question intake matches `stoa_docs` more closely and daily quota enforcement is robust.
+Backend teacher takeover records safe rich reply metadata and SLA timing evidence.
 
 Acceptance criteria:
 
-- OCR correction flow is defined and implemented as either preview-before-submit or edit-before-AI behavior.
-- Question submission preserves the final corrected text and the OCR source metadata needed for audit/debug without exposing private image keys to unauthorized users.
-- Daily question limit no longer depends on a bounded question-history scan that can miss records beyond pagination.
-- Tests cover OCR correction, image/text submission, quota boundaries, and authorization.
+- Teacher reply API accepts the approved rich reply/formula payload and stores sanitized metadata.
+- Backend records request-to-takeover, request-to-first-reply, takeover-to-first-reply, and resolve timing where data exists.
+- Admin stats or teacher stats expose aggregate SLA metrics without private question content.
+- Tests cover validation, sanitization, formula payloads, stale/invalid state, authorization, and SLA calculations.
 
-Status: Complete in Phase 90. OCR correction is implemented as edit-before-AI, question responses suppress private image keys, OCR metadata is preserved, and quota uses atomic daily counters.
+### UI-16 Teacher Reply Composer And SLA Visibility
 
-### VERIFY-13 v3.0 Release Gate And Docs Alignment
-
-v3.0 closes with deploy/test evidence and an updated feature gap ledger.
+Teacher and admin UI make rich replies and SLA state visible without unsafe content rendering.
 
 Acceptance criteria:
 
-- Local quality gates, backend/frontend deploy evidence, production smoke, commit SHAs, request IDs, and timestamps are recorded.
-- `stoa_docs` gap audit is updated with v3.0 outcomes and remaining future requirements.
-- Final audit confirms no production customer data mutation beyond explicitly approved flows and no private marker exposure.
+- Teacher reply composer supports the approved rich text/formula contract.
+- Teacher queue/session UI shows SLA status and timing indicators.
+- Admin stats/reporting exposes aggregate teacher response metrics.
+- Playwright covers rich reply render, formula-safe display, SLA status, admin gating, and private marker denial.
 
-Status: Complete in Phase 91. Local gates, backend deploys, API route fix deployment, Lambda runtime state, production smoke request IDs, and feature gap audit updates are recorded.
+### VERIFY-14 v3.1 Release Gate And STOA Docs Alignment
+
+v3.1 closes with test/deploy/live-smoke evidence and updated `stoa_docs` gap audit.
+
+Acceptance criteria:
+
+- Backend/frontend quality gates, deploy evidence, commit SHAs, timestamps, production API request IDs, and browser smoke are recorded.
+- Feature gap audit marks teacher rich reply and SLA tracking outcomes accurately.
+- Production smoke avoids customer content mutation unless a named non-customer safe fixture and cleanup path are documented.
+- Final audit records residual gaps, including content moderation and Phase 2 expansion.
 
 ## Future Requirements
 
+- Content moderation workflow for reported/unsafe content.
 - Stripe/TWINT subscription payments.
-- Broad multi-subject rollout beyond current subject fields/content.
+- Broad multi-subject rollout for physics, German, and English.
 - Student memory/personalization.
 - AI teacher assistance tools such as summaries and exercise generation.
 - WebSocket realtime notifications.
-- Mobile responsive polish and frontend multilingual rollout.
-- Content moderation workflow.
-- Direct support ticket/evidence integrations after an approved connector or credential path exists.
+- Mobile responsive polish and full multilingual rollout.
+- Real user email verification policy change if product/legal requires it.
 
 ## Out of Scope
 
-- Legal advice or fabricated compliance approval.
-- Direct production customer data mutation without named approval and rollback/cleanup path.
-- Direct third-party support-system writes.
-- Broad Phase 2 expansion in the same milestone.
+- Stripe/TWINT billing implementation.
+- Broad multi-subject curriculum/content rollout.
+- Direct production customer content mutation without an approved safe fixture.
+- Unsafe raw HTML rendering.
+- Direct support-system writes.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCGAP-01 | Phase 87 | Complete |
-| PRODVERIFY-13 | Phase 88 | Complete |
-| AUTH-05 | Phase 89 | Complete |
-| QUESTION-07 | Phase 90 | Complete |
-| VERIFY-13 | Phase 91 | Complete |
+| TEACHOPS-01 | Phase 92 | Planned |
+| TEACHOPS-02 | Phase 93 | Planned |
+| UI-16 | Phase 94 | Planned |
+| VERIFY-14 | Phase 95 | Planned |
