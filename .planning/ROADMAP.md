@@ -29,36 +29,36 @@
 
 ## Current Milestone
 
-**v3.3 Subscription Operations MVP** - Complete.
+**v3.4 Learning Expansion Foundation** - Active.
 
-Goal: make the manual MVP subscription model usable before Stripe/TWINT integration with parent plan views, parent request intents, admin processing, tier application, and lightweight functional verification.
+Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract, backend subject/topic/profile seeds, student/parent learning profile UI, and lightweight functional verification.
 
 ## Phases
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 100 | Subscription Operations Contract And Entitlement Model | Complete | SUBOPS-01 |
-| 101 | Backend Subscription Request And Admin Tier APIs | Complete | SUBOPS-02 |
-| 102 | Parent Subscription Management UI And Admin Queue | Complete | UI-18 |
-| 103 | v3.3 Functional Release Gate And Billing Readiness | Complete | VERIFY-16 |
+| 104 | Multi-Subject Taxonomy And Prompt Contract | Planned | LEARN-01 |
+| 105 | Backend Subject/Topic Support And Student Profile Seeds | Planned | LEARN-02 |
+| 106 | Student And Parent Learning Profile UI | Planned | UI-19 |
+| 107 | v3.4 Functional Release Gate And Expansion Audit | Planned | VERIFY-17 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 100 | v3.3 | 1/1 | Complete | 2026-06-08 |
-| 101 | v3.3 | 1/1 | Complete | 2026-06-08 |
-| 102 | v3.3 | 1/1 | Complete | 2026-06-08 |
-| 103 | v3.3 | 1/1 | Complete | 2026-06-08 |
+| 104 | v3.4 | 1/1 | Planned | - |
+| 105 | v3.4 | 0/1 | Planned | - |
+| 106 | v3.4 | 0/1 | Planned | - |
+| 107 | v3.4 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUBOPS-01 | Phase 100 | Complete |
-| SUBOPS-02 | Phase 101 | Complete |
-| UI-18 | Phase 102 | Complete |
-| VERIFY-16 | Phase 103 | Complete |
+| LEARN-01 | Phase 104 | Planned |
+| LEARN-02 | Phase 105 | Planned |
+| UI-19 | Phase 106 | Planned |
+| VERIFY-17 | Phase 107 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing v3.3*
+*Last updated: 2026-06-08 after planning v3.4*

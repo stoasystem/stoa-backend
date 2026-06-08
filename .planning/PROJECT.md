@@ -40,6 +40,8 @@ The completed v3.2 milestone closed the remaining visible MVP admin workflow fro
 
 The completed v3.3 milestone makes the MVP manual subscription model usable before Stripe/TWINT integration.
 
+The active v3.4 milestone prepares Phase 2 learning expansion with subject taxonomy, prompt behavior, topic metadata, and student learning profile seeds.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -48,7 +50,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v3.3 Subscription Operations MVP on 2026-06-08 (local release gate)
-**Active milestone:** None selected
+**Active milestone:** v3.4 Learning Expansion Foundation
 
 Delivered:
 
@@ -130,6 +132,7 @@ Delivered:
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
 - v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
 - v3.3 completed parent subscription plan/request workflows, admin subscription request processing, tier application, parent/admin UI, and local release-gate verification for the manual MVP billing model.
+- v3.4 is planned to add subject taxonomy, prompt behavior by subject, subject/topic backend support, student profile seeds, and learning profile UI foundations.
 
 ## Last Production-Verified Milestone
 
@@ -159,9 +162,16 @@ Completed phases:
 
 ## Current Milestone
 
-None selected.
+### v3.4 Learning Expansion Foundation
 
-Next candidates are Stripe/TWINT provider integration or another Phase 2 expansion from the gap audit.
+Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract, backend subject/topic/profile seeds, student/parent learning profile UI, and lightweight functional verification.
+
+Planned phases:
+
+- Phase 104: Multi-Subject Taxonomy And Prompt Contract.
+- Phase 105: Backend Subject/Topic Support And Student Profile Seeds.
+- Phase 106: Student And Parent Learning Profile UI.
+- Phase 107: v3.4 Functional Release Gate And Expansion Audit.
 
 ## Requirements
 
@@ -194,7 +204,10 @@ Shipped requirements:
 
 ### Active
 
-- None selected.
+- LEARN-01: multi-subject taxonomy and prompt contract - Phase 104.
+- LEARN-02: backend subject/topic support and student profile seeds - Phase 105.
+- UI-19: student and parent learning profile UI - Phase 106.
+- VERIFY-17: v3.4 functional release gate and expansion audit - Phase 107.
 
 ### Completed
 
@@ -468,7 +481,8 @@ Known current resources:
 | Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Good - shipped in v3.0 |
 | Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Good - shipped in v3.1 |
 | Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Good - shipped in v3.2 |
-| Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Active - Phase 100 planned |
+| Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Good - local release gate complete |
+| Start v3.4 with learning expansion foundation | `stoa_docs` Phase 2 calls for multi-subject support, student memory, and AI teacher tools; taxonomy and profile seeds should precede broad curriculum or exercise generation | Active - Phase 104 planned |
 
 ## Evolution
 
@@ -488,4 +502,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after planning milestone v3.3*
+*Last updated: 2026-06-08 after planning milestone v3.4*

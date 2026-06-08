@@ -536,21 +536,19 @@ Key accomplishments:
 
 Known deferred items at close: manual subscription operations, Stripe/TWINT payment-provider integration, broad multi-subject rollout, student memory/personalization, AI teacher tools, WebSocket realtime notifications, and mobile/multilingual polish.
 
-## Active
-
 ### v3.3 Subscription Operations MVP
 
-**Status:** Active
+**Status:** Completed local release gate 2026-06-08
 **Started:** 2026-06-08
 **Roadmap:** `.planning/milestones/v3.3-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.3-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Make the MVP manual subscription model usable before Stripe/TWINT integration.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 100: Subscription Operations Contract And Entitlement Model.
 - Phase 101: Backend Subscription Request And Admin Tier APIs.
@@ -558,4 +556,35 @@ Planned phases:
 - Phase 103: v3.3 Functional Release Gate And Billing Readiness.
 
 ---
-*Last updated: 2026-06-08 after planning v3.3*
+Key accomplishments:
+
+- Defined the subscription operations contract, request lifecycle, entitlement model, and manual billing boundary.
+- Added backend parent subscription plan/request APIs and admin subscription request processing/apply APIs.
+- Added parent subscription management UI and admin subscription queue/detail/actions UI.
+- Completed focused local release-gate evidence and kept Stripe/TWINT as future scope.
+
+Known deferred items at close: Stripe/TWINT payment-provider integration, broad multi-subject rollout, student memory/personalization, AI teacher tools, WebSocket realtime notifications, and mobile/multilingual polish.
+
+## Active
+
+### v3.4 Learning Expansion Foundation
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.4-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 104: Multi-Subject Taxonomy And Prompt Contract.
+- Phase 105: Backend Subject/Topic Support And Student Profile Seeds.
+- Phase 106: Student And Parent Learning Profile UI.
+- Phase 107: v3.4 Functional Release Gate And Expansion Audit.
+
+---
+*Last updated: 2026-06-08 after planning v3.4*

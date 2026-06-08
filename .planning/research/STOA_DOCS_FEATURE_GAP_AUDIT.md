@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after completing v3.3
+**Updated:** 2026-06-08 after planning v3.4
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -15,6 +15,8 @@ v3.1 closed the remaining teacher-takeover MVP gaps selected for that cycle: saf
 v3.2 closed the remaining visible MVP admin workflow gap: content moderation for reported or abnormal learning content. The release added report actions, moderation cases, admin queue/detail/actions, deploy evidence, and production-safe smoke.
 
 v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
+
+v3.4 is planned to prepare Phase 2 learning expansion with subject taxonomy, prompt behavior by subject, and student learning profile seeds. Full curriculum rollout and automatic exercise generation remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -64,8 +66,9 @@ v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent p
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
-- Multi-subject rollout for physics, German, English beyond current subject fields/content.
-- Student memory/personalization.
+- Multi-subject foundation and student profile seeds: active v3.4.
+- Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
+- Student memory/personalization beyond profile seeds.
 - AI teacher assistance tools such as automatic summaries and exercise generation.
 - WebSocket realtime notifications.
 - Mobile responsive polish.
@@ -107,3 +110,12 @@ v3.3 completed the manual subscription operations MVP before payment-provider in
 2. Add parent subscription plan/request APIs and admin subscription request processing APIs.
 3. Add parent subscription management UI and admin subscription queue/detail UI.
 4. Close with lightweight functional checks and keep Stripe/TWINT as a later provider integration.
+
+## v3.4 Scope Recommendation
+
+v3.4 should build learning expansion foundations before broad curriculum rollout:
+
+1. Define subject identifiers, rollout states, topic taxonomy, and prompt behavior by subject.
+2. Add backend subject/topic support and student profile seed aggregation.
+3. Add student/parent learning profile UI backed by real data.
+4. Close with lightweight functional checks and record residual full-curriculum, AI teacher tooling, and personalization scope.

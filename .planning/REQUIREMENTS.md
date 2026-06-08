@@ -1,83 +1,84 @@
-# Requirements: v3.3 Subscription Operations MVP
+# Requirements: v3.4 Learning Expansion Foundation
 
-**Milestone:** v3.3
-**Status:** Complete
+**Milestone:** v3.4
+**Status:** Active
 **Created:** 2026-06-08
 
 ## Goal
 
-Make the MVP manual subscription model usable for internal operations before Stripe/TWINT integration. Parents should see plans and submit upgrade/cancel intents; admins should process those requests and update tiers with an auditable operational trail. This is a product-building milestone, so verification focuses on functional flows and basic role gating.
+Prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout. This milestone adds the foundation for multiple subjects, stable topic taxonomy, prompt behavior by subject, and student learning profile seeds from existing usage data. It is a product-building milestone; verification focuses on functional behavior and basic regression coverage.
 
 ## Requirements
 
-### SUBOPS-01 Subscription Operations Contract And Entitlement Model
+### LEARN-01 Multi-Subject Taxonomy And Prompt Contract
 
-Implementers have a precise subscription request, entitlement, and admin workflow contract before backend changes.
-
-Acceptance criteria:
-
-- Contract defines plan tiers: Free, Standard, Premium.
-- Contract defines parent-facing intents: request upgrade, request downgrade, request cancellation, and view current plan.
-- Contract defines admin-facing lifecycle: `requested`, `in_review`, `approved`, `applied`, `rejected`, `cancelled`.
-- Contract defines entitlement effects for daily AI quota, teacher support eligibility/priority, and weekly report access.
-- Contract confirms whether existing user profile and DynamoDB single-table patterns support the MVP without new infrastructure.
-
-### SUBOPS-02 Backend Subscription Request And Admin Tier APIs
-
-Backend supports manual subscription operations.
+Implementers have a precise subject/topic taxonomy, prompt behavior contract, and rollout boundary before backend changes.
 
 Acceptance criteria:
 
-- Parent users can read their current plan and submit bounded subscription requests.
-- Admins can list/filter subscription requests by status, tier, parent, and date.
-- Admins can approve/reject/apply/cancel a request and update the target user's `subscription_tier` when applying.
-- Backend records request metadata, operator, reason/note, status history, and effective date.
-- Focused tests cover parent request creation, admin list/detail/actions, tier apply behavior, invalid transitions, and non-admin rejection.
+- Contract defines supported subject identifiers for `math`, `physics`, `german`, and `english`, with MVP display labels and rollout states.
+- Contract defines topic/knowledge-point taxonomy shape that can support weak-topic reporting and future exercises.
+- Contract defines AI prompt behavior by subject, including language expectations and non-goals for full curriculum mastery.
+- Contract defines how existing math-only question flows remain backward compatible.
+- Contract confirms no new infrastructure is needed unless current DynamoDB access patterns cannot support topic/profile seeds.
 
-### UI-18 Parent Subscription Management And Admin Queue
+### LEARN-02 Backend Subject/Topic Support And Student Profile Seeds
 
-Frontend exposes practical subscription operations for internal development.
-
-Acceptance criteria:
-
-- Parent UI shows current plan, tier limits, teacher support/weekly report benefits, and request actions.
-- Parent UI supports upgrade/downgrade/cancel intent submission with status feedback.
-- Admin UI includes subscription request queue, filters, detail, status actions, tier apply controls, and notes.
-- UI handles empty, loading, error, submitted, rejected, applied, and cancelled states.
-- Targeted browser verification confirms the parent/admin workflow is usable.
-
-### VERIFY-16 v3.3 Functional Release Gate And Billing Readiness
-
-v3.3 closes with lightweight functional evidence and updated Phase 2 gap tracking.
+Backend records and exposes learning expansion foundations.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to subscription operations pass.
+- Question submission validates supported subject identifiers and preserves existing math behavior.
+- AI answer path receives subject-specific prompt context from the taxonomy contract.
+- Backend stores normalized subject/topic metadata from AI responses and teacher/admin corrections where available.
+- Student summary/profile APIs expose subject-level counts, weak-topic seeds, feedback averages, and teacher-escalation indicators.
+- Focused tests cover subject validation, backward compatibility, summary/profile aggregation, and prompt context selection.
+
+### UI-19 Student And Parent Learning Profile UI
+
+Frontend exposes learning expansion foundations without pretending a full curriculum rollout is complete.
+
+Acceptance criteria:
+
+- Student question flow shows supported subject choices with rollout-aware labels.
+- Parent/student profile views show subject-level activity, weak-topic seeds, and learning trend placeholders from real backend data.
+- UI copy distinguishes active support from planned/future subject support.
+- Empty/loading/error states are implemented for subject/profile data.
+- Targeted browser verification confirms the workflow is usable.
+
+### VERIFY-17 v3.4 Functional Release Gate And Expansion Audit
+
+v3.4 closes with lightweight functional evidence and updated Phase 2 gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to learning expansion pass.
 - Deploy/build evidence and commit SHAs are recorded if code ships in this milestone.
-- Gap audit marks manual subscription operations as active/closed and keeps Stripe/TWINT as future provider integration.
-- Final audit lists remaining Phase 2 product expansions: payment-provider integration, multi-subject, student memory, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
+- Gap audit marks multi-subject foundation and student profile seeds as active/closed and records residual broad curriculum work.
+- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
 - Stripe/TWINT payment-provider integration.
-- Broad multi-subject rollout for physics, German, and English.
-- Student memory/personalization.
+- Full multi-subject curriculum content and exercises.
+- Student memory/personalization beyond profile seeds.
 - AI teacher assistance tools such as summaries and exercise generation.
 - WebSocket realtime notifications.
 - Mobile responsive polish and full multilingual rollout.
 
 ## Out of Scope
 
-- Charging cards, handling TWINT payments, invoices, refunds, taxes, or payment webhooks.
-- Automated subscription provisioning from a payment provider.
-- Broad Phase 2 curriculum expansion.
+- Full physics/German/English curriculum content authoring.
+- Automatic exercise generation.
+- Long-term student memory/personalization decisions beyond profile seeds.
+- Payment-provider implementation.
 - Extensive security/compliance testing beyond functional role gating and data sanity checks.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUBOPS-01 | Phase 100 | Complete |
-| SUBOPS-02 | Phase 101 | Complete |
-| UI-18 | Phase 102 | Complete |
-| VERIFY-16 | Phase 103 | Complete |
+| LEARN-01 | Phase 104 | Planned |
+| LEARN-02 | Phase 105 | Planned |
+| UI-19 | Phase 106 | Planned |
+| VERIFY-17 | Phase 107 | Planned |
