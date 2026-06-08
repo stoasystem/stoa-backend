@@ -38,7 +38,7 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 108 | Realtime Notification And Teacher Assistance Contract | Planned | NOTIFY-01 |
+| 108 | Realtime Notification And Teacher Assistance Contract | Complete | NOTIFY-01 |
 | 109 | Backend Notification Events And Teacher Summary Seeds | Planned | NOTIFY-02 |
 | 110 | Tutor/Admin Notification And Summary UI | Planned | UI-20 |
 | 111 | v3.5 Functional Release Gate And Expansion Audit | Planned | VERIFY-18 |
@@ -47,7 +47,7 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 108 | v3.5 | 1/1 | Planned | - |
+| 108 | v3.5 | 1/1 | Complete | 2026-06-08 |
 | 109 | v3.5 | 0/1 | Planned | - |
 | 110 | v3.5 | 0/1 | Planned | - |
 | 111 | v3.5 | 0/1 | Planned | - |
@@ -56,10 +56,10 @@ Goal: prepare notification and teacher-assistance expansion with event contracts
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFY-01 | Phase 108 | Planned |
+| NOTIFY-01 | Phase 108 | Complete |
 | NOTIFY-02 | Phase 109 | Planned |
 | UI-20 | Phase 110 | Planned |
 | VERIFY-18 | Phase 111 | Planned |
 
 ---
-*Last updated: 2026-06-08 after planning v3.5*
+*Last updated: 2026-06-08 after completing Phase 108*

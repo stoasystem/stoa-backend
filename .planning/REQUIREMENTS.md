@@ -78,7 +78,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFY-01 | Phase 108 | Planned |
+| NOTIFY-01 | Phase 108 | Complete |
 | NOTIFY-02 | Phase 109 | Planned |
 | UI-20 | Phase 110 | Planned |
 | VERIFY-18 | Phase 111 | Planned |
