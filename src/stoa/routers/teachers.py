@@ -10,7 +10,7 @@ from stoa.db.repositories import question_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
-from stoa.services import teacher_reply_service
+from stoa.services import notification_service, teacher_reply_service
 
 router = APIRouter()
 
@@ -103,6 +103,7 @@ async def takeover(
         "started_at": now,
         "resolved_at": None,
     })
+    notification_service.emit_teacher_takeover(question=item, teacher_id=teacher_id)
 
     return TakeoverResponse(
         question_id=question_id,
@@ -146,6 +147,7 @@ async def reply(
         QuestionStatus.TEACHER_ACTIVE.value,
         **reply_fields,
     )
+    notification_service.emit_teacher_reply(question=item, teacher_id=user["sub"])
     return ReplyResponse(
         question_id=question_id,
         teacher_response=reply_fields["teacher_response"],

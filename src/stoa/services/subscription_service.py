@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
+from stoa.services import notification_service
 
 
 REQUEST_ENTITY = "subscription_request"
@@ -146,6 +147,13 @@ def create_parent_request(
                 detail="Parent already has an open subscription request",
             ) from exc
         raise
+    notification_service.emit_subscription_update(
+        request_item=item,
+        recipient_id=None,
+        recipient_role="admin",
+        actor_id=parent_id,
+        actor_role="parent",
+    )
     return _request_response(item)
 
 
@@ -225,6 +233,13 @@ def update_request_status(
         expected_status=current,
         clear_open_guard=status in TERMINAL_STATUSES,
     )
+    notification_service.emit_subscription_update(
+        request_item=updated,
+        recipient_id=str(updated.get("parent_id") or ""),
+        recipient_role="parent",
+        actor_id=_actor_id(user),
+        actor_role=str(user.get("role") or "admin"),
+    )
     return _request_response(updated)
 
 
@@ -271,6 +286,13 @@ def apply_request(
         requested_tier=requested_tier,
         updates=updates,
         event=event,
+    )
+    notification_service.emit_subscription_update(
+        request_item=updated,
+        recipient_id=str(updated.get("parent_id") or ""),
+        recipient_role="parent",
+        actor_id=actor,
+        actor_role=str(user.get("role") or "admin"),
     )
     return _request_response(updated)
 

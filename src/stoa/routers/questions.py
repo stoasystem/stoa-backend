@@ -15,7 +15,7 @@ from stoa.models.question import (
     SubmitQuestionRequest,
 )
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
-from stoa.services import ai_service, learning_profile_service, moderation_service, notify_service, ocr_service
+from stoa.services import ai_service, learning_profile_service, moderation_service, notification_service, notify_service, ocr_service
 
 router = APIRouter()
 
@@ -197,6 +197,11 @@ async def request_teacher(
         queue_visible_at=item.get("queue_visible_at") or now,
     )
     notify_service.enqueue_teacher_request(
+        question_id=question_id,
+        student_id=user["sub"],
+        subject=item["subject"],
+    )
+    notification_service.emit_teacher_requested(
         question_id=question_id,
         student_id=user["sub"],
         subject=item["subject"],

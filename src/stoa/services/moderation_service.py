@@ -16,6 +16,7 @@ from stoa.models.moderation import (
     ModerationStatus,
     ModerationSurface,
 )
+from stoa.services import notification_service
 
 
 TERMINAL_STATUSES = {
@@ -73,6 +74,11 @@ def create_case(question_id: str, body: ModerationReportRequest, user: dict[str,
     item["history"] = [event]
     moderation_repo.put_case(item)
     moderation_repo.put_event(case_id, event)
+    notification_service.emit_moderation_created(
+        case_item=item,
+        actor_id=item["reporter_id"],
+        actor_role=item["reporter_role"],
+    )
     return item
 
 
@@ -147,6 +153,11 @@ def update_case(case_id: str, body: ModerationCaseUpdateRequest, user: dict[str,
     moderation_repo.put_event(case_id, event)
     updated = dict(updated)
     updated["history"] = moderation_repo.list_case_events(case_id) or [event]
+    notification_service.emit_moderation_update(
+        case_item=updated,
+        actor_id=actor_id,
+        actor_role=str(user.get("role") or "admin"),
+    )
     return updated
 
 
@@ -168,6 +179,11 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
     updated = dict(existing)
     updated["updated_at"] = now
     updated["history"] = moderation_repo.list_case_events(case_id) or [event]
+    notification_service.emit_moderation_update(
+        case_item=updated,
+        actor_id=actor_id,
+        actor_role=str(user.get("role") or "admin"),
+    )
     return updated
 
 

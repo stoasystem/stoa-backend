@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.deps import require_role
-from stoa.services import teacher_reply_service
+from stoa.services import teacher_assistance_service, teacher_reply_service
 
 router = APIRouter()
 
@@ -163,6 +163,20 @@ class TutorStats(BaseModel):
     averageResponseTimeMinutes: int
 
 
+class AssistanceSummaryResponse(BaseModel):
+    summaryId: str
+    questionId: str
+    studentId: str
+    subject: str
+    studentContextSummary: str
+    questionSummary: str
+    aiAnswerSummary: str
+    weakTopics: list[str]
+    suggestedFocus: str
+    sourceCount: int
+    createdAt: str
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -186,6 +200,15 @@ async def get_stats(user: dict = Depends(require_role("teacher", "tutor", "admin
         resolvedToday=resolved_today_count,
         averageResponseTimeMinutes=round(sum(response_times) / len(response_times)) if response_times else 0,
     )
+
+
+@router.get("/questions/{question_id}/assistance-summary", response_model=AssistanceSummaryResponse)
+async def get_question_assistance_summary(
+    question_id: str,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Build a bounded teacher assistance summary seed for an accessible question."""
+    return teacher_assistance_service.build_summary_seed(question_id, user)
 
 
 @router.get("/me/help-requests", response_model=dict)
