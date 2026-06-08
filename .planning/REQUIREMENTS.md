@@ -1,7 +1,7 @@
 # Requirements: v3.1 Teacher Reply Quality And SLA Operations
 
 **Milestone:** v3.1
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-08
 
 ## Goal
@@ -81,4 +81,4 @@ Acceptance criteria:
 | TEACHOPS-01 | Phase 92 | Complete |
 | TEACHOPS-02 | Phase 93 | Complete |
 | UI-16 | Phase 94 | Complete |
-| VERIFY-14 | Phase 95 | Planned |
+| VERIFY-14 | Phase 95 | Complete |

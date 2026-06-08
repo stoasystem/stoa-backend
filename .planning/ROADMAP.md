@@ -23,10 +23,11 @@
 - [x] **v2.8 CDK-Managed Immutable Evidence Storage Deployment** - Shipped 2026-06-07. Archive: `.planning/milestones/v2.8-ROADMAP.md`.
 - [x] **v2.9 Retention Governance And Legal Hold Operations** - Complete local-only 2026-06-07; production verification deferred. Archive: `.planning/milestones/v2.9-ROADMAP.md`.
 - [x] **v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Shipped 2026-06-08. Archive: `.planning/milestones/v3.0-ROADMAP.md`.
+- [x] **v3.1 Teacher Reply Quality And SLA Operations** - Shipped 2026-06-08. Archive: `.planning/milestones/v3.1-ROADMAP.md`.
 
 ## Current Milestone
 
-**v3.1 Teacher Reply Quality And SLA Operations** - Active.
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
 
@@ -37,7 +38,7 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 | 92 | Teacher Rich Reply And SLA Contract Readiness | Complete | TEACHOPS-01 |
 | 93 | Backend Rich Reply Metadata And SLA Tracking | Complete | TEACHOPS-02 |
 | 94 | Teacher Reply Composer And SLA Visibility UI | Complete | UI-16 |
-| 95 | v3.1 Release Gate And STOA Docs Alignment | Planned | VERIFY-14 |
+| 95 | v3.1 Release Gate And STOA Docs Alignment | Complete | VERIFY-14 |
 
 ## Progress
 
@@ -46,7 +47,7 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 | 92 | v3.1 | 1/1 | Complete | 2026-06-08 |
 | 93 | v3.1 | 1/1 | Complete | 2026-06-08 |
 | 94 | v3.1 | 1/1 | Complete | 2026-06-08 |
-| 95 | v3.1 | 0/1 | Planned | - |
+| 95 | v3.1 | 1/1 | Complete | 2026-06-08 |
 
 ## Traceability
 
@@ -55,7 +56,7 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 | TEACHOPS-01 | Phase 92 | Complete |
 | TEACHOPS-02 | Phase 93 | Complete |
 | UI-16 | Phase 94 | Complete |
-| VERIFY-14 | Phase 95 | Planned |
+| VERIFY-14 | Phase 95 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 94*
+*Last updated: 2026-06-08 after shipping v3.1*

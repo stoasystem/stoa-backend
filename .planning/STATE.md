@@ -2,32 +2,32 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Teacher Reply Quality And SLA Operations
-status: active
-last_updated: "2026-06-08T11:35:00+02:00"
+status: complete
+last_updated: "2026-06-08T13:25:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-07)
+See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.1 teacher reply quality and SLA operations.
+**Current focus:** v3.1 is complete; no active next milestone has been started.
 
 ## Current Position
 
-Phase: 95 v3.1 Release Gate And STOA Docs Alignment
-Plan: 95-01 v3.1 Release Gate And STOA Docs Alignment
-Status: Ready to plan/execute.
-Last activity: 2026-06-08 — completed Phase 94 teacher reply composer and SLA visibility UI with backend/frontend/browser verification.
+Phase: v3.1 complete
+Plan: Next milestone not started
+Status: Complete.
+Last activity: 2026-06-08 — shipped v3.1 with backend/frontend deploys, production-safe smoke, gap audit update, release gate, and milestone audit.
 
 ## Accumulated Context
 
@@ -123,7 +123,8 @@ Last activity: 2026-06-08 — completed Phase 94 teacher reply composer and SLA 
 - Phase 92 completed the teacher reply/SLA contract. Backend implementation should target the `/teachers` question reply path first, keep `teacher_response` as a plain-text compatibility field, add `teacher_response_text`, `teacher_response_rich`, `teacher_response_format`, and record SLA timestamps where source data exists. The active frontend tutor workflow under `/tutor` should be the Phase 94 surface.
 - Phase 93 added backend support for rich teacher reply payloads, formula blocks, private marker refusal, request/takeover/first-reply/resolve SLA fields, and privacy-safe admin `teacher_sla` aggregate stats. Full backend pytest passed with 269 tests on 2026-06-08.
 - Phase 94 extended the active `/tutors` workflow with SLA snapshots and rich reply metadata, added frontend teacher reply composer/rendering/SLA badges/admin SLA card, and verified with full backend pytest, frontend lint/build, targeted Playwright, and in-app browser smoke.
+- Phase 95 shipped v3.1 through backend deploy run `27133648881`, frontend CI run `27133654195`, frontend deploy run `27133654168`, API health smoke request id `eo53hjssZicEPLQ=`, admin stats auth-gate smoke request id `eo55kjuJZicEPLQ=`, and frontend `app.stoaedu.ch` availability smoke.
 
 ## Operator Next Steps
 
-- Execute Phase 95 release gate, deploy verification, `stoa_docs` alignment, milestone audit, and cleanup.
+- Start the next milestone with `$gsd-new-milestone` when new scope is selected.

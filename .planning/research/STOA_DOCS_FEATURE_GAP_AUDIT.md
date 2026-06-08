@@ -1,14 +1,16 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.1
+**Updated:** 2026-06-08 after completing v3.1
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
 
 The MVP backend surface from `stoa_docs` is mostly implemented: auth register/login/refresh/logout, file presign, question submit/get/request-teacher/feedback, teacher queue/takeover/reply/resolve, student summary/history, parent children/report access, weekly report automation, admin user/stat APIs, production report operations, and immutable evidence/governance workflows exist.
 
-v3.0 closed the highest-priority remaining MVP gaps identified in this audit: account lifecycle hardening, explicit parent-student binding, OCR correction before final submission, robust daily question quota enforcement, and production deployment/live smoke for the v2.9 governance UI/API.
+v3.0 closed the highest-priority account/intake MVP gaps identified in this audit: account lifecycle hardening, explicit parent-student binding, OCR correction before final submission, robust daily question quota enforcement, and production deployment/live smoke for the v2.9 governance UI/API.
+
+v3.1 closed the remaining teacher-takeover MVP gaps selected for this cycle: safe rich text/formula teacher replies, response-time SLA tracking, teacher queue/session visibility, admin aggregate SLA visibility, and production-safe release verification.
 
 ## Completed Or Largely Complete
 
@@ -21,6 +23,7 @@ v3.0 closed the highest-priority remaining MVP gaps identified in this audit: ac
 - Weekly report automation: scheduled generation, S3 artifacts, SES delivery, parent report view, and extensive report operations recovery.
 - Admin basics: `/admin/users`, `/admin/users/{id}`, `/admin/stats`.
 - Report operations hardening: recovery jobs, evidence export, support handoff, artifact editing/rollback, immutable evidence, retention governance.
+- Teacher reply quality and SLA operations: versioned rich reply/formula payload, backend sanitization/refusal, first-reply/takeover/resolve SLA fields, tutor SLA badges/composer, and admin aggregate Teacher SLA stats.
 
 ## v3.0 Closed MVP Gaps
 
@@ -33,12 +36,17 @@ v3.0 closed the highest-priority remaining MVP gaps identified in this audit: ac
 | Robust daily question limit | `PRD.md` 3.2 P0 | Phase 90 replaced bounded latest-question scans with atomic daily usage counters. | Closed |
 | v2.9 production governance verification | `.planning/STATE.md` | Phase 88 deployed backend/frontend governance changes and recorded API/browser smoke evidence. | Closed |
 
+## v3.1 Closed MVP Gaps
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Teacher rich text/formula reply polish | `PRD.md` 3.3 P0 | Phase 92 defined the contract; Phase 93 added backend normalized rich reply/formula payloads and refusal rules; Phase 94 added the active tutor composer and safe formula renderer; Phase 95 deployed and production-smoked read-only surfaces. | Closed |
+| SLA response tracking | `PRD.md` 3.3 P1 | Phase 93 added request/takeover/first-reply/resolve SLA fields and admin `teacher_sla` aggregates; Phase 94 added tutor SLA badges and admin Teacher SLA card. | Closed |
+
 ## Remaining MVP/Future Gaps
 
 | Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| Teacher rich text/formula reply polish | `PRD.md` 3.3 P0 | Teacher reply endpoint exists; v3.1 plans the rich reply/formula contract and implementation. | Active v3.1 |
-| SLA response tracking | `PRD.md` 3.3 P1 | Queue/takeover exists; v3.1 plans SLA event tracking and admin/teacher visibility. | Active v3.1 |
 | Content moderation | `PRD.md` 3.5 P2 | Not currently a visible admin workflow. | Low |
 
 ## Phase 2 / Future Expansion
@@ -61,11 +69,11 @@ v3.0 scope was completed:
 3. Implemented OCR correction and hardened daily question quota.
 4. Updated this gap audit and release evidence after verification.
 
-## v3.1 Scope Recommendation
+## v3.1 Scope Outcome
 
-v3.1 should close the remaining teacher-takeover MVP gaps before Phase 2 expansion:
+v3.1 completed the selected teacher-takeover MVP closeout:
 
-1. Define the safe rich text/formula reply contract.
-2. Add backend metadata and sanitization for rich replies.
-3. Add SLA timestamping and aggregate response metrics.
-4. Expose teacher/admin SLA visibility and update release evidence.
+1. Defined the safe rich text/formula reply contract.
+2. Added backend metadata and sanitization/refusal for rich replies.
+3. Added SLA timestamping and aggregate response metrics.
+4. Exposed teacher/admin SLA visibility and updated release evidence.
