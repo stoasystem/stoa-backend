@@ -177,7 +177,13 @@ async def request_teacher(
     if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Teacher already active on this question")
 
-    question_repo.update_status(question_id, QuestionStatus.ESCALATED.value)
+    now = datetime.now(timezone.utc).isoformat()
+    question_repo.update_status(
+        question_id,
+        QuestionStatus.ESCALATED.value,
+        teacher_requested_at=item.get("teacher_requested_at") or now,
+        queue_visible_at=item.get("queue_visible_at") or now,
+    )
     notify_service.enqueue_teacher_request(
         question_id=question_id,
         student_id=user["sub"],

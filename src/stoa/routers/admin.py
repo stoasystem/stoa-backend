@@ -18,6 +18,7 @@ from stoa.services import (
     report_recovery_job_service,
     report_recovery_service,
     support_handoff_service,
+    teacher_reply_service,
 )
 
 router = APIRouter()
@@ -58,6 +59,7 @@ class StatsResponse(BaseModel):
     ai_resolved: int
     teacher_resolved: int
     escalated: int
+    teacher_sla: dict[str, Any]
 
 
 class ReportOperationResponse(BaseModel):
@@ -576,7 +578,21 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
     q_scan = table.scan(
         FilterExpression="SK = :meta",
         ExpressionAttributeValues={":meta": "META"},
-        ProjectionExpression="#s",
+        ProjectionExpression=", ".join(
+            [
+                "#s",
+                "teacher_requested_at",
+                "queue_visible_at",
+                "teacher_taken_over_at",
+                "teacher_first_replied_at",
+                "resolved_at",
+                "sla_request_to_takeover_seconds",
+                "sla_request_to_first_reply_seconds",
+                "sla_takeover_to_first_reply_seconds",
+                "sla_request_to_resolved_seconds",
+                "teacher_first_reply_sla_bucket",
+            ]
+        ),
         ExpressionAttributeNames={"#s": "status"},
     )
     questions = [
@@ -600,6 +616,7 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         ai_resolved=ai_resolved,
         teacher_resolved=teacher_resolved,
         escalated=escalated,
+        teacher_sla=teacher_reply_service.aggregate_teacher_sla(questions),
     )
 
 

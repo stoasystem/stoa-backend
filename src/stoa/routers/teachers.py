@@ -1,17 +1,16 @@
 """Teacher routes — work queue, takeover, reply, resolve."""
 import uuid
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any
 
-import boto3
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from stoa.config import Settings, get_settings
 from stoa.db.repositories import question_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
+from stoa.services import teacher_reply_service
 
 router = APIRouter()
 
@@ -23,12 +22,18 @@ class TakeoverResponse(BaseModel):
 
 
 class ReplyRequest(BaseModel):
-    content: str
+    content: str | None = Field(default=None, max_length=4000)
+    rich_content: dict[str, Any] | None = None
 
 
 class ReplyResponse(BaseModel):
     question_id: str
     teacher_response: str
+    teacher_response_text: str
+    teacher_response_rich: dict[str, Any]
+    teacher_response_format: str
+    teacher_first_replied_at: str | None = None
+    teacher_first_reply_sla_bucket: str | None = None
     status: str
 
 
@@ -42,6 +47,10 @@ def _list_escalated_questions(limit: int = 50) -> list[dict]:
         Limit=limit,
     )
     return result.get("Items", [])
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @router.get("/queue")
@@ -64,10 +73,13 @@ async def takeover(
         raise HTTPException(status_code=404, detail="Question not found")
     if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Question is already taken by a teacher")
+    if item.get("status") != QuestionStatus.ESCALATED.value:
+        raise HTTPException(status_code=409, detail="Question is not awaiting teacher takeover")
 
     teacher_id = user["sub"]
     session_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = _now()
+    sla_fields = teacher_reply_service.compute_takeover_sla_fields(item, now)
 
     question_repo.update_status(
         question_id,
@@ -75,6 +87,8 @@ async def takeover(
         teacher_id=teacher_id,
         session_id=session_id,
         teacher_started_at=now,
+        teacher_taken_over_at=now,
+        **sla_fields,
     )
 
     # Persist a TeacherSession record in DynamoDB
@@ -109,15 +123,39 @@ async def reply(
         raise HTTPException(status_code=404, detail="Question not found")
     if item.get("teacher_id") != user["sub"]:
         raise HTTPException(status_code=403, detail="You have not taken over this question")
+    if item.get("status") == QuestionStatus.RESOLVED.value:
+        raise HTTPException(status_code=409, detail="Question is already resolved")
+    if item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
+        raise HTTPException(status_code=409, detail="Question is not active with a teacher")
+
+    try:
+        reply_fields = teacher_reply_service.normalize_teacher_reply(
+            body.content,
+            body.rich_content,
+        )
+    except teacher_reply_service.TeacherReplyValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    now = _now()
+    if not item.get("teacher_first_replied_at"):
+        reply_fields["teacher_first_replied_at"] = now
+        reply_fields.update(teacher_reply_service.compute_sla_fields(item, now))
 
     question_repo.update_status(
         question_id,
         QuestionStatus.TEACHER_ACTIVE.value,
-        teacher_response=body.content,
+        **reply_fields,
     )
     return ReplyResponse(
         question_id=question_id,
-        teacher_response=body.content,
+        teacher_response=reply_fields["teacher_response"],
+        teacher_response_text=reply_fields["teacher_response_text"],
+        teacher_response_rich=reply_fields["teacher_response_rich"],
+        teacher_response_format=reply_fields["teacher_response_format"],
+        teacher_first_replied_at=reply_fields.get("teacher_first_replied_at")
+        or item.get("teacher_first_replied_at"),
+        teacher_first_reply_sla_bucket=reply_fields.get("teacher_first_reply_sla_bucket")
+        or item.get("teacher_first_reply_sla_bucket"),
         status=QuestionStatus.TEACHER_ACTIVE.value,
     )
 
@@ -133,12 +171,15 @@ async def resolve(
         raise HTTPException(status_code=404, detail="Question not found")
     if item.get("teacher_id") != user["sub"]:
         raise HTTPException(status_code=403, detail="You have not taken over this question")
+    if item.get("status") == QuestionStatus.RESOLVED.value:
+        raise HTTPException(status_code=409, detail="Question is already resolved")
 
-    now = datetime.utcnow().isoformat()
+    now = _now()
     question_repo.update_status(
         question_id,
         QuestionStatus.RESOLVED.value,
         resolved_at=now,
+        **teacher_reply_service.compute_resolved_sla_fields(item, now),
     )
 
     # Update session record
