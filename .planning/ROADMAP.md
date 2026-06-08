@@ -29,9 +29,9 @@
 - [x] **v3.4 Learning Expansion Foundation** - Completed local release gate 2026-06-08.
 - [x] **v3.5 Realtime And Teacher Assistance Foundation** - Completed local release gate 2026-06-08.
 
-## Current Milestone
+## Current Milestone: v3.6 Full WebSocket Realtime Notifications
 
-**v3.6 Full WebSocket Realtime Notifications** - Active.
+**Status:** Active.
 
 Goal: turn the v3.5 notification foundation into full authenticated WebSocket realtime delivery for core learning and operations events.
 
