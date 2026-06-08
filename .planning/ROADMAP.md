@@ -39,7 +39,7 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 |-------|------|--------|-------------|
 | 104 | Multi-Subject Taxonomy And Prompt Contract | Complete | LEARN-01 |
 | 105 | Backend Subject/Topic Support And Student Profile Seeds | Complete | LEARN-02 |
-| 106 | Student And Parent Learning Profile UI | Planned | UI-19 |
+| 106 | Student And Parent Learning Profile UI | Complete | UI-19 |
 | 107 | v3.4 Functional Release Gate And Expansion Audit | Planned | VERIFY-17 |
 
 ## Progress
@@ -48,7 +48,7 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 |-------|-----------|----------------|--------|-----------|
 | 104 | v3.4 | 1/1 | Complete | 2026-06-08 |
 | 105 | v3.4 | 1/1 | Complete | 2026-06-08 |
-| 106 | v3.4 | 0/1 | Planned | - |
+| 106 | v3.4 | 1/1 | Complete | 2026-06-08 |
 | 107 | v3.4 | 0/1 | Planned | - |
 
 ## Traceability
@@ -57,8 +57,8 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 |-------------|-------|--------|
 | LEARN-01 | Phase 104 | Complete |
 | LEARN-02 | Phase 105 | Complete |
-| UI-19 | Phase 106 | Planned |
+| UI-19 | Phase 106 | Complete |
 | VERIFY-17 | Phase 107 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 105*
+*Last updated: 2026-06-08 after completing Phase 106*
