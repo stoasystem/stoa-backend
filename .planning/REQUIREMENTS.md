@@ -82,5 +82,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | MOD-01 | Phase 96 | Complete |
 | MOD-02 | Phase 97 | Complete |
-| UI-17 | Phase 98 | Planned |
+| UI-17 | Phase 98 | Complete |
 | VERIFY-15 | Phase 99 | Planned |

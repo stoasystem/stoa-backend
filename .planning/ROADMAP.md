@@ -37,7 +37,7 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 |-------|------|--------|-------------|
 | 96 | Content Moderation Contract And Data Model | Complete | MOD-01 |
 | 97 | Backend Moderation Reporting And Admin APIs | Complete | MOD-02 |
-| 98 | Moderation Reporting And Admin Queue UI | Planned | UI-17 |
+| 98 | Moderation Reporting And Admin Queue UI | Complete | UI-17 |
 | 99 | v3.2 Functional Release Gate And Docs Alignment | Planned | VERIFY-15 |
 
 ## Progress
@@ -46,7 +46,7 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 |-------|-----------|----------------|--------|-----------|
 | 96 | v3.2 | 1/1 | Complete | 2026-06-08 |
 | 97 | v3.2 | 1/1 | Complete | 2026-06-08 |
-| 98 | v3.2 | 0/1 | Planned | - |
+| 98 | v3.2 | 1/1 | Complete | 2026-06-08 |
 | 99 | v3.2 | 0/1 | Planned | - |
 
 ## Traceability
@@ -55,8 +55,8 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 |-------------|-------|--------|
 | MOD-01 | Phase 96 | Complete |
 | MOD-02 | Phase 97 | Complete |
-| UI-17 | Phase 98 | Planned |
+| UI-17 | Phase 98 | Complete |
 | VERIFY-15 | Phase 99 | Planned |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 97*
+*Last updated: 2026-06-08 after completing Phase 98*

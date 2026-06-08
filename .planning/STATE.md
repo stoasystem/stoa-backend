@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Content Moderation And Internal Operations
 status: planning
-last_updated: "2026-06-08T14:10:00+02:00"
+last_updated: "2026-06-08T14:25:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 
 ## Current Position
 
-Phase: 98 Moderation Reporting And Admin Queue UI
+Phase: 99 v3.2 Functional Release Gate And Docs Alignment
 Plan: Not started
-Status: Ready for frontend implementation.
-Last activity: 2026-06-08 - completed Phase 97 backend moderation case creation, admin list/detail/action APIs, focused tests, and privacy sanity checks.
+Status: Ready for release verification.
+Last activity: 2026-06-08 - completed Phase 98 student/tutor report actions, admin moderation queue/detail/actions, lint/build, moderation e2e, and tutor workflow regression.
 
 ## Accumulated Context
 
@@ -48,7 +48,6 @@ Last activity: 2026-06-08 - completed Phase 97 backend moderation case creation,
 
 ### Pending Todos
 
-- Implement student/teacher report actions and admin moderation queue/detail UI in Phase 98.
 - Run a lightweight functional release gate and update the `stoa_docs` gap audit in Phase 99.
 
 ### Blockers/Concerns
@@ -60,4 +59,4 @@ Last activity: 2026-06-08 - completed Phase 97 backend moderation case creation,
 
 ## Operator Next Steps
 
-- Execute Phase 98 moderation reporting and admin queue UI.
+- Execute Phase 99 functional release gate and docs alignment.
