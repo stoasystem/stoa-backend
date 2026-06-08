@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Learning Expansion Foundation
 status: planning
-last_updated: "2026-06-08T16:00:00+02:00"
+last_updated: "2026-06-08T16:20:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 105 backend subject/topic support and student profile seeds.
+**Current focus:** Phase 106 student and parent learning profile UI.
 
 ## Current Position
 
-Phase: 105 Backend Subject/Topic Support And Student Profile Seeds
+Phase: 106 Student And Parent Learning Profile UI
 Plan: —
 Status: Ready for planning.
-Last activity: 2026-06-08 - completed Phase 104 multi-subject taxonomy and prompt contract.
+Last activity: 2026-06-08 - completed Phase 105 backend subject/topic support and student profile seeds.
 
 ## Accumulated Context
 
@@ -41,7 +41,6 @@ Last activity: 2026-06-08 - completed Phase 104 multi-subject taxonomy and promp
 
 ### Pending Todos
 
-- Implement backend subject/topic support and student profile seeds in Phase 105.
 - Implement student/parent learning profile UI in Phase 106.
 - Run lightweight functional release gate and update gap tracking in Phase 107.
 

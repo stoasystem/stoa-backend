@@ -15,7 +15,7 @@ from stoa.models.question import (
     SubmitQuestionRequest,
 )
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
-from stoa.services import ai_service, moderation_service, notify_service, ocr_service
+from stoa.services import ai_service, learning_profile_service, moderation_service, notify_service, ocr_service
 
 router = APIRouter()
 
@@ -93,6 +93,7 @@ async def submit_question(
     subscription_tier = student_profile.get("subscription_tier", "free")
     language = student_profile.get("language", "de")
     grade = student_profile.get("grade", "Sek1")
+    subject = learning_profile_service.normalize_subject(body.subject)
 
     _check_daily_limit(student_id, subscription_tier, settings)
 
@@ -104,7 +105,7 @@ async def submit_question(
     item = {
         "question_id": question_id,
         "student_id": student_id,
-        "subject": body.subject,
+        "subject": subject,
         "content": content,
         "original_content": body.content,
         "corrected_text": body.corrected_text,
@@ -117,6 +118,7 @@ async def submit_question(
         "teacher_id": None,
         "teacher_response": None,
         "knowledge_points": [],
+        "topic_seeds": [],
         "student_feedback": None,
         "created_at": now,
         "resolved_at": None,
@@ -127,18 +129,27 @@ async def submit_question(
     try:
         ai_resp = ai_service.get_ai_answer(
             content=content,
-            subject=body.subject,
+            subject=subject,
             grade=grade,
             language=language,
+        )
+        topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
+            subject=subject,
+            response=ai_resp,
+            question_id=question_id,
+            timestamp=now,
         )
         question_repo.update_status(
             question_id,
             QuestionStatus.AI_ANSWERED.value,
             ai_response=ai_resp,
             knowledge_points=ai_resp.get("knowledge_points", []),
+            topic_seeds=topic_seeds,
         )
         item["status"] = QuestionStatus.AI_ANSWERED.value
         item["ai_response"] = ai_resp
+        item["knowledge_points"] = ai_resp.get("knowledge_points", [])
+        item["topic_seeds"] = topic_seeds
     except Exception:
         # AI call failed — leave as PENDING; client can poll
         pass

@@ -1,4 +1,6 @@
 """Student routes — profile, learning summary, and question history."""
+import base64
+import json
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
@@ -6,12 +8,13 @@ from typing import Optional
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import question_repo, user_repo
+from stoa.db.repositories import practice_repo, question_repo, user_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import get_current_user, require_role
+from stoa.services import learning_profile_service
 
 router = APIRouter()
 
@@ -171,6 +174,40 @@ class QuestionListResponse(BaseModel):
     next_token: Optional[str] = None
 
 
+class LearningSubjectDefinition(BaseModel):
+    id: str
+    label: str
+    rolloutState: str
+
+
+class LearningSubjectActivity(BaseModel):
+    subject: str
+    label: str
+    rolloutState: str
+    questionCount: int
+    aiResolvedCount: int
+    teacherEscalationCount: int
+    feedbackAverage: float | None = None
+
+
+class LearningWeakTopic(BaseModel):
+    subject: str
+    topicId: str
+    label: str
+    count: int
+    latestEvidenceAt: str | None = None
+    evidenceQuestionIds: list[str] = Field(default_factory=list)
+
+
+class LearningProfileResponse(BaseModel):
+    studentId: str
+    subjects: list[LearningSubjectDefinition]
+    subjectActivity: list[LearningSubjectActivity]
+    weakTopics: list[LearningWeakTopic]
+    strengthTopics: list[dict] = Field(default_factory=list)
+    updatedAt: str
+
+
 @router.get("/{student_id}/summary", response_model=SummaryResponse)
 async def get_summary(
     student_id: str,
@@ -207,6 +244,29 @@ async def get_summary(
     )
 
 
+@router.get("/{student_id}/learning-profile", response_model=LearningProfileResponse)
+async def get_learning_profile(
+    student_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Return subject-level activity and topic seeds for a student."""
+    role = user.get("role", "")
+    uid = user["sub"]
+
+    if role == "student" and uid != student_id:
+        raise HTTPException(status_code=403, detail="Cannot view another student's profile")
+    if role not in ("student", "parent", "admin"):
+        raise HTTPException(status_code=403, detail="Role not permitted")
+
+    questions = question_repo.list_by_student(student_id, limit=500).get("Items", [])
+    mistakes = practice_repo.get_mistakes(student_id)
+    return learning_profile_service.build_learning_profile(
+        student_id=student_id,
+        questions=questions,
+        mistakes=mistakes,
+    )
+
+
 @router.get("/{student_id}/questions", response_model=QuestionListResponse)
 async def list_questions(
     student_id: str,
@@ -225,7 +285,6 @@ async def list_questions(
 
     last_key = None
     if next_token:
-        import json, base64
         try:
             last_key = json.loads(base64.b64decode(next_token).decode())
         except Exception:
@@ -236,7 +295,6 @@ async def list_questions(
 
     new_token = None
     if "LastEvaluatedKey" in result:
-        import json, base64
         new_token = base64.b64encode(json.dumps(result["LastEvaluatedKey"]).encode()).decode()
 
     return QuestionListResponse(items=items, next_token=new_token)

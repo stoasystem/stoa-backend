@@ -16,7 +16,7 @@ from stoa.db.repositories import practice_repo, question_repo, report_repo, user
 from stoa.deps import get_current_user, require_role
 from stoa.models.report import WeeklyReportResponse
 from stoa.models.user import SubscriptionTier
-from stoa.services import subscription_service
+from stoa.services import learning_profile_service, subscription_service
 
 router = APIRouter()
 
@@ -73,6 +73,40 @@ class ParentChildSummaryResponse(BaseModel):
     practiceLessonsCompletedThisWeek: int
     weakTopics: list[str]
     recentActivity: list[ParentChildActivity]
+
+
+class LearningSubjectDefinition(BaseModel):
+    id: str
+    label: str
+    rolloutState: str
+
+
+class LearningSubjectActivity(BaseModel):
+    subject: str
+    label: str
+    rolloutState: str
+    questionCount: int
+    aiResolvedCount: int
+    teacherEscalationCount: int
+    feedbackAverage: float | None = None
+
+
+class LearningWeakTopic(BaseModel):
+    subject: str
+    topicId: str
+    label: str
+    count: int
+    latestEvidenceAt: str | None = None
+    evidenceQuestionIds: list[str] = Field(default_factory=list)
+
+
+class LearningProfileResponse(BaseModel):
+    studentId: str
+    subjects: list[LearningSubjectDefinition]
+    subjectActivity: list[LearningSubjectActivity]
+    weakTopics: list[LearningWeakTopic]
+    strengthTopics: list[dict] = Field(default_factory=list)
+    updatedAt: str
 
 
 class ParentChildHistoryEvent(BaseModel):
@@ -671,6 +705,25 @@ async def get_child_summary(
             for topic, _ in sorted(weak_topics_counter.items(), key=lambda item: (-item[1], item[0]))
         ][:10],
         recentActivity=_sort_activities(activities, limit=5),
+    )
+
+
+@router.get("/me/children/{child_id}/learning-profile", response_model=LearningProfileResponse)
+async def get_child_learning_profile(
+    child_id: str,
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return subject-level profile seeds for an authorized child."""
+    resolved = _resolve_parent_profile(user, settings)
+    _get_owned_child_profile(resolved, child_id)
+
+    questions = question_repo.list_by_student(child_id, limit=500).get("Items", [])
+    mistakes = practice_repo.get_mistakes(child_id)
+    return learning_profile_service.build_learning_profile(
+        student_id=child_id,
+        questions=questions,
+        mistakes=mistakes,
     )
 
 

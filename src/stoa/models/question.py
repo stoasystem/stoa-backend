@@ -17,11 +17,12 @@ class AIResponse(BaseModel):
     answer: str = ""
     hints: List[str] = []
     similar_exercises: List[str] = []
+    knowledge_points: List[str] = []
 
 
 class SubmitQuestionRequest(BaseModel):
     content: str = Field(..., min_length=5, max_length=2000)
-    subject: str = Field(..., pattern="^(math|physics|german|english|french)$")
+    subject: str = Field(..., pattern="^(math|physics|german|english)$")
     image_s3_key: Optional[str] = None
     corrected_text: Optional[str] = Field(default=None, min_length=5, max_length=2000)
 
@@ -47,6 +48,7 @@ class QuestionResponse(BaseModel):
     teacher_id: Optional[str]
     teacher_response: Optional[str]
     knowledge_points: List[str]
+    topic_seeds: List[dict] = Field(default_factory=list)
     student_feedback: Optional[int]
     created_at: datetime
     resolved_at: Optional[datetime]

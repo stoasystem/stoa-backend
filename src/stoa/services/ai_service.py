@@ -11,9 +11,9 @@ import json
 import logging
 import re
 import boto3
-from datetime import datetime, timezone
 
 from stoa.config import settings
+from stoa.services import learning_profile_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject} at {grade} level.
+
+Subject context: {subject_context}
 
 Rules:
 - Never give the final answer directly. Always explain step-by-step.
@@ -31,7 +33,7 @@ Rules:
 - Keep explanations concise (max 300 words).
 
 IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text):
-{{"steps":["Step 1: ..."],"answer":"Final answer","hints":["Hint..."],"similar_exercises":["Exercise..."],"suggest_teacher":false}}"""
+{{"steps":["Step 1: ..."],"answer":"Final answer","hints":["Hint..."],"similar_exercises":["Exercise..."],"knowledge_points":["Topic"],"suggest_teacher":false}}"""
 
 # ── Prompt injection defence ───────────────────────────────────────────────────
 
@@ -197,7 +199,13 @@ def get_ai_answer(
                   _MAX_HISTORY_TURNS pairs will be included.
     """
     safe_content = _sanitise_input(content)
-    system_prompt = SYSTEM_PROMPT.format(subject=subject, grade=grade, language=language)
+    normalized_subject = learning_profile_service.normalize_subject(subject)
+    system_prompt = SYSTEM_PROMPT.format(
+        subject=normalized_subject,
+        subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
+        grade=grade,
+        language=language,
+    )
     messages = _build_messages(safe_content, history)
 
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
