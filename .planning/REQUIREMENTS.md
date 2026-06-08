@@ -69,6 +69,8 @@ Acceptance criteria:
 - `stoa_docs` gap audit is updated with v3.0 outcomes and remaining future requirements.
 - Final audit confirms no production customer data mutation beyond explicitly approved flows and no private marker exposure.
 
+Status: Complete in Phase 91. Local gates, backend deploys, API route fix deployment, Lambda runtime state, production smoke request IDs, and feature gap audit updates are recorded.
+
 ## Future Requirements
 
 - Stripe/TWINT subscription payments.
@@ -95,4 +97,4 @@ Acceptance criteria:
 | PRODVERIFY-13 | Phase 88 | Complete |
 | AUTH-05 | Phase 89 | Complete |
 | QUESTION-07 | Phase 90 | Complete |
-| VERIFY-13 | Phase 91 | Planned |
+| VERIFY-13 | Phase 91 | Complete |
