@@ -7,10 +7,10 @@ last_updated: "2026-06-08T14:28:12+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.3 subscription operations MVP.
+**Current focus:** Phase 101 backend subscription request and admin tier APIs.
 
 ## Current Position
 
-Phase: 100 Subscription Operations Contract And Entitlement Model
-Plan: 100-01
-Status: Planned.
-Last activity: 2026-06-08 - reviewed `stoa_docs` after v3.2 and selected manual subscription operations as the next product-building milestone.
+Phase: 101 Backend Subscription Request And Admin Tier APIs
+Plan: —
+Status: Ready for discussion/planning.
+Last activity: 2026-06-08 - completed Phase 100 subscription operations contract and entitlement model.
 
 ## Accumulated Context
 
@@ -41,7 +41,6 @@ Last activity: 2026-06-08 - reviewed `stoa_docs` after v3.2 and selected manual 
 
 ### Pending Todos
 
-- Complete Phase 100 subscription operations contract and entitlement model docs.
 - Implement backend parent subscription request and admin processing APIs in Phase 101.
 - Implement parent plan/request UI and admin subscription queue UI in Phase 102.
 - Run lightweight functional release gate and update gap tracking in Phase 103.
@@ -49,9 +48,9 @@ Last activity: 2026-06-08 - reviewed `stoa_docs` after v3.2 and selected manual 
 ### Blockers/Concerns
 
 - Payment processing, invoices, refunds, tax handling, and Stripe/TWINT webhooks remain out of scope for v3.3.
-- Existing `subscription_tier` behavior already drives daily quota; Phase 100 should define teacher support and weekly report entitlement expectations before implementation.
+- Existing `subscription_tier` behavior already drives daily quota; Phase 101 should preserve that behavior while adding manual subscription request/tier operations.
 - Production verification can use read-only or safe-fixture paths; internal development should not over-index on broad compliance evidence.
 
 ## Operator Next Steps
 
-- Execute Phase 100 and proceed to backend subscription operations APIs.
+- Discuss and plan Phase 101 backend subscription operations APIs.
