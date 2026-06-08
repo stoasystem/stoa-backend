@@ -80,5 +80,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | TEACHOPS-01 | Phase 92 | Complete |
 | TEACHOPS-02 | Phase 93 | Complete |
-| UI-16 | Phase 94 | Planned |
+| UI-16 | Phase 94 | Complete |
 | VERIFY-14 | Phase 95 | Planned |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Teacher Reply Quality And SLA Operations
 status: active
-last_updated: "2026-06-08T11:00:00+02:00"
+last_updated: "2026-06-08T11:35:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 94 Teacher Reply Composer And SLA Visibility UI
-Plan: 94-01 Teacher Reply Composer And SLA Visibility UI
+Phase: 95 v3.1 Release Gate And STOA Docs Alignment
+Plan: 95-01 v3.1 Release Gate And STOA Docs Alignment
 Status: Ready to plan/execute.
-Last activity: 2026-06-08 — completed Phase 93 backend rich reply metadata and SLA tracking with full backend tests passing.
+Last activity: 2026-06-08 — completed Phase 94 teacher reply composer and SLA visibility UI with backend/frontend/browser verification.
 
 ## Accumulated Context
 
@@ -122,7 +122,8 @@ Last activity: 2026-06-08 — completed Phase 93 backend rich reply metadata and
 - Teacher rich replies must not render unsafe raw HTML or expose private image keys, report artifact keys, presigned URLs, tokens, cookies, passwords, or AWS secrets.
 - Phase 92 completed the teacher reply/SLA contract. Backend implementation should target the `/teachers` question reply path first, keep `teacher_response` as a plain-text compatibility field, add `teacher_response_text`, `teacher_response_rich`, `teacher_response_format`, and record SLA timestamps where source data exists. The active frontend tutor workflow under `/tutor` should be the Phase 94 surface.
 - Phase 93 added backend support for rich teacher reply payloads, formula blocks, private marker refusal, request/takeover/first-reply/resolve SLA fields, and privacy-safe admin `teacher_sla` aggregate stats. Full backend pytest passed with 269 tests on 2026-06-08.
+- Phase 94 extended the active `/tutors` workflow with SLA snapshots and rich reply metadata, added frontend teacher reply composer/rendering/SLA badges/admin SLA card, and verified with full backend pytest, frontend lint/build, targeted Playwright, and in-app browser smoke.
 
 ## Operator Next Steps
 
-- Implement Phase 94 teacher reply composer and SLA visibility UI against the Phase 93 backend contract.
+- Execute Phase 95 release gate, deploy verification, `stoa_docs` alignment, milestone audit, and cleanup.

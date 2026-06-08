@@ -9,14 +9,16 @@ Frontend API contract (tutorApi.ts):
 """
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 import boto3
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.deps import require_role
+from stoa.services import teacher_reply_service
 
 router = APIRouter()
 
@@ -66,6 +68,36 @@ def _get_student_name(student_id: str) -> str:
     return "Student"
 
 
+def _sla_snapshot(conv: dict) -> dict[str, int | str | None]:
+    requested_at = _parse_time(conv.get("escalated_at") or conv.get("created_at"))
+    first_action_at = _parse_time(conv.get("first_tutor_action_at"))
+    seconds = None
+    if requested_at and first_action_at:
+        seconds = max(0, int((first_action_at - requested_at).total_seconds()))
+    return {
+        "status": teacher_reply_service.sla_bucket(seconds),
+        "requestToFirstActionMinutes": round(seconds / 60) if seconds is not None else None,
+        "targetMinutes": 30,
+    }
+
+
+def _parse_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -81,6 +113,7 @@ class TutorHelpRequestSummary(BaseModel):
     priority: str = "medium"
     createdAt: str
     firstTutorActionAt: str | None = None
+    sla: dict | None = None
 
 
 class MessageOut(BaseModel):
@@ -97,6 +130,8 @@ class TutorNoteOut(BaseModel):
     note: str
     createdAt: str
     tutor: dict
+    richContent: dict | None = None
+    responseFormat: str | None = None
 
 
 class TutorHelpRequestDetail(BaseModel):
@@ -109,6 +144,7 @@ class TutorHelpRequestDetail(BaseModel):
     messages: list[MessageOut]
     notes: list[TutorNoteOut]
     firstTutorActionAt: str | None = None
+    sla: dict | None = None
 
 
 class UpdateStatusRequest(BaseModel):
@@ -118,6 +154,7 @@ class UpdateStatusRequest(BaseModel):
 
 class AddNoteRequest(BaseModel):
     content: str
+    richContent: dict[str, Any] | None = None
 
 
 class TutorStats(BaseModel):
@@ -134,6 +171,11 @@ class TutorStats(BaseModel):
 async def get_stats(user: dict = Depends(require_role("teacher", "tutor", "admin"))):
     escalated = _get_escalated_conversations()
     pending = sum(1 for c in escalated if c.get("escalation_status", "pending") == "pending")
+    response_times = [
+        snapshot["requestToFirstActionMinutes"]
+        for snapshot in (_sla_snapshot(c) for c in escalated)
+        if isinstance(snapshot["requestToFirstActionMinutes"], int)
+    ]
     resolved_today_count = sum(
         1 for c in escalated
         if c.get("escalation_status") == "resolved"
@@ -142,7 +184,7 @@ async def get_stats(user: dict = Depends(require_role("teacher", "tutor", "admin
     return TutorStats(
         pendingRequests=pending,
         resolvedToday=resolved_today_count,
-        averageResponseTimeMinutes=15,
+        averageResponseTimeMinutes=round(sum(response_times) / len(response_times)) if response_times else 0,
     )
 
 
@@ -165,6 +207,7 @@ async def list_help_requests(user: dict = Depends(require_role("teacher", "tutor
             requestMessage=conv.get("escalation_message"),
             createdAt=conv.get("escalated_at", conv.get("updated_at", _now())),
             firstTutorActionAt=conv.get("first_tutor_action_at"),
+            sla=_sla_snapshot(conv),
         ).model_dump())
     return {"items": items}
 
@@ -219,21 +262,26 @@ async def get_help_request(
             note=n["content"],
             createdAt=n["created_at"],
             tutor={"id": n.get("teacher_id", ""), "name": n.get("teacher_name", "Teacher")},
+            richContent=n.get("teacher_response_rich"),
+            responseFormat=n.get("teacher_response_format"),
         )
         for n in notes_resp.get("Items", [])
     ]
 
     # Mark first teacher access time
-    if not conv.get("first_tutor_action_at"):
+    first_tutor_action_at = conv.get("first_tutor_action_at")
+    if not first_tutor_action_at:
+        first_tutor_action_at = _now()
         try:
             table.update_item(
                 Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
                 UpdateExpression="SET first_tutor_action_at = :t",
                 ConditionExpression="attribute_not_exists(first_tutor_action_at)",
-                ExpressionAttributeValues={":t": _now()},
+                ExpressionAttributeValues={":t": first_tutor_action_at},
             )
         except Exception:
             pass
+        conv = {**conv, "first_tutor_action_at": first_tutor_action_at}
 
     return TutorHelpRequestDetail(
         requestId=conv.get("escalation_request_id", conv_id),
@@ -248,7 +296,8 @@ async def get_help_request(
         requestMessage=conv.get("escalation_message"),
         messages=messages,
         notes=notes,
-        firstTutorActionAt=conv.get("first_tutor_action_at"),
+        firstTutorActionAt=first_tutor_action_at,
+        sla=_sla_snapshot(conv),
     )
 
 
@@ -271,6 +320,9 @@ async def update_help_request(
     now = _now()
     update_parts = ["escalation_status = :s", "updated_at = :u"]
     expr_values: dict = {":s": body.status, ":u": now}
+    if not conv.get("first_tutor_action_at"):
+        update_parts.append("first_tutor_action_at = :f")
+        expr_values[":f"] = now
 
     if body.resolutionNote:
         update_parts.append("resolution_note = :r")
@@ -292,6 +344,8 @@ async def update_help_request(
         status=body.status,
         requestMessage=conv.get("escalation_message"),
         createdAt=conv.get("escalated_at", now),
+        firstTutorActionAt=conv.get("first_tutor_action_at") or now,
+        sla=_sla_snapshot({**conv, "first_tutor_action_at": conv.get("first_tutor_action_at") or now}),
     )
 
 
@@ -316,6 +370,10 @@ async def add_note(
     teacher_name = (teacher_profile or {}).get("name", "Teacher")
     note_id = str(uuid.uuid4())
     now = _now()
+    try:
+        reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
+    except teacher_reply_service.TeacherReplyValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     table.put_item(Item={
         "PK": _conv_pk(conv_id),
@@ -324,7 +382,9 @@ async def add_note(
         "conversation_id": conv_id,
         "teacher_id": teacher_id,
         "teacher_name": teacher_name,
-        "content": body.content,
+        "content": reply_fields["teacher_response"],
+        "teacher_response_rich": reply_fields["teacher_response_rich"],
+        "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
     })
 
@@ -337,13 +397,17 @@ async def add_note(
         "conversation_id": conv_id,
         "student_id": conv.get("student_id", ""),
         "role": "teacher",
-        "content": body.content,
+        "content": reply_fields["teacher_response"],
+        "teacher_response_rich": reply_fields["teacher_response_rich"],
+        "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
     })
 
     return TutorNoteOut(
         id=note_id,
-        note=body.content,
+        note=reply_fields["teacher_response"],
         createdAt=now,
         tutor={"id": teacher_id, "name": teacher_name},
+        richContent=reply_fields["teacher_response_rich"],
+        responseFormat=reply_fields["teacher_response_format"],
     )
