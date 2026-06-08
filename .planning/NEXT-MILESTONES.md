@@ -3,23 +3,6 @@
 **Updated:** 2026-06-08
 **Mode:** product functionality first
 
-## v3.4 Learning Expansion Foundation
-
-Goal: prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout.
-
-Planned phases:
-
-- Phase 104: Multi-Subject Taxonomy And Prompt Contract.
-- Phase 105: Backend Subject/Topic Support And Student Learning Profile Seeds.
-- Phase 106: Student And Parent Learning Profile UI.
-- Phase 107: v3.4 Functional Release Gate And Expansion Audit.
-
-Scope:
-
-- Add a durable subject/topic taxonomy for math-first expansion into physics, German, and English.
-- Start student learning profile fields from existing questions, feedback, weak-topic data, and teacher escalation signals.
-- Prepare AI teacher assistance and personalization hooks without shipping full autonomous exercise generation yet.
-
 ## v3.5 Realtime And Teacher Assistance Foundation
 
 Goal: prepare the next teacher-support expansion after moderation, subscriptions, and learning-profile foundations.
@@ -53,3 +36,20 @@ Scope:
 - Define provider boundaries, subscription mapping, webhook state machine, billing metadata, and operational failure states.
 - Start with readiness and sandbox-safe flows before any real charge path.
 - Keep production charging disabled unless explicitly approved with provider credentials and safe test customers.
+
+## v3.7 Mobile And Multilingual Polish Foundation
+
+Goal: reduce the largest remaining usability gaps after learning, realtime, and payment readiness foundations.
+
+Planned phases:
+
+- Phase 116: Mobile And Multilingual Polish Contract.
+- Phase 117: Responsive Navigation And Core Flow Polish.
+- Phase 118: Translation Coverage And Language Preference UI.
+- Phase 119: v3.7 Functional Release Gate And Polish Audit.
+
+Scope:
+
+- Improve mobile ergonomics for parent/student/tutor core flows without redesigning the product.
+- Expand frontend translation coverage around high-traffic workflows.
+- Keep native mobile apps and full localization operations out of scope unless promoted by a later milestone.

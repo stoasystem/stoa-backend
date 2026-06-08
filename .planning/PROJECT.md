@@ -40,7 +40,7 @@ The completed v3.2 milestone closed the remaining visible MVP admin workflow fro
 
 The completed v3.3 milestone makes the MVP manual subscription model usable before Stripe/TWINT integration.
 
-The active v3.4 milestone prepares Phase 2 learning expansion with subject taxonomy, prompt behavior, topic metadata, and student learning profile seeds.
+The completed v3.4 milestone prepared Phase 2 learning expansion with subject taxonomy, prompt behavior, topic metadata, student profile seeds, and learning profile UI foundations.
 
 ## Core Value
 
@@ -132,7 +132,7 @@ Delivered:
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
 - v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
 - v3.3 completed parent subscription plan/request workflows, admin subscription request processing, tier application, parent/admin UI, and local release-gate verification for the manual MVP billing model.
-- v3.4 is planned to add subject taxonomy, prompt behavior by subject, subject/topic backend support, student profile seeds, and learning profile UI foundations.
+- v3.4 added subject taxonomy, prompt behavior by subject, subject/topic backend support, student profile seeds, and learning profile UI foundations.
 
 ## Last Production-Verified Milestone
 
@@ -482,7 +482,7 @@ Known current resources:
 | Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Good - shipped in v3.1 |
 | Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Good - shipped in v3.2 |
 | Start v3.3 with subscription operations MVP | `stoa_docs` defines manual paid onboarding before Stripe/TWINT; parent/admin subscription workflows are the next direct product and business-function gap | Good - local release gate complete |
-| Start v3.4 with learning expansion foundation | `stoa_docs` Phase 2 calls for multi-subject support, student memory, and AI teacher tools; taxonomy and profile seeds should precede broad curriculum or exercise generation | Active - Phase 104 planned |
+| Start v3.4 with learning expansion foundation | `stoa_docs` Phase 2 calls for multi-subject support, student memory, and AI teacher tools; taxonomy and profile seeds should precede broad curriculum or exercise generation | Good - local release gate complete |
 
 ## Evolution
 

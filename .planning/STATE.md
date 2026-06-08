@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Learning Expansion Foundation
-status: planning
-last_updated: "2026-06-08T16:55:00+02:00"
+status: complete
+last_updated: "2026-06-08T17:05:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Phase 107 v3.4 functional release gate and expansion audit.
+**Current focus:** v3.4 complete. Next milestone selection is pending.
 
 ## Current Position
 
-Phase: 107 v3.4 Functional Release Gate And Expansion Audit
-Plan: —
-Status: Ready for planning.
-Last activity: 2026-06-08 - completed Phase 106 student and parent learning profile UI.
+Phase: none
+Plan: none
+Status: v3.4 complete.
+Last activity: 2026-06-08 - completed Phase 107 functional release gate and expansion audit.
 
 ## Accumulated Context
 
@@ -41,7 +41,7 @@ Last activity: 2026-06-08 - completed Phase 106 student and parent learning prof
 
 ### Pending Todos
 
-- Run lightweight functional release gate and update gap tracking in Phase 107.
+- Select next milestone from `.planning/NEXT-MILESTONES.md`.
 
 ### Blockers/Concerns
 
@@ -49,7 +49,8 @@ Last activity: 2026-06-08 - completed Phase 106 student and parent learning prof
 - Automatic exercise generation and full long-term student memory remain future scope.
 - Existing math flows must remain backward compatible.
 - Internal development should focus on functional progress, not broad compliance/security evidence.
+- Full backend Ruff still has unrelated legacy lint findings outside v3.4 changed files.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 107 release gate and expansion audit.
+- Select and plan the next milestone.

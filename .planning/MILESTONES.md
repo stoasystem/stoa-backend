@@ -565,26 +565,29 @@ Key accomplishments:
 
 Known deferred items at close: Stripe/TWINT payment-provider integration, broad multi-subject rollout, student memory/personalization, AI teacher tools, WebSocket realtime notifications, and mobile/multilingual polish.
 
-## Active
-
 ### v3.4 Learning Expansion Foundation
 
-**Status:** Active
+**Status:** Complete
 **Started:** 2026-06-08
-**Roadmap:** `.planning/milestones/v3.4-ROADMAP.md`
-**Requirements:** `.planning/milestones/v3.4-REQUIREMENTS.md`
+**Completed:** 2026-06-08
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 104: Multi-Subject Taxonomy And Prompt Contract.
 - Phase 105: Backend Subject/Topic Support And Student Profile Seeds.
 - Phase 106: Student And Parent Learning Profile UI.
 - Phase 107: v3.4 Functional Release Gate And Expansion Audit.
 
+Known deferred items at close: Stripe/TWINT payment-provider integration, full multi-subject curriculum content and exercises, student memory/personalization beyond profile seeds, AI teacher assistance tools, WebSocket realtime notifications, mobile responsive polish, full multilingual rollout, and support integrations.
+
+## Active
+
+No active milestone.
+
 ---
-*Last updated: 2026-06-08 after planning v3.4*
+*Last updated: 2026-06-08 after completing v3.4*

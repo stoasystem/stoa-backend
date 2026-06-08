@@ -26,12 +26,13 @@
 - [x] **v3.1 Teacher Reply Quality And SLA Operations** - Shipped 2026-06-08.
 - [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08.
 - [x] **v3.3 Subscription Operations MVP** - Completed local release gate 2026-06-08.
+- [x] **v3.4 Learning Expansion Foundation** - Completed local release gate 2026-06-08.
 
 ## Current Milestone
 
-**v3.4 Learning Expansion Foundation** - Active.
+No active milestone.
 
-Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract, backend subject/topic/profile seeds, student/parent learning profile UI, and lightweight functional verification.
+Next milestone should be selected from `.planning/NEXT-MILESTONES.md`.
 
 ## Phases
 
@@ -40,7 +41,7 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 | 104 | Multi-Subject Taxonomy And Prompt Contract | Complete | LEARN-01 |
 | 105 | Backend Subject/Topic Support And Student Profile Seeds | Complete | LEARN-02 |
 | 106 | Student And Parent Learning Profile UI | Complete | UI-19 |
-| 107 | v3.4 Functional Release Gate And Expansion Audit | Planned | VERIFY-17 |
+| 107 | v3.4 Functional Release Gate And Expansion Audit | Complete | VERIFY-17 |
 
 ## Progress
 
@@ -49,7 +50,7 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 | 104 | v3.4 | 1/1 | Complete | 2026-06-08 |
 | 105 | v3.4 | 1/1 | Complete | 2026-06-08 |
 | 106 | v3.4 | 1/1 | Complete | 2026-06-08 |
-| 107 | v3.4 | 0/1 | Planned | - |
+| 107 | v3.4 | 1/1 | Complete | 2026-06-08 |
 
 ## Traceability
 
@@ -58,7 +59,7 @@ Goal: prepare Phase 2 learning expansion with subject taxonomy, prompt contract,
 | LEARN-01 | Phase 104 | Complete |
 | LEARN-02 | Phase 105 | Complete |
 | UI-19 | Phase 106 | Complete |
-| VERIFY-17 | Phase 107 | Planned |
+| VERIFY-17 | Phase 107 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 106*
+*Last updated: 2026-06-08 after completing v3.4*

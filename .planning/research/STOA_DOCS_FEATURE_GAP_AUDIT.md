@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.4
+**Updated:** 2026-06-08 after completing v3.4
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -16,7 +16,7 @@ v3.2 closed the remaining visible MVP admin workflow gap: content moderation for
 
 v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
 
-v3.4 is planned to prepare Phase 2 learning expansion with subject taxonomy, prompt behavior by subject, and student learning profile seeds. Full curriculum rollout and automatic exercise generation remain future scope.
+v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout and automatic exercise generation remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -32,6 +32,7 @@ v3.4 is planned to prepare Phase 2 learning expansion with subject taxonomy, pro
 - Teacher reply quality and SLA operations: versioned rich reply/formula payload, backend sanitization/refusal, first-reply/takeover/resolve SLA fields, tutor SLA badges/composer, and admin aggregate Teacher SLA stats.
 - Content moderation operations: user/tutor report actions, moderation case storage/history, admin list/detail/update/note APIs, admin moderation queue/detail/actions UI, and production-safe verification.
 - Manual subscription operations: parent subscription plan/request APIs, admin request processing/apply APIs, parent plan/request UI, admin subscription queue/detail/actions UI, and focused local verification.
+- Learning expansion foundation: subject taxonomy, subject-specific prompt context, topic seeds, student/parent learning profile APIs, and student/parent learning profile UI.
 
 ## v3.0 Closed MVP Gaps
 
@@ -63,10 +64,15 @@ v3.4 is planned to prepare Phase 2 learning expansion with subject taxonomy, pro
 |-----|--------|------------------|----------|
 | Manual subscription operations before payment-provider integration | `PLAN.md` manual paid onboarding model | Phase 100 defined plan/lifecycle/entitlement contract; Phase 101 added backend parent/admin APIs; Phase 102 added parent/admin UI and E2E; Phase 103 captured local release-gate evidence. | Closed |
 
+## v3.4 Closed Phase 2 Foundation Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Multi-subject foundation and student profile seeds | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 104 defined subject/topic/prompt contract; Phase 105 added backend subject/topic/profile seed APIs; Phase 106 added student/parent UI and E2E; Phase 107 captured local release-gate evidence. | Closed for foundation scope |
+
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
-- Multi-subject foundation and student profile seeds: active v3.4.
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
 - AI teacher assistance tools such as automatic summaries and exercise generation.
@@ -111,11 +117,11 @@ v3.3 completed the manual subscription operations MVP before payment-provider in
 3. Add parent subscription management UI and admin subscription queue/detail UI.
 4. Close with lightweight functional checks and keep Stripe/TWINT as a later provider integration.
 
-## v3.4 Scope Recommendation
+## v3.4 Scope Outcome
 
-v3.4 should build learning expansion foundations before broad curriculum rollout:
+v3.4 completed the learning expansion foundation before broad curriculum rollout:
 
-1. Define subject identifiers, rollout states, topic taxonomy, and prompt behavior by subject.
-2. Add backend subject/topic support and student profile seed aggregation.
-3. Add student/parent learning profile UI backed by real data.
-4. Close with lightweight functional checks and record residual full-curriculum, AI teacher tooling, and personalization scope.
+1. Defined subject identifiers, rollout states, topic taxonomy, and prompt behavior by subject.
+2. Added backend subject/topic support and student profile seed aggregation.
+3. Added student/parent learning profile UI backed by backend-shaped data.
+4. Closed with lightweight functional checks and recorded residual full-curriculum, AI teacher tooling, and personalization scope.
