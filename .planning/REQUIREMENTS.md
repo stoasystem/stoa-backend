@@ -1,7 +1,7 @@
 # Requirements: v3.2 Content Moderation And Internal Operations
 
 **Milestone:** v3.2
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-08
 
 ## Goal
@@ -83,4 +83,4 @@ Acceptance criteria:
 | MOD-01 | Phase 96 | Complete |
 | MOD-02 | Phase 97 | Complete |
 | UI-17 | Phase 98 | Complete |
-| VERIFY-15 | Phase 99 | Planned |
+| VERIFY-15 | Phase 99 | Complete |

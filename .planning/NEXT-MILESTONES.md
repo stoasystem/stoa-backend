@@ -3,24 +3,6 @@
 **Updated:** 2026-06-08
 **Mode:** product functionality first
 
-## v3.2 Content Moderation And Internal Operations
-
-Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`.
-
-Planned phases:
-
-- Phase 96: Content Moderation Contract And Data Model.
-- Phase 97: Backend Moderation Reporting And Admin APIs.
-- Phase 98: Moderation Reporting And Admin Queue UI.
-- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
-
-Scope:
-
-- Add user/tutor report actions for question, AI answer, and teacher reply surfaces.
-- Add moderation case records with status, severity, reason, reporter, subject identifiers, assignment, resolution notes, and history.
-- Add admin list/detail/action APIs and admin queue/detail UI.
-- Keep verification functional and lightweight: route tests, status transitions, basic role gating, and browser smoke.
-
 ## v3.3 Subscription Operations MVP
 
 Goal: make the manual MVP subscription model usable before integrating Stripe/TWINT.
@@ -54,3 +36,20 @@ Scope:
 - Add a durable subject/topic taxonomy for math-first expansion into physics, German, and English.
 - Start student learning profile fields from existing questions, feedback, and weak-topic data.
 - Prepare AI teacher assistance and personalization hooks without shipping full autonomous exercise generation yet.
+
+## v3.5 Realtime And Teacher Assistance Foundation
+
+Goal: prepare the next teacher-support expansion after moderation, subscriptions, and learning-profile foundations.
+
+Planned phases:
+
+- Phase 108: Realtime Notification And Teacher Assistance Contract.
+- Phase 109: Backend Notification Events And Teacher Summary Seeds.
+- Phase 110: Tutor/Admin Notification And Summary UI.
+- Phase 111: v3.5 Functional Release Gate And Expansion Audit.
+
+Scope:
+
+- Add a bounded notification event model before any broad WebSocket rollout.
+- Prepare teacher assistance summaries from existing question/conversation context.
+- Keep automatic exercise generation, full personalization, mobile polish, and multilingual rollout out of scope unless a later milestone explicitly promotes them.

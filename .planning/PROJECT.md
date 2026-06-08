@@ -36,7 +36,7 @@ The completed v3.0 milestone reconciled the original `stoa_docs` product baselin
 
 The completed v3.1 milestone closed the remaining teacher-takeover MVP gaps: rich text/formula replies and response-time SLA tracking.
 
-The active v3.2 milestone targets the remaining visible MVP admin workflow from `stoa_docs`: content moderation for reported or abnormal learning content.
+The completed v3.2 milestone closed the remaining visible MVP admin workflow from `stoa_docs`: content moderation for reported or abnormal learning content.
 
 ## Core Value
 
@@ -44,9 +44,9 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 ## Current State
 
-**Production-verified shipped version:** v3.1 Teacher Reply Quality And SLA Operations on 2026-06-08
-**Latest completed milestone:** v3.1 Teacher Reply Quality And SLA Operations on 2026-06-08
-**Active milestone:** v3.2 Content Moderation And Internal Operations
+**Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
+**Latest completed milestone:** v3.2 Content Moderation And Internal Operations on 2026-06-08
+**Active milestone:** None.
 
 Delivered:
 
@@ -126,46 +126,37 @@ Delivered:
 - v2.8 deployed CDK-managed immutable evidence storage with S3 Object Lock GOVERNANCE retention, API-only runtime configuration, scoped metadata-prefix S3 permissions, live immutable manifest persistence, DynamoDB metadata verification, S3 Object Lock header verification, and production browser smoke.
 - v2.9 locally completed retention governance and legal-hold operations with governance contracts, backend metadata recording APIs, admin UI controls, local quality gates, and explicit production deploy/live smoke deferral.
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
-- v3.2 is planned to add content moderation report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification for internal operations.
+- v3.2 completed content moderation report actions, moderation cases, admin queue/detail/actions, deployment, and production-safe smoke for internal operations.
 
 ## Last Production-Verified Milestone
 
-**v3.1 Teacher Reply Quality And SLA Operations** shipped on 2026-06-08.
-
-Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 scope.
-
-Completed phases:
-
-- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
-- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
-- Phase 94: Teacher Reply Composer And SLA Visibility UI.
-- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
-
-## Latest Completed Milestone
-
-### v3.1 Teacher Reply Quality And SLA Operations
-
-Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
-
-Completed phases:
-
-- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
-- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
-- Phase 94: Teacher Reply Composer And SLA Visibility UI.
-- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
-
-## Current Milestone
-
-### v3.2 Content Moderation And Internal Operations
+**v3.2 Content Moderation And Internal Operations** shipped on 2026-06-08.
 
 Goal: close the remaining MVP admin content moderation workflow from `stoa_docs` with report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification.
 
-Planned phases:
+Completed phases:
 
 - Phase 96: Content Moderation Contract And Data Model.
 - Phase 97: Backend Moderation Reporting And Admin APIs.
 - Phase 98: Moderation Reporting And Admin Queue UI.
 - Phase 99: v3.2 Functional Release Gate And Docs Alignment.
+
+## Latest Completed Milestone
+
+### v3.2 Content Moderation And Internal Operations
+
+Goal: close the remaining MVP admin content moderation workflow from `stoa_docs` with report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification.
+
+Completed phases:
+
+- Phase 96: Content Moderation Contract And Data Model.
+- Phase 97: Backend Moderation Reporting And Admin APIs.
+- Phase 98: Moderation Reporting And Admin Queue UI.
+- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
+
+## Current Milestone
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ## Requirements
 
@@ -198,12 +189,16 @@ Shipped requirements:
 
 ### Active
 
+No active requirements.
+
+### Completed
+
+Milestone v3.2 requirements are archived in `.planning/milestones/v3.2-REQUIREMENTS.md` and are complete:
+
 - MOD-01: content moderation contract and data model readiness - Phase 96.
 - MOD-02: backend moderation reporting and admin APIs - Phase 97.
 - UI-17: moderation reporting and admin queue UI - Phase 98.
 - VERIFY-15: v3.2 functional release gate and STOA docs alignment - Phase 99.
-
-### Completed
 
 Milestone v3.1 requirements are archived in `.planning/milestones/v3.1-REQUIREMENTS.md` and are complete:
 
@@ -460,7 +455,7 @@ Known current resources:
 | Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Complete locally; production deploy/live smoke deferred |
 | Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Good - shipped in v3.0 |
 | Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Good - shipped in v3.1 |
-| Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Active - Phase 96 planned |
+| Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Good - shipped in v3.2 |
 
 ## Evolution
 
@@ -480,4 +475,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after planning milestone v3.2*
+*Last updated: 2026-06-08 after shipping milestone v3.2*

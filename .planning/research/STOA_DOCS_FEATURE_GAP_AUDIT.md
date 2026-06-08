@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.2
+**Updated:** 2026-06-08 after completing v3.2
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -12,7 +12,7 @@ v3.0 closed the highest-priority account/intake MVP gaps identified in this audi
 
 v3.1 closed the remaining teacher-takeover MVP gaps selected for that cycle: safe rich text/formula teacher replies, response-time SLA tracking, teacher queue/session visibility, admin aggregate SLA visibility, and production-safe release verification.
 
-v3.2 is planned to close the remaining visible MVP admin workflow gap: content moderation for reported or abnormal learning content. This is a product-building scope, so verification should focus on functional report/admin workflows rather than broad compliance evidence.
+v3.2 closed the remaining visible MVP admin workflow gap: content moderation for reported or abnormal learning content. The release added report actions, moderation cases, admin queue/detail/actions, deploy evidence, and production-safe smoke.
 
 ## Completed Or Largely Complete
 
@@ -26,6 +26,7 @@ v3.2 is planned to close the remaining visible MVP admin workflow gap: content m
 - Admin basics: `/admin/users`, `/admin/users/{id}`, `/admin/stats`.
 - Report operations hardening: recovery jobs, evidence export, support handoff, artifact editing/rollback, immutable evidence, retention governance.
 - Teacher reply quality and SLA operations: versioned rich reply/formula payload, backend sanitization/refusal, first-reply/takeover/resolve SLA fields, tutor SLA badges/composer, and admin aggregate Teacher SLA stats.
+- Content moderation operations: user/tutor report actions, moderation case storage/history, admin list/detail/update/note APIs, admin moderation queue/detail/actions UI, and production-safe verification.
 
 ## v3.0 Closed MVP Gaps
 
@@ -45,11 +46,11 @@ v3.2 is planned to close the remaining visible MVP admin workflow gap: content m
 | Teacher rich text/formula reply polish | `PRD.md` 3.3 P0 | Phase 92 defined the contract; Phase 93 added backend normalized rich reply/formula payloads and refusal rules; Phase 94 added the active tutor composer and safe formula renderer; Phase 95 deployed and production-smoked read-only surfaces. | Closed |
 | SLA response tracking | `PRD.md` 3.3 P1 | Phase 93 added request/takeover/first-reply/resolve SLA fields and admin `teacher_sla` aggregates; Phase 94 added tutor SLA badges and admin Teacher SLA card. | Closed |
 
-## Active MVP Gap
+## v3.2 Closed MVP Gap
 
 | Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| Content moderation | `PRD.md` 3.5 P2 | v3.2 plans user report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification. | Active v3.2 |
+| Content moderation | `PRD.md` 3.5 P2 | Phase 96 defined the contract; Phase 97 added backend report creation/admin APIs; Phase 98 added student/tutor report actions and admin moderation UI; Phase 99 deployed and production-smoked read-only/auth-gated surfaces. | Closed |
 
 ## Phase 2 / Future Expansion
 
@@ -80,9 +81,9 @@ v3.1 completed the selected teacher-takeover MVP closeout:
 3. Added SLA timestamping and aggregate response metrics.
 4. Exposed teacher/admin SLA visibility and updated release evidence.
 
-## v3.2 Scope Recommendation
+## v3.2 Scope Outcome
 
-v3.2 should close the remaining MVP admin moderation workflow before Phase 2 expansion:
+v3.2 completed the remaining MVP admin moderation workflow before Phase 2 expansion:
 
 1. Define the moderation case contract, status lifecycle, data model, and API/UI workflow.
 2. Add backend report creation and admin moderation list/detail/action APIs.

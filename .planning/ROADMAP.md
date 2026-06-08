@@ -24,12 +24,11 @@
 - [x] **v2.9 Retention Governance And Legal Hold Operations** - Complete local-only 2026-06-07; production verification closed by v3.0.
 - [x] **v3.0 STOA Docs Gap Closeout And Account Intake Hardening** - Shipped 2026-06-08.
 - [x] **v3.1 Teacher Reply Quality And SLA Operations** - Shipped 2026-06-08.
+- [x] **v3.2 Content Moderation And Internal Operations** - Shipped 2026-06-08. Archive: `.planning/milestones/v3.2-ROADMAP.md`.
 
 ## Current Milestone
 
-**v3.2 Content Moderation And Internal Operations** - Active.
-
-Goal: close the remaining MVP admin content moderation workflow from `stoa_docs` with report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification. This is a product-building milestone; security work is limited to basic authorization and privacy checks.
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ## Phases
 
@@ -38,7 +37,7 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 | 96 | Content Moderation Contract And Data Model | Complete | MOD-01 |
 | 97 | Backend Moderation Reporting And Admin APIs | Complete | MOD-02 |
 | 98 | Moderation Reporting And Admin Queue UI | Complete | UI-17 |
-| 99 | v3.2 Functional Release Gate And Docs Alignment | Planned | VERIFY-15 |
+| 99 | v3.2 Functional Release Gate And Docs Alignment | Complete | VERIFY-15 |
 
 ## Progress
 
@@ -47,7 +46,7 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 | 96 | v3.2 | 1/1 | Complete | 2026-06-08 |
 | 97 | v3.2 | 1/1 | Complete | 2026-06-08 |
 | 98 | v3.2 | 1/1 | Complete | 2026-06-08 |
-| 99 | v3.2 | 0/1 | Planned | - |
+| 99 | v3.2 | 1/1 | Complete | 2026-06-08 |
 
 ## Traceability
 
@@ -56,7 +55,7 @@ Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`
 | MOD-01 | Phase 96 | Complete |
 | MOD-02 | Phase 97 | Complete |
 | UI-17 | Phase 98 | Complete |
-| VERIFY-15 | Phase 99 | Planned |
+| VERIFY-15 | Phase 99 | Complete |
 
 ---
-*Last updated: 2026-06-08 after completing Phase 98*
+*Last updated: 2026-06-08 after shipping v3.2*

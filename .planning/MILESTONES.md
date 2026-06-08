@@ -509,17 +509,19 @@ Known deferred items at close: content moderation workflow, production mutation 
 
 ### v3.2 Content Moderation And Internal Operations
 
-**Status:** Active
+**Status:** Shipped 2026-06-08
 **Started:** 2026-06-08
 **Roadmap:** `.planning/milestones/v3.2-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.2-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Close the remaining MVP admin content moderation workflow from `stoa_docs`.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Audit:** `.planning/milestones/v3.2-MILESTONE-AUDIT.md`
+**Phase archive:** `.planning/milestones/v3.2-phases/`
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 96: Content Moderation Contract And Data Model.
 - Phase 97: Backend Moderation Reporting And Admin APIs.
@@ -527,4 +529,4 @@ Planned phases:
 - Phase 99: v3.2 Functional Release Gate And Docs Alignment.
 
 ---
-*Last updated: 2026-06-08 after planning v3.2*
+*Last updated: 2026-06-08 after shipping v3.2*

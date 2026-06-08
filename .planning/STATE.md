@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Content Moderation And Internal Operations
-status: planning
-last_updated: "2026-06-08T14:25:00+02:00"
+status: complete
+last_updated: "2026-06-08T14:58:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.2 content moderation and internal operations.
+**Current focus:** v3.2 is complete; no active next milestone has been started.
 
 ## Current Position
 
-Phase: 99 v3.2 Functional Release Gate And Docs Alignment
-Plan: Not started
-Status: Ready for release verification.
-Last activity: 2026-06-08 - completed Phase 98 student/tutor report actions, admin moderation queue/detail/actions, lint/build, moderation e2e, and tutor workflow regression.
+Phase: v3.2 complete
+Plan: Next milestone not started
+Status: Complete.
+Last activity: 2026-06-08 - shipped v3.2 with backend/frontend deploys, production-safe smoke, gap audit update, release gate, and milestone audit.
 
 ## Accumulated Context
 
@@ -45,10 +45,11 @@ Last activity: 2026-06-08 - completed Phase 98 student/tutor report actions, adm
 - v3.0 reconciled `stoa_docs` against the shipped backend/frontend state and closed account lifecycle, parent binding, OCR correction, quota hardening, and v2.9 production verification gaps.
 - v3.1 closed teacher rich text/formula replies and response-time SLA tracking.
 - v3.2 starts with content moderation because it is the only remaining visible MVP admin workflow in `stoa_docs`; this milestone should prioritize feature delivery over broad compliance/security evidence.
+- v3.2 shipped content moderation report actions, moderation cases, admin queue/detail/actions, deploy evidence, and production-safe smoke.
 
 ### Pending Todos
 
-- Run a lightweight functional release gate and update the `stoa_docs` gap audit in Phase 99.
+- Start the next milestone with `$gsd-new-milestone`.
 
 ### Blockers/Concerns
 
@@ -59,4 +60,4 @@ Last activity: 2026-06-08 - completed Phase 98 student/tutor report actions, adm
 
 ## Operator Next Steps
 
-- Execute Phase 99 functional release gate and docs alignment.
+- Start the next milestone with `$gsd-new-milestone`.
