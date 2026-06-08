@@ -36,6 +36,8 @@ The completed v3.0 milestone reconciled the original `stoa_docs` product baselin
 
 The completed v3.1 milestone closed the remaining teacher-takeover MVP gaps: rich text/formula replies and response-time SLA tracking.
 
+The active v3.2 milestone targets the remaining visible MVP admin workflow from `stoa_docs`: content moderation for reported or abnormal learning content.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -44,7 +46,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.1 Teacher Reply Quality And SLA Operations on 2026-06-08
 **Latest completed milestone:** v3.1 Teacher Reply Quality And SLA Operations on 2026-06-08
-**Active milestone:** None.
+**Active milestone:** v3.2 Content Moderation And Internal Operations
 
 Delivered:
 
@@ -124,19 +126,20 @@ Delivered:
 - v2.8 deployed CDK-managed immutable evidence storage with S3 Object Lock GOVERNANCE retention, API-only runtime configuration, scoped metadata-prefix S3 permissions, live immutable manifest persistence, DynamoDB metadata verification, S3 Object Lock header verification, and production browser smoke.
 - v2.9 locally completed retention governance and legal-hold operations with governance contracts, backend metadata recording APIs, admin UI controls, local quality gates, and explicit production deploy/live smoke deferral.
 - v3.1 completed teacher reply quality and SLA operations with a versioned rich reply/formula contract, backend sanitization/refusal, SLA timing fields, tutor reply composer and SLA badges, admin Teacher SLA metrics, deployment, and production-safe smoke.
+- v3.2 is planned to add content moderation report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification for internal operations.
 
 ## Last Production-Verified Milestone
 
-**v2.8 CDK-Managed Immutable Evidence Storage Deployment** shipped on 2026-06-07.
+**v3.1 Teacher Reply Quality And SLA Operations** shipped on 2026-06-08.
 
-Goal: deploy and enable CDK-managed immutable evidence storage for report operations retention manifests, then prove full metadata-only immutable manifest object persistence in production without exposing private artifacts, deleting audit rows, or mutating customer report artifacts.
+Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 scope.
 
 Completed phases:
 
-- Phase 79: Immutable Evidence Storage CDK Design And Deploy Readiness.
-- Phase 80: CDK Immutable Evidence Storage Resource Deployment.
-- Phase 81: Backend Immutable Manifest Persistence Enablement.
-- Phase 82: v2.8 Release Gate And Live Immutable Storage Verification.
+- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
+- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
+- Phase 94: Teacher Reply Composer And SLA Visibility UI.
+- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
 
 ## Latest Completed Milestone
 
@@ -153,7 +156,16 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
+### v3.2 Content Moderation And Internal Operations
+
+Goal: close the remaining MVP admin content moderation workflow from `stoa_docs` with report actions, moderation cases, admin queue/detail/actions, and lightweight functional verification.
+
+Planned phases:
+
+- Phase 96: Content Moderation Contract And Data Model.
+- Phase 97: Backend Moderation Reporting And Admin APIs.
+- Phase 98: Moderation Reporting And Admin Queue UI.
+- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
 
 ## Requirements
 
@@ -186,7 +198,10 @@ Shipped requirements:
 
 ### Active
 
-No active requirements.
+- MOD-01: content moderation contract and data model readiness - Phase 96.
+- MOD-02: backend moderation reporting and admin APIs - Phase 97.
+- UI-17: moderation reporting and admin queue UI - Phase 98.
+- VERIFY-15: v3.2 functional release gate and STOA docs alignment - Phase 99.
 
 ### Completed
 
@@ -445,6 +460,7 @@ Known current resources:
 | Start v2.9 with retention governance and legal hold operations | v2.8 proved technical Object Lock-backed immutable evidence persistence but left formal retention-period approval and legal-hold operating procedure as residual gaps | Complete locally; production deploy/live smoke deferred |
 | Start v3.0 with stoa_docs gap closeout and account intake hardening | `stoa_docs` MVP is mostly implemented, but account lifecycle, parent binding, OCR correction, robust question quota, and v2.9 production verification remain high-priority gaps | Good - shipped in v3.0 |
 | Start v3.1 with teacher reply quality and SLA operations | After v3.0, remaining MVP-level gaps are concentrated in teacher rich text/formula replies and response-time tracking | Good - shipped in v3.1 |
+| Start v3.2 with content moderation and internal operations | After v3.1, the only remaining visible MVP admin workflow in `stoa_docs` is content moderation; internal development should prioritize usable feature flow over broad security/compliance evidence | Active - Phase 96 planned |
 
 ## Evolution
 
@@ -464,4 +480,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after shipping milestone v3.1*
+*Last updated: 2026-06-08 after planning milestone v3.2*

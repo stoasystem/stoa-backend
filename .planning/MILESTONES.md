@@ -477,22 +477,54 @@ Known deferred items at close: real email verification policy change, teacher ri
 
 ### v3.1 Teacher Reply Quality And SLA Operations
 
-**Status:** Active
+**Status:** Shipped 2026-06-08
 **Started:** 2026-06-08
-**Roadmap:** `.planning/milestones/v3.1-ROADMAP.md`
-**Requirements:** `.planning/milestones/v3.1-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v3.1-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v3.1-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v3.1-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula replies and response-time SLA tracking.
+**Phases:** 4
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
+
+Completed phases:
+
+- Phase 92: Teacher Rich Reply And SLA Contract Readiness - Complete.
+- Phase 93: Backend Rich Reply Metadata And SLA Tracking - Complete.
+- Phase 94: Teacher Reply Composer And SLA Visibility UI - Complete.
+- Phase 95: v3.1 Release Gate And STOA Docs Alignment - Complete.
+
+---
+Key accomplishments:
+
+- Defined the versioned safe teacher rich reply/formula contract.
+- Added backend rich reply sanitization/refusal and teacher SLA timing fields.
+- Added tutor composer, formula rendering, SLA badges, and admin Teacher SLA stats.
+- Completed backend/frontend deploys and production-safe smoke.
+
+Known deferred items at close: content moderation workflow, production mutation verification for teacher rich replies with a named fixture, realtime/WebSocket teacher notifications, and broad Phase 2 expansion.
+
+## Active
+
+### v3.2 Content Moderation And Internal Operations
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.2-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.2-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Close the remaining MVP admin content moderation workflow from `stoa_docs`.
 **Phases:** 4
 **Plans:** 1/4 complete
 **Requirements:** 0/4 complete
 
 Planned phases:
 
-- Phase 92: Teacher Rich Reply And SLA Contract Readiness.
-- Phase 93: Backend Rich Reply Metadata And SLA Tracking.
-- Phase 94: Teacher Reply Composer And SLA Visibility UI.
-- Phase 95: v3.1 Release Gate And STOA Docs Alignment.
+- Phase 96: Content Moderation Contract And Data Model.
+- Phase 97: Backend Moderation Reporting And Admin APIs.
+- Phase 98: Moderation Reporting And Admin Queue UI.
+- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
 
 ---
-*Last updated: 2026-06-08 after planning v3.1*
+*Last updated: 2026-06-08 after planning v3.2*

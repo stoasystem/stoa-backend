@@ -1,64 +1,66 @@
-# Requirements: v3.1 Teacher Reply Quality And SLA Operations
+# Requirements: v3.2 Content Moderation And Internal Operations
 
-**Milestone:** v3.1
-**Status:** Complete
+**Milestone:** v3.2
+**Status:** Active
 **Created:** 2026-06-08
 
 ## Goal
 
-Close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/formula reply contract, response-time SLA tracking, teacher/admin visibility, and release verification without expanding into broad Phase 2 payments or multi-subject scope.
+Close the remaining MVP admin workflow gap from `stoa_docs`: content moderation for reported or abnormal learning content. This milestone prioritizes product functionality for internal development: user-facing report actions, admin moderation queue/detail/actions, and operational visibility. Security testing stays limited to basic role gating and privacy sanity checks.
 
 ## Requirements
 
-### TEACHOPS-01 Teacher Reply And SLA Contract Readiness
+### MOD-01 Content Moderation Contract And Data Model Readiness
 
-Implementers have a precise teacher reply content contract, SLA event model, privacy boundary, and verification plan before changing teacher reply behavior.
-
-Acceptance criteria:
-
-- Contract defines allowed rich text/formula input shape, safe rendering/output shape, markdown/HTML/LaTeX handling, validation limits, and refusal behavior.
-- Contract defines teacher-request, queue-visible, takeover, first-reply, resolve, and timeout SLA timestamps.
-- Contract defines SLA metrics for teacher queue, admin stats, and future compensation/operations reporting without exposing private student content.
-- Privacy model forbids leaking private image keys, report artifact keys, presigned URLs, auth tokens, cookies, passwords, AWS secrets, or raw unsafe HTML.
-- CDK/infrastructure readiness confirms no new resource is needed, or records any exact required change.
-
-### TEACHOPS-02 Backend Rich Reply Metadata And SLA Tracking
-
-Backend teacher takeover records safe rich reply metadata and SLA timing evidence.
+Implementers have a precise moderation case contract, data model, and API plan before backend changes.
 
 Acceptance criteria:
 
-- Teacher reply API accepts the approved rich reply/formula payload and stores sanitized metadata.
-- Backend records request-to-takeover, request-to-first-reply, takeover-to-first-reply, and resolve timing where data exists.
-- Admin stats or teacher stats expose aggregate SLA metrics without private question content.
-- Tests cover validation, sanitization, formula payloads, stale/invalid state, authorization, and SLA calculations.
+- Contract defines reportable surfaces: student question content, AI answer, teacher reply, and optional freeform user note.
+- Contract defines moderation case status lifecycle: `open`, `in_review`, `actioned`, `dismissed`, and `closed`.
+- Contract defines reason/severity fields, reporter identity, subject identifiers, assigned admin, timestamps, resolution notes, and audit history.
+- Contract confirms whether the existing DynamoDB single-table patterns support queue/list/detail access without new infrastructure.
+- Functional verification plan focuses on happy path, role gating, status transitions, pagination/filtering, and UI usability.
 
-### UI-16 Teacher Reply Composer And SLA Visibility
+### MOD-02 Backend Moderation Reporting And Admin APIs
 
-Teacher and admin UI make rich replies and SLA state visible without unsafe content rendering.
-
-Acceptance criteria:
-
-- Teacher reply composer supports the approved rich text/formula contract.
-- Teacher queue/session UI shows SLA status and timing indicators.
-- Admin stats/reporting exposes aggregate teacher response metrics.
-- Playwright covers rich reply render, formula-safe display, SLA status, admin gating, and private marker denial.
-
-### VERIFY-14 v3.1 Release Gate And STOA Docs Alignment
-
-v3.1 closes with test/deploy/live-smoke evidence and updated `stoa_docs` gap audit.
+Backend supports creating moderation cases and managing them from admin APIs.
 
 Acceptance criteria:
 
-- Backend/frontend quality gates, deploy evidence, commit SHAs, timestamps, production API request IDs, and browser smoke are recorded.
-- Feature gap audit marks teacher rich reply and SLA tracking outcomes accurately.
-- Production smoke avoids customer content mutation unless a named non-customer safe fixture and cleanup path are documented.
-- Final audit records residual gaps, including content moderation and Phase 2 expansion.
+- Students and teachers/tutors can create a bounded report against an existing question or teacher reply they are allowed to view.
+- Admins can list moderation cases with filters for status, severity, reason, reporter role, assignee, and date.
+- Admins can open a case detail with the relevant question context and existing AI/teacher response summaries.
+- Admins can assign, update status, add resolution notes, and close/dismiss/action a case.
+- Focused tests cover case creation, admin list/detail/actions, invalid target handling, and non-admin rejection.
+
+### UI-17 Moderation Reporting And Admin Queue UI
+
+Frontend exposes practical moderation workflows for internal operations.
+
+Acceptance criteria:
+
+- Student question/detail UI offers a report action with reason, severity, and optional note.
+- Teacher/tutor question detail UI offers a report action for abnormal student content or answer context.
+- Admin UI includes moderation queue, filters, case detail, assignment/status actions, and resolution note controls.
+- UI handles empty, loading, error, submitted, actioned, dismissed, and closed states.
+- Targeted browser verification confirms the internal workflow is usable without requiring production customer mutations.
+
+### VERIFY-15 v3.2 Functional Release Gate And STOA Docs Alignment
+
+v3.2 closes with lightweight functional evidence and updated `stoa_docs` gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to moderation pass.
+- Deploy/build evidence and commit SHAs are recorded if code ships in this milestone.
+- `STOA_DOCS_FEATURE_GAP_AUDIT.md` marks content moderation as closed or accurately records residuals.
+- Final audit lists remaining Phase 2 product expansions: payments, multi-subject, student memory, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
-- Content moderation workflow for reported/unsafe content.
 - Stripe/TWINT subscription payments.
+- Parent-facing subscription management beyond manual admin tier updates.
 - Broad multi-subject rollout for physics, German, and English.
 - Student memory/personalization.
 - AI teacher assistance tools such as summaries and exercise generation.
@@ -68,17 +70,17 @@ Acceptance criteria:
 
 ## Out of Scope
 
-- Stripe/TWINT billing implementation.
-- Broad multi-subject curriculum/content rollout.
-- Direct production customer content mutation without an approved safe fixture.
-- Unsafe raw HTML rendering.
-- Direct support-system writes.
+- Payment-provider integration.
+- Broad Phase 2 curriculum expansion.
+- Compliance-grade moderation/legal workflows.
+- New AWS infrastructure unless Phase 96 proves the existing table/access patterns cannot support the MVP.
+- Extensive security audit beyond basic authorization/privacy checks.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEACHOPS-01 | Phase 92 | Complete |
-| TEACHOPS-02 | Phase 93 | Complete |
-| UI-16 | Phase 94 | Complete |
-| VERIFY-14 | Phase 95 | Complete |
+| MOD-01 | Phase 96 | Planned |
+| MOD-02 | Phase 97 | Planned |
+| UI-17 | Phase 98 | Planned |
+| VERIFY-15 | Phase 99 | Planned |

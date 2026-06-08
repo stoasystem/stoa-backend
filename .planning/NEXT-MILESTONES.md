@@ -1,59 +1,56 @@
 # Next Three Milestones
 
-**Created:** 2026-06-05
-**Mode:** autonomous
+**Updated:** 2026-06-08
+**Mode:** product functionality first
 
-## v1.8 Incident Generation Retry Jobs
+## v3.2 Content Moderation And Internal Operations
 
-Goal: admins can run bounded async `generation_failed` recovery jobs using the existing recovery job/audit platform and weekly report Lambda, without adding AWS infrastructure by default.
-
-Phases:
-
-- Phase 42: Recovery Job Type Contract And CDK Readiness.
-- Phase 43: Async Generation Retry Backend.
-- Phase 44: Admin Generation Retry Job UI.
-- Phase 45: v1.8 Release Gate And Read-only Production Verification.
-
-Scope:
-
-- Add `retry_generation` async job preview/create/execute/cancel/result/audit support.
-- Reuse existing DynamoDB job/target/audit shapes.
-- Reuse existing `stoa-weekly-report` worker Lambda invocation model.
-- Keep production browser smoke read-only; do not create production generation retry jobs without a named safe fixture.
-
-## v1.9 Recovery Resume And Support Evidence Packages
-
-Goal: admins can resume failed/refused/skipped recovery subsets from a prior job and generate support-safe incident evidence packages.
+Goal: close the remaining MVP admin content moderation workflow from `stoa_docs`.
 
 Planned phases:
 
-- Phase 46: Resume Contract And Evidence Package Design.
-- Phase 47: Failed/Skipped Subset Resume Backend.
-- Phase 48: Support Evidence Package UI.
-- Phase 49: v1.9 Release Gate And Live Verification.
+- Phase 96: Content Moderation Contract And Data Model.
+- Phase 97: Backend Moderation Reporting And Admin APIs.
+- Phase 98: Moderation Reporting And Admin Queue UI.
+- Phase 99: v3.2 Functional Release Gate And Docs Alignment.
 
 Scope:
 
-- Create a new audit-linked recovery job from a previous job's failed/refused/not_found/skipped targets.
-- Support both resend and generation retry resume paths where the original job type permits it.
-- Add support-safe package output that bundles job summary, target results, audit timeline, request IDs, and redacted operator notes.
-- Do not integrate an external ticketing system unless an approved connector/credential path exists.
+- Add user/tutor report actions for question, AI answer, and teacher reply surfaces.
+- Add moderation case records with status, severity, reason, reporter, subject identifiers, assignment, resolution notes, and history.
+- Add admin list/detail/action APIs and admin queue/detail UI.
+- Keep verification functional and lightweight: route tests, status transitions, basic role gating, and browser smoke.
 
-## v2.0 Controlled Report Editing MVP
+## v3.3 Subscription Operations MVP
 
-Goal: admins can safely propose and apply bounded report content edits with append-only audit evidence and no direct S3 exposure.
+Goal: make the manual MVP subscription model usable before integrating Stripe/TWINT.
 
 Planned phases:
 
-- Phase 50: Report Editing Contract And Safety Model.
-- Phase 51: Backend Report Edit Draft And Apply APIs.
-- Phase 52: Admin Report Editing UI.
-- Phase 53: v2.0 Release Gate And Final Verification.
+- Phase 100: Subscription Operations Contract And Entitlement Model.
+- Phase 101: Backend Subscription Request And Admin Tier APIs.
+- Phase 102: Parent Subscription Management UI And Admin Queue.
+- Phase 103: v3.3 Functional Release Gate And Billing Readiness.
 
 Scope:
 
-- Add backend-mediated report edit drafts and apply flow for existing HTML/JSON artifacts.
-- Preserve ownership/admin authorization and no public/presigned S3 URLs.
-- Record before/after metadata, editor, reason, validation result, and artifact version references in audit evidence.
-- Keep PDF generation, multilingual delivery, billing, analytics, and WORM storage out of the MVP unless safety evidence requires them.
+- Preserve manual billing while giving parents a clear plan view, request/upgrade/cancel intent, and admin processing workflow.
+- Record subscription source, requested tier, current tier, effective date, internal note, and status.
+- Keep actual payment-provider integration out of scope until v3.4+.
 
+## v3.4 Learning Expansion Foundation
+
+Goal: prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout.
+
+Planned phases:
+
+- Phase 104: Multi-Subject Taxonomy And Prompt Contract.
+- Phase 105: Backend Subject/Topic Support And Student Learning Profile Seeds.
+- Phase 106: Student/Parent Learning Profile UI Polish.
+- Phase 107: v3.4 Functional Release Gate And Expansion Audit.
+
+Scope:
+
+- Add a durable subject/topic taxonomy for math-first expansion into physics, German, and English.
+- Start student learning profile fields from existing questions, feedback, and weak-topic data.
+- Prepare AI teacher assistance and personalization hooks without shipping full autonomous exercise generation yet.
