@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Teacher Reply Quality And SLA Operations
-status: planning
-last_updated: "2026-06-08T10:08:43+02:00"
+status: active
+last_updated: "2026-06-08T10:35:00+02:00"
 last_activity: 2026-06-08
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 
 ## Current Position
 
-Phase: 92 Teacher Rich Reply And SLA Contract Readiness
-Plan: 92-01 Teacher Rich Reply And SLA Contract Readiness
-Status: Planned.
-Last activity: 2026-06-08 — reviewed `stoa_docs` residual gaps and planned v3.1 around teacher rich replies and SLA tracking.
+Phase: 93 Backend Rich Reply Metadata And SLA Tracking
+Plan: 93-01 Backend Rich Reply Metadata And SLA Tracking
+Status: Ready to plan/execute.
+Last activity: 2026-06-08 — completed Phase 92 contract/readiness with backend/UI surface inspection, rich reply payload rules, SLA target model, privacy boundary, and no-new-CDK readiness.
 
 ## Accumulated Context
 
@@ -120,7 +120,8 @@ Last activity: 2026-06-08 — reviewed `stoa_docs` residual gaps and planned v3.
 - v2.9 must not provide legal advice or fabricate approval; it can only create and verify the approval workflow and record actual approval metadata if supplied through an approved path.
 - `stoa_docs` Phase 2 items such as Stripe/TWINT payments, broad multi-subject rollout, student memory, AI teacher tools, WebSocket notifications, and multilingual/mobile polish remain future scope unless explicitly selected.
 - Teacher rich replies must not render unsafe raw HTML or expose private image keys, report artifact keys, presigned URLs, tokens, cookies, passwords, or AWS secrets.
+- Phase 92 completed the teacher reply/SLA contract. Backend implementation should target the `/teachers` question reply path first, keep `teacher_response` as a plain-text compatibility field, add `teacher_response_text`, `teacher_response_rich`, `teacher_response_format`, and record SLA timestamps where source data exists. The active frontend tutor workflow under `/tutor` should be the Phase 94 surface.
 
 ## Operator Next Steps
 
-- Execute Phase 92 and proceed to backend teacher reply/SLA implementation.
+- Implement Phase 93 backend rich reply metadata and SLA tracking.

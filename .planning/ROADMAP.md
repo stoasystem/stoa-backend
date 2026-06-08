@@ -34,7 +34,7 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 92 | Teacher Rich Reply And SLA Contract Readiness | Planned | TEACHOPS-01 |
+| 92 | Teacher Rich Reply And SLA Contract Readiness | Complete | TEACHOPS-01 |
 | 93 | Backend Rich Reply Metadata And SLA Tracking | Planned | TEACHOPS-02 |
 | 94 | Teacher Reply Composer And SLA Visibility UI | Planned | UI-16 |
 | 95 | v3.1 Release Gate And STOA Docs Alignment | Planned | VERIFY-14 |
@@ -43,7 +43,7 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 92 | v3.1 | 1/1 | Planned | - |
+| 92 | v3.1 | 1/1 | Complete | 2026-06-08 |
 | 93 | v3.1 | 0/1 | Planned | - |
 | 94 | v3.1 | 0/1 | Planned | - |
 | 95 | v3.1 | 0/1 | Planned | - |
@@ -52,10 +52,10 @@ Goal: close the remaining teacher-takeover MVP gaps from `stoa_docs`: rich text/
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEACHOPS-01 | Phase 92 | Planned |
+| TEACHOPS-01 | Phase 92 | Complete |
 | TEACHOPS-02 | Phase 93 | Planned |
 | UI-16 | Phase 94 | Planned |
 | VERIFY-14 | Phase 95 | Planned |
 
 ---
-*Last updated: 2026-06-08 after planning v3.1*
+*Last updated: 2026-06-08 after completing Phase 92*
