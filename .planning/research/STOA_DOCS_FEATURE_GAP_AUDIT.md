@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after completing v3.4
+**Updated:** 2026-06-08 after planning v3.5
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -17,6 +17,8 @@ v3.2 closed the remaining visible MVP admin workflow gap: content moderation for
 v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
 
 v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout and automatic exercise generation remain future scope.
+
+v3.5 is planned to prepare realtime notification and AI teacher assistance foundations with bounded notification events and teacher summary seeds. Full WebSocket rollout, push notifications, and automatic exercise generation remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -75,8 +77,9 @@ v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subj
 - Stripe/TWINT subscription payments after manual operations are usable.
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
-- AI teacher assistance tools such as automatic summaries and exercise generation.
-- WebSocket realtime notifications.
+- Notification and AI teacher assistance foundation: active v3.5.
+- Automatic exercise generation and richer AI teacher tools.
+- Full WebSocket realtime notifications.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
@@ -125,3 +128,12 @@ v3.4 completed the learning expansion foundation before broad curriculum rollout
 2. Added backend subject/topic support and student profile seed aggregation.
 3. Added student/parent learning profile UI backed by backend-shaped data.
 4. Closed with lightweight functional checks and recorded residual full-curriculum, AI teacher tooling, and personalization scope.
+
+## v3.5 Scope Recommendation
+
+v3.5 should build notification and teacher-assistance foundations before full realtime rollout:
+
+1. Define notification event types, recipient rules, lifecycle, and API/UI behavior.
+2. Define teacher assistance summary seed inputs and output shape.
+3. Add backend event list/read/archive and tutor summary seed support.
+4. Add tutor/admin notification and summary UI, then record residual WebSocket, push, and exercise-generation scope.

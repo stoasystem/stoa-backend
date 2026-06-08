@@ -587,7 +587,24 @@ Known deferred items at close: Stripe/TWINT payment-provider integration, full m
 
 ## Active
 
-No active milestone.
+### v3.5 Realtime And Teacher Assistance Foundation
+
+**Status:** Active
+**Started:** 2026-06-08
+**Roadmap:** `.planning/milestones/v3.5-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.5-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Prepare realtime and teacher-assistance expansion without jumping directly into a broad WebSocket rollout or automatic exercise generation.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 108: Realtime Notification And Teacher Assistance Contract.
+- Phase 109: Backend Notification Events And Teacher Summary Seeds.
+- Phase 110: Tutor/Admin Notification And Summary UI.
+- Phase 111: v3.5 Functional Release Gate And Expansion Audit.
 
 ---
-*Last updated: 2026-06-08 after completing v3.4*
+*Last updated: 2026-06-08 after planning v3.5*

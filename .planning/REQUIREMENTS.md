@@ -1,76 +1,76 @@
-# Requirements: v3.4 Learning Expansion Foundation
+# Requirements: v3.5 Realtime And Teacher Assistance Foundation
 
-**Milestone:** v3.4
-**Status:** Complete
+**Milestone:** v3.5
+**Status:** Active
 **Created:** 2026-06-08
 
 ## Goal
 
-Prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout. This milestone adds the foundation for multiple subjects, stable topic taxonomy, prompt behavior by subject, and student learning profile seeds from existing usage data. It is a product-building milestone; verification focuses on functional behavior and basic regression coverage.
+Prepare realtime and teacher-assistance expansion without jumping directly into a broad WebSocket rollout or automatic exercise generation. This milestone adds a bounded notification event model, backend event surfaces, teacher assistance summary seeds, tutor/admin UI surfaces, and lightweight functional verification.
 
 ## Requirements
 
-### LEARN-01 Multi-Subject Taxonomy And Prompt Contract
+### NOTIFY-01 Realtime Notification And Teacher Assistance Contract
 
-Implementers have a precise subject/topic taxonomy, prompt behavior contract, and rollout boundary before backend changes.
-
-Acceptance criteria:
-
-- Contract defines supported subject identifiers for `math`, `physics`, `german`, and `english`, with MVP display labels and rollout states.
-- Contract defines topic/knowledge-point taxonomy shape that can support weak-topic reporting and future exercises.
-- Contract defines AI prompt behavior by subject, including language expectations and non-goals for full curriculum mastery.
-- Contract defines how existing math-only question flows remain backward compatible.
-- Contract confirms no new infrastructure is needed unless current DynamoDB access patterns cannot support topic/profile seeds.
-
-### LEARN-02 Backend Subject/Topic Support And Student Profile Seeds
-
-Backend records and exposes learning expansion foundations.
+Implementers have a precise notification event contract, delivery boundary, and teacher assistance seed contract before backend changes.
 
 Acceptance criteria:
 
-- Question submission validates supported subject identifiers and preserves existing math behavior.
-- AI answer path receives subject-specific prompt context from the taxonomy contract.
-- Backend stores normalized subject/topic metadata from AI responses and teacher/admin corrections where available.
-- Student summary/profile APIs expose subject-level counts, weak-topic seeds, feedback averages, and teacher-escalation indicators.
-- Focused tests cover subject validation, backward compatibility, summary/profile aggregation, and prompt context selection.
+- Contract defines notification events for teacher request, teacher takeover, teacher reply, moderation update, subscription request update, and learning profile update.
+- Contract defines delivery states: `created`, `read`, `archived`, and `failed`.
+- Contract defines recipient roles, target ids, event payload shape, retention expectations, and UI display rules.
+- Contract defines teacher assistance summary seed inputs from question content, AI response, teacher replies, topic/profile metadata, and conversation context.
+- Contract explicitly keeps full WebSocket streaming and automatic exercise generation out of v3.5 unless later promoted.
 
-### UI-19 Student And Parent Learning Profile UI
+### NOTIFY-02 Backend Notification Events And Teacher Summary Seeds
 
-Frontend exposes learning expansion foundations without pretending a full curriculum rollout is complete.
+Backend records and exposes notification events and teacher assistance seed summaries.
 
 Acceptance criteria:
 
-- Student question flow shows supported subject choices with rollout-aware labels.
-- Parent/student profile views show subject-level activity, weak-topic seeds, and learning trend placeholders from real backend data.
-- UI copy distinguishes active support from planned/future subject support.
-- Empty/loading/error states are implemented for subject/profile data.
+- Backend creates notification events for selected existing workflows without changing their core behavior.
+- Users can list and mark their notification events read/archived.
+- Tutor/admin surfaces can request teacher assistance summary seeds for visible questions/sessions.
+- Backend stores minimal summary seed metadata and avoids generating full autonomous exercise content.
+- Focused tests cover event creation/list/read/archive, recipient filtering, and summary seed generation from existing data.
+
+### UI-20 Tutor/Admin Notification And Summary UI
+
+Frontend exposes notification and teacher-assistance foundations.
+
+Acceptance criteria:
+
+- Student/parent/tutor/admin shell can display notification counts and event list states where relevant.
+- Tutor question/session UI shows a teacher assistance summary seed panel.
+- Admin UI shows selected operational notification events for moderation/subscription workflows.
+- UI handles empty, loading, error, read, archived, and unavailable summary states.
 - Targeted browser verification confirms the workflow is usable.
 
-### VERIFY-17 v3.4 Functional Release Gate And Expansion Audit
+### VERIFY-18 v3.5 Functional Release Gate And Expansion Audit
 
-v3.4 closes with lightweight functional evidence and updated Phase 2 gap tracking.
+v3.5 closes with lightweight functional evidence and updated Phase 2 gap tracking.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to learning expansion pass.
+- Backend and frontend focused quality gates relevant to notifications and teacher assistance pass.
 - Deploy/build evidence and commit SHAs are recorded if code ships in this milestone.
-- Gap audit marks multi-subject foundation and student profile seeds as active/closed and records residual broad curriculum work.
-- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, AI teacher tools, realtime notifications, mobile/multilingual polish, and support integrations.
+- Gap audit marks notification foundation and teacher assistance seeds as active/closed and records residual full WebSocket/exercise-generation scope.
+- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, full personalization, production WebSocket rollout, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
+- Full WebSocket realtime delivery.
+- Automatic exercise generation and richer AI teacher tools.
 - Stripe/TWINT payment-provider integration.
 - Full multi-subject curriculum content and exercises.
-- Student memory/personalization beyond profile seeds.
-- AI teacher assistance tools such as summaries and exercise generation.
-- WebSocket realtime notifications.
+- Student memory/personalization beyond profile and summary seeds.
 - Mobile responsive polish and full multilingual rollout.
 
 ## Out of Scope
 
-- Full physics/German/English curriculum content authoring.
+- Full WebSocket infrastructure or streaming UX.
+- Push notifications, native mobile notifications, or email notification digests.
 - Automatic exercise generation.
-- Long-term student memory/personalization decisions beyond profile seeds.
 - Payment-provider implementation.
 - Extensive security/compliance testing beyond functional role gating and data sanity checks.
 
@@ -78,7 +78,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEARN-01 | Phase 104 | Complete |
-| LEARN-02 | Phase 105 | Complete |
-| UI-19 | Phase 106 | Complete |
-| VERIFY-17 | Phase 107 | Complete |
+| NOTIFY-01 | Phase 108 | Planned |
+| NOTIFY-02 | Phase 109 | Planned |
+| UI-20 | Phase 110 | Planned |
+| VERIFY-18 | Phase 111 | Planned |
