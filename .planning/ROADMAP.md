@@ -33,97 +33,36 @@
 
 ## Current Milestone
 
-**v3.7 AI Teacher Tools And Exercise Generation** - Complete.
+**v3.8 Full Curriculum Rollout** - Active.
 
-Goal: add teacher-facing automatic summaries, suggested focus, draft explanations, and bounded exercise generation with teacher/admin review.
+Goal: roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
 
 ## Phases
 
-- [x] **Phase 116: AI Teacher Tools Contract And Generation Model** - Complete 2026-06-09.
-- [x] **Phase 117: Backend Teacher Summary And Exercise Draft APIs** - Complete 2026-06-09.
-- [x] **Phase 118: Tutor AI Tools And Exercise Draft UI** - Complete 2026-06-09.
-- [x] **Phase 119: Functional Release Gate And AI Tools Audit** - Complete 2026-06-09.
-
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 116 | AI Teacher Tools Contract And Generation Model | Complete | AITOOL-01 |
-| 117 | Backend Teacher Summary And Exercise Draft APIs | Complete | AITOOL-02 |
-| 118 | Tutor AI Tools And Exercise Draft UI | Complete | UI-22 |
-| 119 | v3.7 Functional Release Gate And AI Tools Audit | Complete | VERIFY-20 |
+| 120 | Full Curriculum Rollout Contract And Content Model | Planned | CURRIC-01 |
+| 121 | Backend Curriculum Catalog And Exercise Bank APIs | Planned | CURRIC-02 |
+| 122 | Student/Parent Curriculum UX And Tutor Signals | Planned | UI-23 |
+| 123 | v3.8 Functional Release Gate And Curriculum Audit | Planned | VERIFY-21 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 116 | v3.7 | 1/1 | Complete | 2026-06-09 |
-| 117 | v3.7 | 1/1 | Complete | 2026-06-09 |
-| 118 | v3.7 | 1/1 | Complete | 2026-06-09 |
-| 119 | v3.7 | 1/1 | Complete | 2026-06-09 |
-
-## Phase Details
-
-### Phase 116: AI Teacher Tools Contract And Generation Model
-
-**Goal:** Define teacher summaries, suggested focus, draft explanation, bounded exercise generation, input sources, persistence, review lifecycle, and no-auto-send boundaries before implementation.
-
-**Requirement:** AITOOL-01
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Contract defines session summary, misconception summary, suggested teaching focus, draft explanation, and practice exercise draft outputs.
-2. Contract defines approved input sources from question, conversation, teacher reply, subject/topic, learning profile, feedback, escalation, and teacher assistance seed data.
-3. Contract defines exercise draft shape, difficulty, subject/topic binding, answer key, explanation, and review state.
-4. Contract states AI-generated replies and exercises are drafts only until teacher/admin review.
-5. Contract defines persistence, regeneration, accept/reject/archive behavior, and verification priorities.
-
-### Phase 117: Backend Teacher Summary And Exercise Draft APIs
-
-**Goal:** Add backend tutor/admin APIs and storage for teacher summary drafts and bounded exercise drafts using existing AI and learning context foundations.
-
-**Requirement:** AITOOL-02
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Tutor/admin can request summary drafts for visible question/session context only.
-2. Tutor/admin can request bounded exercise drafts by student, subject, topic, difficulty, and count.
-3. Backend stores draft metadata including status, creator, source context, prompt version, generated timestamp, review timestamp, and linked evidence.
-4. Backend supports regenerate, accept, reject, and archive lifecycle operations.
-5. Focused tests cover authorization, generation shape, lifecycle transitions, topic binding, and no automatic student delivery.
-
-### Phase 118: Tutor AI Tools And Exercise Draft UI
-
-**Goal:** Expose practical tutor/admin UI for AI summaries, suggested focus, draft explanations, and reviewed exercise draft workflows.
-
-**Requirement:** UI-22
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Tutor session UI shows auto summary, misconception summary, suggested focus, and draft explanation controls.
-2. Tutor/admin UI can generate practice exercise drafts from selected student, subject, topic, difficulty, and count context.
-3. UI clearly distinguishes AI draft content from sent teacher replies or assigned exercises.
-4. UI supports accept, reject, archive, and regenerate states with clear status feedback.
-5. Targeted browser verification confirms the tutor/admin workflow is usable.
-
-### Phase 119: Functional Release Gate And AI Tools Audit
-
-**Goal:** Close v3.7 with focused backend/frontend evidence and update Phase 2 gap tracking for AI teacher tools and residual expansion scope.
-
-**Requirement:** VERIFY-20
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Backend and frontend focused quality gates relevant to AI teacher tools pass.
-2. Gap audit marks AI teacher tools, automatic summaries, and exercise generation active or closed with residual richer personalization/curriculum scope.
-3. Final audit lists remaining Phase 2 product expansions including Stripe/TWINT, full curriculum rollout, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, and support integrations.
+| 120 | v3.8 | 1/1 | Planned | - |
+| 121 | v3.8 | 0/1 | Planned | - |
+| 122 | v3.8 | 0/1 | Planned | - |
+| 123 | v3.8 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AITOOL-01 | Phase 116 | Complete |
-| AITOOL-02 | Phase 117 | Complete |
-| UI-22 | Phase 118 | Complete |
-| VERIFY-20 | Phase 119 | Complete |
+| CURRIC-01 | Phase 120 | Planned |
+| CURRIC-02 | Phase 121 | Planned |
+| UI-23 | Phase 122 | Planned |
+| VERIFY-21 | Phase 123 | Planned |
 
 ---
-*Last updated: 2026-06-09 after completing v3.7*
+*Last updated: 2026-06-09 after planning v3.8*

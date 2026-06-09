@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after completing v3.7 AI teacher tools
+**Updated:** 2026-06-09 after planning v3.8 full curriculum rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -16,13 +16,15 @@ v3.2 closed the remaining visible MVP admin workflow gap: content moderation for
 
 v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
 
-v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout remains future scope; automatic exercise generation was later promoted to v3.7.
+v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout was later promoted to v3.8; automatic exercise generation was later promoted to v3.7.
 
 v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout was completed locally in v3.6, automatic exercise generation was promoted to v3.7, and push notifications plus email digests remain future scope.
 
 v3.6 completed the local functional WebSocket realtime notification scope: authenticated connection/subscription service behavior, connection storage, notification fanout with delivery attempt metadata, frontend WebSocket client behavior, notification center cache sync, reconnect/offline states, and polling fallback. Production live rollout still requires API Gateway WebSocket/CDK route wiring and deploy/live-smoke evidence outside this repo's current infrastructure surface.
 
 v3.7 completed the local functional AI teacher tools / automatic summaries / exercise generation scope. The milestone defined reviewed-draft contracts for session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts; added backend persistence and tutor/admin lifecycle APIs; added tutor UI; and captured functional release-gate evidence. AI-generated replies and exercises remain reviewed drafts; automatic student assignment remains future scope.
+
+v3.8 promotes full multi-subject curriculum rollout into active scope. The planned milestone defines curriculum hierarchy and content states, adds backend curriculum catalog and exercise bank APIs, exposes student/parent curriculum UX plus tutor/admin curriculum signals, and closes with a functional curriculum audit. Long-term adaptive sequencing and automatic student assignment remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -42,6 +44,7 @@ v3.7 completed the local functional AI teacher tools / automatic summaries / exe
 - Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
 - Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
 - AI teacher tools and exercise generation: reviewed-draft output contract, backend summary/exercise draft APIs, tutor AI teacher tools UI, and release-gate evidence for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
+- Full curriculum rollout planning: curriculum hierarchy, content states, lesson/exercise bank contract, rollout phases, and release-gate requirements for math, physics, German, and English.
 
 ## v3.0 Closed MVP Gaps
 
@@ -97,15 +100,20 @@ v3.7 completed the local functional AI teacher tools / automatic summaries / exe
 |-----|--------|------------------|----------|
 | AI teacher tools, automatic summaries, and exercise generation | `PRD.md` / `PLAN.md` Phase 2 teacher support and learning expansion | Phase 116 defined reviewed-draft output/input/lifecycle contracts; Phase 117 added backend summary and exercise draft APIs; Phase 118 added tutor UI; Phase 119 captured functional release-gate and residual-scope audit evidence. | Closed for local functional scope |
 
+## v3.8 Active Phase 2 Functional Gap
+
+| Gap | Source | Planned evidence | Priority |
+|-----|--------|------------------|----------|
+| Full multi-subject curriculum rollout and exercise banks | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 120 defines curriculum hierarchy/content states/backfill behavior; Phase 121 adds backend curriculum catalog and exercise bank APIs; Phase 122 adds student/parent/tutor UI; Phase 123 captures functional release-gate and residual adaptive sequencing audit evidence. | Active |
+
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
-- Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
 - Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
 - Push notifications, native notifications, and email notification digests.
 - Automatic student assignment of generated exercises and autonomous tutoring decisions.
-- Full curriculum-aligned exercise banks and long-term adaptive exercise sequencing.
+- Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
@@ -190,3 +198,12 @@ v3.7 completed reviewed AI teacher tools and bounded exercise generation:
 2. Added backend teacher summary, draft explanation, and practice exercise draft APIs using existing question, tutor, subject/topic, and learning profile context.
 3. Added tutor UI for summaries, suggested focus, draft explanations, exercise draft review, regenerate, accept, reject, and archive actions.
 4. Closed with backend pytest/focused Ruff evidence, frontend lint/build/browser evidence, and residual automatic assignment, full curriculum banks, long-term adaptive sequencing, and production AI cost/quality monitoring scope.
+
+## v3.8 Scope Recommendation
+
+v3.8 should complete the full curriculum rollout foundation:
+
+1. Define curriculum hierarchy, supported subjects, content lifecycle states, lesson fields, exercise fields, and compatibility with existing practice data.
+2. Add backend curriculum catalog and exercise bank APIs for active content while preserving current progress, mistakes, and challenge attempts.
+3. Add student/parent curriculum navigation and tutor/admin curriculum context signals.
+4. Close with focused functional checks and record residual automatic assignment, long-term adaptive sequencing, rich authoring workflow, and production content QA/analytics scope.

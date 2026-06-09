@@ -1,83 +1,83 @@
-# Requirements: v3.7 AI Teacher Tools And Exercise Generation
+# Requirements: v3.8 Full Curriculum Rollout
 
-**Milestone:** v3.7
-**Status:** Complete
+**Milestone:** v3.8
+**Status:** Active
 **Created:** 2026-06-09
 
 ## Goal
 
-Build AI teacher tools on top of the existing question, teacher reply, learning profile, topic seed, notification, and realtime foundations. This milestone focuses on practical teacher-facing productivity: automatic session summaries, suggested teaching focus, draft follow-up explanations, and bounded practice exercise generation.
+Turn the v3.4 subject/topic foundation and v3.7 exercise draft foundation into a usable full curriculum rollout for math, physics, German, and English. This milestone focuses on curriculum structure, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin visibility.
 
 ## Requirements
 
-### AITOOL-01 AI Teacher Tools Contract And Generation Model
+### CURRIC-01 Full Curriculum Rollout Contract And Content Model
 
-Implementers have a precise contract for teacher summaries, suggested focus, draft follow-up explanations, and bounded exercise generation.
-
-Acceptance criteria:
-
-- Contract defines tool outputs: session summary, misconception summary, suggested teaching focus, draft explanation, and generated practice exercises.
-- Contract defines input sources: question content, AI answer, teacher replies, conversation context, subject/topic taxonomy, learning profile seeds, feedback, and escalation history.
-- Contract defines exercise output shape, difficulty levels, subject/topic binding, answer key, explanation, and review state.
-- Contract defines human-in-the-loop workflow: AI drafts are never automatically sent to students without teacher/admin action.
-- Contract defines persistence and regeneration behavior for drafts, summaries, and exercises.
-
-### AITOOL-02 Backend Teacher Summary And Exercise Draft APIs
-
-Backend supports teacher summary and practice exercise draft generation.
+Implementers have a precise curriculum rollout contract before backend and frontend changes.
 
 Acceptance criteria:
 
-- Tutor/admin can request a summary draft for visible question/session context.
-- Tutor/admin can request bounded exercise drafts by student, subject, topic, difficulty, and count.
-- Backend stores generated drafts with status, creator, source context, prompt version, generated_at, reviewed_at, accepted/rejected state, and optional linked question/profile evidence.
-- Backend supports regenerate, accept, reject, and archive operations for drafts.
-- Focused tests cover authorization, generation shape, draft lifecycle, topic binding, and no automatic student delivery.
+- Contract defines curriculum hierarchy: subject, grade/band, unit, topic, lesson, exercise, assessment/checkpoint, and rollout state.
+- Contract defines minimum content fields for lessons and exercises, including title, objective, explanation, examples, difficulty, estimated time, answer key, and topic binding.
+- Contract defines supported subjects for rollout: math, physics, German, and English, with language and grade-level metadata.
+- Contract defines content source and review states: seed, draft, reviewed, active, archived.
+- Contract defines migration/backfill behavior from existing practice subjects/topics/lessons/challenges without breaking current practice routes.
 
-### UI-22 Tutor AI Tools And Exercise Draft UI
+### CURRIC-02 Backend Curriculum Catalog And Exercise Bank APIs
 
-Frontend exposes practical AI teacher tools for tutors/admins.
-
-Acceptance criteria:
-
-- Tutor session UI shows auto summary, misconception summary, suggested focus, and draft explanation controls.
-- Tutor/admin UI supports generating practice exercise drafts from selected subject/topic/student context.
-- UI clearly distinguishes AI draft content from sent teacher replies or assigned exercises.
-- UI supports accept/reject/archive/regenerate states.
-- Targeted browser verification confirms the workflow is usable.
-
-### VERIFY-20 v3.7 Functional Release Gate And AI Tools Audit
-
-v3.7 closes with functional evidence and updated Phase 2 gap tracking.
+Backend exposes curriculum catalog and exercise bank data through real APIs.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to AI teacher tools pass.
-- Gap audit marks AI teacher tools / automatic summaries / exercise generation as active or closed and records residual richer personalization/curriculum scope.
-- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, production WebSocket infrastructure live rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
+- Student/tutor/admin can list curriculum subjects, units, topics, lessons, and exercises with rollout-aware filters.
+- Backend supports curriculum content seed/backfill from existing practice data and new curriculum metadata.
+- Backend preserves existing practice progress, mistake, lesson completion, and challenge attempt behavior.
+- Backend can return lesson detail with explanation, examples, exercises, answer keys where authorized, and next-step metadata.
+- Focused tests cover catalog shape, subject/grade/topic filtering, exercise bank shape, progress compatibility, and inactive/archived content exclusion.
+
+### UI-23 Student/Parent Curriculum UX And Tutor Signals
+
+Frontend exposes the curriculum rollout as usable product surfaces.
+
+Acceptance criteria:
+
+- Student practice/curriculum UI shows subject, unit, topic, lesson, exercise, progress, and next-step states for rolled-out subjects.
+- Parent child profile/report surfaces show curriculum progress and weak curriculum areas without claiming unsupported subjects are complete.
+- Tutor/admin surfaces can inspect a student's curriculum context while answering questions or reviewing AI exercise drafts.
+- UI distinguishes active curriculum content from draft/preview/archived content.
+- Targeted browser verification confirms core curriculum navigation and progress states.
+
+### VERIFY-21 v3.8 Functional Release Gate And Curriculum Audit
+
+v3.8 closes with functional evidence and updated `stoa_docs` gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to curriculum rollout pass.
+- Gap audit marks full multi-subject curriculum rollout active or closed and records residual adaptive sequencing/automatic assignment scope.
+- Final audit lists remaining Phase 2 product expansions: payment-provider integration, long-term personalization, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
-- Student-facing automatic assignment/delivery of generated exercises.
-- Full curriculum-aligned exercise banks.
-- Long-term personalization beyond current learning profile seeds.
+- Long-term adaptive sequencing beyond current progress and weak-topic signals.
+- Automatic student assignment/delivery of generated exercises.
+- Full content authoring workflow with rich editor, approval queues, and versioned publishing.
 - Payment-provider implementation.
 - Push/native/email notification delivery.
 - Full mobile/multilingual polish.
 
 ## Out of Scope
 
-- Automatically sending AI-generated replies to students.
-- Automatically assigning generated exercises without teacher/admin review.
-- Full curriculum content authoring.
+- Automatically assigning generated exercises to students.
+- Full adaptive tutoring engine.
 - Payment-provider implementation.
+- Production WebSocket infrastructure rollout.
 - Broad security/compliance program beyond required authorization and functional correctness.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AITOOL-01 | Phase 116 | Complete |
-| AITOOL-02 | Phase 117 | Complete |
-| UI-22 | Phase 118 | Complete |
-| VERIFY-20 | Phase 119 | Complete |
+| CURRIC-01 | Phase 120 | Planned |
+| CURRIC-02 | Phase 121 | Planned |
+| UI-23 | Phase 122 | Planned |
+| VERIFY-21 | Phase 123 | Planned |

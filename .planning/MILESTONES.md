@@ -674,11 +674,28 @@ Key accomplishments:
 - Added tutor request detail UI for summary drafts and exercise drafts with explicit `Draft only` and `not delivered` status.
 - Completed backend pytest/focused Ruff evidence, frontend lint/build/browser evidence, and updated the feature gap audit.
 
-Known deferred items at close: automatic student assignment or delivery, full curriculum-aligned exercise banks, long-term adaptive sequencing, production AI quality/cost monitoring, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
+Known deferred items at close: automatic student assignment or delivery, long-term adaptive sequencing, production AI quality/cost monitoring, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations. Full curriculum-aligned exercise banks were promoted to v3.8.
 
 ## Active
 
-No active milestone. Next recommended milestone: v3.8 Payment Provider Readiness.
+### v3.8 Full Curriculum Rollout
+
+**Status:** Active
+**Started:** 2026-06-09
+**Roadmap:** `.planning/milestones/v3.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.8-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 120: Full Curriculum Rollout Contract And Content Model.
+- Phase 121: Backend Curriculum Catalog And Exercise Bank APIs.
+- Phase 122: Student/Parent Curriculum UX And Tutor Signals.
+- Phase 123: v3.8 Functional Release Gate And Curriculum Audit.
 
 ---
-*Last updated: 2026-06-09 after completing v3.7*
+*Last updated: 2026-06-09 after planning v3.8*
