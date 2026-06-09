@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after planning v3.8 full curriculum rollout
+**Updated:** 2026-06-09 after completing v3.8 full curriculum rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -24,7 +24,7 @@ v3.6 completed the local functional WebSocket realtime notification scope: authe
 
 v3.7 completed the local functional AI teacher tools / automatic summaries / exercise generation scope. The milestone defined reviewed-draft contracts for session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts; added backend persistence and tutor/admin lifecycle APIs; added tutor UI; and captured functional release-gate evidence. AI-generated replies and exercises remain reviewed drafts; automatic student assignment remains future scope.
 
-v3.8 promotes full multi-subject curriculum rollout into active scope. The planned milestone defines curriculum hierarchy and content states, adds backend curriculum catalog and exercise bank APIs, exposes student/parent curriculum UX plus tutor/admin curriculum signals, and closes with a functional curriculum audit. Long-term adaptive sequencing and automatic student assignment remain future scope.
+v3.8 completed the local functional full multi-subject curriculum rollout scope. The milestone defined curriculum hierarchy and content states, added backend curriculum catalog and exercise bank APIs, exposed student/parent curriculum UX plus tutor/admin curriculum signals, and closed with backend/frontend/browser release-gate evidence. Long-term adaptive sequencing, automatic student assignment, rich authoring workflow, and production content QA remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -44,7 +44,7 @@ v3.8 promotes full multi-subject curriculum rollout into active scope. The plann
 - Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
 - Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
 - AI teacher tools and exercise generation: reviewed-draft output contract, backend summary/exercise draft APIs, tutor AI teacher tools UI, and release-gate evidence for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
-- Full curriculum rollout planning: curriculum hierarchy, content states, lesson/exercise bank contract, rollout phases, and release-gate requirements for math, physics, German, and English.
+- Full curriculum rollout: curriculum hierarchy, content states, lesson/exercise bank contract, backend catalog/exercise/progress APIs, student/parent/tutor UI signals, and release-gate evidence for math, physics, German, and English.
 
 ## v3.0 Closed MVP Gaps
 
@@ -100,11 +100,11 @@ v3.8 promotes full multi-subject curriculum rollout into active scope. The plann
 |-----|--------|------------------|----------|
 | AI teacher tools, automatic summaries, and exercise generation | `PRD.md` / `PLAN.md` Phase 2 teacher support and learning expansion | Phase 116 defined reviewed-draft output/input/lifecycle contracts; Phase 117 added backend summary and exercise draft APIs; Phase 118 added tutor UI; Phase 119 captured functional release-gate and residual-scope audit evidence. | Closed for local functional scope |
 
-## v3.8 Active Phase 2 Functional Gap
+## v3.8 Closed Phase 2 Functional Gap
 
-| Gap | Source | Planned evidence | Priority |
+| Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| Full multi-subject curriculum rollout and exercise banks | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 120 defines curriculum hierarchy/content states/backfill behavior; Phase 121 adds backend curriculum catalog and exercise bank APIs; Phase 122 adds student/parent/tutor UI; Phase 123 captures functional release-gate and residual adaptive sequencing audit evidence. | Active |
+| Full multi-subject curriculum rollout and exercise banks | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 120 defined curriculum hierarchy/content states/backfill behavior; Phase 121 added backend curriculum catalog and exercise bank APIs; Phase 122 added student/parent/tutor UI; Phase 123 captured functional release-gate and residual adaptive sequencing/automatic assignment audit evidence. | Closed for local functional scope |
 
 ## Phase 2 / Future Expansion
 
@@ -199,11 +199,11 @@ v3.7 completed reviewed AI teacher tools and bounded exercise generation:
 3. Added tutor UI for summaries, suggested focus, draft explanations, exercise draft review, regenerate, accept, reject, and archive actions.
 4. Closed with backend pytest/focused Ruff evidence, frontend lint/build/browser evidence, and residual automatic assignment, full curriculum banks, long-term adaptive sequencing, and production AI cost/quality monitoring scope.
 
-## v3.8 Scope Recommendation
+## v3.8 Scope Outcome
 
-v3.8 should complete the full curriculum rollout foundation:
+v3.8 completed the full curriculum rollout foundation:
 
-1. Define curriculum hierarchy, supported subjects, content lifecycle states, lesson fields, exercise fields, and compatibility with existing practice data.
-2. Add backend curriculum catalog and exercise bank APIs for active content while preserving current progress, mistakes, and challenge attempts.
-3. Add student/parent curriculum navigation and tutor/admin curriculum context signals.
-4. Close with focused functional checks and record residual automatic assignment, long-term adaptive sequencing, rich authoring workflow, and production content QA/analytics scope.
+1. Defined curriculum hierarchy, supported subjects, content lifecycle states, lesson fields, exercise fields, and compatibility with existing practice data.
+2. Added backend curriculum catalog and exercise bank APIs for active content while preserving current progress, mistakes, and challenge attempts.
+3. Added student/parent curriculum navigation and tutor/admin curriculum context signals.
+4. Closed with focused functional checks and recorded residual automatic assignment, long-term adaptive sequencing, rich authoring workflow, and production content QA/analytics scope.

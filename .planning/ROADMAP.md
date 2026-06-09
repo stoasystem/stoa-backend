@@ -30,26 +30,27 @@
 - [x] **v3.5 Realtime And Teacher Assistance Foundation** - Completed local release gate 2026-06-08.
 - [x] **v3.6 Full WebSocket Realtime Notifications** - Completed local release gate 2026-06-09.
 - [x] **v3.7 AI Teacher Tools And Exercise Generation** - Completed local release gate 2026-06-09.
+- [x] **v3.8 Full Curriculum Rollout** - Completed local release gate 2026-06-09.
 
 ## Current Milestone
 
-**v3.8 Full Curriculum Rollout** - Active.
+No active milestone.
 
-Goal: roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
+Next recommended milestone: v3.9 Payment Provider Readiness.
 
 ## Phases
 
 - [x] **Phase 120: Full Curriculum Rollout Contract And Content Model** - Complete 2026-06-09.
 - [x] **Phase 121: Backend Curriculum Catalog And Exercise Bank APIs** - Complete 2026-06-09.
 - [x] **Phase 122: Student/Parent Curriculum UX And Tutor Signals** - Complete 2026-06-09.
-- [ ] **Phase 123: Functional Release Gate And Curriculum Audit** - Planned.
+- [x] **Phase 123: Functional Release Gate And Curriculum Audit** - Complete 2026-06-09.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 120 | Full Curriculum Rollout Contract And Content Model | Complete | CURRIC-01 |
 | 121 | Backend Curriculum Catalog And Exercise Bank APIs | Complete | CURRIC-02 |
 | 122 | Student/Parent Curriculum UX And Tutor Signals | Complete | UI-23 |
-| 123 | Functional Release Gate And Curriculum Audit | Planned | VERIFY-21 |
+| 123 | Functional Release Gate And Curriculum Audit | Complete | VERIFY-21 |
 
 ## Phase Details
 
@@ -72,7 +73,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 **Goal:** Add backend curriculum catalog and exercise bank APIs that expose active curriculum data while preserving existing practice progress behavior.
 
 **Requirement:** CURRIC-02
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Student/tutor/admin can list curriculum subjects, units, topics, lessons, and exercises with rollout-aware filters.
@@ -86,7 +87,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 **Goal:** Expose curriculum rollout through student, parent, tutor, and admin surfaces using real curriculum data and clear rollout states.
 
 **Requirement:** UI-23
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Student practice/curriculum UI shows subject, unit, topic, lesson, exercise, progress, and next-step states.
@@ -100,7 +101,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 **Goal:** Close v3.8 with focused backend/frontend evidence and update Phase 2 gap tracking for curriculum rollout and residual adaptive scope.
 
 **Requirement:** VERIFY-21
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Backend and frontend focused quality gates relevant to curriculum rollout pass.
@@ -114,7 +115,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 | 120 | v3.8 | 1/1 | Complete | 2026-06-09 |
 | 121 | v3.8 | 1/1 | Complete | 2026-06-09 |
 | 122 | v3.8 | 1/1 | Complete | 2026-06-09 |
-| 123 | v3.8 | 0/1 | Planned | - |
+| 123 | v3.8 | 1/1 | Complete | 2026-06-09 |
 
 ## Traceability
 
@@ -123,7 +124,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 | CURRIC-01 | Phase 120 | Complete |
 | CURRIC-02 | Phase 121 | Complete |
 | UI-23 | Phase 122 | Complete |
-| VERIFY-21 | Phase 123 | Planned |
+| VERIFY-21 | Phase 123 | Complete |
 
 ---
-*Last updated: 2026-06-09 after completing Phase 122*
+*Last updated: 2026-06-09 after completing v3.8*

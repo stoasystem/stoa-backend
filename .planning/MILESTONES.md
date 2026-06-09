@@ -676,26 +676,40 @@ Key accomplishments:
 
 Known deferred items at close: automatic student assignment or delivery, long-term adaptive sequencing, production AI quality/cost monitoring, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations. Full curriculum-aligned exercise banks were promoted to v3.8.
 
-## Active
-
 ### v3.8 Full Curriculum Rollout
 
-**Status:** Active
+**Status:** Completed local release gate 2026-06-09
 **Started:** 2026-06-09
+**Completed:** 2026-06-09
+**Audit:** `.planning/milestones/v3.8-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.8-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.8-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 120: Full Curriculum Rollout Contract And Content Model.
 - Phase 121: Backend Curriculum Catalog And Exercise Bank APIs.
 - Phase 122: Student/Parent Curriculum UX And Tutor Signals.
-- Phase 123: v3.8 Functional Release Gate And Curriculum Audit.
+- Phase 123: Functional Release Gate And Curriculum Audit.
+
+Key accomplishments:
+
+- Defined curriculum hierarchy, supported subjects, grade/language metadata, content lifecycle states, lesson fields, exercise fields, and backfill behavior.
+- Added backend curriculum catalog, lesson detail, exercise bank, and progress APIs while preserving existing practice progress and challenge-attempt behavior.
+- Added student, parent, and tutor curriculum rollout UI signals for math, physics, German, and English.
+- Preserved inactive/draft/preview/archived content boundaries and answer-key authorization.
+- Completed backend pytest/Ruff evidence, frontend lint/build evidence, targeted Playwright evidence, and feature gap audit closeout.
+
+Known deferred items at close: automatic student assignment or delivery of generated exercises, long-term adaptive sequencing, rich curriculum authoring workflow, production content QA/analytics, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
+
+## Active
+
+No active milestone.
 
 ---
-*Last updated: 2026-06-09 after planning v3.8*
+*Last updated: 2026-06-09 after completing v3.8*
