@@ -13,12 +13,12 @@ from typing import Any
 
 import boto3
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.deps import require_role
-from stoa.services import teacher_assistance_service, teacher_reply_service
+from stoa.services import ai_teacher_tools_service, teacher_assistance_service, teacher_reply_service
 
 router = APIRouter()
 
@@ -177,6 +177,58 @@ class AssistanceSummaryResponse(BaseModel):
     createdAt: str
 
 
+class CreateSummaryDraftResponse(BaseModel):
+    draftId: str
+    draftType: str
+    status: str
+    studentId: str | None = None
+    questionId: str | None = None
+    subject: str | None = None
+    topicIds: list[str] = Field(default_factory=list)
+    sessionSummary: str | None = None
+    misconceptionSummary: str | None = None
+    suggestedTeachingFocus: str | None = None
+    draftFollowupExplanation: str | None = None
+    sourceContext: dict[str, Any] = Field(default_factory=dict)
+    promptVersion: str | None = None
+    createdBy: str | None = None
+    createdByRole: str | None = None
+    createdAt: str | None = None
+    generatedAt: str | None = None
+    updatedAt: str | None = None
+    reviewedBy: str | None = None
+    reviewedAt: str | None = None
+    reviewNote: str | None = None
+    previousDraftId: str | None = None
+    studentDeliveryStatus: str = "not_delivered"
+
+
+class ExerciseDraftRequest(BaseModel):
+    studentId: str
+    subject: str
+    topicIds: list[str]
+    difficulty: str
+    exerciseCount: int
+    questionId: str | None = None
+
+
+class ReviewDraftRequest(BaseModel):
+    note: str | None = None
+
+
+class AiTeacherDraftResponse(CreateSummaryDraftResponse):
+    difficulty: str | None = None
+    exerciseCount: int = 0
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    answerKey: list[dict[str, Any]] = Field(default_factory=list)
+    explanations: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AiTeacherDraftListResponse(BaseModel):
+    items: list[AiTeacherDraftResponse]
+    count: int
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -209,6 +261,114 @@ async def get_question_assistance_summary(
 ):
     """Build a bounded teacher assistance summary seed for an accessible question."""
     return teacher_assistance_service.build_summary_seed(question_id, user)
+
+
+@router.post("/questions/{question_id}/ai-tools/summary-draft", response_model=AiTeacherDraftResponse)
+async def create_question_summary_draft(
+    question_id: str,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Create a reviewed AI teacher summary draft for an accessible question."""
+    return ai_teacher_tools_service.create_summary_draft(question_id, user)
+
+
+@router.post("/ai-tools/exercise-drafts", response_model=AiTeacherDraftResponse)
+async def create_exercise_draft(
+    body: ExerciseDraftRequest,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Create a reviewed practice exercise draft from tutor-visible learning context."""
+    return ai_teacher_tools_service.create_exercise_draft(
+        student_id=body.studentId,
+        subject=body.subject,
+        topic_ids=body.topicIds,
+        difficulty=body.difficulty,
+        exercise_count=body.exerciseCount,
+        question_id=body.questionId,
+        user=user,
+    )
+
+
+@router.get("/ai-tools/drafts", response_model=AiTeacherDraftListResponse)
+async def list_ai_teacher_drafts(
+    student_id: str | None = None,
+    status: str | None = None,
+    draft_type: str | None = None,
+    limit: int = 50,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """List visible reviewed AI teacher tool drafts."""
+    items = ai_teacher_tools_service.list_drafts(
+        user=user,
+        student_id=student_id,
+        status=status,
+        draft_type=draft_type,
+        limit=limit,
+    )
+    return AiTeacherDraftListResponse(items=items, count=len(items))
+
+
+@router.get("/ai-tools/drafts/{draft_id}", response_model=AiTeacherDraftResponse)
+async def get_ai_teacher_draft(
+    draft_id: str,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Return one visible reviewed AI teacher tool draft."""
+    return ai_teacher_tools_service.get_draft(draft_id, user)
+
+
+@router.post("/ai-tools/drafts/{draft_id}/regenerate", response_model=AiTeacherDraftResponse)
+async def regenerate_ai_teacher_draft(
+    draft_id: str,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Create a new draft version while preserving prior draft metadata."""
+    return ai_teacher_tools_service.regenerate_draft(draft_id, user)
+
+
+@router.post("/ai-tools/drafts/{draft_id}/accept", response_model=AiTeacherDraftResponse)
+async def accept_ai_teacher_draft(
+    draft_id: str,
+    body: ReviewDraftRequest | None = None,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Mark a draft as reviewed and accepted without delivering it to students."""
+    return ai_teacher_tools_service.review_draft(
+        draft_id=draft_id,
+        action="accept",
+        user=user,
+        note=body.note if body else None,
+    )
+
+
+@router.post("/ai-tools/drafts/{draft_id}/reject", response_model=AiTeacherDraftResponse)
+async def reject_ai_teacher_draft(
+    draft_id: str,
+    body: ReviewDraftRequest | None = None,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Mark a draft as rejected without deleting evidence."""
+    return ai_teacher_tools_service.review_draft(
+        draft_id=draft_id,
+        action="reject",
+        user=user,
+        note=body.note if body else None,
+    )
+
+
+@router.post("/ai-tools/drafts/{draft_id}/archive", response_model=AiTeacherDraftResponse)
+async def archive_ai_teacher_draft(
+    draft_id: str,
+    body: ReviewDraftRequest | None = None,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Archive a draft from the active teacher workflow without deleting evidence."""
+    return ai_teacher_tools_service.review_draft(
+        draft_id=draft_id,
+        action="archive",
+        user=user,
+        note=body.note if body else None,
+    )
 
 
 @router.get("/me/help-requests", response_model=dict)

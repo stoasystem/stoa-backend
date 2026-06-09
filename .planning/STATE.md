@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.7
 milestone_name: AI Teacher Tools And Exercise Generation
 status: planning
-last_updated: "2026-06-09T13:59:36+02:00"
+last_updated: "2026-06-09T14:04:47+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 117 Backend Teacher Summary And Exercise Draft APIs
+Phase: 118 Tutor AI Tools And Exercise Draft UI
 Plan: —
-Status: Ready for backend planning.
-Last activity: 2026-06-09 - Phase 116 AI teacher tools contract and generation model completed.
+Status: Ready for frontend planning.
+Last activity: 2026-06-09 - Phase 117 backend teacher summary and exercise draft APIs passed.
 
 ## Accumulated Context
 
@@ -39,10 +39,10 @@ Last activity: 2026-06-09 - Phase 116 AI teacher tools contract and generation m
 - v3.7 promotes the remaining `stoa_docs` AI teacher tools / automatic summaries / exercise generation scope from future expansion to active scope.
 - v3.7 keeps teacher/admin review in the loop; generated replies/exercises are drafts, not automatic student delivery.
 - Phase 116 defined the AI teacher tools output contract, input sources, exercise draft shape, review lifecycle, and no-auto-send boundary.
+- Phase 117 added backend AI teacher draft persistence, tutor/admin generation APIs, lifecycle endpoints, and focused authorization/lifecycle tests.
 
 ### Pending Todos
 
-- Implement backend teacher summary and exercise draft APIs in Phase 117.
 - Implement tutor AI tools and exercise draft UI in Phase 118.
 - Run functional release gate and update gap tracking in Phase 119.
 
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 116 AI teacher tools contract and generation m
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 117 backend teacher summary and exercise draft APIs.
+- Discuss and plan Phase 118 tutor AI tools and exercise draft UI.
