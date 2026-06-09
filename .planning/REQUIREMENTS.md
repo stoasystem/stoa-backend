@@ -78,7 +78,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WS-01 | Phase 112 | Planned |
+| WS-01 | Phase 112 | Complete |
 | WS-02 | Phase 113 | Planned |
 | UI-21 | Phase 114 | Planned |
 | VERIFY-19 | Phase 115 | Planned |

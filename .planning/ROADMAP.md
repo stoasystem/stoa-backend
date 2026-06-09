@@ -39,7 +39,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 112 | Full WebSocket Transport Contract And Infra Readiness | Planned | WS-01 |
+| 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
 | 113 | Backend WebSocket Connection And Event Delivery | Planned | WS-02 |
 | 114 | Realtime Notification Client And UX | Planned | UI-21 |
 | 115 | v3.6 Functional Release Gate And Realtime Audit | Planned | VERIFY-19 |
@@ -48,7 +48,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 112 | v3.6 | 1/1 | Planned | - |
+| 112 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 113 | v3.6 | 0/1 | Planned | - |
 | 114 | v3.6 | 0/1 | Planned | - |
 | 115 | v3.6 | 0/1 | Planned | - |
@@ -60,7 +60,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 **Goal:** Define the WebSocket transport contract, authenticated connection lifecycle, authorization model, fallback behavior, and infrastructure/CDK readiness before backend and frontend implementation.
 
 **Requirement:** WS-01
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Contract defines connect, authenticate, subscribe, heartbeat, reconnect, disconnect, and stale connection cleanup behavior.
@@ -114,7 +114,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WS-01 | Phase 112 | Planned |
+| WS-01 | Phase 112 | Complete |
 | WS-02 | Phase 113 | Planned |
 | UI-21 | Phase 114 | Planned |
 | VERIFY-19 | Phase 115 | Planned |

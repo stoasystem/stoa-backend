@@ -57,8 +57,22 @@ Likely CDK impact:
 
 Phase 113 should implement only after this readiness decision is confirmed against `/Users/zhdeng/stoa-infra`.
 
+## Readiness Decision
+
+- Use API Gateway WebSocket as the default implementation path for v3.6 unless CDK inspection in Phase 113 proves an existing managed WebSocket entrypoint is already available.
+- Keep notification persistence in the existing notification center as the source of truth; WebSocket delivery is a realtime transport overlay, not a replacement for durable notification records.
+- Store connection records with enough data to authorize fanout without trusting client-supplied channel names after subscription.
+- Treat missing or stale WebSocket delivery as non-destructive because users can still recover notifications through the existing list/read/archive APIs.
+
 ## Fallback Behavior
 
 - Existing notification center remains canonical history.
 - If WebSocket is unavailable, frontend falls back to notification list refresh/polling.
 - Reconnect should not duplicate visible notifications because event ids are stable.
+
+## Functional Verification Checklist
+
+- Backend tests prove connection lifecycle, authorization, fanout, disconnect cleanup, stale cleanup, and persistent fallback behavior.
+- Frontend tests prove authenticated connect, reconnect, heartbeat/offline state, notification count/list refresh, and polling fallback.
+- CDK/diff evidence proves any WebSocket infrastructure is intentional, permission-scoped, and deployable without weakening existing HTTP API behavior.
+- Browser smoke uses local or safe fixtures and does not require production notification mutation unless explicitly approved in the release gate.
