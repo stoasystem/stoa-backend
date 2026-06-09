@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from stoa.config import settings
 from stoa.db.repositories import notification_repo
+from stoa.services import websocket_service
 
 
 EVENT_TYPES = {
@@ -69,6 +70,7 @@ def create_event(
         "actor_role": actor_role,
     }
     notification_repo.put_event(item)
+    websocket_service.fanout_notification_event_safe(item)
     return event_response(item)
 
 

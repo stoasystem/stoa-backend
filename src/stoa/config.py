@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     # Lambda targets
     weekly_report_function_name: str = "stoa-weekly-report"
 
+    # WebSocket realtime notifications
+    websocket_api_endpoint: str = ""
+    websocket_connection_ttl_seconds: int = 600
+
 
 @lru_cache
 def get_settings() -> Settings:
