@@ -32,10 +32,11 @@
 - [x] **v3.7 AI Teacher Tools And Exercise Generation** - Completed local release gate 2026-06-09.
 - [x] **v3.8 Full Curriculum Rollout** - Completed local release gate 2026-06-09.
 - [x] **v3.9 Payment Provider Integration MVP** - Completed local release gate 2026-06-09.
+- [x] **v4.0 Adaptive Learning Memory And Assignment** - Completed local backend release gate 2026-06-10.
 
 ## Current Milestone
 
-**v4.0 Adaptive Learning Memory And Assignment** - Active.
+**v4.0 Adaptive Learning Memory And Assignment** - Complete locally.
 
 Goal: add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
 
@@ -43,28 +44,28 @@ Goal: add durable student memory, next-practice recommendations, reviewed assign
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 128 | Adaptive Learning Memory And Assignment Contract | Planned | ADAPT-01 |
-| 129 | Backend Learning Memory And Reviewed Assignment APIs | Planned | ADAPT-02 |
-| 130 | Student/Tutor Assignment UX And Parent Progress Signals | Planned | UI-25 |
-| 131 | v4.0 Functional Release Gate And Personalization Audit | Planned | VERIFY-23 |
+| 128 | Adaptive Learning Memory And Assignment Contract | Complete | ADAPT-01 |
+| 129 | Backend Learning Memory And Reviewed Assignment APIs | Complete | ADAPT-02 |
+| 130 | Student/Tutor Assignment UX And Parent Progress Signals | Complete | UI-25 |
+| 131 | v4.0 Functional Release Gate And Personalization Audit | Complete | VERIFY-23 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 128 | v4.0 | 1/1 | Planned | - |
-| 129 | v4.0 | 0/1 | Planned | - |
-| 130 | v4.0 | 0/1 | Planned | - |
-| 131 | v4.0 | 0/1 | Planned | - |
+| 128 | v4.0 | 1/1 | Complete | 2026-06-10 |
+| 129 | v4.0 | 1/1 | Complete | 2026-06-10 |
+| 130 | v4.0 | 1/1 | Complete | 2026-06-10 |
+| 131 | v4.0 | 1/1 | Complete | 2026-06-10 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADAPT-01 | Phase 128 | Planned |
-| ADAPT-02 | Phase 129 | Planned |
-| UI-25 | Phase 130 | Planned |
-| VERIFY-23 | Phase 131 | Planned |
+| ADAPT-01 | Phase 128 | Complete |
+| ADAPT-02 | Phase 129 | Complete |
+| UI-25 | Phase 130 | Complete |
+| VERIFY-23 | Phase 131 | Complete |
 
 ---
-*Last updated: 2026-06-10 after planning v4.0*
+*Last updated: 2026-06-10 after completing v4.0 local release gate*

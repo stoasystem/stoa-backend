@@ -52,7 +52,7 @@ The completed-local v3.8 milestone turns the subject/topic/practice foundations 
 
 The completed-local v3.9 milestone implements the first payment-provider integration MVP for STOA subscriptions: checkout, provider subscription state, webhooks, parent payment UX, and admin billing visibility.
 
-The active v4.0 milestone builds adaptive learning memory and reviewed assignment workflows from learning profile seeds, curriculum progress, AI exercise drafts, question history, and parent/tutor progress signals.
+The completed-local v4.0 milestone builds adaptive learning memory and reviewed assignment workflows from learning profile seeds, curriculum progress, AI exercise drafts, question history, and parent/tutor progress signals.
 
 ## Core Value
 
@@ -61,8 +61,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v3.9 Payment Provider Integration MVP on 2026-06-09 (local release gate)
-**Active milestone:** v4.0 Adaptive Learning Memory And Assignment
+**Latest completed milestone:** v4.0 Adaptive Learning Memory And Assignment on 2026-06-10 (local backend release gate)
 
 Delivered:
 
@@ -150,7 +149,7 @@ Delivered:
 - v3.7 completed teacher-facing automatic summaries, suggested teaching focus, draft follow-up explanations, and bounded practice exercise generation with teacher/admin review before use.
 - v3.8 completed full curriculum hierarchy, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin curriculum signals for math, physics, German, and English.
 - v3.9 completed local functional payment-provider integration with subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
-- v4.0 is planned to add durable learning memory, next-practice recommendations, reviewed assignment workflows, student/tutor assignment UX, and parent progress signals.
+- v4.0 added durable learning memory snapshots, next-practice recommendations, reviewed assignment workflows, student/tutor assignment route contracts, and parent progress signals.
 
 ## Last Production-Verified Milestone
 
@@ -167,29 +166,20 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v3.9 Payment Provider Integration MVP
-
-Goal: implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
-
-Completed phases:
-
-- Phase 124: Payment Provider Contract And Billing Model.
-- Phase 125: Backend Checkout Subscription And Webhook APIs.
-- Phase 126: Parent Payment UX And Admin Billing Operations.
-- Phase 127: Functional Release Gate And Billing Audit.
-
-## Current Milestone
-
 ### v4.0 Adaptive Learning Memory And Assignment
 
 Goal: add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
 
-Planned phases:
+Completed phases:
 
 - Phase 128: Adaptive Learning Memory And Assignment Contract.
 - Phase 129: Backend Learning Memory And Reviewed Assignment APIs.
 - Phase 130: Student/Tutor Assignment UX And Parent Progress Signals.
 - Phase 131: v4.0 Functional Release Gate And Personalization Audit.
+
+## Current Milestone
+
+No active milestone. v4.0 is complete locally; next milestone selection is pending.
 
 ## Requirements
 
@@ -222,12 +212,16 @@ Shipped requirements:
 
 ### Active
 
+No active requirements.
+
+### Completed
+
+Milestone v4.0 requirements are archived in `.planning/milestones/v4.0-REQUIREMENTS.md` and are complete:
+
 - ADAPT-01: adaptive learning memory and assignment contract - Phase 128.
 - ADAPT-02: backend learning memory and reviewed assignment APIs - Phase 129.
 - UI-25: student/tutor assignment UX and parent progress signals - Phase 130.
 - VERIFY-23: v4.0 functional release gate and personalization audit - Phase 131.
-
-### Completed
 
 Milestone v3.9 requirements are archived in `.planning/milestones/v3.9-REQUIREMENTS.md` and are complete:
 
@@ -548,7 +542,7 @@ Known current resources:
 | Start v3.7 with AI teacher tools and exercise generation | `stoa_docs` Phase 2 calls for AI teacher tools, automatic summaries, and practice generation; v3.4 learning profile seeds and v3.5 assistance seeds provide enough foundation for reviewed draft generation | Good - local release gate complete |
 | Start v3.8 with full curriculum rollout | `stoa_docs` Phase 2 calls for broad multi-subject curriculum expansion; v3.4 subject/topic foundations and existing practice lesson/challenge data can now be promoted into full curriculum catalog and exercise bank scope | Good - local release gate complete |
 | Start v3.9 with payment provider integration MVP | `stoa_docs` Phase 2 calls for Stripe subscription payment and credit card/TWINT support; v3.3 manual subscription operations provide the local entitlement model and admin override surface needed for provider-backed billing | Good - local release gate complete |
-| Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Active - Phase 128 planned |
+| Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Complete locally - backend release gate passed |
 
 ## Evolution
 
@@ -568,4 +562,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-10 after planning milestone v4.0*
+*Last updated: 2026-06-10 after completing milestone v4.0 local backend release gate*

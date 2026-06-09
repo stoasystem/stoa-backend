@@ -745,26 +745,37 @@ Key accomplishments:
 
 Known deferred items at close: live production charging, real Stripe credential rollout, production TWINT validation, refunds, invoices, tax/accounting automation, dunning, provider portal handoff, and production live-payment smoke remain future rollout scope.
 
-## Active
-
 ### v4.0 Adaptive Learning Memory And Assignment
 
-**Status:** Active
+**Status:** Completed local backend release gate 2026-06-10
 **Started:** 2026-06-10
+**Completed:** 2026-06-10
+**Audit:** `.planning/milestones/v4.0-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v4.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.0-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v4.0-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 128: Adaptive Learning Memory And Assignment Contract.
 - Phase 129: Backend Learning Memory And Reviewed Assignment APIs.
 - Phase 130: Student/Tutor Assignment UX And Parent Progress Signals.
 - Phase 131: v4.0 Functional Release Gate And Personalization Audit.
 
+Key accomplishments:
+
+- Defined adaptive memory fields, source inputs, assignment lifecycle, recommendation boundaries, role visibility, and stale evidence behavior.
+- Added backend adaptive memory snapshot persistence and aggregation from question, feedback, practice, curriculum, and topic evidence.
+- Added reviewed assignment APIs for curriculum exercises and accepted AI teacher exercise drafts.
+- Added student start/complete/skip assignment lifecycle, tutor/admin assignment management, and parent progress signals.
+- Completed focused Ruff/pytest evidence and adjacent learning/parent regression tests.
+
+Known deferred items at close: production deploy/live smoke, frontend component implementation outside this backend repository, fully autonomous tutoring/assignment/sequencing, rich learning analytics dashboards, native mobile apps, production notification delivery, support integrations, rich content authoring, and deeper analytics.
+
 ---
-*Last updated: 2026-06-10 after planning v4.0*
+*Last updated: 2026-06-10 after completing v4.0 local backend release gate*

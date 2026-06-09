@@ -4,6 +4,7 @@ from mangum import Mangum
 
 from stoa.config import settings
 from stoa.routers import (
+    adaptive,
     admin,
     auth,
     billing,
@@ -45,6 +46,7 @@ app.include_router(parents.router, prefix="/parents", tags=["parents"])
 app.include_router(billing.router, prefix="/billing", tags=["billing"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 app.include_router(notifications.admin_router, prefix="/admin", tags=["admin-notifications"])
+app.include_router(adaptive.router, prefix="/adaptive", tags=["adaptive"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(files.router, prefix="/files", tags=["files"])
 

@@ -1,7 +1,7 @@
 # Requirements: v4.0 Adaptive Learning Memory And Assignment
 
 **Milestone:** v4.0
-**Status:** Active
+**Status:** Complete locally
 **Created:** 2026-06-10
 
 ## Goal
@@ -75,7 +75,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADAPT-01 | Phase 128 | Planned |
-| ADAPT-02 | Phase 129 | Planned |
-| UI-25 | Phase 130 | Planned |
-| VERIFY-23 | Phase 131 | Planned |
+| ADAPT-01 | Phase 128 | Complete |
+| ADAPT-02 | Phase 129 | Complete |
+| UI-25 | Phase 130 | Complete |
+| VERIFY-23 | Phase 131 | Complete |
