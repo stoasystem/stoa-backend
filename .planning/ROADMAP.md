@@ -39,14 +39,14 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 
 ## Phases
 
-- [ ] **Phase 120: Full Curriculum Rollout Contract And Content Model** - Planned.
+- [x] **Phase 120: Full Curriculum Rollout Contract And Content Model** - Complete 2026-06-09.
 - [ ] **Phase 121: Backend Curriculum Catalog And Exercise Bank APIs** - Planned.
 - [ ] **Phase 122: Student/Parent Curriculum UX And Tutor Signals** - Planned.
 - [ ] **Phase 123: Functional Release Gate And Curriculum Audit** - Planned.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 120 | Full Curriculum Rollout Contract And Content Model | Planned | CURRIC-01 |
+| 120 | Full Curriculum Rollout Contract And Content Model | Complete | CURRIC-01 |
 | 121 | Backend Curriculum Catalog And Exercise Bank APIs | Planned | CURRIC-02 |
 | 122 | Student/Parent Curriculum UX And Tutor Signals | Planned | UI-23 |
 | 123 | Functional Release Gate And Curriculum Audit | Planned | VERIFY-21 |
@@ -111,7 +111,7 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 120 | v3.8 | 1/1 | Planned | - |
+| 120 | v3.8 | 1/1 | Complete | 2026-06-09 |
 | 121 | v3.8 | 0/1 | Planned | - |
 | 122 | v3.8 | 0/1 | Planned | - |
 | 123 | v3.8 | 0/1 | Planned | - |
@@ -120,10 +120,10 @@ Goal: roll out full curriculum structure and exercise bank coverage for math, ph
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURRIC-01 | Phase 120 | Planned |
+| CURRIC-01 | Phase 120 | Complete |
 | CURRIC-02 | Phase 121 | Planned |
 | UI-23 | Phase 122 | Planned |
 | VERIFY-21 | Phase 123 | Planned |
 
 ---
-*Last updated: 2026-06-09 after planning v3.8*
+*Last updated: 2026-06-09 after completing Phase 120*

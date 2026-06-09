@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: Full Curriculum Rollout
-status: planning
-last_updated: "2026-06-09T14:40:37+02:00"
+status: executing
+last_updated: "2026-06-09T14:52:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 120 Full Curriculum Rollout Contract And Content Model
-Plan: 120-01
-Status: Planned.
-Last activity: 2026-06-09 - selected full curriculum rollout as the next milestone after v3.7 AI teacher tools.
+Phase: 121 Backend Curriculum Catalog And Exercise Bank APIs
+Plan: —
+Status: Ready for backend planning.
+Last activity: 2026-06-09 - Phase 120 curriculum rollout contract completed.
 
 ## Accumulated Context
 
@@ -38,10 +38,10 @@ Last activity: 2026-06-09 - selected full curriculum rollout as the next milesto
 - v3.7 added reviewed exercise draft generation, but left full curriculum-aligned exercise banks and long-term adaptive sequencing as future scope.
 - v3.8 promotes full multi-subject curriculum rollout from future expansion to active scope.
 - v3.8 should preserve existing practice progress and challenge attempt behavior while adding richer curriculum catalog/content metadata.
+- Phase 120 defined the curriculum hierarchy, content lifecycle states, lesson/exercise fields, and existing-practice compatibility contract.
 
 ### Pending Todos
 
-- Complete Phase 120 curriculum rollout contract and content model docs.
 - Implement backend curriculum catalog and exercise bank APIs in Phase 121.
 - Implement student/parent curriculum UX and tutor/admin curriculum signals in Phase 122.
 - Run functional release gate and update gap tracking in Phase 123.
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - selected full curriculum rollout as the next milesto
 
 ## Operator Next Steps
 
-- Execute Phase 120 and proceed to backend curriculum catalog APIs.
+- Plan and execute Phase 121 backend curriculum catalog and exercise bank APIs.
