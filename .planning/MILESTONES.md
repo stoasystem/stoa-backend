@@ -707,26 +707,40 @@ Key accomplishments:
 
 Known deferred items at close: automatic student assignment or delivery of generated exercises, long-term adaptive sequencing, rich curriculum authoring workflow, production content QA/analytics, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
 
-## Active
-
 ### v3.9 Payment Provider Integration MVP
 
-**Status:** Active
+**Status:** Completed local release gate 2026-06-09
 **Started:** 2026-06-09
+**Completed:** 2026-06-09
+**Audit:** `.planning/milestones/v3.9-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.9-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.9-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
 **Phases:** 4
-**Plans:** 3/4 complete
-**Requirements:** 3/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
-- Phase 124: Payment Provider Contract And Billing Model - Complete.
-- Phase 125: Backend Checkout Subscription And Webhook APIs - Complete.
-- Phase 126: Parent Payment UX And Admin Billing Operations - Complete.
+- Phase 124: Payment Provider Contract And Billing Model.
+- Phase 125: Backend Checkout Subscription And Webhook APIs.
+- Phase 126: Parent Payment UX And Admin Billing Operations.
 - Phase 127: Functional Release Gate And Billing Audit.
 
+Key accomplishments:
+
+- Defined the Stripe-first payment provider contract, local test-mode safety boundary, billing state model, manual override behavior, and TWINT readiness boundary.
+- Added backend parent checkout session creation, parent billing status, admin billing visibility, and signed Stripe webhook lifecycle handling with idempotent event processing.
+- Added provider billing status and checkout controls to the parent subscription UI while preserving the manual subscription request path.
+- Added admin billing visibility for provider-managed records, lifecycle events, manual overrides, and checkout/session references.
+- Completed backend pytest/Ruff evidence, frontend lint/build evidence, targeted Playwright evidence, and feature gap audit closeout.
+
+Known deferred items at close: live production charging, real Stripe credential rollout, production TWINT validation, refunds, invoices, tax/accounting automation, dunning, provider portal handoff, and production live-payment smoke remain future rollout scope.
+
+## Active
+
+No active milestone. Next recommended milestone: v4.0 Adaptive Learning Memory And Assignment.
+
 ---
-*Last updated: 2026-06-09 after planning v3.9*
+*Last updated: 2026-06-09 after completing v3.9*

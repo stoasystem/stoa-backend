@@ -1,25 +1,7 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-09 after planning v3.9
+**Updated:** 2026-06-09 after completing v3.9
 **Mode:** product functionality first
-
-## v3.9 Payment Provider Integration MVP
-
-Goal: implement the first payment-provider integration for STOA subscriptions after manual subscription operations are proven.
-
-Planned phases:
-
-- Phase 124: Payment Provider Contract And Billing Model.
-- Phase 125: Backend Checkout Subscription And Webhook APIs.
-- Phase 126: Parent Payment UX And Admin Billing Operations.
-- Phase 127: Functional Release Gate And Billing Audit.
-
-Scope:
-
-- Add Stripe-first subscription checkout and billing lifecycle with TWINT readiness where provider configuration supports it.
-- Add backend checkout, subscription status, and webhook billing-state APIs.
-- Add parent checkout/status UI and admin billing visibility.
-- Keep live production charging, tax/accounting automation, and refunds behind later approved rollout work.
 
 ## v4.0 Adaptive Learning Memory And Assignment
 
@@ -55,3 +37,20 @@ Scope:
 - Improve mobile ergonomics for parent/student/tutor core flows without redesigning the product.
 - Expand frontend translation coverage around high-traffic workflows.
 - Keep native mobile apps and full localization operations out of scope unless promoted by a later milestone.
+
+## v4.2 Production Notification Delivery Readiness
+
+Goal: promote the local realtime notification foundation toward deployable production delivery and durable user preferences.
+
+Planned phases:
+
+- Phase 136: Production Notification Infrastructure Contract.
+- Phase 137: API Gateway WebSocket And Delivery Operations Readiness.
+- Phase 138: Push/Email Notification Preference And Digest Readiness.
+- Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
+
+Scope:
+
+- Add CDK/API Gateway WebSocket route wiring, deploy readiness, live-smoke protocol, and rollback evidence for production realtime delivery.
+- Add notification preference and digest readiness for push/email channels where approved provider credentials exist.
+- Keep broad native-app push rollout and full notification marketing automation out of scope.

@@ -50,7 +50,7 @@ The completed-local v3.7 milestone turns the teacher-assistance seeds and learni
 
 The completed-local v3.8 milestone turns the subject/topic/practice foundations into full curriculum rollout for math, physics, German, and English, including curriculum hierarchy, lesson/exercise bank coverage, student/parent UX, and tutor/admin curriculum signals.
 
-The active v3.9 milestone implements the first payment-provider integration MVP for STOA subscriptions: checkout, provider subscription state, webhooks, parent payment UX, and admin billing visibility.
+The completed-local v3.9 milestone implements the first payment-provider integration MVP for STOA subscriptions: checkout, provider subscription state, webhooks, parent payment UX, and admin billing visibility.
 
 ## Core Value
 
@@ -59,8 +59,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v3.8 Full Curriculum Rollout on 2026-06-09 (local release gate)
-**Active milestone:** v3.9 Payment Provider Integration MVP
+**Latest completed milestone:** v3.9 Payment Provider Integration MVP on 2026-06-09 (local release gate)
+**Active milestone:** none; next recommended milestone is v4.0 Adaptive Learning Memory And Assignment
 
 Delivered:
 
@@ -147,7 +147,7 @@ Delivered:
 - v3.6 completed local functional WebSocket realtime transport, authenticated connection lifecycle, event fanout, realtime frontend client behavior, and fallback to the existing notification center.
 - v3.7 completed teacher-facing automatic summaries, suggested teaching focus, draft follow-up explanations, and bounded practice exercise generation with teacher/admin review before use.
 - v3.8 completed full curriculum hierarchy, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin curriculum signals for math, physics, German, and English.
-- v3.9 is planned to add subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
+- v3.9 completed local functional payment-provider integration with subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
 
 ## Last Production-Verified Milestone
 
@@ -164,29 +164,23 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v3.8 Full Curriculum Rollout
-
-Goal: roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
-
-Completed phases:
-
-- Phase 120: Full Curriculum Rollout Contract And Content Model.
-- Phase 121: Backend Curriculum Catalog And Exercise Bank APIs.
-- Phase 122: Student/Parent Curriculum UX And Tutor Signals.
-- Phase 123: v3.8 Functional Release Gate And Curriculum Audit.
-
-## Current Milestone
-
 ### v3.9 Payment Provider Integration MVP
 
 Goal: implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
 
-Planned phases:
+Completed phases:
 
 - Phase 124: Payment Provider Contract And Billing Model.
 - Phase 125: Backend Checkout Subscription And Webhook APIs.
 - Phase 126: Parent Payment UX And Admin Billing Operations.
 - Phase 127: Functional Release Gate And Billing Audit.
+
+## Current Milestone
+
+### No Active Milestone
+
+Next recommended milestone: v4.0 Adaptive Learning Memory And Assignment.
+
 
 ## Requirements
 
@@ -219,12 +213,16 @@ Shipped requirements:
 
 ### Active
 
+No active milestone requirements. Next recommended requirements should be defined with v4.0 Adaptive Learning Memory And Assignment.
+
+### Completed
+
+Milestone v3.9 requirements are archived in `.planning/milestones/v3.9-REQUIREMENTS.md` and are complete:
+
 - PAY-01: payment provider contract and billing model - Phase 124.
 - PAY-02: backend checkout subscription and webhook APIs - Phase 125.
 - UI-24: parent payment UX and admin billing operations - Phase 126.
 - VERIFY-22: v3.9 functional release gate and billing audit - Phase 127.
-
-### Completed
 
 Milestone v3.8 requirements are archived in `.planning/milestones/v3.8-REQUIREMENTS.md` and are complete:
 
@@ -404,10 +402,10 @@ Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREME
 
 ### Out of Scope
 
-- Billing or paid subscription enforcement - not part of the original report automation MVP; provider-backed subscription billing is active v3.9 scope.
+- Historical billing note: billing or paid subscription enforcement was not part of the original report automation MVP; v3.9 completed a local functional provider-backed subscription billing MVP.
 - PDF generation - HTML/JSON report artifacts are enough for this milestone.
 - Multi-language report generation beyond the primary parent-facing language chosen for MVP.
-- Historical billing note: provider integration was unrelated to the original parent real-data milestone; payment provider integration is active v3.9 scope.
+- Live payment rollout note: production charging, real Stripe credentials, production TWINT validation, refunds, invoices, tax/accounting automation, and dunning remain future rollout scope after v3.9.
 - Organization/school portal work - separate product surface.
 - Real-time report generation on every parent page load - scheduled generation is the intended model.
 - Freeform WYSIWYG report editor - v2.2 remains bounded artifact operations with sanitized preview/rollback controls.
@@ -537,7 +535,7 @@ Known current resources:
 | Start v3.6 with full WebSocket realtime notifications | User explicitly selected full WebSocket realtime notifications after v3.5 foundation; existing durable notification events can now become realtime transport payloads | Good - local release gate complete |
 | Start v3.7 with AI teacher tools and exercise generation | `stoa_docs` Phase 2 calls for AI teacher tools, automatic summaries, and practice generation; v3.4 learning profile seeds and v3.5 assistance seeds provide enough foundation for reviewed draft generation | Good - local release gate complete |
 | Start v3.8 with full curriculum rollout | `stoa_docs` Phase 2 calls for broad multi-subject curriculum expansion; v3.4 subject/topic foundations and existing practice lesson/challenge data can now be promoted into full curriculum catalog and exercise bank scope | Good - local release gate complete |
-| Start v3.9 with payment provider integration MVP | `stoa_docs` Phase 2 calls for Stripe subscription payment and credit card/TWINT support; v3.3 manual subscription operations provide the local entitlement model and admin override surface needed for provider-backed billing | Active - Phase 124 planned |
+| Start v3.9 with payment provider integration MVP | `stoa_docs` Phase 2 calls for Stripe subscription payment and credit card/TWINT support; v3.3 manual subscription operations provide the local entitlement model and admin override surface needed for provider-backed billing | Good - local release gate complete |
 
 ## Evolution
 
@@ -557,4 +555,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-09 after planning milestone v3.9*
+*Last updated: 2026-06-09 after completing milestone v3.9*

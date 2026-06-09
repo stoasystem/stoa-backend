@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Payment Provider Integration MVP
-status: executing
-last_updated: "2026-06-09T17:36:00+02:00"
+status: complete
+last_updated: "2026-06-09T17:48:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-09)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.9 payment provider integration MVP.
+**Current focus:** v3.9 payment provider integration MVP complete; next milestone selection.
 
 ## Current Position
 
 Phase: 127 Functional Release Gate And Billing Audit
-Plan: —
-Status: Ready for release gate planning.
-Last activity: 2026-06-09 - Phase 126 parent payment UX and admin billing operations passed frontend lint/build/browser verification.
+Plan: 127-01
+Status: Complete.
+Last activity: 2026-06-09 - v3.9 payment provider integration MVP passed local functional release gate.
 
 ## Accumulated Context
 
@@ -41,10 +41,11 @@ Last activity: 2026-06-09 - Phase 126 parent payment UX and admin billing operat
 - Phase 124 defined Stripe-first provider scope, STOA tier mapping, billing states, webhook idempotency/signature behavior, and manual override interaction.
 - Phase 125 added test-mode checkout session records, parent/admin billing APIs, signed Stripe webhook handling, provider event dedupe, and manual override protection.
 - Phase 126 added parent provider billing status/checkout entry and admin provider billing visibility backed by the Phase 125 APIs.
+- Phase 127 closed the local functional release gate with backend, frontend, and browser evidence and updated the feature gap audit.
 
 ### Pending Todos
 
-- Run functional release gate and update gap tracking in Phase 127.
+- Select the next milestone. Recommended next: v4.0 Adaptive Learning Memory And Assignment.
 
 ### Blockers/Concerns
 
@@ -54,4 +55,4 @@ Last activity: 2026-06-09 - Phase 126 parent payment UX and admin billing operat
 
 ## Operator Next Steps
 
-- Execute Phase 127 functional release gate and billing audit.
+- Start v4.0 Adaptive Learning Memory And Assignment or adjust the next milestone sequence.

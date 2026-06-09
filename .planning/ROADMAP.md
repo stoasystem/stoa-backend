@@ -31,26 +31,27 @@
 - [x] **v3.6 Full WebSocket Realtime Notifications** - Completed local release gate 2026-06-09.
 - [x] **v3.7 AI Teacher Tools And Exercise Generation** - Completed local release gate 2026-06-09.
 - [x] **v3.8 Full Curriculum Rollout** - Completed local release gate 2026-06-09.
+- [x] **v3.9 Payment Provider Integration MVP** - Completed local release gate 2026-06-09.
 
 ## Current Milestone
 
-**v3.9 Payment Provider Integration MVP** - Active.
+No active milestone.
 
-Goal: implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
+Next recommended milestone: v4.0 Adaptive Learning Memory And Assignment.
 
 ## Phases
 
 - [x] **Phase 124: Payment Provider Contract And Billing Model** - Complete 2026-06-09.
 - [x] **Phase 125: Backend Checkout Subscription And Webhook APIs** - Complete 2026-06-09.
 - [x] **Phase 126: Parent Payment UX And Admin Billing Operations** - Complete 2026-06-09.
-- [ ] **Phase 127: Functional Release Gate And Billing Audit** - Planned.
+- [x] **Phase 127: Functional Release Gate And Billing Audit** - Complete 2026-06-09.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 124 | Payment Provider Contract And Billing Model | Complete | PAY-01 |
 | 125 | Backend Checkout Subscription And Webhook APIs | Complete | PAY-02 |
 | 126 | Parent Payment UX And Admin Billing Operations | Complete | UI-24 |
-| 127 | Functional Release Gate And Billing Audit | Planned | VERIFY-22 |
+| 127 | Functional Release Gate And Billing Audit | Complete | VERIFY-22 |
 
 ## Phase Details
 
@@ -100,7 +101,7 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 **Goal:** Close v3.9 with focused backend/frontend evidence and update Phase 2 gap tracking for payment-provider integration and residual live-charge scope.
 
 **Requirement:** VERIFY-22
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Backend and frontend focused quality gates relevant to payment-provider integration pass.
@@ -114,7 +115,7 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 | 124 | v3.9 | 1/1 | Complete | 2026-06-09 |
 | 125 | v3.9 | 1/1 | Complete | 2026-06-09 |
 | 126 | v3.9 | 1/1 | Complete | 2026-06-09 |
-| 127 | v3.9 | 0/1 | Planned | - |
+| 127 | v3.9 | 1/1 | Complete | 2026-06-09 |
 
 ## Traceability
 
@@ -123,7 +124,7 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 | PAY-01 | Phase 124 | Complete |
 | PAY-02 | Phase 125 | Complete |
 | UI-24 | Phase 126 | Complete |
-| VERIFY-22 | Phase 127 | Planned |
+| VERIFY-22 | Phase 127 | Complete |
 
 ---
-*Last updated: 2026-06-09 after completing Phase 126*
+*Last updated: 2026-06-09 after completing v3.9*

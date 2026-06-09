@@ -1,7 +1,7 @@
 # Requirements: v3.9 Payment Provider Integration MVP
 
 **Milestone:** v3.9
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-09
 
 ## Goal
@@ -78,4 +78,4 @@ Acceptance criteria:
 | PAY-01 | Phase 124 | Complete |
 | PAY-02 | Phase 125 | Complete |
 | UI-24 | Phase 126 | Complete |
-| VERIFY-22 | Phase 127 | Planned |
+| VERIFY-22 | Phase 127 | Complete |
