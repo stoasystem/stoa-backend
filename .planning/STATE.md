@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: Full Curriculum Rollout
 status: executing
-last_updated: "2026-06-09T15:02:17+02:00"
+last_updated: "2026-06-09T15:09:17+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 122 Student/Parent Curriculum UX And Tutor Signals
+Phase: 123 Functional Release Gate And Curriculum Audit
 Plan: —
-Status: Ready for frontend planning.
-Last activity: 2026-06-09 - Phase 121 backend curriculum catalog and exercise bank APIs passed.
+Status: Ready for release gate planning.
+Last activity: 2026-06-09 - Phase 122 student/parent curriculum UX and tutor signals passed.
 
 ## Accumulated Context
 
@@ -40,10 +40,10 @@ Last activity: 2026-06-09 - Phase 121 backend curriculum catalog and exercise ba
 - v3.8 should preserve existing practice progress and challenge attempt behavior while adding richer curriculum catalog/content metadata.
 - Phase 120 defined the curriculum hierarchy, content lifecycle states, lesson/exercise fields, and existing-practice compatibility contract.
 - Phase 121 added curriculum catalog, lesson detail, exercise bank, and progress APIs on top of existing practice content/progress records.
+- Phase 122 added student, parent, and tutor curriculum rollout UI signals backed by the new curriculum APIs.
 
 ### Pending Todos
 
-- Implement student/parent curriculum UX and tutor/admin curriculum signals in Phase 122.
 - Run functional release gate and update gap tracking in Phase 123.
 
 ### Blockers/Concerns
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 121 backend curriculum catalog and exercise ba
 
 ## Operator Next Steps
 
-- Plan and execute Phase 122 student/parent curriculum UX and tutor/admin curriculum signals.
+- Plan and execute Phase 123 functional release gate and curriculum audit.

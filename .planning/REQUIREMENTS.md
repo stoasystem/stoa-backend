@@ -79,5 +79,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | CURRIC-01 | Phase 120 | Complete |
 | CURRIC-02 | Phase 121 | Complete |
-| UI-23 | Phase 122 | Planned |
+| UI-23 | Phase 122 | Complete |
 | VERIFY-21 | Phase 123 | Planned |
