@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_current_user, require_role
+from stoa.services import curriculum_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -89,6 +89,23 @@ def _build_unit(raw: dict, lessons: list[dict]) -> dict:
     }
 
 
+def _enforce_curriculum_preview_access(user: dict, include_preview: bool, rollout_state: str | None) -> None:
+    preview_requested = include_preview or (rollout_state is not None and rollout_state.lower() != "active")
+    if preview_requested and not curriculum_service.can_preview(user):
+        raise HTTPException(status_code=403, detail="Curriculum preview content requires tutor or admin access")
+
+
+def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None) -> str:
+    role = str(user.get("role", "")).lower()
+    if role == "student":
+        if requested_student_id and requested_student_id != user.get("sub"):
+            raise HTTPException(status_code=403, detail="Students can only view their own curriculum progress")
+        return user["sub"]
+    if role in {"admin", "tutor", "teacher"} and requested_student_id:
+        return requested_student_id
+    raise HTTPException(status_code=400, detail="studentId is required for tutor/admin curriculum progress")
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
 @router.get("/subjects")
@@ -130,12 +147,12 @@ async def get_overview(user: dict = Depends(require_role("student"))):
     topic_progress: dict[str, dict] = {}
     for t in all_topics_raw:
         tid = t["topic_id"]
-        t_lessons = [l for l in all_lessons if l.get("topic_id") == tid]
-        done = sum(1 for l in t_lessons if l["lesson_id"] in completed_ids)
+        t_lessons = [lesson for lesson in all_lessons if lesson.get("topic_id") == tid]
+        done = sum(1 for lesson in t_lessons if lesson["lesson_id"] in completed_ids)
         pct = int(done / len(t_lessons) * 100) if t_lessons else 0
         current = next(
-            (l["lesson_id"] for l in sorted(t_lessons, key=lambda x: x.get("order", 0))
-             if l["lesson_id"] not in completed_ids),
+            (lesson["lesson_id"] for lesson in sorted(t_lessons, key=lambda x: x.get("order", 0))
+             if lesson["lesson_id"] not in completed_ids),
             t_lessons[-1]["lesson_id"] if t_lessons else None,
         )
         topic_progress[tid] = {"pct": pct, "current_lesson_id": current}
@@ -172,9 +189,9 @@ async def get_overview(user: dict = Depends(require_role("student"))):
 
     # -- Recommended lesson --
     recommended_raw = None
-    for l in sorted(all_lessons, key=lambda x: (x.get("topic_id", ""), x.get("order", 0))):
-        if l["lesson_id"] not in completed_ids:
-            recommended_raw = l
+    for lesson in sorted(all_lessons, key=lambda x: (x.get("topic_id", ""), x.get("order", 0))):
+        if lesson["lesson_id"] not in completed_ids:
+            recommended_raw = lesson
             break
     if not recommended_raw:
         recommended_raw = all_lessons[0] if all_lessons else None
@@ -235,6 +252,76 @@ async def get_overview(user: dict = Depends(require_role("student"))):
     }
 
 
+@router.get("/curriculum/catalog")
+async def get_curriculum_catalog(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    grade_level: str | None = Query(default=None, alias="gradeLevel"),
+    rollout_state: str | None = Query(default=None, alias="rolloutState"),
+    include_preview: bool = Query(default=False, alias="includePreview"),
+    user: dict = Depends(get_current_user),
+):
+    _enforce_curriculum_preview_access(user, include_preview, rollout_state)
+    return curriculum_service.list_catalog(
+        subject_id=subject_id,
+        grade_level=grade_level,
+        rollout_state=rollout_state,
+        include_preview=include_preview,
+    )
+
+
+@router.get("/curriculum/lessons/{lesson_id}")
+async def get_curriculum_lesson(
+    lesson_id: str,
+    include_preview: bool = Query(default=False, alias="includePreview"),
+    include_answers: bool = Query(default=False, alias="includeAnswers"),
+    user: dict = Depends(get_current_user),
+):
+    _enforce_curriculum_preview_access(user, include_preview, None)
+    include_answer_keys = include_answers and curriculum_service.can_view_answer_keys(user)
+    lesson = curriculum_service.get_lesson_detail(
+        lesson_id,
+        include_preview=include_preview,
+        include_answer_keys=include_answer_keys,
+    )
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Curriculum lesson not found")
+    return lesson
+
+
+@router.get("/curriculum/exercises")
+async def list_curriculum_exercises(
+    lesson_id: str | None = Query(default=None, alias="lessonId"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    topic_id: str | None = Query(default=None, alias="topicId"),
+    difficulty: str | None = Query(default=None),
+    rollout_state: str | None = Query(default=None, alias="rolloutState"),
+    include_preview: bool = Query(default=False, alias="includePreview"),
+    include_answers: bool = Query(default=False, alias="includeAnswers"),
+    user: dict = Depends(get_current_user),
+):
+    _enforce_curriculum_preview_access(user, include_preview, rollout_state)
+    include_answer_keys = include_answers and curriculum_service.can_view_answer_keys(user)
+    return curriculum_service.list_exercises(
+        lesson_id=lesson_id,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        difficulty=difficulty,
+        rollout_state=rollout_state,
+        include_preview=include_preview,
+        include_answer_keys=include_answer_keys,
+    )
+
+
+@router.get("/curriculum/progress")
+async def get_curriculum_progress(
+    student_id: str | None = Query(default=None, alias="studentId"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    user: dict = Depends(get_current_user),
+):
+    resolved_student_id = _resolve_curriculum_student_id(user, student_id)
+    return curriculum_service.get_progress_summary(resolved_student_id, subject_id=subject_id)
+
+
 @router.get("/{subject_id}/{topic_id}/roadmap")
 async def get_roadmap(
     subject_id: str,
@@ -259,29 +346,29 @@ async def get_roadmap(
         key=lambda x: (x.get("unit_id", ""), x.get("order", 0)),
     )
     current_lesson_id = next(
-        (l["lesson_id"] for l in all_lessons if l["lesson_id"] not in completed_ids),
+        (lesson["lesson_id"] for lesson in all_lessons if lesson["lesson_id"] not in completed_ids),
         all_lessons[-1]["lesson_id"] if all_lessons else None,
     )
     progress_pct = int(len(completed_ids) / len(all_lessons) * 100) if all_lessons else 0
 
     roadmap_units = []
     for unit_raw in units_raw:
-        unit_lessons_raw = [l for l in all_lessons if l.get("unit_id") == unit_raw["unit_id"]]
+        unit_lessons_raw = [lesson for lesson in all_lessons if lesson.get("unit_id") == unit_raw["unit_id"]]
         roadmap_lessons = []
-        for l in unit_lessons_raw:
-            st = _lesson_status(l["lesson_id"], completed_ids, current_lesson_id)
+        for lesson in unit_lessons_raw:
+            st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
             roadmap_lessons.append({
-                "id": l["lesson_id"],
-                "title": l["title"],
-                "description": l.get("description", ""),
-                "order": l.get("order", 1),
+                "id": lesson["lesson_id"],
+                "title": lesson["title"],
+                "description": lesson.get("description", ""),
+                "order": lesson.get("order", 1),
                 "status": st,
-                "estimatedMinutes": l.get("estimated_minutes", 10),
+                "estimatedMinutes": lesson.get("estimated_minutes", 10),
                 "subjectId": subject_id,
-                "gradeLevel": l.get("grade_level", ""),
+                "gradeLevel": lesson.get("grade_level", ""),
                 "topicId": topic_id,
-                "unitId": l.get("unit_id", ""),
-                "challengeCount": l.get("challenge_count", 3),
+                "unitId": lesson.get("unit_id", ""),
+                "challengeCount": lesson.get("challenge_count", 3),
             })
         roadmap_units.append({
             "id": unit_raw["unit_id"],
@@ -335,7 +422,7 @@ async def get_path(
         key=lambda x: (x.get("topic_id", ""), x.get("unit_id", ""), x.get("order", 0)),
     )
     current_lesson_id = next(
-        (l["lesson_id"] for l in all_lessons if l["lesson_id"] not in completed_ids),
+        (lesson["lesson_id"] for lesson in all_lessons if lesson["lesson_id"] not in completed_ids),
         all_lessons[-1]["lesson_id"] if all_lessons else None,
     )
 
@@ -346,13 +433,13 @@ async def get_path(
 
     path_units = []
     for unit_raw in units_raw:
-        unit_lessons_raw = [l for l in all_lessons if l.get("unit_id") == unit_raw["unit_id"]]
+        unit_lessons_raw = [lesson for lesson in all_lessons if lesson.get("unit_id") == unit_raw["unit_id"]]
         unit_lessons = []
-        for l in unit_lessons_raw:
+        for lesson in unit_lessons_raw:
             challenges = [_build_challenge(c)
-                          for c in practice_repo.get_challenges(l["lesson_id"])]
-            st = _lesson_status(l["lesson_id"], completed_ids, current_lesson_id)
-            unit_lessons.append(_build_lesson(l, challenges, st))
+                          for c in practice_repo.get_challenges(lesson["lesson_id"])]
+            st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
+            unit_lessons.append(_build_lesson(lesson, challenges, st))
         path_units.append(_build_unit(unit_raw, unit_lessons))
 
     return {
@@ -378,7 +465,7 @@ async def get_lesson(lesson_id: str, user: dict = Depends(get_current_user)):
         key=lambda x: x.get("order", 0),
     )
     current_id = next(
-        (l["lesson_id"] for l in all_lessons if l["lesson_id"] not in completed_ids),
+        (lesson["lesson_id"] for lesson in all_lessons if lesson["lesson_id"] not in completed_ids),
         None,
     )
     st = _lesson_status(lesson_id, completed_ids, current_id)
@@ -403,7 +490,7 @@ async def complete_lesson(
     completed_ids = {p["lesson_id"] for p in practice_repo.get_progress(user["sub"])
                      if p.get("status") == "completed"}
     next_lesson = next(
-        (l for l in all_lessons if l["lesson_id"] not in completed_ids), None
+        (lesson for lesson in all_lessons if lesson["lesson_id"] not in completed_ids), None
     )
     return {
         "lessonId": lesson_id,

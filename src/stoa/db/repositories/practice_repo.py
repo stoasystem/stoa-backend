@@ -66,12 +66,32 @@ def get_challenges(lesson_id: str) -> list[dict]:
     return sorted(items, key=lambda x: x.get("order", 0))
 
 
+def get_all_challenges(
+    lesson_id: str | None = None,
+    subject_id: str | None = None,
+    topic_id: str | None = None,
+) -> list[dict]:
+    table = get_table()
+    prefix = f"CHALLENGE#{lesson_id}#" if lesson_id else "CHALLENGE#"
+    resp = table.query(
+        KeyConditionExpression=(
+            Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix)
+        )
+    )
+    items = resp.get("Items", [])
+    if subject_id:
+        items = [i for i in items if i.get("subject_id") == subject_id]
+    if topic_id:
+        items = [i for i in items if i.get("topic_id") == topic_id]
+    return sorted(items, key=lambda x: (x.get("lesson_id", ""), x.get("order", 0)))
+
+
 def get_challenge(challenge_id: str) -> dict | None:
     """Look up a challenge by its full SK (CHALLENGE#{lesson_id}#{challenge_id})
     or by scanning for challenge_id attribute."""
     table = get_table()
     # Try direct lookup with known SK pattern first
-    for prefix in [f"CHALLENGE#"]:
+    for prefix in ["CHALLENGE#"]:
         resp = table.query(
             KeyConditionExpression=(
                 Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix)

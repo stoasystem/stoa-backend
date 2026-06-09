@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: Full Curriculum Rollout
 status: executing
-last_updated: "2026-06-09T14:52:00+02:00"
+last_updated: "2026-06-09T15:02:17+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 121 Backend Curriculum Catalog And Exercise Bank APIs
+Phase: 122 Student/Parent Curriculum UX And Tutor Signals
 Plan: —
-Status: Ready for backend planning.
-Last activity: 2026-06-09 - Phase 120 curriculum rollout contract completed.
+Status: Ready for frontend planning.
+Last activity: 2026-06-09 - Phase 121 backend curriculum catalog and exercise bank APIs passed.
 
 ## Accumulated Context
 
@@ -39,10 +39,10 @@ Last activity: 2026-06-09 - Phase 120 curriculum rollout contract completed.
 - v3.8 promotes full multi-subject curriculum rollout from future expansion to active scope.
 - v3.8 should preserve existing practice progress and challenge attempt behavior while adding richer curriculum catalog/content metadata.
 - Phase 120 defined the curriculum hierarchy, content lifecycle states, lesson/exercise fields, and existing-practice compatibility contract.
+- Phase 121 added curriculum catalog, lesson detail, exercise bank, and progress APIs on top of existing practice content/progress records.
 
 ### Pending Todos
 
-- Implement backend curriculum catalog and exercise bank APIs in Phase 121.
 - Implement student/parent curriculum UX and tutor/admin curriculum signals in Phase 122.
 - Run functional release gate and update gap tracking in Phase 123.
 
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 120 curriculum rollout contract completed.
 
 ## Operator Next Steps
 
-- Plan and execute Phase 121 backend curriculum catalog and exercise bank APIs.
+- Plan and execute Phase 122 student/parent curriculum UX and tutor/admin curriculum signals.
