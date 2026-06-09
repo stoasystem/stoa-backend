@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after closing v3.6 local release gate
+**Updated:** 2026-06-09 after planning v3.7 AI teacher tools
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -16,11 +16,13 @@ v3.2 closed the remaining visible MVP admin workflow gap: content moderation for
 
 v3.3 completed the MVP manual subscription process before Stripe/TWINT: parent plan/request UI, admin processing queue, tier application workflow, and focused backend/frontend verification. Payment-provider integration remains future scope.
 
-v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout and automatic exercise generation remain future scope.
+v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subject-specific prompt behavior, topic seeds, student/parent learning profile APIs, and learning profile UI. Full curriculum rollout remains future scope; automatic exercise generation was later promoted to v3.7.
 
-v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout, push notifications, email digests, and automatic exercise generation remain future scope.
+v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout was completed locally in v3.6, automatic exercise generation was promoted to v3.7, and push notifications plus email digests remain future scope.
 
 v3.6 completed the local functional WebSocket realtime notification scope: authenticated connection/subscription service behavior, connection storage, notification fanout with delivery attempt metadata, frontend WebSocket client behavior, notification center cache sync, reconnect/offline states, and polling fallback. Production live rollout still requires API Gateway WebSocket/CDK route wiring and deploy/live-smoke evidence outside this repo's current infrastructure surface.
+
+v3.7 promotes the remaining AI teacher tools / automatic summaries / exercise generation gap into active scope. The planned milestone starts with a contract for session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts, then adds backend APIs, tutor UI, and functional release-gate evidence. AI-generated replies and exercises remain reviewed drafts; automatic student assignment remains future scope.
 
 ## Completed Or Largely Complete
 
@@ -39,6 +41,7 @@ v3.6 completed the local functional WebSocket realtime notification scope: authe
 - Learning expansion foundation: subject taxonomy, subject-specific prompt context, topic seeds, student/parent learning profile APIs, and student/parent learning profile UI.
 - Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
 - Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
+- AI teacher tools and exercise generation planning: reviewed-draft output contract, backend/API/UI phase plan, and release-gate requirements for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
 
 ## v3.0 Closed MVP Gaps
 
@@ -88,14 +91,21 @@ v3.6 completed the local functional WebSocket realtime notification scope: authe
 |-----|--------|------------------|----------|
 | Full WebSocket realtime notifications | `PRD.md` / `PLAN.md` Phase 2 realtime expansion | Phase 112 defined the WebSocket lifecycle/auth/channel/fallback contract; Phase 113 added backend connection records, authorized subscriptions, notification fanout, and delivery metadata; Phase 114 added the feature-flagged frontend WebSocket client, cache sync, reconnect/offline/fallback UX, and browser fixture coverage; Phase 115 captured local release-gate evidence. | Closed for local functional scope |
 
+## v3.7 Active Phase 2 Functional Gap
+
+| Gap | Source | Planned evidence | Priority |
+|-----|--------|------------------|----------|
+| AI teacher tools, automatic summaries, and exercise generation | `PRD.md` / `PLAN.md` Phase 2 teacher support and learning expansion | Phase 116 defines reviewed-draft output/input/lifecycle contracts; Phase 117 adds backend summary and exercise draft APIs; Phase 118 adds tutor UI; Phase 119 captures functional release-gate and residual-scope audit evidence. | Active |
+
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
-- Automatic exercise generation and richer AI teacher tools.
 - Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
 - Push notifications, native notifications, and email notification digests.
+- Automatic student assignment of generated exercises and autonomous tutoring decisions.
+- Full curriculum-aligned exercise banks and long-term adaptive exercise sequencing.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
@@ -171,3 +181,12 @@ v3.6 completed the local functional WebSocket realtime notification gate:
 2. Added backend connection records, authorized subscription operations, event fanout, stale cleanup, and delivery attempt metadata.
 3. Added frontend realtime client behavior, reconnect/heartbeat/offline handling, notification center cache sync, and polling fallback UX.
 4. Closed with backend pytest/Ruff evidence, frontend lint/build/browser fixture evidence, and explicit residual production WebSocket infrastructure plus push/native/email scope.
+
+## v3.7 Scope Recommendation
+
+v3.7 should complete reviewed AI teacher tools and bounded exercise generation:
+
+1. Define AI teacher tool output contracts, input sources, generation lifecycle, review boundary, and refusal/fallback behavior.
+2. Add backend teacher summary, draft explanation, and practice exercise draft APIs backed by existing AI service, subject taxonomy, and learning profile seeds.
+3. Add tutor UI for summaries, suggested focus, draft explanations, exercise draft review, regenerate, accept, reject, and archive actions.
+4. Close with focused functional checks and record residual automatic assignment, full curriculum banks, long-term adaptive sequencing, and production AI cost/quality monitoring scope.

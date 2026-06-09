@@ -1,84 +1,83 @@
-# Requirements: v3.6 Full WebSocket Realtime Notifications
+# Requirements: v3.7 AI Teacher Tools And Exercise Generation
 
-**Milestone:** v3.6
-**Status:** Complete
-**Created:** 2026-06-08
+**Milestone:** v3.7
+**Status:** Active
+**Created:** 2026-06-09
 
 ## Goal
 
-Turn the v3.5 in-product notification foundation into full WebSocket realtime notifications for core learning and operations workflows. This milestone focuses on functional realtime delivery: connection lifecycle, authenticated subscriptions, backend event fanout, frontend realtime client behavior, and graceful fallback to the existing notification center.
+Build AI teacher tools on top of the existing question, teacher reply, learning profile, topic seed, notification, and realtime foundations. This milestone focuses on practical teacher-facing productivity: automatic session summaries, suggested teaching focus, draft follow-up explanations, and bounded practice exercise generation.
 
 ## Requirements
 
-### WS-01 Full WebSocket Transport Contract And Infra Readiness
+### AITOOL-01 AI Teacher Tools Contract And Generation Model
 
-Implementers have a precise WebSocket transport contract, connection model, authorization model, and infrastructure readiness decision before backend changes.
-
-Acceptance criteria:
-
-- Contract defines WebSocket connection lifecycle: connect, authenticate, subscribe, heartbeat, reconnect, disconnect, and stale connection cleanup.
-- Contract defines event envelope for existing notification events and per-role channel/target authorization.
-- Contract defines supported realtime event categories: teacher request/takeover/reply, moderation updates, subscription updates, learning profile updates, and system notices.
-- Contract defines fallback behavior to polling/notification center when WebSocket is unavailable.
-- Infrastructure readiness compares API Gateway WebSocket, existing Lambda/API shape, DynamoDB connection records, and CDK changes required for v3.6.
-
-### WS-02 Backend WebSocket Connection And Event Delivery
-
-Backend supports authenticated WebSocket connections and realtime delivery from existing notification events.
+Implementers have a precise contract for teacher summaries, suggested focus, draft follow-up explanations, and bounded exercise generation.
 
 Acceptance criteria:
 
-- Backend stores active connection records with user id, role, subscribed channels, heartbeat/update timestamps, and expiry.
-- Backend authenticates connection/subscription requests using the existing Cognito/JWT model or an approved equivalent path.
-- Backend publishes selected notification events to active authorized WebSocket connections and records delivery attempts/results.
-- Backend supports disconnect cleanup and stale connection cleanup.
-- Focused tests cover connection lifecycle, authorization, event fanout, stale cleanup, and fallback-safe event persistence.
+- Contract defines tool outputs: session summary, misconception summary, suggested teaching focus, draft explanation, and generated practice exercises.
+- Contract defines input sources: question content, AI answer, teacher replies, conversation context, subject/topic taxonomy, learning profile seeds, feedback, and escalation history.
+- Contract defines exercise output shape, difficulty levels, subject/topic binding, answer key, explanation, and review state.
+- Contract defines human-in-the-loop workflow: AI drafts are never automatically sent to students without teacher/admin action.
+- Contract defines persistence and regeneration behavior for drafts, summaries, and exercises.
 
-### UI-21 Realtime Notification Client And UX
+### AITOOL-02 Backend Teacher Summary And Exercise Draft APIs
 
-Frontend consumes WebSocket notifications while preserving existing notification center fallback.
-
-Acceptance criteria:
-
-- Frontend establishes an authenticated WebSocket session after login where enabled.
-- Frontend handles reconnect, heartbeat, offline/unavailable state, and fallback to existing notification list polling.
-- Student/parent/tutor/admin shells show realtime notification count/list updates for supported events.
-- Tutor workflows receive teacher-session events without page refresh where supported.
-- Targeted browser verification confirms realtime/fallback UX for local or safe test fixtures.
-
-### VERIFY-19 v3.6 Functional Release Gate And Realtime Audit
-
-v3.6 closes with functional evidence and updated Phase 2 gap tracking.
+Backend supports teacher summary and practice exercise draft generation.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to WebSocket delivery pass.
-- CDK/diff/deploy evidence is recorded if infrastructure changes are required.
-- Gap audit marks full WebSocket realtime notifications as active/closed and records residual push/email/native notification scope.
-- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, richer AI teacher tools/exercise generation, mobile/multilingual polish, and support integrations.
+- Tutor/admin can request a summary draft for visible question/session context.
+- Tutor/admin can request bounded exercise drafts by student, subject, topic, difficulty, and count.
+- Backend stores generated drafts with status, creator, source context, prompt version, generated_at, reviewed_at, accepted/rejected state, and optional linked question/profile evidence.
+- Backend supports regenerate, accept, reject, and archive operations for drafts.
+- Focused tests cover authorization, generation shape, draft lifecycle, topic binding, and no automatic student delivery.
+
+### UI-22 Tutor AI Tools And Exercise Draft UI
+
+Frontend exposes practical AI teacher tools for tutors/admins.
+
+Acceptance criteria:
+
+- Tutor session UI shows auto summary, misconception summary, suggested focus, and draft explanation controls.
+- Tutor/admin UI supports generating practice exercise drafts from selected subject/topic/student context.
+- UI clearly distinguishes AI draft content from sent teacher replies or assigned exercises.
+- UI supports accept/reject/archive/regenerate states.
+- Targeted browser verification confirms the workflow is usable.
+
+### VERIFY-20 v3.7 Functional Release Gate And AI Tools Audit
+
+v3.7 closes with functional evidence and updated Phase 2 gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to AI teacher tools pass.
+- Gap audit marks AI teacher tools / automatic summaries / exercise generation as active or closed and records residual richer personalization/curriculum scope.
+- Final audit lists remaining Phase 2 product expansions: Stripe/TWINT, full curriculum rollout, production WebSocket infrastructure live rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
 
 ## Future Requirements
 
-- Push notifications and native mobile notification delivery.
-- Email notification digests.
-- Stripe/TWINT payment-provider integration.
-- Automatic exercise generation and richer AI teacher tools.
-- Full multi-subject curriculum content and exercises.
-- Mobile responsive polish and full multilingual rollout.
+- Student-facing automatic assignment/delivery of generated exercises.
+- Full curriculum-aligned exercise banks.
+- Long-term personalization beyond current learning profile seeds.
+- Payment-provider implementation.
+- Push/native/email notification delivery.
+- Full mobile/multilingual polish.
 
 ## Out of Scope
 
-- Native mobile push notifications.
-- Email notification digests.
-- Production charging/payment-provider work.
-- Automatic exercise generation.
-- Broad security/compliance program beyond required WebSocket auth/authorization and functional correctness.
+- Automatically sending AI-generated replies to students.
+- Automatically assigning generated exercises without teacher/admin review.
+- Full curriculum content authoring.
+- Payment-provider implementation.
+- Broad security/compliance program beyond required authorization and functional correctness.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WS-01 | Phase 112 | Complete |
-| WS-02 | Phase 113 | Complete |
-| UI-21 | Phase 114 | Complete |
-| VERIFY-19 | Phase 115 | Complete |
+| AITOOL-01 | Phase 116 | Planned |
+| AITOOL-02 | Phase 117 | Planned |
+| UI-22 | Phase 118 | Planned |
+| VERIFY-20 | Phase 119 | Planned |

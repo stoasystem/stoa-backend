@@ -614,28 +614,58 @@ Key accomplishments:
 - Added frontend notification center, admin operational notifications, and tutor assistance seed UI.
 - Completed local release-gate evidence with backend tests, focused lint, frontend lint/build, and targeted Playwright evidence.
 
-Known deferred items at close: Stripe/TWINT payment-provider integration, production WebSocket realtime delivery, push/email notification delivery, automatic exercise generation, richer AI teacher tools, mobile responsive polish, full multilingual rollout, and support integrations.
-
-## Active
+Known deferred items at close: Stripe/TWINT payment-provider integration, production WebSocket realtime delivery, push/email notification delivery, mobile responsive polish, full multilingual rollout, and support integrations. Automatic exercise generation and richer AI teacher tools were promoted to v3.7.
 
 ### v3.6 Full WebSocket Realtime Notifications
 
-**Status:** Active
+**Status:** Completed local release gate 2026-06-09
 **Started:** 2026-06-08
+**Completed:** 2026-06-09
+**Audit:** `.planning/milestones/v3.6-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.6-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.6-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Turn the v3.5 in-product notification foundation into full WebSocket realtime notifications for core learning and operations workflows.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 112: Full WebSocket Transport Contract And Infra Readiness.
 - Phase 113: Backend WebSocket Connection And Event Delivery.
 - Phase 114: Realtime Notification Client And UX.
 - Phase 115: v3.6 Functional Release Gate And Realtime Audit.
 
+Key accomplishments:
+
+- Defined authenticated WebSocket lifecycle, subscription, envelope, and fallback contracts.
+- Added backend connection records, authorized subscription behavior, notification fanout, stale cleanup, and delivery attempt metadata.
+- Added frontend WebSocket client behavior, reconnect/heartbeat/offline handling, notification cache sync, and polling fallback UX.
+- Completed local backend pytest/Ruff evidence, frontend lint/build/browser fixture evidence, and documented residual production WebSocket infrastructure rollout.
+
+Known deferred items at close: production API Gateway WebSocket/CDK route wiring, deploy/live smoke evidence, push/native notifications, email notification digests, payment provider integration, mobile polish, multilingual rollout, and support integrations. Richer AI teacher tools and automatic exercise generation were promoted to v3.7.
+
+## Active
+
+### v3.7 AI Teacher Tools And Exercise Generation
+
+**Status:** Active
+**Started:** 2026-06-09
+**Roadmap:** `.planning/milestones/v3.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v3.7-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Add teacher-facing automatic summaries, suggested focus, draft explanations, and bounded exercise generation with teacher/admin review.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 116: AI Teacher Tools Contract And Generation Model.
+- Phase 117: Backend Teacher Summary And Exercise Draft APIs.
+- Phase 118: Tutor AI Tools And Exercise Draft UI.
+- Phase 119: v3.7 Functional Release Gate And AI Tools Audit.
+
 ---
-*Last updated: 2026-06-08 after planning v3.6*
+*Last updated: 2026-06-09 after planning v3.7*

@@ -1,35 +1,36 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-08
+**Updated:** 2026-06-09
 **Mode:** product functionality first
 
-## v3.6 Full WebSocket Realtime Notifications
+## v3.7 AI Teacher Tools And Exercise Generation
 
-Goal: turn the v3.5 notification foundation into full WebSocket realtime delivery.
+Goal: turn the v3.5 teacher-assistance seeds and v3.4 learning profile foundations into usable teacher tools for automatic summaries, suggested focus, draft explanations, and bounded exercise generation.
 
 Planned phases:
 
-- Phase 112: Full WebSocket Transport Contract And Infra Readiness.
-- Phase 113: Backend WebSocket Connection And Event Delivery.
-- Phase 114: Realtime Notification Client And UX.
-- Phase 115: v3.6 Functional Release Gate And Realtime Audit.
+- Phase 116: AI Teacher Tools Contract And Generation Model.
+- Phase 117: Backend Teacher Summary And Exercise Draft APIs.
+- Phase 118: Tutor AI Tools And Exercise Draft UI.
+- Phase 119: v3.7 Functional Release Gate And AI Tools Audit.
 
 Scope:
 
-- Add authenticated WebSocket connection lifecycle, subscription model, event fanout, reconnect, and fallback behavior.
-- Preserve the existing notification center as canonical history and fallback.
-- Keep native push notifications and email digests out of scope.
+- Generate session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts from existing learning and conversation context.
+- Keep all AI-generated replies and exercises in teacher/admin-reviewed draft states.
+- Reuse existing AI/Bedrock, subject taxonomy, learning profile seed, notification, and tutor UI foundations where possible.
+- Keep automatic student assignment, full curriculum exercise banks, and autonomous tutoring decisions out of scope.
 
-## v3.7 Payment Provider Readiness
+## v3.8 Payment Provider Readiness
 
 Goal: prepare Stripe/TWINT integration after manual subscription operations are proven.
 
 Planned phases:
 
-- Phase 116: Payment Provider Contract And Billing Data Model.
-- Phase 117: Backend Payment Intent/Webhook Readiness.
-- Phase 118: Parent Payment Readiness UI And Admin Billing Signals.
-- Phase 119: v3.7 Functional Release Gate And Provider Integration Audit.
+- Phase 120: Payment Provider Contract And Billing Data Model.
+- Phase 121: Backend Payment Intent/Webhook Readiness.
+- Phase 122: Parent Payment Readiness UI And Admin Billing Signals.
+- Phase 123: v3.8 Functional Release Gate And Provider Integration Audit.
 
 Scope:
 
@@ -37,16 +38,16 @@ Scope:
 - Start with readiness and sandbox-safe flows before any real charge path.
 - Keep production charging disabled unless explicitly approved with provider credentials and safe test customers.
 
-## v3.8 Mobile And Multilingual Polish Foundation
+## v3.9 Mobile And Multilingual Polish Foundation
 
-Goal: reduce the largest remaining usability gaps after learning, realtime, and payment readiness foundations.
+Goal: reduce the largest remaining usability gaps after learning, realtime, AI teacher tools, and payment readiness foundations.
 
 Planned phases:
 
-- Phase 120: Mobile And Multilingual Polish Contract.
-- Phase 121: Responsive Navigation And Core Flow Polish.
-- Phase 122: Translation Coverage And Language Preference UI.
-- Phase 123: v3.8 Functional Release Gate And Polish Audit.
+- Phase 124: Mobile And Multilingual Polish Contract.
+- Phase 125: Responsive Navigation And Core Flow Polish.
+- Phase 126: Translation Coverage And Language Preference UI.
+- Phase 127: v3.9 Functional Release Gate And Polish Audit.
 
 Scope:
 

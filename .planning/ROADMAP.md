@@ -32,98 +32,36 @@
 
 ## Current Milestone
 
-No active milestone. Last completed: **v3.6 Full WebSocket Realtime Notifications**.
+**v3.7 AI Teacher Tools And Exercise Generation** - Active.
 
-Latest outcome: v3.6 turned the v3.5 notification foundation into local functional authenticated WebSocket realtime delivery for core learning and operations events, with production WebSocket infrastructure rollout still future scope.
+Goal: add teacher-facing automatic summaries, suggested focus, draft explanations, and bounded exercise generation with teacher/admin review.
 
 ## Phases
 
-- [x] **Phase 112: Full WebSocket Transport Contract And Infra Readiness** - Complete 2026-06-09.
-- [x] **Phase 113: Backend WebSocket Connection And Event Delivery** - Complete 2026-06-09.
-- [x] **Phase 114: Realtime Notification Client And UX** - Complete 2026-06-09.
-- [x] **Phase 115: Functional Release Gate And Realtime Audit** - Complete 2026-06-09.
-
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
-| 113 | Backend WebSocket Connection And Event Delivery | Complete | WS-02 |
-| 114 | Realtime Notification Client And UX | Complete | UI-21 |
-| 115 | v3.6 Functional Release Gate And Realtime Audit | Complete | VERIFY-19 |
+| 116 | AI Teacher Tools Contract And Generation Model | Planned | AITOOL-01 |
+| 117 | Backend Teacher Summary And Exercise Draft APIs | Planned | AITOOL-02 |
+| 118 | Tutor AI Tools And Exercise Draft UI | Planned | UI-22 |
+| 119 | v3.7 Functional Release Gate And AI Tools Audit | Planned | VERIFY-20 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 112 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 113 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 114 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 115 | v3.6 | 1/1 | Complete | 2026-06-09 |
-
-## Phase Details
-
-### Phase 112: Full WebSocket Transport Contract And Infra Readiness
-
-**Goal:** Define the WebSocket transport contract, authenticated connection lifecycle, authorization model, fallback behavior, and infrastructure/CDK readiness before backend and frontend implementation.
-
-**Requirement:** WS-01
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Contract defines connect, authenticate, subscribe, heartbeat, reconnect, disconnect, and stale connection cleanup behavior.
-2. Contract defines event envelopes for existing notification events and per-role channel/target authorization.
-3. Contract defines supported realtime event categories for teacher, moderation, subscription, learning profile, and system notice workflows.
-4. Fallback behavior to polling/notification center is explicit when WebSocket transport is unavailable.
-5. Infrastructure readiness compares API Gateway WebSocket, Lambda/API shape, DynamoDB connection records, and required CDK changes.
-
-### Phase 113: Backend WebSocket Connection And Event Delivery
-
-**Goal:** Implement authenticated backend WebSocket connection storage, subscription authorization, event fanout, delivery recording, disconnect cleanup, and stale connection cleanup.
-
-**Requirement:** WS-02
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Backend stores active connection records with user id, role, subscribed channels, heartbeat/update timestamps, and expiry.
-2. Connection and subscription requests are authenticated through the existing Cognito/JWT model or an explicitly approved equivalent.
-3. Existing notification events publish to active authorized WebSocket connections and record delivery attempts/results.
-4. Disconnect and stale connection cleanup keep connection state bounded and fallback-safe.
-5. Focused tests cover lifecycle, authorization, fanout, stale cleanup, and persistent notification fallback behavior.
-
-### Phase 114: Realtime Notification Client And UX
-
-**Goal:** Add frontend realtime notification client behavior across role shells while preserving the existing notification center and polling fallback.
-
-**Requirement:** UI-21
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Frontend establishes an authenticated WebSocket session after login when realtime transport is enabled.
-2. Client handles reconnect, heartbeat, offline/unavailable state, and fallback to existing notification list polling.
-3. Student, parent, tutor, and admin shells show realtime notification count/list updates for supported events.
-4. Tutor workflows receive teacher-session events without page refresh where supported.
-5. Targeted browser verification proves realtime and fallback UX with local or safe test fixtures.
-
-### Phase 115: Functional Release Gate And Realtime Audit
-
-**Goal:** Close v3.6 with focused functional evidence, infrastructure/deploy evidence where needed, and updated Phase 2 gap tracking.
-
-**Requirement:** VERIFY-19
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Backend and frontend quality gates relevant to WebSocket delivery pass.
-2. CDK/diff/deploy evidence is recorded if infrastructure changes are required.
-3. Gap audit marks full WebSocket realtime notifications active or closed and records residual push/email/native notification scope.
-4. Final audit lists remaining Phase 2 product expansions including Stripe/TWINT, curriculum rollout, richer AI teacher tools, mobile/multilingual polish, and support integrations.
+| 116 | v3.7 | 1/1 | Planned | - |
+| 117 | v3.7 | 0/1 | Planned | - |
+| 118 | v3.7 | 0/1 | Planned | - |
+| 119 | v3.7 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WS-01 | Phase 112 | Complete |
-| WS-02 | Phase 113 | Complete |
-| UI-21 | Phase 114 | Complete |
-| VERIFY-19 | Phase 115 | Complete |
+| AITOOL-01 | Phase 116 | Planned |
+| AITOOL-02 | Phase 117 | Planned |
+| UI-22 | Phase 118 | Planned |
+| VERIFY-20 | Phase 119 | Planned |
 
 ---
-*Last updated: 2026-06-09 after closing v3.6 local release gate*
+*Last updated: 2026-06-09 after planning v3.7*
