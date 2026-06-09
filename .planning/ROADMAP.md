@@ -38,6 +38,11 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 
 ## Phases
 
+- [ ] **Phase 116: AI Teacher Tools Contract And Generation Model** - Planned.
+- [ ] **Phase 117: Backend Teacher Summary And Exercise Draft APIs** - Planned.
+- [ ] **Phase 118: Tutor AI Tools And Exercise Draft UI** - Planned.
+- [ ] **Phase 119: Functional Release Gate And AI Tools Audit** - Planned.
+
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 116 | AI Teacher Tools Contract And Generation Model | Planned | AITOOL-01 |
@@ -53,6 +58,62 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 | 117 | v3.7 | 0/1 | Planned | - |
 | 118 | v3.7 | 0/1 | Planned | - |
 | 119 | v3.7 | 0/1 | Planned | - |
+
+## Phase Details
+
+### Phase 116: AI Teacher Tools Contract And Generation Model
+
+**Goal:** Define teacher summaries, suggested focus, draft explanation, bounded exercise generation, input sources, persistence, review lifecycle, and no-auto-send boundaries before implementation.
+
+**Requirement:** AITOOL-01
+**Plans:** 1/1 plans prepared
+
+**Success Criteria**:
+1. Contract defines session summary, misconception summary, suggested teaching focus, draft explanation, and practice exercise draft outputs.
+2. Contract defines approved input sources from question, conversation, teacher reply, subject/topic, learning profile, feedback, escalation, and teacher assistance seed data.
+3. Contract defines exercise draft shape, difficulty, subject/topic binding, answer key, explanation, and review state.
+4. Contract states AI-generated replies and exercises are drafts only until teacher/admin review.
+5. Contract defines persistence, regeneration, accept/reject/archive behavior, and verification priorities.
+
+### Phase 117: Backend Teacher Summary And Exercise Draft APIs
+
+**Goal:** Add backend tutor/admin APIs and storage for teacher summary drafts and bounded exercise drafts using existing AI and learning context foundations.
+
+**Requirement:** AITOOL-02
+**Plans:** 0/1 plans complete
+
+**Success Criteria**:
+1. Tutor/admin can request summary drafts for visible question/session context only.
+2. Tutor/admin can request bounded exercise drafts by student, subject, topic, difficulty, and count.
+3. Backend stores draft metadata including status, creator, source context, prompt version, generated timestamp, review timestamp, and linked evidence.
+4. Backend supports regenerate, accept, reject, and archive lifecycle operations.
+5. Focused tests cover authorization, generation shape, lifecycle transitions, topic binding, and no automatic student delivery.
+
+### Phase 118: Tutor AI Tools And Exercise Draft UI
+
+**Goal:** Expose practical tutor/admin UI for AI summaries, suggested focus, draft explanations, and reviewed exercise draft workflows.
+
+**Requirement:** UI-22
+**Plans:** 0/1 plans complete
+
+**Success Criteria**:
+1. Tutor session UI shows auto summary, misconception summary, suggested focus, and draft explanation controls.
+2. Tutor/admin UI can generate practice exercise drafts from selected student, subject, topic, difficulty, and count context.
+3. UI clearly distinguishes AI draft content from sent teacher replies or assigned exercises.
+4. UI supports accept, reject, archive, and regenerate states with clear status feedback.
+5. Targeted browser verification confirms the tutor/admin workflow is usable.
+
+### Phase 119: Functional Release Gate And AI Tools Audit
+
+**Goal:** Close v3.7 with focused backend/frontend evidence and update Phase 2 gap tracking for AI teacher tools and residual expansion scope.
+
+**Requirement:** VERIFY-20
+**Plans:** 0/1 plans complete
+
+**Success Criteria**:
+1. Backend and frontend focused quality gates relevant to AI teacher tools pass.
+2. Gap audit marks AI teacher tools, automatic summaries, and exercise generation active or closed with residual richer personalization/curriculum scope.
+3. Final audit lists remaining Phase 2 product expansions including Stripe/TWINT, full curriculum rollout, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, and support integrations.
 
 ## Traceability
 
