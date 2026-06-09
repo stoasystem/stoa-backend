@@ -46,7 +46,7 @@ Acceptance criteria:
 - UI distinguishes active curriculum content from draft/preview/archived content.
 - Targeted browser verification confirms core curriculum navigation and progress states.
 
-### VERIFY-21 v3.8 Functional Release Gate And Curriculum Audit
+### VERIFY-21 Functional Release Gate And Curriculum Audit
 
 v3.8 closes with functional evidence and updated `stoa_docs` gap tracking.
 
