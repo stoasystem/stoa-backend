@@ -542,6 +542,7 @@ Known deferred items at close: manual subscription operations, Stripe/TWINT paym
 **Started:** 2026-06-08
 **Roadmap:** `.planning/milestones/v3.3-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.3-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.3-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Make the MVP manual subscription model usable before Stripe/TWINT integration.
 **Phases:** 4
@@ -570,6 +571,7 @@ Known deferred items at close: Stripe/TWINT payment-provider integration, broad 
 **Status:** Complete
 **Started:** 2026-06-08
 **Completed:** 2026-06-08
+**Phase archive:** `.planning/milestones/v3.4-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Prepare Phase 2 learning expansion without jumping directly into a broad curriculum rollout.
 **Phases:** 4
@@ -593,6 +595,7 @@ Known deferred items at close: Stripe/TWINT payment-provider integration, full m
 **Audit:** `.planning/milestones/v3.5-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.5-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.5-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Prepare realtime and teacher-assistance expansion without jumping directly into a broad WebSocket rollout or automatic exercise generation.
 **Phases:** 4
@@ -624,6 +627,7 @@ Known deferred items at close: Stripe/TWINT payment-provider integration, produc
 **Audit:** `.planning/milestones/v3.6-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.6-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.6-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.6-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Turn the v3.5 in-product notification foundation into full WebSocket realtime notifications for core learning and operations workflows.
 **Phases:** 4
@@ -654,6 +658,7 @@ Known deferred items at close: production API Gateway WebSocket/CDK route wiring
 **Audit:** `.planning/milestones/v3.7-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.7-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.7-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.7-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Add teacher-facing automatic summaries, suggested focus, draft explanations, and bounded exercise generation with teacher/admin review.
 **Phases:** 4
@@ -684,6 +689,7 @@ Known deferred items at close: automatic student assignment or delivery, long-te
 **Audit:** `.planning/milestones/v3.8-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.8-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.8-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.8-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Roll out full curriculum structure and exercise bank coverage for math, physics, German, and English on top of the existing subject/topic/practice foundations.
 **Phases:** 4
@@ -715,6 +721,7 @@ Known deferred items at close: automatic student assignment or delivery of gener
 **Audit:** `.planning/milestones/v3.9-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.9-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.9-REQUIREMENTS.md`
+**Phase archive:** `.planning/milestones/v3.9-phases/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
 **Phases:** 4
