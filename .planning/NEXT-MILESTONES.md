@@ -12,7 +12,7 @@ Planned phases:
 - Phase 124: Payment Provider Contract And Billing Model.
 - Phase 125: Backend Checkout Subscription And Webhook APIs.
 - Phase 126: Parent Payment UX And Admin Billing Operations.
-- Phase 127: v3.9 Functional Release Gate And Billing Audit.
+- Phase 127: Functional Release Gate And Billing Audit.
 
 Scope:
 
