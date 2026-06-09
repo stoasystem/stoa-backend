@@ -77,5 +77,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | PAY-01 | Phase 124 | Complete |
 | PAY-02 | Phase 125 | Complete |
-| UI-24 | Phase 126 | Planned |
+| UI-24 | Phase 126 | Complete |
 | VERIFY-22 | Phase 127 | Planned |

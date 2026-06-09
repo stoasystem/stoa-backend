@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Payment Provider Integration MVP
 status: executing
-last_updated: "2026-06-09T17:18:00+02:00"
+last_updated: "2026-06-09T17:36:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 126 Parent Payment UX And Admin Billing Operations
+Phase: 127 Functional Release Gate And Billing Audit
 Plan: —
-Status: Ready for frontend implementation planning.
-Last activity: 2026-06-09 - Phase 125 backend checkout, billing status, and webhook APIs passed focused tests.
+Status: Ready for release gate planning.
+Last activity: 2026-06-09 - Phase 126 parent payment UX and admin billing operations passed frontend lint/build/browser verification.
 
 ## Accumulated Context
 
@@ -40,10 +40,10 @@ Last activity: 2026-06-09 - Phase 125 backend checkout, billing status, and webh
 - Internal development can use provider sandbox/test mode; live production charges still require approved provider credentials and rollout approval.
 - Phase 124 defined Stripe-first provider scope, STOA tier mapping, billing states, webhook idempotency/signature behavior, and manual override interaction.
 - Phase 125 added test-mode checkout session records, parent/admin billing APIs, signed Stripe webhook handling, provider event dedupe, and manual override protection.
+- Phase 126 added parent provider billing status/checkout entry and admin provider billing visibility backed by the Phase 125 APIs.
 
 ### Pending Todos
 
-- Implement parent payment UX and admin billing operations in Phase 126.
 - Run functional release gate and update gap tracking in Phase 127.
 
 ### Blockers/Concerns
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 125 backend checkout, billing status, and webh
 
 ## Operator Next Steps
 
-- Execute Phase 126 parent payment UX and admin billing operations.
+- Execute Phase 127 functional release gate and billing audit.
