@@ -7,10 +7,10 @@ last_updated: "2026-06-08T23:29:31+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 
 ## Current Position
 
-Phase: 113 Backend WebSocket Connection And Event Delivery
+Phase: 114 Realtime Notification Client And UX
 Plan: —
 Status: Ready for discuss/planning.
-Last activity: 2026-06-09 - Phase 112 WebSocket transport contract and infrastructure readiness passed.
+Last activity: 2026-06-09 - Phase 113 backend WebSocket connection and event delivery passed.
 
 ## Accumulated Context
 
@@ -39,19 +39,19 @@ Last activity: 2026-06-09 - Phase 112 WebSocket transport contract and infrastru
 - Payment provider readiness moves later because full WebSocket realtime notifications were explicitly selected.
 - Phase 112 established that durable notification records remain canonical history and WebSocket delivery is a realtime transport overlay.
 - Phase 112 set API Gateway WebSocket as the default implementation path unless Phase 113 CDK inspection proves an existing managed entrypoint is available.
+- Phase 113 added DynamoDB-backed WebSocket connection records, server-authorized subscriptions, fallback-safe notification fanout, and delivery attempt metadata.
+- Phase 113 keeps empty WebSocket endpoint behavior non-destructive for local/test runs while allowing API Gateway Management API posting when configured.
 
 ### Pending Todos
 
-- Implement backend WebSocket connection and event delivery in Phase 113.
 - Implement frontend realtime notification client and UX in Phase 114.
 - Run functional release gate and update gap tracking in Phase 115.
 
 ### Blockers/Concerns
 
-- CDK changes may be required for API Gateway WebSocket and connection management.
-- WebSocket auth and per-recipient authorization must be precise enough for functional correctness.
+- CDK changes may still be required for API Gateway WebSocket and connection management endpoint configuration.
 - Production rollout should support fallback to polling/notification center.
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 113 backend WebSocket connection and event delivery.
+- Discuss and plan Phase 114 realtime notification client and UX.

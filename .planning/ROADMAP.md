@@ -40,7 +40,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
-| 113 | Backend WebSocket Connection And Event Delivery | Planned | WS-02 |
+| 113 | Backend WebSocket Connection And Event Delivery | Complete | WS-02 |
 | 114 | Realtime Notification Client And UX | Planned | UI-21 |
 | 115 | v3.6 Functional Release Gate And Realtime Audit | Planned | VERIFY-19 |
 
@@ -49,7 +49,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 112 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 113 | v3.6 | 0/1 | Planned | - |
+| 113 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 114 | v3.6 | 0/1 | Planned | - |
 | 115 | v3.6 | 0/1 | Planned | - |
 
@@ -74,7 +74,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 **Goal:** Implement authenticated backend WebSocket connection storage, subscription authorization, event fanout, delivery recording, disconnect cleanup, and stale connection cleanup.
 
 **Requirement:** WS-02
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Backend stores active connection records with user id, role, subscribed channels, heartbeat/update timestamps, and expiry.
@@ -115,7 +115,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | WS-01 | Phase 112 | Complete |
-| WS-02 | Phase 113 | Planned |
+| WS-02 | Phase 113 | Complete |
 | UI-21 | Phase 114 | Planned |
 | VERIFY-19 | Phase 115 | Planned |
 
