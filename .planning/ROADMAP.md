@@ -37,6 +37,11 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 
 ## Phases
 
+- [x] **Phase 112: Full WebSocket Transport Contract And Infra Readiness** - Complete 2026-06-09.
+- [x] **Phase 113: Backend WebSocket Connection And Event Delivery** - Complete 2026-06-09.
+- [ ] **Phase 114: Realtime Notification Client And UX** - Planned.
+- [ ] **Phase 115: Functional Release Gate And Realtime Audit** - Planned.
+
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
