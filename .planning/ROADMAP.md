@@ -35,96 +35,36 @@
 
 ## Current Milestone
 
-No active milestone.
+**v4.0 Adaptive Learning Memory And Assignment** - Active.
 
-Next recommended milestone: v4.0 Adaptive Learning Memory And Assignment.
+Goal: add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
 
 ## Phases
 
-- [x] **Phase 124: Payment Provider Contract And Billing Model** - Complete 2026-06-09.
-- [x] **Phase 125: Backend Checkout Subscription And Webhook APIs** - Complete 2026-06-09.
-- [x] **Phase 126: Parent Payment UX And Admin Billing Operations** - Complete 2026-06-09.
-- [x] **Phase 127: Functional Release Gate And Billing Audit** - Complete 2026-06-09.
-
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 124 | Payment Provider Contract And Billing Model | Complete | PAY-01 |
-| 125 | Backend Checkout Subscription And Webhook APIs | Complete | PAY-02 |
-| 126 | Parent Payment UX And Admin Billing Operations | Complete | UI-24 |
-| 127 | Functional Release Gate And Billing Audit | Complete | VERIFY-22 |
-
-## Phase Details
-
-### Phase 124: Payment Provider Contract And Billing Model
-
-**Goal:** Define provider scope, billing state, tier mapping, webhook lifecycle, and manual override behavior before implementation.
-
-**Requirement:** PAY-01
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Contract defines Stripe-first subscription checkout with TWINT readiness where provider configuration supports it.
-2. Contract maps STOA `free`, `standard`, and `premium` tiers to provider product/price behavior.
-3. Contract defines local billing fields, subscription states, provider references, billing history, and manual override interaction.
-4. Contract defines webhook event mapping, idempotency behavior, sandbox/live mode boundaries, and no-live-charge safeguards.
-
-### Phase 125: Backend Checkout Subscription And Webhook APIs
-
-**Goal:** Add backend checkout session, billing status, webhook, and admin billing inspection APIs while preserving manual subscription operations.
-
-**Requirement:** PAY-02
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Parent users can create sandbox/test checkout sessions only for allowed STOA plans.
-2. Backend stores provider customer/subscription references, mode, tier, billing status, timestamps, and last provider event metadata.
-3. Webhook handler validates provider event shape, deduplicates provider events, and maps lifecycle changes into local subscription state.
-4. Admin can inspect billing status, recent provider events, and manual override context.
-5. Focused tests cover checkout request shape, tier validation, webhook idempotency, lifecycle transitions, and manual override compatibility.
-
-### Phase 126: Parent Payment UX And Admin Billing Operations
-
-**Goal:** Expose provider checkout/status to parents and billing visibility to admins through real backend APIs.
-
-**Requirement:** UI-24
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Parent subscription UI can start checkout, show current plan, show provider status, and handle return/cancel states.
-2. Parent UI distinguishes manual subscription, provider-managed subscription, checkout-pending, past-due, canceled, and payment-failure states.
-3. Admin billing UI shows provider status, billing event summary, provider/manual distinction, and manual override context.
-4. UI uses real backend billing APIs and keeps demo/payment mock behavior clearly separated.
-5. Targeted browser verification confirms parent checkout entry and admin billing visibility.
-
-### Phase 127: Functional Release Gate And Billing Audit
-
-**Goal:** Close v3.9 with focused backend/frontend evidence and update Phase 2 gap tracking for payment-provider integration and residual live-charge scope.
-
-**Requirement:** VERIFY-22
-**Plans:** 1/1 plans complete
-
-**Success Criteria**:
-1. Backend and frontend focused quality gates relevant to payment-provider integration pass.
-2. Gap audit marks Stripe/TWINT subscription payment integration active or closed and records residual live-charge/provider-credential scope.
-3. Final audit lists remaining product expansions including adaptive learning memory/automatic assignment, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, support integrations, and rich content authoring.
+| 128 | Adaptive Learning Memory And Assignment Contract | Planned | ADAPT-01 |
+| 129 | Backend Learning Memory And Reviewed Assignment APIs | Planned | ADAPT-02 |
+| 130 | Student/Tutor Assignment UX And Parent Progress Signals | Planned | UI-25 |
+| 131 | v4.0 Functional Release Gate And Personalization Audit | Planned | VERIFY-23 |
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 124 | v3.9 | 1/1 | Complete | 2026-06-09 |
-| 125 | v3.9 | 1/1 | Complete | 2026-06-09 |
-| 126 | v3.9 | 1/1 | Complete | 2026-06-09 |
-| 127 | v3.9 | 1/1 | Complete | 2026-06-09 |
+| 128 | v4.0 | 1/1 | Planned | - |
+| 129 | v4.0 | 0/1 | Planned | - |
+| 130 | v4.0 | 0/1 | Planned | - |
+| 131 | v4.0 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | Phase 124 | Complete |
-| PAY-02 | Phase 125 | Complete |
-| UI-24 | Phase 126 | Complete |
-| VERIFY-22 | Phase 127 | Complete |
+| ADAPT-01 | Phase 128 | Planned |
+| ADAPT-02 | Phase 129 | Planned |
+| UI-25 | Phase 130 | Planned |
+| VERIFY-23 | Phase 131 | Planned |
 
 ---
-*Last updated: 2026-06-09 after completing v3.9*
+*Last updated: 2026-06-10 after planning v4.0*

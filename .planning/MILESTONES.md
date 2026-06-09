@@ -747,7 +747,24 @@ Known deferred items at close: live production charging, real Stripe credential 
 
 ## Active
 
-No active milestone. Next recommended milestone: v4.0 Adaptive Learning Memory And Assignment.
+### v4.0 Adaptive Learning Memory And Assignment
+
+**Status:** Active
+**Started:** 2026-06-10
+**Roadmap:** `.planning/milestones/v4.0-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.0-REQUIREMENTS.md`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
+**Phases:** 4
+**Plans:** 1/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 128: Adaptive Learning Memory And Assignment Contract.
+- Phase 129: Backend Learning Memory And Reviewed Assignment APIs.
+- Phase 130: Student/Tutor Assignment UX And Parent Progress Signals.
+- Phase 131: v4.0 Functional Release Gate And Personalization Audit.
 
 ---
-*Last updated: 2026-06-09 after completing v3.9*
+*Last updated: 2026-06-10 after planning v4.0*

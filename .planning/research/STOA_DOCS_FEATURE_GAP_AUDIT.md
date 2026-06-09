@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after completing v3.9 payment provider integration
+**Updated:** 2026-06-10 after planning v4.0 adaptive learning memory
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -28,6 +28,8 @@ v3.8 completed the local functional full multi-subject curriculum rollout scope.
 
 v3.9 completed the local functional payment-provider integration MVP. The milestone defined a Stripe-first provider contract, added backend checkout/status/webhook APIs, exposed parent checkout/status UX and admin provider billing visibility, and closed with backend/frontend/browser release-gate evidence. Live production charges, provider credentials, TWINT production validation, refunds/invoices, tax/accounting, and dunning remain future scope.
 
+After checking `stoa_docs` again on 2026-06-10, the highest-value remaining feature construction item is personalized learning memory and reviewed assignments. v4.0 promotes student memory/personalization beyond profile seeds into active scope and connects it to curriculum progress, AI exercise drafts, and parent/tutor progress signals.
+
 ## Completed Or Largely Complete
 
 - Auth basics: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`.
@@ -48,6 +50,7 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 - AI teacher tools and exercise generation: reviewed-draft output contract, backend summary/exercise draft APIs, tutor AI teacher tools UI, and release-gate evidence for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
 - Full curriculum rollout: curriculum hierarchy, content states, lesson/exercise bank contract, backend catalog/exercise/progress APIs, student/parent/tutor UI signals, and release-gate evidence for math, physics, German, and English.
 - Payment provider integration MVP: Stripe-first provider scope, STOA tier mapping, billing state model, checkout session creation, signed webhook lifecycle, parent checkout/status UX, admin billing visibility, and release-gate evidence.
+- Adaptive learning memory and assignment planning: durable memory fields, source inputs, reviewed assignment lifecycle, recommendation boundaries, and student/tutor/parent visibility requirements.
 
 ## v3.0 Closed MVP Gaps
 
@@ -115,10 +118,15 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 |-----|--------|------------------|----------|
 | Stripe/TWINT subscription payment integration | `PRD.md` subscription management and `PLAN.md` Phase 2 growth features | Phase 124 defined provider/tier/billing/webhook contract; Phase 125 added backend checkout/status/webhook APIs; Phase 126 added parent payment UX and admin billing operations; Phase 127 captured functional billing release-gate evidence. | Closed for local functional scope |
 
+## v4.0 Active Phase 2 Functional Gap
+
+| Gap | Source | Planned evidence | Priority |
+|-----|--------|------------------|----------|
+| Personalized learning memory and reviewed assignments | `PLAN.md` Phase 2 growth feature: personalized learning memory / student profile | Phase 128 defines memory/assignment contract; Phase 129 adds backend memory and reviewed assignment APIs; Phase 130 adds student/tutor assignment UX and parent progress signals; Phase 131 captures functional personalization release-gate evidence. | Active |
+
 ## Phase 2 / Future Expansion
 
 - Live payment-provider rollout with approved production credentials, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-- Student memory/personalization beyond profile seeds.
 - Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
 - Push notifications, native notifications, and email notification digests.
 - Automatic student assignment of generated exercises and autonomous tutoring decisions.
@@ -129,7 +137,7 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 
 ## Remaining Feature Build Order
 
-1. Adaptive learning memory and reviewed assignment workflows - recommended v4.0.
+1. Adaptive learning memory and reviewed assignment workflows - active v4.0.
 2. Mobile responsive polish and expanded multilingual frontend coverage - recommended v4.1.
 3. Production notification delivery readiness: API Gateway WebSocket wiring, push/email preferences, and digest flows.
 4. Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
@@ -234,3 +242,12 @@ v3.9 completed the payment provider integration MVP:
 2. Added backend checkout session creation, subscription status, billing event persistence, and webhook lifecycle APIs.
 3. Added parent checkout/status UX and admin billing visibility.
 4. Closed with focused functional checks and recorded residual live-charge rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning scope.
+
+## v4.0 Scope Recommendation
+
+v4.0 should complete adaptive learning memory and reviewed assignment workflows:
+
+1. Define durable memory fields, input sources, freshness behavior, reviewed assignment lifecycle, recommendation boundaries, and role visibility.
+2. Add backend memory snapshot, next-practice recommendation, and reviewed assignment APIs using question, curriculum, AI draft, feedback, and weekly report signals.
+3. Add student next-practice/assignment UX, tutor assignment controls, and parent progress signals.
+4. Close with focused functional checks and record residual fully autonomous tutoring, long-term sequencing, analytics dashboard, and native mobile scope.

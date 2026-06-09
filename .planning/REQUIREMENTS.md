@@ -1,81 +1,81 @@
-# Requirements: v3.9 Payment Provider Integration MVP
+# Requirements: v4.0 Adaptive Learning Memory And Assignment
 
-**Milestone:** v3.9
-**Status:** Complete
-**Created:** 2026-06-09
+**Milestone:** v4.0
+**Status:** Active
+**Created:** 2026-06-10
 
 ## Goal
 
-Implement the first payment-provider integration for STOA subscriptions after the manual subscription operations MVP. This milestone focuses on product functionality: provider contract, checkout/subscription lifecycle, webhook-driven billing state, parent payment UX, and admin billing visibility.
+Turn learning profile seeds, curriculum progress, question history, AI teacher drafts, and weak-topic evidence into durable student memory and teacher-reviewed assignment workflows. This milestone focuses on product functionality: adaptive memory records, next-practice recommendations, reviewed exercise assignment, student/tutor UX, and parent progress signals.
 
 ## Requirements
 
-### PAY-01 Payment Provider Contract And Billing Model
+### ADAPT-01 Adaptive Learning Memory And Assignment Contract
 
-Implementers have a concrete provider and billing-domain contract before backend/frontend changes.
-
-Acceptance criteria:
-
-- Contract defines provider scope for Stripe-first subscription checkout with TWINT readiness where supported by provider configuration.
-- Contract maps STOA tiers to provider prices/products and local subscription fields.
-- Contract defines subscription lifecycle states: none, checkout_pending, active, past_due, canceled, payment_failed, manual_override, and provider_unknown.
-- Contract defines idempotency, webhook event mapping, billing history shape, and manual admin override interaction.
-- Contract defines internal-development safeguards: sandbox/test mode by default and no live charge path without approved provider credentials.
-
-### PAY-02 Backend Checkout Subscription And Webhook APIs
-
-Backend supports checkout session creation, subscription status reads, and webhook-driven billing updates.
+Implementers have a concrete product and data contract before backend/frontend changes.
 
 Acceptance criteria:
 
-- Parent users can create a provider checkout session for an allowed STOA plan.
-- Backend stores billing customer/subscription references, provider mode, tier, status, timestamps, and last provider event metadata.
-- Webhook handler validates provider event shape, deduplicates events, and updates local subscription state.
-- Admin can inspect billing status, recent billing events, and manual override interactions.
-- Focused tests cover checkout request shape, tier validation, webhook idempotency, lifecycle transitions, and manual override compatibility.
+- Contract defines durable learning memory fields: strengths, weak topics, recent activity, mastered concepts, struggling concepts, preferred explanation style, curriculum progress, assignment history, and freshness.
+- Contract defines memory inputs from questions, feedback, teacher replies, curriculum progress, exercise attempts, AI teacher drafts, and weekly report signals.
+- Contract defines reviewed assignment lifecycle: draft, recommended, assigned, started, completed, skipped, archived.
+- Contract defines recommendation behavior for next-practice suggestions without claiming fully autonomous tutoring decisions.
+- Contract defines parent/tutor/student visibility boundaries and stale data behavior.
 
-### UI-24 Parent Payment UX And Admin Billing Operations
+### ADAPT-02 Backend Learning Memory And Reviewed Assignment APIs
 
-Frontend exposes subscription checkout and billing status in parent/admin workflows.
-
-Acceptance criteria:
-
-- Parent subscription UI can start checkout, show current plan, show provider status, and handle return/cancel states.
-- Parent UI distinguishes manual subscription, provider-managed subscription, and payment failure states.
-- Admin billing UI shows provider status, billing event summary, and manual override context.
-- UI uses real backend billing APIs and keeps demo/payment mock behavior clearly separated.
-- Targeted browser verification confirms parent checkout entry and admin billing visibility.
-
-### VERIFY-22 v3.9 Functional Release Gate And Billing Audit
-
-v3.9 closes with functional evidence and updated `stoa_docs` gap tracking.
+Backend supports durable student memory, next-practice recommendations, and reviewed assignments.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to payment-provider integration pass.
-- Gap audit marks Stripe/TWINT subscription payment integration active or closed and records residual live-charge/provider-credential scope if needed.
-- Final audit lists remaining product expansions: adaptive learning memory/automatic assignment, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, support integrations, and rich content authoring.
+- Backend aggregates and stores learning memory snapshots per student and subject/topic.
+- Backend exposes student/tutor/parent-readable learning memory summaries with role-appropriate fields.
+- Tutor/admin can create reviewed assignments from curriculum exercises or AI exercise drafts.
+- Student can list, start, complete, and skip assigned practice items with progress updates.
+- Focused tests cover memory aggregation, role visibility, assignment lifecycle, idempotency, and progress compatibility.
+
+### UI-25 Student/Tutor Assignment UX And Parent Progress Signals
+
+Frontend exposes adaptive learning memory and assignment workflows.
+
+Acceptance criteria:
+
+- Student UI shows next-practice recommendations, assigned exercises, status, and completion feedback.
+- Tutor UI shows memory signals and can assign/review exercises from curriculum or AI draft context.
+- Parent UI shows progress signals, weak areas, assigned/completed practice, and freshness.
+- UI distinguishes recommended practice from teacher/admin-assigned practice.
+- Targeted browser verification confirms student/tutor/parent assignment workflows.
+
+### VERIFY-23 v4.0 Functional Release Gate And Personalization Audit
+
+v4.0 closes with functional evidence and updated `stoa_docs` gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to adaptive memory and assignments pass.
+- Gap audit marks student memory/personalization and reviewed assignment workflows active or closed and records residual fully autonomous sequencing scope.
+- Final audit lists remaining product expansions: mobile/multilingual polish, production notification delivery, live payment rollout, support integrations, rich content authoring, and deeper analytics.
 
 ## Future Requirements
 
-- Live provider charging with approved production credentials and safe rollout plan.
-- TWINT-specific production validation if not covered by Stripe configuration.
-- Invoices, receipts, refunds, dunning, tax/VAT, and accounting export.
-- Adaptive learning memory and automatic assignment.
-- Production notification delivery and mobile/multilingual polish.
+- Fully autonomous tutoring and assignment decisions.
+- Long-term adaptive sequencing engine beyond reviewed assignments and next-practice recommendations.
+- Learning analytics dashboards beyond parent/tutor progress signals.
+- Native mobile apps.
+- Production notification delivery and support integrations.
 
 ## Out of Scope
 
-- Real production charges without approved provider credentials.
-- Accounting/tax automation.
-- Refund operations beyond provider status visibility.
-- Broad security/compliance program beyond required payment correctness and provider webhook integrity.
+- Fully autonomous student assignment without teacher/admin review.
+- Replacing the existing tutor workflow with an AI-only tutor.
+- Broad security/compliance program beyond required authorization and functional correctness.
+- Native mobile apps or notification provider rollout.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAY-01 | Phase 124 | Complete |
-| PAY-02 | Phase 125 | Complete |
-| UI-24 | Phase 126 | Complete |
-| VERIFY-22 | Phase 127 | Complete |
+| ADAPT-01 | Phase 128 | Planned |
+| ADAPT-02 | Phase 129 | Planned |
+| UI-25 | Phase 130 | Planned |
+| VERIFY-23 | Phase 131 | Planned |

@@ -1,11 +1,11 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-09 after completing v3.9
+**Updated:** 2026-06-10 after planning v4.0
 **Mode:** product functionality first
 
 ## v4.0 Adaptive Learning Memory And Assignment
 
-Goal: turn learning profile seeds, curriculum progress, and AI exercise drafts into more useful personalized learning memory and reviewed assignment workflows.
+Goal: turn learning profile seeds, curriculum progress, and AI exercise drafts into useful personalized learning memory and reviewed assignment workflows.
 
 Planned phases:
 
@@ -23,7 +23,7 @@ Scope:
 
 ## v4.1 Mobile And Multilingual Polish Foundation
 
-Goal: reduce the largest remaining usability gaps after learning, realtime, AI teacher tools, curriculum, and payment foundations.
+Goal: reduce the largest remaining usability gaps after learning, realtime, AI teacher tools, curriculum, payment, and assignment foundations.
 
 Planned phases:
 
