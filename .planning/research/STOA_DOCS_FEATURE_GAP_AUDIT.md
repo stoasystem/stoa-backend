@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after completing v3.8 full curriculum rollout
+**Updated:** 2026-06-09 after planning v3.9 payment provider integration
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -26,6 +26,8 @@ v3.7 completed the local functional AI teacher tools / automatic summaries / exe
 
 v3.8 completed the local functional full multi-subject curriculum rollout scope. The milestone defined curriculum hierarchy and content states, added backend curriculum catalog and exercise bank APIs, exposed student/parent curriculum UX plus tutor/admin curriculum signals, and closed with backend/frontend/browser release-gate evidence. Long-term adaptive sequencing, automatic student assignment, rich authoring workflow, and production content QA remain future scope.
 
+After checking `stoa_docs` again on 2026-06-09, the remaining feature work is concentrated in Phase 2 growth features rather than MVP basics. v3.9 promotes Stripe/TWINT subscription payment integration into active scope because manual subscription operations already exist and payment is the clearest remaining business-function gap.
+
 ## Completed Or Largely Complete
 
 - Auth basics: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`.
@@ -45,6 +47,7 @@ v3.8 completed the local functional full multi-subject curriculum rollout scope.
 - Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
 - AI teacher tools and exercise generation: reviewed-draft output contract, backend summary/exercise draft APIs, tutor AI teacher tools UI, and release-gate evidence for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
 - Full curriculum rollout: curriculum hierarchy, content states, lesson/exercise bank contract, backend catalog/exercise/progress APIs, student/parent/tutor UI signals, and release-gate evidence for math, physics, German, and English.
+- Payment provider integration planning: Stripe-first provider scope, STOA tier mapping, billing state model, webhook lifecycle, parent checkout/status UX, and admin billing visibility.
 
 ## v3.0 Closed MVP Gaps
 
@@ -106,9 +109,14 @@ v3.8 completed the local functional full multi-subject curriculum rollout scope.
 |-----|--------|------------------|----------|
 | Full multi-subject curriculum rollout and exercise banks | `PRD.md` / `PLAN.md` Phase 2 learning expansion | Phase 120 defined curriculum hierarchy/content states/backfill behavior; Phase 121 added backend curriculum catalog and exercise bank APIs; Phase 122 added student/parent/tutor UI; Phase 123 captured functional release-gate and residual adaptive sequencing/automatic assignment audit evidence. | Closed for local functional scope |
 
+## v3.9 Active Phase 2 Functional Gap
+
+| Gap | Source | Planned evidence | Priority |
+|-----|--------|------------------|----------|
+| Stripe/TWINT subscription payment integration | `PRD.md` subscription management and `PLAN.md` Phase 2 growth features | Phase 124 defines provider/tier/billing/webhook contract; Phase 125 adds backend checkout/status/webhook APIs; Phase 126 adds parent payment UX and admin billing operations; Phase 127 captures functional billing release-gate evidence. | Active |
+
 ## Phase 2 / Future Expansion
 
-- Stripe/TWINT subscription payments after manual operations are usable.
 - Student memory/personalization beyond profile seeds.
 - Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
 - Push notifications, native notifications, and email notification digests.
@@ -117,6 +125,15 @@ v3.8 completed the local functional full multi-subject curriculum rollout scope.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
+
+## Remaining Feature Build Order
+
+1. Payment provider integration MVP - active v3.9.
+2. Adaptive learning memory and reviewed assignment workflows - recommended v4.0.
+3. Mobile responsive polish and expanded multilingual frontend coverage - recommended v4.1.
+4. Production notification delivery readiness: API Gateway WebSocket wiring, push/email preferences, and digest flows.
+5. Support-ticket/evidence destination integrations after approved connector or credential path exists.
+6. Rich curriculum authoring, production content QA, analytics, refunds/accounting, and deeper compliance operations.
 
 ## v3.0 Scope Recommendation
 
@@ -207,3 +224,12 @@ v3.8 completed the full curriculum rollout foundation:
 2. Added backend curriculum catalog and exercise bank APIs for active content while preserving current progress, mistakes, and challenge attempts.
 3. Added student/parent curriculum navigation and tutor/admin curriculum context signals.
 4. Closed with focused functional checks and recorded residual automatic assignment, long-term adaptive sequencing, rich authoring workflow, and production content QA/analytics scope.
+
+## v3.9 Scope Recommendation
+
+v3.9 should complete the payment provider integration MVP:
+
+1. Define Stripe-first provider scope, STOA tier to provider product/price mapping, local billing states, webhook mapping, idempotency, and manual override behavior.
+2. Add backend checkout session creation, subscription status, billing event persistence, and webhook lifecycle APIs.
+3. Add parent checkout/status UX and admin billing visibility.
+4. Close with focused functional checks and record residual live-charge rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning scope.

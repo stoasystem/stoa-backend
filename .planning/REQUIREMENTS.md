@@ -1,83 +1,81 @@
-# Requirements: v3.8 Full Curriculum Rollout
+# Requirements: v3.9 Payment Provider Integration MVP
 
-**Milestone:** v3.8
-**Status:** Complete
+**Milestone:** v3.9
+**Status:** Active
 **Created:** 2026-06-09
 
 ## Goal
 
-Turn the v3.4 subject/topic foundation and v3.7 exercise draft foundation into a usable full curriculum rollout for math, physics, German, and English. This milestone focuses on curriculum structure, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin visibility.
+Implement the first payment-provider integration for STOA subscriptions after the manual subscription operations MVP. This milestone focuses on product functionality: provider contract, checkout/subscription lifecycle, webhook-driven billing state, parent payment UX, and admin billing visibility.
 
 ## Requirements
 
-### CURRIC-01 Full Curriculum Rollout Contract And Content Model
+### PAY-01 Payment Provider Contract And Billing Model
 
-Implementers have a precise curriculum rollout contract before backend and frontend changes.
-
-Acceptance criteria:
-
-- Contract defines curriculum hierarchy: subject, grade/band, unit, topic, lesson, exercise, assessment/checkpoint, and rollout state.
-- Contract defines minimum content fields for lessons and exercises, including title, objective, explanation, examples, difficulty, estimated time, answer key, and topic binding.
-- Contract defines supported subjects for rollout: math, physics, German, and English, with language and grade-level metadata.
-- Contract defines content source and review states: seed, draft, reviewed, active, archived.
-- Contract defines migration/backfill behavior from existing practice subjects/topics/lessons/challenges without breaking current practice routes.
-
-### CURRIC-02 Backend Curriculum Catalog And Exercise Bank APIs
-
-Backend exposes curriculum catalog and exercise bank data through real APIs.
+Implementers have a concrete provider and billing-domain contract before backend/frontend changes.
 
 Acceptance criteria:
 
-- Student/tutor/admin can list curriculum subjects, units, topics, lessons, and exercises with rollout-aware filters.
-- Backend supports curriculum content seed/backfill from existing practice data and new curriculum metadata.
-- Backend preserves existing practice progress, mistake, lesson completion, and challenge attempt behavior.
-- Backend can return lesson detail with explanation, examples, exercises, answer keys where authorized, and next-step metadata.
-- Focused tests cover catalog shape, subject/grade/topic filtering, exercise bank shape, progress compatibility, and inactive/archived content exclusion.
+- Contract defines provider scope for Stripe-first subscription checkout with TWINT readiness where supported by provider configuration.
+- Contract maps STOA tiers to provider prices/products and local subscription fields.
+- Contract defines subscription lifecycle states: none, checkout_pending, active, past_due, canceled, payment_failed, manual_override, and provider_unknown.
+- Contract defines idempotency, webhook event mapping, billing history shape, and manual admin override interaction.
+- Contract defines internal-development safeguards: sandbox/test mode by default and no live charge path without approved provider credentials.
 
-### UI-23 Student/Parent Curriculum UX And Tutor Signals
+### PAY-02 Backend Checkout Subscription And Webhook APIs
 
-Frontend exposes the curriculum rollout as usable product surfaces.
-
-Acceptance criteria:
-
-- Student practice/curriculum UI shows subject, unit, topic, lesson, exercise, progress, and next-step states for rolled-out subjects.
-- Parent child profile/report surfaces show curriculum progress and weak curriculum areas without claiming unsupported subjects are complete.
-- Tutor/admin surfaces can inspect a student's curriculum context while answering questions or reviewing AI exercise drafts.
-- UI distinguishes active curriculum content from draft/preview/archived content.
-- Targeted browser verification confirms core curriculum navigation and progress states.
-
-### VERIFY-21 Functional Release Gate And Curriculum Audit
-
-v3.8 closes with functional evidence and updated `stoa_docs` gap tracking.
+Backend supports checkout session creation, subscription status reads, and webhook-driven billing updates.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to curriculum rollout pass.
-- Gap audit marks full multi-subject curriculum rollout active or closed and records residual adaptive sequencing/automatic assignment scope.
-- Final audit lists remaining Phase 2 product expansions: payment-provider integration, long-term personalization, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, and support integrations.
+- Parent users can create a provider checkout session for an allowed STOA plan.
+- Backend stores billing customer/subscription references, provider mode, tier, status, timestamps, and last provider event metadata.
+- Webhook handler validates provider event shape, deduplicates events, and updates local subscription state.
+- Admin can inspect billing status, recent billing events, and manual override interactions.
+- Focused tests cover checkout request shape, tier validation, webhook idempotency, lifecycle transitions, and manual override compatibility.
+
+### UI-24 Parent Payment UX And Admin Billing Operations
+
+Frontend exposes subscription checkout and billing status in parent/admin workflows.
+
+Acceptance criteria:
+
+- Parent subscription UI can start checkout, show current plan, show provider status, and handle return/cancel states.
+- Parent UI distinguishes manual subscription, provider-managed subscription, and payment failure states.
+- Admin billing UI shows provider status, billing event summary, and manual override context.
+- UI uses real backend billing APIs and keeps demo/payment mock behavior clearly separated.
+- Targeted browser verification confirms parent checkout entry and admin billing visibility.
+
+### VERIFY-22 v3.9 Functional Release Gate And Billing Audit
+
+v3.9 closes with functional evidence and updated `stoa_docs` gap tracking.
+
+Acceptance criteria:
+
+- Backend and frontend focused quality gates relevant to payment-provider integration pass.
+- Gap audit marks Stripe/TWINT subscription payment integration active or closed and records residual live-charge/provider-credential scope if needed.
+- Final audit lists remaining product expansions: adaptive learning memory/automatic assignment, production WebSocket infrastructure, push/native/email notifications, mobile/multilingual polish, support integrations, and rich content authoring.
 
 ## Future Requirements
 
-- Long-term adaptive sequencing beyond current progress and weak-topic signals.
-- Automatic student assignment/delivery of generated exercises.
-- Full content authoring workflow with rich editor, approval queues, and versioned publishing.
-- Payment-provider implementation.
-- Push/native/email notification delivery.
-- Full mobile/multilingual polish.
+- Live provider charging with approved production credentials and safe rollout plan.
+- TWINT-specific production validation if not covered by Stripe configuration.
+- Invoices, receipts, refunds, dunning, tax/VAT, and accounting export.
+- Adaptive learning memory and automatic assignment.
+- Production notification delivery and mobile/multilingual polish.
 
 ## Out of Scope
 
-- Automatically assigning generated exercises to students.
-- Full adaptive tutoring engine.
-- Payment-provider implementation.
-- Production WebSocket infrastructure rollout.
-- Broad security/compliance program beyond required authorization and functional correctness.
+- Real production charges without approved provider credentials.
+- Accounting/tax automation.
+- Refund operations beyond provider status visibility.
+- Broad security/compliance program beyond required payment correctness and provider webhook integrity.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURRIC-01 | Phase 120 | Complete |
-| CURRIC-02 | Phase 121 | Complete |
-| UI-23 | Phase 122 | Complete |
-| VERIFY-21 | Phase 123 | Complete |
+| PAY-01 | Phase 124 | Planned |
+| PAY-02 | Phase 125 | Planned |
+| UI-24 | Phase 126 | Planned |
+| VERIFY-22 | Phase 127 | Planned |

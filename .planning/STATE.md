@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.8
-milestone_name: Full Curriculum Rollout
-status: complete
-last_updated: "2026-06-09T15:12:43+02:00"
+milestone: v3.9
+milestone_name: Payment Provider Integration MVP
+status: planning
+last_updated: "2026-06-09T16:45:39+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 1
+  percent: 0
 ---
 
 # Project State
@@ -20,39 +20,38 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-09)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v3.8 full curriculum rollout complete; next milestone selection.
+**Current focus:** v3.9 payment provider integration MVP.
 
 ## Current Position
 
-Phase: 123 Functional Release Gate And Curriculum Audit
-Plan: 123-01
-Status: Complete.
-Last activity: 2026-06-09 - v3.8 full curriculum rollout passed local functional release gate.
+Phase: 124 Payment Provider Contract And Billing Model
+Plan: 124-01
+Status: Planned.
+Last activity: 2026-06-09 - checked `stoa_docs` remaining functionality and selected payment-provider integration as the next product-build milestone after v3.8 curriculum rollout.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v3.4 added subject taxonomy, topic seeds, and student learning profile foundations.
-- Existing practice routes and `practice_repo` already model subjects, topics, lessons, challenges, progress, mistakes, and attempts.
-- v3.7 added reviewed exercise draft generation, but left full curriculum-aligned exercise banks and long-term adaptive sequencing as future scope.
-- v3.8 completed the full multi-subject curriculum rollout for local functional scope.
-- v3.8 should preserve existing practice progress and challenge attempt behavior while adding richer curriculum catalog/content metadata.
-- Phase 120 defined the curriculum hierarchy, content lifecycle states, lesson/exercise fields, and existing-practice compatibility contract.
-- Phase 121 added curriculum catalog, lesson detail, exercise bank, and progress APIs on top of existing practice content/progress records.
-- Phase 122 added student, parent, and tutor curriculum rollout UI signals backed by the new curriculum APIs.
-- Phase 123 closed the local functional release gate with backend, frontend, and Playwright evidence and updated the feature gap audit.
+- v3.3 completed manual subscription operations with parent plan/request UI and admin tier processing.
+- `stoa_docs` Phase 2 explicitly calls for Stripe subscription payment with credit card/TWINT support.
+- v3.8 completed local functional full curriculum rollout, leaving payment integration as the most direct remaining business-function gap.
+- v3.9 should prioritize product construction: checkout/session APIs, webhook billing state, parent payment UX, and admin billing visibility.
+- Internal development can use provider sandbox/test mode; live production charges still require approved provider credentials and rollout approval.
 
 ### Pending Todos
 
-- Select the next milestone. Recommended next: v3.9 Payment Provider Readiness.
+- Complete Phase 124 payment provider contract and billing model docs.
+- Implement backend checkout/subscription/webhook APIs in Phase 125.
+- Implement parent payment UX and admin billing operations in Phase 126.
+- Run functional release gate and update gap tracking in Phase 127.
 
 ### Blockers/Concerns
 
-- Curriculum rollout must not claim unsupported content is active.
-- Automatic exercise assignment and full adaptive sequencing remain future scope.
-- Existing practice data access patterns should be reused unless Phase 120 proves they cannot support curriculum catalog needs.
+- Real production charging is high impact and must remain gated behind explicit production credentials and rollout approval.
+- Manual subscription overrides must continue to work while provider-managed subscriptions are introduced.
+- Provider-specific TWINT behavior may require final validation after provider credentials/configuration are available.
 
 ## Operator Next Steps
 
-- Start v3.9 Payment Provider Readiness or adjust the next milestone sequence.
+- Execute Phase 124 and proceed to backend payment provider APIs.
