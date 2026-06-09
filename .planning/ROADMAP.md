@@ -39,14 +39,14 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 
 - [x] **Phase 112: Full WebSocket Transport Contract And Infra Readiness** - Complete 2026-06-09.
 - [x] **Phase 113: Backend WebSocket Connection And Event Delivery** - Complete 2026-06-09.
-- [ ] **Phase 114: Realtime Notification Client And UX** - Planned.
+- [x] **Phase 114: Realtime Notification Client And UX** - Complete 2026-06-09.
 - [ ] **Phase 115: Functional Release Gate And Realtime Audit** - Planned.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
 | 113 | Backend WebSocket Connection And Event Delivery | Complete | WS-02 |
-| 114 | Realtime Notification Client And UX | Planned | UI-21 |
+| 114 | Realtime Notification Client And UX | Complete | UI-21 |
 | 115 | v3.6 Functional Release Gate And Realtime Audit | Planned | VERIFY-19 |
 
 ## Progress
@@ -55,7 +55,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 |-------|-----------|----------------|--------|-----------|
 | 112 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 113 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 114 | v3.6 | 0/1 | Planned | - |
+| 114 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 115 | v3.6 | 0/1 | Planned | - |
 
 ## Phase Details
@@ -93,7 +93,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 **Goal:** Add frontend realtime notification client behavior across role shells while preserving the existing notification center and polling fallback.
 
 **Requirement:** UI-21
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Frontend establishes an authenticated WebSocket session after login when realtime transport is enabled.
@@ -121,7 +121,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 |-------------|-------|--------|
 | WS-01 | Phase 112 | Complete |
 | WS-02 | Phase 113 | Complete |
-| UI-21 | Phase 114 | Planned |
+| UI-21 | Phase 114 | Complete |
 | VERIFY-19 | Phase 115 | Planned |
 
 ---

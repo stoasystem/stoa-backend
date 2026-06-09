@@ -80,5 +80,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | WS-01 | Phase 112 | Complete |
 | WS-02 | Phase 113 | Complete |
-| UI-21 | Phase 114 | Planned |
+| UI-21 | Phase 114 | Complete |
 | VERIFY-19 | Phase 115 | Planned |

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Full WebSocket Realtime Notifications
-status: planning
-last_updated: "2026-06-08T23:29:31+02:00"
+status: executing
+last_updated: "2026-06-09T12:59:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 
 ## Current Position
 
-Phase: 114 Realtime Notification Client And UX
+Phase: 115 Functional Release Gate And Realtime Audit
 Plan: —
-Status: Ready for discuss/planning.
-Last activity: 2026-06-09 - Phase 113 backend WebSocket connection and event delivery passed.
+Status: Ready for release gate planning.
+Last activity: 2026-06-09 - Phase 114 frontend realtime notification client and UX passed.
 
 ## Accumulated Context
 
@@ -41,10 +41,10 @@ Last activity: 2026-06-09 - Phase 113 backend WebSocket connection and event del
 - Phase 112 set API Gateway WebSocket as the default implementation path unless Phase 113 CDK inspection proves an existing managed entrypoint is available.
 - Phase 113 added DynamoDB-backed WebSocket connection records, server-authorized subscriptions, fallback-safe notification fanout, and delivery attempt metadata.
 - Phase 113 keeps empty WebSocket endpoint behavior non-destructive for local/test runs while allowing API Gateway Management API posting when configured.
+- Phase 114 added feature-flagged frontend WebSocket notification client behavior in `stoa-frontend` commit `79c6628`, including heartbeat, reconnect/offline/fallback states, cache merge, and browser fixture coverage.
 
 ### Pending Todos
 
-- Implement frontend realtime notification client and UX in Phase 114.
 - Run functional release gate and update gap tracking in Phase 115.
 
 ### Blockers/Concerns
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 113 backend WebSocket connection and event del
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 114 realtime notification client and UX.
+- Discuss and plan Phase 115 functional release gate and realtime audit.
