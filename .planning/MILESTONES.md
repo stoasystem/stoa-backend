@@ -646,26 +646,39 @@ Key accomplishments:
 
 Known deferred items at close: production API Gateway WebSocket/CDK route wiring, deploy/live smoke evidence, push/native notifications, email notification digests, payment provider integration, mobile polish, multilingual rollout, and support integrations. Richer AI teacher tools and automatic exercise generation were promoted to v3.7.
 
-## Active
-
 ### v3.7 AI Teacher Tools And Exercise Generation
 
-**Status:** Active
+**Status:** Completed local release gate 2026-06-09
 **Started:** 2026-06-09
+**Completed:** 2026-06-09
+**Audit:** `.planning/milestones/v3.7-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v3.7-ROADMAP.md`
 **Requirements:** `.planning/milestones/v3.7-REQUIREMENTS.md`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Add teacher-facing automatic summaries, suggested focus, draft explanations, and bounded exercise generation with teacher/admin review.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 116: AI Teacher Tools Contract And Generation Model.
 - Phase 117: Backend Teacher Summary And Exercise Draft APIs.
 - Phase 118: Tutor AI Tools And Exercise Draft UI.
 - Phase 119: v3.7 Functional Release Gate And AI Tools Audit.
 
+Key accomplishments:
+
+- Defined reviewed-draft contracts for summaries, suggested focus, draft explanations, bounded exercises, input sources, lifecycle, and no-auto-send behavior.
+- Added backend AI teacher draft persistence and tutor/admin APIs for summary draft generation, exercise draft generation, list/detail, regenerate, accept, reject, and archive.
+- Added tutor request detail UI for summary drafts and exercise drafts with explicit `Draft only` and `not delivered` status.
+- Completed backend pytest/focused Ruff evidence, frontend lint/build/browser evidence, and updated the feature gap audit.
+
+Known deferred items at close: automatic student assignment or delivery, full curriculum-aligned exercise banks, long-term adaptive sequencing, production AI quality/cost monitoring, payment-provider integration, production realtime infrastructure rollout, push/native/email notifications, mobile/multilingual polish, and support integrations.
+
+## Active
+
+No active milestone. Next recommended milestone: v3.8 Payment Provider Readiness.
+
 ---
-*Last updated: 2026-06-09 after planning v3.7*
+*Last updated: 2026-06-09 after completing v3.7*

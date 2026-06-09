@@ -1,25 +1,7 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-09
+**Updated:** 2026-06-09 after completing v3.7
 **Mode:** product functionality first
-
-## v3.7 AI Teacher Tools And Exercise Generation
-
-Goal: turn the v3.5 teacher-assistance seeds and v3.4 learning profile foundations into usable teacher tools for automatic summaries, suggested focus, draft explanations, and bounded exercise generation.
-
-Planned phases:
-
-- Phase 116: AI Teacher Tools Contract And Generation Model.
-- Phase 117: Backend Teacher Summary And Exercise Draft APIs.
-- Phase 118: Tutor AI Tools And Exercise Draft UI.
-- Phase 119: v3.7 Functional Release Gate And AI Tools Audit.
-
-Scope:
-
-- Generate session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts from existing learning and conversation context.
-- Keep all AI-generated replies and exercises in teacher/admin-reviewed draft states.
-- Reuse existing AI/Bedrock, subject taxonomy, learning profile seed, notification, and tutor UI foundations where possible.
-- Keep automatic student assignment, full curriculum exercise banks, and autonomous tutoring decisions out of scope.
 
 ## v3.8 Payment Provider Readiness
 
@@ -54,3 +36,21 @@ Scope:
 - Improve mobile ergonomics for parent/student/tutor core flows without redesigning the product.
 - Expand frontend translation coverage around high-traffic workflows.
 - Keep native mobile apps and full localization operations out of scope unless promoted by a later milestone.
+
+## v4.0 Production Notifications And Support Integration Readiness
+
+Goal: close the remaining notification and operations handoff gaps after local WebSocket and in-product notification foundations are stable.
+
+Planned phases:
+
+- Phase 128: Production Notification Delivery Contract.
+- Phase 129: API Gateway WebSocket And Push/Email Delivery Readiness.
+- Phase 130: Support Evidence Destination Contract And Admin Signals.
+- Phase 131: v4.0 Functional Release Gate And Operations Integration Audit.
+
+Scope:
+
+- Prepare production WebSocket route wiring and live-smoke evidence requirements.
+- Define push/native/email notification delivery boundaries and opt-in/out behavior.
+- Define support-ticket/evidence handoff readiness without assuming connector credentials.
+- Keep real production notification senders or support mutations behind explicit credential and safety approval.

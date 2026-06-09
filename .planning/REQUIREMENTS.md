@@ -1,7 +1,7 @@
 # Requirements: v3.7 AI Teacher Tools And Exercise Generation
 
 **Milestone:** v3.7
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-06-09
 
 ## Goal
@@ -80,4 +80,4 @@ Acceptance criteria:
 | AITOOL-01 | Phase 116 | Complete |
 | AITOOL-02 | Phase 117 | Complete |
 | UI-22 | Phase 118 | Complete |
-| VERIFY-20 | Phase 119 | Planned |
+| VERIFY-20 | Phase 119 | Complete |

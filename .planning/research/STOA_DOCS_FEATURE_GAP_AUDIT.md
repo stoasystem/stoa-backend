@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-09 after planning v3.7 AI teacher tools
+**Updated:** 2026-06-09 after completing v3.7 AI teacher tools
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -22,7 +22,7 @@ v3.5 completed the realtime notification and AI teacher assistance foundation sc
 
 v3.6 completed the local functional WebSocket realtime notification scope: authenticated connection/subscription service behavior, connection storage, notification fanout with delivery attempt metadata, frontend WebSocket client behavior, notification center cache sync, reconnect/offline states, and polling fallback. Production live rollout still requires API Gateway WebSocket/CDK route wiring and deploy/live-smoke evidence outside this repo's current infrastructure surface.
 
-v3.7 promotes the remaining AI teacher tools / automatic summaries / exercise generation gap into active scope. The planned milestone starts with a contract for session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts, then adds backend APIs, tutor UI, and functional release-gate evidence. AI-generated replies and exercises remain reviewed drafts; automatic student assignment remains future scope.
+v3.7 completed the local functional AI teacher tools / automatic summaries / exercise generation scope. The milestone defined reviewed-draft contracts for session summaries, misconception summaries, suggested teaching focus, draft follow-up explanations, and practice exercise drafts; added backend persistence and tutor/admin lifecycle APIs; added tutor UI; and captured functional release-gate evidence. AI-generated replies and exercises remain reviewed drafts; automatic student assignment remains future scope.
 
 ## Completed Or Largely Complete
 
@@ -41,7 +41,7 @@ v3.7 promotes the remaining AI teacher tools / automatic summaries / exercise ge
 - Learning expansion foundation: subject taxonomy, subject-specific prompt context, topic seeds, student/parent learning profile APIs, and student/parent learning profile UI.
 - Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
 - Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
-- AI teacher tools and exercise generation planning: reviewed-draft output contract, backend/API/UI phase plan, and release-gate requirements for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
+- AI teacher tools and exercise generation: reviewed-draft output contract, backend summary/exercise draft APIs, tutor AI teacher tools UI, and release-gate evidence for automatic summaries, suggested focus, draft explanations, and bounded practice exercise drafts.
 
 ## v3.0 Closed MVP Gaps
 
@@ -91,11 +91,11 @@ v3.7 promotes the remaining AI teacher tools / automatic summaries / exercise ge
 |-----|--------|------------------|----------|
 | Full WebSocket realtime notifications | `PRD.md` / `PLAN.md` Phase 2 realtime expansion | Phase 112 defined the WebSocket lifecycle/auth/channel/fallback contract; Phase 113 added backend connection records, authorized subscriptions, notification fanout, and delivery metadata; Phase 114 added the feature-flagged frontend WebSocket client, cache sync, reconnect/offline/fallback UX, and browser fixture coverage; Phase 115 captured local release-gate evidence. | Closed for local functional scope |
 
-## v3.7 Active Phase 2 Functional Gap
+## v3.7 Closed Phase 2 Functional Gap
 
-| Gap | Source | Planned evidence | Priority |
+| Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| AI teacher tools, automatic summaries, and exercise generation | `PRD.md` / `PLAN.md` Phase 2 teacher support and learning expansion | Phase 116 defines reviewed-draft output/input/lifecycle contracts; Phase 117 adds backend summary and exercise draft APIs; Phase 118 adds tutor UI; Phase 119 captures functional release-gate and residual-scope audit evidence. | Active |
+| AI teacher tools, automatic summaries, and exercise generation | `PRD.md` / `PLAN.md` Phase 2 teacher support and learning expansion | Phase 116 defined reviewed-draft output/input/lifecycle contracts; Phase 117 added backend summary and exercise draft APIs; Phase 118 added tutor UI; Phase 119 captured functional release-gate and residual-scope audit evidence. | Closed for local functional scope |
 
 ## Phase 2 / Future Expansion
 
@@ -182,11 +182,11 @@ v3.6 completed the local functional WebSocket realtime notification gate:
 3. Added frontend realtime client behavior, reconnect/heartbeat/offline handling, notification center cache sync, and polling fallback UX.
 4. Closed with backend pytest/Ruff evidence, frontend lint/build/browser fixture evidence, and explicit residual production WebSocket infrastructure plus push/native/email scope.
 
-## v3.7 Scope Recommendation
+## v3.7 Scope Outcome
 
-v3.7 should complete reviewed AI teacher tools and bounded exercise generation:
+v3.7 completed reviewed AI teacher tools and bounded exercise generation:
 
-1. Define AI teacher tool output contracts, input sources, generation lifecycle, review boundary, and refusal/fallback behavior.
-2. Add backend teacher summary, draft explanation, and practice exercise draft APIs backed by existing AI service, subject taxonomy, and learning profile seeds.
-3. Add tutor UI for summaries, suggested focus, draft explanations, exercise draft review, regenerate, accept, reject, and archive actions.
-4. Close with focused functional checks and record residual automatic assignment, full curriculum banks, long-term adaptive sequencing, and production AI cost/quality monitoring scope.
+1. Defined AI teacher tool output contracts, input sources, generation lifecycle, review boundary, and refusal/fallback behavior.
+2. Added backend teacher summary, draft explanation, and practice exercise draft APIs using existing question, tutor, subject/topic, and learning profile context.
+3. Added tutor UI for summaries, suggested focus, draft explanations, exercise draft review, regenerate, accept, reject, and archive actions.
+4. Closed with backend pytest/focused Ruff evidence, frontend lint/build/browser evidence, and residual automatic assignment, full curriculum banks, long-term adaptive sequencing, and production AI cost/quality monitoring scope.

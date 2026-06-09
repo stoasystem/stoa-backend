@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.7
 milestone_name: AI Teacher Tools And Exercise Generation
-status: executing
-last_updated: "2026-06-09T14:16:02+02:00"
+status: complete
+last_updated: "2026-06-09T14:18:31+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 Phase: 119 Functional Release Gate And AI Tools Audit
 Plan: —
-Status: Ready for release gate planning.
-Last activity: 2026-06-09 - Phase 118 tutor AI tools and exercise draft UI passed.
+Status: Complete.
+Last activity: 2026-06-09 - v3.7 local functional release gate passed.
 
 ## Accumulated Context
 
@@ -41,10 +41,11 @@ Last activity: 2026-06-09 - Phase 118 tutor AI tools and exercise draft UI passe
 - Phase 116 defined the AI teacher tools output contract, input sources, exercise draft shape, review lifecycle, and no-auto-send boundary.
 - Phase 117 added backend AI teacher draft persistence, tutor/admin generation APIs, lifecycle endpoints, and focused authorization/lifecycle tests.
 - Phase 118 added the tutor AI teacher tools panel, draft API hooks, demo fallbacks, and targeted browser coverage.
+- Phase 119 passed the v3.7 release gate and updated the feature gap audit.
 
 ### Pending Todos
 
-- Run functional release gate and update gap tracking in Phase 119.
+- Start v3.8 payment provider readiness when requested.
 
 ### Blockers/Concerns
 
@@ -54,4 +55,4 @@ Last activity: 2026-06-09 - Phase 118 tutor AI tools and exercise draft UI passe
 
 ## Operator Next Steps
 
-- Plan and execute Phase 119 functional release gate and AI tools audit.
+- v3.7 is complete. Next recommended milestone is v3.8 Payment Provider Readiness.
