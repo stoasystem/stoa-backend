@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Payment Provider Integration MVP
-status: planning
-last_updated: "2026-06-09T16:45:39+02:00"
+status: executing
+last_updated: "2026-06-09T17:05:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 124 Payment Provider Contract And Billing Model
-Plan: 124-01
-Status: Planned.
-Last activity: 2026-06-09 - checked `stoa_docs` remaining functionality and selected payment-provider integration as the next product-build milestone after v3.8 curriculum rollout.
+Phase: 125 Backend Checkout Subscription And Webhook APIs
+Plan: —
+Status: Ready for backend implementation planning.
+Last activity: 2026-06-09 - Phase 124 payment provider contract and billing model completed.
 
 ## Accumulated Context
 
@@ -38,10 +38,10 @@ Last activity: 2026-06-09 - checked `stoa_docs` remaining functionality and sele
 - v3.8 completed local functional full curriculum rollout, leaving payment integration as the most direct remaining business-function gap.
 - v3.9 should prioritize product construction: checkout/session APIs, webhook billing state, parent payment UX, and admin billing visibility.
 - Internal development can use provider sandbox/test mode; live production charges still require approved provider credentials and rollout approval.
+- Phase 124 defined Stripe-first provider scope, STOA tier mapping, billing states, webhook idempotency/signature behavior, and manual override interaction.
 
 ### Pending Todos
 
-- Complete Phase 124 payment provider contract and billing model docs.
 - Implement backend checkout/subscription/webhook APIs in Phase 125.
 - Implement parent payment UX and admin billing operations in Phase 126.
 - Run functional release gate and update gap tracking in Phase 127.
