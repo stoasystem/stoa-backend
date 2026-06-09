@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.7
 milestone_name: AI Teacher Tools And Exercise Generation
 status: planning
-last_updated: "2026-06-09T13:20:20+02:00"
+last_updated: "2026-06-09T13:59:36+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 1
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 116 AI Teacher Tools Contract And Generation Model
-Plan: 116-01
-Status: Planned.
-Last activity: 2026-06-09 - selected AI teacher tools, automatic summaries, and exercise generation as the next milestone after v3.6 WebSocket realtime notifications.
+Phase: 117 Backend Teacher Summary And Exercise Draft APIs
+Plan: —
+Status: Ready for backend planning.
+Last activity: 2026-06-09 - Phase 116 AI teacher tools contract and generation model completed.
 
 ## Accumulated Context
 
@@ -38,10 +38,10 @@ Last activity: 2026-06-09 - selected AI teacher tools, automatic summaries, and 
 - v3.6 added local functional WebSocket notification delivery.
 - v3.7 promotes the remaining `stoa_docs` AI teacher tools / automatic summaries / exercise generation scope from future expansion to active scope.
 - v3.7 keeps teacher/admin review in the loop; generated replies/exercises are drafts, not automatic student delivery.
+- Phase 116 defined the AI teacher tools output contract, input sources, exercise draft shape, review lifecycle, and no-auto-send boundary.
 
 ### Pending Todos
 
-- Complete Phase 116 AI teacher tools contract and generation model docs.
 - Implement backend teacher summary and exercise draft APIs in Phase 117.
 - Implement tutor AI tools and exercise draft UI in Phase 118.
 - Run functional release gate and update gap tracking in Phase 119.
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - selected AI teacher tools, automatic summaries, and 
 
 ## Operator Next Steps
 
-- Execute Phase 116 and proceed to backend AI teacher tool draft APIs.
+- Discuss and plan Phase 117 backend teacher summary and exercise draft APIs.

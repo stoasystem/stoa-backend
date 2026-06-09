@@ -77,7 +77,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AITOOL-01 | Phase 116 | Planned |
+| AITOOL-01 | Phase 116 | Complete |
 | AITOOL-02 | Phase 117 | Planned |
 | UI-22 | Phase 118 | Planned |
 | VERIFY-20 | Phase 119 | Planned |

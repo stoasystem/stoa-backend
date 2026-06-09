@@ -38,14 +38,14 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 
 ## Phases
 
-- [ ] **Phase 116: AI Teacher Tools Contract And Generation Model** - Planned.
+- [x] **Phase 116: AI Teacher Tools Contract And Generation Model** - Complete 2026-06-09.
 - [ ] **Phase 117: Backend Teacher Summary And Exercise Draft APIs** - Planned.
 - [ ] **Phase 118: Tutor AI Tools And Exercise Draft UI** - Planned.
 - [ ] **Phase 119: Functional Release Gate And AI Tools Audit** - Planned.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
-| 116 | AI Teacher Tools Contract And Generation Model | Planned | AITOOL-01 |
+| 116 | AI Teacher Tools Contract And Generation Model | Complete | AITOOL-01 |
 | 117 | Backend Teacher Summary And Exercise Draft APIs | Planned | AITOOL-02 |
 | 118 | Tutor AI Tools And Exercise Draft UI | Planned | UI-22 |
 | 119 | v3.7 Functional Release Gate And AI Tools Audit | Planned | VERIFY-20 |
@@ -54,7 +54,7 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 116 | v3.7 | 1/1 | Planned | - |
+| 116 | v3.7 | 1/1 | Complete | 2026-06-09 |
 | 117 | v3.7 | 0/1 | Planned | - |
 | 118 | v3.7 | 0/1 | Planned | - |
 | 119 | v3.7 | 0/1 | Planned | - |
@@ -66,7 +66,7 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 **Goal:** Define teacher summaries, suggested focus, draft explanation, bounded exercise generation, input sources, persistence, review lifecycle, and no-auto-send boundaries before implementation.
 
 **Requirement:** AITOOL-01
-**Plans:** 1/1 plans prepared
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Contract defines session summary, misconception summary, suggested teaching focus, draft explanation, and practice exercise draft outputs.
@@ -119,7 +119,7 @@ Goal: add teacher-facing automatic summaries, suggested focus, draft explanation
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AITOOL-01 | Phase 116 | Planned |
+| AITOOL-01 | Phase 116 | Complete |
 | AITOOL-02 | Phase 117 | Planned |
 | UI-22 | Phase 118 | Planned |
 | VERIFY-20 | Phase 119 | Planned |
