@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Full WebSocket Realtime Notifications
-status: executing
-last_updated: "2026-06-09T12:59:00+02:00"
+status: complete
+last_updated: "2026-06-09T13:01:25+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 
 ## Current Position
 
-Phase: 115 Functional Release Gate And Realtime Audit
+Phase: v3.6 milestone complete
 Plan: —
-Status: Ready for release gate planning.
-Last activity: 2026-06-09 - Phase 114 frontend realtime notification client and UX passed.
+Status: Complete for local functional release gate.
+Last activity: 2026-06-09 - Phase 115 release gate and realtime audit passed.
 
 ## Accumulated Context
 
@@ -42,16 +42,17 @@ Last activity: 2026-06-09 - Phase 114 frontend realtime notification client and 
 - Phase 113 added DynamoDB-backed WebSocket connection records, server-authorized subscriptions, fallback-safe notification fanout, and delivery attempt metadata.
 - Phase 113 keeps empty WebSocket endpoint behavior non-destructive for local/test runs while allowing API Gateway Management API posting when configured.
 - Phase 114 added feature-flagged frontend WebSocket notification client behavior in `stoa-frontend` commit `79c6628`, including heartbeat, reconnect/offline/fallback states, cache merge, and browser fixture coverage.
+- Phase 115 passed backend focused pytest/Ruff, backend full pytest, frontend lint/build/browser checks, and updated gap audit/release evidence.
 
 ### Pending Todos
 
-- Run functional release gate and update gap tracking in Phase 115.
+- Choose the next milestone.
 
 ### Blockers/Concerns
 
-- CDK changes may still be required for API Gateway WebSocket and connection management endpoint configuration.
-- Production rollout should support fallback to polling/notification center.
+- Production API Gateway WebSocket route/integration/CDK deployment and live endpoint smoke remain future rollout scope.
+- Push/native/email notification delivery remains future scope.
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 115 functional release gate and realtime audit.
+- Select and plan the next milestone.

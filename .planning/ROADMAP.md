@@ -28,26 +28,27 @@
 - [x] **v3.3 Subscription Operations MVP** - Completed local release gate 2026-06-08.
 - [x] **v3.4 Learning Expansion Foundation** - Completed local release gate 2026-06-08.
 - [x] **v3.5 Realtime And Teacher Assistance Foundation** - Completed local release gate 2026-06-08.
+- [x] **v3.6 Full WebSocket Realtime Notifications** - Completed local release gate 2026-06-09.
 
 ## Current Milestone
 
-**v3.6 Full WebSocket Realtime Notifications** - Active.
+No active milestone. Last completed: **v3.6 Full WebSocket Realtime Notifications**.
 
-Goal: turn the v3.5 notification foundation into full authenticated WebSocket realtime delivery for core learning and operations events.
+Latest outcome: v3.6 turned the v3.5 notification foundation into local functional authenticated WebSocket realtime delivery for core learning and operations events, with production WebSocket infrastructure rollout still future scope.
 
 ## Phases
 
 - [x] **Phase 112: Full WebSocket Transport Contract And Infra Readiness** - Complete 2026-06-09.
 - [x] **Phase 113: Backend WebSocket Connection And Event Delivery** - Complete 2026-06-09.
 - [x] **Phase 114: Realtime Notification Client And UX** - Complete 2026-06-09.
-- [ ] **Phase 115: Functional Release Gate And Realtime Audit** - Planned.
+- [x] **Phase 115: Functional Release Gate And Realtime Audit** - Complete 2026-06-09.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 112 | Full WebSocket Transport Contract And Infra Readiness | Complete | WS-01 |
 | 113 | Backend WebSocket Connection And Event Delivery | Complete | WS-02 |
 | 114 | Realtime Notification Client And UX | Complete | UI-21 |
-| 115 | v3.6 Functional Release Gate And Realtime Audit | Planned | VERIFY-19 |
+| 115 | v3.6 Functional Release Gate And Realtime Audit | Complete | VERIFY-19 |
 
 ## Progress
 
@@ -56,7 +57,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 | 112 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 113 | v3.6 | 1/1 | Complete | 2026-06-09 |
 | 114 | v3.6 | 1/1 | Complete | 2026-06-09 |
-| 115 | v3.6 | 0/1 | Planned | - |
+| 115 | v3.6 | 1/1 | Complete | 2026-06-09 |
 
 ## Phase Details
 
@@ -107,7 +108,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 **Goal:** Close v3.6 with focused functional evidence, infrastructure/deploy evidence where needed, and updated Phase 2 gap tracking.
 
 **Requirement:** VERIFY-19
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Backend and frontend quality gates relevant to WebSocket delivery pass.
@@ -122,7 +123,7 @@ Goal: turn the v3.5 notification foundation into full authenticated WebSocket re
 | WS-01 | Phase 112 | Complete |
 | WS-02 | Phase 113 | Complete |
 | UI-21 | Phase 114 | Complete |
-| VERIFY-19 | Phase 115 | Planned |
+| VERIFY-19 | Phase 115 | Complete |
 
 ---
-*Last updated: 2026-06-08 after planning v3.6*
+*Last updated: 2026-06-09 after closing v3.6 local release gate*

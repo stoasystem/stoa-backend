@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-08 after planning v3.6
+**Updated:** 2026-06-09 after closing v3.6 local release gate
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -20,7 +20,7 @@ v3.4 completed the Phase 2 learning expansion foundation: subject taxonomy, subj
 
 v3.5 completed the realtime notification and AI teacher assistance foundation scope with bounded notification events, recipient list/read/archive behavior, admin operational notifications, and teacher summary seeds. Full WebSocket rollout, push notifications, email digests, and automatic exercise generation remain future scope.
 
-v3.6 is planned to complete full WebSocket realtime notifications by adding authenticated WebSocket transport, connection lifecycle, event fanout, frontend realtime client behavior, and fallback to the existing notification center.
+v3.6 completed the local functional WebSocket realtime notification scope: authenticated connection/subscription service behavior, connection storage, notification fanout with delivery attempt metadata, frontend WebSocket client behavior, notification center cache sync, reconnect/offline states, and polling fallback. Production live rollout still requires API Gateway WebSocket/CDK route wiring and deploy/live-smoke evidence outside this repo's current infrastructure surface.
 
 ## Completed Or Largely Complete
 
@@ -38,6 +38,7 @@ v3.6 is planned to complete full WebSocket realtime notifications by adding auth
 - Manual subscription operations: parent subscription plan/request APIs, admin request processing/apply APIs, parent plan/request UI, admin subscription queue/detail/actions UI, and focused local verification.
 - Learning expansion foundation: subject taxonomy, subject-specific prompt context, topic seeds, student/parent learning profile APIs, and student/parent learning profile UI.
 - Notification and teacher assistance foundation: durable in-product notification events, recipient list/read/archive APIs, admin operational notification list, tutor assistance summary seed API, notification center UI, admin operational notification card, and tutor assistance seed panel.
+- Full WebSocket realtime notification functional scope: WebSocket transport contract, backend connection records and fanout helpers, delivery attempt metadata, frontend WebSocket notification client, live/fallback notification center UX, and browser fixture coverage.
 
 ## v3.0 Closed MVP Gaps
 
@@ -81,13 +82,19 @@ v3.6 is planned to complete full WebSocket realtime notifications by adding auth
 |-----|--------|------------------|----------|
 | Realtime notification and AI teacher assistance foundation | `PRD.md` / `PLAN.md` Phase 2 teacher support and realtime expansion | Phase 108 defined notification event and assistance seed contracts; Phase 109 added backend notification events, list/read/archive/admin APIs, and tutor summary seeds; Phase 110 added notification center, admin operational notification, and tutor assistance seed UI; Phase 111 captured local release-gate evidence. | Closed for foundation scope |
 
+## v3.6 Closed Phase 2 Functional Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Full WebSocket realtime notifications | `PRD.md` / `PLAN.md` Phase 2 realtime expansion | Phase 112 defined the WebSocket lifecycle/auth/channel/fallback contract; Phase 113 added backend connection records, authorized subscriptions, notification fanout, and delivery metadata; Phase 114 added the feature-flagged frontend WebSocket client, cache sync, reconnect/offline/fallback UX, and browser fixture coverage; Phase 115 captured local release-gate evidence. | Closed for local functional scope |
+
 ## Phase 2 / Future Expansion
 
 - Stripe/TWINT subscription payments after manual operations are usable.
 - Full multi-subject curriculum rollout for physics, German, English beyond foundational subject/topic support.
 - Student memory/personalization beyond profile seeds.
 - Automatic exercise generation and richer AI teacher tools.
-- Full WebSocket realtime notifications: active v3.6.
+- Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
 - Push notifications, native notifications, and email notification digests.
 - Mobile responsive polish.
 - Full frontend multilingual rollout.
@@ -155,3 +162,12 @@ v3.6 should complete full WebSocket realtime notifications:
 2. Add backend connection records, authenticated WebSocket route handling, event fanout, and stale cleanup.
 3. Add frontend realtime client, reconnect behavior, notification center sync, and fallback UX.
 4. Close with functional realtime evidence and record residual push/native/email notification scope.
+
+## v3.6 Scope Outcome
+
+v3.6 completed the local functional WebSocket realtime notification gate:
+
+1. Defined WebSocket connection lifecycle, auth/subscription model, event envelope, and fallback behavior.
+2. Added backend connection records, authorized subscription operations, event fanout, stale cleanup, and delivery attempt metadata.
+3. Added frontend realtime client behavior, reconnect/heartbeat/offline handling, notification center cache sync, and polling fallback UX.
+4. Closed with backend pytest/Ruff evidence, frontend lint/build/browser fixture evidence, and explicit residual production WebSocket infrastructure plus push/native/email scope.
