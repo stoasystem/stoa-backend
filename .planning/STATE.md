@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.7
 milestone_name: AI Teacher Tools And Exercise Generation
-status: planning
-last_updated: "2026-06-09T14:04:47+02:00"
+status: executing
+last_updated: "2026-06-09T14:16:02+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 118 Tutor AI Tools And Exercise Draft UI
+Phase: 119 Functional Release Gate And AI Tools Audit
 Plan: —
-Status: Ready for frontend planning.
-Last activity: 2026-06-09 - Phase 117 backend teacher summary and exercise draft APIs passed.
+Status: Ready for release gate planning.
+Last activity: 2026-06-09 - Phase 118 tutor AI tools and exercise draft UI passed.
 
 ## Accumulated Context
 
@@ -40,10 +40,10 @@ Last activity: 2026-06-09 - Phase 117 backend teacher summary and exercise draft
 - v3.7 keeps teacher/admin review in the loop; generated replies/exercises are drafts, not automatic student delivery.
 - Phase 116 defined the AI teacher tools output contract, input sources, exercise draft shape, review lifecycle, and no-auto-send boundary.
 - Phase 117 added backend AI teacher draft persistence, tutor/admin generation APIs, lifecycle endpoints, and focused authorization/lifecycle tests.
+- Phase 118 added the tutor AI teacher tools panel, draft API hooks, demo fallbacks, and targeted browser coverage.
 
 ### Pending Todos
 
-- Implement tutor AI tools and exercise draft UI in Phase 118.
 - Run functional release gate and update gap tracking in Phase 119.
 
 ### Blockers/Concerns
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 117 backend teacher summary and exercise draft
 
 ## Operator Next Steps
 
-- Discuss and plan Phase 118 tutor AI tools and exercise draft UI.
+- Plan and execute Phase 119 functional release gate and AI tools audit.
