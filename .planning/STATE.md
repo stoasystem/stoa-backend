@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Payment Provider Integration MVP
 status: executing
-last_updated: "2026-06-09T17:05:00+02:00"
+last_updated: "2026-06-09T17:18:00+02:00"
 last_activity: 2026-06-09
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-09)
 
 ## Current Position
 
-Phase: 125 Backend Checkout Subscription And Webhook APIs
+Phase: 126 Parent Payment UX And Admin Billing Operations
 Plan: —
-Status: Ready for backend implementation planning.
-Last activity: 2026-06-09 - Phase 124 payment provider contract and billing model completed.
+Status: Ready for frontend implementation planning.
+Last activity: 2026-06-09 - Phase 125 backend checkout, billing status, and webhook APIs passed focused tests.
 
 ## Accumulated Context
 
@@ -39,10 +39,10 @@ Last activity: 2026-06-09 - Phase 124 payment provider contract and billing mode
 - v3.9 should prioritize product construction: checkout/session APIs, webhook billing state, parent payment UX, and admin billing visibility.
 - Internal development can use provider sandbox/test mode; live production charges still require approved provider credentials and rollout approval.
 - Phase 124 defined Stripe-first provider scope, STOA tier mapping, billing states, webhook idempotency/signature behavior, and manual override interaction.
+- Phase 125 added test-mode checkout session records, parent/admin billing APIs, signed Stripe webhook handling, provider event dedupe, and manual override protection.
 
 ### Pending Todos
 
-- Implement backend checkout/subscription/webhook APIs in Phase 125.
 - Implement parent payment UX and admin billing operations in Phase 126.
 - Run functional release gate and update gap tracking in Phase 127.
 
@@ -54,4 +54,4 @@ Last activity: 2026-06-09 - Phase 124 payment provider contract and billing mode
 
 ## Operator Next Steps
 
-- Execute Phase 124 and proceed to backend payment provider APIs.
+- Execute Phase 126 parent payment UX and admin billing operations.

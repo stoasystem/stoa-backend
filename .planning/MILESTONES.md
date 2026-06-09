@@ -718,13 +718,13 @@ Known deferred items at close: automatic student assignment or delivery of gener
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Implement subscription checkout, provider webhook billing state, parent payment UX, and admin billing visibility for the first payment-provider integration.
 **Phases:** 4
-**Plans:** 1/4 complete
-**Requirements:** 1/4 complete
+**Plans:** 2/4 complete
+**Requirements:** 2/4 complete
 
 Planned phases:
 
 - Phase 124: Payment Provider Contract And Billing Model - Complete.
-- Phase 125: Backend Checkout Subscription And Webhook APIs.
+- Phase 125: Backend Checkout Subscription And Webhook APIs - Complete.
 - Phase 126: Parent Payment UX And Admin Billing Operations.
 - Phase 127: Functional Release Gate And Billing Audit.
 

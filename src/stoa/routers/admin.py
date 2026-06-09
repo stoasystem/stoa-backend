@@ -64,6 +64,36 @@ class SubscriptionRequestListResponse(BaseModel):
     count: int
 
 
+class SubscriptionBillingResponse(BaseModel):
+    parentId: str
+    provider: str | None = None
+    mode: str
+    status: str
+    subscriptionTier: str
+    requestedTier: str | None = None
+    providerCustomerId: str | None = None
+    providerSubscriptionId: str | None = None
+    providerPriceId: str | None = None
+    checkoutSessionId: str | None = None
+    checkoutUrl: str | None = None
+    currentPeriodStart: str | None = None
+    currentPeriodEnd: str | None = None
+    cancelAtPeriodEnd: bool = False
+    lastProviderEventId: str | None = None
+    lastProviderEventType: str | None = None
+    lastProviderEventAt: str | None = None
+    manualOverrideAt: str | None = None
+    manualOverrideBy: str | None = None
+    manualOverrideSource: str | None = None
+    updatedAt: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SubscriptionBillingListResponse(BaseModel):
+    items: list[SubscriptionBillingResponse]
+    count: int
+
+
 class SubscriptionRequestUpdateRequest(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
     admin_note: str | None = Field(default=None, max_length=500)
@@ -684,6 +714,33 @@ async def get_subscription_request(
 ):
     """Open one manual subscription request with lifecycle history."""
     return subscription_service.get_request(request_id)
+
+
+@router.get("/subscriptions/billing", response_model=SubscriptionBillingListResponse)
+async def list_subscription_billing(
+    limit: int = Query(default=50, ge=1, le=100),
+    parent_id: Optional[str] = Query(default=None),
+    billing_status: Optional[str] = Query(default=None),
+    billing_provider: Optional[str] = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List provider billing records for admin visibility."""
+    items = subscription_service.list_admin_billing(
+        limit=limit,
+        parent_id=parent_id,
+        billing_status=billing_status,
+        billing_provider=billing_provider,
+    )
+    return SubscriptionBillingListResponse(items=items, count=len(items))
+
+
+@router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)
+async def get_subscription_billing(
+    parent_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Open one parent provider billing record with recent event history."""
+    return subscription_service.get_admin_billing(parent_id)
 
 
 @router.patch("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)

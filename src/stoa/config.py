@@ -90,6 +90,15 @@ class Settings(BaseSettings):
     websocket_api_endpoint: str = ""
     websocket_connection_ttl_seconds: int = 600
 
+    # Payment provider integration (v3.9)
+    stripe_api_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_standard_price_id: str = ""
+    stripe_premium_price_id: str = ""
+    stripe_checkout_success_url: str = "http://localhost:5173/parent/subscription?checkout=success"
+    stripe_checkout_cancel_url: str = "http://localhost:5173/parent/subscription?checkout=cancel"
+    stripe_live_charges_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

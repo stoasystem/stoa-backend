@@ -204,6 +204,50 @@ class ParentSubscriptionResponse(BaseModel):
     currentTier: str
     plans: dict[str, dict[str, Any]]
     pendingRequest: ParentSubscriptionRequestResponse | None = None
+    billing: dict[str, Any] = Field(default_factory=dict)
+
+
+class ParentCheckoutSessionCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    requested_tier: SubscriptionTier = Field(..., alias="requestedTier")
+    success_url: str | None = Field(default=None, alias="successUrl", max_length=500)
+    cancel_url: str | None = Field(default=None, alias="cancelUrl", max_length=500)
+
+
+class ParentCheckoutSessionResponse(BaseModel):
+    parentId: str
+    checkoutSessionId: str
+    checkoutUrl: str
+    provider: str
+    mode: str
+    requestedTier: str
+    billingStatus: str
+
+
+class ParentBillingResponse(BaseModel):
+    parentId: str
+    provider: str | None = None
+    mode: str
+    status: str
+    subscriptionTier: str
+    requestedTier: str | None = None
+    providerCustomerId: str | None = None
+    providerSubscriptionId: str | None = None
+    providerPriceId: str | None = None
+    checkoutSessionId: str | None = None
+    checkoutUrl: str | None = None
+    currentPeriodStart: str | None = None
+    currentPeriodEnd: str | None = None
+    cancelAtPeriodEnd: bool = False
+    lastProviderEventId: str | None = None
+    lastProviderEventType: str | None = None
+    lastProviderEventAt: str | None = None
+    manualOverrideAt: str | None = None
+    manualOverrideBy: str | None = None
+    manualOverrideSource: str | None = None
+    updatedAt: str | None = None
+    events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def _resolve_parent_profile(user: dict, settings: Settings) -> ResolvedParent:
@@ -604,6 +648,37 @@ async def get_my_subscription(
     """Return the authenticated parent's current plan and MVP plan options."""
     resolved = _resolve_parent_profile(user, settings)
     return subscription_service.get_parent_subscription(resolved.parent_user_id)
+
+
+@router.post(
+    "/me/subscription/checkout",
+    response_model=ParentCheckoutSessionResponse,
+    status_code=201,
+)
+async def create_my_subscription_checkout(
+    body: ParentCheckoutSessionCreate,
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Create a provider checkout session for the authenticated parent."""
+    resolved = _resolve_parent_profile(user, settings)
+    return subscription_service.create_checkout_session(
+        parent_id=resolved.parent_user_id,
+        requested_tier=body.requested_tier.value,
+        success_url=body.success_url,
+        cancel_url=body.cancel_url,
+        settings=settings,
+    )
+
+
+@router.get("/me/subscription/billing", response_model=ParentBillingResponse)
+async def get_my_subscription_billing(
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return provider billing status for the authenticated parent."""
+    resolved = _resolve_parent_profile(user, settings)
+    return subscription_service.get_parent_billing(resolved.parent_user_id)
 
 
 @router.post(

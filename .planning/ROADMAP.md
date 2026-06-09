@@ -41,14 +41,14 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 ## Phases
 
 - [x] **Phase 124: Payment Provider Contract And Billing Model** - Complete 2026-06-09.
-- [ ] **Phase 125: Backend Checkout Subscription And Webhook APIs** - Planned.
+- [x] **Phase 125: Backend Checkout Subscription And Webhook APIs** - Complete 2026-06-09.
 - [ ] **Phase 126: Parent Payment UX And Admin Billing Operations** - Planned.
 - [ ] **Phase 127: Functional Release Gate And Billing Audit** - Planned.
 
 | Phase | Name | Status | Requirement |
 |-------|------|--------|-------------|
 | 124 | Payment Provider Contract And Billing Model | Complete | PAY-01 |
-| 125 | Backend Checkout Subscription And Webhook APIs | Planned | PAY-02 |
+| 125 | Backend Checkout Subscription And Webhook APIs | Complete | PAY-02 |
 | 126 | Parent Payment UX And Admin Billing Operations | Planned | UI-24 |
 | 127 | Functional Release Gate And Billing Audit | Planned | VERIFY-22 |
 
@@ -72,7 +72,7 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 **Goal:** Add backend checkout session, billing status, webhook, and admin billing inspection APIs while preserving manual subscription operations.
 
 **Requirement:** PAY-02
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 **Success Criteria**:
 1. Parent users can create sandbox/test checkout sessions only for allowed STOA plans.
@@ -112,7 +112,7 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 124 | v3.9 | 1/1 | Complete | 2026-06-09 |
-| 125 | v3.9 | 0/1 | Planned | - |
+| 125 | v3.9 | 1/1 | Complete | 2026-06-09 |
 | 126 | v3.9 | 0/1 | Planned | - |
 | 127 | v3.9 | 0/1 | Planned | - |
 
@@ -121,9 +121,9 @@ Goal: implement subscription checkout, provider webhook billing state, parent pa
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAY-01 | Phase 124 | Complete |
-| PAY-02 | Phase 125 | Planned |
+| PAY-02 | Phase 125 | Complete |
 | UI-24 | Phase 126 | Planned |
 | VERIFY-22 | Phase 127 | Planned |
 
 ---
-*Last updated: 2026-06-09 after completing Phase 124*
+*Last updated: 2026-06-09 after completing Phase 125*

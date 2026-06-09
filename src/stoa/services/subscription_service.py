@@ -1,7 +1,11 @@
-"""Manual subscription operations for the MVP billing workflow."""
+"""Subscription operations for manual and provider-managed billing workflows."""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import time
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -11,6 +15,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
+from stoa.config import Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
@@ -19,10 +24,33 @@ from stoa.services import notification_service
 
 REQUEST_ENTITY = "subscription_request"
 OPEN_GUARD_ENTITY = "subscription_request_open_guard"
+BILLING_ENTITY = "subscription_billing"
+BILLING_EVENT_ENTITY = "subscription_billing_event"
+BILLING_EVENT_DEDUPE_ENTITY = "subscription_billing_event_dedupe"
 REQUEST_STATUSES = {"requested", "in_review", "approved", "applied", "rejected", "cancelled"}
 OPEN_STATUSES = {"requested", "in_review", "approved"}
 TERMINAL_STATUSES = {"applied", "rejected", "cancelled"}
 REQUEST_TYPES = {"upgrade", "downgrade", "cancel"}
+BILLING_STATUSES = {
+    "none",
+    "checkout_pending",
+    "active",
+    "past_due",
+    "canceled",
+    "payment_failed",
+    "manual_override",
+    "provider_unknown",
+}
+PROVIDER_EVENT_TYPES = {
+    "checkout.session.completed",
+    "checkout.session.expired",
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "invoice.paid",
+    "invoice.payment_failed",
+    "customer.updated",
+}
 
 ALLOWED_TRANSITIONS = {
     "requested": {"in_review", "approved", "rejected", "cancelled"},
@@ -62,11 +90,197 @@ def now_iso() -> str:
 def get_parent_subscription(parent_id: str) -> dict[str, Any]:
     profile = _require_parent(parent_id)
     current_tier = _normalize_tier(profile.get("subscription_tier"))
+    billing = _billing_response(_get_billing_item(parent_id), parent_id=parent_id)
+    if billing["status"] == "none":
+        billing["subscriptionTier"] = current_tier
     return {
         "parentId": parent_id,
         "currentTier": current_tier,
         "plans": PLAN_BENEFITS,
         "pendingRequest": _request_response(_latest_open_request(parent_id)),
+        "billing": billing,
+    }
+
+
+def create_checkout_session(
+    *,
+    parent_id: str,
+    requested_tier: str,
+    success_url: str | None,
+    cancel_url: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    profile = _require_parent(parent_id)
+    requested_tier = _normalize_tier(requested_tier)
+    if requested_tier == SubscriptionTier.FREE.value:
+        raise HTTPException(status_code=400, detail="Checkout is only available for paid tiers")
+
+    provider_mode = _provider_mode(settings)
+    price_id = _price_id_for_tier(requested_tier, settings)
+    now = now_iso()
+    existing = _get_billing_item(parent_id) or {}
+    customer_id = existing.get("provider_customer_id") or f"cus_test_{uuid4().hex[:24]}"
+    session_id = f"cs_{provider_mode}_{uuid4().hex}"
+    checkout_url = _checkout_url(session_id)
+    item = {
+        **_billing_key(parent_id),
+        "entity_type": BILLING_ENTITY,
+        "parent_id": parent_id,
+        "subscription_tier": _normalize_tier(profile.get("subscription_tier")),
+        "requested_tier": requested_tier,
+        "billing_provider": "stripe",
+        "billing_mode": provider_mode,
+        "billing_status": "checkout_pending",
+        "provider_customer_id": customer_id,
+        "provider_subscription_id": existing.get("provider_subscription_id"),
+        "provider_price_id": price_id,
+        "checkout_session_id": session_id,
+        "checkout_url": checkout_url,
+        "success_url": _safe_url(success_url) or settings.stripe_checkout_success_url,
+        "cancel_url": _safe_url(cancel_url) or settings.stripe_checkout_cancel_url,
+        "current_period_start": existing.get("current_period_start"),
+        "current_period_end": existing.get("current_period_end"),
+        "cancel_at_period_end": bool(existing.get("cancel_at_period_end") or False),
+        "last_provider_event_id": existing.get("last_provider_event_id"),
+        "last_provider_event_type": existing.get("last_provider_event_type"),
+        "last_provider_event_at": existing.get("last_provider_event_at"),
+        "manual_override_at": existing.get("manual_override_at"),
+        "manual_override_by": existing.get("manual_override_by"),
+        "manual_override_source": existing.get("manual_override_source"),
+        "created_at": existing.get("created_at") or now,
+        "updated_at": now,
+    }
+    get_table().put_item(Item=item)
+    _put_billing_event(
+        parent_id,
+        {
+            "event_id": f"local_checkout_{session_id}",
+            "event_type": "checkout_session_created",
+            "event_at": now,
+            "provider": "stripe",
+            "provider_mode": provider_mode,
+            "billing_status": "checkout_pending",
+            "requested_tier": requested_tier,
+            "provider_session_id": session_id,
+        },
+    )
+    return {
+        "parentId": parent_id,
+        "checkoutSessionId": session_id,
+        "checkoutUrl": checkout_url,
+        "provider": "stripe",
+        "mode": provider_mode,
+        "requestedTier": requested_tier,
+        "billingStatus": "checkout_pending",
+    }
+
+
+def get_parent_billing(parent_id: str) -> dict[str, Any]:
+    profile = _require_parent(parent_id)
+    item = _get_billing_item(parent_id)
+    response = _billing_response(item, parent_id=parent_id, include_events=True)
+    if response["status"] == "none":
+        response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
+    return response
+
+
+def list_admin_billing(
+    *,
+    limit: int = 50,
+    parent_id: str | None = None,
+    billing_status: str | None = None,
+    billing_provider: str | None = None,
+) -> list[dict[str, Any]]:
+    if billing_status is not None:
+        _require_choice(billing_status, BILLING_STATUSES, "billing_status")
+    scan_kwargs: dict[str, Any] = dict(
+        FilterExpression="entity_type = :entity",
+        ExpressionAttributeValues={":entity": BILLING_ENTITY},
+    )
+    items: list[dict[str, Any]] = []
+    while True:
+        response = get_table().scan(**scan_kwargs)
+        items.extend(
+            item
+            for item in response.get("Items", [])
+            if item.get("SK") == "SUMMARY"
+            and _matches(item, "parent_id", parent_id)
+            and _matches(item, "billing_status", billing_status)
+            and _matches(item, "billing_provider", billing_provider)
+        )
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return [
+        _billing_response(item, parent_id=str(item.get("parent_id") or ""), include_events=True)
+        for item in sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)[:limit]
+    ]
+
+
+def get_admin_billing(parent_id: str) -> dict[str, Any]:
+    profile = _require_parent(parent_id)
+    response = _billing_response(_get_billing_item(parent_id), parent_id=parent_id, include_events=True)
+    if response["status"] == "none":
+        response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
+    return response
+
+
+def handle_stripe_webhook(
+    *,
+    payload: bytes,
+    signature_header: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    event = _parse_provider_event(payload, signature_header, settings)
+    event_id = str(event.get("id") or "")
+    event_type = str(event.get("type") or "")
+    if not event_id or not event_type:
+        raise HTTPException(status_code=400, detail="Provider event id and type are required")
+    if event_type not in PROVIDER_EVENT_TYPES:
+        return {"received": True, "ignored": True, "eventId": event_id, "eventType": event_type}
+
+    event_object = ((event.get("data") or {}).get("object") or {})
+    if not isinstance(event_object, dict):
+        raise HTTPException(status_code=400, detail="Provider event object is required")
+
+    parent_id = _parent_id_from_provider_object(event_object)
+    if not parent_id:
+        parent_id = _find_parent_id_for_provider_object(event_object)
+    if not parent_id:
+        raise HTTPException(status_code=400, detail="Unable to resolve parent for provider event")
+    _require_parent(parent_id)
+
+    existing = _get_billing_item(parent_id) or {}
+    if _provider_event_seen(event_id):
+        return {
+            "received": True,
+            "deduplicated": True,
+            "eventId": event_id,
+            "eventType": event_type,
+            "parentId": parent_id,
+            "billingStatus": existing.get("billing_status") or "none",
+        }
+
+    now = now_iso()
+    transition = _billing_transition(event_type, event_object, existing)
+    updated = _apply_billing_transition(
+        parent_id=parent_id,
+        event_id=event_id,
+        event_type=event_type,
+        event_created=event.get("created"),
+        event_object=event_object,
+        transition=transition,
+        existing=existing,
+        now=now,
+    )
+    return {
+        "received": True,
+        "deduplicated": False,
+        "eventId": event_id,
+        "eventType": event_type,
+        "parentId": parent_id,
+        "billingStatus": updated.get("billing_status"),
     }
 
 
@@ -287,6 +501,13 @@ def apply_request(
         updates=updates,
         event=event,
     )
+    _record_manual_override(
+        parent_id=parent_id,
+        requested_tier=requested_tier,
+        actor_id=actor,
+        source_request_id=request_id,
+        at=now,
+    )
     notification_service.emit_subscription_update(
         request_item=updated,
         recipient_id=str(updated.get("parent_id") or ""),
@@ -502,6 +723,444 @@ def _request_response(item: dict[str, Any] | None) -> dict[str, Any] | None:
         "appliedBy": item.get("applied_by"),
         "history": history,
     }
+
+
+def _billing_key(parent_id: str) -> dict[str, str]:
+    return {"PK": f"SUBSCRIPTION_BILLING#{parent_id}", "SK": "SUMMARY"}
+
+
+def _billing_event_sk(at: str, event_id: str) -> str:
+    return f"EVENT#{at}#{event_id}"
+
+
+def _provider_event_key(event_id: str) -> dict[str, str]:
+    return {"PK": f"BILLING_PROVIDER_EVENT#stripe#{event_id}", "SK": "SUMMARY"}
+
+
+def _get_billing_item(parent_id: str) -> dict[str, Any] | None:
+    response = get_table().get_item(Key=_billing_key(parent_id))
+    item = response.get("Item")
+    return dict(item) if item else None
+
+
+def _list_billing_events(parent_id: str, limit: int = 25) -> list[dict[str, Any]]:
+    response = get_table().query(
+        KeyConditionExpression=Key("PK").eq(_billing_key(parent_id)["PK"]) & Key("SK").begins_with("EVENT#"),
+    )
+    events = sorted(response.get("Items", []), key=lambda item: item.get("event_at", ""), reverse=True)
+    return events[:limit]
+
+
+def _billing_response(
+    item: dict[str, Any] | None,
+    *,
+    parent_id: str,
+    include_events: bool = False,
+) -> dict[str, Any]:
+    if item is None:
+        response = {
+            "parentId": parent_id,
+            "provider": None,
+            "mode": "manual",
+            "status": "none",
+            "subscriptionTier": SubscriptionTier.FREE.value,
+            "requestedTier": None,
+            "providerCustomerId": None,
+            "providerSubscriptionId": None,
+            "providerPriceId": None,
+            "checkoutSessionId": None,
+            "checkoutUrl": None,
+            "currentPeriodStart": None,
+            "currentPeriodEnd": None,
+            "cancelAtPeriodEnd": False,
+            "lastProviderEventId": None,
+            "lastProviderEventType": None,
+            "lastProviderEventAt": None,
+            "manualOverrideAt": None,
+            "manualOverrideBy": None,
+            "manualOverrideSource": None,
+            "updatedAt": None,
+        }
+    else:
+        response = {
+            "parentId": parent_id,
+            "provider": item.get("billing_provider"),
+            "mode": item.get("billing_mode") or "manual",
+            "status": item.get("billing_status") or "none",
+            "subscriptionTier": item.get("subscription_tier") or SubscriptionTier.FREE.value,
+            "requestedTier": item.get("requested_tier"),
+            "providerCustomerId": item.get("provider_customer_id"),
+            "providerSubscriptionId": item.get("provider_subscription_id"),
+            "providerPriceId": item.get("provider_price_id"),
+            "checkoutSessionId": item.get("checkout_session_id"),
+            "checkoutUrl": item.get("checkout_url"),
+            "currentPeriodStart": item.get("current_period_start"),
+            "currentPeriodEnd": item.get("current_period_end"),
+            "cancelAtPeriodEnd": bool(item.get("cancel_at_period_end") or False),
+            "lastProviderEventId": item.get("last_provider_event_id"),
+            "lastProviderEventType": item.get("last_provider_event_type"),
+            "lastProviderEventAt": item.get("last_provider_event_at"),
+            "manualOverrideAt": item.get("manual_override_at"),
+            "manualOverrideBy": item.get("manual_override_by"),
+            "manualOverrideSource": item.get("manual_override_source"),
+            "updatedAt": item.get("updated_at"),
+        }
+    if include_events:
+        response["events"] = [
+            {
+                "eventId": event.get("event_id"),
+                "eventAt": event.get("event_at"),
+                "eventType": event.get("event_type"),
+                "provider": event.get("provider"),
+                "providerMode": event.get("provider_mode"),
+                "billingStatus": event.get("billing_status"),
+                "requestedTier": event.get("requested_tier"),
+                "providerEventId": event.get("provider_event_id"),
+            }
+            for event in _list_billing_events(parent_id)
+        ]
+    return response
+
+
+def _provider_mode(settings: Settings) -> str:
+    if settings.stripe_live_charges_enabled and settings.is_production:
+        return "live"
+    return "test"
+
+
+def _price_id_for_tier(tier: str, settings: Settings) -> str:
+    configured = {
+        SubscriptionTier.STANDARD.value: settings.stripe_standard_price_id,
+        SubscriptionTier.PREMIUM.value: settings.stripe_premium_price_id,
+    }[tier]
+    return configured or f"price_test_stoa_{tier}_monthly"
+
+
+def _checkout_url(session_id: str) -> str:
+    return f"https://checkout.stripe.com/c/pay/{session_id}"
+
+
+def _safe_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not (cleaned.startswith("https://") or cleaned.startswith("http://localhost")):
+        raise HTTPException(status_code=400, detail="Checkout return URL must use HTTPS or localhost")
+    return cleaned
+
+
+def _put_billing_event(parent_id: str, event: dict[str, Any]) -> None:
+    item = {
+        **event,
+        "PK": _billing_key(parent_id)["PK"],
+        "SK": _billing_event_sk(str(event["event_at"]), str(event["event_id"])),
+        "entity_type": BILLING_EVENT_ENTITY,
+        "parent_id": parent_id,
+    }
+    get_table().put_item(Item=item)
+
+
+def _provider_event_seen(event_id: str) -> bool:
+    return bool(get_table().get_item(Key=_provider_event_key(event_id)).get("Item"))
+
+
+def _parse_provider_event(
+    payload: bytes,
+    signature_header: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    if settings.stripe_webhook_secret:
+        _verify_stripe_signature(payload, signature_header, settings.stripe_webhook_secret)
+    elif settings.is_production:
+        raise HTTPException(status_code=400, detail="Stripe webhook signing secret is required")
+    try:
+        event = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid provider event payload") from exc
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Provider event must be a JSON object")
+    return event
+
+
+def _verify_stripe_signature(payload: bytes, signature_header: str | None, secret: str) -> None:
+    if not signature_header:
+        raise HTTPException(status_code=400, detail="Missing Stripe signature")
+    parts: dict[str, list[str]] = {}
+    for raw_part in signature_header.split(","):
+        if "=" not in raw_part:
+            continue
+        key, value = raw_part.split("=", 1)
+        parts.setdefault(key.strip(), []).append(value.strip())
+    timestamp_values = parts.get("t") or []
+    signatures = parts.get("v1") or []
+    if not timestamp_values or not signatures:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature header")
+    try:
+        timestamp = int(timestamp_values[0])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Stripe signature timestamp") from exc
+    if abs(time.time() - timestamp) > 300:
+        raise HTTPException(status_code=400, detail="Stripe signature timestamp is outside tolerance")
+    signed_payload = f"{timestamp}.".encode("utf-8") + payload
+    expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+    if not any(hmac.compare_digest(expected, signature) for signature in signatures):
+        raise HTTPException(status_code=400, detail="Stripe signature verification failed")
+
+
+def _parent_id_from_provider_object(event_object: dict[str, Any]) -> str | None:
+    metadata = event_object.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return (
+        metadata.get("stoa_parent_id")
+        or metadata.get("parent_id")
+        or event_object.get("client_reference_id")
+    )
+
+
+def _find_parent_id_for_provider_object(event_object: dict[str, Any]) -> str | None:
+    customer_id = event_object.get("customer")
+    subscription_id = event_object.get("subscription") or event_object.get("id")
+    session_id = event_object.get("id") if str(event_object.get("object") or "") == "checkout.session" else None
+    response = get_table().scan(
+        FilterExpression="entity_type = :entity",
+        ExpressionAttributeValues={":entity": BILLING_ENTITY},
+    )
+    for item in response.get("Items", []):
+        if item.get("SK") != "SUMMARY":
+            continue
+        if customer_id and item.get("provider_customer_id") == customer_id:
+            return str(item.get("parent_id"))
+        if subscription_id and item.get("provider_subscription_id") == subscription_id:
+            return str(item.get("parent_id"))
+        if session_id and item.get("checkout_session_id") == session_id:
+            return str(item.get("parent_id"))
+    return None
+
+
+def _billing_transition(
+    event_type: str,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+) -> dict[str, Any]:
+    metadata = event_object.get("metadata") if isinstance(event_object.get("metadata"), dict) else {}
+    requested_tier = _normalize_tier(metadata.get("requested_tier") or existing.get("requested_tier"))
+    status = existing.get("billing_status") or "none"
+    if event_type == "checkout.session.completed":
+        status = "active"
+    elif event_type == "checkout.session.expired":
+        status = "canceled"
+    elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
+        status = _status_from_provider_subscription(event_object.get("status"))
+    elif event_type == "customer.subscription.deleted":
+        status = "canceled"
+    elif event_type == "invoice.paid":
+        status = "active"
+    elif event_type == "invoice.payment_failed":
+        status = "payment_failed"
+    elif event_type == "customer.updated":
+        status = existing.get("billing_status") or "provider_unknown"
+    return {
+        "billing_status": status,
+        "requested_tier": requested_tier,
+        "provider_customer_id": event_object.get("customer") or existing.get("provider_customer_id"),
+        "provider_subscription_id": event_object.get("subscription")
+        or (event_object.get("id") if str(event_object.get("object") or "") == "subscription" else None)
+        or existing.get("provider_subscription_id"),
+        "provider_price_id": _price_from_provider_object(event_object) or existing.get("provider_price_id"),
+        "checkout_session_id": event_object.get("id")
+        if str(event_object.get("object") or "") == "checkout.session"
+        else existing.get("checkout_session_id"),
+        "current_period_start": _timestamp_to_iso(event_object.get("current_period_start"))
+        or existing.get("current_period_start"),
+        "current_period_end": _timestamp_to_iso(event_object.get("current_period_end"))
+        or existing.get("current_period_end"),
+        "cancel_at_period_end": bool(event_object.get("cancel_at_period_end") or False),
+    }
+
+
+def _status_from_provider_subscription(status: Any) -> str:
+    return {
+        "trialing": "active",
+        "active": "active",
+        "past_due": "past_due",
+        "unpaid": "payment_failed",
+        "canceled": "canceled",
+        "incomplete": "checkout_pending",
+        "incomplete_expired": "canceled",
+    }.get(str(status or ""), "provider_unknown")
+
+
+def _price_from_provider_object(event_object: dict[str, Any]) -> str | None:
+    price = event_object.get("price")
+    if isinstance(price, dict):
+        return price.get("id")
+    items = ((event_object.get("items") or {}).get("data") or [])
+    if items and isinstance(items[0], dict):
+        nested_price = items[0].get("price")
+        if isinstance(nested_price, dict):
+            return nested_price.get("id")
+    return None
+
+
+def _timestamp_to_iso(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).replace(microsecond=0).isoformat()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _apply_billing_transition(
+    *,
+    parent_id: str,
+    event_id: str,
+    event_type: str,
+    event_created: Any,
+    event_object: dict[str, Any],
+    transition: dict[str, Any],
+    existing: dict[str, Any],
+    now: str,
+) -> dict[str, Any]:
+    current_status = existing.get("billing_status")
+    manual_override_active = current_status == "manual_override"
+    status = current_status if manual_override_active else transition["billing_status"]
+    tier = existing.get("subscription_tier") or SubscriptionTier.FREE.value
+    if not manual_override_active and status == "active":
+        tier = transition["requested_tier"]
+    elif not manual_override_active and status == "canceled":
+        tier = SubscriptionTier.FREE.value
+
+    updated = {
+        **_billing_key(parent_id),
+        "entity_type": BILLING_ENTITY,
+        "parent_id": parent_id,
+        "subscription_tier": tier,
+        "requested_tier": transition["requested_tier"],
+        "billing_provider": "stripe",
+        "billing_mode": existing.get("billing_mode") or "test",
+        "billing_status": status,
+        "provider_customer_id": transition.get("provider_customer_id"),
+        "provider_subscription_id": transition.get("provider_subscription_id"),
+        "provider_price_id": transition.get("provider_price_id"),
+        "checkout_session_id": transition.get("checkout_session_id"),
+        "checkout_url": existing.get("checkout_url"),
+        "success_url": existing.get("success_url"),
+        "cancel_url": existing.get("cancel_url"),
+        "current_period_start": transition.get("current_period_start"),
+        "current_period_end": transition.get("current_period_end"),
+        "cancel_at_period_end": transition.get("cancel_at_period_end"),
+        "last_provider_event_id": event_id,
+        "last_provider_event_type": event_type,
+        "last_provider_event_at": _timestamp_to_iso(event_created) or now,
+        "manual_override_at": existing.get("manual_override_at"),
+        "manual_override_by": existing.get("manual_override_by"),
+        "manual_override_source": existing.get("manual_override_source"),
+        "created_at": existing.get("created_at") or now,
+        "updated_at": now,
+    }
+    event = {
+        "PK": updated["PK"],
+        "SK": _billing_event_sk(now, event_id),
+        "entity_type": BILLING_EVENT_ENTITY,
+        "parent_id": parent_id,
+        "event_id": f"stripe_{event_id}",
+        "provider_event_id": event_id,
+        "event_type": event_type,
+        "event_at": now,
+        "provider": "stripe",
+        "provider_mode": updated["billing_mode"],
+        "billing_status": status,
+        "requested_tier": transition["requested_tier"],
+    }
+    dedupe = {
+        **_provider_event_key(event_id),
+        "entity_type": BILLING_EVENT_DEDUPE_ENTITY,
+        "provider": "stripe",
+        "provider_event_id": event_id,
+        "event_type": event_type,
+        "parent_id": parent_id,
+        "created_at": now,
+    }
+    operations: list[dict[str, Any]] = [
+        {"Put": {"Item": dedupe, "ConditionExpression": "attribute_not_exists(PK)"}},
+        {"Put": {"Item": updated}},
+        {"Put": {"Item": event, "ConditionExpression": "attribute_not_exists(PK)"}},
+    ]
+    if not manual_override_active and status in {"active", "canceled"}:
+        operations.append(
+            {
+                "Update": {
+                    "Key": {"PK": f"USER#{parent_id}", "SK": "PROFILE"},
+                    "UpdateExpression": "SET subscription_tier = :tier",
+                    "ExpressionAttributeValues": {":tier": tier},
+                    "ConditionExpression": "attribute_exists(PK)",
+                }
+            }
+        )
+    try:
+        _transact_write(operations)
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            return _get_billing_item(parent_id) or updated
+        raise
+    return updated
+
+
+def _record_manual_override(
+    *,
+    parent_id: str,
+    requested_tier: str,
+    actor_id: str,
+    source_request_id: str,
+    at: str,
+) -> None:
+    existing = _get_billing_item(parent_id) or {}
+    item = {
+        **_billing_key(parent_id),
+        "entity_type": BILLING_ENTITY,
+        "parent_id": parent_id,
+        "subscription_tier": requested_tier,
+        "requested_tier": requested_tier,
+        "billing_provider": existing.get("billing_provider"),
+        "billing_mode": "manual",
+        "billing_status": "manual_override",
+        "provider_customer_id": existing.get("provider_customer_id"),
+        "provider_subscription_id": existing.get("provider_subscription_id"),
+        "provider_price_id": existing.get("provider_price_id"),
+        "checkout_session_id": existing.get("checkout_session_id"),
+        "checkout_url": existing.get("checkout_url"),
+        "success_url": existing.get("success_url"),
+        "cancel_url": existing.get("cancel_url"),
+        "current_period_start": existing.get("current_period_start"),
+        "current_period_end": existing.get("current_period_end"),
+        "cancel_at_period_end": bool(existing.get("cancel_at_period_end") or False),
+        "last_provider_event_id": existing.get("last_provider_event_id"),
+        "last_provider_event_type": existing.get("last_provider_event_type"),
+        "last_provider_event_at": existing.get("last_provider_event_at"),
+        "manual_override_at": at,
+        "manual_override_by": actor_id,
+        "manual_override_source": source_request_id,
+        "created_at": existing.get("created_at") or at,
+        "updated_at": at,
+    }
+    get_table().put_item(Item=item)
+    _put_billing_event(
+        parent_id,
+        {
+            "event_id": f"manual_override_{source_request_id}",
+            "event_type": "manual_override",
+            "event_at": at,
+            "provider": item.get("billing_provider") or "manual",
+            "provider_mode": "manual",
+            "billing_status": "manual_override",
+            "requested_tier": requested_tier,
+            "provider_event_id": None,
+        },
+    )
 
 
 def _event(
