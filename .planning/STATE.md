@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.5
 milestone_name: Support Evidence Integrations And Operations Handoff
 status: planning
-last_updated: "2026-06-12T00:01:13+02:00"
-last_activity: 2026-06-12
+last_updated: "2026-06-12T00:52:00+02:00"
+last_activity: 2026-06-12 - Phase 148 support destination contract completed
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 148 - Support Destination Contract And Credential Readiness
+Phase: 149 - Support Evidence Export Destination Integration
 Plan: —
-Status: Ready for Phase 148 planning
-Last activity: 2026-06-12 - v4.5 research, requirements, and roadmap initialized
+Status: Ready for Phase 149 planning
+Last activity: 2026-06-12 - Phase 148 completed support destination contract
 
 ## Accumulated Context
 
@@ -47,10 +47,11 @@ Last activity: 2026-06-12 - v4.5 research, requirements, and roadmap initialized
 - Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 - v4.5 research confirmed existing support handoff packages already preserve metadata-only manual preview/copy/download behavior and refuse unapproved external writes.
 - Phase 148 owns the support destination contract, credential/config readiness, payload rules, attachment policy, and refusal behavior before delivery implementation.
+- Phase 148 completed the support destination contract and selected `internal_queue` as the first approved Phase 149 destination path with `none_required` third-party credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
 
 ### Pending Todos
 
-- Plan Phase 148: support destination contract and credential readiness.
+- Plan Phase 149: support evidence export destination integration.
 
 ### Blockers/Concerns
 
@@ -63,4 +64,4 @@ Last activity: 2026-06-12 - v4.5 research, requirements, and roadmap initialized
 
 ## Operator Next Steps
 
-- Plan Phase 148.
+- Plan Phase 149.

@@ -51,7 +51,7 @@ Goal: connect existing support-safe evidence packages to approved operational de
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [ ] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior.
+- [x] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior. (completed 2026-06-11)
 - [ ] **Phase 149: Support Evidence Export Destination Integration** - Implement a credential-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback.
 - [ ] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal evidence, and admin-only queue views.
 - [ ] **Phase 151: v4.5 Support Integration Release Gate** - Verify support integration behavior, refusal paths, redacted evidence, status visibility, and remaining-feature updates.
@@ -70,11 +70,11 @@ Goal: connect existing support-safe evidence packages to approved operational de
   3. Readiness checks can distinguish configured, missing, refused, and dry-run-safe states without exposing secrets.
   4. Metadata-only payload, attachment, redaction, and outbound digest rules are defined so implementation cannot leak raw report artifacts or private provider data.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 148-01: Define support destination contract and credential readiness.
+- [x] 148-01: Define support destination contract and credential readiness.
 
 ### Phase 149: Support Evidence Export Destination Integration
 
@@ -134,7 +134,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 148 Support Destination Contract And Credential Readiness | v4.5 | 0/1 | Planned | — |
+| 148 Support Destination Contract And Credential Readiness | v4.5 | 1/1 | Complete   | 2026-06-11 |
 | 149 Support Evidence Export Destination Integration | v4.5 | 0/1 | Planned | — |
 | 150 Operator Queue And Handoff Status Visibility | v4.5 | 0/1 | Planned | — |
 | 151 v4.5 Support Integration Release Gate | v4.5 | 0/1 | Planned | — |
