@@ -1,85 +1,87 @@
-# Requirements: v4.2 Production Notification Delivery Readiness
+# Requirements: v4.3 Frontend Mobile And Visual Localization Rollout
 
-**Milestone:** v4.2
-**Status:** Complete locally
+**Milestone:** v4.3
+**Status:** Active planning
 **Created:** 2026-06-11
 
 ## Goal
 
-Promote STOA's local realtime notification foundation into production-deliverable notification capability. v4.2 focuses on backend/infrastructure contracts, notification delivery operations, durable user preferences, email digest readiness, and release evidence. Because this is still internal development, the milestone prioritizes feature progress and practical verification over expanding broad security test scope.
+Implement the responsive frontend and visual localization work that v4.1 intentionally left outside the backend repository. v4.3 should use the available `/Users/zhdeng/stoa-frontend` workspace to improve real student, parent, tutor, and admin workflows on mobile viewports and expose the backend locale preference foundation through usable UI.
+
+Because STOA is still in internal development, this milestone should prioritize visible feature progress and practical browser verification over broad security/compliance testing.
 
 ## Requirements
 
-### NOTIFYDEL-01 Production Notification Infrastructure Contract
+### MOBILEUI-01 Frontend Workspace Contract And Mobile UAT Plan
 
-Implementers have a concrete contract for production notification delivery before route or infrastructure changes begin.
-
-Acceptance criteria:
-
-- Contract identifies the production WebSocket endpoint shape, API Gateway route/integration expectations, environment variables, deployment ownership, and fallback behavior.
-- Contract maps existing notification events to production delivery channels: in-app realtime, polling fallback, email digest readiness, and push-ready preference flags.
-- Contract defines delivery state fields needed by operators: attempted channel, delivery result, retry/skip reason, timestamp, and request/correlation identifier when available.
-- Contract separates work that can be completed in this backend repository from CDK/frontend/native work that may require another workspace.
-- `stoa_docs` gap audit and remaining feature queue mark production notification delivery as the active v4.2 build area.
-
-### NOTIFYDEL-02 WebSocket Delivery Operations And Preference APIs
-
-Backend notification APIs support production-oriented delivery operations and user preference reads/updates.
+Implementers have a concrete frontend workspace contract before UI changes begin.
 
 Acceptance criteria:
 
-- Authenticated users can read and update durable notification preferences for supported categories/channels without changing role authorization.
-- Notification preference defaults preserve current in-product notification behavior for existing users.
-- Backend delivery helpers can decide whether a notification should attempt realtime, remain in-app only, or be queued for digest/push readiness based on preferences and event type.
-- Admin or operator-facing routes expose bounded delivery health/status signals useful during internal rollout.
-- Focused tests cover preference defaults, updates, role boundaries, and delivery decision behavior.
+- Contract confirms the frontend workspace, framework, key route structure, API client pattern, and available local verification commands.
+- Mobile-critical flows are selected for v4.3: student question/practice/assignment, parent child overview/progress/report, tutor queue/detail/AI tools, admin operations dashboards.
+- Mobile UAT criteria define expected behavior for narrow viewports, touch targets, navigation, overflow, loading/error states, and route-level back/forward behavior.
+- Localization UAT criteria define language preference controls, locale persistence, translated visible UI copy, and fallback behavior for untranslated strings.
+- Backend versus frontend ownership remains explicit: backend canonical fields stay stable; frontend owns layout, text, formatting, and visual language switching.
 
-### NOTIFYDEL-03 Email Digest And Push Preference Readiness
+### MOBILEUI-02 Responsive Student Parent Tutor Core Flow Polish
 
-Notification delivery is ready for digest and push expansion without requiring production provider credentials during internal development.
-
-Acceptance criteria:
-
-- Backend has a digest-ready selection/preview contract for unread or relevant notifications by recipient, category, and time window.
-- Digest payloads avoid private artifact leakage and use stable metadata fields that future email templates can consume.
-- Push/native preference flags can be stored and surfaced even if native push provider delivery remains deferred.
-- The implementation does not send broad production email/push traffic without approved provider configuration.
-- Tests or documented fixtures prove digest selection, preference interaction, and no-provider fallback behavior.
-
-### VERIFY-25 v4.2 Functional Release Gate And Notification Delivery Audit
-
-v4.2 closes with functional evidence and an updated remaining-feature audit.
+Core learning workflows are usable on realistic mobile viewports.
 
 Acceptance criteria:
 
-- Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
-- Requirements, roadmap, state, and feature gap docs reflect completed v4.2 notification-delivery work.
-- Release evidence includes any available build/deploy/CDK/API/browser evidence, or explicitly records why live production verification was deferred.
-- Final audit lists remaining notification work: frontend/mobile visuals, native push provider rollout, production email templates, and broader notification analytics if not completed.
-- The next milestone recommendation is updated from the remaining `stoa_docs` feature queue.
+- Student question/practice/assignment flows fit mobile viewports without horizontal overflow or clipped primary actions.
+- Parent child overview, progress, and report views show scannable mobile layouts with clear loading/empty/error states.
+- Tutor queue/detail and AI teacher tool surfaces are usable on mobile-width screens without nested card clutter or broken controls.
+- Shared navigation and route transitions work on mobile without hiding key actions.
+- Browser or Playwright evidence captures representative mobile viewports.
+
+### I18NUI-01 Visual Localization And Language Preference UI
+
+Users can see and change supported language preferences in the frontend.
+
+Acceptance criteria:
+
+- Frontend exposes English/German language preference controls backed by the v4.1 locale preference API.
+- Supported visible UI copy in selected core flows is translated or routed through a translation map.
+- Locale preference persists through refresh and is reflected in `/auth/me` derived UI state.
+- Canonical backend values remain untranslated in API logic; display labels are localized separately.
+- Browser evidence covers language switching and fallback behavior.
+
+### VERIFY-26 v4.3 Browser Release Gate And Localization Audit
+
+v4.3 closes with mobile/browser evidence and an updated `stoa_docs` remaining-feature audit.
+
+Acceptance criteria:
+
+- Frontend lint/build and targeted browser checks pass or isolate documented pre-existing failures.
+- Mobile viewport screenshots or Playwright evidence cover student, parent, tutor, and admin representative flows.
+- Language preference and translated UI behavior are verified for English/German paths.
+- Backend planning docs, frontend handoff notes, feature gap audit, and remaining-feature queue reflect completed v4.3 work.
+- The next milestone recommendation is updated from the remaining feature queue.
 
 ## Future Requirements
 
-- Full responsive frontend/native mobile implementation and browser/mobile viewport verification.
-- Full frontend visual localization and translated UI rollout.
+- Native mobile app surfaces and push token registration.
+- Full translation management, translator workflow, and broad copy QA.
+- RTL visual layout support if STOA adds RTL languages.
 - Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 - Support-ticket/evidence destination integrations after approved connector or credential path exists.
-- Automatic student assignment of generated exercises and longer-term adaptive sequencing.
 - Rich curriculum authoring workflow, production content QA, analytics dashboards, and deeper operations reporting.
 
 ## Out of Scope
 
-- Production mutation smoke that sends real customer notification traffic without explicit approval.
-- Native mobile push provider credential rollout unless approved provider details are available.
-- Marketing automation or campaign messaging.
-- Replacing frontend responsive/localized UI work that belongs in the UI workspace.
-- Reworking already-completed report operations security/compliance evidence beyond what v4.2 feature work needs.
+- Server-side device sniffing or backend route branching by user agent.
+- Machine translation of tutor notes, student free text, generated explanations, reports, or educational content.
+- Native app implementation unless a native workspace is explicitly selected.
+- Broad security/compliance test expansion beyond what is needed for the touched UI/API paths.
+- Live production mutation smoke.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFYDEL-01 | Phase 136 | Complete |
-| NOTIFYDEL-02 | Phase 137 | Complete |
-| NOTIFYDEL-03 | Phase 138 | Complete |
-| VERIFY-25 | Phase 139 | Complete |
+| MOBILEUI-01 | Phase 140 | Planned |
+| MOBILEUI-02 | Phase 141 | Planned |
+| I18NUI-01 | Phase 142 | Planned |
+| VERIFY-26 | Phase 143 | Planned |

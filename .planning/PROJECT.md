@@ -58,6 +58,8 @@ The completed-local v4.1 milestone prepared mobile-friendly and multilingual pro
 
 The completed-local v4.2 milestone promotes the local realtime notification foundation toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
 
+The active v4.3 milestone moves the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, targeting responsive core flows and visible English/German UI.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -66,7 +68,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.2 Production Notification Delivery Readiness on 2026-06-11 (local backend release gate)
-**Active milestone:** None selected
+**Active milestone:** v4.3 Frontend Mobile And Visual Localization Rollout
 
 Delivered:
 
@@ -188,7 +190,7 @@ Completed phases:
 
 ### v4.3 Frontend Mobile And Visual Localization Rollout
 
-Goal: implement the responsive frontend/native-adjacent and visual localization work that v4.1 intentionally left outside this backend repository.
+Goal: implement the responsive frontend/native-adjacent and visual localization work that v4.1 intentionally left outside this backend repository by using `/Users/zhdeng/stoa-frontend`.
 
 Candidate phases:
 
@@ -197,7 +199,7 @@ Candidate phases:
 - Phase 142: Visual Localization And Language Preference UI.
 - Phase 143: v4.3 Browser Release Gate And Localization Audit.
 
-This likely requires the frontend/UI workspace. Remaining future work also includes live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
+This is now selected as the active next milestone because `/Users/zhdeng/stoa-frontend` exists. Remaining future work also includes live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
 
 ## Requirements
 
@@ -230,7 +232,10 @@ Shipped requirements:
 
 ### Active
 
-- None. Next milestone selection is pending.
+- MOBILEUI-01: frontend workspace contract and mobile UAT plan - Phase 140.
+- MOBILEUI-02: responsive student/parent/tutor core flow polish - Phase 141.
+- I18NUI-01: visual localization and language preference UI - Phase 142.
+- VERIFY-26: v4.3 browser release gate and localization audit - Phase 143.
 
 ### Completed
 
@@ -577,6 +582,7 @@ Known current resources:
 | Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Complete locally - backend release gate passed |
 | Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Complete locally - backend release gate passed |
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
+| Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Active - milestone initialized |
 
 ## Evolution
 
@@ -596,4 +602,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after completing v4.2 production notification delivery readiness*
+*Last updated: 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout*

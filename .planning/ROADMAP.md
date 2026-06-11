@@ -36,11 +36,11 @@
 - [x] **v4.1 Mobile And Multilingual Polish Foundation** - Completed local backend release gate 2026-06-11.
 - [x] **v4.2 Production Notification Delivery Readiness** - Completed local backend release gate 2026-06-11.
 
-## v4.2 Production Notification Delivery Readiness
+## v4.3 Frontend Mobile And Visual Localization Rollout
 
-**v4.2 Production Notification Delivery Readiness** - Completed local backend release gate 2026-06-11.
+**v4.3 Frontend Mobile And Visual Localization Rollout** - Active planning.
 
-Goal: promote local realtime notification foundations toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, notification preferences, email digest readiness, and focused release evidence.
+Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mobile UX and visible English/German localization on core student, parent, tutor, and admin flows.
 
 ## Phases
 
@@ -49,102 +49,102 @@ Goal: promote local realtime notification foundations toward production-delivera
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [x] **Phase 136: Production Notification Infrastructure Contract** - Define production WebSocket route/integration expectations, event/channel mapping, delivery state model, and backend versus infrastructure ownership. (completed 2026-06-11)
-- [x] **Phase 137: WebSocket Delivery Operations And Preference APIs** - Add durable notification preference APIs and backend delivery decision/status behavior for realtime and fallback channels. (completed 2026-06-11)
-- [x] **Phase 138: Email Digest And Push Preference Readiness** - Add digest-ready selection/preview contracts and push-ready preference metadata without requiring live provider credentials. (completed 2026-06-11)
-- [x] **Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit** - Verify focused backend behavior, update docs, capture available deploy/build evidence, and record deferred notification surfaces. (completed 2026-06-11)
+- [ ] **Phase 140: Frontend Workspace Contract And Mobile UAT Plan** - Confirm frontend workspace structure, route/API patterns, mobile flow targets, localization approach, and browser verification commands.
+- [ ] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows.
+- [ ] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs.
+- [ ] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope.
 
 ## Phase Details
 
-### Phase 136: Production Notification Infrastructure Contract
+### Phase 140: Frontend Workspace Contract And Mobile UAT Plan
 
-**Goal**: Define the production notification delivery contract, route/integration expectations, event/channel mapping, and release boundaries before code changes.
-**Depends on**: v4.1 closeout and `stoa_docs` feature gap audit
-**Requirements**: NOTIFYDEL-01
+**Goal**: Confirm the frontend workspace and define mobile/localization implementation targets before UI edits.
+**Depends on**: v4.2 closeout and frontend workspace availability
+**Requirements**: MOBILEUI-01
 **Success Criteria** (what must be TRUE):
 
-  1. Production WebSocket endpoint, API Gateway route expectations, environment variables, and fallback behavior are documented.
-  2. Existing notification event types are mapped to in-app realtime, polling fallback, digest readiness, and push-ready preference channels.
-  3. Delivery state fields needed for internal rollout and operator debugging are defined.
-  4. Backend, CDK, frontend, and native ownership boundaries are explicit.
+  1. `/Users/zhdeng/stoa-frontend` framework, route structure, API client pattern, and verification commands are documented.
+  2. Student, parent, tutor, and admin mobile-critical flows are selected for v4.3.
+  3. Mobile UAT criteria cover narrow viewports, touch targets, navigation, overflow, loading/empty/error states, and browser back/forward behavior.
+  4. Localization UAT criteria cover language preference UI, persistence, translated copy, and fallback behavior.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 136-01: Define production notification delivery contract.
+- [ ] 140-01: Define frontend mobile and localization execution contract.
 
-### Phase 137: WebSocket Delivery Operations And Preference APIs
+### Phase 141: Responsive Student Parent Tutor Core Flow Polish
 
-**Goal**: Add durable notification preferences and backend delivery-decision/status behavior for production-oriented internal rollout.
-**Depends on**: Phase 136
-**Requirements**: NOTIFYDEL-02
+**Goal**: Make selected core learning workflows usable on realistic mobile viewports.
+**Depends on**: Phase 140
+**Requirements**: MOBILEUI-02
 **Success Criteria** (what must be TRUE):
 
-  1. Users can read and update supported notification category/channel preferences.
-  2. Existing in-product notification behavior remains enabled by default for existing users.
-  3. Delivery helpers honor preferences when deciding realtime, in-app only, digest-ready, or push-ready handling.
-  4. Bounded delivery health/status signals are available for admin/operator inspection.
+  1. Student question/practice/assignment flows fit mobile viewports without horizontal overflow or clipped primary actions.
+  2. Parent child overview, progress, and report views are scannable with clear loading/empty/error states.
+  3. Tutor queue/detail and AI teacher tools remain usable on mobile-width screens.
+  4. Targeted browser evidence captures representative mobile behavior.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 137-01: Implement notification preferences and delivery operations.
+- [ ] 141-01: Implement responsive core flow polish.
 
-### Phase 138: Email Digest And Push Preference Readiness
+### Phase 142: Visual Localization And Language Preference UI
 
-**Goal**: Prepare email digest and push preference capability without depending on production provider credentials during internal development.
-**Depends on**: Phase 137
-**Requirements**: NOTIFYDEL-03
+**Goal**: Expose supported language preference controls and localized visible UI copy.
+**Depends on**: Phase 141
+**Requirements**: I18NUI-01
 **Success Criteria** (what must be TRUE):
 
-  1. Backend can select or preview digest-ready notifications by recipient, category, and time window.
-  2. Digest payload shape is metadata-safe and stable for future email templates.
-  3. Push/native preference flags are stored and surfaced while provider delivery remains optional.
-  4. No-provider fallback behavior is explicit and tested.
+  1. English/German language preference controls use the v4.1 backend locale preference API.
+  2. Selected visible UI copy is translated or routed through a translation map.
+  3. Locale preference persists through refresh and reflects `/auth/me` state.
+  4. Canonical backend values remain stable while display labels are localized separately.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 138-01: Implement digest and push preference readiness.
+- [ ] 142-01: Implement visual localization and language preference UI.
 
-### Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit
+### Phase 143: v4.3 Browser Release Gate And Localization Audit
 
-**Goal**: Close v4.2 with focused functional verification and updated `stoa_docs` remaining-feature planning.
-**Depends on**: Phase 138
-**Requirements**: VERIFY-25
+**Goal**: Close v4.3 with frontend build/browser evidence and updated remaining-feature planning.
+**Depends on**: Phase 142
+**Requirements**: VERIFY-26
 **Success Criteria** (what must be TRUE):
 
-  1. Focused backend tests and relevant checks pass or isolate documented pre-existing failures.
-  2. Requirements, roadmap, state, feature gap audit, and remaining-feature queue reflect completed v4.2 work.
-  3. Available build/deploy/CDK/API/browser evidence is captured, or production verification deferral is explicit.
-  4. v4.3 recommendation is updated from the remaining feature queue.
+  1. Frontend lint/build and targeted browser checks pass or isolate documented pre-existing failures.
+  2. Mobile viewport evidence covers representative student, parent, tutor, and admin flows.
+  3. English/German language switching and fallback behavior are verified.
+  4. Feature gap audit and next milestone recommendation are updated.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 139-01: Verify v4.2 and update release documentation.
+- [ ] 143-01: Verify v4.3 and update release documentation.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 136 Production Notification Infrastructure Contract | v4.2 | 1/1 | Complete   | 2026-06-11 |
-| 137 WebSocket Delivery Operations And Preference APIs | v4.2 | 1/1 | Complete   | 2026-06-11 |
-| 138 Email Digest And Push Preference Readiness | v4.2 | 1/1 | Complete   | 2026-06-11 |
-| 139 v4.2 Functional Release Gate And Notification Delivery Audit | v4.2 | 1/1 | Complete   | 2026-06-11 |
+| 140 Frontend Workspace Contract And Mobile UAT Plan | v4.3 | 0/1 | Planned | - |
+| 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 0/1 | Planned | - |
+| 142 Visual Localization And Language Preference UI | v4.3 | 0/1 | Planned | - |
+| 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFYDEL-01 | Phase 136 | Complete |
-| NOTIFYDEL-02 | Phase 137 | Complete |
-| NOTIFYDEL-03 | Phase 138 | Complete |
-| VERIFY-25 | Phase 139 | Complete |
+| MOBILEUI-01 | Phase 140 | Planned |
+| MOBILEUI-02 | Phase 141 | Planned |
+| I18NUI-01 | Phase 142 | Planned |
+| VERIFY-26 | Phase 143 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing v4.2 local backend release gate*
+*Last updated: 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout*

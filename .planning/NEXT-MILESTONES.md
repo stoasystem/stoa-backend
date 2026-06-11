@@ -1,11 +1,11 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after completing v4.2
+**Updated:** 2026-06-11 after selecting v4.3
 **Mode:** product functionality first
 
 ## v4.3 Frontend Mobile And Visual Localization Rollout
 
-**Status:** Recommended next
+**Status:** Active planning
 
 Goal: implement the responsive frontend/native-adjacent work that v4.1 intentionally left outside this backend repository.
 

@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after completing v4.2 production notification delivery readiness
+**Updated:** 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -31,6 +31,8 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend foundation for mobile-friendly and multilingual polish: mobile/backend contract documentation, durable locale preferences, language-safe adaptive route metadata, and explicit deferred frontend/native UI scope.
 
 v4.2 completed the backend-local production notification delivery readiness scope: production WebSocket delivery contracts, durable notification preferences, preference-aware delivery state/status behavior, email digest preview readiness, push-ready preference metadata, and clean local release-gate evidence. Remaining notification work is now provider/infrastructure/frontend rollout scope: CDK/API Gateway WebSocket deployment, live endpoint smoke, frontend/native notification visuals, native push token/provider integration, production email digest templates/scheduling, and broader notification analytics.
+
+v4.3 is now selected as the next feature-building milestone because `/Users/zhdeng/stoa-frontend` exists and the largest remaining visible `stoa_docs` gap is responsive mobile UX plus English/German visual localization. The backend planning docs should hand off execution to the frontend workspace rather than trying to implement UI changes inside `stoa-backend`.
 
 ## Completed Or Largely Complete
 
@@ -152,7 +154,7 @@ v4.2 completed the backend-local production notification delivery readiness scop
 
 ## Remaining Feature Build Order
 
-1. v4.3 Frontend mobile and visual localization rollout after UI workspace availability.
+1. v4.3 Frontend mobile and visual localization rollout in `/Users/zhdeng/stoa-frontend`.
 2. v4.4 Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 3. v4.5 Support-ticket/evidence destination integrations after approved connector or credential path exists.
 4. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.

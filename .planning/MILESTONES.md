@@ -843,5 +843,32 @@ Key accomplishments:
 
 Known deferred items at close: CDK/API Gateway WebSocket production route wiring, live production notification smoke, frontend/native notification surfaces, native push provider rollout, production email digest templates/scheduling, and broader notification analytics remain future rollout scope.
 
+### v4.3 Frontend Mobile And Visual Localization Rollout
+
+**Status:** Active planning
+**Started:** 2026-06-11
+**Roadmap:** `.planning/milestones/v4.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.3-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/140-frontend-workspace-contract-and-mobile-uat-plan/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Use `/Users/zhdeng/stoa-frontend` to implement responsive mobile UX and visible English/German localization for selected core STOA workflows.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
+- Phase 141: Responsive Student Parent Tutor Core Flow Polish.
+- Phase 142: Visual Localization And Language Preference UI.
+- Phase 143: v4.3 Browser Release Gate And Localization Audit.
+
+Feature priorities:
+
+- Confirm frontend routes/components/API clients and verification commands.
+- Make selected student, parent, and tutor workflows usable on mobile viewports.
+- Add English/German language preference UI and localized display copy.
+- Capture browser/mobile viewport evidence and update the remaining feature queue.
+
 ---
-*Last updated: 2026-06-11 after completing v4.2 production notification delivery readiness*
+*Last updated: 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout*
