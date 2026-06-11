@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: Production Notification Delivery Readiness
 status: planning
-last_updated: "2026-06-11T12:47:45+02:00"
+last_updated: "2026-06-11T13:05:00+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 136 - Production Notification Infrastructure Contract
-Plan: 136-01
-Status: Planning
-Last activity: 2026-06-11 - Selected v4.2 after syncing v4.1 docs to `origin/main` and rechecking the `stoa_docs` remaining feature queue.
+Phase: 137 - WebSocket Delivery Operations And Preference APIs
+Plan: —
+Status: Phase 136 complete; ready for notification preference implementation
+Last activity: 2026-06-11 - Completed Phase 136 production notification infrastructure contract.
 
 ## Accumulated Context
 
@@ -42,10 +42,10 @@ Last activity: 2026-06-11 - Selected v4.2 after syncing v4.1 docs to `origin/mai
 - v4.1 delivered the backend mobile/multilingual foundation: `en`/`de` locale policy, durable locale preferences, additive route metadata, and deferred frontend/native ownership.
 - The next backend-feasible `stoa_docs` feature gap is production notification delivery readiness. Full frontend/native mobile and visual localization remain important, but they require the UI workspace.
 - v4.2 should prioritize feature construction for internal development: production WebSocket delivery contract, notification preferences, delivery operations, email digest readiness, and push-ready preference metadata.
+- Phase 136 defined production WebSocket route/config expectations, channel mapping, notification preference categories, delivery state fields, and backend/CDK/frontend/native ownership boundaries.
 
 ### Pending Todos
 
-- Execute Phase 136: define production notification infrastructure and channel contract.
 - Plan and implement Phase 137 notification preference APIs and delivery operations.
 - Plan and implement Phase 138 email digest and push preference readiness.
 - Close Phase 139 with functional release evidence and updated feature gap audit.
@@ -59,4 +59,4 @@ Last activity: 2026-06-11 - Selected v4.2 after syncing v4.1 docs to `origin/mai
 
 ## Operator Next Steps
 
-- Start Phase 136 and write the production notification delivery contract.
+- Start Phase 137 notification preference APIs and delivery operations.

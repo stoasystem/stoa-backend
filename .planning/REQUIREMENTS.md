@@ -79,7 +79,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIFYDEL-01 | Phase 136 | Planned |
+| NOTIFYDEL-01 | Phase 136 | Complete |
 | NOTIFYDEL-02 | Phase 137 | Planned |
 | NOTIFYDEL-03 | Phase 138 | Planned |
 | VERIFY-25 | Phase 139 | Planned |
