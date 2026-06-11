@@ -50,7 +50,7 @@ Goal: promote local realtime notification foundations toward production-delivera
 
 - [x] **Phase 136: Production Notification Infrastructure Contract** - Define production WebSocket route/integration expectations, event/channel mapping, delivery state model, and backend versus infrastructure ownership. (completed 2026-06-11)
 - [x] **Phase 137: WebSocket Delivery Operations And Preference APIs** - Add durable notification preference APIs and backend delivery decision/status behavior for realtime and fallback channels. (completed 2026-06-11)
-- [ ] **Phase 138: Email Digest And Push Preference Readiness** - Add digest-ready selection/preview contracts and push-ready preference metadata without requiring live provider credentials.
+- [x] **Phase 138: Email Digest And Push Preference Readiness** - Add digest-ready selection/preview contracts and push-ready preference metadata without requiring live provider credentials. (completed 2026-06-11)
 - [ ] **Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit** - Verify focused backend behavior, update docs, capture available deploy/build evidence, and record deferred notification surfaces.
 
 ## Phase Details
@@ -67,7 +67,7 @@ Goal: promote local realtime notification foundations toward production-delivera
   3. Delivery state fields needed for internal rollout and operator debugging are defined.
   4. Backend, CDK, frontend, and native ownership boundaries are explicit.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
@@ -85,7 +85,7 @@ Plans:
   3. Delivery helpers honor preferences when deciding realtime, in-app only, digest-ready, or push-ready handling.
   4. Bounded delivery health/status signals are available for admin/operator inspection.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
@@ -103,11 +103,11 @@ Plans:
   3. Push/native preference flags are stored and surfaced while provider delivery remains optional.
   4. No-provider fallback behavior is explicit and tested.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 138-01: Implement digest and push preference readiness.
+- [x] 138-01: Implement digest and push preference readiness.
 
 ### Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit
 
@@ -133,7 +133,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 136 Production Notification Infrastructure Contract | v4.2 | 1/1 | Complete   | 2026-06-11 |
 | 137 WebSocket Delivery Operations And Preference APIs | v4.2 | 1/1 | Complete   | 2026-06-11 |
-| 138 Email Digest And Push Preference Readiness | v4.2 | 0/1 | Planned | - |
+| 138 Email Digest And Push Preference Readiness | v4.2 | 1/1 | Complete   | 2026-06-11 |
 | 139 v4.2 Functional Release Gate And Notification Delivery Audit | v4.2 | 0/1 | Planned | - |
 
 ## Traceability
@@ -142,8 +142,8 @@ Plans:
 |-------------|-------|--------|
 | NOTIFYDEL-01 | Phase 136 | Complete |
 | NOTIFYDEL-02 | Phase 137 | Complete |
-| NOTIFYDEL-03 | Phase 138 | Planned |
+| NOTIFYDEL-03 | Phase 138 | Complete |
 | VERIFY-25 | Phase 139 | Planned |
 
 ---
-*Last updated: 2026-06-11 after selecting v4.2 production notification delivery readiness*
+*Last updated: 2026-06-11 after completing Phase 138 digest and push readiness*

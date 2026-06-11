@@ -220,6 +220,118 @@ def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
     assert "realtime" in body["preferenceChannels"]
 
 
+def test_digest_preview_selects_digest_enabled_unread_notifications(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["email_digest"] = True
+    prefs["teacher_responses"]["push"] = True
+    preferences["student-1"] = {
+        "user_id": "student-1",
+        "preferences": prefs,
+    }
+    created = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+        metadata={
+            "subject": "math",
+            "html_s3_key": "weekly-reports/private/report.html",
+            "safe_count": 1,
+        },
+        created_at="2026-06-11T10:00:00+00:00",
+    )
+    notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="learning_profile_update",
+        target_type="learning_profile",
+        target_id="student-1",
+        title="Profile updated",
+        summary="Learning profile changed.",
+        created_at="2026-06-11T11:00:00+00:00",
+    )
+    events[created["eventId"]]["status"] = "created"
+
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    response = client.get("/notifications/digest-preview?category=teacher_responses")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["deliveryMode"] == "preview_only"
+    assert body["emailProviderConfigured"] is False
+    assert body["pushProviderConfigured"] is False
+    assert body["pushPreferencesSupported"] is True
+    assert body["count"] == 1
+    assert body["items"][0]["eventId"] == created["eventId"]
+    assert body["items"][0]["metadata"] == {"subject": "math", "safe_count": 1}
+
+
+def test_digest_preview_requires_digest_preference(monkeypatch):
+    _install_notification_repo(monkeypatch)
+    notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+
+    response = client.get("/notifications/digest-preview")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
+
+
+def test_digest_preview_filters_by_time_window(monkeypatch):
+    _events, preferences = _install_notification_repo(monkeypatch)
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["email_digest"] = True
+    preferences["student-1"] = {
+        "user_id": "student-1",
+        "preferences": prefs,
+    }
+    older = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Older reply",
+        summary="This reply is before the digest window.",
+        created_at="2026-06-10T10:00:00+00:00",
+    )
+    selected = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-2",
+        title="Selected reply",
+        summary="This reply is inside the digest window.",
+        created_at="2026-06-11T10:00:00+00:00",
+    )
+
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    response = client.get(
+        "/notifications/digest-preview"
+        "?since=2026-06-11T00:00:00+00:00"
+        "&until=2026-06-11T23:59:59+00:00"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["items"][0]["eventId"] == selected["eventId"]
+    assert body["items"][0]["eventId"] != older["eventId"]
+
+
 def test_request_teacher_emits_tutor_and_admin_events(monkeypatch):
     updates = []
     emitted = []

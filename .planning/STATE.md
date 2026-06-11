@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: Production Notification Delivery Readiness
 status: planning
-last_updated: "2026-06-11T13:25:00+02:00"
+last_updated: "2026-06-11T13:30:00+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 138 - Email Digest And Push Preference Readiness
+Phase: 139 - v4.2 Functional Release Gate And Notification Delivery Audit
 Plan: —
-Status: Phase 137 complete; ready for digest and push readiness
-Last activity: 2026-06-11 - Completed Phase 137 notification preferences and delivery operations.
+Status: Phase 138 complete; ready for v4.2 release gate
+Last activity: 2026-06-11 - Completed Phase 138 digest preview and push preference readiness.
 
 ## Accumulated Context
 
@@ -44,10 +44,10 @@ Last activity: 2026-06-11 - Completed Phase 137 notification preferences and del
 - v4.2 should prioritize feature construction for internal development: production WebSocket delivery contract, notification preferences, delivery operations, email digest readiness, and push-ready preference metadata.
 - Phase 136 defined production WebSocket route/config expectations, channel mapping, notification preference categories, delivery state fields, and backend/CDK/frontend/native ownership boundaries.
 - Phase 137 added durable notification preferences, delivery decision metadata, realtime preference gating, and bounded admin delivery status aggregates.
+- Phase 138 added digest preview selection, metadata-safe digest payloads, explicit no-provider email/push readiness metadata, and preserved push-ready preference flags without live provider traffic.
 
 ### Pending Todos
 
-- Plan and implement Phase 138 email digest and push preference readiness.
 - Close Phase 139 with functional release evidence and updated feature gap audit.
 
 ### Blockers/Concerns
@@ -59,4 +59,4 @@ Last activity: 2026-06-11 - Completed Phase 137 notification preferences and del
 
 ## Operator Next Steps
 
-- Start Phase 138 email digest and push preference readiness.
+- Start Phase 139 v4.2 functional release gate and notification delivery audit.

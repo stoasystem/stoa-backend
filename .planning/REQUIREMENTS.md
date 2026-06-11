@@ -81,5 +81,5 @@ Acceptance criteria:
 |-------------|-------|--------|
 | NOTIFYDEL-01 | Phase 136 | Complete |
 | NOTIFYDEL-02 | Phase 137 | Complete |
-| NOTIFYDEL-03 | Phase 138 | Planned |
+| NOTIFYDEL-03 | Phase 138 | Complete |
 | VERIFY-25 | Phase 139 | Planned |

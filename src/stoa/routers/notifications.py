@@ -57,6 +57,30 @@ class NotificationDeliveryStatusResponse(BaseModel):
     realtimeDecisionCounts: dict[str, int]
 
 
+class NotificationDigestItem(BaseModel):
+    eventId: str
+    eventType: str
+    category: str
+    targetType: str
+    targetId: str
+    title: str
+    summary: str
+    createdAt: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationDigestPreviewResponse(BaseModel):
+    userId: str
+    category: str | None = None
+    window: dict[str, str | None]
+    count: int
+    items: list[NotificationDigestItem]
+    deliveryMode: str
+    emailProviderConfigured: bool
+    pushProviderConfigured: bool
+    pushPreferencesSupported: bool
+
+
 @router.get("", response_model=NotificationListResponse)
 async def list_notifications(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -80,6 +104,23 @@ async def update_notification_preferences(
     user: dict = Depends(get_current_user),
 ):
     return notification_service.update_preferences(str(user.get("sub") or ""), body.preferences)
+
+
+@router.get("/digest-preview", response_model=NotificationDigestPreviewResponse)
+async def preview_notification_digest(
+    category: str | None = Query(default=None),
+    since: str | None = Query(default=None),
+    until: str | None = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    user: dict = Depends(get_current_user),
+):
+    return notification_service.digest_preview(
+        user,
+        category=category,
+        since=since,
+        until=until,
+        limit=limit,
+    )
 
 
 @router.post("/{event_id}/read", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)

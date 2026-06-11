@@ -385,6 +385,69 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
     }
 
 
+def digest_preview(
+    user: dict[str, Any],
+    *,
+    category: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 25,
+) -> dict[str, Any]:
+    if category is not None and category not in PREFERENCE_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unsupported notification preference category")
+    user_id = str(user.get("sub") or "")
+    role = str(user.get("role") or "")
+    preferences = get_preferences_for_user(user_id)
+    items = []
+    for item in _sort_events(notification_repo.list_events(limit=max(limit, 100))):
+        if not _visible_to_user(item, user_id=user_id, role=role):
+            continue
+        if item.get("status") != "created":
+            continue
+        item_category = item.get("category") or category_for_event(
+            event_type=str(item.get("event_type") or ""),
+            target_type=str(item.get("target_type") or ""),
+        )
+        if category and item_category != category:
+            continue
+        created_at = str(item.get("created_at") or "")
+        if since and created_at < since:
+            continue
+        if until and created_at > until:
+            continue
+        category_prefs = _merged_preferences(preferences)[item_category]
+        if not category_prefs["email_digest"]:
+            continue
+        items.append(digest_item(item, category=item_category))
+        if len(items) >= limit:
+            break
+    return {
+        "userId": user_id,
+        "category": category,
+        "window": {"since": since, "until": until},
+        "count": len(items),
+        "items": items,
+        "deliveryMode": "preview_only",
+        "emailProviderConfigured": False,
+        "pushProviderConfigured": False,
+        "pushPreferencesSupported": True,
+    }
+
+
+def digest_item(item: dict[str, Any], *, category: str) -> dict[str, Any]:
+    return {
+        "eventId": item.get("event_id"),
+        "eventType": item.get("event_type"),
+        "category": category,
+        "targetType": item.get("target_type"),
+        "targetId": item.get("target_id"),
+        "title": item.get("title"),
+        "summary": item.get("summary"),
+        "createdAt": item.get("created_at"),
+        "metadata": _digest_safe_metadata(item.get("metadata") or {}),
+    }
+
+
 def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
         raise HTTPException(status_code=400, detail="Unsupported notification transition")
@@ -456,6 +519,20 @@ def _clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         str(key): value for key, value in metadata.items()
         if value is not None and "s3_key" not in str(key).lower()
     }
+
+
+def _digest_safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    private_markers = ("s3", "artifact", "presigned", "weekly-reports/", "html", "raw")
+    safe: dict[str, Any] = {}
+    for key, value in metadata.items():
+        key_text = str(key)
+        value_text = str(value)
+        combined = f"{key_text} {value_text}".lower()
+        if any(marker in combined for marker in private_markers):
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            safe[key_text] = value
+    return safe
 
 
 def _merged_preferences(raw: Any) -> dict[str, dict[str, bool]]:
