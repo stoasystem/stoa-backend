@@ -53,7 +53,7 @@ Goal: connect existing support-safe evidence packages to approved operational de
 
 - [x] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior. (completed 2026-06-12)
 - [x] **Phase 149: Support Evidence Export Destination Integration** - Implement a credential-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback. (completed 2026-06-12)
-- [ ] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal evidence, and admin-only queue views.
+- [x] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal evidence, and admin-only queue views. (completed 2026-06-12)
 - [ ] **Phase 151: v4.5 Support Integration Release Gate** - Verify support integration behavior, refusal paths, redacted evidence, status visibility, and remaining-feature updates.
 
 ## Phase Details
@@ -106,11 +106,11 @@ Plans:
   3. Retry behavior is explicit, bounded, idempotent, and unavailable for privacy-failed or unapproved destinations.
   4. Queue/status outputs do not expose raw report artifacts, secrets, authorization headers, presigned URLs, or unredacted outbound payloads.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 150-01: Add support handoff queue, status, and retry visibility.
+- [x] 150-01: Add support handoff queue, status, and retry visibility.
 
 ### Phase 151: v4.5 Support Integration Release Gate
 
@@ -136,7 +136,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 148 Support Destination Contract And Credential Readiness | v4.5 | 1/1 | Complete   | 2026-06-12 |
 | 149 Support Evidence Export Destination Integration | v4.5 | 1/1 | Complete   | 2026-06-12 |
-| 150 Operator Queue And Handoff Status Visibility | v4.5 | 0/1 | Planned | — |
+| 150 Operator Queue And Handoff Status Visibility | v4.5 | 1/1 | Complete   | 2026-06-12 |
 | 151 v4.5 Support Integration Release Gate | v4.5 | 0/1 | Planned | — |
 
 ## Traceability
@@ -145,7 +145,7 @@ Plans:
 |-------------|-------|--------|
 | SUPPORTINT-01 | Phase 148 | Complete |
 | SUPPORTINT-02 | Phase 149 | Complete |
-| SUPPORTINT-03 | Phase 150 | Planned |
+| SUPPORTINT-03 | Phase 150 | Complete |
 | VERIFY-28 | Phase 151 | Planned |
 
 ---

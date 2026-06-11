@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.5
 milestone_name: Support Evidence Integrations And Operations Handoff
 status: planning
-last_updated: "2026-06-12T01:27:00+02:00"
-last_activity: 2026-06-12 - Phase 149 support evidence export destination integration completed
+last_updated: "2026-06-12T01:46:00+02:00"
+last_activity: 2026-06-12 - Phase 150 operator queue and handoff status visibility completed
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 150 - Operator Queue And Handoff Status Visibility
+Phase: 151 - v4.5 Support Integration Release Gate
 Plan: —
-Status: Ready for Phase 150 planning
-Last activity: 2026-06-12 - Phase 149 completed support evidence export destination integration
+Status: Ready for Phase 151 planning
+Last activity: 2026-06-12 - Phase 150 completed operator queue and handoff status visibility
 
 ## Accumulated Context
 
@@ -49,10 +49,11 @@ Last activity: 2026-06-12 - Phase 149 completed support evidence export destinat
 - Phase 148 owns the support destination contract, credential/config readiness, payload rules, attachment policy, and refusal behavior before delivery implementation.
 - Phase 148 completed the support destination contract and selected `internal_queue` as the first approved Phase 149 destination path with `none_required` third-party credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
 - Phase 149 completed the fail-closed `internal_queue` delivery path, admin-only sibling delivery endpoint, provider-neutral delivery lifecycle records, idempotency independent of package UUIDs, and refused-record handling for contract-defined unapproved destinations.
+- Phase 150 completed admin-only support handoff delivery queue/detail visibility with recent feed rows, pre-feed read-through coverage, bounded audit timelines, complete lifecycle state visibility, and read-only retry eligibility.
 
 ### Pending Todos
 
-- Plan Phase 150: operator queue and handoff status visibility.
+- Plan Phase 151: v4.5 support integration release gate.
 
 ### Blockers/Concerns
 
@@ -65,4 +66,4 @@ Last activity: 2026-06-12 - Phase 149 completed support evidence export destinat
 
 ## Operator Next Steps
 
-- Plan Phase 150.
+- Plan Phase 151.
