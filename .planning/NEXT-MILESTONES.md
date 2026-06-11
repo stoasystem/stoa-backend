@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after planning v4.5 and v4.6
+**Updated:** 2026-06-12 after activating v4.5
 **Mode:** product functionality first
 
 ## v4.4 Live Payment Provider Rollout
@@ -25,13 +25,13 @@ Closed scope:
 
 ## v4.5 Support Evidence Integrations And Operations Handoff
 
-**Status:** Planned after v4.4
+**Status:** Active planning
 **Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
 
 Goal: connect the existing support-safe evidence packages to approved operational destinations and close the remaining manual handoff gap.
 
-Candidate phases:
+Active phases:
 
 - Phase 148: Support Destination Contract And Credential Readiness.
 - Phase 149: Support Evidence Export Destination Integration.
@@ -41,6 +41,7 @@ Candidate phases:
 Scope:
 
 - Requires approved connector, credential, or destination policy.
+- Starts with destination contract and credential readiness before any provider write.
 - Preserve metadata-only evidence boundaries and refusal behavior for unapproved external writes.
 - Keep broad CRM automation and customer messaging campaigns out of scope until support handoff basics are verified.
 

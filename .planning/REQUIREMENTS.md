@@ -1,87 +1,88 @@
-# Requirements: v4.4 Live Payment Provider Rollout
+# Requirements: v4.5 Support Evidence Integrations And Operations Handoff
 
-**Milestone:** v4.4
-**Status:** Complete
-**Created:** 2026-06-11
+**Milestone:** v4.5
+**Status:** Active planning
+**Created:** 2026-06-12
+**Research:** `.planning/research/SUMMARY.md`
 
 ## Goal
 
-Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations. v4.4 should close the highest-value payment gaps from `stoa_docs`: live provider credential readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, refunds/invoices/tax handoff, dunning readiness, and clear release evidence.
+Connect STOA's existing support-safe evidence packages and operations metadata to approved support destinations, reducing manual copy/download handoff while preserving metadata-only evidence boundaries.
 
-Because STOA is still in internal development, this milestone prioritizes feature construction and practical payment-ops readiness over broad security/compliance expansion. Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
+The milestone should prove a controlled destination workflow, not a broad CRM platform. Existing `preview`, `copy`, and `download` modes remain supported, and unapproved external writes remain fail-closed.
 
 ## Requirements
 
-### PAYLIVE-01 Live Payment Rollout Contract And Credential Readiness
+### SUPPORTINT-01 Support Destination Contract And Credential Readiness
 
-Implementers have a concrete rollout contract before live payment behavior is enabled.
-
-Acceptance criteria:
-
-- Contract identifies Stripe live-mode credential path, webhook endpoint expectations, price/product mapping, environment variables, and rollback switches.
-- Contract records how TWINT is included through Stripe for v4.4, what account or capability checks are required, and which rollout gates still block real customer use.
-- Contract defines safe smoke modes: local/test-mode verification, approved live-mode configuration inspection, and explicit no-real-charge default.
-- Contract maps existing checkout/status/webhook code paths to the required production rollout changes.
-- `stoa_docs` gap audit and remaining feature queue mark live payment rollout as the active v4.4 build area.
-
-### PAYLIVE-02 Production Checkout And Webhook Verification
-
-Backend payment APIs and operator checks are ready for production checkout/webhook rollout.
+Implementers and operators have a precise destination, credential, payload, and refusal contract before any live support-system write is enabled.
 
 Acceptance criteria:
 
-- Checkout session creation can distinguish configured live-mode readiness from test-mode/local behavior and expose whether TWINT-capable Stripe Checkout is eligible for Swiss/CHF subscription flows.
-- Webhook verification records provider mode, event type, processing result, idempotency status, and relevant request/correlation identifiers.
-- Admin billing visibility exposes enough provider status for internal operators to verify checkout and webhook lifecycle without inspecting provider secrets.
-- Tests cover live-readiness configuration behavior, webhook idempotency, failure states, and non-live fallback behavior.
-- No real customer charge is attempted without explicit rollout approval.
+- Contract defines approved destination modes, including manual modes plus candidate `internal_queue`, `shared_mailbox`, `zendesk_ticket`, `freshdesk_ticket`, and `helpscout_conversation`.
+- Contract identifies credential references, environment variables, secret ownership, provider account requirements, and operator approval gates for each selected destination.
+- Readiness checks expose configured, missing, refused, and dry-run-safe states without exposing secrets.
+- Metadata-only payload rules define allowed subject/body/reference/custom-field data, attachment policy, redaction rules, and outbound payload digest behavior.
+- Existing `external_write` refusal remains in place unless replaced by an explicitly approved destination mode with tests.
 
-### PAYLIVE-03 Refunds Invoices Tax And Dunning Readiness
+### SUPPORTINT-02 Support Evidence Export Destination Integration
 
-Billing operations have first-pass functional support or clear integration-ready contracts.
-
-Acceptance criteria:
-
-- Refund readiness contract identifies eligible billing states, required operator inputs, provider handoff behavior, and audit/status fields.
-- Invoice/receipt readiness contract identifies provider-hosted invoice links or metadata fields that can be surfaced to parents/admins.
-- Tax/accounting handoff defines exportable billing metadata needed for Swiss accounting workflows.
-- Dunning readiness defines overdue/payment-failed states, parent/admin visibility, and retry/escalation boundaries.
-- Billing projections and operator flows handle Stripe-backed TWINT subscription and refund lifecycle data through the same invoice, refund, and dunning surfaces.
-- Tests or documented fixtures cover state transitions and operator-visible outputs for the implemented readiness scope.
-
-### VERIFY-27 v4.4 Payment Release Gate And Support Audit
-
-v4.4 closes with focused payment evidence and an updated remaining-feature audit.
+Backend support handoff can deliver a support-safe package to one approved destination path while retaining manual fallback.
 
 Acceptance criteria:
 
-- Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
-- Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v4.4 payment work.
-- Release evidence includes available backend/frontend build evidence, provider configuration checks, webhook verification evidence, and explicit live-charge deferral or approval status.
-- Final audit lists remaining payment work: broader provider automation, accounting integration, expanded refund/dunning automation, and any TWINT rollout gaps still blocked by provider capability or approval state.
-- The next milestone recommendation is updated from the remaining feature queue.
+- Delivery service validates destination readiness and package privacy before provider calls.
+- Selected destination adapter maps only the redacted support package summary, package ID, evidence references, tags, and approved custom fields.
+- Delivery records include lifecycle status, request/correlation IDs, timestamps, idempotency key, provider object ID/URL when available, retry count, and redacted refusal/failure reasons.
+- Provider failures, missing credentials, and unapproved destinations are recorded as failed/refused, not as generated-package success.
+- Existing preview/copy/download behavior remains available and covered by focused tests.
+
+### SUPPORTINT-03 Operator Queue And Handoff Status Visibility
+
+Operators can inspect recent support handoff activity and understand whether a package is created, queued, sent, failed, refused, or retried.
+
+Acceptance criteria:
+
+- Admin-only list/detail APIs expose recent support handoff delivery records with bounded filters for status, destination, package ID, and date range.
+- Detail views include provider references, redacted failure/refusal reasons, retry count, correlation ID, and privacy validation summary.
+- Retry behavior is explicit, bounded, idempotent, and unavailable for privacy-failed or unapproved destinations.
+- Queue/status records do not expose raw report artifacts, secrets, authorization headers, presigned URLs, or unredacted outbound payloads.
+- Support workflow remains usable when external delivery is unavailable through clear manual fallback status.
+
+### VERIFY-28 v4.5 Support Integration Release Gate
+
+v4.5 closes with focused verification and updated remaining-feature planning.
+
+Acceptance criteria:
+
+- Focused backend and frontend checks pass for the selected delivery path, refusal paths, status visibility, and existing manual fallback.
+- Release evidence captures destination configuration status with secrets redacted, provider/write deferral or approval state, and privacy validation results.
+- Tests prove unapproved destinations, missing credentials, provider failures, duplicate retries, and privacy violations fail closed.
+- Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.5 support integration work.
+- Remaining work is explicit for additional support providers, two-way synchronization, SLA analytics, and broader CRM/customer messaging automation.
 
 ## Future Requirements
 
-- Support-ticket/evidence destination integrations after approved connector or credential path exists.
-- Rich curriculum authoring workflow, production content QA, analytics dashboards, and deeper operations reporting.
-- Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
-- Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
-- Multi-provider billing automation beyond Stripe/TWINT basics.
+- Additional live support destination writes after separate provider approval.
+- Two-way ticket synchronization and webhook ingestion.
+- Support SLA analytics beyond first-pass handoff status.
+- Broad CRM/customer messaging campaigns.
+- Native mobile support flows.
 
 ## Out of Scope
 
-- Real production customer charges without explicit approval.
-- Broad CRM, accounting, or marketing automation.
-- Replacing provider-hosted billing primitives where provider metadata/links are sufficient for rollout.
-- Broad security/compliance test expansion unrelated to touched payment paths.
-- Native app payment flows unless a native workspace is selected.
+- Unapproved external writes.
+- Raw report artifact exposure.
+- Direct S3 artifact links or presigned URLs.
+- Storing provider credentials in code, planning docs, payloads, or audit rows.
+- Broad customer messaging campaigns.
+- Replacing existing metadata-only report operations evidence boundaries.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYLIVE-01 | Phase 144 | Complete |
-| PAYLIVE-02 | Phase 145 | Complete |
-| PAYLIVE-03 | Phase 146 | Complete |
-| VERIFY-27 | Phase 147 | Complete |
+| SUPPORTINT-01 | Phase 148 | Planned |
+| SUPPORTINT-02 | Phase 149 | Planned |
+| SUPPORTINT-03 | Phase 150 | Planned |
+| VERIFY-28 | Phase 151 | Planned |

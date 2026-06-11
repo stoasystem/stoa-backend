@@ -910,7 +910,7 @@ Known deferred items at close: approved Stripe live credentials, production webh
 
 ### v4.5 Support Evidence Integrations And Operations Handoff
 
-**Status:** Planned after v4.4
+**Status:** Active planning
 **Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
 **Goal:** Connect support-safe evidence packages to approved operational destinations and expose operator-visible handoff status.
@@ -928,7 +928,7 @@ Planned phases:
 Feature priorities:
 
 - Define approved support destinations, credential readiness, payload boundaries, and refusal behavior.
-- Implement metadata-only evidence package delivery to one approved destination.
+- Implement metadata-only evidence package delivery to one approved destination with manual fallback preserved.
 - Add operator handoff queue/status visibility.
 - Verify refusal paths and update remaining feature planning.
 
