@@ -11,10 +11,15 @@ from stoa.db.dynamodb import get_table
 
 NOTIFICATION_ENTITY = "notification_event"
 SUMMARY_SEED_ENTITY = "teacher_assistance_summary_seed"
+PREFERENCE_ENTITY = "notification_preference"
 
 
 def notification_pk(event_id: str) -> str:
     return f"NOTIFICATION#{event_id}"
+
+
+def preference_pk(user_id: str) -> str:
+    return f"NOTIFICATION_PREF#{user_id}"
 
 
 def summary_seed_pk(summary_id: str) -> str:
@@ -53,6 +58,15 @@ def list_events(limit: int = 100) -> list[dict[str, Any]]:
         Limit=limit,
     )
     return response.get("Items", [])
+
+
+def put_preferences(item: dict[str, Any]) -> None:
+    get_table().put_item(Item={**item, "PK": preference_pk(item["user_id"]), "SK": "META"})
+
+
+def get_preferences(user_id: str) -> dict[str, Any] | None:
+    response = get_table().get_item(Key={"PK": preference_pk(user_id), "SK": "META"})
+    return response.get("Item")
 
 
 def put_summary_seed(item: dict[str, Any]) -> None:

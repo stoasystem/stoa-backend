@@ -5,6 +5,7 @@ from stoa.services import notification_service, websocket_service
 
 def _install_notification_repo(monkeypatch):
     events: dict[str, dict] = {}
+    preferences: dict[str, dict] = {}
 
     def put_event(item):
         events[item["event_id"]] = dict(item)
@@ -19,10 +20,18 @@ def _install_notification_repo(monkeypatch):
         events[event_id].update(updates)
         return events[event_id]
 
+    def put_preferences(item):
+        preferences[item["user_id"]] = dict(item)
+
+    def get_preferences(user_id):
+        return preferences.get(user_id)
+
     monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
     monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
     monkeypatch.setattr(notification_service.notification_repo, "list_events", list_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
+    monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
+    monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
     monkeypatch.setattr(websocket_service.notification_repo, "update_event", update_event)
     return events
 

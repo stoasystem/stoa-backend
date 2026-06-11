@@ -49,7 +49,7 @@ Goal: promote local realtime notification foundations toward production-delivera
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
 - [x] **Phase 136: Production Notification Infrastructure Contract** - Define production WebSocket route/integration expectations, event/channel mapping, delivery state model, and backend versus infrastructure ownership. (completed 2026-06-11)
-- [ ] **Phase 137: WebSocket Delivery Operations And Preference APIs** - Add durable notification preference APIs and backend delivery decision/status behavior for realtime and fallback channels.
+- [x] **Phase 137: WebSocket Delivery Operations And Preference APIs** - Add durable notification preference APIs and backend delivery decision/status behavior for realtime and fallback channels. (completed 2026-06-11)
 - [ ] **Phase 138: Email Digest And Push Preference Readiness** - Add digest-ready selection/preview contracts and push-ready preference metadata without requiring live provider credentials.
 - [ ] **Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit** - Verify focused backend behavior, update docs, capture available deploy/build evidence, and record deferred notification surfaces.
 
@@ -89,7 +89,7 @@ Plans:
 
 Plans:
 
-- [ ] 137-01: Implement notification preferences and delivery operations.
+- [x] 137-01: Implement notification preferences and delivery operations.
 
 ### Phase 138: Email Digest And Push Preference Readiness
 
@@ -132,7 +132,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 136 Production Notification Infrastructure Contract | v4.2 | 1/1 | Complete   | 2026-06-11 |
-| 137 WebSocket Delivery Operations And Preference APIs | v4.2 | 0/1 | Planned | - |
+| 137 WebSocket Delivery Operations And Preference APIs | v4.2 | 1/1 | Complete   | 2026-06-11 |
 | 138 Email Digest And Push Preference Readiness | v4.2 | 0/1 | Planned | - |
 | 139 v4.2 Functional Release Gate And Notification Delivery Audit | v4.2 | 0/1 | Planned | - |
 
@@ -141,7 +141,7 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | NOTIFYDEL-01 | Phase 136 | Complete |
-| NOTIFYDEL-02 | Phase 137 | Planned |
+| NOTIFYDEL-02 | Phase 137 | Complete |
 | NOTIFYDEL-03 | Phase 138 | Planned |
 | VERIFY-25 | Phase 139 | Planned |
 

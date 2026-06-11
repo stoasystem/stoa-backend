@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: Production Notification Delivery Readiness
 status: planning
-last_updated: "2026-06-11T13:05:00+02:00"
+last_updated: "2026-06-11T13:25:00+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 137 - WebSocket Delivery Operations And Preference APIs
+Phase: 138 - Email Digest And Push Preference Readiness
 Plan: —
-Status: Phase 136 complete; ready for notification preference implementation
-Last activity: 2026-06-11 - Completed Phase 136 production notification infrastructure contract.
+Status: Phase 137 complete; ready for digest and push readiness
+Last activity: 2026-06-11 - Completed Phase 137 notification preferences and delivery operations.
 
 ## Accumulated Context
 
@@ -43,10 +43,10 @@ Last activity: 2026-06-11 - Completed Phase 136 production notification infrastr
 - The next backend-feasible `stoa_docs` feature gap is production notification delivery readiness. Full frontend/native mobile and visual localization remain important, but they require the UI workspace.
 - v4.2 should prioritize feature construction for internal development: production WebSocket delivery contract, notification preferences, delivery operations, email digest readiness, and push-ready preference metadata.
 - Phase 136 defined production WebSocket route/config expectations, channel mapping, notification preference categories, delivery state fields, and backend/CDK/frontend/native ownership boundaries.
+- Phase 137 added durable notification preferences, delivery decision metadata, realtime preference gating, and bounded admin delivery status aggregates.
 
 ### Pending Todos
 
-- Plan and implement Phase 137 notification preference APIs and delivery operations.
 - Plan and implement Phase 138 email digest and push preference readiness.
 - Close Phase 139 with functional release evidence and updated feature gap audit.
 
@@ -59,4 +59,4 @@ Last activity: 2026-06-11 - Completed Phase 136 production notification infrastr
 
 ## Operator Next Steps
 
-- Start Phase 137 notification preference APIs and delivery operations.
+- Start Phase 138 email digest and push preference readiness.

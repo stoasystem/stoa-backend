@@ -21,8 +21,28 @@ EVENT_TYPES = {
     "moderation_case_update",
     "subscription_request_update",
     "learning_profile_update",
+    "assignment_update",
+    "weekly_report_update",
 }
 STATUSES = {"created", "read", "archived", "failed"}
+PREFERENCE_CATEGORIES = {
+    "learning_updates",
+    "teacher_responses",
+    "assignments",
+    "weekly_reports",
+    "admin_operations",
+}
+PREFERENCE_CHANNELS = {"in_app", "realtime", "email_digest", "push"}
+EVENT_CATEGORY_BY_TYPE = {
+    "teacher_requested": "teacher_responses",
+    "teacher_takeover": "teacher_responses",
+    "teacher_reply": "teacher_responses",
+    "moderation_case_update": "admin_operations",
+    "subscription_request_update": "admin_operations",
+    "learning_profile_update": "learning_updates",
+    "assignment_update": "assignments",
+    "weekly_report_update": "weekly_reports",
+}
 
 
 def now_iso() -> str:
@@ -51,6 +71,17 @@ def create_event(
     if not recipient_role:
         raise HTTPException(status_code=400, detail="Notification recipient role is required")
 
+    category = category_for_event(event_type=event_type, target_type=target_type)
+    preferences = get_preferences_for_user(recipient_id) if recipient_id else default_preferences()
+    delivery = delivery_decision(
+        category=category,
+        preferences=preferences,
+        realtime_configured=bool(settings.websocket_api_endpoint),
+    )
+    event_status = status
+    if not delivery["channels"]["in_app"]["enabled"] and status == "created":
+        event_status = "archived"
+
     item = {
         "entity_type": notification_repo.NOTIFICATION_ENTITY,
         "event_id": f"notif-{uuid4().hex}",
@@ -61,16 +92,21 @@ def create_event(
         "target_id": target_id,
         "title": _clean_text(title, limit=140),
         "summary": _clean_text(summary, limit=500),
-        "status": status,
+        "status": event_status,
         "created_at": created_at or now_iso(),
-        "read_at": None,
-        "archived_at": None,
-        "metadata": _clean_metadata(metadata or {}),
+        "read_at": now_iso() if event_status == "archived" else None,
+        "archived_at": now_iso() if event_status == "archived" else None,
+        "metadata": {
+            **_clean_metadata(metadata or {}),
+            "delivery_decision": delivery,
+        },
         "actor_id": actor_id,
         "actor_role": actor_role,
+        "category": category,
     }
     notification_repo.put_event(item)
-    websocket_service.fanout_notification_event_safe(item)
+    if delivery["channels"]["realtime"]["decision"] == "attempted":
+        websocket_service.fanout_notification_event_safe(item)
     return event_response(item)
 
 
@@ -222,6 +258,133 @@ def list_admin_events(
     return [event_response(item) for item in _sort_events(items)[:limit]]
 
 
+def default_preferences() -> dict[str, Any]:
+    return {
+        category: {
+            "in_app": True,
+            "realtime": True,
+            "email_digest": False,
+            "push": False,
+        }
+        for category in sorted(PREFERENCE_CATEGORIES)
+    }
+
+
+def get_preferences_for_user(user_id: str | None) -> dict[str, Any]:
+    if not user_id:
+        return default_preferences()
+    stored = notification_repo.get_preferences(user_id) or {}
+    return _merged_preferences(stored.get("preferences"))
+
+
+def preferences_response(user_id: str) -> dict[str, Any]:
+    stored = notification_repo.get_preferences(user_id) or {}
+    return {
+        "userId": user_id,
+        "preferences": _merged_preferences(stored.get("preferences")),
+        "supportedCategories": sorted(PREFERENCE_CATEGORIES),
+        "supportedChannels": sorted(PREFERENCE_CHANNELS),
+        "updatedAt": stored.get("updated_at"),
+    }
+
+
+def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
+    merged = _merged_preferences(None)
+    for category, channel_updates in preferences.items():
+        if category not in PREFERENCE_CATEGORIES:
+            raise HTTPException(status_code=400, detail="Unsupported notification preference category")
+        if not isinstance(channel_updates, dict):
+            raise HTTPException(status_code=400, detail="Notification preference channels must be an object")
+        for channel, enabled in channel_updates.items():
+            if channel not in PREFERENCE_CHANNELS:
+                raise HTTPException(status_code=400, detail="Unsupported notification preference channel")
+            if not isinstance(enabled, bool):
+                raise HTTPException(status_code=400, detail="Notification preference value must be boolean")
+            merged[category][channel] = enabled
+
+    updated_at = now_iso()
+    notification_repo.put_preferences(
+        {
+            "entity_type": notification_repo.PREFERENCE_ENTITY,
+            "user_id": user_id,
+            "preferences": merged,
+            "updated_at": updated_at,
+        }
+    )
+    return {
+        "userId": user_id,
+        "preferences": merged,
+        "supportedCategories": sorted(PREFERENCE_CATEGORIES),
+        "supportedChannels": sorted(PREFERENCE_CHANNELS),
+        "updatedAt": updated_at,
+    }
+
+
+def category_for_event(*, event_type: str, target_type: str) -> str:
+    if event_type in EVENT_CATEGORY_BY_TYPE:
+        return EVENT_CATEGORY_BY_TYPE[event_type]
+    if target_type in {"assignment", "recommendation"}:
+        return "assignments"
+    if target_type in {"weekly_report", "report"}:
+        return "weekly_reports"
+    return "learning_updates"
+
+
+def delivery_decision(
+    *,
+    category: str,
+    preferences: dict[str, Any],
+    realtime_configured: bool,
+) -> dict[str, Any]:
+    category_prefs = _merged_preferences(preferences).get(category, default_preferences()[category])
+    return {
+        "category": category,
+        "channels": {
+            "in_app": {
+                "enabled": bool(category_prefs["in_app"]),
+                "decision": "stored" if category_prefs["in_app"] else "skipped_preference",
+            },
+            "realtime": {
+                "enabled": bool(category_prefs["realtime"]),
+                "decision": (
+                    "attempted"
+                    if category_prefs["realtime"]
+                    else "skipped_preference"
+                ),
+                "configured": realtime_configured,
+            },
+            "email_digest": {
+                "enabled": bool(category_prefs["email_digest"]),
+                "decision": "deferred_digest" if category_prefs["email_digest"] else "skipped_preference",
+            },
+            "push": {
+                "enabled": bool(category_prefs["push"]),
+                "decision": "deferred_push" if category_prefs["push"] else "skipped_preference",
+            },
+        },
+    }
+
+
+def delivery_status(*, limit: int = 100) -> dict[str, Any]:
+    items = list_admin_events(limit=limit)
+    category_counts: dict[str, int] = {}
+    realtime_counts: dict[str, int] = {}
+    for item in items:
+        category = str(item.get("deliveryCategory") or "unknown")
+        category_counts[category] = category_counts.get(category, 0) + 1
+        realtime = item.get("deliveryChannels", {}).get("realtime", {})
+        decision = str(realtime.get("decision") or "unknown")
+        realtime_counts[decision] = realtime_counts.get(decision, 0) + 1
+    return {
+        "websocketConfigured": bool(settings.websocket_api_endpoint),
+        "preferenceCategories": sorted(PREFERENCE_CATEGORIES),
+        "preferenceChannels": sorted(PREFERENCE_CHANNELS),
+        "recentEventCount": len(items),
+        "categoryCounts": category_counts,
+        "realtimeDecisionCounts": realtime_counts,
+    }
+
+
 def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
         raise HTTPException(status_code=400, detail="Unsupported notification transition")
@@ -245,6 +408,7 @@ def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[st
 
 
 def event_response(item: dict[str, Any]) -> dict[str, Any]:
+    delivery = (item.get("metadata") or {}).get("delivery_decision") or {}
     return {
         "eventId": item.get("event_id"),
         "recipientId": item.get("recipient_id"),
@@ -261,6 +425,8 @@ def event_response(item: dict[str, Any]) -> dict[str, Any]:
         "metadata": item.get("metadata") or {},
         "actorId": item.get("actor_id"),
         "actorRole": item.get("actor_role"),
+        "deliveryCategory": item.get("category") or delivery.get("category"),
+        "deliveryChannels": delivery.get("channels") or {},
     }
 
 
@@ -290,3 +456,16 @@ def _clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         str(key): value for key, value in metadata.items()
         if value is not None and "s3_key" not in str(key).lower()
     }
+
+
+def _merged_preferences(raw: Any) -> dict[str, dict[str, bool]]:
+    merged = default_preferences()
+    if not isinstance(raw, dict):
+        return merged
+    for category, channels in raw.items():
+        if category not in PREFERENCE_CATEGORIES or not isinstance(channels, dict):
+            continue
+        for channel, enabled in channels.items():
+            if channel in PREFERENCE_CHANNELS and isinstance(enabled, bool):
+                merged[category][channel] = enabled
+    return merged

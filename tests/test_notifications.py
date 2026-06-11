@@ -15,6 +15,7 @@ def _app(router, prefix: str, user: dict) -> TestClient:
 
 def _install_notification_repo(monkeypatch):
     events: dict[str, dict] = {}
+    preferences: dict[str, dict] = {}
 
     def put_event(item):
         events[item["event_id"]] = dict(item)
@@ -29,11 +30,19 @@ def _install_notification_repo(monkeypatch):
         events[event_id].update(updates)
         return events[event_id]
 
+    def put_preferences(item):
+        preferences[item["user_id"]] = dict(item)
+
+    def get_preferences(user_id):
+        return preferences.get(user_id)
+
     monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
     monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
     monkeypatch.setattr(notification_service.notification_repo, "list_events", list_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
-    return events
+    monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
+    monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
+    return events, preferences
 
 
 def test_notifications_list_read_and_archive_visible_events(monkeypatch):
@@ -116,6 +125,99 @@ def test_admin_can_list_operational_notifications(monkeypatch):
     assert response.status_code == 200
     assert response.json()["count"] == 1
     assert response.json()["items"][0]["eventType"] == "subscription_request_update"
+
+
+def test_notification_preferences_default_and_update(monkeypatch):
+    _, preferences = _install_notification_repo(monkeypatch)
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+
+    default_response = client.get("/notifications/preferences")
+    assert default_response.status_code == 200
+    default_body = default_response.json()
+    assert default_body["preferences"]["teacher_responses"]["in_app"] is True
+    assert default_body["preferences"]["teacher_responses"]["realtime"] is True
+    assert default_body["preferences"]["teacher_responses"]["email_digest"] is False
+
+    update_response = client.patch(
+        "/notifications/preferences",
+        json={"preferences": {"teacher_responses": {"realtime": False, "email_digest": True}}},
+    )
+
+    assert update_response.status_code == 200
+    body = update_response.json()
+    assert body["preferences"]["teacher_responses"]["realtime"] is False
+    assert body["preferences"]["teacher_responses"]["email_digest"] is True
+    assert body["preferences"]["teacher_responses"]["in_app"] is True
+    assert preferences["student-1"]["preferences"]["teacher_responses"]["realtime"] is False
+
+
+def test_notification_preferences_reject_invalid_channel(monkeypatch):
+    _install_notification_repo(monkeypatch)
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+
+    response = client.patch(
+        "/notifications/preferences",
+        json={"preferences": {"teacher_responses": {"sms": True}}},
+    )
+
+    assert response.status_code == 400
+
+
+def test_delivery_decision_honors_realtime_preference(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    sent = []
+    monkeypatch.setattr(
+        notification_service.websocket_service,
+        "fanout_notification_event_safe",
+        lambda item: sent.append(item) or {"deliveryId": "ws-1"},
+    )
+    preferences["student-1"] = {
+        "user_id": "student-1",
+        "preferences": notification_service.default_preferences(),
+    }
+    preferences["student-1"]["preferences"]["teacher_responses"]["realtime"] = False
+    preferences["student-1"]["preferences"]["teacher_responses"]["email_digest"] = True
+
+    event = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    assert sent == []
+    stored = events[event["eventId"]]
+    decision = stored["metadata"]["delivery_decision"]
+    assert decision["category"] == "teacher_responses"
+    assert decision["channels"]["in_app"]["decision"] == "stored"
+    assert decision["channels"]["realtime"]["decision"] == "skipped_preference"
+    assert decision["channels"]["email_digest"]["decision"] == "deferred_digest"
+    assert event["deliveryChannels"]["realtime"]["decision"] == "skipped_preference"
+
+
+def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
+    _install_notification_repo(monkeypatch)
+    notification_service.create_event(
+        recipient_id=None,
+        recipient_role="admin",
+        event_type="moderation_case_update",
+        target_type="moderation_case",
+        target_id="case-1",
+        title="Moderation",
+        summary="Case updated.",
+    )
+    client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
+
+    response = client.get("/admin/notifications/delivery-status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recentEventCount"] == 1
+    assert body["categoryCounts"]["admin_operations"] == 1
+    assert "realtime" in body["preferenceChannels"]
 
 
 def test_request_teacher_emits_tutor_and_admin_events(monkeypatch):
