@@ -50,7 +50,7 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [ ] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Define the live Stripe rollout contract, explicit TWINT inclusion, smoke boundaries, and rollback switches before enabling production payment behavior.
+- [x] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Defined the live Stripe rollout contract, explicit TWINT inclusion, smoke boundaries, and rollback switches before enabling production payment behavior.
 - [ ] **Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating** - Add production checkout/webhook primitives, livemode gating, and Stripe-backed TWINT eligibility handling for Swiss subscription flows.
 - [ ] **Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff** - Add post-checkout billing operations and accounting-facing lifecycle support inside the same Stripe billing model, including TWINT behavior.
 - [ ] **Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit** - Capture rollout evidence, verify rollback/disable controls, update planning docs, and close the milestone with an explicit remaining-work audit.
@@ -69,11 +69,11 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
   3. Safe smoke modes distinguish local or test verification, approved live configuration inspection, and the default no-real-charge posture.
   4. Existing checkout, status, and webhook code paths plus remaining gap docs are mapped to Phases 145 through 147 so v4.4 is the active payment rollout build area.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 144-01: Define live payment rollout, Stripe credential, and TWINT gating contract.
+- [x] 144-01: Define live payment rollout, Stripe credential, and TWINT gating contract.
 
 ### Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating
 
@@ -133,7 +133,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 0/1 | Planned | - |
+| 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 1/1 | Complete | 2026-06-11 |
 | 145 Production Checkout, Webhook, And TWINT-Capable Stripe Gating | v4.4 | 0/1 | Planned | - |
 | 146 Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff | v4.4 | 0/1 | Planned | - |
 | 147 v4.4 Payment Release Gate, Rollout Controls, And Support Audit | v4.4 | 0/1 | Planned | - |
@@ -142,10 +142,10 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYLIVE-01 | Phase 144 | Planned |
+| PAYLIVE-01 | Phase 144 | Complete |
 | PAYLIVE-02 | Phase 145 | Planned |
 | PAYLIVE-03 | Phase 146 | Planned |
 | VERIFY-27 | Phase 147 | Planned |
 
 ---
-*Last updated: 2026-06-11 after refreshing v4.4 roadmap scope and TWINT inclusion*
+*Last updated: 2026-06-11 after completing Phase 144 live payment rollout contract*

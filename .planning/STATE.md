@@ -7,10 +7,10 @@ last_updated: "2026-06-11T23:02:49+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 144 - Live Payment Rollout Contract And Credential Readiness
-Plan: 144-01
+Phase: 145 - Production Checkout, Webhook, And TWINT-Capable Stripe Gating
+Plan: —
 Status: Planning
-Last activity: 2026-06-11 - Refreshed the v4.4 roadmap so TWINT stays in scope for Stripe-backed rollout, Phase 145 owns checkout/webhook/gating, and Phase 146 owns the billing lifecycle surfaces.
+Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract and verified focused subscription tests with the project virtualenv.
 
 ## Accumulated Context
 
@@ -40,11 +40,11 @@ Last activity: 2026-06-11 - Refreshed the v4.4 roadmap so TWINT stays in scope f
 - v4.4 should prioritize feature construction: live credential readiness, production checkout/webhook verification, Stripe-backed TWINT rollout, refund/invoice/tax/dunning readiness, and clear release evidence.
 - Phase 145 owns production checkout/webhook rollout plus TWINT-capable Stripe provider primitives and livemode gating.
 - Phase 146 owns refunds, invoices, dunning, Swiss tax/accounting handoff, and TWINT lifecycle behavior inside the same Stripe billing model.
+- Phase 144 completed the live payment rollout contract and confirmed no real customer charge was enabled.
 - Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
 ### Pending Todos
 
-- Execute Phase 144 by writing the live payment rollout contract and credential readiness plan, including Stripe-backed TWINT gating.
 - Plan and implement Phase 145 production checkout, webhook, and TWINT-capable Stripe gating.
 - Plan and implement Phase 146 billing operations, invoice, refund, dunning, and Swiss accounting handoff readiness.
 - Close Phase 147 with payment release evidence, rollout controls, and updated feature gap docs.
@@ -58,4 +58,4 @@ Last activity: 2026-06-11 - Refreshed the v4.4 roadmap so TWINT stays in scope f
 
 ## Operator Next Steps
 
-- Start Phase 144: inspect `src/stoa/services/subscription_service.py`, `src/stoa/routers/billing.py`, `src/stoa/routers/parents.py`, `src/stoa/routers/admin.py`, and `tests/test_subscription_operations.py`; then write the live payment rollout contract.
+- Start Phase 145: plan production checkout, webhook, and TWINT-capable Stripe gating from the Phase 144 contract and v4.4 research summary.
