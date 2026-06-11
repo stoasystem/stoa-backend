@@ -7,10 +7,10 @@ last_updated: "2026-06-11T23:02:49+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 145 - Production Checkout, Webhook, And TWINT-Capable Stripe Gating
+Phase: 146 - Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff
 Plan: —
 Status: Planning
-Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract and verified focused subscription tests with the project virtualenv.
+Last activity: 2026-06-11 - Completed Phase 145 production checkout/webhook gating, Stripe dependency wiring, TWINT readiness metadata, and focused subscription verification.
 
 ## Accumulated Context
 
@@ -41,14 +41,14 @@ Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract an
 - Phase 145 owns production checkout/webhook rollout plus TWINT-capable Stripe provider primitives and livemode gating.
 - Phase 146 owns refunds, invoices, dunning, Swiss tax/accounting handoff, and TWINT lifecycle behavior inside the same Stripe billing model.
 - Phase 144 completed the live payment rollout contract and confirmed no real customer charge was enabled.
+- Phase 145 completed fail-closed readiness states, provider lookup rows, TWINT eligibility metadata, and redacted parent/admin billing readiness surfaces.
 - Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
 ### Pending Todos
 
-- Phase 145 development docs are ready for production checkout, webhook, and TWINT-capable Stripe gating implementation.
 - Phase 146 development docs are ready for billing operations, invoice, refund, dunning, and Swiss accounting handoff implementation.
 - Phase 147 development docs are ready for payment release evidence, rollout controls, and milestone closeout.
-- Next implementation step is Phase 145 code work.
+- Next implementation step is Phase 146 code work.
 
 ### Blockers/Concerns
 
@@ -59,4 +59,4 @@ Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract an
 
 ## Operator Next Steps
 
-- Start Phase 145 implementation using `.planning/phases/145-production-checkout-webhook-and-twint-capable-stripe-gating/145-01-PLAN.md`.
+- Start Phase 146 implementation using `.planning/phases/146-billing-operations-invoices-refunds-dunning-and-swiss-handoff/146-01-PLAN.md`.

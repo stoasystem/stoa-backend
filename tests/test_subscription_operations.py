@@ -371,6 +371,9 @@ def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkey
     assert body["provider"] == "stripe"
     assert body["mode"] == "test"
     assert body["billingStatus"] == "checkout_pending"
+    assert body["readiness"]["state"] == "test"
+    assert body["twint"]["inScope"] is True
+    assert body["twint"]["status"] == "capability_unconfirmed"
     assert body["checkoutUrl"].startswith("https://checkout.stripe.com/c/pay/cs_test_")
 
     subscription = client.get("/parents/me/subscription").json()
@@ -381,10 +384,96 @@ def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkey
     assert admin_response.status_code == 200
     assert admin_response.json()["count"] == 1
     assert admin_response.json()["items"][0]["parentId"] == "parent-1"
+    assert admin_response.json()["items"][0]["readiness"]["state"] == "test"
 
 
-def test_stripe_webhook_completion_activates_subscription_idempotently(monkeypatch):
+def test_production_checkout_requires_explicit_live_enablement(monkeypatch):
     _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_live_charges_enabled=False,
+    )
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+
+    response = client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["readiness"]["state"] == "live_ready_but_blocked"
+    assert detail["readiness"]["checkoutAllowed"] is False
+
+
+def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
+    _install_fakes(monkeypatch)
+    captured: dict[str, object] = {}
+
+    class FakeStripeSession:
+        @staticmethod
+        def create(**kwargs):
+            captured.update(kwargs)
+            return {"id": "cs_live_twint", "url": "https://checkout.stripe.com/c/pay/cs_live_twint"}
+
+    class FakeStripeCheckout:
+        Session = FakeStripeSession
+
+    class FakeStripe:
+        checkout = FakeStripeCheckout
+        api_key = None
+
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    monkeypatch.setattr(subscription_service, "_load_stripe_sdk", lambda: FakeStripe)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_live_charges_enabled=True,
+        stripe_twint_capability_confirmed=True,
+    )
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+
+    response = client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    )
+
+    assert response.status_code == 201
+    assert captured["mode"] == "subscription"
+    assert captured["payment_method_types"] == ["card", "twint"]
+    assert "customer" not in captured
+    assert captured["subscription_data"] == {
+        "metadata": {"stoa_parent_id": "parent-1", "requested_tier": "standard"}
+    }
+
+
+def test_production_checkout_reports_missing_live_configuration(monkeypatch):
+    _install_fakes(monkeypatch)
+    settings = _settings(environment="production", stripe_live_charges_enabled=True)
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+
+    response = client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    )
+
+    assert response.status_code == 503
+    blockers = set(response.json()["detail"]["readiness"]["blockers"])
+    assert "missing_stripe_api_key" in blockers
+    assert "missing_stripe_webhook_secret" in blockers
+    assert "missing_standard_price_id" in blockers
+
+
+def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeypatch):
+    table, profiles = _install_fakes(monkeypatch)
     secret = "whsec_test_secret"
     settings = _settings(stripe_webhook_secret=secret)
     parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
@@ -394,7 +483,7 @@ def test_stripe_webhook_completion_activates_subscription_idempotently(monkeypat
         "/parents/me/subscription/checkout",
         json={"requestedTier": "premium"},
     ).json()
-    event = {
+    checkout_completed = {
         "id": "evt_checkout_completed_1",
         "type": "checkout.session.completed",
         "created": int(time.time()),
@@ -402,24 +491,54 @@ def test_stripe_webhook_completion_activates_subscription_idempotently(monkeypat
             "object": {
                 "id": checkout["checkoutSessionId"],
                 "object": "checkout.session",
+                "livemode": False,
                 "customer": "cus_test_parent",
                 "subscription": "sub_test_parent",
-                "client_reference_id": "parent-1",
-                "metadata": {"stoa_parent_id": "parent-1", "requested_tier": "premium"},
+                "metadata": {"requested_tier": "premium"},
+                "payment_method_types": ["twint"],
             }
         },
     }
-    payload = json.dumps(event, separators=(",", ":")).encode("utf-8")
+    checkout_payload = json.dumps(checkout_completed, separators=(",", ":")).encode("utf-8")
 
+    checkout_response = webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=checkout_payload,
+        headers={"stripe-signature": _stripe_signature(checkout_payload, secret)},
+    )
+
+    assert checkout_response.status_code == 200
+    assert checkout_response.json()["billingStatus"] == "checkout_pending"
+    pending_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert pending_status["status"] == "checkout_pending"
+    assert pending_status["subscriptionTier"] == "free"
+    assert pending_status["paymentMethodType"] == "unknown"
+
+    invoice_paid = {
+        "id": "evt_invoice_paid_1",
+        "type": "invoice.paid",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": "in_test_parent",
+                "object": "invoice",
+                "livemode": False,
+                "customer": "cus_test_parent",
+                "subscription": "sub_test_parent",
+                "payment_method_details": {"type": "twint"},
+            }
+        },
+    }
+    invoice_payload = json.dumps(invoice_paid, separators=(",", ":")).encode("utf-8")
     response = webhook_client.post(
         "/billing/webhooks/stripe",
-        content=payload,
-        headers={"stripe-signature": _stripe_signature(payload, secret)},
+        content=invoice_payload,
+        headers={"stripe-signature": _stripe_signature(invoice_payload, secret)},
     )
     duplicate = webhook_client.post(
         "/billing/webhooks/stripe",
-        content=payload,
-        headers={"stripe-signature": _stripe_signature(payload, secret)},
+        content=invoice_payload,
+        headers={"stripe-signature": _stripe_signature(invoice_payload, secret)},
     )
 
     assert response.status_code == 200
@@ -430,6 +549,51 @@ def test_stripe_webhook_completion_activates_subscription_idempotently(monkeypat
     assert billing_status["status"] == "active"
     assert billing_status["subscriptionTier"] == "premium"
     assert billing_status["providerSubscriptionId"] == "sub_test_parent"
+    assert billing_status["providerLivemode"] is False
+    assert billing_status["paymentMethodType"] == "twint"
+    webhook_events = [
+        event
+        for event in billing_status["events"]
+        if event["providerEventId"] == "evt_invoice_paid_1"
+    ]
+    assert webhook_events[0]["providerLivemode"] is False
+    assert webhook_events[0]["processingResult"] == "processed"
+    assert profiles["parent-1"]["subscription_tier"] == "premium"
+    assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#subscription#sub_test_parent", "SUMMARY")][
+        "parent_id"
+    ] == "parent-1"
+
+    replacement = parent_client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    ).json()
+    expired = {
+        "id": "evt_checkout_expired_1",
+        "type": "checkout.session.expired",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": replacement["checkoutSessionId"],
+                "object": "checkout.session",
+                "livemode": False,
+                "customer": "cus_test_parent",
+                "metadata": {"requested_tier": "standard"},
+            }
+        },
+    }
+    expired_payload = json.dumps(expired, separators=(",", ":")).encode("utf-8")
+    expired_response = webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=expired_payload,
+        headers={"stripe-signature": _stripe_signature(expired_payload, secret)},
+    )
+
+    assert expired_response.status_code == 200
+    assert expired_response.json()["billingStatus"] == "active"
+    preserved_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert preserved_status["status"] == "active"
+    assert preserved_status["subscriptionTier"] == "premium"
+    assert profiles["parent-1"]["subscription_tier"] == "premium"
 
 
 def test_stripe_webhook_rejects_bad_signature(monkeypatch):
@@ -445,6 +609,17 @@ def test_stripe_webhook_rejects_bad_signature(monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_stripe_webhook_requires_signing_secret_by_default(monkeypatch):
+    _install_fakes(monkeypatch)
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
+    payload = b'{"id":"evt_unsigned","type":"customer.updated","data":{"object":{"metadata":{"stoa_parent_id":"parent-1"}}}}'
+
+    response = client.post("/billing/webhooks/stripe", content=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Stripe webhook signing secret is required"
 
 
 def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):

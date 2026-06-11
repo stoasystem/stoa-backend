@@ -2,7 +2,7 @@
 
 **Milestone:** v4.4 Live Payment Provider Rollout
 **Requirement:** PAYLIVE-02
-**Status:** Planned
+**Status:** Implemented
 
 ## Readiness States
 
@@ -78,3 +78,11 @@ It must not show API keys, webhook secrets, raw provider payloads, payment metho
 - Duplicate webhook event is idempotent.
 - TWINT eligibility is surfaced only for supported Swiss/CHF flows.
 - Admin readiness output is redacted.
+
+## Implementation Notes
+
+- `src/stoa/services/subscription_service.py` now computes readiness states and blocks production live checkout unless configuration and the explicit live-charge gate pass.
+- Local/test checkout remains fixture-backed; live-enabled checkout routes through a lazy Stripe SDK adapter.
+- Provider lookup rows are written for checkout/customer identifiers and webhook-discovered Stripe identifiers.
+- Parent and admin billing responses expose redacted readiness and TWINT metadata.
+- Webhook events record livemode, processing result, idempotency status, and payment-method context where available.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import importlib
 import json
 import time
 from datetime import datetime, timezone
@@ -27,6 +28,8 @@ OPEN_GUARD_ENTITY = "subscription_request_open_guard"
 BILLING_ENTITY = "subscription_billing"
 BILLING_EVENT_ENTITY = "subscription_billing_event"
 BILLING_EVENT_DEDUPE_ENTITY = "subscription_billing_event_dedupe"
+BILLING_PROVIDER_LOOKUP_ENTITY = "subscription_billing_provider_lookup"
+READINESS_STATES = {"test", "not_configured", "live_ready_but_blocked", "live_enabled"}
 REQUEST_STATUSES = {"requested", "in_review", "approved", "applied", "rejected", "cancelled"}
 OPEN_STATUSES = {"requested", "in_review", "approved"}
 TERMINAL_STATUSES = {"applied", "rejected", "cancelled"}
@@ -87,10 +90,10 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def get_parent_subscription(parent_id: str) -> dict[str, Any]:
+def get_parent_subscription(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
     profile = _require_parent(parent_id)
     current_tier = _normalize_tier(profile.get("subscription_tier"))
-    billing = _billing_response(_get_billing_item(parent_id), parent_id=parent_id)
+    billing = _billing_response(_get_billing_item(parent_id), parent_id=parent_id, settings=settings)
     if billing["status"] == "none":
         billing["subscriptionTier"] = current_tier
     return {
@@ -115,13 +118,26 @@ def create_checkout_session(
     if requested_tier == SubscriptionTier.FREE.value:
         raise HTTPException(status_code=400, detail="Checkout is only available for paid tiers")
 
-    provider_mode = _provider_mode(settings)
+    readiness = get_billing_readiness(settings)
+    _require_checkout_allowed(readiness, settings)
+    provider_mode = _provider_mode(settings, readiness)
     price_id = _price_id_for_tier(requested_tier, settings)
     now = now_iso()
     existing = _get_billing_item(parent_id) or {}
     customer_id = existing.get("provider_customer_id") or f"cus_test_{uuid4().hex[:24]}"
-    session_id = f"cs_{provider_mode}_{uuid4().hex}"
-    checkout_url = _checkout_url(session_id)
+    session = _create_provider_checkout_session(
+        parent_id=parent_id,
+        customer_id=customer_id,
+        requested_tier=requested_tier,
+        price_id=price_id,
+        success_url=_safe_url(success_url) or settings.stripe_checkout_success_url,
+        cancel_url=_safe_url(cancel_url) or settings.stripe_checkout_cancel_url,
+        readiness=readiness,
+        settings=settings,
+    )
+    session_id = session["id"]
+    checkout_url = session["url"]
+    customer_id = session.get("customer_id") or customer_id
     item = {
         **_billing_key(parent_id),
         "entity_type": BILLING_ENTITY,
@@ -136,8 +152,16 @@ def create_checkout_session(
         "provider_price_id": price_id,
         "checkout_session_id": session_id,
         "checkout_url": checkout_url,
-        "success_url": _safe_url(success_url) or settings.stripe_checkout_success_url,
-        "cancel_url": _safe_url(cancel_url) or settings.stripe_checkout_cancel_url,
+        "success_url": session["success_url"],
+        "cancel_url": session["cancel_url"],
+        "provider_livemode": bool(readiness["livemode"]),
+        "readiness_state": readiness["state"],
+        "readiness_blockers": readiness["blockers"],
+        "twint_in_scope": True,
+        "twint_status": readiness["twint"]["status"],
+        "payment_method_type": session.get("payment_method_type"),
+        "previous_billing_status": existing.get("billing_status"),
+        "previous_subscription_tier": existing.get("subscription_tier"),
         "current_period_start": existing.get("current_period_start"),
         "current_period_end": existing.get("current_period_end"),
         "cancel_at_period_end": bool(existing.get("cancel_at_period_end") or False),
@@ -151,6 +175,14 @@ def create_checkout_session(
         "updated_at": now,
     }
     get_table().put_item(Item=item)
+    _put_provider_lookup_rows(
+        parent_id=parent_id,
+        provider_mode=provider_mode,
+        livemode=bool(readiness["livemode"]),
+        created_at=now,
+        customer=customer_id,
+        checkout_session=session_id,
+    )
     _put_billing_event(
         parent_id,
         {
@@ -159,9 +191,13 @@ def create_checkout_session(
             "event_at": now,
             "provider": "stripe",
             "provider_mode": provider_mode,
+            "provider_livemode": bool(readiness["livemode"]),
+            "processing_result": "created",
             "billing_status": "checkout_pending",
             "requested_tier": requested_tier,
             "provider_session_id": session_id,
+            "readiness_state": readiness["state"],
+            "twint_status": readiness["twint"]["status"],
         },
     )
     return {
@@ -172,13 +208,15 @@ def create_checkout_session(
         "mode": provider_mode,
         "requestedTier": requested_tier,
         "billingStatus": "checkout_pending",
+        "readiness": readiness,
+        "twint": readiness["twint"],
     }
 
 
-def get_parent_billing(parent_id: str) -> dict[str, Any]:
+def get_parent_billing(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
     profile = _require_parent(parent_id)
     item = _get_billing_item(parent_id)
-    response = _billing_response(item, parent_id=parent_id, include_events=True)
+    response = _billing_response(item, parent_id=parent_id, include_events=True, settings=settings)
     if response["status"] == "none":
         response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
     return response
@@ -190,6 +228,7 @@ def list_admin_billing(
     parent_id: str | None = None,
     billing_status: str | None = None,
     billing_provider: str | None = None,
+    settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     if billing_status is not None:
         _require_choice(billing_status, BILLING_STATUSES, "billing_status")
@@ -204,6 +243,7 @@ def list_admin_billing(
             item
             for item in response.get("Items", [])
             if item.get("SK") == "SUMMARY"
+            and item.get("entity_type") == BILLING_ENTITY
             and _matches(item, "parent_id", parent_id)
             and _matches(item, "billing_status", billing_status)
             and _matches(item, "billing_provider", billing_provider)
@@ -213,14 +253,24 @@ def list_admin_billing(
             break
         scan_kwargs["ExclusiveStartKey"] = last_key
     return [
-        _billing_response(item, parent_id=str(item.get("parent_id") or ""), include_events=True)
+        _billing_response(
+            item,
+            parent_id=str(item.get("parent_id") or ""),
+            include_events=True,
+            settings=settings,
+        )
         for item in sorted(items, key=lambda item: item.get("updated_at", ""), reverse=True)[:limit]
     ]
 
 
-def get_admin_billing(parent_id: str) -> dict[str, Any]:
+def get_admin_billing(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
     profile = _require_parent(parent_id)
-    response = _billing_response(_get_billing_item(parent_id), parent_id=parent_id, include_events=True)
+    response = _billing_response(
+        _get_billing_item(parent_id),
+        parent_id=parent_id,
+        include_events=True,
+        settings=settings,
+    )
     if response["status"] == "none":
         response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
     return response
@@ -737,6 +787,13 @@ def _provider_event_key(event_id: str) -> dict[str, str]:
     return {"PK": f"BILLING_PROVIDER_EVENT#stripe#{event_id}", "SK": "SUMMARY"}
 
 
+def _provider_lookup_key(provider: str, object_type: str, object_id: str) -> dict[str, str]:
+    return {
+        "PK": f"BILLING_PROVIDER_LOOKUP#{provider}#{object_type}#{object_id}",
+        "SK": "SUMMARY",
+    }
+
+
 def _get_billing_item(parent_id: str) -> dict[str, Any] | None:
     response = get_table().get_item(Key=_billing_key(parent_id))
     item = response.get("Item")
@@ -756,8 +813,10 @@ def _billing_response(
     *,
     parent_id: str,
     include_events: bool = False,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     if item is None:
+        readiness = get_billing_readiness(settings) if settings else None
         response = {
             "parentId": parent_id,
             "provider": None,
@@ -770,6 +829,10 @@ def _billing_response(
             "providerPriceId": None,
             "checkoutSessionId": None,
             "checkoutUrl": None,
+            "providerLivemode": None,
+            "readiness": readiness or {},
+            "twint": (readiness or {}).get("twint", {}),
+            "paymentMethodType": None,
             "currentPeriodStart": None,
             "currentPeriodEnd": None,
             "cancelAtPeriodEnd": False,
@@ -782,6 +845,7 @@ def _billing_response(
             "updatedAt": None,
         }
     else:
+        persisted_readiness = _stored_readiness(item)
         response = {
             "parentId": parent_id,
             "provider": item.get("billing_provider"),
@@ -794,6 +858,11 @@ def _billing_response(
             "providerPriceId": item.get("provider_price_id"),
             "checkoutSessionId": item.get("checkout_session_id"),
             "checkoutUrl": item.get("checkout_url"),
+            "providerLivemode": item.get("provider_livemode"),
+            "readiness": persisted_readiness,
+            "environmentReadiness": get_billing_readiness(settings) if settings else {},
+            "twint": _stored_twint(item),
+            "paymentMethodType": item.get("payment_method_type"),
             "currentPeriodStart": item.get("current_period_start"),
             "currentPeriodEnd": item.get("current_period_end"),
             "cancelAtPeriodEnd": bool(item.get("cancel_at_period_end") or False),
@@ -813,19 +882,211 @@ def _billing_response(
                 "eventType": event.get("event_type"),
                 "provider": event.get("provider"),
                 "providerMode": event.get("provider_mode"),
+                "providerLivemode": event.get("provider_livemode"),
                 "billingStatus": event.get("billing_status"),
+                "processingResult": event.get("processing_result"),
+                "idempotencyStatus": event.get("idempotency_status"),
+                "requestId": event.get("request_id"),
+                "correlationId": event.get("correlation_id"),
                 "requestedTier": event.get("requested_tier"),
                 "providerEventId": event.get("provider_event_id"),
+                "paymentMethodType": event.get("payment_method_type"),
+                "twintStatus": event.get("twint_status"),
             }
             for event in _list_billing_events(parent_id)
         ]
     return response
 
 
-def _provider_mode(settings: Settings) -> str:
-    if settings.stripe_live_charges_enabled and settings.is_production:
+def _stored_readiness(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "state": item.get("readiness_state"),
+        "blockers": item.get("readiness_blockers") or [],
+    }
+
+
+def _stored_twint(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "inScope": bool(item.get("twint_in_scope")),
+        "status": item.get("twint_status"),
+    }
+
+
+def get_billing_readiness(settings: Settings) -> dict[str, Any]:
+    api_key = settings.stripe_api_key.strip()
+    webhook_secret = settings.stripe_webhook_secret.strip()
+    standard_price = settings.stripe_standard_price_id.strip()
+    premium_price = settings.stripe_premium_price_id.strip()
+    blockers: list[str] = []
+    warnings: list[str] = []
+    sdk_available = _stripe_sdk_available()
+
+    if settings.is_production:
+        if not api_key:
+            blockers.append("missing_stripe_api_key")
+        elif not api_key.startswith("sk_live_"):
+            blockers.append("stripe_api_key_not_live")
+        if not webhook_secret:
+            blockers.append("missing_stripe_webhook_secret")
+        if not standard_price:
+            blockers.append("missing_standard_price_id")
+        if not premium_price:
+            blockers.append("missing_premium_price_id")
+        if not sdk_available:
+            blockers.append("stripe_sdk_missing")
+        if blockers:
+            state = "not_configured"
+        elif not settings.stripe_live_charges_enabled:
+            state = "live_ready_but_blocked"
+        else:
+            state = "live_enabled"
+    else:
+        state = "test"
+        if api_key.startswith("sk_live_"):
+            warnings.append("live_key_present_outside_production")
+
+    twint_status = "disabled"
+    if settings.stripe_twint_enabled:
+        if not settings.stripe_twint_capability_confirmed:
+            twint_status = "capability_unconfirmed"
+        elif settings.is_production and state != "live_enabled":
+            twint_status = "blocked_by_live_gate"
+        else:
+            twint_status = "eligible"
+
+    return {
+        "state": state,
+        "mode": "live" if state in {"live_ready_but_blocked", "live_enabled"} else "test",
+        "livemode": state in {"live_ready_but_blocked", "live_enabled"},
+        "checkoutAllowed": not settings.is_production or state == "live_enabled",
+        "liveChargesEnabled": bool(settings.stripe_live_charges_enabled),
+        "blockers": blockers,
+        "warnings": warnings,
+        "configured": {
+            "apiKey": _redacted_presence(api_key),
+            "webhookSecret": _redacted_presence(webhook_secret),
+            "standardPrice": _redacted_presence(standard_price),
+            "premiumPrice": _redacted_presence(premium_price),
+            "successUrl": bool(settings.stripe_checkout_success_url),
+            "cancelUrl": bool(settings.stripe_checkout_cancel_url),
+            "stripeSdk": sdk_available,
+        },
+        "twint": {
+            "inScope": True,
+            "enabled": bool(settings.stripe_twint_enabled),
+            "capabilityConfirmed": bool(settings.stripe_twint_capability_confirmed),
+            "status": twint_status,
+        },
+    }
+
+
+def _provider_mode(settings: Settings, readiness: dict[str, Any] | None = None) -> str:
+    readiness = readiness or get_billing_readiness(settings)
+    if readiness["state"] in {"live_ready_but_blocked", "live_enabled"}:
         return "live"
     return "test"
+
+
+def _require_checkout_allowed(readiness: dict[str, Any], settings: Settings) -> None:
+    if readiness["checkoutAllowed"]:
+        return
+    detail = {
+        "message": "Live checkout is not enabled",
+        "readiness": readiness,
+    }
+    status_code = 503 if readiness["state"] == "not_configured" else 409
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _stripe_sdk_available() -> bool:
+    return importlib.util.find_spec("stripe") is not None
+
+
+def _load_stripe_sdk() -> Any:
+    try:
+        return importlib.import_module("stripe")
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="Stripe SDK is not installed") from exc
+
+
+def _redacted_presence(value: str) -> str:
+    return "configured" if value else "missing"
+
+
+def _create_provider_checkout_session(
+    *,
+    parent_id: str,
+    customer_id: str,
+    requested_tier: str,
+    price_id: str,
+    success_url: str,
+    cancel_url: str,
+    readiness: dict[str, Any],
+    settings: Settings,
+) -> dict[str, Any]:
+    if readiness["state"] != "live_enabled":
+        session_id = f"cs_{readiness['mode']}_{uuid4().hex}"
+        return {
+            "id": session_id,
+            "url": _checkout_url(session_id),
+            "customer_id": customer_id,
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "payment_method_type": "unknown",
+        }
+
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    metadata = {"stoa_parent_id": parent_id, "requested_tier": requested_tier}
+    create_kwargs: dict[str, Any] = {
+        "mode": "subscription",
+        "client_reference_id": parent_id,
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "metadata": metadata,
+        "subscription_data": {"metadata": metadata},
+    }
+    if not customer_id.startswith("cus_test_"):
+        create_kwargs["customer"] = customer_id
+    payment_method_types = _checkout_payment_method_types(readiness)
+    if payment_method_types:
+        create_kwargs["payment_method_types"] = payment_method_types
+    try:
+        session = stripe.checkout.Session.create(**create_kwargs)
+    except Exception as exc:  # pragma: no cover - requires live Stripe SDK/API behavior.
+        raise HTTPException(status_code=502, detail="Stripe checkout session creation failed") from exc
+
+    session_dict = _stripe_object_to_dict(session)
+    session_id = str(session_dict.get("id") or "")
+    checkout_url = str(session_dict.get("url") or "")
+    if not session_id or not checkout_url:
+        raise HTTPException(status_code=502, detail="Stripe checkout response was incomplete")
+    return {
+        "id": session_id,
+        "url": checkout_url,
+        "customer_id": session_dict.get("customer") or customer_id,
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "payment_method_type": _selected_payment_method_type_from_provider_object(session_dict),
+    }
+
+
+def _stripe_object_to_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    to_dict = getattr(value, "to_dict_recursive", None)
+    if callable(to_dict):
+        converted = to_dict()
+        return converted if isinstance(converted, dict) else {}
+    return dict(value) if hasattr(value, "keys") else {}
+
+
+def _checkout_payment_method_types(readiness: dict[str, Any]) -> list[str] | None:
+    twint = readiness.get("twint") or {}
+    if twint.get("enabled") and twint.get("capabilityConfirmed") and twint.get("status") == "eligible":
+        return ["card", "twint"]
+    return None
 
 
 def _price_id_for_tier(tier: str, settings: Settings) -> str:
@@ -862,6 +1123,61 @@ def _put_billing_event(parent_id: str, event: dict[str, Any]) -> None:
     get_table().put_item(Item=item)
 
 
+def _put_provider_lookup_rows(
+    *,
+    parent_id: str,
+    provider_mode: str,
+    livemode: bool,
+    created_at: str,
+    **provider_ids: Any,
+) -> list[dict[str, Any]]:
+    rows = []
+    for object_type, object_id in provider_ids.items():
+        normalized = _provider_id_value(object_id)
+        if not normalized:
+            continue
+        rows.append(
+            {
+                **_provider_lookup_key("stripe", object_type, normalized),
+                "entity_type": BILLING_PROVIDER_LOOKUP_ENTITY,
+                "provider": "stripe",
+                "object_type": object_type,
+                "object_id": normalized,
+                "parent_id": parent_id,
+                "provider_mode": provider_mode,
+                "provider_livemode": livemode,
+                "created_at": created_at,
+            }
+        )
+    for row in rows:
+        get_table().put_item(Item=row)
+    return rows
+
+
+def _provider_lookup_rows_for_event(
+    *,
+    parent_id: str,
+    provider_mode: str,
+    livemode: bool,
+    event_object: dict[str, Any],
+    created_at: str,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            **_provider_lookup_key("stripe", object_type, object_id),
+            "entity_type": BILLING_PROVIDER_LOOKUP_ENTITY,
+            "provider": "stripe",
+            "object_type": object_type,
+            "object_id": object_id,
+            "parent_id": parent_id,
+            "provider_mode": provider_mode,
+            "provider_livemode": livemode,
+            "created_at": created_at,
+        }
+        for object_type, object_id in _provider_object_ids(event_object).items()
+    ]
+
+
 def _provider_event_seen(event_id: str) -> bool:
     return bool(get_table().get_item(Key=_provider_event_key(event_id)).get("Item"))
 
@@ -872,8 +1188,19 @@ def _parse_provider_event(
     settings: Settings,
 ) -> dict[str, Any]:
     if settings.stripe_webhook_secret:
+        if _stripe_sdk_available():
+            stripe = _load_stripe_sdk()
+            try:
+                event = stripe.Webhook.construct_event(
+                    payload,
+                    signature_header,
+                    settings.stripe_webhook_secret,
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail="Stripe signature verification failed") from exc
+            return _stripe_object_to_dict(event)
         _verify_stripe_signature(payload, signature_header, settings.stripe_webhook_secret)
-    elif settings.is_production:
+    elif settings.is_production or not settings.stripe_allow_unsigned_test_webhooks:
         raise HTTPException(status_code=400, detail="Stripe webhook signing secret is required")
     try:
         event = json.loads(payload.decode("utf-8"))
@@ -921,23 +1248,66 @@ def _parent_id_from_provider_object(event_object: dict[str, Any]) -> str | None:
 
 
 def _find_parent_id_for_provider_object(event_object: dict[str, Any]) -> str | None:
-    customer_id = event_object.get("customer")
-    subscription_id = event_object.get("subscription") or event_object.get("id")
-    session_id = event_object.get("id") if str(event_object.get("object") or "") == "checkout.session" else None
-    response = get_table().scan(
-        FilterExpression="entity_type = :entity",
-        ExpressionAttributeValues={":entity": BILLING_ENTITY},
-    )
-    for item in response.get("Items", []):
-        if item.get("SK") != "SUMMARY":
-            continue
-        if customer_id and item.get("provider_customer_id") == customer_id:
-            return str(item.get("parent_id"))
-        if subscription_id and item.get("provider_subscription_id") == subscription_id:
-            return str(item.get("parent_id"))
-        if session_id and item.get("checkout_session_id") == session_id:
-            return str(item.get("parent_id"))
+    ids = _provider_object_ids(event_object)
+    for object_type, object_id in ids.items():
+        lookup = get_table().get_item(Key=_provider_lookup_key("stripe", object_type, object_id)).get("Item")
+        if lookup and lookup.get("parent_id"):
+            return str(lookup["parent_id"])
+    customer_id = ids.get("customer")
+    subscription_id = ids.get("subscription")
+    session_id = ids.get("checkout_session")
+    scan_kwargs: dict[str, Any] = {
+        "FilterExpression": "entity_type = :entity",
+        "ExpressionAttributeValues": {":entity": BILLING_ENTITY},
+    }
+    while True:
+        response = get_table().scan(**scan_kwargs)
+        for item in response.get("Items", []):
+            if item.get("SK") != "SUMMARY":
+                continue
+            if customer_id and item.get("provider_customer_id") == customer_id:
+                return str(item.get("parent_id"))
+            if subscription_id and item.get("provider_subscription_id") == subscription_id:
+                return str(item.get("parent_id"))
+            if session_id and item.get("checkout_session_id") == session_id:
+                return str(item.get("parent_id"))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
     return None
+
+
+def _provider_object_ids(event_object: dict[str, Any]) -> dict[str, str]:
+    object_type = str(event_object.get("object") or "")
+    ids: dict[str, str] = {
+        "customer": _provider_id_value(event_object.get("customer")),
+        "subscription": _provider_id_value(event_object.get("subscription")),
+        "invoice": _provider_id_value(event_object.get("invoice")),
+        "payment_intent": _provider_id_value(event_object.get("payment_intent")),
+        "charge": _provider_id_value(event_object.get("charge") or event_object.get("latest_charge")),
+        "refund": _provider_id_value(event_object.get("refund")),
+    }
+    if object_type == "checkout.session":
+        ids["checkout_session"] = _provider_id_value(event_object.get("id"))
+    if object_type == "subscription":
+        ids["subscription"] = _provider_id_value(event_object.get("id"))
+    if object_type == "invoice":
+        ids["invoice"] = _provider_id_value(event_object.get("id"))
+    if object_type == "payment_intent":
+        ids["payment_intent"] = _provider_id_value(event_object.get("id"))
+    if object_type == "charge":
+        ids["charge"] = _provider_id_value(event_object.get("id"))
+    if object_type == "refund":
+        ids["refund"] = _provider_id_value(event_object.get("id"))
+    return {key: value for key, value in ids.items() if value}
+
+
+def _provider_id_value(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("id")
+    cleaned = str(value or "").strip()
+    return cleaned
 
 
 def _billing_transition(
@@ -948,10 +1318,16 @@ def _billing_transition(
     metadata = event_object.get("metadata") if isinstance(event_object.get("metadata"), dict) else {}
     requested_tier = _normalize_tier(metadata.get("requested_tier") or existing.get("requested_tier"))
     status = existing.get("billing_status") or "none"
+    subscription_tier = None
     if event_type == "checkout.session.completed":
-        status = "active"
+        status = "checkout_pending"
     elif event_type == "checkout.session.expired":
-        status = "canceled"
+        previous_status = existing.get("previous_billing_status")
+        if previous_status and previous_status != "checkout_pending":
+            status = previous_status
+            subscription_tier = existing.get("previous_subscription_tier")
+        elif existing.get("billing_status") == "checkout_pending":
+            status = "canceled"
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
         status = _status_from_provider_subscription(event_object.get("status"))
     elif event_type == "customer.subscription.deleted":
@@ -964,6 +1340,7 @@ def _billing_transition(
         status = existing.get("billing_status") or "provider_unknown"
     return {
         "billing_status": status,
+        "subscription_tier": subscription_tier,
         "requested_tier": requested_tier,
         "provider_customer_id": event_object.get("customer") or existing.get("provider_customer_id"),
         "provider_subscription_id": event_object.get("subscription")
@@ -978,7 +1355,21 @@ def _billing_transition(
         "current_period_end": _timestamp_to_iso(event_object.get("current_period_end"))
         or existing.get("current_period_end"),
         "cancel_at_period_end": bool(event_object.get("cancel_at_period_end") or False),
+        "payment_method_type": _selected_payment_method_type_from_provider_object(event_object)
+        or existing.get("payment_method_type"),
     }
+
+
+def _selected_payment_method_type_from_provider_object(event_object: dict[str, Any]) -> str | None:
+    payment_method = event_object.get("payment_method")
+    if isinstance(payment_method, dict):
+        payment_method_type = payment_method.get("type")
+        return str(payment_method_type) if payment_method_type else None
+    payment_method_details = event_object.get("payment_method_details")
+    if isinstance(payment_method_details, dict):
+        payment_method_type = payment_method_details.get("type")
+        return str(payment_method_type) if payment_method_type else None
+    return None
 
 
 def _status_from_provider_subscription(status: Any) -> str:
@@ -1028,9 +1419,9 @@ def _apply_billing_transition(
     current_status = existing.get("billing_status")
     manual_override_active = current_status == "manual_override"
     status = current_status if manual_override_active else transition["billing_status"]
-    tier = existing.get("subscription_tier") or SubscriptionTier.FREE.value
+    tier = transition.get("subscription_tier") or existing.get("subscription_tier") or SubscriptionTier.FREE.value
     if not manual_override_active and status == "active":
-        tier = transition["requested_tier"]
+        tier = transition.get("subscription_tier") or transition["requested_tier"]
     elif not manual_override_active and status == "canceled":
         tier = SubscriptionTier.FREE.value
 
@@ -1043,6 +1434,14 @@ def _apply_billing_transition(
         "billing_provider": "stripe",
         "billing_mode": existing.get("billing_mode") or "test",
         "billing_status": status,
+        "provider_livemode": bool(existing.get("provider_livemode") or event_object.get("livemode") or False),
+        "readiness_state": existing.get("readiness_state"),
+        "readiness_blockers": existing.get("readiness_blockers") or [],
+        "twint_in_scope": bool(existing.get("twint_in_scope") or True),
+        "twint_status": existing.get("twint_status"),
+        "payment_method_type": transition.get("payment_method_type"),
+        "previous_billing_status": existing.get("previous_billing_status"),
+        "previous_subscription_tier": existing.get("previous_subscription_tier"),
         "provider_customer_id": transition.get("provider_customer_id"),
         "provider_subscription_id": transition.get("provider_subscription_id"),
         "provider_price_id": transition.get("provider_price_id"),
@@ -1073,8 +1472,13 @@ def _apply_billing_transition(
         "event_at": now,
         "provider": "stripe",
         "provider_mode": updated["billing_mode"],
+        "provider_livemode": updated["provider_livemode"],
         "billing_status": status,
+        "processing_result": "deduplicated" if event_id == existing.get("last_provider_event_id") else "processed",
+        "idempotency_status": "new",
         "requested_tier": transition["requested_tier"],
+        "payment_method_type": transition.get("payment_method_type"),
+        "twint_status": updated.get("twint_status"),
     }
     dedupe = {
         **_provider_event_key(event_id),
@@ -1090,6 +1494,14 @@ def _apply_billing_transition(
         {"Put": {"Item": updated}},
         {"Put": {"Item": event, "ConditionExpression": "attribute_not_exists(PK)"}},
     ]
+    for lookup in _provider_lookup_rows_for_event(
+        parent_id=parent_id,
+        provider_mode=updated["billing_mode"],
+        livemode=updated["provider_livemode"],
+        event_object=event_object,
+        created_at=now,
+    ):
+        operations.append({"Put": {"Item": lookup}})
     if not manual_override_active and status in {"active", "canceled"}:
         operations.append(
             {

@@ -223,6 +223,8 @@ class ParentCheckoutSessionResponse(BaseModel):
     mode: str
     requestedTier: str
     billingStatus: str
+    readiness: dict[str, Any] = Field(default_factory=dict)
+    twint: dict[str, Any] = Field(default_factory=dict)
 
 
 class ParentBillingResponse(BaseModel):
@@ -237,6 +239,10 @@ class ParentBillingResponse(BaseModel):
     providerPriceId: str | None = None
     checkoutSessionId: str | None = None
     checkoutUrl: str | None = None
+    providerLivemode: bool | None = None
+    readiness: dict[str, Any] = Field(default_factory=dict)
+    twint: dict[str, Any] = Field(default_factory=dict)
+    paymentMethodType: str | None = None
     currentPeriodStart: str | None = None
     currentPeriodEnd: str | None = None
     cancelAtPeriodEnd: bool = False
@@ -647,7 +653,7 @@ async def get_my_subscription(
 ):
     """Return the authenticated parent's current plan and MVP plan options."""
     resolved = _resolve_parent_profile(user, settings)
-    return subscription_service.get_parent_subscription(resolved.parent_user_id)
+    return subscription_service.get_parent_subscription(resolved.parent_user_id, settings=settings)
 
 
 @router.post(
@@ -678,7 +684,7 @@ async def get_my_subscription_billing(
 ):
     """Return provider billing status for the authenticated parent."""
     resolved = _resolve_parent_profile(user, settings)
-    return subscription_service.get_parent_billing(resolved.parent_user_id)
+    return subscription_service.get_parent_billing(resolved.parent_user_id, settings=settings)
 
 
 @router.post(

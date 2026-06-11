@@ -4,6 +4,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo, user_repo
 from stoa.deps import require_role
@@ -76,6 +77,10 @@ class SubscriptionBillingResponse(BaseModel):
     providerPriceId: str | None = None
     checkoutSessionId: str | None = None
     checkoutUrl: str | None = None
+    providerLivemode: bool | None = None
+    readiness: dict[str, Any] = Field(default_factory=dict)
+    twint: dict[str, Any] = Field(default_factory=dict)
+    paymentMethodType: str | None = None
     currentPeriodStart: str | None = None
     currentPeriodEnd: str | None = None
     cancelAtPeriodEnd: bool = False
@@ -722,6 +727,7 @@ async def list_subscription_billing(
     parent_id: Optional[str] = Query(default=None),
     billing_status: Optional[str] = Query(default=None),
     billing_provider: Optional[str] = Query(default=None),
+    settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
     """List provider billing records for admin visibility."""
@@ -730,6 +736,7 @@ async def list_subscription_billing(
         parent_id=parent_id,
         billing_status=billing_status,
         billing_provider=billing_provider,
+        settings=settings,
     )
     return SubscriptionBillingListResponse(items=items, count=len(items))
 
@@ -737,10 +744,11 @@ async def list_subscription_billing(
 @router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)
 async def get_subscription_billing(
     parent_id: str,
+    settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
     """Open one parent provider billing record with recent event history."""
-    return subscription_service.get_admin_billing(parent_id)
+    return subscription_service.get_admin_billing(parent_id, settings=settings)
 
 
 @router.patch("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)

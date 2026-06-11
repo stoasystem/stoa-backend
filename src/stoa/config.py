@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     stripe_checkout_success_url: str = "http://localhost:5173/parent/subscription?checkout=success"
     stripe_checkout_cancel_url: str = "http://localhost:5173/parent/subscription?checkout=cancel"
     stripe_live_charges_enabled: bool = False
+    stripe_twint_enabled: bool = True
+    stripe_twint_capability_confirmed: bool = False
+    stripe_allow_unsigned_test_webhooks: bool = False
 
 
 @lru_cache
