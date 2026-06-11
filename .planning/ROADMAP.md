@@ -41,7 +41,7 @@
 
 **v4.4 Live Payment Provider Rollout** - Active planning.
 
-Goal: move the local Stripe-first payment provider MVP toward controlled live rollout, production checkout/webhook readiness, refund/invoice/tax/dunning operations, and focused release evidence.
+Goal: move the local Stripe-first payment provider MVP toward controlled live rollout, Stripe-backed TWINT inclusion, operator-ready billing operations, and payment release evidence with explicit rollout controls.
 
 ## Phases
 
@@ -50,10 +50,10 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [ ] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Define live credential path, provider mode, price/product mapping, TWINT status, smoke modes, and rollback switches.
-- [ ] **Phase 145: Production Checkout And Webhook Verification** - Harden checkout/webhook behavior for production readiness, idempotency evidence, admin visibility, and no-real-charge fallback.
-- [ ] **Phase 146: Refunds Invoices Tax And Dunning Readiness** - Add or define operator-ready refund, invoice/receipt, tax/accounting, and dunning state support.
-- [ ] **Phase 147: v4.4 Payment Release Gate And Support Audit** - Verify focused payment behavior, update docs, capture evidence, and recommend the next feature milestone.
+- [ ] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Define the live Stripe rollout contract, explicit TWINT inclusion, smoke boundaries, and rollback switches before enabling production payment behavior.
+- [ ] **Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating** - Add production checkout/webhook primitives, livemode gating, and Stripe-backed TWINT eligibility handling for Swiss subscription flows.
+- [ ] **Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff** - Add post-checkout billing operations and accounting-facing lifecycle support inside the same Stripe billing model, including TWINT behavior.
+- [ ] **Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit** - Capture rollout evidence, verify rollback/disable controls, update planning docs, and close the milestone with an explicit remaining-work audit.
 
 ## Phase Details
 
@@ -64,79 +64,79 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
 **Requirements**: PAYLIVE-01
 **Success Criteria** (what must be TRUE):
 
-  1. Stripe live-mode credential path, webhook endpoint, product/price mapping, environment variables, and rollback switches are documented.
-  2. TWINT production validation status and v4.4 implementation boundary are explicit.
-  3. Safe smoke modes distinguish local/test-mode checks, configuration inspection, and no-real-charge default behavior.
-  4. Existing checkout/status/webhook code paths are mapped to Phase 145 implementation targets.
+  1. Implementers and operators can point to the exact Stripe live credential path, webhook endpoint, product and price mapping, environment variables, and rollback switches needed for rollout.
+  2. TWINT is explicitly defined as an in-scope Stripe-backed payment method for v4.4, with required account or capability checks and any remaining rollout blockers recorded.
+  3. Safe smoke modes distinguish local or test verification, approved live configuration inspection, and the default no-real-charge posture.
+  4. Existing checkout, status, and webhook code paths plus remaining gap docs are mapped to Phases 145 through 147 so v4.4 is the active payment rollout build area.
 
 **Plans**: 0/1 plans complete
 
 Plans:
 
-- [ ] 144-01: Define live payment rollout and credential readiness contract.
+- [ ] 144-01: Define live payment rollout, Stripe credential, and TWINT gating contract.
 
-### Phase 145: Production Checkout And Webhook Verification
+### Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating
 
-**Goal**: Make checkout and webhook paths production-ready with operator-visible lifecycle evidence.
+**Goal**: Make checkout and webhook paths production-ready with livemode-aware Stripe primitives, explicit rollout gating, and TWINT-capable Swiss subscription handling.
 **Depends on**: Phase 144
 **Requirements**: PAYLIVE-02
 **Success Criteria** (what must be TRUE):
 
-  1. Checkout session creation exposes configured live-readiness state without accidentally charging customers.
-  2. Webhook processing records provider mode, event type, result, idempotency, and request/correlation identifiers.
-  3. Admin billing surfaces expose provider lifecycle status needed for internal rollout.
-  4. Focused tests cover live-readiness config, idempotency, failure states, and fallback behavior.
+  1. Checkout session creation clearly distinguishes local or test behavior, live-ready-but-blocked state, and explicitly enabled live rollout before any subscription flow can proceed.
+  2. Eligible Swiss and CHF subscription flows use Stripe Checkout configuration that can surface TWINT when account capability and rollout gates allow it.
+  3. Webhook processing records provider mode, event type, processing result, idempotency status, and request or correlation identifiers that operators can inspect without provider secrets.
+  4. Admin billing status surfaces and focused tests cover livemode gating, webhook idempotency, failure states, and non-live fallback behavior.
 
 **Plans**: 0/1 plans complete
 
 Plans:
 
-- [ ] 145-01: Implement production checkout and webhook verification readiness.
+- [ ] 145-01: Implement production checkout, webhook, and TWINT-capable Stripe gating primitives.
 
-### Phase 146: Refunds Invoices Tax And Dunning Readiness
+### Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff
 
-**Goal**: Add first-pass billing operations readiness for post-checkout support.
+**Goal**: Add first-pass billing operations readiness for post-checkout support, finance handoff, and TWINT lifecycle behavior inside the shared Stripe billing model.
 **Depends on**: Phase 145
 **Requirements**: PAYLIVE-03
 **Success Criteria** (what must be TRUE):
 
-  1. Refund readiness contract or implementation covers eligible states, operator inputs, provider handoff, and status fields.
-  2. Invoice/receipt readiness exposes provider-hosted invoice metadata where available.
-  3. Tax/accounting handoff identifies exportable billing metadata for Swiss accounting workflows.
-  4. Dunning readiness covers overdue/payment-failed states and parent/admin visibility.
+  1. Operators can determine refund eligibility, required inputs, provider handoff state, and audit or status fields for billed subscriptions, including TWINT-originated charges handled through Stripe.
+  2. Parents and admins can access provider-hosted invoice or receipt links plus the billing metadata needed to understand the subscription lifecycle.
+  3. Billing exports include Swiss accounting handoff fields for invoices, refunds, taxes, reconciliation identifiers, and payment-method context from the same Stripe model.
+  4. Past-due, payment-failed, retry, recovery, and escalation boundaries are visible to parents and admins, including TWINT lifecycle behavior where Stripe projects the same subscription into dunning or refund states.
 
 **Plans**: 0/1 plans complete
 
 Plans:
 
-- [ ] 146-01: Implement refund invoice tax and dunning readiness.
+- [ ] 146-01: Implement billing operations, Swiss handoff, and TWINT lifecycle readiness.
 
-### Phase 147: v4.4 Payment Release Gate And Support Audit
+### Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit
 
-**Goal**: Close v4.4 with payment-focused verification and updated remaining-feature planning.
+**Goal**: Close v4.4 with payment-focused verification, explicit rollout and rollback controls, and an updated remaining-feature audit.
 **Depends on**: Phase 146
 **Requirements**: VERIFY-27
 **Success Criteria** (what must be TRUE):
 
-  1. Focused backend tests and relevant checks pass or isolate documented pre-existing failures.
-  2. Payment requirements, roadmap, state, feature gap audit, and remaining-feature queue reflect completed v4.4 work.
-  3. Provider configuration, webhook, checkout, refund/invoice/dunning readiness evidence is captured.
-  4. Next milestone recommendation is updated from the remaining feature queue.
+  1. Focused backend tests and relevant static checks pass, or any pre-existing failures are isolated and documented in the release evidence.
+  2. Release evidence captures provider configuration state, checkout and webhook verification, billing operations outcomes, and explicit live-charge deferral or approval status.
+  3. Operators have verified rollback, disable, and controlled rollout entry points for live charging before the milestone can be considered closed.
+  4. Requirements, roadmap, state, feature-gap docs, and the remaining-feature queue reflect the shipped v4.4 scope and any unresolved payment or TWINT blockers.
 
 **Plans**: 0/1 plans complete
 
 Plans:
 
-- [ ] 147-01: Verify v4.4 and update release documentation.
+- [ ] 147-01: Verify v4.4, rollout controls, and payment release evidence.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 0/1 | Planned | - |
-| 145 Production Checkout And Webhook Verification | v4.4 | 0/1 | Planned | - |
-| 146 Refunds Invoices Tax And Dunning Readiness | v4.4 | 0/1 | Planned | - |
-| 147 v4.4 Payment Release Gate And Support Audit | v4.4 | 0/1 | Planned | - |
+| 145 Production Checkout, Webhook, And TWINT-Capable Stripe Gating | v4.4 | 0/1 | Planned | - |
+| 146 Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff | v4.4 | 0/1 | Planned | - |
+| 147 v4.4 Payment Release Gate, Rollout Controls, And Support Audit | v4.4 | 0/1 | Planned | - |
 
 ## Traceability
 
@@ -148,4 +148,4 @@ Plans:
 | VERIFY-27 | Phase 147 | Planned |
 
 ---
-*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*
+*Last updated: 2026-06-11 after refreshing v4.4 roadmap scope and TWINT inclusion*

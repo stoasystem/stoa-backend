@@ -6,7 +6,7 @@
 
 ## Goal
 
-Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations. v4.4 should close the highest-value payment gaps from `stoa_docs`: live provider credential readiness, production checkout/webhook verification, refunds/invoices/tax handoff, dunning readiness, and clear release evidence.
+Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations. v4.4 should close the highest-value payment gaps from `stoa_docs`: live provider credential readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, refunds/invoices/tax handoff, dunning readiness, and clear release evidence.
 
 Because STOA is still in internal development, this milestone prioritizes feature construction and practical payment-ops readiness over broad security/compliance expansion. Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
@@ -19,7 +19,7 @@ Implementers have a concrete rollout contract before live payment behavior is en
 Acceptance criteria:
 
 - Contract identifies Stripe live-mode credential path, webhook endpoint expectations, price/product mapping, environment variables, and rollback switches.
-- Contract records TWINT production validation status and whether TWINT is in scope for v4.4 implementation or remains provider-readiness only.
+- Contract records how TWINT is included through Stripe for v4.4, what account or capability checks are required, and which rollout gates still block real customer use.
 - Contract defines safe smoke modes: local/test-mode verification, approved live-mode configuration inspection, and explicit no-real-charge default.
 - Contract maps existing checkout/status/webhook code paths to the required production rollout changes.
 - `stoa_docs` gap audit and remaining feature queue mark live payment rollout as the active v4.4 build area.
@@ -30,7 +30,7 @@ Backend payment APIs and operator checks are ready for production checkout/webho
 
 Acceptance criteria:
 
-- Checkout session creation can distinguish configured live-mode readiness from test-mode/local behavior.
+- Checkout session creation can distinguish configured live-mode readiness from test-mode/local behavior and expose whether TWINT-capable Stripe Checkout is eligible for Swiss/CHF subscription flows.
 - Webhook verification records provider mode, event type, processing result, idempotency status, and relevant request/correlation identifiers.
 - Admin billing visibility exposes enough provider status for internal operators to verify checkout and webhook lifecycle without inspecting provider secrets.
 - Tests cover live-readiness configuration behavior, webhook idempotency, failure states, and non-live fallback behavior.
@@ -46,6 +46,7 @@ Acceptance criteria:
 - Invoice/receipt readiness contract identifies provider-hosted invoice links or metadata fields that can be surfaced to parents/admins.
 - Tax/accounting handoff defines exportable billing metadata needed for Swiss accounting workflows.
 - Dunning readiness defines overdue/payment-failed states, parent/admin visibility, and retry/escalation boundaries.
+- Billing projections and operator flows handle Stripe-backed TWINT subscription and refund lifecycle data through the same invoice, refund, and dunning surfaces.
 - Tests or documented fixtures cover state transitions and operator-visible outputs for the implemented readiness scope.
 
 ### VERIFY-27 v4.4 Payment Release Gate And Support Audit
@@ -57,7 +58,7 @@ Acceptance criteria:
 - Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
 - Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v4.4 payment work.
 - Release evidence includes available backend/frontend build evidence, provider configuration checks, webhook verification evidence, and explicit live-charge deferral or approval status.
-- Final audit lists remaining payment work: broader provider automation, accounting integration, expanded refund/dunning automation, and live TWINT rollout if not completed.
+- Final audit lists remaining payment work: broader provider automation, accounting integration, expanded refund/dunning automation, and any TWINT rollout gaps still blocked by provider capability or approval state.
 - The next milestone recommendation is updated from the remaining feature queue.
 
 ## Future Requirements

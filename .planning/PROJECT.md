@@ -60,7 +60,7 @@ The completed-local v4.2 milestone promotes the local realtime notification foun
 
 The completed-local v4.3 milestone moved the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, delivering selected responsive core-flow polish and visible English/German locale preference UI.
 
-The active v4.4 milestone moves the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, and first-pass billing operations support.
+The active v4.4 milestone moves the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, and first-pass billing operations support.
 
 ## Core Value
 
@@ -193,7 +193,7 @@ Completed phases:
 
 ### v4.4 Live Payment Provider Rollout
 
-Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
+Goal: move the local Stripe-first payment provider MVP toward controlled production charging, Stripe-backed TWINT inclusion, and operator readiness.
 
 Candidate phases:
 
@@ -202,7 +202,7 @@ Candidate phases:
 - Phase 146: Refunds Invoices Tax And Dunning Readiness.
 - Phase 147: v4.4 Payment Release Gate And Support Audit.
 
-This is now the active milestone because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, refunds, invoices, tax/accounting, and dunning remain unclosed.
+This is now the active milestone because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning remain unclosed.
 
 ## Requirements
 
@@ -465,7 +465,7 @@ Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREME
 - Historical billing note: billing or paid subscription enforcement was not part of the original report automation MVP; v3.9 completed a local functional provider-backed subscription billing MVP.
 - PDF generation - HTML/JSON report artifacts are enough for this milestone.
 - Multi-language report generation beyond the primary parent-facing language chosen for MVP.
-- Live payment rollout note: production charging, real Stripe credentials, production TWINT validation, refunds, invoices, tax/accounting automation, and dunning remain future rollout scope after v3.9.
+- Live payment rollout note: broad ERP/accounting automation, custom invoice rendering, and any non-Stripe TWINT or multi-provider orchestration remain outside the v4.4 rollout scope.
 - Organization/school portal work - separate product surface.
 - Real-time report generation on every parent page load - scheduled generation is the intended model.
 - Freeform WYSIWYG report editor - v2.2 remains bounded artifact operations with sanitized preview/rollback controls.
@@ -600,7 +600,7 @@ Known current resources:
 | Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Complete locally - backend release gate passed |
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
 | Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
-| Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, refunds, invoices, tax/accounting, dunning, and TWINT validation | Active - milestone initialized |
+| Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Active - milestone initialized |
 
 ## Evolution
 
@@ -620,4 +620,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*
+*Last updated: 2026-06-11 after v4.4 research clarified Stripe-backed TWINT scope*
