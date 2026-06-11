@@ -54,6 +54,8 @@ The completed-local v3.9 milestone implements the first payment-provider integra
 
 The completed-local v4.0 milestone builds adaptive learning memory and reviewed assignment workflows from learning profile seeds, curriculum progress, AI exercise drafts, question history, and parent/tutor progress signals.
 
+The active v4.1 milestone prepares mobile-friendly and multilingual product polish foundations by defining responsive/mobile readiness contracts, localization backend support, language-safe response boundaries, and local release evidence before broader frontend/native rollout.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -62,6 +64,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.0 Adaptive Learning Memory And Assignment on 2026-06-10 (local backend release gate)
+**Active milestone:** v4.1 Mobile And Multilingual Polish Foundation
 
 Delivered:
 
@@ -150,6 +153,7 @@ Delivered:
 - v3.8 completed full curriculum hierarchy, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin curriculum signals for math, physics, German, and English.
 - v3.9 completed local functional payment-provider integration with subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
 - v4.0 added durable learning memory snapshots, next-practice recommendations, reviewed assignment workflows, student/tutor assignment route contracts, and parent progress signals.
+- v4.1 is planned to add mobile/responsive readiness contracts, multilingual/localization backend foundations, language-safe response boundaries, and local release evidence for polish readiness.
 
 ## Last Production-Verified Milestone
 
@@ -179,7 +183,15 @@ Completed phases:
 
 ## Current Milestone
 
-No active milestone. v4.0 is complete locally; next milestone selection is pending.
+### v4.1 Mobile And Multilingual Polish Foundation
+
+Goal: prepare STOA for mobile-friendly and multilingual product polish by defining the contracts, backend support, and release evidence needed before broader UI rollout.
+
+Target features:
+
+- Mobile/responsive readiness contract and gap audit for student, parent, tutor, and admin flows.
+- Backend/frontend-facing localization foundation: locale preferences, language-safe response contracts, and translated content boundaries.
+- Focused polish release gate documenting what is complete locally and what remains for frontend/native rollout.
 
 ## Requirements
 
@@ -212,7 +224,9 @@ Shipped requirements:
 
 ### Active
 
-No active requirements.
+- Mobile/responsive readiness foundation for core student, parent, tutor, and admin flows - v4.1.
+- Multilingual/localization backend foundation with locale preferences and language-safe response contracts - v4.1.
+- v4.1 polish release gate and residual frontend/native rollout audit - v4.1.
 
 ### Completed
 
@@ -543,6 +557,7 @@ Known current resources:
 | Start v3.8 with full curriculum rollout | `stoa_docs` Phase 2 calls for broad multi-subject curriculum expansion; v3.4 subject/topic foundations and existing practice lesson/challenge data can now be promoted into full curriculum catalog and exercise bank scope | Good - local release gate complete |
 | Start v3.9 with payment provider integration MVP | `stoa_docs` Phase 2 calls for Stripe subscription payment and credit card/TWINT support; v3.3 manual subscription operations provide the local entitlement model and admin override surface needed for provider-backed billing | Good - local release gate complete |
 | Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Complete locally - backend release gate passed |
+| Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Active - milestone initialized |
 
 ## Evolution
 
@@ -562,4 +577,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-10 after completing milestone v4.0 local backend release gate*
+*Last updated: 2026-06-11 after starting milestone v4.1*

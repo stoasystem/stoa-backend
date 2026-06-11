@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Adaptive Learning Memory And Assignment
-status: complete
-last_updated: "2026-06-10T01:05:00+02:00"
-last_activity: 2026-06-10
+milestone: v4.1
+milestone_name: Mobile And Multilingual Polish Foundation
+status: planning
+last_updated: "2026-06-11T10:06:44.803Z"
+last_activity: 2026-06-11
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-10)
+See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.0 adaptive learning memory and reviewed assignments complete locally.
+**Current focus:** v4.1 mobile and multilingual polish foundation.
 
 ## Current Position
 
-Phase: 131 v4.0 Functional Release Gate And Personalization Audit
-Plan: 131-01
-Status: Complete locally.
-Last activity: 2026-06-10 - completed adaptive memory, reviewed assignment APIs, backend route contracts, focused tests, adjacent regression tests, and local release gate evidence.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-11 — Milestone v4.1 started
 
 ## Accumulated Context
 
@@ -39,11 +39,13 @@ Last activity: 2026-06-10 - completed adaptive memory, reviewed assignment APIs,
 - v3.9 completed the local payment provider integration MVP.
 - `stoa_docs` Phase 2 still calls for personalized learning memory and mobile/responsive polish; adaptive memory is the strongest next feature because it compounds curriculum, AI drafts, and parent/tutor visibility.
 - v4.0 delivered local backend product construction: durable memory snapshots, next-practice recommendations, reviewed assignment APIs, and student/tutor/parent route contracts.
+- v4.1 should prepare mobile-friendly and multilingual polish through contracts, locale support, language-safe response boundaries, and release evidence before broader frontend/native rollout.
 
 ### Pending Todos
 
 - Production deploy/live smoke remains pending if v4.0 is promoted beyond local backend completion.
 - Frontend component implementation remains outside this backend repository.
+- Define v4.1 requirements and roadmap before phase planning.
 
 ### Blockers/Concerns
 
@@ -51,7 +53,8 @@ Last activity: 2026-06-10 - completed adaptive memory, reviewed assignment APIs,
 - Assignment workflows should keep teacher/admin review for generated exercises.
 - Memory freshness and stale evidence must be visible so users do not overtrust old data.
 - No production deployment or live smoke was performed during this autonomous local run.
+- This workspace is backend-only; actual frontend/native UI implementation may require another workspace.
 
 ## Operator Next Steps
 
-- Review v4.0 local release gate evidence, then decide whether to deploy/smoke or start the next milestone.
+- Decide whether to run research for v4.1 before defining requirements.
