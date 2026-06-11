@@ -6,7 +6,7 @@
 
 ## Validation Goal
 
-Close v4.5 with backend release-gate evidence for support handoff delivery, refusal paths, queue/status visibility, metadata-only privacy, and remaining-work updates, without over-claiming live provider or frontend verification.
+Close v4.5 with backend release-gate evidence for support handoff delivery, refusal paths, queue/status visibility, metadata-only privacy, imported frontend support handoff evidence, and remaining-work updates, without over-claiming live provider writes or fresh frontend execution from this backend workspace.
 
 ## Required Checks
 
@@ -16,9 +16,10 @@ Close v4.5 with backend release-gate evidence for support handoff delivery, refu
 | Full admin report ops gate | Regression coverage for touched admin/support surface | Full admin report ops suite passes | `./.venv/bin/pytest -q tests/test_admin_report_ops.py` |
 | Static touched-file gate | Code hygiene for release surface | Ruff passes on support handoff service, destination service, admin router, report repo, and admin tests | `./.venv/bin/ruff check ...` |
 | Provider failure lifecycle evidence | Provider failures fail closed | `failed` lifecycle transition records `failure_reasons`, is visible, and is not treated as queued/sent success | `test_support_handoff_delivery_lifecycle_failed_transition_records_failure_reason` |
-| Release gate artifact | Release evidence | `151-RELEASE-GATE.md` captures command results, privacy/fail-closed matrix, release posture, frontend limitation, and remaining work | artifact review |
+| Frontend support handoff evidence import | UI/browser support handoff path and privacy boundary | `151-RELEASE-GATE.md` cites Phase 68 UI verification, Phase 69 local frontend quality gates, and Phase 70 production browser smoke proving support handoff marker visibility, preview/copy/download/refusal controls, no external write, and no private artifact markers | `.planning/milestones/v2.4-phases/68-admin-support-handoff-ui/68-VERIFICATION.md`; `.planning/milestones/v2.4-phases/69-v2.4-release-gate-and-live-verification/69-RELEASE-GATE.md`; `.planning/milestones/v2.5-phases/70-production-support-handoff-verification-closeout/70-LIVE-VERIFICATION.md` |
+| Release gate artifact | Release evidence | `151-RELEASE-GATE.md` captures command results, privacy/fail-closed matrix, release posture, imported frontend evidence, and remaining work | artifact review |
 | Docs closeout | Requirement traceability | Requirements, roadmap, state, project notes, feature-gap audit, and remaining-feature queue reflect v4.5 completion and future work | artifact/doc diff review |
 
 ## Acceptance Threshold
 
-Phase 151 cannot complete unless the focused support handoff tests, full admin report ops tests, Ruff gate, and release-gate artifact all pass. Frontend verification must be stated accurately as external/not run in this backend workspace unless fresh frontend evidence is supplied.
+Phase 151 cannot complete unless the focused support handoff tests, full admin report ops tests, Ruff gate, provider-failure lifecycle test, imported frontend evidence check, and release-gate artifact all pass. Frontend verification must be stated accurately as imported prior evidence unless fresh frontend/browser evidence is supplied.
