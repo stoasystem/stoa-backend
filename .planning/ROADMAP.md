@@ -51,8 +51,8 @@ Goal: connect existing support-safe evidence packages to approved operational de
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [x] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior. (completed 2026-06-11)
-- [ ] **Phase 149: Support Evidence Export Destination Integration** - Implement a credential-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback.
+- [x] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior. (completed 2026-06-12)
+- [x] **Phase 149: Support Evidence Export Destination Integration** - Implement a credential-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback. (completed 2026-06-12)
 - [ ] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal evidence, and admin-only queue views.
 - [ ] **Phase 151: v4.5 Support Integration Release Gate** - Verify support integration behavior, refusal paths, redacted evidence, status visibility, and remaining-feature updates.
 
@@ -88,11 +88,11 @@ Plans:
   3. Delivery records capture lifecycle status, correlation IDs, idempotency key, provider object references, retry count, and redacted refusal/failure reasons.
   4. Provider failures, missing credentials, unapproved destinations, and privacy failures are recorded as failed/refused while manual fallback remains available.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 149-01: Implement support handoff destination delivery and fallback.
+- [x] 149-01: Implement support handoff destination delivery and fallback.
 
 ### Phase 150: Operator Queue And Handoff Status Visibility
 
@@ -134,8 +134,8 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 148 Support Destination Contract And Credential Readiness | v4.5 | 1/1 | Complete   | 2026-06-11 |
-| 149 Support Evidence Export Destination Integration | v4.5 | 0/1 | Planned | — |
+| 148 Support Destination Contract And Credential Readiness | v4.5 | 1/1 | Complete   | 2026-06-12 |
+| 149 Support Evidence Export Destination Integration | v4.5 | 1/1 | Complete   | 2026-06-12 |
 | 150 Operator Queue And Handoff Status Visibility | v4.5 | 0/1 | Planned | — |
 | 151 v4.5 Support Integration Release Gate | v4.5 | 0/1 | Planned | — |
 
@@ -143,8 +143,8 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUPPORTINT-01 | Phase 148 | Planned |
-| SUPPORTINT-02 | Phase 149 | Planned |
+| SUPPORTINT-01 | Phase 148 | Complete |
+| SUPPORTINT-02 | Phase 149 | Complete |
 | SUPPORTINT-03 | Phase 150 | Planned |
 | VERIFY-28 | Phase 151 | Planned |
 

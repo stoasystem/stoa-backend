@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.5
 milestone_name: Support Evidence Integrations And Operations Handoff
 status: planning
-last_updated: "2026-06-12T00:52:00+02:00"
-last_activity: 2026-06-12 - Phase 148 support destination contract completed
+last_updated: "2026-06-12T01:27:00+02:00"
+last_activity: 2026-06-12 - Phase 149 support evidence export destination integration completed
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 25
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 149 - Support Evidence Export Destination Integration
+Phase: 150 - Operator Queue And Handoff Status Visibility
 Plan: —
-Status: Ready for Phase 149 planning
-Last activity: 2026-06-12 - Phase 148 completed support destination contract
+Status: Ready for Phase 150 planning
+Last activity: 2026-06-12 - Phase 149 completed support evidence export destination integration
 
 ## Accumulated Context
 
@@ -48,10 +48,11 @@ Last activity: 2026-06-12 - Phase 148 completed support destination contract
 - v4.5 research confirmed existing support handoff packages already preserve metadata-only manual preview/copy/download behavior and refuse unapproved external writes.
 - Phase 148 owns the support destination contract, credential/config readiness, payload rules, attachment policy, and refusal behavior before delivery implementation.
 - Phase 148 completed the support destination contract and selected `internal_queue` as the first approved Phase 149 destination path with `none_required` third-party credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
+- Phase 149 completed the fail-closed `internal_queue` delivery path, admin-only sibling delivery endpoint, provider-neutral delivery lifecycle records, idempotency independent of package UUIDs, and refused-record handling for contract-defined unapproved destinations.
 
 ### Pending Todos
 
-- Plan Phase 149: support evidence export destination integration.
+- Plan Phase 150: operator queue and handoff status visibility.
 
 ### Blockers/Concerns
 
@@ -60,8 +61,8 @@ Last activity: 2026-06-12 - Phase 148 completed support destination contract
 - Refund execution remains intentionally non-mutating; operators receive provider handoff metadata rather than direct refund mutation.
 - Swiss tax/accounting fields are provider-managed when provider data is unavailable locally.
 - Broad security/compliance testing should stay proportionate to touched payment paths during this internal development stage.
-- Support destination delivery must remain fail-closed until an approved destination mode, credential path, payload mapping, idempotency, and audit/status lifecycle are defined.
+- Support destination delivery remains fail-closed unless `SUPPORT_INTERNAL_QUEUE_APPROVED=true`; third-party destinations remain refused until separate secret-backed provider phases approve them.
 
 ## Operator Next Steps
 
-- Plan Phase 149.
+- Plan Phase 150.
