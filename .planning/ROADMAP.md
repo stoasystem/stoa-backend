@@ -50,7 +50,7 @@ Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mo
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
 - [x] **Phase 140: Frontend Workspace Contract And Mobile UAT Plan** - Confirm frontend workspace structure, route/API patterns, mobile flow targets, localization approach, and browser verification commands. (completed 2026-06-11)
-- [ ] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows.
+- [x] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows. (completed 2026-06-11)
 - [ ] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs.
 - [ ] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope.
 
@@ -86,11 +86,11 @@ Plans:
   3. Tutor queue/detail and AI teacher tools remain usable on mobile-width screens.
   4. Targeted browser evidence captures representative mobile behavior.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 141-01: Implement responsive core flow polish.
+- [x] 141-01: Implement responsive core flow polish.
 
 ### Phase 142: Visual Localization And Language Preference UI
 
@@ -133,7 +133,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 140 Frontend Workspace Contract And Mobile UAT Plan | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 0/1 | Planned | - |
+| 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 1/1 | Complete   | 2026-06-11 |
 | 142 Visual Localization And Language Preference UI | v4.3 | 0/1 | Planned | - |
 | 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 0/1 | Planned | - |
 
@@ -142,9 +142,9 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MOBILEUI-01 | Phase 140 | Complete |
-| MOBILEUI-02 | Phase 141 | Planned |
+| MOBILEUI-02 | Phase 141 | Complete |
 | I18NUI-01 | Phase 142 | Planned |
 | VERIFY-26 | Phase 143 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 140 frontend mobile/localization contract*
+*Last updated: 2026-06-11 after completing Phase 141 responsive frontend polish*

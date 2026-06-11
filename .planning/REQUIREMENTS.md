@@ -82,6 +82,6 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MOBILEUI-01 | Phase 140 | Complete |
-| MOBILEUI-02 | Phase 141 | Planned |
+| MOBILEUI-02 | Phase 141 | Complete |
 | I18NUI-01 | Phase 142 | Planned |
 | VERIFY-26 | Phase 143 | Planned |
