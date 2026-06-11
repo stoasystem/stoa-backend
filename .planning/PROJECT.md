@@ -204,6 +204,22 @@ Candidate phases:
 
 This is now the active milestone because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning remain unclosed.
 
+## Following Milestones
+
+### v4.5 Support Evidence Integrations And Operations Handoff
+
+Roadmap: `.planning/milestones/v4.5-ROADMAP.md`
+Requirements: `.planning/milestones/v4.5-REQUIREMENTS.md`
+
+Goal: connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status.
+
+### v4.6 Rich Curriculum Authoring And Analytics Foundation
+
+Roadmap: `.planning/milestones/v4.6-ROADMAP.md`
+Requirements: `.planning/milestones/v4.6-REQUIREMENTS.md`
+
+Goal: add internal curriculum authoring, QA lifecycle, and actionable learning/content analytics on top of the existing curriculum and adaptive-learning foundations.
+
 ## Requirements
 
 ### Validated
@@ -601,6 +617,8 @@ Known current resources:
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
 | Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
 | Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Active - milestone initialized |
+| Plan v4.5 support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Planned after v4.4 |
+| Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Planned after v4.5 |
 
 ## Evolution
 
@@ -620,4 +638,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after v4.4 research clarified Stripe-backed TWINT scope*
+*Last updated: 2026-06-11 after planning v4.5 support integration and v4.6 curriculum operations milestones*

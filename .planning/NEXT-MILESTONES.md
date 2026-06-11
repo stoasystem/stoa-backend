@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after selecting v4.4
+**Updated:** 2026-06-11 after planning v4.5 and v4.6
 **Mode:** product functionality first
 
 ## v4.4 Live Payment Provider Rollout
@@ -24,6 +24,10 @@ Scope:
 
 ## v4.5 Support Evidence Integrations And Operations Handoff
 
+**Status:** Planned after v4.4
+**Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
+
 Goal: connect the existing support-safe evidence packages to approved operational destinations and close the remaining manual handoff gap.
 
 Candidate phases:
@@ -40,6 +44,10 @@ Scope:
 - Keep broad CRM automation and customer messaging campaigns out of scope until support handoff basics are verified.
 
 ## v4.6 Rich Curriculum Authoring And Analytics Foundation
+
+**Status:** Planned after v4.5
+**Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
 
 Goal: turn the curriculum catalog and exercise-bank foundation into a more operable authoring, QA, and insight workflow.
 

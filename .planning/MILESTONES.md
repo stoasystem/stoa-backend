@@ -903,5 +903,53 @@ Feature priorities:
 - Add first-pass refund, invoice/receipt, tax/accounting, and dunning readiness.
 - Capture focused payment release evidence and update the remaining feature queue.
 
+### v4.5 Support Evidence Integrations And Operations Handoff
+
+**Status:** Planned after v4.4
+**Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
+**Goal:** Connect support-safe evidence packages to approved operational destinations and expose operator-visible handoff status.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 148: Support Destination Contract And Credential Readiness.
+- Phase 149: Support Evidence Export Destination Integration.
+- Phase 150: Operator Queue And Handoff Status Visibility.
+- Phase 151: v4.5 Support Integration Release Gate.
+
+Feature priorities:
+
+- Define approved support destinations, credential readiness, payload boundaries, and refusal behavior.
+- Implement metadata-only evidence package delivery to one approved destination.
+- Add operator handoff queue/status visibility.
+- Verify refusal paths and update remaining feature planning.
+
+### v4.6 Rich Curriculum Authoring And Analytics Foundation
+
+**Status:** Planned after v4.5
+**Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
+**Goal:** Build internal curriculum authoring, QA, publication lifecycle, and content-quality analytics on top of the existing curriculum and adaptive-learning foundations.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 152: Curriculum Authoring Contract And QA Workflow.
+- Phase 153: Admin Lesson And Exercise Authoring MVP.
+- Phase 154: Learning Analytics And Content Quality Signals.
+- Phase 155: v4.6 Curriculum Operations Release Gate.
+
+Feature priorities:
+
+- Define authoring lifecycle, review model, and validation rules.
+- Add admin/tutor authoring flows for lessons and exercises.
+- Expose actionable content quality and learning analytics.
+- Verify lifecycle safety and update future milestone recommendations.
+
 ---
-*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*
+*Last updated: 2026-06-11 after planning v4.5 support integration and v4.6 curriculum operations milestones*

@@ -21,10 +21,10 @@
 1. **v4.4 Live Payment Rollout And Billing Operations** - active.
    Roll out real provider credentials, TWINT production validation, invoices, receipts, refunds, tax/accounting, and dunning.
 
-2. **v4.5 Support Integrations And Operations Handoff**.
+2. **v4.5 Support Integrations And Operations Handoff** - planned.
    Add support-ticket/evidence destination integrations after an approved connector or credential path exists.
 
-3. **v4.6 Rich Curriculum Authoring And Analytics Foundation**.
+3. **v4.6 Rich Curriculum Authoring And Analytics Foundation** - planned.
    Add authoring, content QA, learning analytics, and operational curriculum insights.
 
 4. **Later Product Expansion**.
@@ -32,4 +32,4 @@
 
 ## Current Planning Decision
 
-The next stage is v4.4 because v4.3 closed the selected frontend mobile/localization gap, and `stoa_docs` still has a business-critical payment gap around live provider rollout, TWINT validation, invoices/receipts/refunds, tax/accounting, and dunning. v4.4 should build payment operations readiness while keeping real customer charges gated on explicit approval.
+The next stage is v4.4 because v4.3 closed the selected frontend mobile/localization gap, and `stoa_docs` still has a business-critical payment gap around live provider rollout, TWINT validation, invoices/receipts/refunds, tax/accounting, and dunning. v4.5 and v4.6 are now documented as the next feature-building milestones after payment rollout: support handoff integration first, then curriculum authoring and analytics.
