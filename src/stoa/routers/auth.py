@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_current_user
+from stoa.services import locale_service
 
 router = APIRouter()
 
@@ -41,6 +42,8 @@ class UserOut(BaseModel):
     email: str
     role: str
     preferredLanguage: str | None = None
+    preferredLocale: str
+    effectiveLocale: str
     subscriptionStatus: str = "trial"
     plan: str = "free_trial"
 
@@ -77,6 +80,17 @@ class ResetPasswordRequest(BaseModel):
 class PasswordResetResponse(BaseModel):
     status: str
     delivery: dict | None = None
+
+
+class LocalePreferenceUpdate(BaseModel):
+    preferredLocale: str = Field(..., min_length=1, max_length=32)
+
+
+class LocalePreferenceResponse(BaseModel):
+    preferredLocale: str
+    effectiveLocale: str
+    supportedLocales: list[str]
+    updatedAt: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -117,12 +131,15 @@ def _get_cognito(settings: Settings):
 
 def _build_user_out(profile: dict) -> UserOut:
     role = _display_role(profile.get("role", "student"))
+    effective_locale = locale_service.effective_locale(profile)
     return UserOut(
         id=profile.get("user_id", ""),
         name=profile.get("name") or profile.get("email", "").split("@")[0],
         email=profile.get("email", ""),
         role=role,
-        preferredLanguage=profile.get("language") or profile.get("preferredLanguage"),
+        preferredLanguage=effective_locale,
+        preferredLocale=effective_locale,
+        effectiveLocale=effective_locale,
         subscriptionStatus="trial",
         plan="free_trial",
     )
@@ -156,6 +173,44 @@ def _profile_child_email(profile: dict) -> str:
         or profile.get("student_email")
         or profile.get("studentEmail")
     )
+
+
+def _profile_from_current_user(current_user: dict, settings: Settings) -> dict | None:
+    user_id = current_user.get("sub", "")
+    if user_id:
+        profile = user_repo.get_user(user_id)
+        if profile:
+            return profile
+
+    email = current_user.get("email", "")
+    role_from_cognito = None
+    cognito_username = current_user.get("username", "")
+
+    if cognito_username and not email:
+        try:
+            cognito = _get_cognito(settings)
+            user_data = cognito.admin_get_user(
+                UserPoolId=settings.cognito_user_pool_id,
+                Username=cognito_username,
+            )
+            attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
+            email = attrs.get("email", "")
+            role_from_cognito = attrs.get("custom:role")
+        except ClientError:
+            pass
+
+    if email:
+        profile = user_repo.get_user_by_email(email)
+        if profile:
+            return profile
+        return {
+            "user_id": user_id,
+            "email": email,
+            "name": email.split("@")[0],
+            "role": role_from_cognito or current_user.get("role") or "student",
+        }
+
+    return None
 
 
 def _bind_parent_student_if_possible(parent_email: str | None, student_profile: dict) -> dict | None:
@@ -468,33 +523,41 @@ async def me(
     settings: Settings = Depends(get_settings),
 ):
     """Return the authenticated user's profile."""
-    # JWT `username` is Cognito internal UUID — resolve email via admin API
-    cognito_username = current_user.get("username", "")
-    email = ""
-    role_from_cognito = None
-
-    if cognito_username:
-        try:
-            cognito = _get_cognito(settings)
-            user_data = cognito.admin_get_user(
-                UserPoolId=settings.cognito_user_pool_id,
-                Username=cognito_username,
-            )
-            attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
-            email = attrs.get("email", "")
-            role_from_cognito = attrs.get("custom:role")
-        except ClientError:
-            pass
-
-    profile = user_repo.get_user_by_email(email) if email else None
+    profile = _profile_from_current_user(current_user, settings)
     if not profile:
         profile = {
             "user_id": current_user.get("sub", ""),
-            "email": email,
-            "name": email.split("@")[0] if email else "",
-            "role": role_from_cognito or current_user.get("role") or "student",
+            "email": current_user.get("email", ""),
+            "name": "",
+            "role": current_user.get("role") or "student",
         }
     return _build_user_out(profile)
+
+
+@router.patch("/me/preferences/locale", response_model=LocalePreferenceResponse)
+async def update_my_locale_preference(
+    body: LocalePreferenceUpdate,
+    current_user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+):
+    """Persist the authenticated user's preferred locale."""
+    profile = _profile_from_current_user(current_user, settings)
+    if not profile or not profile.get("user_id"):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    try:
+        locale = locale_service.normalize_locale(body.preferredLocale)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    updated_at = _utc_now_iso()
+    updated = user_repo.update_locale_preference(profile["user_id"], locale, updated_at)
+    effective_locale = locale_service.effective_locale(updated or {**profile, "preferred_locale": locale})
+    return LocalePreferenceResponse(
+        preferredLocale=locale,
+        effectiveLocale=effective_locale,
+        supportedLocales=sorted(locale_service.SUPPORTED_LOCALES),
+        updatedAt=updated.get("locale_updated_at") or updated_at,
+    )
 
 
 @router.post("/refresh", response_model=AuthResponse)
@@ -520,7 +583,15 @@ async def refresh(body: RefreshRequest, settings: Settings = Depends(get_setting
     result = resp["AuthenticationResult"]
     return AuthResponse(
         accessToken=result["AccessToken"],
-        user=UserOut(id="", name="", email="", role=role),
+        user=UserOut(
+            id="",
+            name="",
+            email="",
+            role=role,
+            preferredLanguage=locale_service.DEFAULT_LOCALE,
+            preferredLocale=locale_service.DEFAULT_LOCALE,
+            effectiveLocale=locale_service.DEFAULT_LOCALE,
+        ),
     )
 
 

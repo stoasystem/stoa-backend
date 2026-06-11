@@ -25,6 +25,24 @@ def get_user_by_email(email: str) -> dict | None:
     return items[0] if items else None
 
 
+def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict:
+    table = get_table()
+    resp = table.update_item(
+        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
+        UpdateExpression=(
+            "SET preferred_locale = :locale, preferredLocale = :locale, "
+            "#language = :locale, locale_updated_at = :updated_at, updated_at = :updated_at"
+        ),
+        ExpressionAttributeNames={"#language": "language"},
+        ExpressionAttributeValues={
+            ":locale": locale,
+            ":updated_at": updated_at,
+        },
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes", {})
+
+
 def put_parent_student_binding(
     *,
     parent_id: str,

@@ -48,7 +48,7 @@ Goal: prepare mobile-friendly and multilingual polish through backend contracts,
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
 - [x] **Phase 132: Mobile And Multilingual Contract Foundation** - Define backend/client boundaries, mobile UAT criteria, supported locale policy, and the v4.1 gap audit. (completed 2026-06-11)
-- [ ] **Phase 133: Locale Preference APIs** - Implement durable locale preference storage, profile exposure, normalization, fallback, and focused tests.
+- [x] **Phase 133: Locale Preference APIs** - Implement durable locale preference storage, profile exposure, normalization, fallback, and focused tests. (completed 2026-06-11)
 - [ ] **Phase 134: Role Route Contract Polish** - Apply language metadata and mobile-friendly response checks to selected student, parent, tutor, and admin flows.
 - [ ] **Phase 135: Release Gate And Documentation** - Verify regression coverage, update docs/gap audit, and record deferred frontend/native scope.
 
@@ -84,11 +84,11 @@ Plans:
   3. Missing, malformed, unsupported, and supported locale behavior is deterministic and tested.
   4. Existing authorization and clients without locale inputs remain compatible.
 
-**Plans**: TBD
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 133-01: Implement locale preference backend APIs.
+- [x] 133-01: Implement locale preference backend APIs.
 
 ### Phase 134: Role Route Contract Polish
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 132 Mobile And Multilingual Contract Foundation | v4.1 | 1/1 | Complete   | 2026-06-11 |
-| 133 Locale Preference APIs | v4.1 | 0/1 | Not started | - |
+| 133 Locale Preference APIs | v4.1 | 1/1 | Complete   | 2026-06-11 |
 | 134 Role Route Contract Polish | v4.1 | 0/1 | Not started | - |
 | 135 Release Gate And Documentation | v4.1 | 0/1 | Not started | - |
 
@@ -140,9 +140,9 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MOBILE-01 | Phase 132 | Complete |
-| I18N-01 | Phase 133 | Planned |
+| I18N-01 | Phase 133 | Complete |
 | I18N-02 | Phase 134 | Planned |
 | VERIFY-24 | Phase 135 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 132*
+*Last updated: 2026-06-11 after completing Phase 133*
