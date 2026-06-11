@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after completing v4.3 frontend mobile and visual localization rollout
+**Updated:** 2026-06-11 after selecting v4.4 live payment provider rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -33,6 +33,8 @@ After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend
 v4.2 completed the backend-local production notification delivery readiness scope: production WebSocket delivery contracts, durable notification preferences, preference-aware delivery state/status behavior, email digest preview readiness, push-ready preference metadata, and clean local release-gate evidence. Remaining notification work is now provider/infrastructure/frontend rollout scope: CDK/API Gateway WebSocket deployment, live endpoint smoke, frontend/native notification visuals, native push token/provider integration, production email digest templates/scheduling, and broader notification analytics.
 
 v4.3 completed the selected frontend mobile and English/German visual localization rollout in `/Users/zhdeng/stoa-frontend`: frontend workspace contract, shared mobile shell/action polish, targeted mobile Playwright coverage, backend-backed language preference UI, `/auth/me` locale refresh behavior, and release-gate evidence. Remaining mobile/localization work is now broader native app, translation management, RTL, broad copy QA, and production deploy scope rather than the selected core-flow frontend rollout.
+
+v4.4 is now selected as the next feature-building milestone because `stoa_docs` still has a business-critical payment gap beyond the v3.9 local Stripe-first MVP: live provider credentials, production checkout/webhook verification, TWINT production validation, invoices/receipts/refunds, tax/accounting handoff, and dunning readiness.
 
 ## Completed Or Largely Complete
 

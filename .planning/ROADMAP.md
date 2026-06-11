@@ -37,11 +37,11 @@
 - [x] **v4.2 Production Notification Delivery Readiness** - Completed local backend release gate 2026-06-11.
 - [x] **v4.3 Frontend Mobile And Visual Localization Rollout** - Completed local frontend release gate 2026-06-11.
 
-## v4.3 Frontend Mobile And Visual Localization Rollout
+## v4.4 Live Payment Provider Rollout
 
-**v4.3 Frontend Mobile And Visual Localization Rollout** - Completed local frontend release gate 2026-06-11.
+**v4.4 Live Payment Provider Rollout** - Active planning.
 
-Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mobile UX and visible English/German localization on core student, parent, tutor, and admin flows.
+Goal: move the local Stripe-first payment provider MVP toward controlled live rollout, production checkout/webhook readiness, refund/invoice/tax/dunning operations, and focused release evidence.
 
 ## Phases
 
@@ -50,102 +50,102 @@ Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mo
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [x] **Phase 140: Frontend Workspace Contract And Mobile UAT Plan** - Confirm frontend workspace structure, route/API patterns, mobile flow targets, localization approach, and browser verification commands. (completed 2026-06-11)
-- [x] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows. (completed 2026-06-11)
-- [x] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs. (completed 2026-06-11)
-- [x] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope. (completed 2026-06-11)
+- [ ] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Define live credential path, provider mode, price/product mapping, TWINT status, smoke modes, and rollback switches.
+- [ ] **Phase 145: Production Checkout And Webhook Verification** - Harden checkout/webhook behavior for production readiness, idempotency evidence, admin visibility, and no-real-charge fallback.
+- [ ] **Phase 146: Refunds Invoices Tax And Dunning Readiness** - Add or define operator-ready refund, invoice/receipt, tax/accounting, and dunning state support.
+- [ ] **Phase 147: v4.4 Payment Release Gate And Support Audit** - Verify focused payment behavior, update docs, capture evidence, and recommend the next feature milestone.
 
 ## Phase Details
 
-### Phase 140: Frontend Workspace Contract And Mobile UAT Plan
+### Phase 144: Live Payment Rollout Contract And Credential Readiness
 
-**Goal**: Confirm the frontend workspace and define mobile/localization implementation targets before UI edits.
-**Depends on**: v4.2 closeout and frontend workspace availability
-**Requirements**: MOBILEUI-01
+**Goal**: Define the live payment rollout contract, provider credential path, production smoke boundaries, and implementation targets before payment code changes.
+**Depends on**: v4.3 closeout and v3.9 payment provider MVP
+**Requirements**: PAYLIVE-01
 **Success Criteria** (what must be TRUE):
 
-  1. `/Users/zhdeng/stoa-frontend` framework, route structure, API client pattern, and verification commands are documented.
-  2. Student, parent, tutor, and admin mobile-critical flows are selected for v4.3.
-  3. Mobile UAT criteria cover narrow viewports, touch targets, navigation, overflow, loading/empty/error states, and browser back/forward behavior.
-  4. Localization UAT criteria cover language preference UI, persistence, translated copy, and fallback behavior.
+  1. Stripe live-mode credential path, webhook endpoint, product/price mapping, environment variables, and rollback switches are documented.
+  2. TWINT production validation status and v4.4 implementation boundary are explicit.
+  3. Safe smoke modes distinguish local/test-mode checks, configuration inspection, and no-real-charge default behavior.
+  4. Existing checkout/status/webhook code paths are mapped to Phase 145 implementation targets.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 140-01: Define frontend mobile and localization execution contract.
+- [ ] 144-01: Define live payment rollout and credential readiness contract.
 
-### Phase 141: Responsive Student Parent Tutor Core Flow Polish
+### Phase 145: Production Checkout And Webhook Verification
 
-**Goal**: Make selected core learning workflows usable on realistic mobile viewports.
-**Depends on**: Phase 140
-**Requirements**: MOBILEUI-02
+**Goal**: Make checkout and webhook paths production-ready with operator-visible lifecycle evidence.
+**Depends on**: Phase 144
+**Requirements**: PAYLIVE-02
 **Success Criteria** (what must be TRUE):
 
-  1. Student question/practice/assignment flows fit mobile viewports without horizontal overflow or clipped primary actions.
-  2. Parent child overview, progress, and report views are scannable with clear loading/empty/error states.
-  3. Tutor queue/detail and AI teacher tools remain usable on mobile-width screens.
-  4. Targeted browser evidence captures representative mobile behavior.
+  1. Checkout session creation exposes configured live-readiness state without accidentally charging customers.
+  2. Webhook processing records provider mode, event type, result, idempotency, and request/correlation identifiers.
+  3. Admin billing surfaces expose provider lifecycle status needed for internal rollout.
+  4. Focused tests cover live-readiness config, idempotency, failure states, and fallback behavior.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 141-01: Implement responsive core flow polish.
+- [ ] 145-01: Implement production checkout and webhook verification readiness.
 
-### Phase 142: Visual Localization And Language Preference UI
+### Phase 146: Refunds Invoices Tax And Dunning Readiness
 
-**Goal**: Expose supported language preference controls and localized visible UI copy.
-**Depends on**: Phase 141
-**Requirements**: I18NUI-01
+**Goal**: Add first-pass billing operations readiness for post-checkout support.
+**Depends on**: Phase 145
+**Requirements**: PAYLIVE-03
 **Success Criteria** (what must be TRUE):
 
-  1. English/German language preference controls use the v4.1 backend locale preference API.
-  2. Selected visible UI copy is translated or routed through a translation map.
-  3. Locale preference persists through refresh and reflects `/auth/me` state.
-  4. Canonical backend values remain stable while display labels are localized separately.
+  1. Refund readiness contract or implementation covers eligible states, operator inputs, provider handoff, and status fields.
+  2. Invoice/receipt readiness exposes provider-hosted invoice metadata where available.
+  3. Tax/accounting handoff identifies exportable billing metadata for Swiss accounting workflows.
+  4. Dunning readiness covers overdue/payment-failed states and parent/admin visibility.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 142-01: Implement visual localization and language preference UI.
+- [ ] 146-01: Implement refund invoice tax and dunning readiness.
 
-### Phase 143: v4.3 Browser Release Gate And Localization Audit
+### Phase 147: v4.4 Payment Release Gate And Support Audit
 
-**Goal**: Close v4.3 with frontend build/browser evidence and updated remaining-feature planning.
-**Depends on**: Phase 142
-**Requirements**: VERIFY-26
+**Goal**: Close v4.4 with payment-focused verification and updated remaining-feature planning.
+**Depends on**: Phase 146
+**Requirements**: VERIFY-27
 **Success Criteria** (what must be TRUE):
 
-  1. Frontend lint/build and targeted browser checks pass or isolate documented pre-existing failures.
-  2. Mobile viewport evidence covers representative student, parent, tutor, and admin flows.
-  3. English/German language switching and fallback behavior are verified.
-  4. Feature gap audit and next milestone recommendation are updated.
+  1. Focused backend tests and relevant checks pass or isolate documented pre-existing failures.
+  2. Payment requirements, roadmap, state, feature gap audit, and remaining-feature queue reflect completed v4.4 work.
+  3. Provider configuration, webhook, checkout, refund/invoice/dunning readiness evidence is captured.
+  4. Next milestone recommendation is updated from the remaining feature queue.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 143-01: Verify v4.3 and update release documentation.
+- [ ] 147-01: Verify v4.4 and update release documentation.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 140 Frontend Workspace Contract And Mobile UAT Plan | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 142 Visual Localization And Language Preference UI | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 1/1 | Complete   | 2026-06-11 |
+| 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 0/1 | Planned | - |
+| 145 Production Checkout And Webhook Verification | v4.4 | 0/1 | Planned | - |
+| 146 Refunds Invoices Tax And Dunning Readiness | v4.4 | 0/1 | Planned | - |
+| 147 v4.4 Payment Release Gate And Support Audit | v4.4 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILEUI-01 | Phase 140 | Complete |
-| MOBILEUI-02 | Phase 141 | Complete |
-| I18NUI-01 | Phase 142 | Complete |
-| VERIFY-26 | Phase 143 | Complete |
+| PAYLIVE-01 | Phase 144 | Planned |
+| PAYLIVE-02 | Phase 145 | Planned |
+| PAYLIVE-03 | Phase 146 | Planned |
+| VERIFY-27 | Phase 147 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing v4.3 release gate*
+*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*

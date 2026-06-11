@@ -1,87 +1,86 @@
-# Requirements: v4.3 Frontend Mobile And Visual Localization Rollout
+# Requirements: v4.4 Live Payment Provider Rollout
 
-**Milestone:** v4.3
-**Status:** Completed local frontend release gate
+**Milestone:** v4.4
+**Status:** Active planning
 **Created:** 2026-06-11
 
 ## Goal
 
-Implement the responsive frontend and visual localization work that v4.1 intentionally left outside the backend repository. v4.3 should use the available `/Users/zhdeng/stoa-frontend` workspace to improve real student, parent, tutor, and admin workflows on mobile viewports and expose the backend locale preference foundation through usable UI.
+Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations. v4.4 should close the highest-value payment gaps from `stoa_docs`: live provider credential readiness, production checkout/webhook verification, refunds/invoices/tax handoff, dunning readiness, and clear release evidence.
 
-Because STOA is still in internal development, this milestone should prioritize visible feature progress and practical browser verification over broad security/compliance testing.
+Because STOA is still in internal development, this milestone prioritizes feature construction and practical payment-ops readiness over broad security/compliance expansion. Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
 ## Requirements
 
-### MOBILEUI-01 Frontend Workspace Contract And Mobile UAT Plan
+### PAYLIVE-01 Live Payment Rollout Contract And Credential Readiness
 
-Implementers have a concrete frontend workspace contract before UI changes begin.
-
-Acceptance criteria:
-
-- Contract confirms the frontend workspace, framework, key route structure, API client pattern, and available local verification commands.
-- Mobile-critical flows are selected for v4.3: student question/practice/assignment, parent child overview/progress/report, tutor queue/detail/AI tools, admin operations dashboards.
-- Mobile UAT criteria define expected behavior for narrow viewports, touch targets, navigation, overflow, loading/error states, and route-level back/forward behavior.
-- Localization UAT criteria define language preference controls, locale persistence, translated visible UI copy, and fallback behavior for untranslated strings.
-- Backend versus frontend ownership remains explicit: backend canonical fields stay stable; frontend owns layout, text, formatting, and visual language switching.
-
-### MOBILEUI-02 Responsive Student Parent Tutor Core Flow Polish
-
-Core learning workflows are usable on realistic mobile viewports.
+Implementers have a concrete rollout contract before live payment behavior is enabled.
 
 Acceptance criteria:
 
-- Student question/practice/assignment flows fit mobile viewports without horizontal overflow or clipped primary actions.
-- Parent child overview, progress, and report views show scannable mobile layouts with clear loading/empty/error states.
-- Tutor queue/detail and AI teacher tool surfaces are usable on mobile-width screens without nested card clutter or broken controls.
-- Shared navigation and route transitions work on mobile without hiding key actions.
-- Browser or Playwright evidence captures representative mobile viewports.
+- Contract identifies Stripe live-mode credential path, webhook endpoint expectations, price/product mapping, environment variables, and rollback switches.
+- Contract records TWINT production validation status and whether TWINT is in scope for v4.4 implementation or remains provider-readiness only.
+- Contract defines safe smoke modes: local/test-mode verification, approved live-mode configuration inspection, and explicit no-real-charge default.
+- Contract maps existing checkout/status/webhook code paths to the required production rollout changes.
+- `stoa_docs` gap audit and remaining feature queue mark live payment rollout as the active v4.4 build area.
 
-### I18NUI-01 Visual Localization And Language Preference UI
+### PAYLIVE-02 Production Checkout And Webhook Verification
 
-Users can see and change supported language preferences in the frontend.
-
-Acceptance criteria:
-
-- Frontend exposes English/German language preference controls backed by the v4.1 locale preference API.
-- Supported visible UI copy in selected core flows is translated or routed through a translation map.
-- Locale preference persists through refresh and is reflected in `/auth/me` derived UI state.
-- Canonical backend values remain untranslated in API logic; display labels are localized separately.
-- Browser evidence covers language switching and fallback behavior.
-
-### VERIFY-26 v4.3 Browser Release Gate And Localization Audit
-
-v4.3 closes with mobile/browser evidence and an updated `stoa_docs` remaining-feature audit.
+Backend payment APIs and operator checks are ready for production checkout/webhook rollout.
 
 Acceptance criteria:
 
-- Frontend lint/build and targeted browser checks pass or isolate documented pre-existing failures.
-- Mobile viewport screenshots or Playwright evidence cover student, parent, tutor, and admin representative flows.
-- Language preference and translated UI behavior are verified for English/German paths.
-- Backend planning docs, frontend handoff notes, feature gap audit, and remaining-feature queue reflect completed v4.3 work.
+- Checkout session creation can distinguish configured live-mode readiness from test-mode/local behavior.
+- Webhook verification records provider mode, event type, processing result, idempotency status, and relevant request/correlation identifiers.
+- Admin billing visibility exposes enough provider status for internal operators to verify checkout and webhook lifecycle without inspecting provider secrets.
+- Tests cover live-readiness configuration behavior, webhook idempotency, failure states, and non-live fallback behavior.
+- No real customer charge is attempted without explicit rollout approval.
+
+### PAYLIVE-03 Refunds Invoices Tax And Dunning Readiness
+
+Billing operations have first-pass functional support or clear integration-ready contracts.
+
+Acceptance criteria:
+
+- Refund readiness contract identifies eligible billing states, required operator inputs, provider handoff behavior, and audit/status fields.
+- Invoice/receipt readiness contract identifies provider-hosted invoice links or metadata fields that can be surfaced to parents/admins.
+- Tax/accounting handoff defines exportable billing metadata needed for Swiss accounting workflows.
+- Dunning readiness defines overdue/payment-failed states, parent/admin visibility, and retry/escalation boundaries.
+- Tests or documented fixtures cover state transitions and operator-visible outputs for the implemented readiness scope.
+
+### VERIFY-27 v4.4 Payment Release Gate And Support Audit
+
+v4.4 closes with focused payment evidence and an updated remaining-feature audit.
+
+Acceptance criteria:
+
+- Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
+- Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v4.4 payment work.
+- Release evidence includes available backend/frontend build evidence, provider configuration checks, webhook verification evidence, and explicit live-charge deferral or approval status.
+- Final audit lists remaining payment work: broader provider automation, accounting integration, expanded refund/dunning automation, and live TWINT rollout if not completed.
 - The next milestone recommendation is updated from the remaining feature queue.
 
 ## Future Requirements
 
-- Native mobile app surfaces and push token registration.
-- Full translation management, translator workflow, and broad copy QA.
-- RTL visual layout support if STOA adds RTL languages.
-- Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 - Support-ticket/evidence destination integrations after approved connector or credential path exists.
 - Rich curriculum authoring workflow, production content QA, analytics dashboards, and deeper operations reporting.
+- Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+- Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+- Multi-provider billing automation beyond Stripe/TWINT basics.
 
 ## Out of Scope
 
-- Server-side device sniffing or backend route branching by user agent.
-- Machine translation of tutor notes, student free text, generated explanations, reports, or educational content.
-- Native app implementation unless a native workspace is explicitly selected.
-- Broad security/compliance test expansion beyond what is needed for the touched UI/API paths.
-- Live production mutation smoke.
+- Real production customer charges without explicit approval.
+- Broad CRM, accounting, or marketing automation.
+- Replacing provider-hosted billing primitives where provider metadata/links are sufficient for rollout.
+- Broad security/compliance test expansion unrelated to touched payment paths.
+- Native app payment flows unless a native workspace is selected.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILEUI-01 | Phase 140 | Complete |
-| MOBILEUI-02 | Phase 141 | Complete |
-| I18NUI-01 | Phase 142 | Complete |
-| VERIFY-26 | Phase 143 | Complete |
+| PAYLIVE-01 | Phase 144 | Planned |
+| PAYLIVE-02 | Phase 145 | Planned |
+| PAYLIVE-03 | Phase 146 | Planned |
+| VERIFY-27 | Phase 147 | Planned |

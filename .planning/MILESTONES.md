@@ -876,5 +876,32 @@ Key accomplishments:
 
 Known deferred items at close: native mobile apps, full translation management and broad copy QA, RTL support, production frontend deploy/live smoke, full production notification rollout, live payment-provider rollout, support integrations, rich curriculum authoring, analytics, and deeper compliance operations.
 
+### v4.4 Live Payment Provider Rollout
+
+**Status:** Active planning
+**Started:** 2026-06-11
+**Roadmap:** `.planning/milestones/v4.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.4-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/144-live-payment-rollout-contract-and-credential-readiness/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 144: Live Payment Rollout Contract And Credential Readiness.
+- Phase 145: Production Checkout And Webhook Verification.
+- Phase 146: Refunds Invoices Tax And Dunning Readiness.
+- Phase 147: v4.4 Payment Release Gate And Support Audit.
+
+Feature priorities:
+
+- Confirm live provider credential path, product/price mapping, and rollback switches.
+- Harden checkout and webhook readiness for production rollout without default real charges.
+- Add first-pass refund, invoice/receipt, tax/accounting, and dunning readiness.
+- Capture focused payment release evidence and update the remaining feature queue.
+
 ---
-*Last updated: 2026-06-11 after completing v4.3 frontend mobile and visual localization rollout*
+*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*

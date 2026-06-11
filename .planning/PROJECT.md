@@ -60,6 +60,8 @@ The completed-local v4.2 milestone promotes the local realtime notification foun
 
 The completed-local v4.3 milestone moved the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, delivering selected responsive core-flow polish and visible English/German locale preference UI.
 
+The active v4.4 milestone moves the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, and first-pass billing operations support.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -68,7 +70,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.3 Frontend Mobile And Visual Localization Rollout on 2026-06-11 (local frontend release gate)
-**Active milestone:** None selected; recommended next is v4.4 Live Payment Provider Rollout
+**Active milestone:** v4.4 Live Payment Provider Rollout
 
 Delivered:
 
@@ -200,7 +202,7 @@ Candidate phases:
 - Phase 146: Refunds Invoices Tax And Dunning Readiness.
 - Phase 147: v4.4 Payment Release Gate And Support Audit.
 
-This is now recommended because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, refunds, invoices, tax/accounting, and dunning remain unclosed.
+This is now the active milestone because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, refunds, invoices, tax/accounting, and dunning remain unclosed.
 
 ## Requirements
 
@@ -233,9 +235,19 @@ Shipped requirements:
 
 ### Active
 
-- No active milestone requirements. Recommended next: v4.4 live payment provider rollout.
+- PAYLIVE-01: live payment rollout contract and credential readiness - Phase 144.
+- PAYLIVE-02: production checkout and webhook verification - Phase 145.
+- PAYLIVE-03: refunds invoices tax and dunning readiness - Phase 146.
+- VERIFY-27: v4.4 payment release gate and support audit - Phase 147.
 
 ### Completed
+
+Milestone v4.4 requirements are archived in `.planning/milestones/v4.4-REQUIREMENTS.md` and are active:
+
+- PAYLIVE-01: live payment rollout contract and credential readiness - Phase 144.
+- PAYLIVE-02: production checkout and webhook verification - Phase 145.
+- PAYLIVE-03: refunds invoices tax and dunning readiness - Phase 146.
+- VERIFY-27: v4.4 payment release gate and support audit - Phase 147.
 
 Milestone v4.3 requirements are archived in `.planning/milestones/v4.3-REQUIREMENTS.md` and are complete:
 
@@ -587,7 +599,8 @@ Known current resources:
 | Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Complete locally - backend release gate passed |
 | Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Complete locally - backend release gate passed |
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
-| Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Active - milestone initialized |
+| Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
+| Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, refunds, invoices, tax/accounting, dunning, and TWINT validation | Active - milestone initialized |
 
 ## Evolution
 
@@ -607,4 +620,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout*
+*Last updated: 2026-06-11 after selecting v4.4 live payment provider rollout*

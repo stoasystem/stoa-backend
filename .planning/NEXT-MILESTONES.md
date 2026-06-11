@@ -1,11 +1,11 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after completing v4.3
+**Updated:** 2026-06-11 after selecting v4.4
 **Mode:** product functionality first
 
 ## v4.4 Live Payment Provider Rollout
 
-**Status:** Recommended next
+**Status:** Active planning
 
 Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
 

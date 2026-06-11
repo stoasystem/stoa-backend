@@ -12,23 +12,24 @@
 - Local functional WebSocket notification delivery and notification center fallback.
 - Production notification delivery readiness with durable preferences, delivery status, digest preview readiness, and push-ready metadata.
 - Payment provider integration MVP with checkout/status/webhook APIs and parent/admin billing UX.
+- Frontend mobile and visual localization rollout with selected responsive core-flow polish and English/German language preference UI.
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 
 ## Remaining Feature Build Queue
 
-1. **v4.3 Frontend Mobile And Visual Localization Rollout** - active.
-   Implement the responsive frontend/native-adjacent work and translated UI rollout that v4.1 intentionally left outside this backend repository.
-
-2. **v4.4 Live Payment Rollout And Billing Operations**.
+1. **v4.4 Live Payment Rollout And Billing Operations** - active.
    Roll out real provider credentials, TWINT production validation, invoices, receipts, refunds, tax/accounting, and dunning.
 
-3. **v4.5 Support Integrations And Operations Handoff**.
+2. **v4.5 Support Integrations And Operations Handoff**.
    Add support-ticket/evidence destination integrations after an approved connector or credential path exists.
+
+3. **v4.6 Rich Curriculum Authoring And Analytics Foundation**.
+   Add authoring, content QA, learning analytics, and operational curriculum insights.
 
 4. **Later Product Expansion**.
    Rich curriculum authoring workflow, production content QA/analytics, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, and deeper operations reporting.
 
 ## Current Planning Decision
 
-The next stage is v4.3 because v4.2 closed the backend notification readiness gap, and `stoa_docs` still has a visible product gap around mobile-responsive frontend UX and multilingual UI. `/Users/zhdeng/stoa-frontend` exists and should be the implementation workspace for this feature-building milestone.
+The next stage is v4.4 because v4.3 closed the selected frontend mobile/localization gap, and `stoa_docs` still has a business-critical payment gap around live provider rollout, TWINT validation, invoices/receipts/refunds, tax/accounting, and dunning. v4.4 should build payment operations readiness while keeping real customer charges gated on explicit approval.
