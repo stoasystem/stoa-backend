@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.3
 milestone_name: Frontend Mobile And Visual Localization Rollout
 status: planning
-last_updated: "2026-06-11T19:16:25+02:00"
+last_updated: "2026-06-11T19:26:42+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 142 - Visual Localization And Language Preference UI
+Phase: 143 - v4.3 Browser Release Gate And Localization Audit
 Plan: —
-Status: Phase 141 complete; ready for visual localization and language preference UI
-Last activity: 2026-06-11 - Completed Phase 141 responsive frontend polish in `/Users/zhdeng/stoa-frontend`.
+Status: Phase 142 complete; ready for v4.3 browser release gate and localization audit
+Last activity: 2026-06-11 - Completed Phase 142 visual localization UI in `/Users/zhdeng/stoa-frontend`.
 
 ## Accumulated Context
 
@@ -44,10 +44,10 @@ Last activity: 2026-06-11 - Completed Phase 141 responsive frontend polish in `/
 - v4.3 should prioritize visible feature construction: responsive core flows, real mobile browser verification, language preference UI, and selected English/German translated copy.
 - Phase 140 confirmed `/Users/zhdeng/stoa-frontend` is a React/Vite frontend with Tailwind/Radix/lucide, role route metadata, shared AppLayout, i18next resources, Playwright, and passing lint/build checks.
 - Phase 141 improved shared mobile shell/actions/buttons, tightened the tutor AI teacher tools mobile layout, and added targeted mobile Playwright coverage. Frontend commit: `065e08f feat: polish mobile core flows`.
+- Phase 142 wired authenticated language switching to the backend locale preference API, aligned runtime languages to English/German, applied `/auth/me` locale state on refresh, and added localization Playwright coverage. Frontend commit: `9fb3644 feat: persist language preferences`.
 
 ### Pending Todos
 
-- Plan and implement Phase 142 visual localization and language preference UI.
 - Close Phase 143 with frontend build/browser evidence and updated feature gap docs.
 
 ### Blockers/Concerns
@@ -59,4 +59,4 @@ Last activity: 2026-06-11 - Completed Phase 141 responsive frontend polish in `/
 
 ## Operator Next Steps
 
-- Start Phase 142 visual localization and language preference UI in `/Users/zhdeng/stoa-frontend`.
+- Start Phase 143 browser release gate, localization audit, and documentation closeout.

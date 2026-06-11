@@ -51,7 +51,7 @@ Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mo
 
 - [x] **Phase 140: Frontend Workspace Contract And Mobile UAT Plan** - Confirm frontend workspace structure, route/API patterns, mobile flow targets, localization approach, and browser verification commands. (completed 2026-06-11)
 - [x] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows. (completed 2026-06-11)
-- [ ] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs.
+- [x] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs. (completed 2026-06-11)
 - [ ] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope.
 
 ## Phase Details
@@ -104,11 +104,11 @@ Plans:
   3. Locale preference persists through refresh and reflects `/auth/me` state.
   4. Canonical backend values remain stable while display labels are localized separately.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 142-01: Implement visual localization and language preference UI.
+- [x] 142-01: Implement visual localization and language preference UI.
 
 ### Phase 143: v4.3 Browser Release Gate And Localization Audit
 
@@ -134,7 +134,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 140 Frontend Workspace Contract And Mobile UAT Plan | v4.3 | 1/1 | Complete   | 2026-06-11 |
 | 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 142 Visual Localization And Language Preference UI | v4.3 | 0/1 | Planned | - |
+| 142 Visual Localization And Language Preference UI | v4.3 | 1/1 | Complete   | 2026-06-11 |
 | 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 0/1 | Planned | - |
 
 ## Traceability
@@ -143,8 +143,8 @@ Plans:
 |-------------|-------|--------|
 | MOBILEUI-01 | Phase 140 | Complete |
 | MOBILEUI-02 | Phase 141 | Complete |
-| I18NUI-01 | Phase 142 | Planned |
+| I18NUI-01 | Phase 142 | Complete |
 | VERIFY-26 | Phase 143 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 141 responsive frontend polish*
+*Last updated: 2026-06-11 after completing Phase 142 visual localization UI*
