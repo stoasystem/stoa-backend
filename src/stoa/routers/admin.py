@@ -1406,6 +1406,91 @@ async def create_support_handoff_delivery(
     return {"package": package, "delivery": delivery}
 
 
+@router.get("/reports/support-handoff-deliveries")
+async def list_support_handoff_deliveries(
+    status: str | None = Query(default=None),
+    destination_mode: str | None = Query(default=None),
+    package_id: str | None = Query(default=None),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    next_token: str | None = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """List recent support handoff delivery lifecycle records for operators."""
+    if status and status not in support_destination_service.DELIVERY_STATUSES:
+        raise HTTPException(status_code=400, detail="Unsupported delivery status")
+    allowed_destinations = (
+        {support_destination_service.INTERNAL_QUEUE_DESTINATION}
+        | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
+    )
+    if destination_mode and destination_mode not in allowed_destinations:
+        raise HTTPException(status_code=400, detail="Unsupported destination mode")
+    try:
+        last_key = report_repo.decode_support_handoff_delivery_page_token(next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+    result = report_repo.list_support_handoff_delivery_summaries(
+        status=status,
+        destination_mode=destination_mode,
+        package_id=package_id,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        last_key=last_key,
+    )
+    items = [
+        support_destination_service.support_handoff_delivery_response(item)
+        for item in result.get("Items", [])
+    ]
+    return {
+        "items": items,
+        "count": len(items),
+        "next_token": report_repo.encode_support_handoff_delivery_page_token(result.get("LastEvaluatedKey")),
+        "filters": {
+            "status": status,
+            "destination_mode": destination_mode,
+            "package_id": package_id,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    }
+
+
+@router.get("/reports/support-handoff-deliveries/{delivery_id}")
+async def get_support_handoff_delivery_detail(
+    delivery_id: str,
+    audit_limit: int = Query(default=25, ge=1, le=100),
+    audit_next_token: str | None = Query(default=None),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect one support handoff delivery summary plus bounded lifecycle audit events."""
+    try:
+        last_key = report_repo.decode_support_handoff_delivery_page_token(audit_next_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+    record = report_repo.get_support_handoff_delivery_record(delivery_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
+    audit_result = report_repo.list_support_handoff_delivery_audit_events(
+        delivery_id,
+        limit=audit_limit,
+        last_key=last_key,
+    )
+    audit_events = [
+        support_destination_service.support_handoff_delivery_audit_response(event)
+        for event in audit_result.get("Items", [])
+    ]
+    return {
+        "delivery": support_destination_service.support_handoff_delivery_response(record),
+        "audit_events": audit_events,
+        "audit_count": len(audit_events),
+        "audit_next_token": report_repo.encode_support_handoff_delivery_page_token(
+            audit_result.get("LastEvaluatedKey")
+        ),
+    }
+
+
 @router.post("/reports/audit-retention/status")
 async def get_audit_retention_status(
     request: Request,

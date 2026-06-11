@@ -339,6 +339,21 @@ def get_support_handoff_delivery_record(delivery_id: str) -> dict | None:
     return response.get("Item")
 
 
+def _support_handoff_delivery_feed_item(delivery: dict) -> dict:
+    created_at = delivery.get("created_at") or delivery.get("updated_at") or ""
+    delivery_id = delivery["delivery_id"]
+    return {
+        **delivery,
+        "PK": "SUPPORT_HANDOFF_DELIVERY_FEED",
+        "SK": f"SUMMARY#{created_at}#{delivery_id}",
+        "entity_type": "SUPPORT_HANDOFF_DELIVERY_FEED",
+    }
+
+
+def _put_support_handoff_delivery_feed_item(table, delivery: dict) -> None:
+    table.put_item(Item=_support_handoff_delivery_feed_item(delivery))
+
+
 def put_support_handoff_delivery_record(delivery_id: str, delivery: dict) -> tuple[dict, bool]:
     """Persist one provider-neutral support handoff delivery summary.
 
@@ -361,9 +376,52 @@ def put_support_handoff_delivery_record(delivery_id: str, delivery: dict) -> tup
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             existing = get_support_handoff_delivery_record(delivery_id)
             if existing:
+                _put_support_handoff_delivery_feed_item(table, existing)
                 return existing, False
         raise
+    _put_support_handoff_delivery_feed_item(table, item)
     return item, True
+
+
+def update_support_handoff_delivery_status(
+    delivery_id: str,
+    *,
+    status: str,
+    updated_at: str,
+    actor: str,
+    correlation_id: str | None = None,
+    retry_count: int | None = None,
+    retryable: bool | None = None,
+    refusal_reasons: list[str] | None = None,
+    failure_reasons: list[str] | None = None,
+) -> dict | None:
+    """Update one delivery lifecycle status and keep its feed row current."""
+    existing = get_support_handoff_delivery_record(delivery_id)
+    if not existing:
+        return None
+    updated = {
+        **existing,
+        "status": status,
+        "lifecycle_status": status,
+        "updated_at": updated_at,
+        "actor": actor or existing.get("actor"),
+        "correlation_id": correlation_id if correlation_id is not None else existing.get("correlation_id"),
+        "retry_count": retry_count if retry_count is not None else existing.get("retry_count", 0),
+        "retryable": retryable if retryable is not None else existing.get("retryable", False),
+        "refusal_reasons": refusal_reasons if refusal_reasons is not None else existing.get("refusal_reasons", []),
+        "failure_reasons": failure_reasons if failure_reasons is not None else existing.get("failure_reasons", []),
+    }
+    table = get_table()
+    table.put_item(
+        Item={
+            **updated,
+            "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
+            "SK": "SUMMARY",
+            "entity_type": "SUPPORT_HANDOFF_DELIVERY",
+        }
+    )
+    _put_support_handoff_delivery_feed_item(table, updated)
+    return updated
 
 
 def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> None:
@@ -378,6 +436,74 @@ def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> N
         },
         ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
     )
+
+
+def list_support_handoff_delivery_summaries(
+    *,
+    status: str | None = None,
+    destination_mode: str | None = None,
+    package_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 50,
+    last_key: dict | None = None,
+) -> dict:
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq("SUPPORT_HANDOFF_DELIVERY_FEED")
+        & Key("SK").begins_with("SUMMARY#"),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    filter_expr = _support_handoff_delivery_filter_expression(
+        status=status,
+        destination_mode=destination_mode,
+        package_id=package_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if filter_expr is not None:
+        kwargs["FilterExpression"] = filter_expr
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    result = table.query(**kwargs)
+    items = result.get("Items", [])
+    if last_key is None and len(items) < limit:
+        fallback = _scan_support_handoff_delivery_summaries(
+            status=status,
+            destination_mode=destination_mode,
+            package_id=package_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit - len(items),
+        )
+        existing_ids = {item.get("delivery_id") for item in items}
+        for item in fallback.get("Items", []):
+            if item.get("delivery_id") in existing_ids:
+                continue
+            _put_support_handoff_delivery_feed_item(table, item)
+            items.append(item)
+            existing_ids.add(item.get("delivery_id"))
+        result["Items"] = items
+    return result
+
+
+def list_support_handoff_delivery_audit_events(
+    delivery_id: str,
+    *,
+    limit: int = 50,
+    last_key: dict | None = None,
+) -> dict:
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq(f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}")
+        & Key("SK").begins_with("AUDIT#"),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
 
 
 def put_audit_retention_audit_event(manifest_id: str, event: dict) -> None:
@@ -1016,6 +1142,32 @@ def decode_recovery_job_page_token(token: str | None) -> dict | None:
     raise ValueError("Invalid pagination token")
 
 
+def encode_support_handoff_delivery_page_token(last_key: dict | None) -> str | None:
+    """Encode support handoff delivery list/audit pagination keys."""
+    if not last_key:
+        return None
+    raw = json.dumps(
+        {"scope": "support_handoff_delivery", "key": last_key},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_support_handoff_delivery_page_token(token: str | None) -> dict | None:
+    """Decode support handoff delivery pagination token into an ExclusiveStartKey."""
+    if not token:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        decoded = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid pagination token") from exc
+    if _is_valid_support_handoff_delivery_page_payload(decoded):
+        return decoded["key"]
+    raise ValueError("Invalid pagination token")
+
+
 def list_reports_for_admin(
     *,
     status: str | None = None,
@@ -1121,6 +1273,63 @@ def _admin_report_filter_expression(
     return filter_expr
 
 
+def _support_handoff_delivery_filter_expression(
+    *,
+    status: str | None,
+    destination_mode: str | None,
+    package_id: str | None,
+    date_from: str | None,
+    date_to: str | None,
+):
+    filter_expr = None
+    if status:
+        filter_expr = Attr("status").eq(status)
+    if destination_mode:
+        destination_filter = Attr("destination_mode").eq(destination_mode)
+        filter_expr = destination_filter if filter_expr is None else filter_expr & destination_filter
+    if package_id:
+        package_filter = Attr("package_id").eq(package_id)
+        filter_expr = package_filter if filter_expr is None else filter_expr & package_filter
+    if date_from:
+        from_filter = Attr("created_at").gte(date_from)
+        filter_expr = from_filter if filter_expr is None else filter_expr & from_filter
+    if date_to:
+        to_filter = Attr("created_at").lte(date_to)
+        filter_expr = to_filter if filter_expr is None else filter_expr & to_filter
+    return filter_expr
+
+
+def _scan_support_handoff_delivery_summaries(
+    *,
+    status: str | None,
+    destination_mode: str | None,
+    package_id: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    limit: int,
+) -> dict:
+    if limit <= 0:
+        return {"Items": []}
+    table = get_table()
+    filter_expr = Attr("PK").begins_with("SUPPORT_HANDOFF_DELIVERY#") & Attr("SK").eq("SUMMARY")
+    extra_filter = _support_handoff_delivery_filter_expression(
+        status=status,
+        destination_mode=destination_mode,
+        package_id=package_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if extra_filter is not None:
+        filter_expr = filter_expr & extra_filter
+    result = table.scan(FilterExpression=filter_expr, Limit=limit)
+    items = sorted(
+        result.get("Items", []),
+        key=lambda item: (str(item.get("created_at") or ""), str(item.get("delivery_id") or "")),
+        reverse=True,
+    )
+    return {"Items": items[:limit]}
+
+
 def _is_valid_report_page_key(decoded: dict) -> bool:
     pk = decoded.get("PK")
     sk = decoded.get("SK")
@@ -1171,6 +1380,25 @@ def _is_valid_recovery_job_page_payload(decoded: object) -> bool:
     pk = key.get("PK")
     sk = key.get("SK")
     return isinstance(pk, str) and pk.startswith("REPORT_RECOVERY_JOB#") and isinstance(sk, str)
+
+
+def _is_valid_support_handoff_delivery_page_payload(decoded: object) -> bool:
+    if not isinstance(decoded, dict) or decoded.get("scope") != "support_handoff_delivery":
+        return False
+    key = decoded.get("key")
+    if not isinstance(key, dict):
+        return False
+    pk = key.get("PK")
+    sk = key.get("SK")
+    if not isinstance(pk, str) or not isinstance(sk, str):
+        return False
+    return (
+        pk == "SUPPORT_HANDOFF_DELIVERY_FEED"
+        and sk.startswith("SUMMARY#")
+    ) or (
+        pk.startswith("SUPPORT_HANDOFF_DELIVERY#")
+        and sk.startswith("AUDIT#")
+    )
 
 
 def list_reports_for_parent_week(

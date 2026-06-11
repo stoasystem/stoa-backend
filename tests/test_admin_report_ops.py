@@ -12,6 +12,7 @@ from stoa.services import report_artifact_edit_service
 from stoa.services import report_audit_retention_service
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
+from stoa.services import support_destination_service
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
@@ -2123,6 +2124,53 @@ def _patch_support_delivery_repo(monkeypatch):
     return delivery_rows, delivery_audits
 
 
+def _support_delivery_record(
+    delivery_id: str = "support-delivery-1",
+    *,
+    status: str = "queued",
+    destination_mode: str = "internal_queue",
+    package_id: str | None = "support-handoff-1",
+    retryable: bool = True,
+    retry_count: int = 0,
+    created_at: str = "2026-06-12T01:00:00+00:00",
+) -> dict:
+    return {
+        "delivery_id": delivery_id,
+        "package_id": package_id,
+        "destination_mode": destination_mode,
+        "status": status,
+        "lifecycle_status": status,
+        "actor": "admin-sub",
+        "created_at": created_at,
+        "updated_at": created_at,
+        "correlation_id": "req-delivery",
+        "idempotency_key": f"sha256:{delivery_id}",
+        "retry_count": retry_count,
+        "retryable": retryable,
+        "provider_object_reference": delivery_id,
+        "provider_object_url": None,
+        "refusal_reasons": ["destination is not approved"] if status == "refused" else [],
+        "failure_reasons": ["provider failed"] if status == "failed" else [],
+        "privacy": {
+            "metadata_only": True,
+            "private_artifact_fields_omitted": True,
+            "passed": status != "refused",
+            "violation_count": 0,
+            "violations": [],
+        },
+        "evidence_reference_ids": ["job-1"] if package_id else [],
+        "payload_digest": f"sha256:digest-{delivery_id}",
+        "payload_summary": {
+            "schema_version": "v1",
+            "tags": ["stoa", "support-handoff", "internal-queue"],
+            "section_summaries": [
+                {"type": "recovery_job_support_package", "status": "included", "reference": {"type": "recovery_job", "id": "job-1"}}
+            ],
+            "validation_status": "passed",
+        },
+    }
+
+
 def test_support_handoff_package_is_admin_only(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("non-admin handoff should not query evidence")
@@ -2386,6 +2434,235 @@ def test_support_handoff_delivery_unknown_destination_rejects_before_evidence_re
     assert response.status_code == 422
     assert delivery_rows == {}
     assert delivery_audits == []
+
+
+def test_support_handoff_delivery_queue_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin queue access should not query deliveries")
+
+    monkeypatch.setattr(report_repo, "list_support_handoff_delivery_summaries", fail)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.get("/admin/reports/support-handoff-deliveries")
+
+    assert response.status_code == 403
+
+
+def test_support_handoff_delivery_queue_lists_filtered_metadata(monkeypatch):
+    captured = {}
+    next_key = {"PK": "SUPPORT_HANDOFF_DELIVERY_FEED", "SK": "SUMMARY#2026#support-delivery-1"}
+
+    def list_deliveries(**kwargs):
+        captured.update(kwargs)
+        return {"Items": [_support_delivery_record()], "LastEvaluatedKey": next_key}
+
+    monkeypatch.setattr(report_repo, "list_support_handoff_delivery_summaries", list_deliveries)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/support-handoff-deliveries",
+        params={
+            "status": "queued",
+            "destination_mode": "internal_queue",
+            "package_id": "support-handoff-1",
+            "date_from": "2026-06-12T00:00:00+00:00",
+            "date_to": "2026-06-13T00:00:00+00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["items"][0]["status"] == "queued"
+    assert data["items"][0]["retry"]["enabled"] is True
+    assert data["next_token"]
+    assert captured == {
+        "status": "queued",
+        "destination_mode": "internal_queue",
+        "package_id": "support-handoff-1",
+        "date_from": "2026-06-12T00:00:00+00:00",
+        "date_to": "2026-06-13T00:00:00+00:00",
+        "limit": 10,
+        "last_key": None,
+    }
+    assert report_repo.decode_support_handoff_delivery_page_token(data["next_token"]) == next_key
+    _assert_no_private_artifact_markers(data)
+
+
+def test_support_handoff_delivery_queue_includes_pre_feed_summaries(monkeypatch):
+    pre_feed = _support_delivery_record(delivery_id="support-delivery-pre-feed", status="refused", retryable=False)
+    monkeypatch.setattr(
+        report_repo,
+        "list_support_handoff_delivery_summaries",
+        lambda **kwargs: {"Items": [pre_feed]},
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/support-handoff-deliveries")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"][0]["delivery_id"] == "support-delivery-pre-feed"
+    assert data["items"][0]["status"] == "refused"
+    assert data["items"][0]["retry"]["enabled"] is False
+    _assert_no_private_artifact_markers(data)
+
+
+def test_support_handoff_delivery_queue_distinguishes_lifecycle_states(monkeypatch):
+    statuses = ["created", "queued", "sent", "failed", "refused", "retried"]
+    records = [
+        _support_delivery_record(
+            delivery_id=f"support-delivery-{status}",
+            status=status,
+            retryable=status in {"created", "queued", "failed", "retried"},
+            retry_count=1 if status == "retried" else 0,
+        )
+        for status in statuses
+    ]
+    monkeypatch.setattr(
+        report_repo,
+        "list_support_handoff_delivery_summaries",
+        lambda **kwargs: {"Items": records},
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/support-handoff-deliveries")
+
+    assert response.status_code == 200
+    returned = {item["status"]: item for item in response.json()["items"]}
+    assert set(returned) == set(statuses)
+    assert returned["retried"]["retry_count"] == 1
+    assert returned["refused"]["retry"]["enabled"] is False
+
+
+def test_support_handoff_delivery_queue_rejects_invalid_token(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid token should stop before delivery list query")
+
+    monkeypatch.setattr(report_repo, "list_support_handoff_delivery_summaries", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/support-handoff-deliveries", params={"next_token": "bad"})
+
+    assert response.status_code == 400
+
+
+def test_support_handoff_delivery_detail_includes_bounded_audit(monkeypatch):
+    record = _support_delivery_record()
+    next_key = {"PK": "SUPPORT_HANDOFF_DELIVERY#support-delivery-1", "SK": "AUDIT#2026#event-1"}
+    audit_event = {
+        "event_id": "event-1",
+        "event_at": "2026-06-12T01:01:00+00:00",
+        "delivery_id": "support-delivery-1",
+        "package_id": "support-handoff-1",
+        "actor": "admin-sub",
+        "action": "support_handoff_delivery",
+        "source": "admin_api",
+        "result": "queued",
+        "correlation_id": "req-delivery",
+        "metadata": {
+            "destination_mode": "internal_queue",
+            "status": "queued",
+            "retry_count": 0,
+            "retryable": True,
+            "payload_digest": "sha256:digest",
+            "privacy_passed": True,
+            "refusal_reasons": [],
+            "failure_reasons": [],
+        },
+    }
+    captured = {}
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: record)
+
+    def list_audit(delivery_id, **kwargs):
+        captured.update({"delivery_id": delivery_id, **kwargs})
+        return {"Items": [audit_event], "LastEvaluatedKey": next_key}
+
+    monkeypatch.setattr(report_repo, "list_support_handoff_delivery_audit_events", list_audit)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/support-handoff-deliveries/support-delivery-1",
+        params={"audit_limit": 5},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["delivery"]["delivery_id"] == "support-delivery-1"
+    assert data["audit_count"] == 1
+    assert data["audit_events"][0]["result"] == "queued"
+    assert captured == {"delivery_id": "support-delivery-1", "limit": 5, "last_key": None}
+    assert report_repo.decode_support_handoff_delivery_page_token(data["audit_next_token"]) == next_key
+    _assert_no_private_artifact_markers(data)
+
+
+def test_support_handoff_delivery_detail_404_for_missing_record(monkeypatch):
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get("/admin/reports/support-handoff-deliveries/missing-delivery")
+
+    assert response.status_code == 404
+
+
+def test_support_handoff_delivery_detail_rejects_invalid_audit_token(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid audit token should stop before delivery lookup")
+
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", fail)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.get(
+        "/admin/reports/support-handoff-deliveries/support-delivery-1",
+        params={"audit_next_token": "bad"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_support_handoff_delivery_retry_visibility_is_read_only(monkeypatch):
+    refused = _support_delivery_record(status="refused", retryable=False)
+    queued = _support_delivery_record(delivery_id="support-delivery-queued", status="queued", retryable=True)
+
+    assert support_destination_service.support_handoff_delivery_response(refused)["retry"] == {
+        "enabled": False,
+        "reason": "refused deliveries are not retryable",
+        "count": 0,
+    }
+    assert support_destination_service.support_handoff_delivery_response(queued)["retry"] == {
+        "enabled": True,
+        "reason": None,
+        "count": 0,
+    }
+
+
+def test_support_handoff_delivery_lifecycle_states_transition_and_visibility(monkeypatch):
+    audits = []
+    current = _support_delivery_record(status="queued")
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", lambda delivery_id, **kwargs: {**current, **kwargs})
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: audits.append((delivery_id, event)),
+    )
+
+    response = support_destination_service.transition_delivery_status(
+        delivery_id="support-delivery-1",
+        status="retried",
+        actor="admin-sub",
+        request_id="req-retry",
+        retry_count=1,
+        retryable=True,
+    )
+
+    assert response["status"] == "retried"
+    assert response["retry_count"] == 1
+    assert response["retry"]["enabled"] is True
+    assert audits[0][1]["result"] == "retried"
+    _assert_no_private_artifact_markers(response)
+    _assert_no_private_artifact_markers(audits)
 
 
 def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):
