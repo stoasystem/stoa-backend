@@ -12,24 +12,25 @@
 - Local functional WebSocket notification delivery and notification center fallback.
 - Production notification delivery readiness with durable preferences, delivery status, digest preview readiness, and push-ready metadata.
 - Payment provider integration MVP with checkout/status/webhook APIs and parent/admin billing UX.
+- Live payment rollout foundation with Stripe/TWINT readiness gates, invoice/receipt metadata, non-mutating refund handoff, dunning projections, and Swiss accounting export metadata.
 - Frontend mobile and visual localization rollout with selected responsive core-flow polish and English/German language preference UI.
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 
 ## Remaining Feature Build Queue
 
-1. **v4.4 Live Payment Rollout And Billing Operations** - active.
-   Roll out real provider credentials, TWINT production validation, invoices, receipts, refunds, tax/accounting, and dunning.
-
-2. **v4.5 Support Integrations And Operations Handoff** - planned.
+1. **v4.5 Support Integrations And Operations Handoff** - planned.
    Add support-ticket/evidence destination integrations after an approved connector or credential path exists.
 
-3. **v4.6 Rich Curriculum Authoring And Analytics Foundation** - planned.
+2. **v4.6 Rich Curriculum Authoring And Analytics Foundation** - planned.
    Add authoring, content QA, learning analytics, and operational curriculum insights.
+
+3. **Payment Production Activation And Provider Automation**.
+   Complete approved live Stripe credentials, TWINT account validation, webhook endpoint registration, direct refund execution, provider-readiness API checks, and accounting/support destination integrations.
 
 4. **Later Product Expansion**.
    Rich curriculum authoring workflow, production content QA/analytics, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, and deeper operations reporting.
 
 ## Current Planning Decision
 
-The next stage is v4.4 because v4.3 closed the selected frontend mobile/localization gap, and `stoa_docs` still has a business-critical payment gap around live provider rollout, TWINT validation, invoices/receipts/refunds, tax/accounting, and dunning. v4.5 and v4.6 are now documented as the next feature-building milestones after payment rollout: support handoff integration first, then curriculum authoring and analytics.
+v4.4 closed the local live-payment rollout foundation. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval. The next stage is v4.5 support handoff integration, followed by v4.6 curriculum authoring and analytics.

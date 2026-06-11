@@ -39,7 +39,7 @@
 
 ## v4.4 Live Payment Provider Rollout
 
-**v4.4 Live Payment Provider Rollout** - Active planning.
+**v4.4 Live Payment Provider Rollout** - Completed local release gate 2026-06-11.
 
 Goal: move the local Stripe-first payment provider MVP toward controlled live rollout, Stripe-backed TWINT inclusion, operator-ready billing operations, and payment release evidence with explicit rollout controls.
 
@@ -53,7 +53,7 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
 - [x] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Defined the live Stripe rollout contract, explicit TWINT inclusion, smoke boundaries, and rollback switches before enabling production payment behavior.
 - [x] **Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating** - Added production checkout/webhook primitives, livemode gating, and Stripe-backed TWINT eligibility handling for Swiss subscription flows.
 - [x] **Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff** - Added post-checkout billing operations and accounting-facing lifecycle support inside the same Stripe billing model, including TWINT behavior.
-- [ ] **Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit** - Capture rollout evidence, verify rollback/disable controls, update planning docs, and close the milestone with an explicit remaining-work audit.
+- [x] **Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit** - Captured rollout evidence, verified rollback/disable controls, updated planning docs, and closed the milestone with an explicit remaining-work audit.
 
 ## Phase Details
 
@@ -123,11 +123,11 @@ Plans:
   3. Operators have verified rollback, disable, and controlled rollout entry points for live charging before the milestone can be considered closed.
   4. Requirements, roadmap, state, feature-gap docs, and the remaining-feature queue reflect the shipped v4.4 scope and any unresolved payment or TWINT blockers.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 147-01: Verify v4.4, rollout controls, and payment release evidence.
+- [x] 147-01: Verify v4.4, rollout controls, and payment release evidence.
 
 ## Progress
 
@@ -136,7 +136,7 @@ Plans:
 | 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 1/1 | Complete | 2026-06-11 |
 | 145 Production Checkout, Webhook, And TWINT-Capable Stripe Gating | v4.4 | 1/1 | Complete | 2026-06-11 |
 | 146 Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff | v4.4 | 1/1 | Complete | 2026-06-11 |
-| 147 v4.4 Payment Release Gate, Rollout Controls, And Support Audit | v4.4 | 0/1 | Planned | - |
+| 147 v4.4 Payment Release Gate, Rollout Controls, And Support Audit | v4.4 | 1/1 | Complete | 2026-06-11 |
 
 ## Traceability
 
@@ -145,7 +145,7 @@ Plans:
 | PAYLIVE-01 | Phase 144 | Complete |
 | PAYLIVE-02 | Phase 145 | Complete |
 | PAYLIVE-03 | Phase 146 | Complete |
-| VERIFY-27 | Phase 147 | Planned |
+| VERIFY-27 | Phase 147 | Complete |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 146 billing operations and Swiss handoff readiness*
+*Last updated: 2026-06-11 after completing v4.4 payment release gate and closeout*

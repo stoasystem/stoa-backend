@@ -5,22 +5,23 @@
 
 ## v4.4 Live Payment Provider Rollout
 
-**Status:** Active planning
+**Status:** Completed local release gate 2026-06-11
 
 Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
 
-Candidate phases:
+Completed phases:
 
 - Phase 144: Live Payment Rollout Contract And Credential Readiness.
 - Phase 145: Production Checkout/Webhook Verification.
 - Phase 146: Refunds Invoices Tax And Dunning Readiness.
 - Phase 147: v4.4 Payment Release Gate And Support Audit.
 
-Scope:
+Closed scope:
 
 - Validate approved production provider credentials, webhook endpoints, production-safe smoke, and rollback procedures.
 - Add operational readiness for invoices, refunds, tax/accounting handoff, and dunning.
 - Keep broad multi-provider billing automation out of scope until live Stripe/TWINT fundamentals are verified.
+- Real customer charging remains deferred pending external approval and live provider setup.
 
 ## v4.5 Support Evidence Integrations And Operations Handoff
 

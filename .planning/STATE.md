@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.4
 milestone_name: Live Payment Provider Rollout
-status: planning
-last_updated: "2026-06-11T23:48:26+02:00"
+status: complete
+last_updated: "2026-06-11T23:58:00+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 147 - v4.4 Payment Release Gate, Rollout Controls, And Support Audit
-Plan: —
-Status: Planning
-Last activity: 2026-06-11 - Completed Phase 146 billing operations, invoice/refund/dunning projections, Swiss accounting handoff, TWINT lifecycle metadata, and focused subscription verification.
+Plan: 147-01
+Status: Complete
+Last activity: 2026-06-11 - Completed v4.4 payment release gate, rollback controls audit, remaining payment work audit, planning updates, and focused subscription verification.
 
 ## Accumulated Context
 
@@ -43,12 +43,12 @@ Last activity: 2026-06-11 - Completed Phase 146 billing operations, invoice/refu
 - Phase 144 completed the live payment rollout contract and confirmed no real customer charge was enabled.
 - Phase 145 completed fail-closed readiness states, provider lookup rows, TWINT eligibility metadata, and redacted parent/admin billing readiness surfaces.
 - Phase 146 completed invoice/receipt metadata, non-mutating refund readiness, dunning projections, Swiss accounting handoff export, and TWINT lifecycle propagation.
+- Phase 147 completed the v4.4 release gate and confirmed real customer charging remains deferred until external approval and live provider setup.
 - Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
 ### Pending Todos
 
-- Phase 147 development docs are ready for payment release evidence, rollout controls, and milestone closeout.
-- Next implementation step is Phase 147 release-gate and closeout work.
+- v4.5 support integration planning is ready as the recommended next milestone.
 
 ### Blockers/Concerns
 
@@ -60,4 +60,4 @@ Last activity: 2026-06-11 - Completed Phase 146 billing operations, invoice/refu
 
 ## Operator Next Steps
 
-- Start Phase 147 implementation using `.planning/phases/147-v4-4-payment-release-gate-rollout-controls-and-support-audit/147-01-PLAN.md`.
+- Start v4.5 support evidence integrations and operations handoff when ready.

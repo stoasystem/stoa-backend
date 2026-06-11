@@ -1,7 +1,7 @@
 # Requirements: v4.4 Live Payment Provider Rollout
 
 **Milestone:** v4.4
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-06-11
 
 ## Goal
@@ -81,7 +81,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYLIVE-01 | Phase 144 | Planned |
-| PAYLIVE-02 | Phase 145 | Planned |
-| PAYLIVE-03 | Phase 146 | Planned |
-| VERIFY-27 | Phase 147 | Planned |
+| PAYLIVE-01 | Phase 144 | Complete |
+| PAYLIVE-02 | Phase 145 | Complete |
+| PAYLIVE-03 | Phase 146 | Complete |
+| VERIFY-27 | Phase 147 | Complete |

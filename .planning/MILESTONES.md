@@ -878,30 +878,35 @@ Known deferred items at close: native mobile apps, full translation management a
 
 ### v4.4 Live Payment Provider Rollout
 
-**Status:** Active planning
+**Status:** Completed local release gate 2026-06-11
 **Started:** 2026-06-11
+**Completed:** 2026-06-11
 **Roadmap:** `.planning/milestones/v4.4-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.4-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/144-live-payment-rollout-contract-and-credential-readiness/`
+**Phase evidence:** `.planning/phases/144-live-payment-rollout-contract-and-credential-readiness/`, `.planning/phases/145-production-checkout-webhook-and-twint-capable-stripe-gating/`, `.planning/phases/146-billing-operations-invoices-refunds-dunning-and-swiss-handoff/`, `.planning/phases/147-v4-4-payment-release-gate-rollout-controls-and-support-audit/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Move STOA's local Stripe-first payment provider MVP toward controlled live rollout and operator-ready billing operations.
 **Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 144: Live Payment Rollout Contract And Credential Readiness.
 - Phase 145: Production Checkout And Webhook Verification.
 - Phase 146: Refunds Invoices Tax And Dunning Readiness.
 - Phase 147: v4.4 Payment Release Gate And Support Audit.
 
-Feature priorities:
+Key accomplishments:
 
-- Confirm live provider credential path, product/price mapping, and rollback switches.
-- Harden checkout and webhook readiness for production rollout without default real charges.
-- Add first-pass refund, invoice/receipt, tax/accounting, and dunning readiness.
-- Capture focused payment release evidence and update the remaining feature queue.
+- Defined the live Stripe rollout contract, credential path, product/price mapping, TWINT inclusion, safe smoke modes, and rollback switches.
+- Added fail-closed live readiness states, Stripe SDK wiring, TWINT-capable Checkout configuration, and signed webhook verification defaults.
+- Tightened entitlement behavior around authoritative invoice/subscription events and preserved active subscriptions when replacement checkouts expire.
+- Added provider lookup rows and parent/admin billing readiness surfaces.
+- Added invoice/receipt metadata, non-mutating refund handoff, dunning/recovery projections, Swiss accounting export metadata, and TWINT lifecycle propagation.
+- Completed focused backend payment tests, static checks, rollback controls audit, release evidence, and remaining payment work audit.
+
+Known deferred items at close: approved Stripe live credentials, production webhook endpoint registration, TWINT account capability confirmation, explicit live-charge approval, direct refund execution, broader accounting/support destination integration, provider-readiness API checks, expanded dunning automation, and multi-provider billing automation.
 
 ### v4.5 Support Evidence Integrations And Operations Handoff
 
