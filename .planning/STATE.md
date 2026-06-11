@@ -45,9 +45,10 @@ Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract an
 
 ### Pending Todos
 
-- Plan and implement Phase 145 production checkout, webhook, and TWINT-capable Stripe gating.
-- Plan and implement Phase 146 billing operations, invoice, refund, dunning, and Swiss accounting handoff readiness.
-- Close Phase 147 with payment release evidence, rollout controls, and updated feature gap docs.
+- Phase 145 development docs are ready for production checkout, webhook, and TWINT-capable Stripe gating implementation.
+- Phase 146 development docs are ready for billing operations, invoice, refund, dunning, and Swiss accounting handoff implementation.
+- Phase 147 development docs are ready for payment release evidence, rollout controls, and milestone closeout.
+- Next implementation step is Phase 145 code work.
 
 ### Blockers/Concerns
 
@@ -58,4 +59,4 @@ Last activity: 2026-06-11 - Completed Phase 144 live payment rollout contract an
 
 ## Operator Next Steps
 
-- Start Phase 145: plan production checkout, webhook, and TWINT-capable Stripe gating from the Phase 144 contract and v4.4 research summary.
+- Start Phase 145 implementation using `.planning/phases/145-production-checkout-webhook-and-twint-capable-stripe-gating/145-01-PLAN.md`.
