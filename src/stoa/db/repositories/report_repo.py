@@ -329,6 +329,57 @@ def put_support_handoff_audit_event(package_id: str, event: dict) -> None:
     )
 
 
+def get_support_handoff_delivery_record(delivery_id: str) -> dict | None:
+    """Return the current support handoff delivery summary, if present."""
+    table = get_table()
+    response = table.get_item(
+        Key={"PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}", "SK": "SUMMARY"},
+        ConsistentRead=True,
+    )
+    return response.get("Item")
+
+
+def put_support_handoff_delivery_record(delivery_id: str, delivery: dict) -> tuple[dict, bool]:
+    """Persist one provider-neutral support handoff delivery summary.
+
+    Returns `(record, created)`. Duplicate deterministic delivery IDs reuse the
+    existing row so repeated requests remain idempotent.
+    """
+    table = get_table()
+    item = {
+        "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
+        "SK": "SUMMARY",
+        "entity_type": "SUPPORT_HANDOFF_DELIVERY",
+        **delivery,
+    }
+    try:
+        table.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            existing = get_support_handoff_delivery_record(delivery_id)
+            if existing:
+                return existing, False
+        raise
+    return item, True
+
+
+def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> None:
+    """Append one immutable support handoff delivery lifecycle event."""
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
+            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+            "entity_type": "SUPPORT_HANDOFF_DELIVERY_AUDIT_EVENT",
+            **event,
+        },
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+
+
 def put_audit_retention_audit_event(manifest_id: str, event: dict) -> None:
     """Append one metadata-only audit retention event."""
     table = get_table()

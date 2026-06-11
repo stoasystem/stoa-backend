@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.config import Settings
+from stoa.config import Settings, get_settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_current_user
 from stoa.routers import admin
@@ -14,10 +14,12 @@ from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 
 
-def _app_for_user(user: dict) -> FastAPI:
+def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
     app.dependency_overrides[get_current_user] = lambda: user
+    if settings is not None:
+        app.dependency_overrides[get_settings] = lambda: settings
     return app
 
 
@@ -55,6 +57,8 @@ def _assert_no_private_artifact_markers(data):
     assert "access_token" not in serialized
     assert "id_token" not in serialized
     assert "refresh_token" not in serialized
+    assert "authorization" not in serialized.lower()
+    assert "cookie" not in serialized.lower()
 
 
 def _report_json_artifact() -> dict:
@@ -2099,6 +2103,26 @@ def _minimal_release_bundle() -> dict:
     }
 
 
+def _patch_support_delivery_repo(monkeypatch):
+    delivery_rows = {}
+    delivery_audits = []
+
+    def put_delivery(delivery_id, delivery):
+        if delivery_id in delivery_rows:
+            return delivery_rows[delivery_id], False
+        row = dict(delivery)
+        delivery_rows[delivery_id] = row
+        return row, True
+
+    monkeypatch.setattr(report_repo, "put_support_handoff_delivery_record", put_delivery)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: delivery_audits.append((delivery_id, event)),
+    )
+    return delivery_rows, delivery_audits
+
+
 def test_support_handoff_package_is_admin_only(monkeypatch):
     def fail(*args, **kwargs):
         raise AssertionError("non-admin handoff should not query evidence")
@@ -2112,6 +2136,256 @@ def test_support_handoff_package_is_admin_only(monkeypatch):
     )
 
     assert response.status_code == 403
+
+
+def test_support_handoff_delivery_is_admin_only(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("non-admin delivery should not query evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    _patch_support_delivery_repo(monkeypatch)
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={"reason": "support", "destination_mode": "internal_queue", "recovery_job_ids": ["job-1"]},
+    )
+
+    assert response.status_code == 403
+
+
+def test_support_handoff_internal_queue_delivery_queues_metadata_only_record(monkeypatch):
+    package_audits = []
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    job = {
+        "job_id": "job-1",
+        "job_type": "resend_email",
+        "status": "completed",
+        "reason": "support weekly-reports/private/report.html",
+        "target_count": 1,
+        "success_count": 1,
+    }
+    target = {
+        "target_id": "target-1",
+        "report_id": "report-1",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "week_start": "2026-06-01",
+        "result": "success",
+        "detail": "sent weekly-reports/private/report.html html_s3_key",
+        "html_s3_key": "weekly-reports/private/report.html",
+    }
+    event = {
+        "event_id": "event-1",
+        "event_at": "2026-06-07T10:00:00+00:00",
+        "action": "create_resend_job",
+        "actor": "admin-sub",
+        "source": "admin_api",
+        "result": "success",
+        "after": {"html_s3_key": "weekly-reports/private/report.html"},
+    }
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: job if job_id == "job-1" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": [target]})
+    monkeypatch.setattr(report_repo, "list_recovery_job_audit_events", lambda job_id, **kwargs: {"Items": [event]})
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: package_audits.append((package_id, event)),
+    )
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={
+            "reason": "support weekly-reports/private/report.html",
+            "destination_mode": "internal_queue",
+            "recovery_job_ids": ["job-1"],
+            "operator_note": "queue weekly-reports/private/report.html",
+        },
+        headers={"x-request-id": "req-delivery"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"]["destination"]["mode"] == "internal_queue"
+    assert data["package"]["validation"]["status"] == "passed"
+    delivery = data["delivery"]
+    assert delivery["status"] == "queued"
+    assert delivery["lifecycle_status"] == "queued"
+    assert delivery["destination_mode"] == "internal_queue"
+    assert delivery["package_id"] == data["package"]["package_id"]
+    assert delivery["correlation_id"] == "req-delivery"
+    assert delivery["retry_count"] == 0
+    assert delivery["retryable"] is True
+    assert delivery["provider_object_reference"] == delivery["delivery_id"]
+    assert delivery["payload_digest"].startswith("sha256:")
+    assert delivery["idempotency_key"].startswith("sha256:")
+    assert len(package_audits) == 1
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    persisted = next(iter(delivery_rows.values()))
+    assert persisted["status"] == "queued"
+    assert "payload" not in persisted
+    assert "sections" not in persisted
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(persisted)
+    _assert_no_private_artifact_markers(delivery_audits)
+
+
+def test_support_handoff_internal_queue_requires_approval(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("unapproved internal_queue should not query evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("package audit should not be written")),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=Settings()))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={
+            "reason": "support",
+            "destination_mode": "internal_queue",
+            "recovery_job_ids": ["job-1"],
+        },
+        headers={"x-request-id": "req-unapproved"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"] is None
+    assert data["delivery"]["status"] == "refused"
+    assert data["delivery"]["retryable"] is False
+    assert data["delivery"]["package_id"] is None
+    assert "not approved" in data["delivery"]["refusal_reasons"][0]
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
+def test_support_handoff_internal_queue_refuses_privacy_failure(monkeypatch):
+    package_audits = []
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    bundle = _minimal_release_bundle()
+    bundle["backend"]["json_s3_key"] = "weekly-reports/private/report.json"
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: package_audits.append((package_id, event)),
+    )
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={"reason": "support", "destination_mode": "internal_queue", "release_evidence": bundle},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"]["validation"]["status"] == "refused"
+    assert data["delivery"]["status"] == "refused"
+    assert data["delivery"]["retryable"] is False
+    assert any("validation did not pass" in reason for reason in data["delivery"]["refusal_reasons"])
+    assert len(package_audits) == 1
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
+def test_support_handoff_internal_queue_idempotent_duplicate(monkeypatch):
+    package_audits = []
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: package_audits.append((package_id, event)),
+    )
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+    payload = {
+        "reason": "support duplicate",
+        "destination_mode": "internal_queue",
+        "operator_note": "same safe note",
+    }
+
+    first = client.post("/admin/reports/support-handoff-delivery", json=payload, headers={"x-request-id": "req-dup"})
+    second = client.post("/admin/reports/support-handoff-delivery", json=payload, headers={"x-request-id": "req-dup"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_delivery = first.json()["delivery"]
+    second_delivery = second.json()["delivery"]
+    assert first_delivery["status"] == "queued"
+    assert second_delivery["status"] == "queued"
+    assert second_delivery["delivery_id"] == first_delivery["delivery_id"]
+    assert second_delivery["idempotency_key"] == first_delivery["idempotency_key"]
+    assert len(package_audits) == 2
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(first.json())
+    _assert_no_private_artifact_markers(second.json())
+
+
+@pytest.mark.parametrize(
+    "destination_mode",
+    ["external_write", "shared_mailbox", "zendesk_ticket", "freshdesk_ticket", "helpscout_conversation"],
+)
+def test_support_handoff_delivery_contract_defined_destination_is_refused_without_evidence_reads(
+    monkeypatch,
+    destination_mode,
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("contract-defined refused destination should not query evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={"reason": "support", "destination_mode": destination_mode, "recovery_job_ids": ["job-1"]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"] is None
+    assert data["delivery"]["destination_mode"] == destination_mode
+    assert data["delivery"]["status"] == "refused"
+    assert data["delivery"]["retryable"] is False
+    assert "not approved" in data["delivery"]["refusal_reasons"][0]
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
+def test_support_handoff_delivery_unknown_destination_rejects_before_evidence_reads(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("unknown delivery destination should stop before evidence reads")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    settings = Settings(support_internal_queue_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={"reason": "support", "destination_mode": "zendesk", "recovery_job_ids": ["job-1"]},
+    )
+
+    assert response.status_code == 422
+    assert delivery_rows == {}
+    assert delivery_audits == []
 
 
 def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):

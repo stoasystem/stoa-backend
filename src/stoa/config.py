@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     stripe_twint_capability_confirmed: bool = False
     stripe_allow_unsigned_test_webhooks: bool = False
 
+    # Support handoff delivery (v4.5)
+    support_internal_queue_approved: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -28,6 +28,7 @@ from stoa.services import (
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
+    support_destination_service,
     support_handoff_service,
     subscription_service,
     teacher_reply_service,
@@ -1314,6 +1315,95 @@ async def create_support_handoff_package(
         request_id=request_id,
     )
     return package
+
+
+@router.post("/reports/support-handoff-delivery")
+async def create_support_handoff_delivery(
+    request: Request,
+    body: SupportHandoffPackageRequest,
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Deliver or refuse a support-safe handoff package for an approved destination."""
+    request_id = _request_id(request)
+    operator = _operator_id(user)
+    destination = body.destination_mode.strip()
+    contract_defined_destinations = (
+        {support_destination_service.INTERNAL_QUEUE_DESTINATION}
+        | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
+    )
+    if destination not in contract_defined_destinations:
+        raise HTTPException(status_code=422, detail=f"Unsupported destination mode: {destination or 'missing'}")
+
+    if destination in support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS:
+        delivery = support_destination_service.refuse_destination(
+            destination_mode=destination,
+            actor=operator,
+            reason=body.reason,
+            request_id=request_id,
+            refusal_reason="destination is contract-defined but not approved for Phase 149 delivery",
+        )
+        return {"package": None, "delivery": delivery}
+
+    if not settings.support_internal_queue_approved:
+        delivery = support_destination_service.refuse_destination(
+            destination_mode=destination,
+            actor=operator,
+            reason=body.reason,
+            request_id=request_id,
+            refusal_reason="support internal queue delivery is not approved",
+        )
+        return {"package": None, "delivery": delivery}
+
+    recovery_sections: list[dict[str, Any]] = []
+    fixture_response: dict[str, Any] | None = None
+    try:
+        recovery_sections = [
+            _support_handoff_recovery_section(
+                job_id=job_id,
+                request_id=request_id,
+                include_targets=body.include_targets,
+                include_job_audit=body.include_job_audit,
+                include_report_audit=body.include_report_audit,
+                target_limit=body.target_limit,
+                audit_limit=body.audit_limit,
+            )
+            for job_id in body.recovery_job_ids
+        ]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+
+    if body.fixture:
+        fixture_response = _support_handoff_fixture_response(body.fixture)
+
+    try:
+        package = support_handoff_service.build_package(
+            reason=body.reason,
+            destination_mode=support_destination_service.INTERNAL_QUEUE_DESTINATION,
+            generated_by=operator,
+            request_id=request_id,
+            recovery_sections=recovery_sections,
+            release_evidence=body.release_evidence,
+            fixture=fixture_response,
+            operator_note=body.operator_note,
+        )
+    except support_handoff_service.SupportHandoffError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    support_handoff_service.write_audit_event(
+        package,
+        actor=operator,
+        reason=body.reason,
+        request_id=request_id,
+    )
+    delivery = support_destination_service.deliver_internal_queue(
+        package=package,
+        actor=operator,
+        reason=body.reason,
+        request_id=request_id,
+        settings=settings,
+    )
+    return {"package": package, "delivery": delivery}
 
 
 @router.post("/reports/audit-retention/status")
