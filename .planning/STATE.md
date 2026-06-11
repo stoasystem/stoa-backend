@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: Production Notification Delivery Readiness
-status: planning
-last_updated: "2026-06-11T13:30:00+02:00"
+status: complete
+last_updated: "2026-06-11T13:45:00+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.2 production notification delivery readiness.
+**Current focus:** v4.2 production notification delivery readiness complete; next milestone selection pending.
 
 ## Current Position
 
 Phase: 139 - v4.2 Functional Release Gate And Notification Delivery Audit
-Plan: —
-Status: Phase 138 complete; ready for v4.2 release gate
-Last activity: 2026-06-11 - Completed Phase 138 digest preview and push preference readiness.
+Plan: 139-01 - Verify v4.2 and update release documentation
+Status: v4.2 complete locally
+Last activity: 2026-06-11 - Completed v4.2 release gate and notification delivery audit.
 
 ## Accumulated Context
 
@@ -45,10 +45,11 @@ Last activity: 2026-06-11 - Completed Phase 138 digest preview and push preferen
 - Phase 136 defined production WebSocket route/config expectations, channel mapping, notification preference categories, delivery state fields, and backend/CDK/frontend/native ownership boundaries.
 - Phase 137 added durable notification preferences, delivery decision metadata, realtime preference gating, and bounded admin delivery status aggregates.
 - Phase 138 added digest preview selection, metadata-safe digest payloads, explicit no-provider email/push readiness metadata, and preserved push-ready preference flags without live provider traffic.
+- Phase 139 completed the v4.2 local backend release gate with 332 passing backend tests, full ruff success, documentation updates, and explicit deferred production/frontend/native notification scope.
 
 ### Pending Todos
 
-- Close Phase 139 with functional release evidence and updated feature gap audit.
+- Select or start the next milestone from `.planning/NEXT-MILESTONES.md`.
 
 ### Blockers/Concerns
 
@@ -59,4 +60,4 @@ Last activity: 2026-06-11 - Completed Phase 138 digest preview and push preferen
 
 ## Operator Next Steps
 
-- Start Phase 139 v4.2 functional release gate and notification delivery audit.
+- Recommended next milestone: v4.3 Frontend Mobile And Visual Localization Rollout, which likely requires the frontend/UI workspace.

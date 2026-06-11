@@ -812,30 +812,36 @@ Known deferred items at close: production deploy/live smoke, full responsive fro
 
 ### v4.2 Production Notification Delivery Readiness
 
-**Status:** Active planning
+**Status:** Completed local backend release gate 2026-06-11
 **Started:** 2026-06-11
+**Completed:** 2026-06-11
+**Audit:** `.planning/milestones/v4.2-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v4.2-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.2-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/136-production-notification-infrastructure-contract/`
+**Phase evidence:** `.planning/phases/136-production-notification-infrastructure-contract/`, `.planning/phases/137-websocket-delivery-operations-and-preference-apis/`, `.planning/phases/138-email-digest-and-push-preference-readiness/`, `.planning/phases/139-v4.2-functional-release-gate-and-notification-delivery-audit/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Promote STOA's local realtime notification foundation into production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
 **Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 136: Production Notification Infrastructure Contract.
 - Phase 137: WebSocket Delivery Operations And Preference APIs.
 - Phase 138: Email Digest And Push Preference Readiness.
 - Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
 
-Feature priorities:
+Key accomplishments:
 
-- Confirm production WebSocket endpoint, route/integration, environment, and fallback contracts.
-- Add durable notification category/channel preferences without breaking existing in-product notifications.
-- Prepare digest and push preference contracts while avoiding live production traffic without approved provider configuration.
-- Capture focused functional evidence and keep future frontend/native/mobile surfaces explicit.
+- Defined production WebSocket endpoint, API Gateway route/integration expectations, fallback behavior, delivery state fields, and ownership boundaries.
+- Added durable user notification preferences for in-app, realtime, email digest, and push-ready channels.
+- Added preference-aware delivery decision metadata and realtime fanout gating while preserving in-product notification defaults.
+- Added bounded admin/operator delivery status aggregates.
+- Added digest preview selection with category/window filtering, metadata-safe payloads, preview-only behavior, and explicit no-provider email/push fallback metadata.
+- Completed full backend pytest and full ruff release-gate evidence.
+
+Known deferred items at close: CDK/API Gateway WebSocket production route wiring, live production notification smoke, frontend/native notification surfaces, native push provider rollout, production email digest templates/scheduling, and broader notification analytics remain future rollout scope.
 
 ---
-*Last updated: 2026-06-11 after selecting v4.2 production notification delivery readiness*
+*Last updated: 2026-06-11 after completing v4.2 production notification delivery readiness*

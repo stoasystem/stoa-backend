@@ -1,5 +1,4 @@
 """FastAPI dependency injection — DB client, auth, AWS clients."""
-import json
 from functools import lru_cache
 from typing import Any
 
@@ -8,7 +7,6 @@ import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
-from jose.utils import base64url_decode
 
 from stoa.config import Settings, get_settings
 

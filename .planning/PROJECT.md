@@ -56,7 +56,7 @@ The completed-local v4.0 milestone builds adaptive learning memory and reviewed 
 
 The completed-local v4.1 milestone prepared mobile-friendly and multilingual product polish foundations by defining responsive/mobile readiness contracts, localization backend support, language-safe response boundaries, and local release evidence before broader frontend/native rollout.
 
-The active v4.2 milestone promotes the local realtime notification foundation toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
+The completed-local v4.2 milestone promotes the local realtime notification foundation toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
 
 ## Core Value
 
@@ -65,8 +65,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.1 Mobile And Multilingual Polish Foundation on 2026-06-11 (local backend release gate)
-**Active milestone:** v4.2 Production Notification Delivery Readiness
+**Latest completed milestone:** v4.2 Production Notification Delivery Readiness on 2026-06-11 (local backend release gate)
+**Active milestone:** None selected
 
 Delivered:
 
@@ -156,6 +156,7 @@ Delivered:
 - v3.9 completed local functional payment-provider integration with subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
 - v4.0 added durable learning memory snapshots, next-practice recommendations, reviewed assignment workflows, student/tutor assignment route contracts, and parent progress signals.
 - v4.1 completed mobile/responsive readiness contracts, durable locale preference APIs, language-safe adaptive response metadata, canonical-value stability tests, and local release evidence for backend polish readiness.
+- v4.2 completed production notification delivery readiness contracts, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, push preference readiness, and clean full backend release-gate checks.
 
 ## Last Production-Verified Milestone
 
@@ -172,31 +173,31 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v4.1 Mobile And Multilingual Polish Foundation
-
-Goal: prepare STOA for mobile-friendly and multilingual product polish by defining backend contracts, locale preference support, language-safe response metadata, and release evidence before broader UI rollout.
-
-Completed phases:
-
-- Phase 132: Mobile And Multilingual Contract Foundation.
-- Phase 133: Locale Preference APIs.
-- Phase 134: Role Route Contract Polish.
-- Phase 135: Release Gate And Documentation.
-
-## Next Milestone
-
 ### v4.2 Production Notification Delivery Readiness
 
-Goal: promote local realtime notification foundations toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, notification preferences, email digest readiness, and focused release evidence.
+Goal: promote local realtime notification foundations toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
 
-Planned phases:
+Completed phases:
 
 - Phase 136: Production Notification Infrastructure Contract.
 - Phase 137: WebSocket Delivery Operations And Preference APIs.
 - Phase 138: Email Digest And Push Preference Readiness.
 - Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
 
-Remaining future work after v4.2 is expected to include full frontend/native mobile implementation, visual localization, live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
+## Next Milestone
+
+### v4.3 Frontend Mobile And Visual Localization Rollout
+
+Goal: implement the responsive frontend/native-adjacent and visual localization work that v4.1 intentionally left outside this backend repository.
+
+Candidate phases:
+
+- Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
+- Phase 141: Responsive Student Parent Tutor Core Flow Polish.
+- Phase 142: Visual Localization And Language Preference UI.
+- Phase 143: v4.3 Browser Release Gate And Localization Audit.
+
+This likely requires the frontend/UI workspace. Remaining future work also includes live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
 
 ## Requirements
 
@@ -229,12 +230,16 @@ Shipped requirements:
 
 ### Active
 
+- None. Next milestone selection is pending.
+
+### Completed
+
+Milestone v4.2 requirements are archived in `.planning/milestones/v4.2-REQUIREMENTS.md` and are complete:
+
 - NOTIFYDEL-01: production notification infrastructure contract - Phase 136.
 - NOTIFYDEL-02: WebSocket delivery operations and preference APIs - Phase 137.
 - NOTIFYDEL-03: email digest and push preference readiness - Phase 138.
 - VERIFY-25: v4.2 functional release gate and notification delivery audit - Phase 139.
-
-### Completed
 
 Milestone v4.1 requirements are archived in `.planning/milestones/v4.1-REQUIREMENTS.md` and are complete:
 
@@ -571,7 +576,7 @@ Known current resources:
 | Start v3.9 with payment provider integration MVP | `stoa_docs` Phase 2 calls for Stripe subscription payment and credit card/TWINT support; v3.3 manual subscription operations provide the local entitlement model and admin override surface needed for provider-backed billing | Good - local release gate complete |
 | Start v4.0 with adaptive learning memory and assignment | `stoa_docs` Phase 2 calls for personalized learning memory; v3.4 profile seeds, v3.7 AI exercise drafts, and v3.8 curriculum progress now provide enough signal for reviewed assignment workflows | Complete locally - backend release gate passed |
 | Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Complete locally - backend release gate passed |
-| Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Active - milestone initialized |
+| Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
 
 ## Evolution
 
@@ -591,4 +596,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after selecting v4.2 production notification delivery readiness*
+*Last updated: 2026-06-11 after completing v4.2 production notification delivery readiness*

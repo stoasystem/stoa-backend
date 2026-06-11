@@ -1,29 +1,11 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after selecting v4.2
+**Updated:** 2026-06-11 after completing v4.2
 **Mode:** product functionality first
 
-## v4.2 Production Notification Delivery Readiness
-
-**Status:** Active
-
-Goal: promote the local realtime notification foundation toward deployable production delivery and durable user preferences.
-
-Planned phases:
-
-- Phase 136: Production Notification Infrastructure Contract.
-- Phase 137: WebSocket Delivery Operations And Preference APIs.
-- Phase 138: Email Digest And Push Preference Readiness.
-- Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
-
-Scope:
-
-- Define production API Gateway WebSocket route/integration expectations, deployment ownership, rollback, and live-smoke protocol.
-- Add durable notification preferences and delivery decision/status behavior for realtime, in-app fallback, digest-ready, and push-ready channels.
-- Add email digest selection/preview readiness and push/native preference metadata without requiring provider credentials during internal development.
-- Keep broad native-app push rollout and notification marketing automation out of scope.
-
 ## v4.3 Frontend Mobile And Visual Localization Rollout
+
+**Status:** Recommended next
 
 Goal: implement the responsive frontend/native-adjacent work that v4.1 intentionally left outside this backend repository.
 
@@ -56,3 +38,20 @@ Scope:
 - Validate approved production provider credentials, webhook endpoints, production-safe smoke, and rollback procedures.
 - Add operational readiness for invoices, refunds, tax/accounting handoff, and dunning.
 - Keep broad multi-provider billing automation out of scope until live Stripe/TWINT fundamentals are verified.
+
+## v4.5 Support Evidence Integrations And Operations Handoff
+
+Goal: connect the existing support-safe evidence packages to approved operational destinations and close the remaining manual handoff gap.
+
+Candidate phases:
+
+- Phase 148: Support Destination Contract And Credential Readiness.
+- Phase 149: Support Evidence Export Destination Integration.
+- Phase 150: Operator Queue And Handoff Status Visibility.
+- Phase 151: v4.5 Support Integration Release Gate.
+
+Scope:
+
+- Requires approved connector, credential, or destination policy.
+- Preserve metadata-only evidence boundaries and refusal behavior for unapproved external writes.
+- Keep broad CRM automation and customer messaging campaigns out of scope until support handoff basics are verified.

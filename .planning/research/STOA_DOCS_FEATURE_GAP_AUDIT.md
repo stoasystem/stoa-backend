@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after selecting v4.2 production notification delivery readiness
+**Updated:** 2026-06-11 after completing v4.2 production notification delivery readiness
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -30,7 +30,7 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 
 After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend foundation for mobile-friendly and multilingual polish: mobile/backend contract documentation, durable locale preferences, language-safe adaptive route metadata, and explicit deferred frontend/native UI scope.
 
-v4.2 is now selected as the active feature-building milestone because the backend workspace can directly advance production notification delivery readiness: production WebSocket delivery contracts, durable notification preferences, delivery state/status behavior, email digest readiness, and push-ready preference metadata. Full responsive frontend/native implementation and visual localization remain important but require the UI workspace.
+v4.2 completed the backend-local production notification delivery readiness scope: production WebSocket delivery contracts, durable notification preferences, preference-aware delivery state/status behavior, email digest preview readiness, push-ready preference metadata, and clean local release-gate evidence. Remaining notification work is now provider/infrastructure/frontend rollout scope: CDK/API Gateway WebSocket deployment, live endpoint smoke, frontend/native notification visuals, native push token/provider integration, production email digest templates/scheduling, and broader notification analytics.
 
 ## Completed Or Largely Complete
 
@@ -54,6 +54,7 @@ v4.2 is now selected as the active feature-building milestone because the backen
 - Payment provider integration MVP: Stripe-first provider scope, STOA tier mapping, billing state model, checkout session creation, signed webhook lifecycle, parent checkout/status UX, admin billing visibility, and release-gate evidence.
 - Adaptive learning memory and assignment foundation: durable memory fields, source inputs, reviewed assignment lifecycle, recommendation boundaries, student/tutor/parent visibility requirements, backend APIs, and route contracts.
 - Mobile and multilingual backend foundation: mobile-ready route contracts, durable `en`/`de` locale preferences, language-safe adaptive response metadata, and release evidence with deferred frontend/native ownership.
+- Production notification delivery readiness: production WebSocket/API Gateway contract, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, metadata-safe digest payloads, push-ready preference flags, and clean local release evidence.
 
 ## v3.0 Closed MVP Gaps
 
@@ -133,10 +134,16 @@ v4.2 is now selected as the active feature-building milestone because the backen
 |-----|--------|------------------|----------|
 | Mobile-friendly backend contracts and multilingual preference foundation | `PLAN.md` Phase 2 growth feature: mobile responsive polish / multilingual frontend rollout | Phase 132 defined backend/client ownership, mobile-critical flow contract, supported locale policy, and gap-audit updates; Phase 133 added durable locale preference APIs; Phase 134 polished selected adaptive role route metadata and mobile contracts; Phase 135 captured verification and deferred frontend/native evidence. | Closed for backend foundation scope |
 
+## v4.2 Closed Phase 2 Functional Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Production notification delivery readiness | `PLAN.md` Phase 2 growth feature: push notifications / email notifications / production realtime rollout | Phase 136 defined WebSocket route/integration/config/fallback contracts and ownership boundaries; Phase 137 added durable preferences, delivery decisions, realtime preference gating, and admin status; Phase 138 added digest preview selection, metadata-safe payloads, and no-provider fallback metadata; Phase 139 captured full pytest/ruff release evidence and deferred provider/frontend/native rollout scope. | Closed for backend readiness scope |
+
 ## Phase 2 / Future Expansion
 
 - Live payment-provider rollout with approved production credentials, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-- Full production notification rollout beyond v4.2 readiness: live endpoint smoke, real provider credentials, native push token registration, email templates, and broader notification analytics.
+- Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics.
 - Automatic student assignment of generated exercises and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
 - Full responsive frontend implementation with mobile viewport/browser verification.
@@ -145,12 +152,11 @@ v4.2 is now selected as the active feature-building milestone because the backen
 
 ## Remaining Feature Build Order
 
-1. v4.2 Production notification delivery readiness: WebSocket production contract, preference APIs, delivery state, digest readiness, and push-ready metadata.
-2. Full responsive frontend/native mobile implementation after UI workspace availability.
-3. Full frontend visual localization and translated UI rollout.
-4. Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-5. Support-ticket/evidence destination integrations after approved connector or credential path exists.
-6. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
+1. v4.3 Frontend mobile and visual localization rollout after UI workspace availability.
+2. v4.4 Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
+3. v4.5 Support-ticket/evidence destination integrations after approved connector or credential path exists.
+4. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
+5. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
 
 ## v3.0 Scope Recommendation
 
@@ -269,14 +275,14 @@ v4.1 completed the backend mobile and multilingual polish foundation:
 3. Added language-safe route metadata while preserving canonical API values.
 4. Closed with backend verification and explicit deferred frontend/native rollout scope.
 
-## v4.2 Scope Recommendation
+## v4.2 Scope Outcome
 
-v4.2 should complete production notification delivery readiness:
+v4.2 completed production notification delivery readiness:
 
 1. Define production WebSocket route/integration, configuration, fallback, and channel mapping contracts.
 2. Add durable notification preference APIs and backend delivery decision/status behavior.
 3. Add digest-ready selection/preview behavior and push preference metadata without requiring live provider credentials during internal development.
-4. Close with focused functional evidence and update the remaining-feature queue toward frontend/mobile localization or live payment rollout.
+4. Closed with full backend pytest/ruff evidence and updated the remaining-feature queue toward frontend/mobile localization.
 
 ## v4.1 Scope Recommendation
 

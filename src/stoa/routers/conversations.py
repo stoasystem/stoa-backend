@@ -14,18 +14,16 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
-
-from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user, require_role
+from stoa.deps import require_role
 from stoa.db.dynamodb import get_table
 from stoa.services import ai_service
 from stoa.services.rate_limit import check_and_record_chat
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -135,8 +133,10 @@ class TeacherHelpResponse(BaseModel):
 def _generate_title(first_message: str, subject: str) -> str | None:
     """Call Bedrock to generate a short conversation title (max 6 words)."""
     try:
+        import json as _json
+
         from stoa.config import get_settings
-        import boto3, json as _json
+
         settings = get_settings()
         bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
         prompt = (

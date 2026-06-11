@@ -1,5 +1,4 @@
 """File routes — S3 presigned PUT URL for direct client uploads."""
-import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
