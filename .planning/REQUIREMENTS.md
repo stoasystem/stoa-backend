@@ -79,7 +79,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILE-01 | Phase 132 | Planned |
+| MOBILE-01 | Phase 132 | Complete |
 | I18N-01 | Phase 133 | Planned |
 | I18N-02 | Phase 134 | Planned |
 | VERIFY-24 | Phase 135 | Planned |
