@@ -1,85 +1,85 @@
-# Requirements: v4.1 Mobile And Multilingual Polish Foundation
+# Requirements: v4.2 Production Notification Delivery Readiness
 
-**Milestone:** v4.1
-**Status:** Complete locally
+**Milestone:** v4.2
+**Status:** Active planning
 **Created:** 2026-06-11
 
 ## Goal
 
-Prepare STOA for mobile-friendly and multilingual product polish through backend contracts, durable locale preferences, language-safe response metadata, and clear release evidence. This backend repository should provide the API and planning foundation while explicitly tracking frontend/native UI work as deferred unless a UI workspace is added.
+Promote STOA's local realtime notification foundation into production-deliverable notification capability. v4.2 focuses on backend/infrastructure contracts, notification delivery operations, durable user preferences, email digest readiness, and release evidence. Because this is still internal development, the milestone prioritizes feature progress and practical verification over expanding broad security test scope.
 
 ## Requirements
 
-### MOBILE-01 Mobile-Ready Backend Contract And Gap Audit
+### NOTIFYDEL-01 Production Notification Infrastructure Contract
 
-Implementers have a concrete contract for mobile-critical student, parent, tutor, and admin flows before backend route polish begins.
-
-Acceptance criteria:
-
-- Contract identifies mobile-critical flows for student practice/assignments/progress, parent child overview/reports/progress, tutor queue/detail workflows, and plausible admin operations.
-- Contract audits route payloads for mobile pain points: unbounded lists, oversized nested data, inconsistent errors, unclear loading/retry semantics, and missing compact summaries.
-- Contract states that backend behavior must not branch on browser or device user-agent sniffing.
-- Contract separates backend API readiness from deferred frontend/native responsive layout, touch target, focus, and visual localization work.
-- Gap audit is updated so v4.1 planning no longer carries stale v4.0 wording.
-
-### I18N-01 Durable Locale Preference Foundation
-
-Backend supports durable user locale preferences and deterministic fallback behavior.
+Implementers have a concrete contract for production notification delivery before route or infrastructure changes begin.
 
 Acceptance criteria:
 
-- Authenticated users can read their effective locale through an existing or new profile/preferences response.
-- Authorized users can update supported locale preferences, initially covering English and German contracts unless phase planning refines the allowlist.
-- Locale preference is stored durably on backend profile/user data, not only in JWT/session state.
-- Locale normalization and fallback are shared across routes rather than reimplemented per router.
-- Focused tests cover supported locale, missing locale, unsupported or malformed locale behavior, persistence, and backwards compatibility for existing users.
+- Contract identifies the production WebSocket endpoint shape, API Gateway route/integration expectations, environment variables, deployment ownership, and fallback behavior.
+- Contract maps existing notification events to production delivery channels: in-app realtime, polling fallback, email digest readiness, and push-ready preference flags.
+- Contract defines delivery state fields needed by operators: attempted channel, delivery result, retry/skip reason, timestamp, and request/correlation identifier when available.
+- Contract separates work that can be completed in this backend repository from CDK/frontend/native work that may require another workspace.
+- `stoa_docs` gap audit and remaining feature queue mark production notification delivery as the active v4.2 build area.
 
-### I18N-02 Language-Safe Role Route Metadata
+### NOTIFYDEL-02 WebSocket Delivery Operations And Preference APIs
 
-Role-critical responses expose language/locale metadata where useful while preserving canonical API values.
-
-Acceptance criteria:
-
-- Selected student, parent, tutor, and admin responses include effective locale or language metadata where content display depends on language.
-- Canonical IDs, enum values, status codes, timestamps, permissions, and storage keys remain stable across locale preferences.
-- Translatable display labels, if introduced, are separate from canonical state fields.
-- Educational/user-generated/generated content is not automatically rewritten by v4.1; language metadata and frontend formatting responsibilities are documented.
-- Tests prove authorization and canonical route behavior remain unchanged when locale preferences differ.
-
-### VERIFY-24 v4.1 Release Gate And Deferred UI Evidence
-
-v4.1 closes with verification evidence and an honest record of completed backend work versus deferred frontend/native UI implementation.
+Backend notification APIs support production-oriented delivery operations and user preference reads/updates.
 
 Acceptance criteria:
 
-- Focused backend tests and relevant static checks pass or documented pre-existing failures are isolated.
-- Requirements, roadmap, feature gap audit, and release notes reflect completed backend locale/mobile contract work.
-- Final audit lists remaining frontend/native mobile and visual localization tasks that this backend repo cannot complete alone.
-- Release evidence includes source research references for responsive design, locale formatting, language metadata, directionality, and accessibility concerns.
+- Authenticated users can read and update durable notification preferences for supported categories/channels without changing role authorization.
+- Notification preference defaults preserve current in-product notification behavior for existing users.
+- Backend delivery helpers can decide whether a notification should attempt realtime, remain in-app only, or be queued for digest/push readiness based on preferences and event type.
+- Admin or operator-facing routes expose bounded delivery health/status signals useful during internal rollout.
+- Focused tests cover preference defaults, updates, role boundaries, and delivery decision behavior.
+
+### NOTIFYDEL-03 Email Digest And Push Preference Readiness
+
+Notification delivery is ready for digest and push expansion without requiring production provider credentials during internal development.
+
+Acceptance criteria:
+
+- Backend has a digest-ready selection/preview contract for unread or relevant notifications by recipient, category, and time window.
+- Digest payloads avoid private artifact leakage and use stable metadata fields that future email templates can consume.
+- Push/native preference flags can be stored and surfaced even if native push provider delivery remains deferred.
+- The implementation does not send broad production email/push traffic without approved provider configuration.
+- Tests or documented fixtures prove digest selection, preference interaction, and no-provider fallback behavior.
+
+### VERIFY-25 v4.2 Functional Release Gate And Notification Delivery Audit
+
+v4.2 closes with functional evidence and an updated remaining-feature audit.
+
+Acceptance criteria:
+
+- Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
+- Requirements, roadmap, state, and feature gap docs reflect completed v4.2 notification-delivery work.
+- Release evidence includes any available build/deploy/CDK/API/browser evidence, or explicitly records why live production verification was deferred.
+- Final audit lists remaining notification work: frontend/mobile visuals, native push provider rollout, production email templates, and broader notification analytics if not completed.
+- The next milestone recommendation is updated from the remaining `stoa_docs` feature queue.
 
 ## Future Requirements
 
-- Full responsive frontend implementation with mobile viewport/browser verification.
-- Native mobile application surfaces.
-- Full translation management and translator workflow.
-- Machine translation or translation memory integration.
-- RTL visual layout implementation and verification.
-- Localized AI tutoring/content generation beyond explicit language metadata.
-- Production notification delivery, live payment rollout, support integrations, rich content authoring, and deeper analytics.
+- Full responsive frontend/native mobile implementation and browser/mobile viewport verification.
+- Full frontend visual localization and translated UI rollout.
+- Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
+- Support-ticket/evidence destination integrations after approved connector or credential path exists.
+- Automatic student assignment of generated exercises and longer-term adaptive sequencing.
+- Rich curriculum authoring workflow, production content QA, analytics dashboards, and deeper operations reporting.
 
 ## Out of Scope
 
-- Server-side browser or device sniffing.
-- Automatic translation of tutor notes, student free text, generated explanations, reports, or other educational content.
-- Replacing canonical API values with localized labels.
-- Claiming frontend mobile completion from backend-only work.
-- New translation provider, localization database, or infrastructure service unless later phase evidence proves it necessary.
+- Production mutation smoke that sends real customer notification traffic without explicit approval.
+- Native mobile push provider credential rollout unless approved provider details are available.
+- Marketing automation or campaign messaging.
+- Replacing frontend responsive/localized UI work that belongs in the UI workspace.
+- Reworking already-completed report operations security/compliance evidence beyond what v4.2 feature work needs.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILE-01 | Phase 132 | Complete |
-| I18N-01 | Phase 133 | Complete |
-| I18N-02 | Phase 134 | Complete |
-| VERIFY-24 | Phase 135 | Complete |
+| NOTIFYDEL-01 | Phase 136 | Planned |
+| NOTIFYDEL-02 | Phase 137 | Planned |
+| NOTIFYDEL-03 | Phase 138 | Planned |
+| VERIFY-25 | Phase 139 | Planned |

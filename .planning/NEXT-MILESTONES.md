@@ -1,23 +1,26 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after completing v4.1
+**Updated:** 2026-06-11 after selecting v4.2
 **Mode:** product functionality first
 
 ## v4.2 Production Notification Delivery Readiness
 
+**Status:** Active
+
 Goal: promote the local realtime notification foundation toward deployable production delivery and durable user preferences.
 
-Candidate phases:
+Planned phases:
 
 - Phase 136: Production Notification Infrastructure Contract.
-- Phase 137: API Gateway WebSocket And Delivery Operations Readiness.
-- Phase 138: Push/Email Notification Preference And Digest Readiness.
+- Phase 137: WebSocket Delivery Operations And Preference APIs.
+- Phase 138: Email Digest And Push Preference Readiness.
 - Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
 
 Scope:
 
-- Add CDK/API Gateway WebSocket route wiring, deploy readiness, live-smoke protocol, and rollback evidence for production realtime delivery.
-- Add notification preference and digest readiness for push/email channels where approved provider credentials exist.
+- Define production API Gateway WebSocket route/integration expectations, deployment ownership, rollback, and live-smoke protocol.
+- Add durable notification preferences and delivery decision/status behavior for realtime, in-app fallback, digest-ready, and push-ready channels.
+- Add email digest selection/preview readiness and push/native preference metadata without requiring provider credentials during internal development.
 - Keep broad native-app push rollout and notification marketing automation out of scope.
 
 ## v4.3 Frontend Mobile And Visual Localization Rollout

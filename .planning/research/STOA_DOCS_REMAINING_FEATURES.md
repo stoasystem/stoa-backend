@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-10
+**Updated:** 2026-06-11
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -11,27 +11,26 @@
 - AI teacher tools: summaries, suggested focus, draft explanations, and reviewed exercise drafts.
 - Local functional WebSocket notification delivery and notification center fallback.
 - Payment provider integration MVP with checkout/status/webhook APIs and parent/admin billing UX.
+- Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
+- Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 
 ## Remaining Feature Build Queue
 
-1. **v4.0 Adaptive Learning Memory And Assignment** - active.
-   Extend learning profile seeds into durable student memory, reviewed assignment workflows, student next-practice UX, and parent progress signals.
+1. **v4.2 Production Notification Delivery Readiness** - active.
+   Promote local realtime notifications toward production-deliverable behavior: production WebSocket contract, delivery operations/status, notification preferences, email digest readiness, and push-ready metadata.
 
-2. **v4.1 Mobile And Multilingual Polish Foundation** - next recommended.
-   Improve mobile ergonomics across student/parent/tutor flows and expand German-first multilingual coverage.
+2. **v4.3 Frontend Mobile And Visual Localization Rollout** - next candidate after backend notification readiness.
+   Implement the responsive frontend/native-adjacent work and translated UI rollout that v4.1 intentionally left outside this backend repository.
 
-3. **Production Notification Delivery Readiness**.
-   Finish production API Gateway WebSocket wiring, push/email preferences, notification digests, live-smoke expectations, and rollback surfaces.
-
-4. **Live Payment Rollout And Billing Operations**.
+3. **v4.4 Live Payment Rollout And Billing Operations**.
    Roll out real provider credentials, TWINT production validation, invoices, receipts, refunds, tax/accounting, and dunning.
 
-5. **Support Integrations And Operations Handoff**.
+4. **Support Integrations And Operations Handoff**.
    Add support-ticket/evidence destination integrations after an approved connector or credential path exists.
 
-6. **Later Product Expansion**.
-   Rich curriculum authoring workflow, production content QA/analytics, refund/accounting/tax/dunning operations, native apps, full autonomous tutoring decisions, and deeper compliance operations.
+5. **Later Product Expansion**.
+   Rich curriculum authoring workflow, production content QA/analytics, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, and deeper operations reporting.
 
 ## Current Planning Decision
 
-The next stage is v4.0 because `stoa_docs` explicitly lists personalized learning memory in Phase 2, and the shipped subject/profile/curriculum/AI-draft foundations now provide enough signal to build user-visible memory and reviewed assignment workflows.
+The next stage is v4.2 because `stoa_docs` calls for realtime/push/email notification expansion, and the backend repository can make direct progress without waiting for the UI workspace. Internal development should prioritize feature construction: delivery contracts, preference APIs, digest readiness, and operator-visible delivery state.

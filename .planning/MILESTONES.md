@@ -810,5 +810,32 @@ Key accomplishments:
 
 Known deferred items at close: production deploy/live smoke, full responsive frontend/native implementation, visual localization and translated UI copy, RTL verification, machine translation or translation management, production notification delivery, live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
 
+### v4.2 Production Notification Delivery Readiness
+
+**Status:** Active planning
+**Started:** 2026-06-11
+**Roadmap:** `.planning/milestones/v4.2-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.2-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/136-production-notification-infrastructure-contract/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Promote STOA's local realtime notification foundation into production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
+**Phases:** 4
+**Plans:** 0/4 complete
+**Requirements:** 0/4 complete
+
+Planned phases:
+
+- Phase 136: Production Notification Infrastructure Contract.
+- Phase 137: WebSocket Delivery Operations And Preference APIs.
+- Phase 138: Email Digest And Push Preference Readiness.
+- Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
+
+Feature priorities:
+
+- Confirm production WebSocket endpoint, route/integration, environment, and fallback contracts.
+- Add durable notification category/channel preferences without breaking existing in-product notifications.
+- Prepare digest and push preference contracts while avoiding live production traffic without approved provider configuration.
+- Capture focused functional evidence and keep future frontend/native/mobile surfaces explicit.
+
 ---
-*Last updated: 2026-06-11 after completing v4.1 local backend release gate*
+*Last updated: 2026-06-11 after selecting v4.2 production notification delivery readiness*

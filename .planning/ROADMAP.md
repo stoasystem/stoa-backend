@@ -33,12 +33,13 @@
 - [x] **v3.8 Full Curriculum Rollout** - Completed local release gate 2026-06-09.
 - [x] **v3.9 Payment Provider Integration MVP** - Completed local release gate 2026-06-09.
 - [x] **v4.0 Adaptive Learning Memory And Assignment** - Completed local backend release gate 2026-06-10.
+- [x] **v4.1 Mobile And Multilingual Polish Foundation** - Completed local backend release gate 2026-06-11.
 
-## v4.1 Mobile And Multilingual Polish Foundation
+## v4.2 Production Notification Delivery Readiness
 
-**v4.1 Mobile And Multilingual Polish Foundation** - Complete locally.
+**v4.2 Production Notification Delivery Readiness** - Active planning.
 
-Goal: prepare mobile-friendly and multilingual polish through backend contracts, durable locale preferences, language-safe response metadata, and release evidence that separates completed backend work from deferred frontend/native UI implementation.
+Goal: promote local realtime notification foundations toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, notification preferences, email digest readiness, and focused release evidence.
 
 ## Phases
 
@@ -47,102 +48,102 @@ Goal: prepare mobile-friendly and multilingual polish through backend contracts,
 - Integer phases continue across milestones.
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
-- [x] **Phase 132: Mobile And Multilingual Contract Foundation** - Define backend/client boundaries, mobile UAT criteria, supported locale policy, and the v4.1 gap audit. (completed 2026-06-11)
-- [x] **Phase 133: Locale Preference APIs** - Implement durable locale preference storage, profile exposure, normalization, fallback, and focused tests. (completed 2026-06-11)
-- [x] **Phase 134: Role Route Contract Polish** - Apply language metadata and mobile-friendly response checks to selected student, parent, tutor, and admin flows. (completed 2026-06-11)
-- [x] **Phase 135: Release Gate And Documentation** - Verify regression coverage, update docs/gap audit, and record deferred frontend/native scope. (completed 2026-06-11)
+- [ ] **Phase 136: Production Notification Infrastructure Contract** - Define production WebSocket route/integration expectations, event/channel mapping, delivery state model, and backend versus infrastructure ownership.
+- [ ] **Phase 137: WebSocket Delivery Operations And Preference APIs** - Add durable notification preference APIs and backend delivery decision/status behavior for realtime and fallback channels.
+- [ ] **Phase 138: Email Digest And Push Preference Readiness** - Add digest-ready selection/preview contracts and push-ready preference metadata without requiring live provider credentials.
+- [ ] **Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit** - Verify focused backend behavior, update docs, capture available deploy/build evidence, and record deferred notification surfaces.
 
 ## Phase Details
 
-### Phase 132: Mobile And Multilingual Contract Foundation
+### Phase 136: Production Notification Infrastructure Contract
 
-**Goal**: Define v4.1 backend/client scope, mobile-readiness criteria, supported-locale policy, route audit targets, and gap-audit updates before code changes.
-**Depends on**: v4.1 research
-**Requirements**: MOBILE-01
+**Goal**: Define the production notification delivery contract, route/integration expectations, event/channel mapping, and release boundaries before code changes.
+**Depends on**: v4.1 closeout and `stoa_docs` feature gap audit
+**Requirements**: NOTIFYDEL-01
 **Success Criteria** (what must be TRUE):
 
-  1. Mobile-critical student, parent, tutor, and admin flows are identified with backend route contract implications.
-  2. Supported locale and fallback policy is documented for the backend foundation.
-  3. Backend versus frontend/native ownership is explicit, including what this repository cannot visually verify.
-  4. The feature gap audit is updated from v4.0 personalization language to v4.1 mobile/multilingual scope.
+  1. Production WebSocket endpoint, API Gateway route expectations, environment variables, and fallback behavior are documented.
+  2. Existing notification event types are mapped to in-app realtime, polling fallback, digest readiness, and push-ready preference channels.
+  3. Delivery state fields needed for internal rollout and operator debugging are defined.
+  4. Backend, CDK, frontend, and native ownership boundaries are explicit.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 132-01: Define mobile and multilingual backend contract.
+- [ ] 136-01: Define production notification delivery contract.
 
-### Phase 133: Locale Preference APIs
+### Phase 137: WebSocket Delivery Operations And Preference APIs
 
-**Goal**: Add durable locale preference support with shared normalization/fallback and authenticated profile/preference API exposure.
-**Depends on**: Phase 132
-**Requirements**: I18N-01
+**Goal**: Add durable notification preferences and backend delivery-decision/status behavior for production-oriented internal rollout.
+**Depends on**: Phase 136
+**Requirements**: NOTIFYDEL-02
 **Success Criteria** (what must be TRUE):
 
-  1. Authenticated profile/preference responses expose effective locale for existing and new users.
-  2. Supported locale updates persist durably on backend profile/user data.
-  3. Missing, malformed, unsupported, and supported locale behavior is deterministic and tested.
-  4. Existing authorization and clients without locale inputs remain compatible.
+  1. Users can read and update supported notification category/channel preferences.
+  2. Existing in-product notification behavior remains enabled by default for existing users.
+  3. Delivery helpers honor preferences when deciding realtime, in-app only, digest-ready, or push-ready handling.
+  4. Bounded delivery health/status signals are available for admin/operator inspection.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 133-01: Implement locale preference backend APIs.
+- [ ] 137-01: Implement notification preferences and delivery operations.
 
-### Phase 134: Role Route Contract Polish
+### Phase 138: Email Digest And Push Preference Readiness
 
-**Goal**: Apply language-safe metadata and mobile-friendly response contract checks to selected role-critical backend routes.
-**Depends on**: Phase 133
-**Requirements**: I18N-02
+**Goal**: Prepare email digest and push preference capability without depending on production provider credentials during internal development.
+**Depends on**: Phase 137
+**Requirements**: NOTIFYDEL-03
 **Success Criteria** (what must be TRUE):
 
-  1. Selected student, parent, tutor, and admin responses expose locale/language metadata where display content depends on language.
-  2. Canonical IDs, statuses, enum values, timestamps, permissions, and storage keys remain stable across locale preferences.
-  3. Mobile-sensitive list/detail or summary contracts are bounded and documented where route payloads need polish.
-  4. Focused tests cover role visibility, canonical-value stability, and metadata behavior across locales.
+  1. Backend can select or preview digest-ready notifications by recipient, category, and time window.
+  2. Digest payload shape is metadata-safe and stable for future email templates.
+  3. Push/native preference flags are stored and surfaced while provider delivery remains optional.
+  4. No-provider fallback behavior is explicit and tested.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 134-01: Polish role route contracts for locale and mobile readiness.
+- [ ] 138-01: Implement digest and push preference readiness.
 
-### Phase 135: Release Gate And Documentation
+### Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit
 
-**Goal**: Close v4.1 with verification evidence, updated planning artifacts, and an honest deferred-scope record for frontend/native mobile and visual localization work.
-**Depends on**: Phase 134
-**Requirements**: VERIFY-24
+**Goal**: Close v4.2 with focused functional verification and updated `stoa_docs` remaining-feature planning.
+**Depends on**: Phase 138
+**Requirements**: VERIFY-25
 **Success Criteria** (what must be TRUE):
 
-  1. Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
-  2. Requirements, roadmap, feature gap audit, and release evidence reflect completed v4.1 backend work.
-  3. Deferred frontend/native mobile and visual localization tasks are explicitly listed.
-  4. Final milestone audit ties shipped behavior back to MOBILE-01, I18N-01, I18N-02, and VERIFY-24.
+  1. Focused backend tests and relevant checks pass or isolate documented pre-existing failures.
+  2. Requirements, roadmap, state, feature gap audit, and remaining-feature queue reflect completed v4.2 work.
+  3. Available build/deploy/CDK/API/browser evidence is captured, or production verification deferral is explicit.
+  4. v4.3 recommendation is updated from the remaining feature queue.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 135-01: Verify v4.1 and update release documentation.
+- [ ] 139-01: Verify v4.2 and update release documentation.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 132 Mobile And Multilingual Contract Foundation | v4.1 | 1/1 | Complete   | 2026-06-11 |
-| 133 Locale Preference APIs | v4.1 | 1/1 | Complete   | 2026-06-11 |
-| 134 Role Route Contract Polish | v4.1 | 1/1 | Complete   | 2026-06-11 |
-| 135 Release Gate And Documentation | v4.1 | 1/1 | Complete   | 2026-06-11 |
+| 136 Production Notification Infrastructure Contract | v4.2 | 0/1 | Planned | - |
+| 137 WebSocket Delivery Operations And Preference APIs | v4.2 | 0/1 | Planned | - |
+| 138 Email Digest And Push Preference Readiness | v4.2 | 0/1 | Planned | - |
+| 139 v4.2 Functional Release Gate And Notification Delivery Audit | v4.2 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILE-01 | Phase 132 | Complete |
-| I18N-01 | Phase 133 | Complete |
-| I18N-02 | Phase 134 | Complete |
-| VERIFY-24 | Phase 135 | Complete |
+| NOTIFYDEL-01 | Phase 136 | Planned |
+| NOTIFYDEL-02 | Phase 137 | Planned |
+| NOTIFYDEL-03 | Phase 138 | Planned |
+| VERIFY-25 | Phase 139 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing v4.1 local release gate*
+*Last updated: 2026-06-11 after selecting v4.2 production notification delivery readiness*

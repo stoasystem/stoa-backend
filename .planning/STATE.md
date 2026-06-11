@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.1
-milestone_name: Mobile And Multilingual Polish Foundation
-status: complete
-last_updated: "2026-06-11T12:05:00.000Z"
+milestone: v4.2
+milestone_name: Production Notification Delivery Readiness
+status: planning
+last_updated: "2026-06-11T12:47:45+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 4
-  completed_plans: 4
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,45 +20,43 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.1 mobile and multilingual polish foundation.
+**Current focus:** v4.2 production notification delivery readiness.
 
 ## Current Position
 
-Phase: 135 - Release Gate And Documentation
-Plan: 135-01
-Status: Complete locally
-Last activity: 2026-06-11 — Completed v4.1 local backend release gate
+Phase: 136 - Production Notification Infrastructure Contract
+Plan: 136-01
+Status: Planning
+Last activity: 2026-06-11 - Selected v4.2 after syncing v4.1 docs to `origin/main` and rechecking the `stoa_docs` remaining feature queue.
 
 ## Accumulated Context
 
 ### Decisions
 
 - v3.4 added subject taxonomy, topic seeds, and student learning profile foundations.
+- v3.6 completed local functional WebSocket realtime notifications, including backend connection records, event fanout helpers, frontend realtime client behavior, and polling fallback.
 - v3.7 added reviewed AI exercise drafts but intentionally did not assign them automatically.
 - v3.8 added curriculum catalog, exercise bank, progress APIs, and student/parent/tutor curriculum UX.
 - v3.9 completed the local payment provider integration MVP.
-- `stoa_docs` Phase 2 still calls for personalized learning memory and mobile/responsive polish; adaptive memory is the strongest next feature because it compounds curriculum, AI drafts, and parent/tutor visibility.
-- v4.0 delivered local backend product construction: durable memory snapshots, next-practice recommendations, reviewed assignment APIs, and student/tutor/parent route contracts.
-- v4.1 should prepare mobile-friendly and multilingual polish through contracts, locale support, language-safe response boundaries, and release evidence before broader frontend/native rollout.
-- Phase 132 set the v4.1 backend contract: `en`/`de` initial locale support, durable profile-level locale preference, no backend device sniffing, canonical values remain locale-neutral, and frontend/native visual polish remains deferred outside this backend workspace.
-- Phase 133 added shared locale normalization/fallback, exposed `preferredLocale`/`effectiveLocale` on `/auth/me`, and added `PATCH /auth/me/preferences/locale` for durable profile locale updates.
-- Phase 134 added additive locale metadata to adaptive learning memory, recommendation, assignment, assignment-list, and parent progress responses while tests preserve canonical values across `de` and `en`.
-- Phase 135 closed v4.1 locally with 325 passing backend tests, documented pre-existing full-ruff debt, release gate evidence, and explicit frontend/native deferred scope.
+- v4.0 delivered durable memory snapshots, next-practice recommendations, reviewed assignment APIs, and student/tutor/parent route contracts.
+- v4.1 delivered the backend mobile/multilingual foundation: `en`/`de` locale policy, durable locale preferences, additive route metadata, and deferred frontend/native ownership.
+- The next backend-feasible `stoa_docs` feature gap is production notification delivery readiness. Full frontend/native mobile and visual localization remain important, but they require the UI workspace.
+- v4.2 should prioritize feature construction for internal development: production WebSocket delivery contract, notification preferences, delivery operations, email digest readiness, and push-ready preference metadata.
 
 ### Pending Todos
 
-- Production deploy/live smoke remains pending if v4.0 is promoted beyond local backend completion.
-- Frontend component implementation remains outside this backend repository.
-- Select the next milestone before new implementation work.
+- Execute Phase 136: define production notification infrastructure and channel contract.
+- Plan and implement Phase 137 notification preference APIs and delivery operations.
+- Plan and implement Phase 138 email digest and push preference readiness.
+- Close Phase 139 with functional release evidence and updated feature gap audit.
 
 ### Blockers/Concerns
 
-- Fully autonomous tutoring decisions remain out of scope.
-- Assignment workflows should keep teacher/admin review for generated exercises.
-- Memory freshness and stale evidence must be visible so users do not overtrust old data.
-- No production deployment or live smoke was performed during this autonomous local run.
-- This workspace is backend-only; actual frontend/native UI implementation may require another workspace.
+- This workspace is backend-only; actual frontend/native responsive UI and visual localization implementation may require another workspace.
+- CDK/API Gateway WebSocket deployment work may require the infrastructure repository or explicit CDK surface in this repository.
+- Native push provider rollout and production email sending should wait for approved provider credentials and explicit rollout decision.
+- Production mutation smoke should not send real customer notifications without explicit approval.
 
 ## Operator Next Steps
 
-- v4.1 is complete locally. Next milestone is not selected.
+- Start Phase 136 and write the production notification delivery contract.

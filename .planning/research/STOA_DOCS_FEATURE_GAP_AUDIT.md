@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after completing v4.1 mobile and multilingual foundation
+**Updated:** 2026-06-11 after selecting v4.2 production notification delivery readiness
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -30,6 +30,8 @@ v3.9 completed the local functional payment-provider integration MVP. The milest
 
 After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend foundation for mobile-friendly and multilingual polish: mobile/backend contract documentation, durable locale preferences, language-safe adaptive route metadata, and explicit deferred frontend/native UI scope.
 
+v4.2 is now selected as the active feature-building milestone because the backend workspace can directly advance production notification delivery readiness: production WebSocket delivery contracts, durable notification preferences, delivery state/status behavior, email digest readiness, and push-ready preference metadata. Full responsive frontend/native implementation and visual localization remain important but require the UI workspace.
+
 ## Completed Or Largely Complete
 
 - Auth basics: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`.
@@ -51,6 +53,7 @@ After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend
 - Full curriculum rollout: curriculum hierarchy, content states, lesson/exercise bank contract, backend catalog/exercise/progress APIs, student/parent/tutor UI signals, and release-gate evidence for math, physics, German, and English.
 - Payment provider integration MVP: Stripe-first provider scope, STOA tier mapping, billing state model, checkout session creation, signed webhook lifecycle, parent checkout/status UX, admin billing visibility, and release-gate evidence.
 - Adaptive learning memory and assignment foundation: durable memory fields, source inputs, reviewed assignment lifecycle, recommendation boundaries, student/tutor/parent visibility requirements, backend APIs, and route contracts.
+- Mobile and multilingual backend foundation: mobile-ready route contracts, durable `en`/`de` locale preferences, language-safe adaptive response metadata, and release evidence with deferred frontend/native ownership.
 
 ## v3.0 Closed MVP Gaps
 
@@ -133,8 +136,7 @@ After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend
 ## Phase 2 / Future Expansion
 
 - Live payment-provider rollout with approved production credentials, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-- Production API Gateway WebSocket/CDK route wiring, deploy evidence, and live endpoint smoke for realtime notifications.
-- Push notifications, native notifications, and email notification digests.
+- Full production notification rollout beyond v4.2 readiness: live endpoint smoke, real provider credentials, native push token registration, email templates, and broader notification analytics.
 - Automatic student assignment of generated exercises and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
 - Full responsive frontend implementation with mobile viewport/browser verification.
@@ -143,9 +145,9 @@ After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend
 
 ## Remaining Feature Build Order
 
-1. Full responsive frontend/native mobile implementation after UI workspace availability.
-2. Full frontend visual localization and translated UI rollout.
-3. Production notification delivery readiness: API Gateway WebSocket wiring, push/email preferences, and digest flows.
+1. v4.2 Production notification delivery readiness: WebSocket production contract, preference APIs, delivery state, digest readiness, and push-ready metadata.
+2. Full responsive frontend/native mobile implementation after UI workspace availability.
+3. Full frontend visual localization and translated UI rollout.
 4. Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 5. Support-ticket/evidence destination integrations after approved connector or credential path exists.
 6. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
@@ -257,6 +259,24 @@ v4.0 completed adaptive learning memory and reviewed assignment workflows:
 2. Add backend memory snapshot, next-practice recommendation, and reviewed assignment APIs using question, curriculum, AI draft, feedback, and weekly report signals.
 3. Add student next-practice/assignment UX, tutor assignment controls, and parent progress signals.
 4. Close with focused functional checks and record residual fully autonomous tutoring, long-term sequencing, analytics dashboard, and native mobile scope.
+
+## v4.1 Scope Outcome
+
+v4.1 completed the backend mobile and multilingual polish foundation:
+
+1. Defined backend/client ownership boundaries for mobile-critical flows and visual localization.
+2. Added durable locale preference storage and authenticated profile/preference APIs.
+3. Added language-safe route metadata while preserving canonical API values.
+4. Closed with backend verification and explicit deferred frontend/native rollout scope.
+
+## v4.2 Scope Recommendation
+
+v4.2 should complete production notification delivery readiness:
+
+1. Define production WebSocket route/integration, configuration, fallback, and channel mapping contracts.
+2. Add durable notification preference APIs and backend delivery decision/status behavior.
+3. Add digest-ready selection/preview behavior and push preference metadata without requiring live provider credentials during internal development.
+4. Close with focused functional evidence and update the remaining-feature queue toward frontend/mobile localization or live payment rollout.
 
 ## v4.1 Scope Recommendation
 
