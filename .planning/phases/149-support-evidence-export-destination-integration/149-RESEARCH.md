@@ -342,17 +342,17 @@ Use this canonicalization style for support-delivery payload digests so duplicat
 | A3 | The first successful `internal_queue` lifecycle state should be `queued` rather than `sent`, because the row represents operator queue intake. | `## Open Questions`, `## Validation Architecture` | Medium: if the team wants `sent`, downstream queue/status semantics and tests will differ. |
 | A4 | `idempotency_key` should be derived from destination mode + canonical payload digest + sanitized request ID/config version, not from `package_id` alone. | `## Common Pitfalls`, `## Code Examples` | Medium: if a different stable key is chosen, duplicate detection tests must be adjusted accordingly. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should a successful `internal_queue` write return `queued` or `sent`?**
    - What we know: The contract vocabulary includes both, and the selected destination is explicitly an internal queue/status record rather than a third-party dispatch. [VERIFIED: .planning/phases/148-support-destination-contract-and-credential-readiness/148-SUPPORT-DESTINATION-CONTRACT.md]
-   - What's unclear: The contract does not explicitly assign the first success state for `internal_queue`. [VERIFIED: .planning/phases/148-support-destination-contract-and-credential-readiness/148-SUPPORT-DESTINATION-CONTRACT.md]
-   - Recommendation: Plan Phase 149 around `queued` and let Phase 150 operator views consume that as the default successful intake state. [ASSUMED]
+   - Resolution: Use `queued` for the first successful `internal_queue` persistence state. `internal_queue` represents STOA-owned operator queue intake, not a completed third-party dispatch, so `sent` remains reserved for future external provider adapters.
+   - Decision source: Phase 148 selected `internal_queue` as an internal delivery/status ID path and Phase 149 plans Phase 150 queue visibility from those records.
 
 2. **Should the frontend/backend reuse the package route or call a sibling delivery route?**
    - What we know: The current route is named and shaped as a package generator, and manual fallback must remain backward-compatible. [VERIFIED: codebase grep]
-   - What's unclear: There is no locked decision on exact route naming. [VERIFIED: .planning/phases/149-support-evidence-export-destination-integration/149-CONTEXT.md]
-   - Recommendation: Prefer a sibling route in planning unless there is a strong reason to keep one endpoint. [ASSUMED]
+   - Resolution: Add a sibling admin delivery route for Phase 149, tentatively `POST /admin/reports/support-handoff-delivery`, and leave `POST /admin/reports/support-handoff-package` unchanged for manual fallback and existing refusal behavior.
+   - Decision source: Phase 149 backward-compatibility requirement and the Phase 148 contract's distinction between package validation and delivery lifecycle status.
 
 ## Environment Availability
 
