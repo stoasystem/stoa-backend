@@ -81,6 +81,10 @@ class SubscriptionBillingResponse(BaseModel):
     readiness: dict[str, Any] = Field(default_factory=dict)
     twint: dict[str, Any] = Field(default_factory=dict)
     paymentMethodType: str | None = None
+    latestInvoice: dict[str, Any] = Field(default_factory=dict)
+    refund: dict[str, Any] = Field(default_factory=dict)
+    dunning: dict[str, Any] = Field(default_factory=dict)
+    accountingHandoff: dict[str, Any] = Field(default_factory=dict)
     currentPeriodStart: str | None = None
     currentPeriodEnd: str | None = None
     cancelAtPeriodEnd: bool = False
@@ -96,6 +100,11 @@ class SubscriptionBillingResponse(BaseModel):
 
 class SubscriptionBillingListResponse(BaseModel):
     items: list[SubscriptionBillingResponse]
+    count: int
+
+
+class SubscriptionAccountingExportResponse(BaseModel):
+    items: list[dict[str, Any]]
     count: int
 
 
@@ -739,6 +748,22 @@ async def list_subscription_billing(
         settings=settings,
     )
     return SubscriptionBillingListResponse(items=items, count=len(items))
+
+
+@router.get("/subscriptions/billing/accounting-export", response_model=SubscriptionAccountingExportResponse)
+async def list_subscription_accounting_export(
+    limit: int = Query(default=100, ge=1, le=500),
+    parent_id: Optional[str] = Query(default=None),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """List redacted provider billing rows for Swiss accounting handoff."""
+    items = subscription_service.list_admin_accounting_handoff(
+        limit=limit,
+        parent_id=parent_id,
+        settings=settings,
+    )
+    return SubscriptionAccountingExportResponse(items=items, count=len(items))
 
 
 @router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)

@@ -2,7 +2,17 @@
 
 **Milestone:** v4.4 Live Payment Provider Rollout
 **Requirement:** PAYLIVE-03
-**Status:** Planned
+**Status:** Implemented
+
+## Implementation Notes
+
+- Parent/admin billing responses now include `latestInvoice`, `refund`, `dunning`, and `accountingHandoff`.
+- Stripe invoice webhooks project provider invoice IDs, hosted invoice URLs, receipt URLs, invoice status, currency, amounts, tax provider-managed status, period bounds, and selected payment method context.
+- Refund readiness is non-mutating and reports provider handoff state, required operator reason, eligible amount, currency, and provider references.
+- Refund lifecycle webhook events can update refund status and accounting handoff references.
+- Dunning projections expose retry and payment-failed states without exposing raw provider payloads.
+- The admin accounting export endpoint returns redacted handoff rows for finance/reconciliation.
+- TWINT is represented through the same Stripe payment method context as card and other provider methods.
 
 ## Invoice And Receipt Readiness
 
@@ -30,7 +40,7 @@ Refund readiness should include:
 - Provider handoff state: `not_eligible`, `ready_for_provider`, `requested`, `succeeded`, `failed`, `cancelled`, or equivalent.
 - Audit/status timestamps.
 
-Direct refund execution is optional for v4.4. If implemented, it must be explicit and operator-driven.
+Direct refund execution is not enabled in Phase 146. Refund support is a readiness and provider-handoff surface only.
 
 ## Dunning Readiness
 

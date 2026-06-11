@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.4
 milestone_name: Live Payment Provider Rollout
 status: planning
-last_updated: "2026-06-11T23:02:49+02:00"
+last_updated: "2026-06-11T23:48:26+02:00"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 146 - Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff
+Phase: 147 - v4.4 Payment Release Gate, Rollout Controls, And Support Audit
 Plan: —
 Status: Planning
-Last activity: 2026-06-11 - Completed Phase 145 production checkout/webhook gating, Stripe dependency wiring, TWINT readiness metadata, and focused subscription verification.
+Last activity: 2026-06-11 - Completed Phase 146 billing operations, invoice/refund/dunning projections, Swiss accounting handoff, TWINT lifecycle metadata, and focused subscription verification.
 
 ## Accumulated Context
 
@@ -42,21 +42,22 @@ Last activity: 2026-06-11 - Completed Phase 145 production checkout/webhook gati
 - Phase 146 owns refunds, invoices, dunning, Swiss tax/accounting handoff, and TWINT lifecycle behavior inside the same Stripe billing model.
 - Phase 144 completed the live payment rollout contract and confirmed no real customer charge was enabled.
 - Phase 145 completed fail-closed readiness states, provider lookup rows, TWINT eligibility metadata, and redacted parent/admin billing readiness surfaces.
+- Phase 146 completed invoice/receipt metadata, non-mutating refund readiness, dunning projections, Swiss accounting handoff export, and TWINT lifecycle propagation.
 - Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
 
 ### Pending Todos
 
-- Phase 146 development docs are ready for billing operations, invoice, refund, dunning, and Swiss accounting handoff implementation.
 - Phase 147 development docs are ready for payment release evidence, rollout controls, and milestone closeout.
-- Next implementation step is Phase 146 code work.
+- Next implementation step is Phase 147 release-gate and closeout work.
 
 ### Blockers/Concerns
 
 - Live payment rollout requires approved production provider credentials before any real charging path is enabled.
 - Stripe-backed TWINT rollout may still require provider account capability checks, CHF eligibility verification, or external merchant onboarding state before live enablement.
-- Refund, invoice, tax/accounting, and dunning scope should prefer provider-hosted primitives and metadata handoff before building broad accounting automation.
+- Refund execution remains intentionally non-mutating; operators receive provider handoff metadata rather than direct refund mutation.
+- Swiss tax/accounting fields are provider-managed when provider data is unavailable locally.
 - Broad security/compliance testing should stay proportionate to touched payment paths during this internal development stage.
 
 ## Operator Next Steps
 
-- Start Phase 146 implementation using `.planning/phases/146-billing-operations-invoices-refunds-dunning-and-swiss-handoff/146-01-PLAN.md`.
+- Start Phase 147 implementation using `.planning/phases/147-v4-4-payment-release-gate-rollout-controls-and-support-audit/147-01-PLAN.md`.

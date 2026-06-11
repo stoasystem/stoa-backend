@@ -478,6 +478,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     settings = _settings(stripe_webhook_secret=secret)
     parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
     webhook_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
 
     checkout = parent_client.post(
         "/parents/me/subscription/checkout",
@@ -495,7 +496,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
                 "customer": "cus_test_parent",
                 "subscription": "sub_test_parent",
                 "metadata": {"requested_tier": "premium"},
-                "payment_method_types": ["twint"],
+                "payment_method_types": ["card", "twint"],
             }
         },
     }
@@ -513,6 +514,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert pending_status["status"] == "checkout_pending"
     assert pending_status["subscriptionTier"] == "free"
     assert pending_status["paymentMethodType"] == "unknown"
+    assert pending_status["dunning"]["state"] == "checkout_pending"
 
     invoice_paid = {
         "id": "evt_invoice_paid_1",
@@ -525,6 +527,28 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
                 "livemode": False,
                 "customer": "cus_test_parent",
                 "subscription": "sub_test_parent",
+                "payment_intent": "pi_test_parent",
+                "charge": "ch_test_parent",
+                "hosted_invoice_url": "https://invoice.stripe.com/i/test",
+                "receipt_url": "https://pay.stripe.com/receipts/test",
+                "status": "paid",
+                "currency": "chf",
+                "amount_due": 1500,
+                "amount_paid": 1500,
+                "amount_remaining": 0,
+                "amount_refunded": 0,
+                "tax": 115,
+                "number": "STOA-2026-0001",
+                "lines": {
+                    "data": [
+                        {
+                            "period": {
+                                "start": 1780272000,
+                                "end": 1782864000,
+                            }
+                        }
+                    ]
+                },
                 "payment_method_details": {"type": "twint"},
             }
         },
@@ -551,6 +575,20 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert billing_status["providerSubscriptionId"] == "sub_test_parent"
     assert billing_status["providerLivemode"] is False
     assert billing_status["paymentMethodType"] == "twint"
+    assert billing_status["latestInvoice"]["providerInvoiceId"] == "in_test_parent"
+    assert billing_status["latestInvoice"]["hostedInvoiceUrl"] == "https://invoice.stripe.com/i/test"
+    assert billing_status["latestInvoice"]["receiptUrl"] == "https://pay.stripe.com/receipts/test"
+    assert billing_status["latestInvoice"]["currency"] == "CHF"
+    assert billing_status["latestInvoice"]["amountPaid"] == 1500
+    assert billing_status["latestInvoice"]["taxStatus"] == "provider_managed"
+    assert billing_status["refund"]["state"] == "ready_for_provider"
+    assert billing_status["refund"]["eligibleAmount"] == 1500
+    assert billing_status["refund"]["requiresReason"] is True
+    assert billing_status["dunning"]["state"] == "active"
+    assert billing_status["accountingHandoff"]["providerInvoiceId"] == "in_test_parent"
+    assert billing_status["accountingHandoff"]["currency"] == "CHF"
+    assert billing_status["accountingHandoff"]["paymentMethodType"] == "twint"
+    assert billing_status["accountingHandoff"]["reconciliationId"] == "STOA-2026-0001"
     webhook_events = [
         event
         for event in billing_status["events"]
@@ -562,6 +600,48 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#subscription#sub_test_parent", "SUMMARY")][
         "parent_id"
     ] == "parent-1"
+    assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#charge#ch_test_parent", "SUMMARY")][
+        "parent_id"
+    ] == "parent-1"
+
+    export_response = admin_client.get("/admin/subscriptions/billing/accounting-export")
+    assert export_response.status_code == 200
+    export = export_response.json()
+    assert export["count"] == 1
+    assert export["items"][0]["providerInvoiceId"] == "in_test_parent"
+    assert export["items"][0]["taxStatus"] == "provider_managed"
+
+    refund_updated = {
+        "id": "re_test_parent",
+        "type": "refund.updated",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": "re_test_parent",
+                "object": "refund",
+                "status": "succeeded",
+                "charge": "ch_test_parent",
+                "payment_intent": "pi_test_parent",
+                "invoice": "in_test_parent",
+                "amount": 500,
+                "currency": "chf",
+            }
+        },
+    }
+    refund_payload = json.dumps(refund_updated, separators=(",", ":")).encode("utf-8")
+    refund_response = webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=refund_payload,
+        headers={"stripe-signature": _stripe_signature(refund_payload, secret)},
+    )
+    assert refund_response.status_code == 200
+    refunded_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert refunded_status["refund"]["state"] == "succeeded"
+    assert refunded_status["refund"]["providerRefundId"] == "re_test_parent"
+    assert refunded_status["latestInvoice"]["amountRefunded"] == 500
+    assert refunded_status["refund"]["eligibleAmount"] == 1000
+    assert refunded_status["accountingHandoff"]["refund"]["providerRefundId"] == "re_test_parent"
+    assert refunded_status["accountingHandoff"]["refund"]["eligibleAmount"] == 1000
 
     replacement = parent_client.post(
         "/parents/me/subscription/checkout",
@@ -594,6 +674,129 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert preserved_status["status"] == "active"
     assert preserved_status["subscriptionTier"] == "premium"
     assert profiles["parent-1"]["subscription_tier"] == "premium"
+
+
+def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
+    _install_fakes(monkeypatch)
+    secret = "whsec_test_secret"
+    settings = _settings(stripe_webhook_secret=secret)
+    parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+    webhook_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+
+    checkout = parent_client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    ).json()
+    checkout_completed = {
+        "id": "evt_checkout_completed_failed_path",
+        "type": "checkout.session.completed",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": checkout["checkoutSessionId"],
+                "object": "checkout.session",
+                "customer": "cus_test_parent_failed",
+                "subscription": "sub_test_parent_failed",
+                "metadata": {"requested_tier": "standard"},
+            }
+        },
+    }
+    checkout_payload = json.dumps(checkout_completed, separators=(",", ":")).encode("utf-8")
+    webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=checkout_payload,
+        headers={"stripe-signature": _stripe_signature(checkout_payload, secret)},
+    )
+    failed_invoice = {
+        "id": "evt_invoice_failed_1",
+        "type": "invoice.payment_failed",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": "in_failed_parent",
+                "object": "invoice",
+                "status": "open",
+                "customer": "cus_test_parent_failed",
+                "subscription": "sub_test_parent_failed",
+                "hosted_invoice_url": None,
+                "currency": "chf",
+                "amount_due": 1500,
+                "amount_paid": 0,
+                "amount_remaining": 1500,
+                "next_payment_attempt": 1780358400,
+                "payment_method_details": {"type": "twint"},
+            }
+        },
+    }
+    failed_payload = json.dumps(failed_invoice, separators=(",", ":")).encode("utf-8")
+
+    response = webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=failed_payload,
+        headers={"stripe-signature": _stripe_signature(failed_payload, secret)},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["billingStatus"] == "payment_failed"
+    billing_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert billing_status["status"] == "payment_failed"
+    assert billing_status["dunning"]["state"] == "retrying"
+    assert billing_status["dunning"]["nextPaymentAttempt"] == "2026-06-02T00:00:00+00:00"
+    assert billing_status["latestInvoice"]["hostedInvoiceUrl"] is None
+    assert billing_status["latestInvoice"]["amountRemaining"] == 1500
+    assert billing_status["paymentMethodType"] == "twint"
+    assert billing_status["refund"]["state"] == "not_eligible"
+
+    follow_up = {
+        "id": "evt_customer_updated_failed_path",
+        "type": "customer.updated",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": "cus_test_parent_failed",
+                "object": "customer",
+                "metadata": {"stoa_parent_id": "parent-1"},
+            }
+        },
+    }
+    follow_up_payload = json.dumps(follow_up, separators=(",", ":")).encode("utf-8")
+    webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=follow_up_payload,
+        headers={"stripe-signature": _stripe_signature(follow_up_payload, secret)},
+    )
+    after_follow_up = parent_client.get("/parents/me/subscription/billing").json()
+    assert after_follow_up["dunning"]["state"] == "retrying"
+    assert after_follow_up["dunning"]["nextPaymentAttempt"] == "2026-06-02T00:00:00+00:00"
+
+    recovered_invoice = {
+        "id": "evt_invoice_recovered_1",
+        "type": "invoice.paid",
+        "created": int(time.time()),
+        "data": {
+            "object": {
+                "id": "in_failed_parent",
+                "object": "invoice",
+                "status": "paid",
+                "customer": "cus_test_parent_failed",
+                "subscription": "sub_test_parent_failed",
+                "currency": "chf",
+                "amount_due": 1500,
+                "amount_paid": 1500,
+                "amount_remaining": 0,
+                "payment_method_details": {"type": "twint"},
+            }
+        },
+    }
+    recovered_payload = json.dumps(recovered_invoice, separators=(",", ":")).encode("utf-8")
+    webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=recovered_payload,
+        headers={"stripe-signature": _stripe_signature(recovered_payload, secret)},
+    )
+    recovered_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert recovered_status["status"] == "active"
+    assert recovered_status["dunning"]["state"] == "recovered"
 
 
 def test_stripe_webhook_rejects_bad_signature(monkeypatch):

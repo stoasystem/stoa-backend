@@ -52,7 +52,7 @@ Goal: move the local Stripe-first payment provider MVP toward controlled live ro
 
 - [x] **Phase 144: Live Payment Rollout Contract And Credential Readiness** - Defined the live Stripe rollout contract, explicit TWINT inclusion, smoke boundaries, and rollback switches before enabling production payment behavior.
 - [x] **Phase 145: Production Checkout, Webhook, And TWINT-Capable Stripe Gating** - Added production checkout/webhook primitives, livemode gating, and Stripe-backed TWINT eligibility handling for Swiss subscription flows.
-- [ ] **Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff** - Add post-checkout billing operations and accounting-facing lifecycle support inside the same Stripe billing model, including TWINT behavior.
+- [x] **Phase 146: Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff** - Added post-checkout billing operations and accounting-facing lifecycle support inside the same Stripe billing model, including TWINT behavior.
 - [ ] **Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit** - Capture rollout evidence, verify rollback/disable controls, update planning docs, and close the milestone with an explicit remaining-work audit.
 
 ## Phase Details
@@ -105,11 +105,11 @@ Plans:
   3. Billing exports include Swiss accounting handoff fields for invoices, refunds, taxes, reconciliation identifiers, and payment-method context from the same Stripe model.
   4. Past-due, payment-failed, retry, recovery, and escalation boundaries are visible to parents and admins, including TWINT lifecycle behavior where Stripe projects the same subscription into dunning or refund states.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 146-01: Implement billing operations, Swiss handoff, and TWINT lifecycle readiness.
+- [x] 146-01: Implement billing operations, Swiss handoff, and TWINT lifecycle readiness.
 
 ### Phase 147: v4.4 Payment Release Gate, Rollout Controls, And Support Audit
 
@@ -135,7 +135,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 144 Live Payment Rollout Contract And Credential Readiness | v4.4 | 1/1 | Complete | 2026-06-11 |
 | 145 Production Checkout, Webhook, And TWINT-Capable Stripe Gating | v4.4 | 1/1 | Complete | 2026-06-11 |
-| 146 Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff | v4.4 | 0/1 | Planned | - |
+| 146 Billing Operations, Invoices, Refunds, Dunning, And Swiss Handoff | v4.4 | 1/1 | Complete | 2026-06-11 |
 | 147 v4.4 Payment Release Gate, Rollout Controls, And Support Audit | v4.4 | 0/1 | Planned | - |
 
 ## Traceability
@@ -144,8 +144,8 @@ Plans:
 |-------------|-------|--------|
 | PAYLIVE-01 | Phase 144 | Complete |
 | PAYLIVE-02 | Phase 145 | Complete |
-| PAYLIVE-03 | Phase 146 | Planned |
+| PAYLIVE-03 | Phase 146 | Complete |
 | VERIFY-27 | Phase 147 | Planned |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 145 production checkout and webhook gating*
+*Last updated: 2026-06-11 after completing Phase 146 billing operations and Swiss handoff readiness*

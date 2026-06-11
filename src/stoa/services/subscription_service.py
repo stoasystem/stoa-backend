@@ -52,6 +52,10 @@ PROVIDER_EVENT_TYPES = {
     "customer.subscription.deleted",
     "invoice.paid",
     "invoice.payment_failed",
+    "charge.refunded",
+    "refund.created",
+    "refund.updated",
+    "refund.failed",
     "customer.updated",
 }
 
@@ -274,6 +278,21 @@ def get_admin_billing(parent_id: str, settings: Settings | None = None) -> dict[
     if response["status"] == "none":
         response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
     return response
+
+
+def list_admin_accounting_handoff(
+    *,
+    limit: int = 100,
+    parent_id: str | None = None,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    billing_rows = list_admin_billing(limit=limit, parent_id=parent_id, settings=settings)
+    return [
+        row["accountingHandoff"]
+        for row in billing_rows
+        if row.get("accountingHandoff", {}).get("providerInvoiceId")
+        or row.get("accountingHandoff", {}).get("providerSubscriptionId")
+    ]
 
 
 def handle_stripe_webhook(
@@ -833,6 +852,10 @@ def _billing_response(
             "readiness": readiness or {},
             "twint": (readiness or {}).get("twint", {}),
             "paymentMethodType": None,
+            "latestInvoice": {},
+            "refund": _refund_readiness(None),
+            "dunning": _dunning_projection(None),
+            "accountingHandoff": _accounting_handoff(None, parent_id=parent_id),
             "currentPeriodStart": None,
             "currentPeriodEnd": None,
             "cancelAtPeriodEnd": False,
@@ -863,6 +886,11 @@ def _billing_response(
             "environmentReadiness": get_billing_readiness(settings) if settings else {},
             "twint": _stored_twint(item),
             "paymentMethodType": item.get("payment_method_type"),
+            "latestInvoice": item.get("latest_invoice") or {},
+            "refund": item.get("refund_summary") or _refund_readiness(item),
+            "dunning": item.get("dunning") or _dunning_projection(item),
+            "accountingHandoff": item.get("accounting_handoff")
+            or _accounting_handoff(item, parent_id=parent_id),
             "currentPeriodStart": item.get("current_period_start"),
             "currentPeriodEnd": item.get("current_period_end"),
             "cancelAtPeriodEnd": bool(item.get("cancel_at_period_end") or False),
@@ -1336,8 +1364,15 @@ def _billing_transition(
         status = "active"
     elif event_type == "invoice.payment_failed":
         status = "payment_failed"
+    elif event_type in {"charge.refunded", "refund.created", "refund.updated"}:
+        status = existing.get("billing_status") or "provider_unknown"
+    elif event_type == "refund.failed":
+        status = existing.get("billing_status") or "provider_unknown"
     elif event_type == "customer.updated":
         status = existing.get("billing_status") or "provider_unknown"
+    invoice = _invoice_from_provider_object(event_type, event_object, existing)
+    refund = _refund_from_provider_object(event_type, event_object, existing)
+    invoice_period = _invoice_period(event_object) if str(event_object.get("object") or "") == "invoice" else {}
     return {
         "billing_status": status,
         "subscription_tier": subscription_tier,
@@ -1351,12 +1386,17 @@ def _billing_transition(
         if str(event_object.get("object") or "") == "checkout.session"
         else existing.get("checkout_session_id"),
         "current_period_start": _timestamp_to_iso(event_object.get("current_period_start"))
+        or invoice_period.get("start")
         or existing.get("current_period_start"),
         "current_period_end": _timestamp_to_iso(event_object.get("current_period_end"))
+        or invoice_period.get("end")
         or existing.get("current_period_end"),
         "cancel_at_period_end": bool(event_object.get("cancel_at_period_end") or False),
         "payment_method_type": _selected_payment_method_type_from_provider_object(event_object)
         or existing.get("payment_method_type"),
+        "latest_invoice": invoice,
+        "refund": refund,
+        "next_payment_attempt": _timestamp_to_iso(event_object.get("next_payment_attempt")),
     }
 
 
@@ -1370,6 +1410,239 @@ def _selected_payment_method_type_from_provider_object(event_object: dict[str, A
         payment_method_type = payment_method_details.get("type")
         return str(payment_method_type) if payment_method_type else None
     return None
+
+
+def _invoice_from_provider_object(
+    event_type: str,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+) -> dict[str, Any]:
+    current = dict(existing.get("latest_invoice") or {})
+    object_type = str(event_object.get("object") or "")
+    if object_type != "invoice" and not event_object.get("invoice"):
+        return current
+    invoice = event_object if object_type == "invoice" else {}
+    provider_invoice_id = _provider_id_value(invoice.get("id") or event_object.get("invoice"))
+    if not provider_invoice_id:
+        return current
+    period = _invoice_period(invoice)
+    invoice_status = invoice.get("status")
+    if event_type == "invoice.paid" and not invoice_status:
+        invoice_status = "paid"
+    elif event_type == "invoice.payment_failed" and not invoice_status:
+        invoice_status = "payment_failed"
+    payment_method_type = _selected_payment_method_type_from_provider_object(invoice)
+    return {
+        **current,
+        "providerInvoiceId": provider_invoice_id,
+        "providerSubscriptionId": _provider_id_value(invoice.get("subscription"))
+        or current.get("providerSubscriptionId")
+        or existing.get("provider_subscription_id"),
+        "providerPaymentIntentId": _provider_id_value(invoice.get("payment_intent"))
+        or current.get("providerPaymentIntentId"),
+        "providerChargeId": _provider_id_value(invoice.get("charge") or invoice.get("latest_charge"))
+        or current.get("providerChargeId"),
+        "hostedInvoiceUrl": invoice.get("hosted_invoice_url") or current.get("hostedInvoiceUrl"),
+        "receiptUrl": invoice.get("receipt_url") or current.get("receiptUrl"),
+        "invoiceStatus": invoice_status or current.get("invoiceStatus"),
+        "currency": str(invoice.get("currency") or current.get("currency") or "chf").upper(),
+        "amountDue": _amount_value(invoice.get("amount_due"), current.get("amountDue")),
+        "amountPaid": _amount_value(invoice.get("amount_paid"), current.get("amountPaid")),
+        "amountRemaining": _amount_value(invoice.get("amount_remaining"), current.get("amountRemaining")),
+        "amountRefunded": _amount_value(invoice.get("amount_refunded"), current.get("amountRefunded")),
+        "taxAmount": _amount_value(invoice.get("tax"), current.get("taxAmount")),
+        "taxStatus": "provider_managed" if "tax" in invoice or invoice.get("automatic_tax") else "provider_managed",
+        "periodStart": period.get("start") or current.get("periodStart"),
+        "periodEnd": period.get("end") or current.get("periodEnd"),
+        "paymentMethodType": payment_method_type or current.get("paymentMethodType"),
+        "reconciliationId": invoice.get("number") or provider_invoice_id,
+    }
+
+
+def _invoice_period(invoice: dict[str, Any]) -> dict[str, str | None]:
+    lines = ((invoice.get("lines") or {}).get("data") or []) if isinstance(invoice.get("lines"), dict) else []
+    line_period = lines[0].get("period") if lines and isinstance(lines[0], dict) else {}
+    if not isinstance(line_period, dict):
+        line_period = {}
+    return {
+        "start": _timestamp_to_iso(invoice.get("period_start") or line_period.get("start")),
+        "end": _timestamp_to_iso(invoice.get("period_end") or line_period.get("end")),
+    }
+
+
+def _refund_from_provider_object(
+    event_type: str,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+) -> dict[str, Any] | None:
+    if event_type not in {"charge.refunded", "refund.created", "refund.updated", "refund.failed"}:
+        return None
+    current = dict(existing.get("refund_summary") or {})
+    refund_id = _provider_id_value(event_object.get("refund") or event_object.get("id"))
+    provider_charge_id = _provider_id_value(event_object.get("charge") or event_object.get("latest_charge"))
+    amount = _amount_value(
+        event_object.get("amount_refunded") or event_object.get("amount"),
+        current.get("refundedAmount"),
+    )
+    status = str(event_object.get("status") or "").strip()
+    if event_type == "charge.refunded":
+        provider_state = "succeeded"
+    elif event_type == "refund.failed":
+        provider_state = "failed"
+    elif status in {"succeeded", "failed", "canceled", "cancelled"}:
+        provider_state = "cancelled" if status == "canceled" else status
+    else:
+        provider_state = "requested"
+    return {
+        **current,
+        "state": provider_state,
+        "providerHandoffState": provider_state,
+        "refundedAmount": amount,
+        "currency": str(event_object.get("currency") or current.get("currency") or "chf").upper(),
+        "requiresReason": False,
+        "providerRefundId": refund_id or current.get("providerRefundId"),
+        "providerChargeId": provider_charge_id or current.get("providerChargeId"),
+        "providerPaymentIntentId": _provider_id_value(event_object.get("payment_intent"))
+        or current.get("providerPaymentIntentId"),
+        "providerInvoiceId": _provider_id_value(event_object.get("invoice")) or current.get("providerInvoiceId"),
+        "updatedAt": now_iso(),
+    }
+
+
+def _amount_value(value: Any, fallback: Any = None) -> int | None:
+    if value in (None, ""):
+        return fallback
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _refund_readiness(item: dict[str, Any] | None) -> dict[str, Any]:
+    if not item:
+        return {
+            "eligible": False,
+            "state": "not_eligible",
+            "providerHandoffState": "not_eligible",
+            "eligibleAmount": None,
+            "currency": None,
+            "requiresReason": True,
+            "providerInvoiceId": None,
+            "providerChargeId": None,
+            "providerPaymentIntentId": None,
+            "providerRefundId": None,
+        }
+    invoice = item.get("latest_invoice") or {}
+    amount_paid = _amount_value(invoice.get("amountPaid"), 0) or 0
+    amount_refunded = _amount_value(invoice.get("amountRefunded"), 0) or 0
+    eligible_amount = max(amount_paid - amount_refunded, 0)
+    has_provider_reference = bool(
+        invoice.get("providerChargeId")
+        or invoice.get("providerPaymentIntentId")
+        or invoice.get("providerInvoiceId")
+    )
+    eligible = item.get("billing_status") in {"active", "past_due", "payment_failed"} and eligible_amount > 0
+    state = "ready_for_provider" if eligible and has_provider_reference else "not_eligible"
+    return {
+        "eligible": state == "ready_for_provider",
+        "state": state,
+        "providerHandoffState": state,
+        "eligibleAmount": eligible_amount if state == "ready_for_provider" else None,
+        "currency": invoice.get("currency"),
+        "requiresReason": True,
+        "providerInvoiceId": invoice.get("providerInvoiceId"),
+        "providerChargeId": invoice.get("providerChargeId"),
+        "providerPaymentIntentId": invoice.get("providerPaymentIntentId"),
+        "providerRefundId": None,
+    }
+
+
+def _dunning_projection(
+    item: dict[str, Any] | None,
+    *,
+    next_payment_attempt: str | None = None,
+    previous_status: str | None = None,
+) -> dict[str, Any]:
+    status = (item or {}).get("billing_status") or "none"
+    invoice = (item or {}).get("latest_invoice") or {}
+    if status == "none":
+        state = "none"
+    elif status == "checkout_pending":
+        state = "checkout_pending"
+    elif status == "active" and previous_status in {"past_due", "payment_failed"}:
+        state = "recovered"
+    elif status == "active":
+        state = "active"
+    elif status == "past_due":
+        state = "retrying" if next_payment_attempt else "past_due"
+    elif status == "payment_failed":
+        state = "retrying" if next_payment_attempt else "payment_failed"
+    elif status == "canceled":
+        state = "cancelled"
+    elif status in {"provider_unknown", "manual_override"}:
+        state = "manual_review"
+    else:
+        state = "manual_review"
+    return {
+        "state": state,
+        "billingStatus": status,
+        "providerInvoiceId": invoice.get("providerInvoiceId"),
+        "invoiceStatus": invoice.get("invoiceStatus"),
+        "nextPaymentAttempt": next_payment_attempt,
+        "paymentMethodType": (item or {}).get("payment_method_type") or invoice.get("paymentMethodType"),
+        "supportAction": _dunning_support_action(state),
+    }
+
+
+def _dunning_support_action(state: str) -> str:
+    return {
+        "none": "none",
+        "active": "none",
+        "checkout_pending": "wait_for_provider_confirmation",
+        "past_due": "monitor_provider_retry",
+        "payment_failed": "contact_parent_or_wait_for_provider_retry",
+        "retrying": "monitor_provider_retry",
+        "recovered": "none",
+        "cancelled": "confirm_access_and_support_history",
+        "manual_review": "review_provider_billing_record",
+    }.get(state, "review_provider_billing_record")
+
+
+def _accounting_handoff(item: dict[str, Any] | None, *, parent_id: str) -> dict[str, Any]:
+    item = item or {}
+    invoice = item.get("latest_invoice") or {}
+    refund = item.get("refund_summary") or _refund_readiness(item)
+    provider_invoice_id = invoice.get("providerInvoiceId")
+    return {
+        "parentId": parent_id,
+        "billingAccountRef": item.get("provider_customer_id"),
+        "tier": item.get("subscription_tier") or SubscriptionTier.FREE.value,
+        "provider": item.get("billing_provider"),
+        "providerMode": item.get("billing_mode"),
+        "providerLivemode": item.get("provider_livemode"),
+        "providerCustomerId": item.get("provider_customer_id"),
+        "providerSubscriptionId": item.get("provider_subscription_id") or invoice.get("providerSubscriptionId"),
+        "providerInvoiceId": provider_invoice_id,
+        "providerChargeId": invoice.get("providerChargeId") or refund.get("providerChargeId"),
+        "providerPaymentIntentId": invoice.get("providerPaymentIntentId") or refund.get("providerPaymentIntentId"),
+        "currency": invoice.get("currency"),
+        "amountDue": invoice.get("amountDue"),
+        "amountPaid": invoice.get("amountPaid"),
+        "amountRemaining": invoice.get("amountRemaining"),
+        "taxAmount": invoice.get("taxAmount"),
+        "taxStatus": invoice.get("taxStatus") or "provider_managed",
+        "periodStart": invoice.get("periodStart") or item.get("current_period_start"),
+        "periodEnd": invoice.get("periodEnd") or item.get("current_period_end"),
+        "hostedInvoiceUrl": invoice.get("hostedInvoiceUrl"),
+        "receiptUrl": invoice.get("receiptUrl"),
+        "refund": {
+            "state": refund.get("state"),
+            "providerRefundId": refund.get("providerRefundId"),
+            "eligibleAmount": refund.get("eligibleAmount"),
+        },
+        "paymentMethodType": item.get("payment_method_type") or invoice.get("paymentMethodType"),
+        "reconciliationId": invoice.get("reconciliationId") or provider_invoice_id,
+    }
 
 
 def _status_from_provider_subscription(status: Any) -> str:
@@ -1442,6 +1715,8 @@ def _apply_billing_transition(
         "payment_method_type": transition.get("payment_method_type"),
         "previous_billing_status": existing.get("previous_billing_status"),
         "previous_subscription_tier": existing.get("previous_subscription_tier"),
+        "latest_invoice": transition.get("latest_invoice") or existing.get("latest_invoice") or {},
+        "refund_summary": transition.get("refund") or existing.get("refund_summary") or {},
         "provider_customer_id": transition.get("provider_customer_id"),
         "provider_subscription_id": transition.get("provider_subscription_id"),
         "provider_price_id": transition.get("provider_price_id"),
@@ -1461,6 +1736,36 @@ def _apply_billing_transition(
         "created_at": existing.get("created_at") or now,
         "updated_at": now,
     }
+    provider_refund = transition.get("refund")
+    if provider_refund:
+        invoice = dict(updated.get("latest_invoice") or {})
+        refunded_amount = _amount_value(provider_refund.get("refundedAmount"), 0) or 0
+        invoice["amountRefunded"] = (_amount_value(invoice.get("amountRefunded"), 0) or 0) + refunded_amount
+        updated["latest_invoice"] = invoice
+        readiness = _refund_readiness(updated)
+        updated["refund_summary"] = {
+            **readiness,
+            "state": provider_refund.get("state") or readiness["state"],
+            "providerHandoffState": provider_refund.get("providerHandoffState")
+            or readiness["providerHandoffState"],
+            "providerRefundId": provider_refund.get("providerRefundId"),
+            "refundedAmount": refunded_amount,
+            "updatedAt": provider_refund.get("updatedAt"),
+        }
+    else:
+        existing_refund = existing.get("refund_summary") or {}
+        updated["refund_summary"] = (
+            existing_refund if existing_refund.get("providerRefundId") else _refund_readiness(updated)
+        )
+    next_payment_attempt = transition.get("next_payment_attempt") or (
+        existing.get("dunning") or {}
+    ).get("nextPaymentAttempt")
+    updated["dunning"] = _dunning_projection(
+        updated,
+        next_payment_attempt=next_payment_attempt,
+        previous_status=current_status,
+    )
+    updated["accounting_handoff"] = _accounting_handoff(updated, parent_id=parent_id)
     event = {
         "PK": updated["PK"],
         "SK": _billing_event_sk(now, event_id),
