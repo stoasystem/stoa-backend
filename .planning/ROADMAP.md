@@ -34,38 +34,98 @@
 - [x] **v3.9 Payment Provider Integration MVP** - Completed local release gate 2026-06-09.
 - [x] **v4.0 Adaptive Learning Memory And Assignment** - Completed local backend release gate 2026-06-10.
 
-## Current Milestone
+## v4.1 Mobile And Multilingual Polish Foundation
 
-**v4.0 Adaptive Learning Memory And Assignment** - Complete locally.
+**v4.1 Mobile And Multilingual Polish Foundation** - Planned.
 
-Goal: add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
+Goal: prepare mobile-friendly and multilingual polish through backend contracts, durable locale preferences, language-safe response metadata, and release evidence that separates completed backend work from deferred frontend/native UI implementation.
 
 ## Phases
 
-| Phase | Name | Status | Requirement |
-|-------|------|--------|-------------|
-| 128 | Adaptive Learning Memory And Assignment Contract | Complete | ADAPT-01 |
-| 129 | Backend Learning Memory And Reviewed Assignment APIs | Complete | ADAPT-02 |
-| 130 | Student/Tutor Assignment UX And Parent Progress Signals | Complete | UI-25 |
-| 131 | v4.0 Functional Release Gate And Personalization Audit | Complete | VERIFY-23 |
+**Phase Numbering:**
+- Integer phases continue across milestones.
+- Decimal phases are reserved for urgent insertions and marked INSERTED.
+
+- [ ] **Phase 132: Mobile And Multilingual Contract Foundation** - Define backend/client boundaries, mobile UAT criteria, supported locale policy, and the v4.1 gap audit.
+- [ ] **Phase 133: Locale Preference APIs** - Implement durable locale preference storage, profile exposure, normalization, fallback, and focused tests.
+- [ ] **Phase 134: Role Route Contract Polish** - Apply language metadata and mobile-friendly response checks to selected student, parent, tutor, and admin flows.
+- [ ] **Phase 135: Release Gate And Documentation** - Verify regression coverage, update docs/gap audit, and record deferred frontend/native scope.
+
+## Phase Details
+
+### Phase 132: Mobile And Multilingual Contract Foundation
+**Goal**: Define v4.1 backend/client scope, mobile-readiness criteria, supported-locale policy, route audit targets, and gap-audit updates before code changes.
+**Depends on**: v4.1 research
+**Requirements**: MOBILE-01
+**Success Criteria** (what must be TRUE):
+  1. Mobile-critical student, parent, tutor, and admin flows are identified with backend route contract implications.
+  2. Supported locale and fallback policy is documented for the backend foundation.
+  3. Backend versus frontend/native ownership is explicit, including what this repository cannot visually verify.
+  4. The feature gap audit is updated from v4.0 personalization language to v4.1 mobile/multilingual scope.
+**Plans**: TBD
+
+Plans:
+- [ ] 132-01: Define mobile and multilingual backend contract.
+
+### Phase 133: Locale Preference APIs
+**Goal**: Add durable locale preference support with shared normalization/fallback and authenticated profile/preference API exposure.
+**Depends on**: Phase 132
+**Requirements**: I18N-01
+**Success Criteria** (what must be TRUE):
+  1. Authenticated profile/preference responses expose effective locale for existing and new users.
+  2. Supported locale updates persist durably on backend profile/user data.
+  3. Missing, malformed, unsupported, and supported locale behavior is deterministic and tested.
+  4. Existing authorization and clients without locale inputs remain compatible.
+**Plans**: TBD
+
+Plans:
+- [ ] 133-01: Implement locale preference backend APIs.
+
+### Phase 134: Role Route Contract Polish
+**Goal**: Apply language-safe metadata and mobile-friendly response contract checks to selected role-critical backend routes.
+**Depends on**: Phase 133
+**Requirements**: I18N-02
+**Success Criteria** (what must be TRUE):
+  1. Selected student, parent, tutor, and admin responses expose locale/language metadata where display content depends on language.
+  2. Canonical IDs, statuses, enum values, timestamps, permissions, and storage keys remain stable across locale preferences.
+  3. Mobile-sensitive list/detail or summary contracts are bounded and documented where route payloads need polish.
+  4. Focused tests cover role visibility, canonical-value stability, and metadata behavior across locales.
+**Plans**: TBD
+
+Plans:
+- [ ] 134-01: Polish role route contracts for locale and mobile readiness.
+
+### Phase 135: Release Gate And Documentation
+**Goal**: Close v4.1 with verification evidence, updated planning artifacts, and an honest deferred-scope record for frontend/native mobile and visual localization work.
+**Depends on**: Phase 134
+**Requirements**: VERIFY-24
+**Success Criteria** (what must be TRUE):
+  1. Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
+  2. Requirements, roadmap, feature gap audit, and release evidence reflect completed v4.1 backend work.
+  3. Deferred frontend/native mobile and visual localization tasks are explicitly listed.
+  4. Final milestone audit ties shipped behavior back to MOBILE-01, I18N-01, I18N-02, and VERIFY-24.
+**Plans**: TBD
+
+Plans:
+- [ ] 135-01: Verify v4.1 and update release documentation.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 128 | v4.0 | 1/1 | Complete | 2026-06-10 |
-| 129 | v4.0 | 1/1 | Complete | 2026-06-10 |
-| 130 | v4.0 | 1/1 | Complete | 2026-06-10 |
-| 131 | v4.0 | 1/1 | Complete | 2026-06-10 |
+| 132 Mobile And Multilingual Contract Foundation | v4.1 | 0/1 | Not started | - |
+| 133 Locale Preference APIs | v4.1 | 0/1 | Not started | - |
+| 134 Role Route Contract Polish | v4.1 | 0/1 | Not started | - |
+| 135 Release Gate And Documentation | v4.1 | 0/1 | Not started | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADAPT-01 | Phase 128 | Complete |
-| ADAPT-02 | Phase 129 | Complete |
-| UI-25 | Phase 130 | Complete |
-| VERIFY-23 | Phase 131 | Complete |
+| MOBILE-01 | Phase 132 | Planned |
+| I18N-01 | Phase 133 | Planned |
+| I18N-02 | Phase 134 | Planned |
+| VERIFY-24 | Phase 135 | Planned |
 
 ---
-*Last updated: 2026-06-10 after completing v4.0 local release gate*
+*Last updated: 2026-06-11 after approving v4.1 requirements and roadmap*

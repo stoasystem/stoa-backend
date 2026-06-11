@@ -1,81 +1,85 @@
-# Requirements: v4.0 Adaptive Learning Memory And Assignment
+# Requirements: v4.1 Mobile And Multilingual Polish Foundation
 
-**Milestone:** v4.0
-**Status:** Complete locally
-**Created:** 2026-06-10
+**Milestone:** v4.1
+**Status:** Planned
+**Created:** 2026-06-11
 
 ## Goal
 
-Turn learning profile seeds, curriculum progress, question history, AI teacher drafts, and weak-topic evidence into durable student memory and teacher-reviewed assignment workflows. This milestone focuses on product functionality: adaptive memory records, next-practice recommendations, reviewed exercise assignment, student/tutor UX, and parent progress signals.
+Prepare STOA for mobile-friendly and multilingual product polish through backend contracts, durable locale preferences, language-safe response metadata, and clear release evidence. This backend repository should provide the API and planning foundation while explicitly tracking frontend/native UI work as deferred unless a UI workspace is added.
 
 ## Requirements
 
-### ADAPT-01 Adaptive Learning Memory And Assignment Contract
+### MOBILE-01 Mobile-Ready Backend Contract And Gap Audit
 
-Implementers have a concrete product and data contract before backend/frontend changes.
-
-Acceptance criteria:
-
-- Contract defines durable learning memory fields: strengths, weak topics, recent activity, mastered concepts, struggling concepts, preferred explanation style, curriculum progress, assignment history, and freshness.
-- Contract defines memory inputs from questions, feedback, teacher replies, curriculum progress, exercise attempts, AI teacher drafts, and weekly report signals.
-- Contract defines reviewed assignment lifecycle: draft, recommended, assigned, started, completed, skipped, archived.
-- Contract defines recommendation behavior for next-practice suggestions without claiming fully autonomous tutoring decisions.
-- Contract defines parent/tutor/student visibility boundaries and stale data behavior.
-
-### ADAPT-02 Backend Learning Memory And Reviewed Assignment APIs
-
-Backend supports durable student memory, next-practice recommendations, and reviewed assignments.
+Implementers have a concrete contract for mobile-critical student, parent, tutor, and admin flows before backend route polish begins.
 
 Acceptance criteria:
 
-- Backend aggregates and stores learning memory snapshots per student and subject/topic.
-- Backend exposes student/tutor/parent-readable learning memory summaries with role-appropriate fields.
-- Tutor/admin can create reviewed assignments from curriculum exercises or AI exercise drafts.
-- Student can list, start, complete, and skip assigned practice items with progress updates.
-- Focused tests cover memory aggregation, role visibility, assignment lifecycle, idempotency, and progress compatibility.
+- Contract identifies mobile-critical flows for student practice/assignments/progress, parent child overview/reports/progress, tutor queue/detail workflows, and plausible admin operations.
+- Contract audits route payloads for mobile pain points: unbounded lists, oversized nested data, inconsistent errors, unclear loading/retry semantics, and missing compact summaries.
+- Contract states that backend behavior must not branch on browser or device user-agent sniffing.
+- Contract separates backend API readiness from deferred frontend/native responsive layout, touch target, focus, and visual localization work.
+- Gap audit is updated so v4.1 planning no longer carries stale v4.0 wording.
 
-### UI-25 Student/Tutor Assignment UX And Parent Progress Signals
+### I18N-01 Durable Locale Preference Foundation
 
-Frontend exposes adaptive learning memory and assignment workflows.
-
-Acceptance criteria:
-
-- Student UI shows next-practice recommendations, assigned exercises, status, and completion feedback.
-- Tutor UI shows memory signals and can assign/review exercises from curriculum or AI draft context.
-- Parent UI shows progress signals, weak areas, assigned/completed practice, and freshness.
-- UI distinguishes recommended practice from teacher/admin-assigned practice.
-- Targeted browser verification confirms student/tutor/parent assignment workflows.
-
-### VERIFY-23 v4.0 Functional Release Gate And Personalization Audit
-
-v4.0 closes with functional evidence and updated `stoa_docs` gap tracking.
+Backend supports durable user locale preferences and deterministic fallback behavior.
 
 Acceptance criteria:
 
-- Backend and frontend focused quality gates relevant to adaptive memory and assignments pass.
-- Gap audit marks student memory/personalization and reviewed assignment workflows active or closed and records residual fully autonomous sequencing scope.
-- Final audit lists remaining product expansions: mobile/multilingual polish, production notification delivery, live payment rollout, support integrations, rich content authoring, and deeper analytics.
+- Authenticated users can read their effective locale through an existing or new profile/preferences response.
+- Authorized users can update supported locale preferences, initially covering English and German contracts unless phase planning refines the allowlist.
+- Locale preference is stored durably on backend profile/user data, not only in JWT/session state.
+- Locale normalization and fallback are shared across routes rather than reimplemented per router.
+- Focused tests cover supported locale, missing locale, unsupported or malformed locale behavior, persistence, and backwards compatibility for existing users.
+
+### I18N-02 Language-Safe Role Route Metadata
+
+Role-critical responses expose language/locale metadata where useful while preserving canonical API values.
+
+Acceptance criteria:
+
+- Selected student, parent, tutor, and admin responses include effective locale or language metadata where content display depends on language.
+- Canonical IDs, enum values, status codes, timestamps, permissions, and storage keys remain stable across locale preferences.
+- Translatable display labels, if introduced, are separate from canonical state fields.
+- Educational/user-generated/generated content is not automatically rewritten by v4.1; language metadata and frontend formatting responsibilities are documented.
+- Tests prove authorization and canonical route behavior remain unchanged when locale preferences differ.
+
+### VERIFY-24 v4.1 Release Gate And Deferred UI Evidence
+
+v4.1 closes with verification evidence and an honest record of completed backend work versus deferred frontend/native UI implementation.
+
+Acceptance criteria:
+
+- Focused backend tests and relevant static checks pass or documented pre-existing failures are isolated.
+- Requirements, roadmap, feature gap audit, and release notes reflect completed backend locale/mobile contract work.
+- Final audit lists remaining frontend/native mobile and visual localization tasks that this backend repo cannot complete alone.
+- Release evidence includes source research references for responsive design, locale formatting, language metadata, directionality, and accessibility concerns.
 
 ## Future Requirements
 
-- Fully autonomous tutoring and assignment decisions.
-- Long-term adaptive sequencing engine beyond reviewed assignments and next-practice recommendations.
-- Learning analytics dashboards beyond parent/tutor progress signals.
-- Native mobile apps.
-- Production notification delivery and support integrations.
+- Full responsive frontend implementation with mobile viewport/browser verification.
+- Native mobile application surfaces.
+- Full translation management and translator workflow.
+- Machine translation or translation memory integration.
+- RTL visual layout implementation and verification.
+- Localized AI tutoring/content generation beyond explicit language metadata.
+- Production notification delivery, live payment rollout, support integrations, rich content authoring, and deeper analytics.
 
 ## Out of Scope
 
-- Fully autonomous student assignment without teacher/admin review.
-- Replacing the existing tutor workflow with an AI-only tutor.
-- Broad security/compliance program beyond required authorization and functional correctness.
-- Native mobile apps or notification provider rollout.
+- Server-side browser or device sniffing.
+- Automatic translation of tutor notes, student free text, generated explanations, reports, or other educational content.
+- Replacing canonical API values with localized labels.
+- Claiming frontend mobile completion from backend-only work.
+- New translation provider, localization database, or infrastructure service unless later phase evidence proves it necessary.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADAPT-01 | Phase 128 | Complete |
-| ADAPT-02 | Phase 129 | Complete |
-| UI-25 | Phase 130 | Complete |
-| VERIFY-23 | Phase 131 | Complete |
+| MOBILE-01 | Phase 132 | Planned |
+| I18N-01 | Phase 133 | Planned |
+| I18N-02 | Phase 134 | Planned |
+| VERIFY-24 | Phase 135 | Planned |
