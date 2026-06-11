@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-11
+**Updated:** 2026-06-12
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -19,8 +19,8 @@
 
 ## Remaining Feature Build Queue
 
-1. **v4.5 Support Integrations And Operations Handoff** - planned.
-   Add support-ticket/evidence destination integrations after an approved connector or credential path exists.
+1. **v4.5 Support Integrations And Operations Handoff** - active.
+   Add support-ticket/evidence destination integrations after an approved connector or credential path exists, starting with destination contract and credential readiness.
 
 2. **v4.6 Rich Curriculum Authoring And Analytics Foundation** - planned.
    Add authoring, content QA, learning analytics, and operational curriculum insights.
@@ -33,4 +33,4 @@
 
 ## Current Planning Decision
 
-v4.4 closed the local live-payment rollout foundation. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval. The next stage is v4.5 support handoff integration, followed by v4.6 curriculum authoring and analytics.
+v4.5 is active after research-first planning. The selected scope is controlled support handoff integration: approved destinations, credential readiness, metadata-only payload rules, one narrow delivery path, and operator-visible handoff status. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval.
