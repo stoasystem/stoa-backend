@@ -777,5 +777,38 @@ Key accomplishments:
 
 Known deferred items at close: production deploy/live smoke, frontend component implementation outside this backend repository, fully autonomous tutoring/assignment/sequencing, rich learning analytics dashboards, native mobile apps, production notification delivery, support integrations, rich content authoring, and deeper analytics.
 
+### v4.1 Mobile And Multilingual Polish Foundation
+
+**Status:** Completed local backend release gate 2026-06-11
+**Started:** 2026-06-11
+**Completed:** 2026-06-11
+**Audit:** `.planning/milestones/v4.1-MILESTONE-AUDIT.md`
+**Roadmap:** `.planning/milestones/v4.1-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.1-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/132-mobile-and-multilingual-contract-foundation/`, `.planning/phases/133-locale-preference-apis/`, `.planning/phases/134-role-route-contract-polish/`, `.planning/phases/135-release-gate-and-documentation/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Prepare STOA for mobile-friendly and multilingual product polish through backend contracts, durable locale preferences, language-safe response metadata, and release evidence before broader UI rollout.
+**Phases:** 4
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
+
+Completed phases:
+
+- Phase 132: Mobile And Multilingual Contract Foundation.
+- Phase 133: Locale Preference APIs.
+- Phase 134: Role Route Contract Polish.
+- Phase 135: Release Gate And Documentation.
+
+Key accomplishments:
+
+- Defined the backend/client mobile and multilingual contract, including `en`/`de` support, fallback behavior, no backend device sniffing, and deferred frontend/native ownership.
+- Added shared locale normalization/fallback and durable profile locale update support.
+- Extended `/auth/me` with `preferredLocale` and `effectiveLocale` while preserving `preferredLanguage`.
+- Added `PATCH /auth/me/preferences/locale` for authenticated locale preference updates.
+- Added additive locale metadata to adaptive student, parent, tutor, and admin route responses with tests proving canonical values remain stable across `de` and `en`.
+- Completed full backend pytest evidence with 325 passing tests.
+
+Known deferred items at close: production deploy/live smoke, full responsive frontend/native implementation, visual localization and translated UI copy, RTL verification, machine translation or translation management, production notification delivery, live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
+
 ---
-*Last updated: 2026-06-10 after completing v4.0 local backend release gate*
+*Last updated: 2026-06-11 after completing v4.1 local backend release gate*

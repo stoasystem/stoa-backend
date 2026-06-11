@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Mobile And Multilingual Polish Foundation
-status: planning
-last_updated: "2026-06-11T11:45:00.000Z"
+status: complete
+last_updated: "2026-06-11T12:05:00.000Z"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 135 - Release Gate And Documentation
-Plan: —
-Status: Phase 134 complete; ready for v4.1 release gate
-Last activity: 2026-06-11 — Completed Phase 134 role route contract polish
+Plan: 135-01
+Status: Complete locally
+Last activity: 2026-06-11 — Completed v4.1 local backend release gate
 
 ## Accumulated Context
 
@@ -43,12 +43,13 @@ Last activity: 2026-06-11 — Completed Phase 134 role route contract polish
 - Phase 132 set the v4.1 backend contract: `en`/`de` initial locale support, durable profile-level locale preference, no backend device sniffing, canonical values remain locale-neutral, and frontend/native visual polish remains deferred outside this backend workspace.
 - Phase 133 added shared locale normalization/fallback, exposed `preferredLocale`/`effectiveLocale` on `/auth/me`, and added `PATCH /auth/me/preferences/locale` for durable profile locale updates.
 - Phase 134 added additive locale metadata to adaptive learning memory, recommendation, assignment, assignment-list, and parent progress responses while tests preserve canonical values across `de` and `en`.
+- Phase 135 closed v4.1 locally with 325 passing backend tests, documented pre-existing full-ruff debt, release gate evidence, and explicit frontend/native deferred scope.
 
 ### Pending Todos
 
 - Production deploy/live smoke remains pending if v4.0 is promoted beyond local backend completion.
 - Frontend component implementation remains outside this backend repository.
-- Run v4.1 autonomous Phase 135.
+- Select the next milestone before new implementation work.
 
 ### Blockers/Concerns
 
@@ -60,4 +61,4 @@ Last activity: 2026-06-11 — Completed Phase 134 role route contract polish
 
 ## Operator Next Steps
 
-- Start Phase 135 release gate and documentation.
+- v4.1 is complete locally. Next milestone is not selected.

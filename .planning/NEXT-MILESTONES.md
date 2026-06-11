@@ -1,48 +1,13 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-10 after planning v4.0
+**Updated:** 2026-06-11 after completing v4.1
 **Mode:** product functionality first
-
-## v4.0 Adaptive Learning Memory And Assignment
-
-Goal: turn learning profile seeds, curriculum progress, and AI exercise drafts into useful personalized learning memory and reviewed assignment workflows.
-
-Planned phases:
-
-- Phase 128: Adaptive Learning Memory And Assignment Contract.
-- Phase 129: Backend Learning Memory And Reviewed Assignment APIs.
-- Phase 130: Student/Tutor Assignment UX And Parent Progress Signals.
-- Phase 131: v4.0 Functional Release Gate And Personalization Audit.
-
-Scope:
-
-- Add durable student memory beyond current profile seeds.
-- Add teacher/admin-reviewed assignment workflows for generated or curriculum exercises.
-- Add student next-practice UX and parent progress signals.
-- Keep fully autonomous tutoring decisions out of scope.
-
-## v4.1 Mobile And Multilingual Polish Foundation
-
-Goal: reduce the largest remaining usability gaps after learning, realtime, AI teacher tools, curriculum, payment, and assignment foundations.
-
-Planned phases:
-
-- Phase 132: Mobile And Multilingual Polish Contract.
-- Phase 133: Responsive Navigation And Core Flow Polish.
-- Phase 134: Translation Coverage And Language Preference UI.
-- Phase 135: v4.1 Functional Release Gate And Polish Audit.
-
-Scope:
-
-- Improve mobile ergonomics for parent/student/tutor core flows without redesigning the product.
-- Expand frontend translation coverage around high-traffic workflows.
-- Keep native mobile apps and full localization operations out of scope unless promoted by a later milestone.
 
 ## v4.2 Production Notification Delivery Readiness
 
 Goal: promote the local realtime notification foundation toward deployable production delivery and durable user preferences.
 
-Planned phases:
+Candidate phases:
 
 - Phase 136: Production Notification Infrastructure Contract.
 - Phase 137: API Gateway WebSocket And Delivery Operations Readiness.
@@ -53,4 +18,38 @@ Scope:
 
 - Add CDK/API Gateway WebSocket route wiring, deploy readiness, live-smoke protocol, and rollback evidence for production realtime delivery.
 - Add notification preference and digest readiness for push/email channels where approved provider credentials exist.
-- Keep broad native-app push rollout and full notification marketing automation out of scope.
+- Keep broad native-app push rollout and notification marketing automation out of scope.
+
+## v4.3 Frontend Mobile And Visual Localization Rollout
+
+Goal: implement the responsive frontend/native-adjacent work that v4.1 intentionally left outside this backend repository.
+
+Candidate phases:
+
+- Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
+- Phase 141: Responsive Student Parent Tutor Core Flow Polish.
+- Phase 142: Visual Localization And Language Preference UI.
+- Phase 143: v4.3 Browser Release Gate And Localization Audit.
+
+Scope:
+
+- Requires the relevant frontend workspace.
+- Verify real mobile viewports, touch targets, focus behavior, overflow, and translated UI copy.
+- Keep backend canonical-value translation and machine translation out of scope unless a later product decision promotes it.
+
+## v4.4 Live Payment Provider Rollout
+
+Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
+
+Candidate phases:
+
+- Phase 144: Live Payment Rollout Contract And Credential Readiness.
+- Phase 145: Production Checkout/Webhook Verification.
+- Phase 146: Refunds Invoices Tax And Dunning Readiness.
+- Phase 147: v4.4 Payment Release Gate And Support Audit.
+
+Scope:
+
+- Validate approved production provider credentials, webhook endpoints, production-safe smoke, and rollback procedures.
+- Add operational readiness for invoices, refunds, tax/accounting handoff, and dunning.
+- Keep broad multi-provider billing automation out of scope until live Stripe/TWINT fundamentals are verified.

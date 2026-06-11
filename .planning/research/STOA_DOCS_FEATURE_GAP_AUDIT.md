@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 during v4.1 mobile and multilingual contract foundation
+**Updated:** 2026-06-11 after completing v4.1 mobile and multilingual foundation
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -28,7 +28,7 @@ v3.8 completed the local functional full multi-subject curriculum rollout scope.
 
 v3.9 completed the local functional payment-provider integration MVP. The milestone defined a Stripe-first provider contract, added backend checkout/status/webhook APIs, exposed parent checkout/status UX and admin provider billing visibility, and closed with backend/frontend/browser release-gate evidence. Live production charges, provider credentials, TWINT production validation, refunds/invoices, tax/accounting, and dunning remain future scope.
 
-After checking `stoa_docs` again on 2026-06-11, v4.0 has completed the local backend adaptive learning memory and reviewed assignment foundation. v4.1 promotes the next remaining polish area: mobile-friendly backend contracts, durable locale preferences, language-safe response metadata, and explicit deferred frontend/native UI scope.
+After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend foundation for mobile-friendly and multilingual polish: mobile/backend contract documentation, durable locale preferences, language-safe adaptive route metadata, and explicit deferred frontend/native UI scope.
 
 ## Completed Or Largely Complete
 
@@ -124,11 +124,11 @@ After checking `stoa_docs` again on 2026-06-11, v4.0 has completed the local bac
 |-----|--------|------------------|----------|
 | Personalized learning memory and reviewed assignments | `PLAN.md` Phase 2 growth feature: personalized learning memory / student profile | Phase 128 defined the memory/assignment contract; Phase 129 added backend memory and reviewed assignment APIs; Phase 130 added student/tutor/parent route contracts and backend-visible progress signals; Phase 131 captured functional personalization release-gate evidence. | Closed for backend foundation scope |
 
-## v4.1 Active Phase 2 Functional Gap
+## v4.1 Closed Phase 2 Functional Gap
 
-| Gap | Source | Planned evidence | Priority |
+| Gap | Source | Current evidence | Priority |
 |-----|--------|------------------|----------|
-| Mobile-friendly backend contracts and multilingual preference foundation | `PLAN.md` Phase 2 growth feature: mobile responsive polish / multilingual frontend rollout | Phase 132 defines backend/client ownership, mobile-critical flow contract, supported locale policy, and gap-audit updates; Phase 133 adds durable locale preference APIs; Phase 134 polishes selected role route metadata and mobile contracts; Phase 135 captures verification and deferred frontend/native evidence. | Active |
+| Mobile-friendly backend contracts and multilingual preference foundation | `PLAN.md` Phase 2 growth feature: mobile responsive polish / multilingual frontend rollout | Phase 132 defined backend/client ownership, mobile-critical flow contract, supported locale policy, and gap-audit updates; Phase 133 added durable locale preference APIs; Phase 134 polished selected adaptive role route metadata and mobile contracts; Phase 135 captured verification and deferred frontend/native evidence. | Closed for backend foundation scope |
 
 ## Phase 2 / Future Expansion
 
@@ -143,8 +143,8 @@ After checking `stoa_docs` again on 2026-06-11, v4.0 has completed the local bac
 
 ## Remaining Feature Build Order
 
-1. Mobile-friendly backend contracts and multilingual preference foundation - active v4.1.
-2. Full responsive frontend/native mobile implementation after UI workspace availability.
+1. Full responsive frontend/native mobile implementation after UI workspace availability.
+2. Full frontend visual localization and translated UI rollout.
 3. Production notification delivery readiness: API Gateway WebSocket wiring, push/email preferences, and digest flows.
 4. Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 5. Support-ticket/evidence destination integrations after approved connector or credential path exists.
@@ -260,7 +260,7 @@ v4.0 completed adaptive learning memory and reviewed assignment workflows:
 
 ## v4.1 Scope Recommendation
 
-v4.1 should complete the backend foundation for mobile and multilingual polish:
+v4.1 completed the backend foundation for mobile and multilingual polish:
 
 1. Define backend/client ownership, supported locales, fallback behavior, mobile-critical route contracts, and deferred UI scope.
 2. Add durable locale preference APIs and shared normalization/fallback behavior.

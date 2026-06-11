@@ -54,7 +54,7 @@ The completed-local v3.9 milestone implements the first payment-provider integra
 
 The completed-local v4.0 milestone builds adaptive learning memory and reviewed assignment workflows from learning profile seeds, curriculum progress, AI exercise drafts, question history, and parent/tutor progress signals.
 
-The active v4.1 milestone prepares mobile-friendly and multilingual product polish foundations by defining responsive/mobile readiness contracts, localization backend support, language-safe response boundaries, and local release evidence before broader frontend/native rollout.
+The completed-local v4.1 milestone prepared mobile-friendly and multilingual product polish foundations by defining responsive/mobile readiness contracts, localization backend support, language-safe response boundaries, and local release evidence before broader frontend/native rollout.
 
 ## Core Value
 
@@ -63,8 +63,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.0 Adaptive Learning Memory And Assignment on 2026-06-10 (local backend release gate)
-**Active milestone:** v4.1 Mobile And Multilingual Polish Foundation
+**Latest completed milestone:** v4.1 Mobile And Multilingual Polish Foundation on 2026-06-11 (local backend release gate)
+**Active milestone:** None selected
 
 Delivered:
 
@@ -153,7 +153,7 @@ Delivered:
 - v3.8 completed full curriculum hierarchy, lesson/exercise bank coverage, student/parent curriculum UX, and tutor/admin curriculum signals for math, physics, German, and English.
 - v3.9 completed local functional payment-provider integration with subscription checkout, provider-managed billing state, webhook lifecycle handling, parent payment UX, and admin billing visibility.
 - v4.0 added durable learning memory snapshots, next-practice recommendations, reviewed assignment workflows, student/tutor assignment route contracts, and parent progress signals.
-- v4.1 is planned to add mobile/responsive readiness contracts, multilingual/localization backend foundations, language-safe response boundaries, and local release evidence for polish readiness.
+- v4.1 completed mobile/responsive readiness contracts, durable locale preference APIs, language-safe adaptive response metadata, canonical-value stability tests, and local release evidence for backend polish readiness.
 
 ## Last Production-Verified Milestone
 
@@ -170,28 +170,22 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v4.0 Adaptive Learning Memory And Assignment
+### v4.1 Mobile And Multilingual Polish Foundation
 
-Goal: add durable student memory, next-practice recommendations, reviewed assignment workflows, and parent/tutor progress signals.
+Goal: prepare STOA for mobile-friendly and multilingual product polish by defining backend contracts, locale preference support, language-safe response metadata, and release evidence before broader UI rollout.
 
 Completed phases:
 
-- Phase 128: Adaptive Learning Memory And Assignment Contract.
-- Phase 129: Backend Learning Memory And Reviewed Assignment APIs.
-- Phase 130: Student/Tutor Assignment UX And Parent Progress Signals.
-- Phase 131: v4.0 Functional Release Gate And Personalization Audit.
+- Phase 132: Mobile And Multilingual Contract Foundation.
+- Phase 133: Locale Preference APIs.
+- Phase 134: Role Route Contract Polish.
+- Phase 135: Release Gate And Documentation.
 
-## Current Milestone
+## Next Milestone
 
-### v4.1 Mobile And Multilingual Polish Foundation
+Not selected.
 
-Goal: prepare STOA for mobile-friendly and multilingual product polish by defining the contracts, backend support, and release evidence needed before broader UI rollout.
-
-Target features:
-
-- Mobile/responsive readiness contract and gap audit for student, parent, tutor, and admin flows.
-- Backend/frontend-facing localization foundation: locale preferences, language-safe response contracts, and translated content boundaries.
-- Focused polish release gate documenting what is complete locally and what remains for frontend/native rollout.
+Candidate next work remains full frontend/native mobile implementation, visual localization, production notification delivery readiness, live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
 
 ## Requirements
 
