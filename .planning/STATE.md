@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.4
-milestone_name: Live Payment Provider Rollout
-status: complete
-last_updated: "2026-06-11T23:58:00+02:00"
-last_activity: 2026-06-11
+milestone: v4.5
+milestone_name: Support Evidence Integrations And Operations Handoff
+status: planning
+last_updated: "2026-06-12T00:01:13+02:00"
+last_activity: 2026-06-12
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-11)
+See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.4 live payment provider rollout.
+**Current focus:** v4.5 support evidence integrations and operations handoff.
 
 ## Current Position
 
-Phase: 147 - v4.4 Payment Release Gate, Rollout Controls, And Support Audit
-Plan: 147-01
-Status: Complete
-Last activity: 2026-06-11 - Completed v4.4 payment release gate, rollback controls audit, remaining payment work audit, planning updates, and focused subscription verification.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-12 - Milestone v4.5 started
 
 ## Accumulated Context
 

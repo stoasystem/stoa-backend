@@ -60,7 +60,9 @@ The completed-local v4.2 milestone promotes the local realtime notification foun
 
 The completed-local v4.3 milestone moved the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, delivering selected responsive core-flow polish and visible English/German locale preference UI.
 
-The active v4.4 milestone moves the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, and first-pass billing operations support.
+The completed-local v4.4 milestone moved the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, and first-pass billing operations support while keeping real customer charging externally gated.
+
+The active v4.5 milestone connects support-safe evidence packages to approved operational destinations and adds operator-visible handoff status while preserving metadata-only privacy boundaries.
 
 ## Core Value
 
@@ -69,8 +71,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.3 Frontend Mobile And Visual Localization Rollout on 2026-06-11 (local frontend release gate)
-**Active milestone:** v4.4 Live Payment Provider Rollout
+**Latest completed milestone:** v4.4 Live Payment Provider Rollout on 2026-06-11 (local backend release gate)
+**Active milestone:** v4.5 Support Evidence Integrations And Operations Handoff
 
 Delivered:
 
@@ -189,29 +191,23 @@ Completed phases:
 - Phase 142: Visual Localization And Language Preference UI.
 - Phase 143: v4.3 Browser Release Gate And Localization Audit.
 
-## Next Milestone
-
-### v4.4 Live Payment Provider Rollout
-
-Goal: move the local Stripe-first payment provider MVP toward controlled production charging, Stripe-backed TWINT inclusion, and operator readiness.
-
-Candidate phases:
-
-- Phase 144: Live Payment Rollout Contract And Credential Readiness.
-- Phase 145: Production Checkout/Webhook Verification.
-- Phase 146: Refunds Invoices Tax And Dunning Readiness.
-- Phase 147: v4.4 Payment Release Gate And Support Audit.
-
-This is now the active milestone because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning remain unclosed.
-
-## Following Milestones
-
-### v4.5 Support Evidence Integrations And Operations Handoff
+## Current Milestone: v4.5 Support Evidence Integrations And Operations Handoff
 
 Roadmap: `.planning/milestones/v4.5-ROADMAP.md`
 Requirements: `.planning/milestones/v4.5-REQUIREMENTS.md`
 
-Goal: connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status.
+**Goal:** Connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status.
+
+**Target features:**
+
+- Support destination contract and credential readiness.
+- Support evidence export destination integration with preview/copy/download fallback.
+- Operator queue and handoff status visibility.
+- v4.5 release gate with refusal-path, redaction, and planning-doc evidence.
+
+This is now the active milestone because support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps.
+
+## Next Milestone
 
 ### v4.6 Rich Curriculum Authoring And Analytics Foundation
 
@@ -251,14 +247,14 @@ Shipped requirements:
 
 ### Active
 
-- PAYLIVE-01: live payment rollout contract and credential readiness - Phase 144.
-- PAYLIVE-02: production checkout and webhook verification - Phase 145.
-- PAYLIVE-03: refunds invoices tax and dunning readiness - Phase 146.
-- VERIFY-27: v4.4 payment release gate and support audit - Phase 147.
+- SUPPORTINT-01: support destination contract and credential readiness - Phase 148.
+- SUPPORTINT-02: support evidence export destination integration - Phase 149.
+- SUPPORTINT-03: operator queue and handoff status visibility - Phase 150.
+- VERIFY-28: v4.5 support integration release gate - Phase 151.
 
 ### Completed
 
-Milestone v4.4 requirements are archived in `.planning/milestones/v4.4-REQUIREMENTS.md` and are active:
+Milestone v4.4 requirements are archived in `.planning/milestones/v4.4-REQUIREMENTS.md` and are complete:
 
 - PAYLIVE-01: live payment rollout contract and credential readiness - Phase 144.
 - PAYLIVE-02: production checkout and webhook verification - Phase 145.
@@ -482,6 +478,7 @@ Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREME
 - PDF generation - HTML/JSON report artifacts are enough for this milestone.
 - Multi-language report generation beyond the primary parent-facing language chosen for MVP.
 - Live payment rollout note: broad ERP/accounting automation, custom invoice rendering, and any non-Stripe TWINT or multi-provider orchestration remain outside the v4.4 rollout scope.
+- Support integration note: unapproved external writes, raw report artifact exposure, presigned URLs, broad CRM automation, and customer messaging campaigns remain outside the v4.5 support handoff scope.
 - Organization/school portal work - separate product surface.
 - Real-time report generation on every parent page load - scheduled generation is the intended model.
 - Freeform WYSIWYG report editor - v2.2 remains bounded artifact operations with sanitized preview/rollback controls.
@@ -616,8 +613,8 @@ Known current resources:
 | Start v4.1 with mobile and multilingual polish foundation | Mobile and multilingual polish are recurring deferred product gaps after the Phase 2 learning and billing foundations; backend contracts and language-safe boundaries should precede broader frontend/native rollout | Complete locally - backend release gate passed |
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
 | Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
-| Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Active - milestone initialized |
-| Plan v4.5 support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Planned after v4.4 |
+| Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Complete locally - backend release gate passed |
+| Start v4.5 with support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Active - milestone initialized |
 | Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Planned after v4.5 |
 
 ## Evolution
@@ -638,4 +635,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-11 after planning v4.5 support integration and v4.6 curriculum operations milestones*
+*Last updated: 2026-06-12 after starting v4.5 support evidence integrations milestone*
