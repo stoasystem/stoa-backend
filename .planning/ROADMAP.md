@@ -35,10 +35,11 @@
 - [x] **v4.0 Adaptive Learning Memory And Assignment** - Completed local backend release gate 2026-06-10.
 - [x] **v4.1 Mobile And Multilingual Polish Foundation** - Completed local backend release gate 2026-06-11.
 - [x] **v4.2 Production Notification Delivery Readiness** - Completed local backend release gate 2026-06-11.
+- [x] **v4.3 Frontend Mobile And Visual Localization Rollout** - Completed local frontend release gate 2026-06-11.
 
 ## v4.3 Frontend Mobile And Visual Localization Rollout
 
-**v4.3 Frontend Mobile And Visual Localization Rollout** - Active planning.
+**v4.3 Frontend Mobile And Visual Localization Rollout** - Completed local frontend release gate 2026-06-11.
 
 Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mobile UX and visible English/German localization on core student, parent, tutor, and admin flows.
 
@@ -52,7 +53,7 @@ Goal: use the `/Users/zhdeng/stoa-frontend` workspace to implement responsive mo
 - [x] **Phase 140: Frontend Workspace Contract And Mobile UAT Plan** - Confirm frontend workspace structure, route/API patterns, mobile flow targets, localization approach, and browser verification commands. (completed 2026-06-11)
 - [x] **Phase 141: Responsive Student Parent Tutor Core Flow Polish** - Implement mobile-responsive layouts and interaction polish for selected student, parent, and tutor workflows. (completed 2026-06-11)
 - [x] **Phase 142: Visual Localization And Language Preference UI** - Add English/German preference UI and localized display copy for selected core flows using backend locale APIs. (completed 2026-06-11)
-- [ ] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope.
+- [x] **Phase 143: v4.3 Browser Release Gate And Localization Audit** - Verify browser/mobile evidence, update docs, and record remaining frontend/native localization scope. (completed 2026-06-11)
 
 ## Phase Details
 
@@ -122,11 +123,11 @@ Plans:
   3. English/German language switching and fallback behavior are verified.
   4. Feature gap audit and next milestone recommendation are updated.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 143-01: Verify v4.3 and update release documentation.
+- [x] 143-01: Verify v4.3 and update release documentation.
 
 ## Progress
 
@@ -135,7 +136,7 @@ Plans:
 | 140 Frontend Workspace Contract And Mobile UAT Plan | v4.3 | 1/1 | Complete   | 2026-06-11 |
 | 141 Responsive Student Parent Tutor Core Flow Polish | v4.3 | 1/1 | Complete   | 2026-06-11 |
 | 142 Visual Localization And Language Preference UI | v4.3 | 1/1 | Complete   | 2026-06-11 |
-| 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 0/1 | Planned | - |
+| 143 v4.3 Browser Release Gate And Localization Audit | v4.3 | 1/1 | Complete   | 2026-06-11 |
 
 ## Traceability
 
@@ -144,7 +145,7 @@ Plans:
 | MOBILEUI-01 | Phase 140 | Complete |
 | MOBILEUI-02 | Phase 141 | Complete |
 | I18NUI-01 | Phase 142 | Complete |
-| VERIFY-26 | Phase 143 | Planned |
+| VERIFY-26 | Phase 143 | Complete |
 
 ---
-*Last updated: 2026-06-11 after completing Phase 142 visual localization UI*
+*Last updated: 2026-06-11 after completing v4.3 release gate*

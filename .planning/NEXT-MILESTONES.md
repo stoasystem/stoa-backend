@@ -1,28 +1,11 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-11 after selecting v4.3
+**Updated:** 2026-06-11 after completing v4.3
 **Mode:** product functionality first
 
-## v4.3 Frontend Mobile And Visual Localization Rollout
-
-**Status:** Active planning
-
-Goal: implement the responsive frontend/native-adjacent work that v4.1 intentionally left outside this backend repository.
-
-Candidate phases:
-
-- Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
-- Phase 141: Responsive Student Parent Tutor Core Flow Polish.
-- Phase 142: Visual Localization And Language Preference UI.
-- Phase 143: v4.3 Browser Release Gate And Localization Audit.
-
-Scope:
-
-- Requires the relevant frontend workspace.
-- Verify real mobile viewports, touch targets, focus behavior, overflow, and translated UI copy.
-- Keep backend canonical-value translation and machine translation out of scope unless a later product decision promotes it.
-
 ## v4.4 Live Payment Provider Rollout
+
+**Status:** Recommended next
 
 Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
 
@@ -55,3 +38,20 @@ Scope:
 - Requires approved connector, credential, or destination policy.
 - Preserve metadata-only evidence boundaries and refusal behavior for unapproved external writes.
 - Keep broad CRM automation and customer messaging campaigns out of scope until support handoff basics are verified.
+
+## v4.6 Rich Curriculum Authoring And Analytics Foundation
+
+Goal: turn the curriculum catalog and exercise-bank foundation into a more operable authoring, QA, and insight workflow.
+
+Candidate phases:
+
+- Phase 152: Curriculum Authoring Contract And QA Workflow.
+- Phase 153: Admin Lesson And Exercise Authoring MVP.
+- Phase 154: Learning Analytics And Content Quality Signals.
+- Phase 155: v4.6 Curriculum Operations Release Gate.
+
+Scope:
+
+- Build on the v3.8 curriculum hierarchy and v4.0 adaptive learning signals.
+- Prioritize author review, content QA, and actionable learning analytics before deeper compliance automation.
+- Full production notification rollout remains an eligible alternative next milestone if infrastructure/provider/frontend ownership becomes available first.

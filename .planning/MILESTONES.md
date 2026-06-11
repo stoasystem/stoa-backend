@@ -845,30 +845,36 @@ Known deferred items at close: CDK/API Gateway WebSocket production route wiring
 
 ### v4.3 Frontend Mobile And Visual Localization Rollout
 
-**Status:** Active planning
+**Status:** Completed local frontend release gate 2026-06-11
 **Started:** 2026-06-11
+**Completed:** 2026-06-11
+**Audit:** `.planning/milestones/v4.3-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v4.3-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.3-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/140-frontend-workspace-contract-and-mobile-uat-plan/`
+**Phase evidence:** `.planning/phases/140-frontend-workspace-contract-and-mobile-uat-plan/`, `.planning/phases/141-responsive-student-parent-tutor-core-flow-polish/`, `.planning/phases/142-visual-localization-and-language-preference-ui/`, `.planning/phases/143-v4.3-browser-release-gate-and-localization-audit/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Use `/Users/zhdeng/stoa-frontend` to implement responsive mobile UX and visible English/German localization for selected core STOA workflows.
 **Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
 - Phase 141: Responsive Student Parent Tutor Core Flow Polish.
 - Phase 142: Visual Localization And Language Preference UI.
 - Phase 143: v4.3 Browser Release Gate And Localization Audit.
 
-Feature priorities:
+Key accomplishments:
 
-- Confirm frontend routes/components/API clients and verification commands.
-- Make selected student, parent, and tutor workflows usable on mobile viewports.
-- Add English/German language preference UI and localized display copy.
-- Capture browser/mobile viewport evidence and update the remaining feature queue.
+- Confirmed `/Users/zhdeng/stoa-frontend` framework, route, API client, i18n, and verification contracts before frontend implementation.
+- Improved shared mobile buttons, page actions, app shell navigation, and tutor AI teacher tool layouts for selected core flows.
+- Added targeted Playwright mobile viewport coverage for student, parent, tutor, and admin flows.
+- Wired authenticated English/German language preference changes to the backend locale preference API.
+- Applied `/auth/me` locale state on refresh and verified German UI persistence through browser reload.
+- Completed frontend lint, production build, and targeted browser release-gate evidence.
+
+Known deferred items at close: native mobile apps, full translation management and broad copy QA, RTL support, production frontend deploy/live smoke, full production notification rollout, live payment-provider rollout, support integrations, rich curriculum authoring, analytics, and deeper compliance operations.
 
 ---
-*Last updated: 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout*
+*Last updated: 2026-06-11 after completing v4.3 frontend mobile and visual localization rollout*

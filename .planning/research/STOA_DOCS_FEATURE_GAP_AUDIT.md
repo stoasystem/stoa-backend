@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after selecting v4.3 frontend mobile and visual localization rollout
+**Updated:** 2026-06-11 after completing v4.3 frontend mobile and visual localization rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -32,7 +32,7 @@ After checking `stoa_docs` again on 2026-06-11, v4.1 completed the local backend
 
 v4.2 completed the backend-local production notification delivery readiness scope: production WebSocket delivery contracts, durable notification preferences, preference-aware delivery state/status behavior, email digest preview readiness, push-ready preference metadata, and clean local release-gate evidence. Remaining notification work is now provider/infrastructure/frontend rollout scope: CDK/API Gateway WebSocket deployment, live endpoint smoke, frontend/native notification visuals, native push token/provider integration, production email digest templates/scheduling, and broader notification analytics.
 
-v4.3 is now selected as the next feature-building milestone because `/Users/zhdeng/stoa-frontend` exists and the largest remaining visible `stoa_docs` gap is responsive mobile UX plus English/German visual localization. The backend planning docs should hand off execution to the frontend workspace rather than trying to implement UI changes inside `stoa-backend`.
+v4.3 completed the selected frontend mobile and English/German visual localization rollout in `/Users/zhdeng/stoa-frontend`: frontend workspace contract, shared mobile shell/action polish, targeted mobile Playwright coverage, backend-backed language preference UI, `/auth/me` locale refresh behavior, and release-gate evidence. Remaining mobile/localization work is now broader native app, translation management, RTL, broad copy QA, and production deploy scope rather than the selected core-flow frontend rollout.
 
 ## Completed Or Largely Complete
 
@@ -57,6 +57,7 @@ v4.3 is now selected as the next feature-building milestone because `/Users/zhde
 - Adaptive learning memory and assignment foundation: durable memory fields, source inputs, reviewed assignment lifecycle, recommendation boundaries, student/tutor/parent visibility requirements, backend APIs, and route contracts.
 - Mobile and multilingual backend foundation: mobile-ready route contracts, durable `en`/`de` locale preferences, language-safe adaptive response metadata, and release evidence with deferred frontend/native ownership.
 - Production notification delivery readiness: production WebSocket/API Gateway contract, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, metadata-safe digest payloads, push-ready preference flags, and clean local release evidence.
+- Frontend mobile and visual localization rollout: selected student, parent, tutor, and admin mobile viewport polish, targeted Playwright coverage, English/German language preference UI backed by locale APIs, `/auth/me` locale refresh behavior, and local frontend release-gate evidence.
 
 ## v3.0 Closed MVP Gaps
 
@@ -142,23 +143,29 @@ v4.3 is now selected as the next feature-building milestone because `/Users/zhde
 |-----|--------|------------------|----------|
 | Production notification delivery readiness | `PLAN.md` Phase 2 growth feature: push notifications / email notifications / production realtime rollout | Phase 136 defined WebSocket route/integration/config/fallback contracts and ownership boundaries; Phase 137 added durable preferences, delivery decisions, realtime preference gating, and admin status; Phase 138 added digest preview selection, metadata-safe payloads, and no-provider fallback metadata; Phase 139 captured full pytest/ruff release evidence and deferred provider/frontend/native rollout scope. | Closed for backend readiness scope |
 
+## v4.3 Closed Phase 2 Functional Gap
+
+| Gap | Source | Current evidence | Priority |
+|-----|--------|------------------|----------|
+| Selected frontend mobile responsive polish and English/German visual localization | `PLAN.md` Phase 2 growth feature: mobile responsive polish / multilingual frontend rollout | Phase 140 confirmed the frontend workspace and UAT plan; Phase 141 added shared mobile layout polish and targeted mobile Playwright coverage; Phase 142 wired language switching to the locale preference API and `/auth/me` refresh behavior; Phase 143 captured lint/build/browser release-gate evidence and updated remaining-feature docs. | Closed for selected frontend rollout scope |
+
 ## Phase 2 / Future Expansion
 
 - Live payment-provider rollout with approved production credentials, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics.
 - Automatic student assignment of generated exercises and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
-- Full responsive frontend implementation with mobile viewport/browser verification.
-- Full frontend multilingual rollout and visual localization.
+- Native mobile apps, native push-token registration, and production mobile rollout.
+- Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
 - Support-ticket/evidence integrations after an approved connector or credential path exists.
 
 ## Remaining Feature Build Order
 
-1. v4.3 Frontend mobile and visual localization rollout in `/Users/zhdeng/stoa-frontend`.
-2. v4.4 Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-3. v4.5 Support-ticket/evidence destination integrations after approved connector or credential path exists.
-4. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
-5. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+1. v4.4 Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
+2. v4.5 Support-ticket/evidence destination integrations after approved connector or credential path exists.
+3. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
+4. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+5. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
 
 ## v3.0 Scope Recommendation
 
@@ -284,7 +291,7 @@ v4.2 completed production notification delivery readiness:
 1. Define production WebSocket route/integration, configuration, fallback, and channel mapping contracts.
 2. Add durable notification preference APIs and backend delivery decision/status behavior.
 3. Add digest-ready selection/preview behavior and push preference metadata without requiring live provider credentials during internal development.
-4. Closed with full backend pytest/ruff evidence and updated the remaining-feature queue toward frontend/mobile localization.
+4. Closed with full backend pytest/ruff evidence and updated the remaining-feature queue toward frontend/mobile localization, which v4.3 later completed for selected frontend flows.
 
 ## v4.1 Scope Recommendation
 
@@ -294,3 +301,12 @@ v4.1 completed the backend foundation for mobile and multilingual polish:
 2. Add durable locale preference APIs and shared normalization/fallback behavior.
 3. Apply language metadata and mobile-friendly contract checks to selected student, parent, tutor, and admin routes while keeping canonical values stable.
 4. Close with focused backend verification and record residual full responsive frontend/native and visual localization scope.
+
+## v4.3 Scope Outcome
+
+v4.3 completed the selected frontend mobile and visual localization rollout:
+
+1. Confirmed the frontend workspace, route/API/i18n contracts, and mobile/localization UAT plan.
+2. Improved shared mobile shell, buttons, page actions, and selected tutor AI tool layouts.
+3. Added authenticated English/German language preference persistence through the backend locale API and `/auth/me` refresh behavior.
+4. Closed with frontend lint/build evidence and targeted Playwright coverage for mobile student/parent/tutor/admin flows plus language persistence, leaving native apps, full translation governance, production frontend deploy smoke, live payments, support integrations, rich authoring, and production notification rollout in the remaining queue.

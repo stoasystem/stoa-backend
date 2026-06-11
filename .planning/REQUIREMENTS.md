@@ -1,7 +1,7 @@
 # Requirements: v4.3 Frontend Mobile And Visual Localization Rollout
 
 **Milestone:** v4.3
-**Status:** Active planning
+**Status:** Completed local frontend release gate
 **Created:** 2026-06-11
 
 ## Goal
@@ -84,4 +84,4 @@ Acceptance criteria:
 | MOBILEUI-01 | Phase 140 | Complete |
 | MOBILEUI-02 | Phase 141 | Complete |
 | I18NUI-01 | Phase 142 | Complete |
-| VERIFY-26 | Phase 143 | Planned |
+| VERIFY-26 | Phase 143 | Complete |

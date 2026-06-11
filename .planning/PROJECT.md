@@ -58,7 +58,7 @@ The completed-local v4.1 milestone prepared mobile-friendly and multilingual pro
 
 The completed-local v4.2 milestone promotes the local realtime notification foundation toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
 
-The active v4.3 milestone moves the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, targeting responsive core flows and visible English/German UI.
+The completed-local v4.3 milestone moved the deferred frontend mobile and visual localization work into the `/Users/zhdeng/stoa-frontend` workspace, delivering selected responsive core-flow polish and visible English/German locale preference UI.
 
 ## Core Value
 
@@ -67,8 +67,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.2 Production Notification Delivery Readiness on 2026-06-11 (local backend release gate)
-**Active milestone:** v4.3 Frontend Mobile And Visual Localization Rollout
+**Latest completed milestone:** v4.3 Frontend Mobile And Visual Localization Rollout on 2026-06-11 (local frontend release gate)
+**Active milestone:** None selected; recommended next is v4.4 Live Payment Provider Rollout
 
 Delivered:
 
@@ -159,6 +159,7 @@ Delivered:
 - v4.0 added durable learning memory snapshots, next-practice recommendations, reviewed assignment workflows, student/tutor assignment route contracts, and parent progress signals.
 - v4.1 completed mobile/responsive readiness contracts, durable locale preference APIs, language-safe adaptive response metadata, canonical-value stability tests, and local release evidence for backend polish readiness.
 - v4.2 completed production notification delivery readiness contracts, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, push preference readiness, and clean full backend release-gate checks.
+- v4.3 completed selected frontend mobile responsive polish, backend-backed English/German language preference UI, `/auth/me` locale refresh behavior, and targeted browser release-gate evidence in `/Users/zhdeng/stoa-frontend`.
 
 ## Last Production-Verified Milestone
 
@@ -175,31 +176,31 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v4.2 Production Notification Delivery Readiness
-
-Goal: promote local realtime notification foundations toward production-deliverable notification capability through production WebSocket delivery contracts, delivery operations, durable preferences, email digest readiness, and focused release evidence.
-
-Completed phases:
-
-- Phase 136: Production Notification Infrastructure Contract.
-- Phase 137: WebSocket Delivery Operations And Preference APIs.
-- Phase 138: Email Digest And Push Preference Readiness.
-- Phase 139: v4.2 Functional Release Gate And Notification Delivery Audit.
-
-## Next Milestone
-
 ### v4.3 Frontend Mobile And Visual Localization Rollout
 
-Goal: implement the responsive frontend/native-adjacent and visual localization work that v4.1 intentionally left outside this backend repository by using `/Users/zhdeng/stoa-frontend`.
+Goal: implement the responsive frontend and visual localization work that v4.1 intentionally left outside this backend repository by using `/Users/zhdeng/stoa-frontend`.
 
-Candidate phases:
+Completed phases:
 
 - Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
 - Phase 141: Responsive Student Parent Tutor Core Flow Polish.
 - Phase 142: Visual Localization And Language Preference UI.
 - Phase 143: v4.3 Browser Release Gate And Localization Audit.
 
-This is now selected as the active next milestone because `/Users/zhdeng/stoa-frontend` exists. Remaining future work also includes live payment-provider rollout, support integrations, rich content authoring, and deeper analytics/compliance operations.
+## Next Milestone
+
+### v4.4 Live Payment Provider Rollout
+
+Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
+
+Candidate phases:
+
+- Phase 144: Live Payment Rollout Contract And Credential Readiness.
+- Phase 145: Production Checkout/Webhook Verification.
+- Phase 146: Refunds Invoices Tax And Dunning Readiness.
+- Phase 147: v4.4 Payment Release Gate And Support Audit.
+
+This is now recommended because v3.9 completed the local payment-provider MVP while live provider credentials, webhook verification, refunds, invoices, tax/accounting, and dunning remain unclosed.
 
 ## Requirements
 
@@ -232,12 +233,16 @@ Shipped requirements:
 
 ### Active
 
+- No active milestone requirements. Recommended next: v4.4 live payment provider rollout.
+
+### Completed
+
+Milestone v4.3 requirements are archived in `.planning/milestones/v4.3-REQUIREMENTS.md` and are complete:
+
 - MOBILEUI-01: frontend workspace contract and mobile UAT plan - Phase 140.
 - MOBILEUI-02: responsive student/parent/tutor core flow polish - Phase 141.
 - I18NUI-01: visual localization and language preference UI - Phase 142.
 - VERIFY-26: v4.3 browser release gate and localization audit - Phase 143.
-
-### Completed
 
 Milestone v4.2 requirements are archived in `.planning/milestones/v4.2-REQUIREMENTS.md` and are complete:
 
