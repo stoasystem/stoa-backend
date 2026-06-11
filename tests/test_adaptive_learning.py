@@ -136,6 +136,8 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     assert tutor_response.json()["memorySnapshots"][0]["recent_questions"] == ["question-1"]
     assert tutor_response.json()["recommendations"][0]["reviewRequired"] is True
     assert tutor_response.json()["recommendations"][0]["autonomousDecision"] is False
+    assert tutor_response.json()["locale"]["effectiveLocale"] == "de"
+    assert tutor_response.json()["locale"]["canonicalValuesStable"] is True
 
     parent_response = _app({"sub": "parent-1", "role": "parent"}).get(
         "/adaptive/parents/me/children/student-1/progress"
@@ -145,6 +147,7 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     parent_body = parent_response.json()
     assert parent_body["assignedPracticeCount"] == 1
     assert parent_body["freshness"]["status"] == "fresh"
+    assert parent_body["locale"]["effectiveLocale"] == "de"
     assert "recent_questions" not in parent_body["weakAreas"][0]
     assert "evidenceQuestionIds" not in parent_body["weakAreas"][0]
 
@@ -181,6 +184,7 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
     assert created.status_code == 200
     assignment_id = created.json()["assignmentId"]
     assert created.json()["answerKey"] == [{"answer": "1/2"}]
+    assert created.json()["locale"]["effectiveLocale"] == "de"
 
     student_client = _app({"sub": "student-1", "role": "student"})
     started = student_client.post(f"/adaptive/assignments/{assignment_id}/start")
@@ -204,6 +208,36 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
         f"/adaptive/assignments/{assignment_id}/skip"
     )
     assert forbidden.status_code == 403
+
+
+def test_adaptive_locale_metadata_does_not_change_canonical_values(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "role": "student", "parent_id": "parent-1"},
+    )
+    monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
+
+    german = _app({"sub": "student-1", "role": "student", "preferredLocale": "de"}).get(
+        "/adaptive/students/me/memory"
+    )
+    english = _app({"sub": "student-1", "role": "student", "preferredLocale": "en"}).get(
+        "/adaptive/students/me/memory"
+    )
+
+    assert german.status_code == 200
+    assert english.status_code == 200
+    german_body = german.json()
+    english_body = english.json()
+    assert german_body["locale"]["effectiveLocale"] == "de"
+    assert english_body["locale"]["effectiveLocale"] == "en"
+    assert german_body["studentId"] == english_body["studentId"] == "student-1"
+    assert german_body["roleView"] == english_body["roleView"] == "student"
+    assert german_body["recommendations"][0]["type"] == english_body["recommendations"][0]["type"]
+    assert german_body["recommendations"][0]["topicId"] == english_body["recommendations"][0]["topicId"]
+    assert german_body["freshness"]["status"] == english_body["freshness"]["status"]
 
 
 def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
@@ -244,6 +278,7 @@ def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
 
     assert created.status_code == 200
     assignment_id = created.json()["assignmentId"]
+    assert created.json()["locale"]["effectiveLocale"] == "de"
     student_client = _app({"sub": "student-1", "role": "student"})
     first = student_client.post(
         f"/adaptive/assignments/{assignment_id}/complete",

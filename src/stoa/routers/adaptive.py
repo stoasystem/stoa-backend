@@ -101,6 +101,7 @@ async def get_student_recommendations(
         "items": summary["recommendations"],
         "reviewRequired": True,
         "autonomousDecision": False,
+        "locale": adaptive_learning_service.locale_contract(user),
     }
 
 

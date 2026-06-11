@@ -16,7 +16,7 @@ from stoa.db.repositories import (
     question_repo,
     user_repo,
 )
-from stoa.services import curriculum_service, learning_profile_service
+from stoa.services import curriculum_service, learning_profile_service, locale_service
 
 
 ASSIGNMENT_STATUSES = {"draft", "recommended", "assigned", "started", "completed", "skipped", "archived"}
@@ -132,7 +132,7 @@ def list_assignments(
         include_archived=include_archived and _can_manage_assignments(user),
     )
     visible = [assignment_response(item, user=user) for item in items if _assignment_visible(item, user)]
-    return {"items": visible, "count": len(visible)}
+    return {"items": visible, "count": len(visible), "locale": locale_contract(user)}
 
 
 def get_assignment(assignment_id: str, user: dict[str, Any]) -> dict[str, Any]:
@@ -212,6 +212,17 @@ def parent_progress_signal(student_id: str, user: dict[str, Any]) -> dict[str, A
         "freshness": memory["freshness"],
         "assignments": active[:5],
         "completedAssignments": completed[:5],
+        "locale": locale_contract(user),
+    }
+
+
+def locale_contract(user: dict[str, Any]) -> dict[str, Any]:
+    effective_locale = locale_service.effective_locale(user)
+    return {
+        "effectiveLocale": effective_locale,
+        "contentLanguage": effective_locale,
+        "supportedLocales": sorted(locale_service.SUPPORTED_LOCALES),
+        "canonicalValuesStable": True,
     }
 
 
@@ -243,6 +254,7 @@ def assignment_response(item: dict[str, Any], *, user: dict[str, Any]) -> dict[s
         "note": item.get("note"),
         "studentAnswer": item.get("student_answer"),
         "completionResult": item.get("completion_result"),
+        "locale": locale_contract(user),
     }
     if _can_manage_assignments(user):
         response["answerKey"] = item.get("answer_key") or []
@@ -340,6 +352,7 @@ def _memory_response(
     return {
         "studentId": student_id,
         "roleView": "tutor" if role in {"teacher", "tutor", "admin"} else role,
+        "locale": locale_contract(user),
         "subjects": profile.get("subjects", []),
         "subjectActivity": profile.get("subjectActivity", []),
         "weakTopics": weak_topics,

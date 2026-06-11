@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Mobile And Multilingual Polish Foundation
 status: planning
-last_updated: "2026-06-11T11:25:00.000Z"
+last_updated: "2026-06-11T11:45:00.000Z"
 last_activity: 2026-06-11
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 
 ## Current Position
 
-Phase: 134 - Role Route Contract Polish
+Phase: 135 - Release Gate And Documentation
 Plan: —
-Status: Phase 133 complete; ready for role route metadata polish
-Last activity: 2026-06-11 — Completed Phase 133 durable locale preference APIs
+Status: Phase 134 complete; ready for v4.1 release gate
+Last activity: 2026-06-11 — Completed Phase 134 role route contract polish
 
 ## Accumulated Context
 
@@ -42,12 +42,13 @@ Last activity: 2026-06-11 — Completed Phase 133 durable locale preference APIs
 - v4.1 should prepare mobile-friendly and multilingual polish through contracts, locale support, language-safe response boundaries, and release evidence before broader frontend/native rollout.
 - Phase 132 set the v4.1 backend contract: `en`/`de` initial locale support, durable profile-level locale preference, no backend device sniffing, canonical values remain locale-neutral, and frontend/native visual polish remains deferred outside this backend workspace.
 - Phase 133 added shared locale normalization/fallback, exposed `preferredLocale`/`effectiveLocale` on `/auth/me`, and added `PATCH /auth/me/preferences/locale` for durable profile locale updates.
+- Phase 134 added additive locale metadata to adaptive learning memory, recommendation, assignment, assignment-list, and parent progress responses while tests preserve canonical values across `de` and `en`.
 
 ### Pending Todos
 
 - Production deploy/live smoke remains pending if v4.0 is promoted beyond local backend completion.
 - Frontend component implementation remains outside this backend repository.
-- Run v4.1 autonomous phases 134-135.
+- Run v4.1 autonomous Phase 135.
 
 ### Blockers/Concerns
 
@@ -59,4 +60,4 @@ Last activity: 2026-06-11 — Completed Phase 133 durable locale preference APIs
 
 ## Operator Next Steps
 
-- Start Phase 134 role route contract polish.
+- Start Phase 135 release gate and documentation.
