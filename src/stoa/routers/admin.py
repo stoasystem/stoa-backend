@@ -139,6 +139,23 @@ class SubscriptionRefundExecutionResponse(BaseModel):
     billing: dict[str, Any] = Field(default_factory=dict)
 
 
+class SubscriptionRolloutControlsResponse(BaseModel):
+    checkout: dict[str, Any] = Field(default_factory=dict)
+    refunds: dict[str, Any] = Field(default_factory=dict)
+    providerReadiness: str
+    activationState: str
+    rollbackAvailable: bool
+    updatedAt: str | None = None
+    updatedBy: str | None = None
+    reason: str | None = None
+
+
+class SubscriptionRolloutControlsUpdateRequest(BaseModel):
+    checkout_state: str | None = Field(default=None, alias="checkoutState")
+    refunds_state: str | None = Field(default=None, alias="refundsState")
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
 class SubscriptionRequestUpdateRequest(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
     admin_note: str | None = Field(default=None, max_length=500)
@@ -1015,6 +1032,31 @@ async def get_subscription_provider_readiness(
 ):
     """Inspect redacted live provider readiness without creating provider mutations."""
     return subscription_service.get_provider_readiness(settings)
+
+
+@router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
+async def get_subscription_rollout_controls(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect effective checkout/refund rollout controls."""
+    return subscription_service.get_payment_rollout_controls(settings)
+
+
+@router.patch("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
+async def update_subscription_rollout_controls(
+    body: SubscriptionRolloutControlsUpdateRequest,
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Update checkout/refund rollout controls for new live-changing operations."""
+    return subscription_service.update_payment_rollout_controls(
+        checkout_state=body.checkout_state,
+        refunds_state=body.refunds_state,
+        reason=body.reason,
+        user=user,
+        settings=settings,
+    )
 
 
 @router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)

@@ -17,7 +17,7 @@ Build production payment activation features directly. Keep safety checks scoped
 - [x] **Phase 156: Payment Production Activation Contract And Provider Readiness** - Define live credential ownership, TWINT capability validation, price mapping, webhook registration, finance acceptance, rollout gates, and provider automation targets.
 - [x] **Phase 157: Live Provider Readiness API Checks** - Add admin-only readiness checks for credentials, price mapping, TWINT eligibility, webhook endpoint state, refund capability, and accounting metadata.
 - [x] **Phase 158: Direct Refund Execution And Finance Handoff** - Add controlled refund execution, idempotency, audit evidence, billing projection updates, and finance handoff export.
-- [ ] **Phase 159: Production Webhook Registration And Rollout Controls** - Verify webhook registration requirements, expose rollout controls for checkout/refunds, and capture readiness evidence.
+- [x] **Phase 159: Production Webhook Registration And Rollout Controls** - Verify webhook registration requirements, expose rollout controls for checkout/refunds, and capture readiness evidence.
 - [ ] **Phase 160: v4.7 Payment Activation Release Gate** - Verify provider readiness, refund execution, finance handoff, rollout controls, docs, and next milestone recommendation.
 
 ## Phase Details
@@ -89,11 +89,11 @@ Plans:
   3. Rollout state is visible to admins without exposing secrets.
   4. Release evidence can distinguish activated, blocked, deferred, and canary-only rollout states.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 159-01: Implement webhook readiness and rollout controls.
+- [x] 159-01: Implement webhook readiness and rollout controls.
 
 ### Phase 160: v4.7 Payment Activation Release Gate
 
@@ -120,7 +120,7 @@ Plans:
 | 156 Payment Production Activation Contract And Provider Readiness | v4.7 | 1/1 | Complete | 2026-06-12 |
 | 157 Live Provider Readiness API Checks | v4.7 | 1/1 | Complete | 2026-06-12 |
 | 158 Direct Refund Execution And Finance Handoff | v4.7 | 1/1 | Complete | 2026-06-12 |
-| 159 Production Webhook Registration And Rollout Controls | v4.7 | 0/1 | Planned | - |
+| 159 Production Webhook Registration And Rollout Controls | v4.7 | 1/1 | Complete | 2026-06-12 |
 | 160 v4.7 Payment Activation Release Gate | v4.7 | 0/1 | Planned | - |
 
 ## Traceability
@@ -130,8 +130,8 @@ Plans:
 | PAYACT-01 | Phase 156 | Complete |
 | PAYACT-02 | Phase 157 | Complete |
 | PAYACT-03 | Phase 158 | Complete |
-| PAYACT-04 | Phase 159 | Planned |
+| PAYACT-04 | Phase 159 | Complete |
 | VERIFY-30 | Phase 160 | Planned |
 
 ---
-*Last updated: 2026-06-12 after completing Phase 158 direct refund execution.*
+*Last updated: 2026-06-12 after completing Phase 159 webhook readiness and rollout controls.*

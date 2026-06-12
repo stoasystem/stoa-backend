@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.7
 milestone_name: Payment Production Activation And Provider Automation
 status: implementing
-last_updated: "2026-06-12T13:45:00+02:00"
+last_updated: "2026-06-12T14:10:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 159 - Production Webhook Registration And Rollout Controls
-Plan: 159-01
+Phase: 160 - v4.7 Payment Activation Release Gate
+Plan: 160-01
 Status: Ready to plan
-Last activity: 2026-06-12 - Completed Phase 158 controlled direct refund execution with idempotency, audit persistence, billing projection updates, and finance handoff export evidence.
+Last activity: 2026-06-12 - Completed Phase 159 production webhook readiness evidence and persisted independent rollout controls for checkout and refunds.
 
 ## Accumulated Context
 
@@ -42,10 +42,10 @@ Last activity: 2026-06-12 - Completed Phase 158 controlled direct refund executi
 - Phase 156 accepted the production payment activation contract. TWINT is in scope with CHF, Switzerland customer-location, 5,000 CHF maximum, recurring support, no manual capture, 180-day refund-window, merchant onboarding, and `twint_payments` capability requirements.
 - Phase 157 added read-only provider readiness checks and kept refund mutation disabled by default.
 - Phase 158 added direct refund execution behind `STRIPE_REFUNDS_ENABLED`, with idempotency replay, TWINT refund-window enforcement, provider failure no-mutation behavior, and finance export refund evidence.
+- Phase 159 added persisted rollout controls. Checkout and refunds can be independently enabled, disabled, canary-marked, or rolled back; rollback blocks new live-changing operations while preserving billing history and finance exports.
 
 ### Pending Todos
 
-- Plan and implement Phase 159 production webhook registration and rollout controls.
 - Close Phase 160 with payment activation release evidence and updated feature gap docs.
 
 ### Blockers/Concerns
@@ -57,4 +57,4 @@ Last activity: 2026-06-12 - Completed Phase 158 controlled direct refund executi
 
 ## Operator Next Steps
 
-- Start Phase 159 by planning webhook registration readiness and runtime rollout controls for checkout and refunds.
+- Start Phase 160 release gate verification and update v4.7 final activation evidence.

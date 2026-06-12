@@ -30,6 +30,8 @@ BILLING_EVENT_ENTITY = "subscription_billing_event"
 BILLING_EVENT_DEDUPE_ENTITY = "subscription_billing_event_dedupe"
 BILLING_PROVIDER_LOOKUP_ENTITY = "subscription_billing_provider_lookup"
 BILLING_REFUND_IDEMPOTENCY_ENTITY = "subscription_billing_refund_idempotency"
+PAYMENT_ROLLOUT_ENTITY = "subscription_payment_rollout"
+PAYMENT_ROLLOUT_STATES = {"disabled", "canary", "enabled", "rolled_back"}
 READINESS_STATES = {
     "test",
     "not_configured",
@@ -365,15 +367,9 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
     warnings.extend(twint["warnings"])
 
     finance = _finance_readiness()
+    rollout = get_payment_rollout_controls(settings)
     refund = _provider_refund_capability_readiness(local=local, twint=twint, settings=settings)
-    refunds_allowed = bool(refund["mutationConfigured"] and local.get("livemode") and not provider_failure)
-    rollout = {
-        "checkout": "enabled" if local["checkoutAllowed"] else "disabled",
-        "refunds": "enabled" if refunds_allowed else "disabled",
-        "providerReadiness": "blocked",
-        "activationState": "blocked",
-        "rollbackAvailable": True,
-    }
+    refunds_allowed = bool(_rollout_state_allows(rollout["refunds"]["state"]) and local.get("livemode") and not provider_failure)
 
     if provider_failure:
         state = "provider_api_failed"
@@ -493,7 +489,8 @@ def execute_billing_refund(
             settings=settings,
         )
 
-    if not settings.stripe_refunds_enabled:
+    rollout = get_payment_rollout_controls(settings)
+    if not _rollout_state_allows(rollout["refunds"]["state"]):
         raise HTTPException(status_code=409, detail="Direct refund execution is not enabled")
     if settings.is_production and not settings.stripe_api_key.strip().startswith("sk_live_"):
         raise HTTPException(status_code=503, detail="Live Stripe API key is required for direct refunds")
@@ -561,6 +558,74 @@ def execute_billing_refund(
         "refund": updated.get("refund_summary") or {},
         "billing": _billing_response(updated, parent_id=parent_id, include_events=True, settings=settings),
     }
+
+
+def get_payment_rollout_controls(settings: Settings) -> dict[str, Any]:
+    item = _get_payment_rollout_item()
+    checkout_state = str(
+        item.get("checkout_state")
+        if item
+        else ("enabled" if settings.stripe_live_charges_enabled else "disabled")
+    )
+    refunds_state = str(
+        item.get("refunds_state")
+        if item
+        else ("enabled" if settings.stripe_refunds_enabled else "disabled")
+    )
+    if checkout_state not in PAYMENT_ROLLOUT_STATES:
+        checkout_state = "disabled"
+    if refunds_state not in PAYMENT_ROLLOUT_STATES:
+        refunds_state = "disabled"
+    updated_at = item.get("updated_at") if item else None
+    updated_by = item.get("updated_by") if item else None
+    reason = item.get("reason") if item else None
+    controls = {
+        "checkout": {
+            "state": checkout_state,
+            "allowed": _rollout_state_allows(checkout_state),
+        },
+        "refunds": {
+            "state": refunds_state,
+            "allowed": _rollout_state_allows(refunds_state),
+        },
+        "providerReadiness": "ready" if checkout_state == "enabled" else "blocked",
+        "activationState": _activation_state_from_rollout(checkout_state, refunds_state),
+        "rollbackAvailable": True,
+        "updatedAt": updated_at,
+        "updatedBy": updated_by,
+        "reason": reason,
+    }
+    return controls
+
+
+def update_payment_rollout_controls(
+    *,
+    checkout_state: str | None,
+    refunds_state: str | None,
+    reason: str,
+    user: dict[str, Any],
+    settings: Settings,
+) -> dict[str, Any]:
+    current = get_payment_rollout_controls(settings)
+    checkout_state = checkout_state or current["checkout"]["state"]
+    refunds_state = refunds_state or current["refunds"]["state"]
+    if checkout_state not in PAYMENT_ROLLOUT_STATES:
+        raise HTTPException(status_code=400, detail="Unsupported checkout rollout state")
+    if refunds_state not in PAYMENT_ROLLOUT_STATES:
+        raise HTTPException(status_code=400, detail="Unsupported refund rollout state")
+    cleaned_reason = _require_refund_reason(reason)
+    now = now_iso()
+    item = {
+        **_payment_rollout_key(),
+        "entity_type": PAYMENT_ROLLOUT_ENTITY,
+        "checkout_state": checkout_state,
+        "refunds_state": refunds_state,
+        "reason": cleaned_reason,
+        "updated_by": _actor_id(user),
+        "updated_at": now,
+    }
+    get_table().put_item(Item=item)
+    return get_payment_rollout_controls(settings)
 
 
 def create_parent_request(
@@ -1023,6 +1088,10 @@ def _provider_lookup_key(provider: str, object_type: str, object_id: str) -> dic
     }
 
 
+def _payment_rollout_key() -> dict[str, str]:
+    return {"PK": "SUBSCRIPTION_PAYMENT_ROLLOUT", "SK": "SUMMARY"}
+
+
 def _refund_idempotency_key(parent_id: str, idempotency_key: str) -> dict[str, str]:
     digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
     return {
@@ -1166,6 +1235,7 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
     blockers: list[str] = []
     warnings: list[str] = []
     sdk_available = _stripe_sdk_available()
+    rollout = get_payment_rollout_controls(settings)
 
     if settings.is_production:
         if not api_key:
@@ -1182,7 +1252,7 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
             blockers.append("stripe_sdk_missing")
         if blockers:
             state = "not_configured"
-        elif not settings.stripe_live_charges_enabled:
+        elif not _rollout_state_allows(rollout["checkout"]["state"]):
             state = "live_ready_but_blocked"
         else:
             state = "live_enabled"
@@ -1205,7 +1275,8 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
         "mode": "live" if state in {"live_ready_but_blocked", "live_enabled"} else "test",
         "livemode": state in {"live_ready_but_blocked", "live_enabled"},
         "checkoutAllowed": not settings.is_production or state == "live_enabled",
-        "liveChargesEnabled": bool(settings.stripe_live_charges_enabled),
+        "liveChargesEnabled": _rollout_state_allows(rollout["checkout"]["state"]),
+        "rollout": rollout,
         "blockers": blockers,
         "warnings": warnings,
         "configured": {
@@ -1478,6 +1549,29 @@ def _provider_refund_capability_readiness(
         "blockers": [] if mutation_configured else ["direct_refund_execution_not_enabled"],
         "warnings": [] if local.get("livemode") else ["refund_readiness_requires_live_provider_mode"],
     }
+
+
+def _get_payment_rollout_item() -> dict[str, Any]:
+    try:
+        item = get_table().get_item(Key=_payment_rollout_key()).get("Item")
+    except Exception:
+        return {}
+    return dict(item) if item else {}
+
+
+def _rollout_state_allows(state: str) -> bool:
+    return state == "enabled"
+
+
+def _activation_state_from_rollout(checkout_state: str, refunds_state: str) -> str:
+    states = {checkout_state, refunds_state}
+    if "enabled" in states:
+        return "activated"
+    if "canary" in states:
+        return "approved_canary_only"
+    if "rolled_back" in states:
+        return "blocked"
+    return "deferred"
 
 
 def _finance_readiness() -> dict[str, Any]:

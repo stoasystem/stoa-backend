@@ -881,6 +881,185 @@ def test_admin_direct_refund_blocks_expired_twint_window(monkeypatch):
     assert response.json()["detail"] == "TWINT refund window has expired"
 
 
+def test_admin_rollout_controls_default_from_static_config(monkeypatch):
+    _install_fakes(monkeypatch)
+    settings = _settings(
+        environment="production",
+        stripe_live_charges_enabled=True,
+        stripe_refunds_enabled=False,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/rollout-controls")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["checkout"]["state"] == "enabled"
+    assert body["checkout"]["allowed"] is True
+    assert body["refunds"]["state"] == "disabled"
+    assert body["refunds"]["allowed"] is False
+
+
+def test_admin_can_update_checkout_and_refund_rollout_controls(monkeypatch):
+    _install_fakes(monkeypatch)
+    settings = _settings(
+        environment="production",
+        stripe_live_charges_enabled=True,
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    updated = admin_client.patch(
+        "/admin/subscriptions/billing/rollout-controls",
+        json={
+            "checkoutState": "rolled_back",
+            "refundsState": "enabled",
+            "reason": "pause checkout while keeping approved refunds",
+        },
+    )
+    fetched = admin_client.get("/admin/subscriptions/billing/rollout-controls")
+
+    assert updated.status_code == 200
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["checkout"]["state"] == "rolled_back"
+    assert body["checkout"]["allowed"] is False
+    assert body["refunds"]["state"] == "enabled"
+    assert body["refunds"]["allowed"] is True
+    assert body["updatedBy"] == "admin-1"
+    assert body["reason"] == "pause checkout while keeping approved refunds"
+
+
+def test_rollout_checkout_rollback_blocks_new_live_checkout(monkeypatch):
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=True,
+        stripe_twint_capability_confirmed=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+    parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+    admin_client.patch(
+        "/admin/subscriptions/billing/rollout-controls",
+        json={
+            "checkoutState": "rolled_back",
+            "refundsState": "disabled",
+            "reason": "rollback checkout",
+        },
+    )
+
+    response = parent_client.post(
+        "/parents/me/subscription/checkout",
+        json={"requestedTier": "standard"},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["readiness"]["state"] == "live_ready_but_blocked"
+    assert detail["readiness"]["rollout"]["checkout"]["state"] == "rolled_back"
+
+
+def test_rollout_refund_rollback_blocks_new_refund_but_preserves_export(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    _put_active_billing(table)
+    monkeypatch.setattr(
+        subscription_service,
+        "_create_provider_refund",
+        lambda **kwargs: {"id": "re_should_not_be_created", "status": "succeeded"},
+    )
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+    admin_client.patch(
+        "/admin/subscriptions/billing/rollout-controls",
+        json={
+            "checkoutState": "disabled",
+            "refundsState": "rolled_back",
+            "reason": "rollback refunds",
+        },
+    )
+
+    response = admin_client.post(
+        "/admin/subscriptions/billing/parent-1/refunds",
+        json={
+            "amount": 500,
+            "reason": "blocked after rollback",
+            "idempotencyKey": "refund-key-006",
+        },
+    )
+    export_response = admin_client.get("/admin/subscriptions/billing/accounting-export")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Direct refund execution is not enabled"
+    assert export_response.status_code == 200
+    assert export_response.json()["count"] == 1
+    assert export_response.json()["items"][0]["providerInvoiceId"] == "in_live_parent"
+
+
+def test_provider_readiness_reports_webhook_last_observed_event(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    table.put_item(
+        Item={
+            "PK": "SUBSCRIPTION_BILLING#parent-1",
+            "SK": "EVENT#2026-06-12T10:00:00+00:00#evt_last",
+            "entity_type": "subscription_billing_event",
+            "parent_id": "parent-1",
+            "event_id": "stripe_evt_last",
+            "event_type": "invoice.paid",
+            "event_at": "2026-06-12T10:00:00+00:00",
+            "provider": "stripe",
+        }
+    )
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_account",
+        lambda settings: {"capabilities": {"twint_payments": "active"}},
+    )
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_price",
+        lambda price_id, settings: {
+            "id": price_id,
+            "currency": "chf",
+            "recurring": {"interval": "month"},
+            "livemode": True,
+            "active": True,
+        },
+    )
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=True,
+        stripe_twint_capability_confirmed=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    webhook = response.json()["webhook"]
+    assert webhook["endpointMode"] == "https"
+    assert webhook["signingSecretConfigured"] is True
+    assert webhook["quickAckExpected"] is True
+    assert "invoice.paid" in webhook["requiredEventTypes"]
+    assert webhook["lastObservedEventType"] == "invoice.paid"
+    assert webhook["lastObservedProviderEventAt"] == "2026-06-12T10:00:00+00:00"
+
+
 def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeypatch):
     table, profiles = _install_fakes(monkeypatch)
     secret = "whsec_test_secret"
