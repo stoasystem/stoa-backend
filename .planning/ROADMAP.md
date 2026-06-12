@@ -17,7 +17,7 @@ Build support operations functionality directly. Keep checks scoped to destinati
 - [x] **Phase 161: Support Provider Expansion Contract And Adapter Readiness** - Define approved provider modes, payload boundaries, adapter readiness, ticket lifecycle, retry/sync contract, SLA inputs, and controlled messaging rules. (completed 2026-06-12)
 - [x] **Phase 162: Approved Third-Party Support Adapter And Delivery Worker** - Add adapter configuration/readiness and delivery worker behavior for provider ticket creation while preserving internal queue fallback. (completed 2026-06-12)
 - [x] **Phase 163: Retry Workers And Two-Way Ticket Synchronization** - Add bounded retry behavior and provider ticket status synchronization with stale/duplicate/conflict handling. (completed 2026-06-12)
-- [ ] **Phase 164: Support SLA Analytics And Controlled CRM Messaging** - Add support SLA aggregates, overdue/failure analytics, and template-gated customer/support messaging.
+- [x] **Phase 164: Support SLA Analytics And Controlled CRM Messaging** - Add support SLA aggregates, overdue/failure analytics, and template-gated customer/support messaging. (completed 2026-06-12)
 - [ ] **Phase 165: v4.8 Support Provider Release Gate And Operations Audit** - Verify v4.8 behavior, update docs, record provider activation state, and select the next feature milestone.
 
 ## Phase Details
@@ -93,7 +93,7 @@ Plans:
 
 Plans:
 
-- [ ] 164-01: Implement support SLA analytics and controlled CRM messaging.
+- [x] 164-01: Implement support SLA analytics and controlled CRM messaging.
 
 ### Phase 165: v4.8 Support Provider Release Gate And Operations Audit
 
@@ -120,7 +120,7 @@ Plans:
 | 161 Support Provider Expansion Contract And Adapter Readiness | v4.8 | 1/1 | Complete    | 2026-06-12 |
 | 162 Approved Third-Party Support Adapter And Delivery Worker | v4.8 | 1/1 | Complete    | 2026-06-12 |
 | 163 Retry Workers And Two-Way Ticket Synchronization | v4.8 | 1/1 | Complete    | 2026-06-12 |
-| 164 Support SLA Analytics And Controlled CRM Messaging | v4.8 | 0/1 | Planned | - |
+| 164 Support SLA Analytics And Controlled CRM Messaging | v4.8 | 1/1 | Complete    | 2026-06-12 |
 | 165 v4.8 Support Provider Release Gate And Operations Audit | v4.8 | 0/1 | Planned | - |
 
 ## Traceability
@@ -130,7 +130,7 @@ Plans:
 | SUPPORTPROV-01 | Phase 161 | Complete |
 | SUPPORTPROV-02 | Phase 162 | Complete |
 | SUPPORTPROV-03 | Phase 163 | Complete |
-| SUPPORTPROV-04 | Phase 164 | Planned |
+| SUPPORTPROV-04 | Phase 164 | Complete |
 | VERIFY-31 | Phase 165 | Planned |
 
 ---
