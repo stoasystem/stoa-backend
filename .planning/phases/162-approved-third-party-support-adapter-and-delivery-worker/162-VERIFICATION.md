@@ -26,7 +26,9 @@ Passed.
 ## Evidence
 
 - Implementation commit: `8807ae9 feat(162-01): add approved support provider delivery`.
+- Code review fix commit: `5c77bec fix(162-01): avoid provider tickets for refused readiness`.
 - Summary: `162-01-SUMMARY.md`.
+- Code review: `162-REVIEW.md`.
 
 ## Human Verification
 

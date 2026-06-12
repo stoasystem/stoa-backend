@@ -56,6 +56,7 @@ completed: 2026-06-12
 ## Task Commits
 
 1. **Tasks 1-3: Provider readiness, delivery worker, and focused tests** - `8807ae9` (feat)
+2. **Code review fix: avoid tickets for refused readiness** - `5c77bec` (fix)
 
 **Plan metadata:** pending in the metadata commit that adds this SUMMARY.
 
@@ -86,6 +87,7 @@ None - plan executed exactly as written.
 ## Issues Encountered
 
 - Initial test pass showed creation responses did not include the `retry` object that queue/detail responses include. Fixed by returning delivery creation records through `support_handoff_delivery_response`.
+- Advisory code review found refused `third_party_support` readiness records could receive provider ticket IDs despite no provider attempt. Fixed in `5c77bec`.
 
 ## User Setup Required
 
@@ -99,6 +101,7 @@ Provider delivery remains disabled by default. To enable the controlled test/pro
 
 - `./.venv/bin/pytest -q tests/test_admin_report_ops.py -k support_handoff` -> 34 passed, 85 deselected.
 - `./.venv/bin/ruff check src/stoa/config.py src/stoa/routers/admin.py src/stoa/services/support_handoff_service.py src/stoa/services/support_destination_service.py tests/test_admin_report_ops.py` -> all checks passed.
+- Advisory code review: `162-REVIEW.md` -> clean after remediation.
 
 ## Next Phase Readiness
 
