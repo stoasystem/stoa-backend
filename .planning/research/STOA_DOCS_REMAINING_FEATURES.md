@@ -15,24 +15,25 @@
 - Live payment rollout foundation with Stripe/TWINT readiness gates, invoice/receipt metadata, non-mutating refund handoff, dunning projections, and Swiss accounting export metadata.
 - Support integration and operations handoff with destination contract, controlled `internal_queue` delivery, admin-only queue/detail visibility, provider-failure lifecycle coverage, and local backend release-gate evidence.
 - Rich curriculum authoring and analytics foundation with stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, bounded aggregate content-quality analytics, and local backend release-gate evidence.
+- Payment production activation automation with live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
 - Frontend mobile and visual localization rollout with selected responsive core-flow polish and English/German language preference UI.
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 
 ## Remaining Feature Build Queue
 
-1. **v4.7 Payment Production Activation And Provider Automation** - active.
-   Complete approved live Stripe credentials, TWINT account validation, webhook endpoint registration, direct refund execution, provider-readiness API checks, and accounting/support destination integrations.
-
-2. **Support Provider Expansion And CRM Automation**.
+1. **Support Provider Expansion And CRM Automation**.
    Add approved third-party support adapters, retry workers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging beyond the v4.5 internal queue path.
 
-3. **Production Notification And Native Delivery Rollout**.
+2. **Production Notification And Native Delivery Rollout**.
    Complete live WebSocket/API Gateway deployment, provider-backed push/email delivery, frontend/native notification visuals, and live smoke evidence.
+
+3. **Final Live Payment Activation Operations**.
+   Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
 4. **Later Product Expansion**.
    Rich curriculum editor UI, production content migration, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, warehouse-backed analytics, and deeper operations reporting.
 
 ## Current Planning Decision
 
-v4.6 is complete after research-first planning and local backend release-gate verification. The shipped scope is curriculum operations foundation: authoring contract, admin/tutor lifecycle APIs, compare-and-set publish/rollback, archive guards, audit evidence, bounded analytics signals, aggregate content-quality views, and full backend regression evidence. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval, so v4.7 payment production activation is now the active next milestone.
+v4.7 is complete after research-first planning and full backend release-gate verification. The shipped scope is payment production activation automation: activation contract, live Stripe/TWINT provider readiness checks, webhook readiness evidence, direct refund execution, finance handoff export updates, and independent rollout controls. Final live activation status is `deferred` because real customer charging still requires approved Stripe live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement. The next recommended milestone is support provider expansion and CRM automation beyond the v4.5 internal queue path.

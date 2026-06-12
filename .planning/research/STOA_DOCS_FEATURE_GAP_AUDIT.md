@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-12 after selecting v4.7 payment production activation
+**Updated:** 2026-06-12 after completing v4.7 payment production activation automation
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -40,7 +40,7 @@ v4.5 completed the local backend support integration and operations handoff scop
 
 v4.6 completed the local backend rich curriculum authoring and analytics foundation: stable public ID versus immutable version contract, separate authoring/review/publish lifecycle, admin/tutor authoring endpoints, compare-and-set publish/rollback, archive guards, append-only audit evidence, bounded curriculum analytics signals, aggregate content-quality views, full backend regression evidence, and release-gate documentation. Rich editor UI, production content migration, warehouse BI, automatic AI publication, and full adaptive sequencing remain future scope.
 
-v4.7 is now selected as the active next milestone because payment production activation remains the highest business-critical `stoa_docs` gap after v4.6. The selected scope is live Stripe/TWINT provider readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls.
+v4.7 completed the backend payment production activation automation scope: accepted activation contract, admin-only live Stripe/TWINT provider readiness checks, webhook registration readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls. Final live activation status is `deferred`: the backend automation is ready, but real customer charging remains blocked until approved live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout control enablement are provided.
 
 ## Completed Or Largely Complete
 
@@ -68,6 +68,7 @@ v4.7 is now selected as the active next milestone because payment production act
 - Frontend mobile and visual localization rollout: selected student, parent, tutor, and admin mobile viewport polish, targeted Playwright coverage, English/German language preference UI backed by locale APIs, `/auth/me` locale refresh behavior, and local frontend release-gate evidence.
 - Support integration and operations handoff: destination contract, controlled `internal_queue` delivery, admin-only delivery queue/detail visibility, provider-failure lifecycle coverage, imported frontend evidence, and local backend release-gate evidence.
 - Curriculum authoring and analytics foundation: stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, audit evidence, bounded content-quality analytics, and aggregate privacy-preserving operator views.
+- Payment production activation automation: live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
 
 ## v3.0 Closed MVP Gaps
 
@@ -161,7 +162,7 @@ v4.7 is now selected as the active next milestone because payment production act
 
 ## Phase 2 / Future Expansion
 
-- Payment production activation with approved live Stripe credentials, TWINT production validation, webhook registration, direct refund execution, provider readiness checks, and finance acceptance.
+- Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
@@ -171,11 +172,11 @@ v4.7 is now selected as the active next milestone because payment production act
 
 ## Remaining Feature Build Order
 
-1. v4.7 Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
-2. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
-3. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
-4. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
-5. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
+1. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
+2. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+3. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+4. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
+5. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
 
 ## v3.0 Scope Recommendation
 

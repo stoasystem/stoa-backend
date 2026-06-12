@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.7
 milestone_name: Payment Production Activation And Provider Automation
-status: implementing
-last_updated: "2026-06-12T14:10:00+02:00"
+status: complete
+last_updated: "2026-06-12T14:30:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 Phase: 160 - v4.7 Payment Activation Release Gate
 Plan: 160-01
-Status: Ready to plan
-Last activity: 2026-06-12 - Completed Phase 159 production webhook readiness evidence and persisted independent rollout controls for checkout and refunds.
+Status: Complete
+Last activity: 2026-06-12 - Completed v4.7 payment activation release gate with full backend test evidence and final activation status `deferred`.
 
 ## Accumulated Context
 
@@ -43,10 +43,11 @@ Last activity: 2026-06-12 - Completed Phase 159 production webhook readiness evi
 - Phase 157 added read-only provider readiness checks and kept refund mutation disabled by default.
 - Phase 158 added direct refund execution behind `STRIPE_REFUNDS_ENABLED`, with idempotency replay, TWINT refund-window enforcement, provider failure no-mutation behavior, and finance export refund evidence.
 - Phase 159 added persisted rollout controls. Checkout and refunds can be independently enabled, disabled, canary-marked, or rolled back; rollback blocks new live-changing operations while preserving billing history and finance exports.
+- Phase 160 verified v4.7 with focused payment tests, full backend tests, ruff, and updated feature-gap docs. Final activation status is `deferred`.
 
 ### Pending Todos
 
-- Close Phase 160 with payment activation release evidence and updated feature gap docs.
+- Prepare the next milestone from the remaining-feature queue: support provider expansion and CRM automation.
 
 ### Blockers/Concerns
 
@@ -57,4 +58,4 @@ Last activity: 2026-06-12 - Completed Phase 159 production webhook readiness evi
 
 ## Operator Next Steps
 
-- Start Phase 160 release gate verification and update v4.7 final activation evidence.
+- Start the next milestone cycle from `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`.
