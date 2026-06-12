@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.6
 milestone_name: Rich Curriculum Authoring And Analytics Foundation
 status: in_progress
-last_updated: "2026-06-12T09:46:05.000Z"
+last_updated: "2026-06-12T09:51:32.000Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 154 - Learning Analytics And Content Quality Signals
-Plan: 154-01
-Status: Ready for Phase 154 planning
-Last activity: 2026-06-12 — Phase 153 admin curriculum authoring MVP completed
+Phase: 155 - v4.6 Curriculum Operations Release Gate
+Plan: 155-01
+Status: Ready for Phase 155 planning
+Last activity: 2026-06-12 — Phase 154 curriculum analytics and content quality signals completed
 
 ## Accumulated Context
 
@@ -54,10 +54,11 @@ Last activity: 2026-06-12 — Phase 153 admin curriculum authoring MVP completed
 - v4.6 should build on the v3.8 curriculum catalog/exercise-bank foundation and v4.0 adaptive-learning signals to add internal authoring, QA lifecycle, and actionable content analytics.
 - Phase 152 completed the curriculum authoring contract, stable-public-ID versus immutable-version model, separate lifecycle state machines, publish manifest rules, validation requirements, role boundaries, and legacy readiness handoff for Phase 153.
 - Phase 153 completed a dedicated curriculum operations repository/service/admin route layer for draft, review, approve, request changes, publish, rollback, archive, preview, audit, and worklist behavior while preserving published-only student reads.
+- Phase 154 completed bounded curriculum analytics signals and aggregate operator content-quality views with explicit privacy boundaries and no raw student-answer exposure.
 
 ### Pending Todos
 
-- Plan Phase 154: learning analytics and content quality signals.
+- Plan Phase 155: v4.6 curriculum operations release gate.
 
 ### Blockers/Concerns
 
@@ -71,4 +72,4 @@ Last activity: 2026-06-12 — Phase 153 admin curriculum authoring MVP completed
 
 ## Operator Next Steps
 
-- Begin Phase 154 analytics planning against the version/public-ID fields added by Phase 153.
+- Begin Phase 155 release-gate verification across curriculum authoring, analytics, compatibility, docs, and next-milestone recommendation.

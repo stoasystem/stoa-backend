@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from stoa.db.repositories import curriculum_ops_repo
+from stoa.services import curriculum_analytics_service
 
 
 AUTHOR_ROLES = {"admin", "tutor", "teacher"}
@@ -142,6 +143,7 @@ def publish(
     updated = _with_state(version, "published", user)
     updated["published_at"] = now
     curriculum_ops_repo.put_version(updated)
+    curriculum_analytics_service.record_publish_event(updated, operation="publish")
     _audit(public_id, user, "publish", version["state"], "published", version_id, reason)
     return {
         "status": "published",
@@ -179,6 +181,7 @@ def rollback(
     except curriculum_ops_repo.StalePointerError as exc:
         raise HTTPException(status_code=409, detail="stale_pointer") from exc
     curriculum_ops_repo.put_published_projection(version, manifest)
+    curriculum_analytics_service.record_publish_event(version, operation="publish")
     _audit(public_id, user, "rollback", pointer.get("published_version_id"), version_id, version_id, reason)
     return {
         "status": "rolled_back",
@@ -205,6 +208,7 @@ def archive(public_id: str, version_id: str, user: dict[str, Any], *, reason: st
     updated = _with_state(version, "archived", user)
     updated["archive_reason"] = reason
     curriculum_ops_repo.put_version(updated)
+    curriculum_analytics_service.record_publish_event(updated, operation="archive")
     _audit(public_id, user, "archive", version.get("state"), "archived", version_id, reason)
     return _version_response(updated)
 
@@ -410,4 +414,3 @@ def _clean_id(value: Any) -> str:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
-

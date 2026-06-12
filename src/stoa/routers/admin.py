@@ -28,6 +28,7 @@ from stoa.services import (
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
+    curriculum_analytics_service,
     curriculum_ops_service,
     support_destination_service,
     support_handoff_service,
@@ -210,6 +211,28 @@ class CurriculumWorklistResponse(BaseModel):
     count: int
 
 
+class CurriculumQualityMetricResponse(BaseModel):
+    publicId: str
+    contentType: str
+    versionId: str
+    subjectId: str | None = None
+    topicId: str | None = None
+    totalSignals: int
+    wrongAnswers: int
+    assignmentSkips: int
+    completions: int
+    publishEvents: int
+    archiveEvents: int
+    priorityScore: int
+    updatedAt: str | None = None
+
+
+class CurriculumQualityResponse(BaseModel):
+    items: list[CurriculumQualityMetricResponse]
+    count: int
+    privacy: dict[str, bool]
+
+
 @router.get("/moderation/cases", response_model=ModerationCaseListResponse)
 async def list_moderation_cases(
     limit: int = Query(default=50, ge=1, le=100),
@@ -273,6 +296,23 @@ async def list_curriculum_authoring_worklist(
 ):
     """List internal curriculum authoring items awaiting operational action."""
     return curriculum_ops_service.list_worklist(status=status, limit=limit)
+
+
+@router.get("/curriculum/analytics/content-quality", response_model=CurriculumQualityResponse)
+async def get_curriculum_content_quality(
+    content_type: str | None = Query(default=None, alias="contentType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    topic_id: str | None = Query(default=None, alias="topicId"),
+    limit: int = Query(default=100, ge=1, le=200),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return aggregate-only curriculum quality metrics for operators."""
+    return curriculum_analytics_service.content_quality_summary(
+        content_type=content_type,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        limit=limit,
+    )
 
 
 @router.post("/curriculum/lessons/drafts", response_model=CurriculumVersionResponse)

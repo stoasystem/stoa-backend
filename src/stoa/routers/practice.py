@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_current_user, require_role
-from stoa.services import curriculum_service
+from stoa.services import curriculum_analytics_service, curriculum_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -483,6 +483,7 @@ async def complete_lesson(
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     practice_repo.mark_lesson_completed(user["sub"], lesson)
+    curriculum_analytics_service.record_lesson_completed(student_id=user["sub"], lesson=lesson)
     all_lessons = sorted(
         practice_repo.get_lessons(topic_id=lesson.get("topic_id")),
         key=lambda x: x.get("order", 0),
@@ -522,6 +523,11 @@ async def submit_answer(
         return str(v).strip().lower()
 
     correct = _norm(student_answer) == _norm(correct_answer)
+    curriculum_analytics_service.record_practice_attempt(
+        student_id=user["sub"],
+        challenge=challenge,
+        correct=correct,
+    )
 
     # Find challenges in the same lesson for next_challenge_id
     lesson_id = challenge.get("lesson_id", "")

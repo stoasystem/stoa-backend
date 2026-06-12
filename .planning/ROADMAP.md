@@ -16,7 +16,7 @@ Keep the existing FastAPI/Pydantic/DynamoDB stack. Do not build a broad CMS, BI 
 
 - [x] **Phase 152: Curriculum Authoring Contract And QA Workflow** - Define stable public IDs versus immutable versions, lifecycle state machines, validation rules, publish manifests, role boundaries, and legacy-readiness rules.
 - [x] **Phase 153: Admin Lesson And Exercise Authoring MVP** - Implement draft/review/publish/archive/rollback authoring workflows with published-only student reads, immutable versions, worklist visibility, and append-only audit evidence.
-- [ ] **Phase 154: Learning Analytics And Content Quality Signals** - Add bounded analytics signal capture and aggregate views for confusing exercises, weak topics, stale lessons, content gaps, and assignment-to-content feedback.
+- [x] **Phase 154: Learning Analytics And Content Quality Signals** - Add bounded analytics signal capture and aggregate views for confusing exercises, weak topics, stale lessons, content gaps, and assignment-to-content feedback.
 - [ ] **Phase 155: v4.6 Curriculum Operations Release Gate** - Verify lifecycle safety, draft isolation, publish/rollback/archive behavior, analytics stability, docs, and next-milestone recommendation.
 
 ## Phase Details
@@ -74,11 +74,11 @@ Plans:
   5. Analytics avoid request-time full table scans through bounded aggregate rows, windows, pagination, and recompute/backfill helpers where needed.
   6. Responses preserve aggregate privacy boundaries and do not expose raw student answers, answer keys, or per-student surveillance data.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 154-01: Add curriculum analytics and content quality signals.
+- [x] 154-01: Add curriculum analytics and content quality signals.
 
 ### Phase 155: v4.6 Curriculum Operations Release Gate
 
@@ -105,7 +105,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 152 Curriculum Authoring Contract And QA Workflow | v4.6 | 1/1 | Complete | 2026-06-12 |
 | 153 Admin Lesson And Exercise Authoring MVP | v4.6 | 1/1 | Complete | 2026-06-12 |
-| 154 Learning Analytics And Content Quality Signals | v4.6 | 0/1 | Planned | — |
+| 154 Learning Analytics And Content Quality Signals | v4.6 | 1/1 | Complete | 2026-06-12 |
 | 155 v4.6 Curriculum Operations Release Gate | v4.6 | 0/1 | Planned | — |
 
 ## Traceability
@@ -114,7 +114,7 @@ Plans:
 |-------------|-------|--------|
 | CURROPS-01 | Phase 152 | Complete |
 | CURROPS-02 | Phase 153 | Complete |
-| CURROPS-03 | Phase 154 | Planned |
+| CURROPS-03 | Phase 154 | Complete |
 | VERIFY-29 | Phase 155 | Planned |
 
 ---

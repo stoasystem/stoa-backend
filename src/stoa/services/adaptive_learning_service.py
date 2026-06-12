@@ -16,7 +16,12 @@ from stoa.db.repositories import (
     question_repo,
     user_repo,
 )
-from stoa.services import curriculum_service, learning_profile_service, locale_service
+from stoa.services import (
+    curriculum_analytics_service,
+    curriculum_service,
+    learning_profile_service,
+    locale_service,
+)
 
 
 ASSIGNMENT_STATUSES = {"draft", "recommended", "assigned", "started", "completed", "skipped", "archived"}
@@ -182,10 +187,13 @@ def transition_assignment(
         )
         if previous_status != "completed":
             _record_assignment_progress(item, correct=correct, student_answer=student_answer)
+            curriculum_analytics_service.record_assignment_outcome(item, correct=correct)
     elif action == "skip":
         if previous_status in {"completed", "archived"}:
             raise HTTPException(status_code=409, detail="Completed or archived assignments cannot be skipped")
         updates.update({"status": "skipped", "skipped_at": item.get("skipped_at") or now, "skip_note": _clean_note(note)})
+        if previous_status != "skipped":
+            curriculum_analytics_service.record_assignment_skipped(item)
     elif action == "archive":
         updates.update({"status": "archived", "archived_at": item.get("archived_at") or now, "archive_note": _clean_note(note)})
 

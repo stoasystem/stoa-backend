@@ -1,0 +1,171 @@
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from stoa.deps import get_current_user
+from stoa.routers import admin, practice
+from stoa.services import adaptive_learning_service, curriculum_analytics_service
+
+
+def _app_for_user(user: dict, *, include_admin: bool = False) -> FastAPI:
+    app = FastAPI()
+    router = admin.router if include_admin else practice.router
+    prefix = "/admin" if include_admin else "/practice"
+    app.include_router(router, prefix=prefix)
+    app.dependency_overrides[get_current_user] = lambda: user
+    return app
+
+
+def _install_analytics_repo(monkeypatch, metrics=None):
+    signals: list[dict] = []
+    increments: list[dict] = []
+    repo = curriculum_analytics_service.curriculum_analytics_repo
+    monkeypatch.setattr(repo, "put_signal", lambda item: signals.append(dict(item)))
+    monkeypatch.setattr(repo, "increment_metric", lambda item: increments.append(dict(item)))
+    monkeypatch.setattr(repo, "list_metrics", lambda **kwargs: list(metrics or []))
+    return {"signals": signals, "increments": increments}
+
+
+def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
+    state = _install_analytics_repo(monkeypatch)
+    challenge = {
+        "challenge_id": "exercise-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "prompt": "Solve x + 1 = 2",
+        "correct_answer": "x = 1",
+        "version_id": "version-1",
+    }
+    attempts = []
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [dict(challenge)])
+    monkeypatch.setattr(practice.practice_repo, "record_attempt", lambda *args, **kwargs: attempts.append((args, kwargs)))
+    client = TestClient(_app_for_user({"sub": "student-1", "role": "student"}))
+
+    response = client.post("/practice/challenges/exercise-1/answer", json={"answer": "x = 3"})
+
+    assert response.status_code == 200
+    assert [item["signal_type"] for item in state["signals"]] == ["practice_attempt", "wrong_answer"]
+    assert state["signals"][0]["source_type"] == "catalog_self_practice"
+    assert state["signals"][0]["metadata"] == {
+        "correct": False,
+        "studentHash": "student:600bf3b15689",
+    }
+    assert "x = 3" not in str(state["signals"])
+    assert len(attempts) == 1
+
+
+def test_lesson_completion_records_aggregate_signal(monkeypatch):
+    state = _install_analytics_repo(monkeypatch)
+    lesson = {
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "version_id": "version-1",
+        "order": 1,
+    }
+    monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda lesson_id: dict(lesson))
+    monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_progress",
+        lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}],
+    )
+    client = TestClient(_app_for_user({"sub": "student-1", "role": "student"}))
+
+    response = client.post("/practice/lessons/lesson-1/complete")
+
+    assert response.status_code == 200
+    assert state["signals"][0]["signal_type"] == "lesson_completed"
+    assert state["signals"][0]["public_id"] == "lesson-1"
+    assert state["signals"][0]["content_type"] == "lesson"
+
+
+def test_adaptive_assignment_transitions_record_content_quality_signals(monkeypatch):
+    state = _install_analytics_repo(monkeypatch)
+    assignments = {
+        "assignment-1": {
+            "assignment_id": "assignment-1",
+            "student_id": "student-1",
+            "status": "assigned",
+            "source_type": "curriculum_exercise",
+            "source_id": "exercise-1",
+            "subject": "math",
+            "topic_ids": ["algebra"],
+            "lesson_id": "lesson-1",
+            "exercise_id": "exercise-1",
+            "items": [],
+            "version_id": "version-1",
+        }
+    }
+    repo = adaptive_learning_service.adaptive_learning_repo
+    monkeypatch.setattr(repo, "get_assignment", lambda assignment_id: dict(assignments[assignment_id]))
+
+    def update_assignment(assignment_id, updates):
+        assignments[assignment_id].update(updates)
+        return dict(assignments[assignment_id])
+
+    monkeypatch.setattr(repo, "update_assignment", update_assignment)
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "record_attempt", lambda *args, **kwargs: None)
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_lesson", lambda lesson_id: None)
+
+    skipped = adaptive_learning_service.transition_assignment(
+        assignment_id="assignment-1",
+        action="skip",
+        user={"sub": "student-1", "role": "student"},
+    )
+    assignments["assignment-1"]["status"] = "assigned"
+    completed = adaptive_learning_service.transition_assignment(
+        assignment_id="assignment-1",
+        action="complete",
+        user={"sub": "student-1", "role": "student"},
+        correct=False,
+        student_answer="raw answer must not be stored",
+    )
+
+    assert skipped["status"] == "skipped"
+    assert completed["status"] == "completed"
+    assert [item["signal_type"] for item in state["signals"]] == [
+        "assignment_skipped",
+        "assignment_completed",
+        "assignment_completed",
+    ]
+    assert "raw answer must not be stored" not in str(state["signals"])
+
+
+def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypatch):
+    _install_analytics_repo(
+        monkeypatch,
+        metrics=[
+            {
+                "public_id": "exercise-1",
+                "content_type": "exercise",
+                "version_id": "version-1",
+                "subject_id": "math",
+                "topic_id": "algebra",
+                "total_count": 5,
+                "signal_wrong_answer_count": 2,
+                "signal_assignment_skipped_count": 1,
+                "signal_assignment_completed_count": 1,
+                "source_reviewed_assignment_count": 3,
+                "updated_at": "2026-06-12T09:00:00+00:00",
+            }
+        ],
+    )
+    client = TestClient(_app_for_user({"sub": "tutor-1", "role": "tutor"}, include_admin=True))
+
+    response = client.get("/admin/curriculum/analytics/content-quality?contentType=exercise")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"][0]["publicId"] == "exercise-1"
+    assert body["items"][0]["priorityScore"] == 7
+    assert body["privacy"] == {
+        "aggregateOnly": True,
+        "rawStudentAnswers": False,
+        "answerKeys": False,
+        "studentIdentifiers": False,
+    }
+    assert "correct_answer" not in str(body)
+    assert "student-1" not in str(body)
