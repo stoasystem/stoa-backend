@@ -943,10 +943,12 @@ Known deferred items at close: third-party support provider credentials/adapters
 
 ### v4.6 Rich Curriculum Authoring And Analytics Foundation
 
-**Status:** Planned after v4.5
+**Status:** Active research-first planning
+**Started:** 2026-06-12
 **Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
-**Goal:** Build internal curriculum authoring, QA, publication lifecycle, and content-quality analytics on top of the existing curriculum and adaptive-learning foundations.
+**Research:** `.planning/research/SUMMARY.md`
+**Goal:** Build internal curriculum authoring, QA, publication lifecycle, rollback/archive safety, and bounded content-quality analytics on top of the existing curriculum and adaptive-learning foundations.
 **Phases:** 4
 **Plans:** 0/4 complete
 **Requirements:** 0/4 complete
@@ -960,10 +962,10 @@ Planned phases:
 
 Feature priorities:
 
-- Define authoring lifecycle, review model, and validation rules.
-- Add admin/tutor authoring flows for lessons and exercises.
-- Expose actionable content quality and learning analytics.
-- Verify lifecycle safety and update future milestone recommendations.
+- Define stable public IDs versus immutable authoring versions, review state machines, publish manifests, validation rules, and preview/published boundaries.
+- Add admin/tutor authoring flows with draft/review/publish/archive/rollback, worklist visibility, and append-only audit.
+- Expose bounded aggregate content-quality analytics for weak topics, confusing exercises, stale lessons, content gaps, and assignment-to-content feedback.
+- Verify lifecycle safety, draft isolation, rollback/archive correctness, analytics stability, and existing v3.8/v4.0 compatibility.
 
 ---
-*Last updated: 2026-06-12 after completing v4.5 support integration and preparing v4.6 curriculum operations*
+*Last updated: 2026-06-12 after v4.6 research-first roadmap refresh*
