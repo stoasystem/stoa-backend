@@ -68,7 +68,7 @@ The completed-local v4.6 milestone adds internal curriculum authoring, QA lifecy
 
 The completed-local v4.7 milestone turns the v4.4 payment readiness foundation into production activation automation: live Stripe/TWINT readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls. Final live activation remains externally gated.
 
-The active v4.8 milestone expands the v4.5 support handoff foundation beyond the internal queue into approved third-party provider adapters, retry workers, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer messaging.
+The completed-local v4.8 milestone expands the v4.5 support handoff foundation beyond the internal queue into approved third-party provider adapters, retry workers, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer messaging. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, and rollout approval.
 
 ## Core Value
 
@@ -77,8 +77,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.7 Payment Production Activation And Provider Automation on 2026-06-12 (backend release gate; final live activation deferred)
-**Active milestone:** v4.8 Support Provider Expansion And CRM Automation
+**Latest completed milestone:** v4.8 Support Provider Expansion And CRM Automation on 2026-06-12 (backend release gate; provider activation state `provider-ready`)
+**Recommended next milestone:** v4.9 Production Notification And Native Delivery Rollout
 
 Delivered:
 
@@ -213,15 +213,16 @@ Requirements: `.planning/REQUIREMENTS.md`
 - Direct refund execution and finance handoff.
 - Production webhook registration and rollout controls.
 - v4.7 payment activation release gate.
+- v4.8 support provider expansion contract, approved provider delivery, retry/sync, SLA analytics, controlled CRM message evidence, and release gate.
 
 Outcome: v4.7 completed live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls. Final live activation is deferred until approved credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout enablement are available.
 
-## Current Milestone: v4.8 Support Provider Expansion And CRM Automation
+## Latest Milestone: v4.8 Support Provider Expansion And CRM Automation
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 
-**Status:** Active planning.
+**Status:** Completed local backend release gate on 2026-06-12.
 
 **Goal:** Expand the v4.5 internal support queue into approved provider-backed support operations and controlled CRM/customer messaging.
 
@@ -233,7 +234,9 @@ Requirements: `.planning/REQUIREMENTS.md`
 - Support SLA analytics and controlled CRM messaging.
 - v4.8 support provider release gate and operations audit.
 
-This is now the active milestone because `stoa_docs` remaining-feature planning identifies provider-backed support operations as the next highest-value feature build after v4.7 payment automation.
+Outcome: v4.8 completed provider-neutral support adapter readiness, approved/configured third-party delivery, bounded retry, provider ticket sync, SLA analytics, and controlled CRM/customer message evidence. Final provider activation state is `provider-ready`: backend behavior is implemented and verified, but real external support-provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
+
+Recommended next milestone: v4.9 Production Notification And Native Delivery Rollout.
 
 ## Requirements
 
@@ -636,7 +639,7 @@ Known current resources:
 | Start v4.5 with support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Complete locally - backend release gate passed |
 | Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Complete locally - backend release gate passed |
 | Start v4.7 payment production activation | v4.4 delivered local payment readiness, but live provider activation still needs approved Stripe/TWINT readiness checks, webhook registration, direct refunds, finance handoff, and explicit rollout controls | Complete locally - backend release gate passed; final live activation deferred |
-| Start v4.8 support provider expansion | v4.5 delivered internal queue support handoff, but approved third-party adapters, retry workers, two-way sync, SLA analytics, and controlled CRM/customer messaging remain the next support operations gap | Active - milestone initialized |
+| Start v4.8 support provider expansion | v4.5 delivered internal queue support handoff, but approved third-party adapters, retry workers, two-way sync, SLA analytics, and controlled CRM/customer messaging remain the next support operations gap | Complete locally - backend release gate passed; provider activation state `provider-ready` |
 
 ## Evolution
 
@@ -656,4 +659,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after selecting v4.8 support provider expansion*
+*Last updated: 2026-06-12 after completing v4.8 support provider expansion*

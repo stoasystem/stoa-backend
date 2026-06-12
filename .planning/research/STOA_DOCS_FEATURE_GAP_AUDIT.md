@@ -42,7 +42,7 @@ v4.6 completed the local backend rich curriculum authoring and analytics foundat
 
 v4.7 completed the backend payment production activation automation scope: accepted activation contract, admin-only live Stripe/TWINT provider readiness checks, webhook registration readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls. Final live activation status is `deferred`: the backend automation is ready, but real customer charging remains blocked until approved live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout control enablement are provided.
 
-v4.8 is now the active planning scope for support provider expansion and CRM automation: approved third-party support adapters, delivery workers, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled customer/support messaging beyond the v4.5 internal queue path.
+v4.8 completed the local backend support provider expansion and CRM automation scope: provider-neutral adapter readiness, approved/configured third-party support delivery, bounded retry, two-way provider ticket synchronization, support SLA analytics, controlled CRM/customer message evidence, and release-gate verification. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Completed Or Largely Complete
 
@@ -170,13 +170,13 @@ v4.8 is now the active planning scope for support provider expansion and CRM aut
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
 - Native mobile apps, native push-token registration, and production mobile rollout.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
-- Approved third-party support provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging automation beyond the v4.5 controlled internal queue path. Status: selected as active v4.8 scope.
+- Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Active v4.8 support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader controlled CRM/customer messaging.
-2. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
-3. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+1. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+2. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+3. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
 4. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
 5. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
 

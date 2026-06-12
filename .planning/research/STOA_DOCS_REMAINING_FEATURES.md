@@ -16,27 +16,24 @@
 - Support integration and operations handoff with destination contract, controlled `internal_queue` delivery, admin-only queue/detail visibility, provider-failure lifecycle coverage, and local backend release-gate evidence.
 - Rich curriculum authoring and analytics foundation with stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, bounded aggregate content-quality analytics, and local backend release-gate evidence.
 - Payment production activation automation with live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
+- Support provider expansion and CRM automation with provider-neutral adapter readiness, approved/configured third-party delivery, bounded retry, two-way ticket synchronization, support SLA analytics, controlled message evidence, and provider activation state `provider-ready`.
 - Frontend mobile and visual localization rollout with selected responsive core-flow polish and English/German language preference UI.
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 
 ## Remaining Feature Build Queue
 
-1. **Support Provider Expansion And CRM Automation**.
-   Add approved third-party support adapters, retry workers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging beyond the v4.5 internal queue path.
-   Status: selected as active v4.8 planning scope.
-
-2. **Production Notification And Native Delivery Rollout**.
+1. **Production Notification And Native Delivery Rollout**.
    Complete live WebSocket/API Gateway deployment, provider-backed push/email delivery, frontend/native notification visuals, and live smoke evidence.
 
-3. **Final Live Payment Activation Operations**.
+2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-4. **Later Product Expansion**.
+3. **Later Product Expansion**.
    Rich curriculum editor UI, production content migration, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, warehouse-backed analytics, and deeper operations reporting.
 
 ## Current Planning Decision
 
-v4.7 is complete after research-first planning and full backend release-gate verification. The shipped scope is payment production activation automation: activation contract, live Stripe/TWINT provider readiness checks, webhook readiness evidence, direct refund execution, finance handoff export updates, and independent rollout controls. Final live activation status is `deferred` because real customer charging still requires approved Stripe live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
+v4.8 is complete after backend release-gate verification. The shipped scope is support provider expansion and CRM automation beyond the v4.5 internal queue path: provider-neutral contract/readiness, approved third-party support delivery, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer message evidence. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
-v4.8 is selected as the active next milestone: support provider expansion and CRM automation beyond the v4.5 internal queue path. The planned scope is approved third-party support adapters, delivery workers, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer messaging. The next likely milestone after v4.8 is production notification and native delivery rollout unless external payment activation prerequisites become available first.
+v4.9 is the recommended next milestone: production notification and native delivery rollout, unless final live payment activation prerequisites become available first.

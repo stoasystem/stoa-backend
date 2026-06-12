@@ -54,22 +54,21 @@ Key accomplishments:
 
 Known deferred items at close: approved live Stripe credentials, registered production webhook endpoint, TWINT production capability approval, finance acceptance, explicit rollout enablement, production notification rollout, and support provider expansion.
 
-## Active
-
 ### v4.8 Support Provider Expansion And CRM Automation
 
-**Status:** Active planning
+**Status:** Completed backend release gate 2026-06-12
 **Started:** 2026-06-12
+**Completed:** 2026-06-12
 **Roadmap:** `.planning/milestones/v4.8-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.8-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/161-support-provider-expansion-contract-and-adapter-readiness/`
+**Phase evidence:** `.planning/phases/161-support-provider-expansion-contract-and-adapter-readiness/`, `.planning/phases/162-approved-third-party-support-adapter-and-delivery-worker/`, `.planning/phases/163-retry-workers-and-two-way-ticket-synchronization/`, `.planning/phases/164-support-sla-analytics-and-controlled-crm-messaging/`, `.planning/phases/165-v4.8-support-provider-release-gate-and-operations-audit/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Expand the v4.5 internal support queue into approved provider-backed support operations and controlled CRM/customer messaging.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 161: Support Provider Expansion Contract And Adapter Readiness.
 - Phase 162: Approved Third-Party Support Adapter And Delivery Worker.
@@ -77,13 +76,17 @@ Planned phases:
 - Phase 164: Support SLA Analytics And Controlled CRM Messaging.
 - Phase 165: v4.8 Support Provider Release Gate And Operations Audit.
 
-Feature priorities:
+Key accomplishments:
 
-- Define approved support provider modes, adapter readiness, payload boundaries, ticket lifecycle, retry/sync rules, SLA inputs, and controlled messaging rules.
-- Add provider adapter readiness and delivery worker behavior while preserving `internal_queue` fallback.
-- Add bounded retry workers and two-way provider ticket synchronization.
-- Add support SLA analytics and template-gated customer/support messaging.
-- Close with focused support provider release evidence and next milestone selection.
+- Defined approved support provider modes, adapter readiness, payload boundaries, ticket lifecycle, retry/sync rules, SLA inputs, and controlled messaging rules.
+- Added provider adapter readiness and delivery worker behavior while preserving `internal_queue` fallback.
+- Added bounded retry workers and two-way provider ticket synchronization.
+- Added support SLA analytics and template-gated customer/support message evidence.
+- Closed with focused backend test/Ruff evidence and final provider activation state `provider-ready`.
+
+Known deferred items at close: real external provider selection, approved production provider credentials, destination policy approval, real CRM/customer transport, and production notification/native delivery rollout.
+
+## Earlier Completed Milestones
 
 ### v1.0 Parent Portal Real Data Integration
 
