@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.7
 milestone_name: Payment Production Activation And Provider Automation
-status: planning
-last_updated: "2026-06-12T12:20:35+02:00"
+status: implementing
+last_updated: "2026-06-12T12:45:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 156 - Payment Production Activation Contract And Provider Readiness
-Plan: 156-01
-Status: Planning
-Last activity: 2026-06-12 - Synced current main with origin, rechecked `stoa_docs` remaining feature queue, and selected v4.7 payment production activation as the next feature-building milestone.
+Phase: 157 - Live Provider Readiness API Checks
+Plan: 157-01
+Status: Ready to plan
+Last activity: 2026-06-12 - Completed Phase 156 activation contract and implementation handoff for live Stripe/TWINT provider readiness, direct refunds, webhook registration, finance evidence, and rollout controls.
 
 ## Accumulated Context
 
@@ -39,10 +39,10 @@ Last activity: 2026-06-12 - Synced current main with origin, rechecked `stoa_doc
 - `stoa_docs` remaining feature queue now recommends payment production activation and provider automation.
 - v4.7 should prioritize live Stripe/TWINT provider readiness checks, webhook endpoint registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
 - Real customer charging remains blocked until live credentials, provider readiness, finance acceptance, and explicit rollout approval are present.
+- Phase 156 accepted the production payment activation contract. TWINT is in scope with CHF, Switzerland customer-location, 5,000 CHF maximum, recurring support, no manual capture, 180-day refund-window, merchant onboarding, and `twint_payments` capability requirements.
 
 ### Pending Todos
 
-- Execute Phase 156 by writing the production payment activation contract and provider readiness handoff.
 - Plan and implement Phase 157 live provider readiness API checks.
 - Plan and implement Phase 158 direct refund execution and finance handoff.
 - Plan and implement Phase 159 production webhook registration and rollout controls.
@@ -57,4 +57,4 @@ Last activity: 2026-06-12 - Synced current main with origin, rechecked `stoa_doc
 
 ## Operator Next Steps
 
-- Start Phase 156 using `.planning/phases/156-payment-production-activation-contract-and-provider-readiness/156-01-PLAN.md`.
+- Start Phase 157 by planning admin-only provider readiness API checks from the Phase 156 implementation handoff.

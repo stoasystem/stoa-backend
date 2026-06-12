@@ -1,7 +1,7 @@
 # Requirements: v4.7 Payment Production Activation And Provider Automation
 
 **Milestone:** v4.7
-**Status:** Active planning
+**Status:** Active implementation
 **Created:** 2026-06-12
 
 ## Goal
@@ -92,7 +92,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYACT-01 | Phase 156 | Planned |
+| PAYACT-01 | Phase 156 | Complete |
 | PAYACT-02 | Phase 157 | Planned |
 | PAYACT-03 | Phase 158 | Planned |
 | PAYACT-04 | Phase 159 | Planned |
