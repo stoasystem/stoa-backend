@@ -472,11 +472,13 @@ def _provider_metadata(
 ) -> dict[str, Any]:
     if destination_mode != THIRD_PARTY_SUPPORT_DESTINATION:
         return {}
+    if value is None:
+        return {}
     safe_value = value if isinstance(value, dict) else {}
-    ticket_id = (
-        _safe_text(safe_value.get("provider_ticket_id"))
-        or f"stoa-ticket-{delivery_id.removeprefix('support-delivery-')[:16]}"
-    )
+    ticket_created = _safe_text(safe_value.get("provider_result")) == "created"
+    ticket_id = _safe_text(safe_value.get("provider_ticket_id"))
+    if ticket_created and not ticket_id:
+        ticket_id = f"stoa-ticket-{delivery_id.removeprefix('support-delivery-')[:16]}"
     ticket_url = _safe_text(safe_value.get("provider_ticket_url"))
     return {
         "provider_ticket_id": ticket_id,
