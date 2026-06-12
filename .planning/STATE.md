@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.5
 milestone_name: Support Evidence Integrations And Operations Handoff
-status: planning
-last_updated: "2026-06-12T01:46:00+02:00"
-last_activity: 2026-06-12 - Phase 150 operator queue and handoff status visibility completed
+status: complete
+last_updated: "2026-06-12T01:54:40+02:00"
+last_activity: 2026-06-12 - Phase 151 v4.5 support integration release gate completed
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 75
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 151 - v4.5 Support Integration Release Gate
-Plan: —
-Status: Ready for Phase 151 planning
-Last activity: 2026-06-12 - Phase 150 completed operator queue and handoff status visibility
+Plan: 151-01
+Status: Complete; ready for milestone audit and archive
+Last activity: 2026-06-12 - Phase 151 completed v4.5 support integration release gate
 
 ## Accumulated Context
 
@@ -50,10 +50,11 @@ Last activity: 2026-06-12 - Phase 150 completed operator queue and handoff statu
 - Phase 148 completed the support destination contract and selected `internal_queue` as the first approved Phase 149 destination path with `none_required` third-party credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
 - Phase 149 completed the fail-closed `internal_queue` delivery path, admin-only sibling delivery endpoint, provider-neutral delivery lifecycle records, idempotency independent of package UUIDs, and refused-record handling for contract-defined unapproved destinations.
 - Phase 150 completed admin-only support handoff delivery queue/detail visibility with recent feed rows, pre-feed read-through coverage, bounded audit timelines, complete lifecycle state visibility, and read-only retry eligibility.
+- Phase 151 completed the v4.5 local backend release gate with provider-failure lifecycle coverage, focused/full backend gates, Ruff, imported frontend support handoff evidence from Phases 68/69/70, and updated remaining-feature documentation.
 
 ### Pending Todos
 
-- Plan Phase 151: v4.5 support integration release gate.
+- Audit and archive v4.5.
 
 ### Blockers/Concerns
 
@@ -63,7 +64,8 @@ Last activity: 2026-06-12 - Phase 150 completed operator queue and handoff statu
 - Swiss tax/accounting fields are provider-managed when provider data is unavailable locally.
 - Broad security/compliance testing should stay proportionate to touched payment paths during this internal development stage.
 - Support destination delivery remains fail-closed unless `SUPPORT_INTERNAL_QUEUE_APPROVED=true`; third-party destinations remain refused until separate secret-backed provider phases approve them.
+- v4.5 does not enable live third-party support-system writes; approved provider adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging remain future work.
 
 ## Operator Next Steps
 
-- Plan Phase 151.
+- Run milestone audit, complete milestone, and prepare v4.6.

@@ -2665,6 +2665,53 @@ def test_support_handoff_delivery_lifecycle_states_transition_and_visibility(mon
     _assert_no_private_artifact_markers(audits)
 
 
+def test_support_handoff_delivery_lifecycle_failed_transition_records_failure_reason(monkeypatch):
+    audits = []
+    current = _support_delivery_record(status="queued")
+
+    monkeypatch.setattr(
+        report_repo,
+        "update_support_handoff_delivery_status",
+        lambda delivery_id, **kwargs: {**current, **kwargs},
+    )
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: audits.append((delivery_id, event)),
+    )
+
+    response = support_destination_service.transition_delivery_status(
+        delivery_id="support-delivery-1",
+        status="failed",
+        actor="admin-sub",
+        request_id="req-provider-failed",
+        retry_count=1,
+        retryable=False,
+        failure_reasons=["provider rejected access_token=abc123 for ticket creation"],
+    )
+
+    assert response["status"] == "failed"
+    assert response["lifecycle_status"] == "failed"
+    assert response["retry_count"] == 1
+    assert response["retryable"] is False
+    assert response["retry"] == {
+        "enabled": False,
+        "reason": "delivery state is not retryable",
+        "count": 1,
+    }
+    assert response["failure_reasons"] == ["provider rejected [private-credential] for ticket creation"]
+    assert audits[0][0] == "support-delivery-1"
+    audit_event = audits[0][1]
+    assert audit_event["result"] == "failed"
+    assert audit_event["metadata"]["status"] == "failed"
+    assert audit_event["metadata"]["retryable"] is False
+    assert audit_event["metadata"]["failure_reasons"] == [
+        "provider rejected [private-credential] for ticket creation"
+    ]
+    _assert_no_private_artifact_markers(response)
+    _assert_no_private_artifact_markers(audits)
+
+
 def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):
     audit_rows = []
     job = {

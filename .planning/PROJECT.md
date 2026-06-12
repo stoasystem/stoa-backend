@@ -62,7 +62,7 @@ The completed-local v4.3 milestone moved the deferred frontend mobile and visual
 
 The completed-local v4.4 milestone moved the Stripe-first payment provider MVP toward live rollout readiness, production checkout/webhook verification, Stripe-backed TWINT inclusion, and first-pass billing operations support while keeping real customer charging externally gated.
 
-The active v4.5 milestone connects support-safe evidence packages to approved operational destinations and adds operator-visible handoff status while preserving metadata-only privacy boundaries.
+The completed-local v4.5 milestone connects support-safe evidence packages to approved operational destinations and adds operator-visible handoff status while preserving metadata-only privacy boundaries.
 
 ## Core Value
 
@@ -71,8 +71,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.4 Live Payment Provider Rollout on 2026-06-11 (local backend release gate)
-**Active milestone:** v4.5 Support Evidence Integrations And Operations Handoff
+**Latest completed milestone:** v4.5 Support Evidence Integrations And Operations Handoff on 2026-06-12 (local backend release gate)
+**Next planned milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation
 
 Delivered:
 
@@ -180,21 +180,23 @@ Completed phases:
 
 ## Latest Completed Milestone
 
-### v4.3 Frontend Mobile And Visual Localization Rollout
+### v4.5 Support Evidence Integrations And Operations Handoff
 
-Goal: implement the responsive frontend and visual localization work that v4.1 intentionally left outside this backend repository by using `/Users/zhdeng/stoa-frontend`.
+Goal: connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status while preserving metadata-only privacy and fail-closed external-write behavior.
 
 Completed phases:
 
-- Phase 140: Frontend Workspace Contract And Mobile UAT Plan.
-- Phase 141: Responsive Student Parent Tutor Core Flow Polish.
-- Phase 142: Visual Localization And Language Preference UI.
-- Phase 143: v4.3 Browser Release Gate And Localization Audit.
+- Phase 148: Support Destination Contract And Credential Readiness.
+- Phase 149: Support Evidence Export Destination Integration.
+- Phase 150: Operator Queue And Handoff Status Visibility.
+- Phase 151: v4.5 Support Integration Release Gate.
 
 ## Current Milestone: v4.5 Support Evidence Integrations And Operations Handoff
 
 Roadmap: `.planning/milestones/v4.5-ROADMAP.md`
 Requirements: `.planning/milestones/v4.5-REQUIREMENTS.md`
+
+**Status:** Completed local backend release gate on 2026-06-12.
 
 **Goal:** Connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status.
 
@@ -205,7 +207,7 @@ Requirements: `.planning/milestones/v4.5-REQUIREMENTS.md`
 - Operator queue and handoff status visibility.
 - v4.5 release gate with refusal-path, redaction, and planning-doc evidence.
 
-This is now the active milestone because support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps.
+v4.5 completed the controlled `internal_queue` delivery path behind `SUPPORT_INTERNAL_QUEUE_APPROVED`, admin-only handoff queue/detail visibility, provider-failure lifecycle evidence, and release-gate documentation. Third-party support-system writes, retry workers, two-way provider sync, support SLA analytics, and broader CRM/customer messaging remain future work.
 
 ## Next Milestone
 
@@ -245,14 +247,14 @@ Shipped requirements:
 - Report operations recovery authorization, privacy, backend tests, frontend e2e, and live deployment state evidence shipped - v1.4.
 - Report recovery production rollout, live admin-auth API verification, safe non-customer retry/resend/bulk smoke, scoped API SES permission, operations runbook, and final CDK diff verification shipped - v1.5.
 
-### Active
+### Completed
+
+Milestone v4.5 requirements are complete:
 
 - SUPPORTINT-01: support destination contract and credential readiness - Phase 148.
 - SUPPORTINT-02: support evidence export destination integration - Phase 149.
 - SUPPORTINT-03: operator queue and handoff status visibility - Phase 150.
 - VERIFY-28: v4.5 support integration release gate - Phase 151.
-
-### Completed
 
 Milestone v4.4 requirements are archived in `.planning/milestones/v4.4-REQUIREMENTS.md` and are complete:
 
@@ -614,7 +616,7 @@ Known current resources:
 | Start v4.2 with production notification delivery readiness | `stoa_docs` still calls for realtime notification delivery beyond local WebSocket behavior; this backend workspace can advance production delivery contracts, preferences, digest readiness, and operator-visible delivery state while frontend/native work remains separate | Complete locally - backend release gate passed |
 | Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
 | Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Complete locally - backend release gate passed |
-| Start v4.5 with support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Active - milestone initialized |
+| Start v4.5 with support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Complete locally - backend release gate passed |
 | Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Planned after v4.5 |
 
 ## Evolution
@@ -635,4 +637,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after starting v4.5 support evidence integrations milestone*
+*Last updated: 2026-06-12 after completing v4.5 support evidence integrations milestone*

@@ -37,10 +37,11 @@
 - [x] **v4.2 Production Notification Delivery Readiness** - Completed local backend release gate 2026-06-11.
 - [x] **v4.3 Frontend Mobile And Visual Localization Rollout** - Completed local frontend release gate 2026-06-11.
 - [x] **v4.4 Live Payment Provider Rollout** - Completed local release gate 2026-06-11.
+- [x] **v4.5 Support Evidence Integrations And Operations Handoff** - Completed local backend release gate 2026-06-12.
 
 ## v4.5 Support Evidence Integrations And Operations Handoff
 
-**v4.5 Support Evidence Integrations And Operations Handoff** - Active planning.
+**v4.5 Support Evidence Integrations And Operations Handoff** - Completed local backend release gate 2026-06-12.
 
 Goal: connect existing support-safe evidence packages to approved operational destinations and add operator-visible handoff status while preserving metadata-only privacy and fail-closed external-write behavior.
 
@@ -52,9 +53,9 @@ Goal: connect existing support-safe evidence packages to approved operational de
 - Decimal phases are reserved for urgent insertions and marked INSERTED.
 
 - [x] **Phase 148: Support Destination Contract And Credential Readiness** - Define approved destination modes, credential/config readiness, metadata-only payload rules, attachment limits, and refusal behavior. (completed 2026-06-12)
-- [x] **Phase 149: Support Evidence Export Destination Integration** - Implement a credential-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback. (completed 2026-06-12)
-- [x] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal evidence, and admin-only queue views. (completed 2026-06-12)
-- [ ] **Phase 151: v4.5 Support Integration Release Gate** - Verify support integration behavior, refusal paths, redacted evidence, status visibility, and remaining-feature updates.
+- [x] **Phase 149: Support Evidence Export Destination Integration** - Implement an approval-gated delivery service and one approved destination adapter while retaining preview/copy/download fallback. (completed 2026-06-12)
+- [x] **Phase 150: Operator Queue And Handoff Status Visibility** - Add handoff lifecycle status, bounded filters, detail visibility, retry/refusal visibility, and admin-only queue views. (completed 2026-06-12)
+- [x] **Phase 151: v4.5 Support Integration Release Gate** - Verify support integration behavior, refusal paths, redacted evidence, status visibility, and remaining-feature updates. (completed 2026-06-12)
 
 ## Phase Details
 
@@ -86,7 +87,7 @@ Plans:
   1. Delivery validates destination readiness and package privacy before any provider adapter call.
   2. The selected destination adapter maps only support-safe package summaries, package IDs, evidence references, tags, and approved custom fields.
   3. Delivery records capture lifecycle status, correlation IDs, idempotency key, provider object references, retry count, and redacted refusal/failure reasons.
-  4. Provider failures, missing credentials, unapproved destinations, and privacy failures are recorded as failed/refused while manual fallback remains available.
+  4. Provider failures, missing approval/config for the selected `internal_queue` path, unapproved destinations, and privacy failures are recorded as failed/refused while manual fallback remains available; missing credentials for third-party adapters remain future provider scope.
 
 **Plans**: 1/1 plans complete
 
@@ -103,7 +104,7 @@ Plans:
 
   1. Admin-only list/detail APIs expose recent support handoff records with bounded filters for status, destination, package ID, and date range.
   2. Operators can distinguish created, queued, sent, failed, refused, and retried handoffs with provider references where available.
-  3. Retry behavior is explicit, bounded, idempotent, and unavailable for privacy-failed or unapproved destinations.
+  3. Retry visibility is explicit, bounded, and unavailable for privacy-failed or unapproved destinations; retry mutation/idempotency remains future worker scope.
   4. Queue/status outputs do not expose raw report artifacts, secrets, authorization headers, presigned URLs, or unredacted outbound payloads.
 
 **Plans**: 1/1 plans complete
@@ -121,14 +122,14 @@ Plans:
 
   1. Focused backend/frontend checks pass for the selected delivery path, refusal paths, queue/status visibility, and existing manual fallback.
   2. Release evidence captures destination configuration status with secrets redacted, provider/write deferral or approval state, and privacy validation results.
-  3. Tests prove unapproved destinations, missing credentials, provider failures, duplicate retries, and privacy violations fail closed.
+  3. Tests prove unapproved destinations, missing approval for the selected `internal_queue` path, provider failures, duplicate delivery requests, and privacy violations fail closed; missing credentials for third-party adapters and duplicate retry mutations remain future scope.
   4. Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.5 scope and unresolved support integration work.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 151-01: Verify v4.5 support integration release gate.
+- [x] 151-01: Verify v4.5 support integration release gate.
 
 ## Progress
 
@@ -137,7 +138,7 @@ Plans:
 | 148 Support Destination Contract And Credential Readiness | v4.5 | 1/1 | Complete   | 2026-06-12 |
 | 149 Support Evidence Export Destination Integration | v4.5 | 1/1 | Complete   | 2026-06-12 |
 | 150 Operator Queue And Handoff Status Visibility | v4.5 | 1/1 | Complete   | 2026-06-12 |
-| 151 v4.5 Support Integration Release Gate | v4.5 | 0/1 | Planned | — |
+| 151 v4.5 Support Integration Release Gate | v4.5 | 1/1 | Complete | 2026-06-12 |
 
 ## Traceability
 
@@ -146,7 +147,7 @@ Plans:
 | SUPPORTINT-01 | Phase 148 | Complete |
 | SUPPORTINT-02 | Phase 149 | Complete |
 | SUPPORTINT-03 | Phase 150 | Complete |
-| VERIFY-28 | Phase 151 | Planned |
+| VERIFY-28 | Phase 151 | Complete |
 
 ---
-*Last updated: 2026-06-12 after research-first v4.5 planning.*
+*Last updated: 2026-06-12 after v4.5 local backend release gate.*

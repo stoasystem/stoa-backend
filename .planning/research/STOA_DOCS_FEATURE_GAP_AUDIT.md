@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-11 after selecting v4.4 live payment provider rollout
+**Updated:** 2026-06-12 after completing v4.5 support integration release gate
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -34,7 +34,9 @@ v4.2 completed the backend-local production notification delivery readiness scop
 
 v4.3 completed the selected frontend mobile and English/German visual localization rollout in `/Users/zhdeng/stoa-frontend`: frontend workspace contract, shared mobile shell/action polish, targeted mobile Playwright coverage, backend-backed language preference UI, `/auth/me` locale refresh behavior, and release-gate evidence. Remaining mobile/localization work is now broader native app, translation management, RTL, broad copy QA, and production deploy scope rather than the selected core-flow frontend rollout.
 
-v4.4 is now selected as the next feature-building milestone because `stoa_docs` still has a business-critical payment gap beyond the v3.9 local Stripe-first MVP: live provider credentials, production checkout/webhook verification, TWINT production validation, invoices/receipts/refunds, tax/accounting handoff, and dunning readiness.
+v4.4 completed the local live payment provider rollout foundation for Stripe/TWINT readiness, invoice/receipt metadata, non-mutating refund handoff, dunning projections, Swiss accounting export metadata, and release-gate evidence. Real customer charging remains gated on approved live credentials and explicit rollout approval.
+
+v4.5 completed the local backend support integration and operations handoff scope: support destination contract/credential readiness, fail-closed `internal_queue` delivery behind `SUPPORT_INTERNAL_QUEUE_APPROVED`, admin-only delivery queue/detail visibility, provider-failure lifecycle evidence, imported support handoff frontend evidence, and release-gate documentation. Approved third-party provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging remain future scope.
 
 ## Completed Or Largely Complete
 
@@ -60,6 +62,7 @@ v4.4 is now selected as the next feature-building milestone because `stoa_docs` 
 - Mobile and multilingual backend foundation: mobile-ready route contracts, durable `en`/`de` locale preferences, language-safe adaptive response metadata, and release evidence with deferred frontend/native ownership.
 - Production notification delivery readiness: production WebSocket/API Gateway contract, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, metadata-safe digest payloads, push-ready preference flags, and clean local release evidence.
 - Frontend mobile and visual localization rollout: selected student, parent, tutor, and admin mobile viewport polish, targeted Playwright coverage, English/German language preference UI backed by locale APIs, `/auth/me` locale refresh behavior, and local frontend release-gate evidence.
+- Support integration and operations handoff: destination contract, controlled `internal_queue` delivery, admin-only delivery queue/detail visibility, provider-failure lifecycle coverage, imported frontend evidence, and local backend release-gate evidence.
 
 ## v3.0 Closed MVP Gaps
 
@@ -159,13 +162,13 @@ v4.4 is now selected as the next feature-building milestone because `stoa_docs` 
 - Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
 - Native mobile apps, native push-token registration, and production mobile rollout.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
-- Support-ticket/evidence integrations after an approved connector or credential path exists.
+- Approved third-party support provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging automation beyond the v4.5 controlled internal queue path.
 
 ## Remaining Feature Build Order
 
-1. v4.4 Live payment-provider rollout, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
-2. v4.5 Support-ticket/evidence destination integrations after approved connector or credential path exists.
-3. Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
+1. v4.6 Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
+2. Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
+3. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
 4. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
 5. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
 
