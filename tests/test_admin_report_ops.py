@@ -2896,6 +2896,250 @@ def test_support_handoff_delivery_lifecycle_failed_transition_records_failure_re
     _assert_no_private_artifact_markers(audits)
 
 
+def test_support_handoff_third_party_retry_success_updates_delivery(monkeypatch):
+    audits = []
+    current = _support_delivery_record(
+        delivery_id="support-delivery-provider-failed",
+        status="delivery_failed",
+        destination_mode="third_party_support",
+        retryable=True,
+    )
+    current.update(
+        {
+            "provider_status": "failed",
+            "provider_ticket_id": "stoa-ticket-existing",
+            "provider_readiness": {"state": "verified", "approved": True, "credentials": "configured", "blockers": []},
+        }
+    )
+
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+
+    def update_delivery(delivery_id, **kwargs):
+        current.update(kwargs.pop("extra_updates", {}) or {})
+        current.update(kwargs)
+        return dict(current)
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", update_delivery)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: audits.append((delivery_id, event)),
+    )
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider-failed/retry",
+        json={"reason": "retry"},
+        headers={"x-request-id": "req-retry-provider"},
+    )
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "delivered"
+    assert delivery["retry_count"] == 1
+    assert delivery["retryable"] is False
+    assert delivery["last_retry_at"]
+    assert delivery["provider_result"] == "retried"
+    assert audits[0][1]["action"] == "support_handoff_delivery_retry"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(audits)
+
+
+def test_support_handoff_third_party_retry_exhaustion_is_visible(monkeypatch):
+    audits = []
+    current = _support_delivery_record(
+        delivery_id="support-delivery-provider-failed",
+        status="delivery_failed",
+        destination_mode="third_party_support",
+        retryable=True,
+        retry_count=2,
+    )
+    current["provider_readiness"] = {"state": "verified", "approved": True, "credentials": "configured", "blockers": []}
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+
+    def update_delivery(delivery_id, **kwargs):
+        current.update(kwargs.pop("extra_updates", {}) or {})
+        current.update(kwargs)
+        return dict(current)
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", update_delivery)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: audits.append((delivery_id, event)),
+    )
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+        support_third_party_provider_fail_delivery=True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post("/admin/reports/support-handoff-deliveries/support-delivery-provider-failed/retry", json={})
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "delivery_failed"
+    assert delivery["retry_count"] == 3
+    assert delivery["retryable"] is False
+    assert delivery["retry_exhausted"] is True
+    assert delivery["provider_error_code"] == "provider_retry_failed"
+    assert delivery["retry"]["enabled"] is False
+    assert audits[0][1]["result"] == "delivery_failed"
+    _assert_no_private_artifact_markers(response.json())
+
+
+def test_support_handoff_retry_endpoint_is_admin_only(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_support_handoff_delivery_record",
+        lambda delivery_id: (_ for _ in ()).throw(AssertionError("non-admin should not query delivery")),
+    )
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post("/admin/reports/support-handoff-deliveries/support-delivery-provider-failed/retry")
+
+    assert response.status_code == 403
+
+
+def test_support_handoff_provider_sync_applies_metadata_only_update(monkeypatch):
+    audits = []
+    current = _support_delivery_record(
+        delivery_id="support-delivery-provider",
+        status="delivered",
+        destination_mode="third_party_support",
+        retryable=False,
+    )
+    current["provider_updated_at"] = "2026-06-12T01:00:00+00:00"
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+
+    def update_delivery(delivery_id, **kwargs):
+        current.update(kwargs.pop("extra_updates", {}) or {})
+        current.update(kwargs)
+        return dict(current)
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", update_delivery)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_delivery_audit_event",
+        lambda delivery_id, event: audits.append((delivery_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/provider-sync",
+        json={
+            "provider_event_id": "evt-1",
+            "provider_status": "resolved",
+            "provider_updated_at": "2026-06-12T02:00:00+00:00",
+            "provider_assignee": "tier-2",
+            "provider_priority": "high",
+        },
+        headers={"x-request-id": "req-sync"},
+    )
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "resolved"
+    assert delivery["provider_status"] == "resolved"
+    assert delivery["provider_updated_at"] == "2026-06-12T02:00:00+00:00"
+    assert delivery["last_synced_at"]
+    assert delivery["provider_assignee"] == "tier-2"
+    assert delivery["provider_priority"] == "high"
+    assert delivery["sync_conflict"] is False
+    assert audits[0][1]["action"] == "support_handoff_delivery_provider_sync"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(audits)
+
+
+def test_support_handoff_provider_sync_ignores_duplicate_event(monkeypatch):
+    current = _support_delivery_record(status="acknowledged", destination_mode="third_party_support")
+    current["provider_sync_event_ids"] = ["evt-1"]
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+    monkeypatch.setattr(
+        report_repo,
+        "update_support_handoff_delivery_status",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("duplicate event should not update")),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/provider-sync",
+        json={
+            "provider_event_id": "evt-1",
+            "provider_status": "resolved",
+            "provider_updated_at": "2026-06-12T02:00:00+00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["delivery"]["status"] == "acknowledged"
+
+
+def test_support_handoff_provider_sync_surfaces_stale_update(monkeypatch):
+    current = _support_delivery_record(status="acknowledged", destination_mode="third_party_support")
+    current["provider_updated_at"] = "2026-06-12T02:00:00+00:00"
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+
+    def update_delivery(delivery_id, **kwargs):
+        current.update(kwargs.pop("extra_updates", {}) or {})
+        current.update(kwargs)
+        return dict(current)
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", update_delivery)
+    monkeypatch.setattr(report_repo, "put_support_handoff_delivery_audit_event", lambda *args, **kwargs: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/provider-sync",
+        json={
+            "provider_event_id": "evt-stale",
+            "provider_status": "resolved",
+            "provider_updated_at": "2026-06-12T01:00:00+00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "sync_conflict"
+    assert delivery["sync_conflict"] is True
+    assert delivery["sync_conflict_reason"] == "stale provider update refused"
+    assert delivery["provider_updated_at"] == "2026-06-12T02:00:00+00:00"
+
+
+def test_support_handoff_provider_sync_surfaces_unknown_status_conflict(monkeypatch):
+    current = _support_delivery_record(status="acknowledged", destination_mode="third_party_support")
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+
+    def update_delivery(delivery_id, **kwargs):
+        current.update(kwargs.pop("extra_updates", {}) or {})
+        current.update(kwargs)
+        return dict(current)
+
+    monkeypatch.setattr(report_repo, "update_support_handoff_delivery_status", update_delivery)
+    monkeypatch.setattr(report_repo, "put_support_handoff_delivery_audit_event", lambda *args, **kwargs: None)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/provider-sync",
+        json={
+            "provider_event_id": "evt-unknown",
+            "provider_status": "raw_status_access_token=abc123",
+            "provider_updated_at": "2026-06-12T03:00:00+00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "sync_conflict"
+    assert delivery["sync_conflict_reason"] == "provider status could not be mapped"
+    _assert_no_private_artifact_markers(response.json())
+
+
 def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):
     audit_rows = []
     job = {

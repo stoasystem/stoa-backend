@@ -824,6 +824,18 @@ class SupportHandoffPackageRequest(BaseModel):
     operator_note: str | None = Field(default=None, max_length=1000)
 
 
+class SupportHandoffRetryRequest(BaseModel):
+    reason: str = Field(default="retry provider delivery", min_length=1, max_length=500)
+
+
+class SupportHandoffProviderSyncRequest(BaseModel):
+    provider_event_id: str = Field(..., min_length=1, max_length=200)
+    provider_status: str = Field(..., min_length=1, max_length=100)
+    provider_updated_at: str = Field(..., min_length=1, max_length=100)
+    provider_assignee: str | None = Field(default=None, max_length=200)
+    provider_priority: str | None = Field(default=None, max_length=100)
+
+
 class AuditRetentionReference(BaseModel):
     scope: str = Field(..., min_length=1, max_length=50)
     job_id: str | None = Field(default=None, max_length=200)
@@ -1830,6 +1842,49 @@ async def get_support_handoff_delivery_detail(
             audit_result.get("LastEvaluatedKey")
         ),
     }
+
+
+@router.post("/reports/support-handoff-deliveries/{delivery_id}/retry")
+async def retry_support_handoff_delivery(
+    delivery_id: str,
+    request: Request,
+    body: SupportHandoffRetryRequest = SupportHandoffRetryRequest(),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Retry one failed third-party support delivery without duplicating tickets."""
+    delivery = support_destination_service.retry_provider_delivery(
+        delivery_id=delivery_id,
+        actor=_operator_id(user),
+        request_id=_request_id(request),
+        settings=settings,
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
+    return {"delivery": delivery, "reason": body.reason}
+
+
+@router.post("/reports/support-handoff-deliveries/{delivery_id}/provider-sync")
+async def sync_support_handoff_delivery_provider_status(
+    delivery_id: str,
+    request: Request,
+    body: SupportHandoffProviderSyncRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Normalize one provider ticket update without storing raw provider payloads."""
+    delivery = support_destination_service.sync_provider_ticket(
+        delivery_id=delivery_id,
+        provider_event_id=body.provider_event_id,
+        provider_status=body.provider_status,
+        provider_updated_at=body.provider_updated_at,
+        provider_assignee=body.provider_assignee,
+        provider_priority=body.provider_priority,
+        actor=_operator_id(user),
+        request_id=_request_id(request),
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
+    return {"delivery": delivery}
 
 
 @router.post("/reports/audit-retention/status")

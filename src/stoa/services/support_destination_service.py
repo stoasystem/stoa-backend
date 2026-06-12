@@ -33,6 +33,18 @@ DELIVERY_STATUSES = {
     "delivered",
     "delivery_failed",
 }
+MAX_PROVIDER_RETRY_ATTEMPTS = 3
+PROVIDER_STATUS_MAP = {
+    "new": "acknowledged",
+    "open": "acknowledged",
+    "pending": "in_progress",
+    "in_progress": "in_progress",
+    "waiting_on_customer": "waiting_on_customer",
+    "solved": "resolved",
+    "closed": "resolved",
+    "resolved": "resolved",
+    "reopened": "reopened",
+}
 PRIVATE_FREE_TEXT_PATTERN = re.compile(
     r"\b(access_token|id_token|refresh_token|password|secret|cookie|authorization)\b\s*[:=]\s*[^\s,;]+",
     re.IGNORECASE,
@@ -299,6 +311,177 @@ def transition_delivery_status(
     return support_handoff_delivery_response(updated)
 
 
+def retry_provider_delivery(
+    *,
+    delivery_id: str,
+    actor: str,
+    request_id: str | None,
+    settings: Settings,
+) -> dict[str, Any] | None:
+    """Retry a failed provider delivery using bounded attempt metadata."""
+    record = report_repo.get_support_handoff_delivery_record(delivery_id)
+    if not record:
+        return None
+    status = str(record.get("status") or "")
+    retry_count = int(record.get("retry_count") or 0)
+    if (
+        record.get("destination_mode") != THIRD_PARTY_SUPPORT_DESTINATION
+        or status not in {"delivery_failed", "failed", "retry_pending"}
+        or not bool(record.get("retryable"))
+    ):
+        return support_handoff_delivery_response(record)
+
+    now = now_iso()
+    next_count = retry_count + 1
+    exhausted = next_count >= MAX_PROVIDER_RETRY_ATTEMPTS
+    failure_reasons = [_safe_text(value) for value in record.get("failure_reasons", [])]
+    provider_metadata: dict[str, Any] = {
+        "retry_count": next_count,
+        "provider_attempt_count": next_count,
+        "last_retry_at": now,
+        "max_retry_attempts": MAX_PROVIDER_RETRY_ATTEMPTS,
+        "retry_exhausted": exhausted,
+        "next_retry_at": None if exhausted else now,
+    }
+
+    if settings.support_third_party_provider_fail_delivery:
+        new_status = "delivery_failed"
+        retryable = not exhausted
+        failure_reasons = [*failure_reasons, "provider retry failed: [private-credential]"]
+        provider_metadata.update(
+            {
+                "provider_status": "failed",
+                "provider_result": "retry_failed",
+                "provider_error_code": "provider_retry_failed",
+            }
+        )
+    else:
+        new_status = "delivered"
+        retryable = False
+        provider_metadata.update(
+            {
+                "provider_status": "created",
+                "provider_result": "retried",
+                "provider_error_code": None,
+                "retry_exhausted": False,
+                "next_retry_at": None,
+            }
+        )
+
+    updated = report_repo.update_support_handoff_delivery_status(
+        delivery_id,
+        status=new_status,
+        updated_at=now,
+        actor=_safe_text(actor) or "unknown-admin",
+        correlation_id=request_id,
+        retry_count=next_count,
+        retryable=retryable,
+        failure_reasons=failure_reasons,
+        extra_updates=provider_metadata,
+    )
+    if not updated:
+        return None
+    _write_delivery_audit(
+        delivery_id,
+        updated=updated,
+        actor=actor,
+        request_id=request_id,
+        action="support_handoff_delivery_retry",
+        result=new_status,
+        now=now,
+    )
+    return support_handoff_delivery_response(updated)
+
+
+def sync_provider_ticket(
+    *,
+    delivery_id: str,
+    provider_event_id: str,
+    provider_status: str,
+    provider_updated_at: str,
+    actor: str,
+    request_id: str | None,
+    provider_assignee: str | None = None,
+    provider_priority: str | None = None,
+) -> dict[str, Any] | None:
+    """Normalize one provider status update without storing raw provider payloads."""
+    record = report_repo.get_support_handoff_delivery_record(delivery_id)
+    if not record:
+        return None
+    if record.get("destination_mode") != THIRD_PARTY_SUPPORT_DESTINATION:
+        return support_handoff_delivery_response(record)
+
+    safe_event_id = _safe_text(provider_event_id) or ""
+    seen_events = [_safe_text(value) for value in record.get("provider_sync_event_ids", [])]
+    if safe_event_id in seen_events:
+        return support_handoff_delivery_response(record)
+
+    now = now_iso()
+    current_provider_updated = _safe_text(record.get("provider_updated_at"))
+    normalized = PROVIDER_STATUS_MAP.get((_safe_text(provider_status) or "").lower())
+    extra_updates: dict[str, Any] = {
+        "provider_sync_event_ids": [*seen_events, safe_event_id][-20:],
+        "last_synced_at": now,
+        "provider_last_event_id": safe_event_id,
+        "provider_assignee": _safe_text(provider_assignee),
+        "provider_priority": _safe_text(provider_priority),
+    }
+    new_status = str(record.get("status") or "sync_conflict")
+    conflict_reason: str | None = None
+
+    if current_provider_updated and provider_updated_at <= current_provider_updated:
+        conflict_reason = "stale provider update refused"
+    elif not normalized:
+        conflict_reason = "provider status could not be mapped"
+    elif str(record.get("status") or "") in {"resolved"} and normalized not in {"resolved", "reopened"}:
+        conflict_reason = "provider update conflicts with local terminal state"
+    else:
+        new_status = normalized
+        extra_updates.update(
+            {
+                "provider_status": _safe_text(provider_status),
+                "provider_updated_at": _safe_text(provider_updated_at),
+                "sync_conflict": False,
+                "sync_conflict_reason": None,
+                "last_sync_result": "applied",
+            }
+        )
+
+    if conflict_reason:
+        new_status = "sync_conflict"
+        extra_updates.update(
+            {
+                "sync_conflict": True,
+                "sync_conflict_reason": conflict_reason,
+                "last_sync_result": "refused",
+            }
+        )
+
+    updated = report_repo.update_support_handoff_delivery_status(
+        delivery_id,
+        status=new_status,
+        updated_at=now,
+        actor=_safe_text(actor) or "unknown-admin",
+        correlation_id=request_id,
+        retryable=bool(record.get("retryable", False)),
+        refusal_reasons=record.get("refusal_reasons", []),
+        failure_reasons=record.get("failure_reasons", []),
+        extra_updates=extra_updates,
+    )
+    if not updated:
+        return None
+    _write_delivery_audit(
+        delivery_id,
+        updated=updated,
+        actor=actor,
+        request_id=request_id,
+        action="support_handoff_delivery_provider_sync",
+        result=new_status,
+        now=now,
+    )
+    return support_handoff_delivery_response(updated)
+
+
 def support_handoff_delivery_response(record: dict[str, Any]) -> dict[str, Any]:
     """Return the metadata-only API shape for one delivery summary."""
     status = str(record.get("status") or record.get("lifecycle_status") or "failed")
@@ -327,6 +510,17 @@ def support_handoff_delivery_response(record: dict[str, Any]) -> dict[str, Any]:
         "provider_result": _safe_text(record.get("provider_result")),
         "provider_error_code": _safe_text(record.get("provider_error_code")),
         "provider_attempt_count": int(record.get("provider_attempt_count") or 0),
+        "provider_updated_at": _safe_text(record.get("provider_updated_at")),
+        "last_synced_at": _safe_text(record.get("last_synced_at")),
+        "provider_assignee": _safe_text(record.get("provider_assignee")),
+        "provider_priority": _safe_text(record.get("provider_priority")),
+        "sync_conflict": bool(record.get("sync_conflict", False)),
+        "sync_conflict_reason": _safe_text(record.get("sync_conflict_reason")),
+        "last_sync_result": _safe_text(record.get("last_sync_result")),
+        "retry_exhausted": bool(record.get("retry_exhausted", False)),
+        "max_retry_attempts": int(record.get("max_retry_attempts") or MAX_PROVIDER_RETRY_ATTEMPTS),
+        "next_retry_at": _safe_text(record.get("next_retry_at")),
+        "last_retry_at": _safe_text(record.get("last_retry_at")),
         "refusal_reasons": [_safe_text(value) for value in record.get("refusal_reasons", [])],
         "failure_reasons": [_safe_text(value) for value in record.get("failure_reasons", [])],
         "privacy": _privacy_summary(record.get("privacy")),
@@ -338,6 +532,45 @@ def support_handoff_delivery_response(record: dict[str, Any]) -> dict[str, Any]:
     }
     release_evidence_service.private_marker_hits(response)
     return response
+
+
+def _write_delivery_audit(
+    delivery_id: str,
+    *,
+    updated: dict[str, Any],
+    actor: str,
+    request_id: str | None,
+    action: str,
+    result: str,
+    now: str,
+) -> None:
+    report_repo.put_support_handoff_delivery_audit_event(
+        delivery_id,
+        {
+            "event_id": hashlib.sha256(f"{delivery_id}:{now}:{action}:{result}".encode()).hexdigest()[:32],
+            "event_at": now,
+            "delivery_id": delivery_id,
+            "package_id": updated.get("package_id"),
+            "actor": _safe_text(actor) or "unknown-admin",
+            "action": action,
+            "source": "admin_api",
+            "result": result,
+            "correlation_id": request_id,
+            "metadata": {
+                "destination_mode": updated.get("destination_mode"),
+                "status": result,
+                "retry_count": updated.get("retry_count", 0),
+                "retryable": bool(updated.get("retryable")),
+                "payload_digest": updated.get("payload_digest"),
+                "privacy_passed": bool(updated.get("privacy", {}).get("passed")),
+                "refusal_reasons": [_safe_text(value) for value in updated.get("refusal_reasons", [])],
+                "failure_reasons": [_safe_text(value) for value in updated.get("failure_reasons", [])],
+                "provider_status": _safe_text(updated.get("provider_status")),
+                "last_sync_result": _safe_text(updated.get("last_sync_result")),
+                "sync_conflict_reason": _safe_text(updated.get("sync_conflict_reason")),
+            },
+        },
+    )
 
 
 def support_handoff_delivery_audit_response(event: dict[str, Any]) -> dict[str, Any]:

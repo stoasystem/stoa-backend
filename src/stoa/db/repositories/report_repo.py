@@ -394,6 +394,7 @@ def update_support_handoff_delivery_status(
     retryable: bool | None = None,
     refusal_reasons: list[str] | None = None,
     failure_reasons: list[str] | None = None,
+    extra_updates: dict | None = None,
 ) -> dict | None:
     """Update one delivery lifecycle status and keep its feed row current."""
     existing = get_support_handoff_delivery_record(delivery_id)
@@ -411,6 +412,8 @@ def update_support_handoff_delivery_status(
         "refusal_reasons": refusal_reasons if refusal_reasons is not None else existing.get("refusal_reasons", []),
         "failure_reasons": failure_reasons if failure_reasons is not None else existing.get("failure_reasons", []),
     }
+    if extra_updates:
+        updated.update(extra_updates)
     table = get_table()
     table.put_item(
         Item={
