@@ -106,6 +106,10 @@ class Settings(BaseSettings):
 
     # Support handoff delivery (v4.5)
     support_internal_queue_approved: bool = False
+    support_third_party_provider_approved: bool = False
+    support_third_party_provider_api_key: str = ""
+    support_third_party_provider_endpoint_url: str = ""
+    support_third_party_provider_fail_delivery: bool = False
 
 
 @lru_cache

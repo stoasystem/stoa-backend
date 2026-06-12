@@ -1639,7 +1639,10 @@ async def create_support_handoff_delivery(
     operator = _operator_id(user)
     destination = body.destination_mode.strip()
     contract_defined_destinations = (
-        {support_destination_service.INTERNAL_QUEUE_DESTINATION}
+        {
+            support_destination_service.INTERNAL_QUEUE_DESTINATION,
+            support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION,
+        }
         | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
     )
     if destination not in contract_defined_destinations:
@@ -1655,13 +1658,29 @@ async def create_support_handoff_delivery(
         )
         return {"package": None, "delivery": delivery}
 
-    if not settings.support_internal_queue_approved:
+    if (
+        destination == support_destination_service.INTERNAL_QUEUE_DESTINATION
+        and not settings.support_internal_queue_approved
+    ):
         delivery = support_destination_service.refuse_destination(
             destination_mode=destination,
             actor=operator,
             reason=body.reason,
             request_id=request_id,
             refusal_reason="support internal queue delivery is not approved",
+        )
+        return {"package": None, "delivery": delivery}
+
+    if destination == support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION and (
+        not settings.support_third_party_provider_approved
+        or not settings.support_third_party_provider_api_key.strip()
+    ):
+        delivery = support_destination_service.refuse_destination(
+            destination_mode=destination,
+            actor=operator,
+            reason=body.reason,
+            request_id=request_id,
+            refusal_reason="third-party support provider is not approved or credentials are missing",
         )
         return {"package": None, "delivery": delivery}
 
@@ -1689,7 +1708,7 @@ async def create_support_handoff_delivery(
     try:
         package = support_handoff_service.build_package(
             reason=body.reason,
-            destination_mode=support_destination_service.INTERNAL_QUEUE_DESTINATION,
+            destination_mode=destination,
             generated_by=operator,
             request_id=request_id,
             recovery_sections=recovery_sections,
@@ -1706,13 +1725,22 @@ async def create_support_handoff_delivery(
         reason=body.reason,
         request_id=request_id,
     )
-    delivery = support_destination_service.deliver_internal_queue(
-        package=package,
-        actor=operator,
-        reason=body.reason,
-        request_id=request_id,
-        settings=settings,
-    )
+    if destination == support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION:
+        delivery = support_destination_service.deliver_third_party_support(
+            package=package,
+            actor=operator,
+            reason=body.reason,
+            request_id=request_id,
+            settings=settings,
+        )
+    else:
+        delivery = support_destination_service.deliver_internal_queue(
+            package=package,
+            actor=operator,
+            reason=body.reason,
+            request_id=request_id,
+            settings=settings,
+        )
     return {"package": package, "delivery": delivery}
 
 
@@ -1731,7 +1759,10 @@ async def list_support_handoff_deliveries(
     if status and status not in support_destination_service.DELIVERY_STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported delivery status")
     allowed_destinations = (
-        {support_destination_service.INTERNAL_QUEUE_DESTINATION}
+        {
+            support_destination_service.INTERNAL_QUEUE_DESTINATION,
+            support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION,
+        }
         | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
     )
     if destination_mode and destination_mode not in allowed_destinations:

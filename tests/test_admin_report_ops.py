@@ -2383,6 +2383,190 @@ def test_support_handoff_internal_queue_idempotent_duplicate(monkeypatch):
     _assert_no_private_artifact_markers(second.json())
 
 
+def test_support_handoff_third_party_requires_provider_readiness_without_evidence_reads(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("unready third-party delivery should not query evidence")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=Settings()))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={
+            "reason": "support access_token=abc123",
+            "destination_mode": "third_party_support",
+            "recovery_job_ids": ["job-1"],
+        },
+        headers={"x-request-id": "req-third-party-missing"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"] is None
+    delivery = data["delivery"]
+    assert delivery["destination_mode"] == "third_party_support"
+    assert delivery["status"] == "refused"
+    assert delivery["retryable"] is False
+    assert "not approved" in delivery["refusal_reasons"][0]
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
+def test_support_handoff_third_party_delivery_creates_provider_ticket(monkeypatch):
+    package_audits = []
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: package_audits.append((package_id, event)),
+    )
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+        support_third_party_provider_endpoint_url="https://support.example.test",
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={
+            "reason": "support",
+            "destination_mode": "third_party_support",
+            "operator_note": "safe support note",
+        },
+        headers={"x-request-id": "req-third-party-success"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"]["destination"]["mode"] == "third_party_support"
+    delivery = data["delivery"]
+    assert delivery["destination_mode"] == "third_party_support"
+    assert delivery["status"] == "delivered"
+    assert delivery["provider_ticket_id"].startswith("stoa-ticket-")
+    assert delivery["provider_object_reference"] == delivery["provider_ticket_id"]
+    assert delivery["provider_status"] == "created"
+    assert delivery["provider_readiness"] == {
+        "state": "verified",
+        "approved": True,
+        "credentials": "configured",
+        "endpoint_configured": True,
+        "blockers": [],
+    }
+    assert delivery["provider_attempt_count"] == 1
+    assert delivery["payload_digest"].startswith("sha256:")
+    persisted = next(iter(delivery_rows.values()))
+    assert "payload" not in persisted
+    assert "sections" not in persisted
+    assert len(package_audits) == 1
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+    _assert_no_private_artifact_markers(delivery_audits)
+
+
+def test_support_handoff_third_party_delivery_is_idempotent(monkeypatch):
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    monkeypatch.setattr(report_repo, "put_support_handoff_audit_event", lambda *args, **kwargs: None)
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+    payload = {
+        "reason": "support duplicate",
+        "destination_mode": "third_party_support",
+        "operator_note": "same safe note",
+    }
+
+    first = client.post("/admin/reports/support-handoff-delivery", json=payload, headers={"x-request-id": "req-dup"})
+    second = client.post("/admin/reports/support-handoff-delivery", json=payload, headers={"x-request-id": "req-dup"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_delivery = first.json()["delivery"]
+    second_delivery = second.json()["delivery"]
+    assert second_delivery["delivery_id"] == first_delivery["delivery_id"]
+    assert second_delivery["idempotency_key"] == first_delivery["idempotency_key"]
+    assert second_delivery["provider_ticket_id"] == first_delivery["provider_ticket_id"]
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(first.json())
+    _assert_no_private_artifact_markers(second.json())
+
+
+def test_support_handoff_third_party_provider_failure_is_redacted_and_retryable(monkeypatch):
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    monkeypatch.setattr(report_repo, "put_support_handoff_audit_event", lambda *args, **kwargs: None)
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+        support_third_party_provider_fail_delivery=True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={
+            "reason": "support",
+            "destination_mode": "third_party_support",
+            "operator_note": "safe support note",
+        },
+        headers={"x-request-id": "req-third-party-failed"},
+    )
+
+    assert response.status_code == 200
+    delivery = response.json()["delivery"]
+    assert delivery["status"] == "delivery_failed"
+    assert delivery["retryable"] is True
+    assert delivery["retry"] == {"enabled": True, "reason": None, "count": 0}
+    assert delivery["provider_status"] == "failed"
+    assert delivery["provider_error_code"] == "provider_delivery_failed"
+    assert delivery["failure_reasons"] == ["provider delivery failed: [private-credential]"]
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
+def test_support_handoff_third_party_refuses_privacy_failure(monkeypatch):
+    package_audits = []
+    delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
+    bundle = _minimal_release_bundle()
+    bundle["backend"]["json_s3_key"] = "weekly-reports/private/report.json"
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_handoff_audit_event",
+        lambda package_id, event: package_audits.append((package_id, event)),
+    )
+    settings = Settings(
+        support_third_party_provider_approved=True,
+        support_third_party_provider_api_key="provider-secret",
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-delivery",
+        json={"reason": "support", "destination_mode": "third_party_support", "release_evidence": bundle},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["package"]["validation"]["status"] == "refused"
+    assert data["delivery"]["status"] == "refused"
+    assert data["delivery"]["retryable"] is False
+    assert any("validation did not pass" in reason for reason in data["delivery"]["refusal_reasons"])
+    assert len(package_audits) == 1
+    assert len(delivery_rows) == 1
+    assert len(delivery_audits) == 1
+    _assert_no_private_artifact_markers(data)
+    _assert_no_private_artifact_markers(delivery_rows)
+
+
 @pytest.mark.parametrize(
     "destination_mode",
     ["external_write", "shared_mailbox", "zendesk_ticket", "freshdesk_ticket", "helpscout_conversation"],

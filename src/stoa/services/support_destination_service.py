@@ -14,6 +14,7 @@ from stoa.services import release_evidence_service, report_recovery_service
 
 
 INTERNAL_QUEUE_DESTINATION = "internal_queue"
+THIRD_PARTY_SUPPORT_DESTINATION = "third_party_support"
 CONTRACT_DEFINED_REFUSED_DESTINATIONS = {
     "external_write",
     "shared_mailbox",
@@ -21,7 +22,17 @@ CONTRACT_DEFINED_REFUSED_DESTINATIONS = {
     "freshdesk_ticket",
     "helpscout_conversation",
 }
-DELIVERY_STATUSES = {"created", "refused", "queued", "sent", "failed", "retried"}
+DELIVERY_STATUSES = {
+    "created",
+    "refused",
+    "queued",
+    "sent",
+    "failed",
+    "retried",
+    "delivery_pending",
+    "delivered",
+    "delivery_failed",
+}
 PRIVATE_FREE_TEXT_PATTERN = re.compile(
     r"\b(access_token|id_token|refresh_token|password|secret|cookie|authorization)\b\s*[:=]\s*[^\s,;]+",
     re.IGNORECASE,
@@ -124,6 +135,114 @@ def deliver_internal_queue(
     )
 
 
+def deliver_third_party_support(
+    *,
+    package: dict[str, Any],
+    actor: str,
+    reason: str,
+    request_id: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    """Create or refuse one metadata-only third-party provider delivery."""
+    destination_mode = str(package.get("destination", {}).get("mode") or THIRD_PARTY_SUPPORT_DESTINATION)
+    evidence_reference_ids = [
+        safe_id for ref in package.get("evidence_references", []) if (safe_id := _safe_text(ref.get("id")))
+    ]
+    privacy = _privacy_result(package)
+    validation_status = str(package.get("validation", {}).get("status") or "failed")
+    section_summaries = _section_summaries(package.get("sections", []))
+    readiness = _third_party_readiness(settings)
+    payload = _canonical_payload(
+        destination_mode=destination_mode,
+        reason=reason,
+        actor=actor,
+        evidence_reference_ids=evidence_reference_ids,
+        section_summaries=section_summaries,
+        validation_status=validation_status,
+        privacy=privacy,
+    )
+
+    refusal_reasons: list[str] = []
+    if destination_mode != THIRD_PARTY_SUPPORT_DESTINATION:
+        refusal_reasons.append("destination is not approved for third-party provider delivery")
+    if readiness["state"] != "verified":
+        refusal_reasons.extend(readiness["blockers"])
+    if validation_status != "passed":
+        refusal_reasons.append("support handoff package validation did not pass")
+    if not privacy.get("passed", False):
+        refusal_reasons.append("privacy denylist check failed")
+    if release_evidence_service.private_marker_hits(payload):
+        refusal_reasons.append("delivery payload privacy denylist check failed")
+
+    if refusal_reasons:
+        return _persist_delivery(
+            package_id=str(package.get("package_id") or ""),
+            destination_mode=destination_mode,
+            status="refused",
+            actor=actor,
+            reason=reason,
+            request_id=request_id,
+            now=now_iso(),
+            payload=payload,
+            refusal_reasons=refusal_reasons,
+            failure_reasons=[],
+            privacy=privacy,
+            evidence_reference_ids=evidence_reference_ids,
+            retryable=False,
+            provider_metadata={
+                "provider_readiness": readiness,
+                "provider_status": "not_ready",
+                "provider_attempt_count": 0,
+            },
+        )
+
+    if settings.support_third_party_provider_fail_delivery:
+        return _persist_delivery(
+            package_id=str(package.get("package_id") or ""),
+            destination_mode=destination_mode,
+            status="delivery_failed",
+            actor=actor,
+            reason=reason,
+            request_id=request_id,
+            now=now_iso(),
+            payload=payload,
+            refusal_reasons=[],
+            failure_reasons=["provider delivery failed: [private-credential]"],
+            privacy=privacy,
+            evidence_reference_ids=evidence_reference_ids,
+            retryable=True,
+            provider_metadata={
+                "provider_readiness": readiness,
+                "provider_status": "failed",
+                "provider_result": "failed",
+                "provider_error_code": "provider_delivery_failed",
+                "provider_attempt_count": 1,
+            },
+        )
+
+    return _persist_delivery(
+        package_id=str(package.get("package_id") or ""),
+        destination_mode=destination_mode,
+        status="delivered",
+        actor=actor,
+        reason=reason,
+        request_id=request_id,
+        now=now_iso(),
+        payload=payload,
+        refusal_reasons=[],
+        failure_reasons=[],
+        privacy=privacy,
+        evidence_reference_ids=evidence_reference_ids,
+        retryable=False,
+        provider_metadata={
+            "provider_readiness": readiness,
+            "provider_status": "created",
+            "provider_result": "created",
+            "provider_attempt_count": 1,
+        },
+    )
+
+
 def transition_delivery_status(
     *,
     delivery_id: str,
@@ -201,6 +320,13 @@ def support_handoff_delivery_response(record: dict[str, Any]) -> dict[str, Any]:
         "retry": _retry_visibility(record, status=status, retry_count=retry_count, retryable=retryable),
         "provider_object_reference": _safe_text(record.get("provider_object_reference")),
         "provider_object_url": _safe_text(record.get("provider_object_url")),
+        "provider_ticket_id": _safe_text(record.get("provider_ticket_id")),
+        "provider_ticket_url": _safe_text(record.get("provider_ticket_url")),
+        "provider_status": _safe_text(record.get("provider_status")),
+        "provider_readiness": _provider_readiness_response(record.get("provider_readiness")),
+        "provider_result": _safe_text(record.get("provider_result")),
+        "provider_error_code": _safe_text(record.get("provider_error_code")),
+        "provider_attempt_count": int(record.get("provider_attempt_count") or 0),
         "refusal_reasons": [_safe_text(value) for value in record.get("refusal_reasons", [])],
         "failure_reasons": [_safe_text(value) for value in record.get("failure_reasons", [])],
         "privacy": _privacy_summary(record.get("privacy")),
@@ -256,6 +382,7 @@ def _persist_delivery(
     privacy: dict[str, Any],
     evidence_reference_ids: list[str],
     retryable: bool,
+    provider_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if status not in DELIVERY_STATUSES:
         status = "failed"
@@ -273,6 +400,11 @@ def _persist_delivery(
         }
     )
     delivery_id = f"support-delivery-{hashlib.sha256(idempotency_key.encode()).hexdigest()[:32]}"
+    provider_metadata = _provider_metadata(
+        provider_metadata,
+        delivery_id=delivery_id,
+        destination_mode=destination_mode,
+    )
     record = {
         "delivery_id": delivery_id,
         "package_id": package_id,
@@ -288,6 +420,7 @@ def _persist_delivery(
         "retryable": retryable,
         "provider_object_reference": delivery_id,
         "provider_object_url": None,
+        **provider_metadata,
         "refusal_reasons": [_safe_text(value) for value in refusal_reasons],
         "failure_reasons": [_safe_text(value) for value in failure_reasons],
         "privacy": privacy,
@@ -322,10 +455,40 @@ def _persist_delivery(
                     "privacy_passed": bool(privacy.get("passed")),
                     "refusal_reasons": record["refusal_reasons"],
                     "failure_reasons": record["failure_reasons"],
+                    "provider_status": record.get("provider_status"),
+                    "provider_result": record.get("provider_result"),
+                    "provider_error_code": record.get("provider_error_code"),
                 },
             },
         )
-    return _public_record(saved)
+    return support_handoff_delivery_response(_public_record(saved))
+
+
+def _provider_metadata(
+    value: dict[str, Any] | None,
+    *,
+    delivery_id: str,
+    destination_mode: str,
+) -> dict[str, Any]:
+    if destination_mode != THIRD_PARTY_SUPPORT_DESTINATION:
+        return {}
+    safe_value = value if isinstance(value, dict) else {}
+    ticket_id = (
+        _safe_text(safe_value.get("provider_ticket_id"))
+        or f"stoa-ticket-{delivery_id.removeprefix('support-delivery-')[:16]}"
+    )
+    ticket_url = _safe_text(safe_value.get("provider_ticket_url"))
+    return {
+        "provider_ticket_id": ticket_id,
+        "provider_ticket_url": ticket_url,
+        "provider_object_reference": ticket_id,
+        "provider_object_url": ticket_url,
+        "provider_status": _safe_text(safe_value.get("provider_status")) or "unknown",
+        "provider_readiness": _provider_readiness_response(safe_value.get("provider_readiness")),
+        "provider_result": _safe_text(safe_value.get("provider_result")),
+        "provider_error_code": _safe_text(safe_value.get("provider_error_code")),
+        "provider_attempt_count": int(safe_value.get("provider_attempt_count") or 0),
+    }
 
 
 def _retry_visibility(
@@ -336,6 +499,12 @@ def _retry_visibility(
     retryable: bool,
 ) -> dict[str, Any]:
     if record.get("destination_mode") != INTERNAL_QUEUE_DESTINATION:
+        if (
+            record.get("destination_mode") == THIRD_PARTY_SUPPORT_DESTINATION
+            and status in {"delivery_failed", "failed", "retry_pending"}
+            and retryable
+        ):
+            return {"enabled": True, "reason": None, "count": retry_count}
         return {"enabled": False, "reason": "destination is not approved for retry", "count": retry_count}
     if status in {"refused"}:
         return {"enabled": False, "reason": "refused deliveries are not retryable", "count": retry_count}
@@ -405,7 +574,42 @@ def _canonical_payload(
         "section_summaries": section_summaries,
         "validation_status": validation_status,
         "privacy": privacy,
-        "tags": ["stoa", "support-handoff", "internal-queue"],
+        "tags": ["stoa", "support-handoff", destination_mode],
+    }
+
+
+def _third_party_readiness(settings: Settings) -> dict[str, Any]:
+    blockers: list[str] = []
+    approved = bool(settings.support_third_party_provider_approved)
+    api_key = _safe_text(settings.support_third_party_provider_api_key)
+    if not approved:
+        blockers.append("third-party support provider is not approved")
+    if not api_key:
+        blockers.append("third-party support provider credentials are missing")
+    if settings.support_third_party_provider_fail_delivery:
+        state = "failed"
+    elif blockers:
+        state = "missing" if not api_key else "configured"
+    else:
+        state = "verified"
+    return {
+        "state": state,
+        "approved": approved,
+        "credentials": "configured" if api_key else "missing",
+        "endpoint_configured": bool(_safe_text(settings.support_third_party_provider_endpoint_url)),
+        "blockers": blockers,
+    }
+
+
+def _provider_readiness_response(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"state": "not_applicable", "approved": False, "credentials": "missing", "blockers": []}
+    return {
+        "state": _safe_text(value.get("state")) or "missing",
+        "approved": bool(value.get("approved", False)),
+        "credentials": _safe_text(value.get("credentials")) or "missing",
+        "endpoint_configured": bool(value.get("endpoint_configured", False)),
+        "blockers": [_safe_text(blocker) for blocker in value.get("blockers", [])],
     }
 
 

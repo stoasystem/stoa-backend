@@ -14,7 +14,7 @@ from stoa.services import release_evidence_service, report_recovery_service
 SCHEMA_VERSION = "v1"
 ALLOWED_DESTINATIONS = {"preview", "copy", "download"}
 REFUSED_DESTINATIONS = {"external_write"}
-DELIVERY_DESTINATIONS = {"internal_queue"}
+DELIVERY_DESTINATIONS = {"internal_queue", "third_party_support"}
 MAX_RECOVERY_JOB_REFS = 5
 PRIVATE_FREE_TEXT_PATTERN = re.compile(
     r"\b(access_token|id_token|refresh_token|password|secret|cookie)\b\s*[:=]\s*[^\s,;]+",
