@@ -22,22 +22,21 @@ Key accomplishments:
 
 Known deferred items at close: rich editor UI, production content migration, warehouse BI, automatic AI publication, full adaptive sequencing, and production deployment/live smoke.
 
-## Active
-
 ### v4.7 Payment Production Activation And Provider Automation
 
-**Status:** Active planning
+**Status:** Completed backend release gate 2026-06-12
 **Started:** 2026-06-12
+**Completed:** 2026-06-12
 **Roadmap:** `.planning/milestones/v4.7-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.7-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/156-payment-production-activation-contract-and-provider-readiness/`
+**Phase evidence:** `.planning/phases/156-payment-production-activation-contract-and-provider-readiness/`, `.planning/phases/157-live-provider-readiness-api-checks/`, `.planning/phases/158-direct-refund-execution-and-finance-handoff/`, `.planning/phases/159-production-webhook-registration-and-rollout-controls/`, `.planning/phases/160-v4-7-payment-activation-release-gate/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
-**Goal:** Turn the v4.4 payment readiness foundation into controlled production activation with provider-readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls.
+**Goal:** Turn the v4.4 payment readiness foundation into controlled production activation automation.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 156: Payment Production Activation Contract And Provider Readiness.
 - Phase 157: Live Provider Readiness API Checks.
@@ -45,13 +44,46 @@ Planned phases:
 - Phase 159: Production Webhook Registration And Rollout Controls.
 - Phase 160: v4.7 Payment Activation Release Gate.
 
+Key accomplishments:
+
+- Accepted the production payment activation contract for live credentials, price mapping, TWINT capability, webhook registration, finance acceptance, and rollout controls.
+- Added admin-only live Stripe/TWINT provider readiness checks and redacted blocker states.
+- Added controlled direct refund execution behind rollout controls with idempotency and finance handoff evidence.
+- Added webhook readiness evidence and independent checkout/refund rollout controls.
+- Closed with focused backend test/Ruff evidence and final live activation status `deferred`.
+
+Known deferred items at close: approved live Stripe credentials, registered production webhook endpoint, TWINT production capability approval, finance acceptance, explicit rollout enablement, production notification rollout, and support provider expansion.
+
+## Active
+
+### v4.8 Support Provider Expansion And CRM Automation
+
+**Status:** Active planning
+**Started:** 2026-06-12
+**Roadmap:** `.planning/milestones/v4.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.8-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/161-support-provider-expansion-contract-and-adapter-readiness/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Expand the v4.5 internal support queue into approved provider-backed support operations and controlled CRM/customer messaging.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 161: Support Provider Expansion Contract And Adapter Readiness.
+- Phase 162: Approved Third-Party Support Adapter And Delivery Worker.
+- Phase 163: Retry Workers And Two-Way Ticket Synchronization.
+- Phase 164: Support SLA Analytics And Controlled CRM Messaging.
+- Phase 165: v4.8 Support Provider Release Gate And Operations Audit.
+
 Feature priorities:
 
-- Define live Stripe/TWINT credential, price, capability, webhook, finance, and rollout acceptance.
-- Add admin-only provider-readiness API checks.
-- Add controlled direct refund execution and finance handoff export.
-- Add webhook readiness and independent rollout controls for checkout/refunds.
-- Close with focused payment activation release evidence.
+- Define approved support provider modes, adapter readiness, payload boundaries, ticket lifecycle, retry/sync rules, SLA inputs, and controlled messaging rules.
+- Add provider adapter readiness and delivery worker behavior while preserving `internal_queue` fallback.
+- Add bounded retry workers and two-way provider ticket synchronization.
+- Add support SLA analytics and template-gated customer/support messaging.
+- Close with focused support provider release evidence and next milestone selection.
 
 ### v1.0 Parent Portal Real Data Integration
 
@@ -993,4 +1025,4 @@ Key accomplishments:
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ---
-*Last updated: 2026-06-12 after selecting v4.7 payment production activation*
+*Last updated: 2026-06-12 after selecting v4.8 support provider expansion*

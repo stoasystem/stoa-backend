@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.7
-milestone_name: Payment Production Activation And Provider Automation
-status: complete
-last_updated: "2026-06-12T14:30:00+02:00"
+milestone: v4.8
+milestone_name: Support Provider Expansion And CRM Automation
+status: planning
+last_updated: "2026-06-12T14:35:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,42 +20,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.7 payment production activation and provider automation.
+**Current focus:** v4.8 support provider expansion and CRM automation.
 
 ## Current Position
 
-Phase: 160 - v4.7 Payment Activation Release Gate
-Plan: 160-01
-Status: Complete
-Last activity: 2026-06-12 - Completed v4.7 payment activation release gate with full backend test evidence and final activation status `deferred`.
+Phase: 161 - Support Provider Expansion Contract And Adapter Readiness
+Plan: 161-01
+Status: Planned
+Last activity: 2026-06-12 - Selected v4.8 from the `stoa_docs` remaining-feature queue and initialized support provider expansion planning.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v4.4 completed local live-payment readiness: Stripe/TWINT gates, checkout/webhook readiness, invoice/receipt metadata, non-mutating refund handoff, dunning projections, Swiss accounting export metadata, and rollout controls.
-- v4.5 completed support evidence integration through the controlled internal queue path, leaving third-party support provider adapters as future scope.
-- v4.6 completed curriculum authoring and analytics foundation with publish/rollback/archive safety and aggregate content-quality views.
-- `stoa_docs` remaining feature queue now recommends payment production activation and provider automation.
-- v4.7 should prioritize live Stripe/TWINT provider readiness checks, webhook endpoint registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
-- Real customer charging remains blocked until live credentials, provider readiness, finance acceptance, and explicit rollout approval are present.
-- Phase 156 accepted the production payment activation contract. TWINT is in scope with CHF, Switzerland customer-location, 5,000 CHF maximum, recurring support, no manual capture, 180-day refund-window, merchant onboarding, and `twint_payments` capability requirements.
-- Phase 157 added read-only provider readiness checks and kept refund mutation disabled by default.
-- Phase 158 added direct refund execution behind `STRIPE_REFUNDS_ENABLED`, with idempotency replay, TWINT refund-window enforcement, provider failure no-mutation behavior, and finance export refund evidence.
-- Phase 159 added persisted rollout controls. Checkout and refunds can be independently enabled, disabled, canary-marked, or rolled back; rollback blocks new live-changing operations while preserving billing history and finance exports.
-- Phase 160 verified v4.7 with focused payment tests, full backend tests, ruff, and updated feature-gap docs. Final activation status is `deferred`.
+- v4.5 completed support evidence integration through the controlled `internal_queue` path, leaving third-party support provider adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging as future scope.
+- v4.6 completed curriculum authoring and analytics foundation.
+- v4.7 completed payment production activation automation with final live activation status `deferred` because external provider prerequisites remain outstanding.
+- `stoa_docs` remaining feature queue now recommends support provider expansion and CRM automation as the next direct product/operations build.
+- v4.8 should prioritize functional support provider integration, provider delivery workers, retry and synchronization, SLA analytics, and controlled support messaging.
+- Support evidence boundaries remain metadata-only. External support/CRM destinations must be explicitly approved before writes are enabled.
+- Internal development mode means verification should stay focused on feature behavior, idempotency, refusal paths, and operator-visible state rather than broad security/compliance sweeps.
 
 ### Pending Todos
 
-- Prepare the next milestone from the remaining-feature queue: support provider expansion and CRM automation.
+- Execute Phase 161 contract and adapter readiness planning.
+- Implement the approved support provider adapter and delivery worker in Phase 162.
+- Add retry worker and two-way ticket synchronization in Phase 163.
+- Add support SLA analytics and controlled CRM/customer messaging in Phase 164.
+- Close v4.8 with release-gate evidence and next milestone selection in Phase 165.
 
 ### Blockers/Concerns
 
-- Approved Stripe live credentials, live webhook secret, and live price IDs are external dependencies.
-- TWINT production validation may require Stripe account capability checks or merchant onboarding state.
-- Real customer charging and direct refunds must remain disabled until explicit rollout approval.
-- Keep safety checks focused on payment activation boundaries during this internal development milestone.
+- Third-party support provider selection and credentials may remain external dependencies.
+- CRM/customer messaging requires approved templates, destination policy, and operator visibility before sending.
+- Existing metadata-only support evidence boundaries must continue to block raw report artifacts, presigned URLs, raw report JSON/HTML, auth tokens, and raw provider payloads.
 
 ## Operator Next Steps
 
-- Start the next milestone cycle from `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`.
+- Start Phase 161 using `.planning/phases/161-support-provider-expansion-contract-and-adapter-readiness/161-01-PLAN.md`.

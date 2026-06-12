@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-12 after completing v4.7 payment production activation automation
+**Updated:** 2026-06-12 after selecting v4.8 support provider expansion
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -41,6 +41,8 @@ v4.5 completed the local backend support integration and operations handoff scop
 v4.6 completed the local backend rich curriculum authoring and analytics foundation: stable public ID versus immutable version contract, separate authoring/review/publish lifecycle, admin/tutor authoring endpoints, compare-and-set publish/rollback, archive guards, append-only audit evidence, bounded curriculum analytics signals, aggregate content-quality views, full backend regression evidence, and release-gate documentation. Rich editor UI, production content migration, warehouse BI, automatic AI publication, and full adaptive sequencing remain future scope.
 
 v4.7 completed the backend payment production activation automation scope: accepted activation contract, admin-only live Stripe/TWINT provider readiness checks, webhook registration readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls. Final live activation status is `deferred`: the backend automation is ready, but real customer charging remains blocked until approved live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout control enablement are provided.
+
+v4.8 is now the active planning scope for support provider expansion and CRM automation: approved third-party support adapters, delivery workers, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled customer/support messaging beyond the v4.5 internal queue path.
 
 ## Completed Or Largely Complete
 
@@ -168,11 +170,11 @@ v4.7 completed the backend payment production activation automation scope: accep
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
 - Native mobile apps, native push-token registration, and production mobile rollout.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
-- Approved third-party support provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging automation beyond the v4.5 controlled internal queue path.
+- Approved third-party support provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging automation beyond the v4.5 controlled internal queue path. Status: selected as active v4.8 scope.
 
 ## Remaining Feature Build Order
 
-1. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
+1. Active v4.8 support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader controlled CRM/customer messaging.
 2. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
 3. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
 4. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.

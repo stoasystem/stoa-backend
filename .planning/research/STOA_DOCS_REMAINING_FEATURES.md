@@ -24,6 +24,7 @@
 
 1. **Support Provider Expansion And CRM Automation**.
    Add approved third-party support adapters, retry workers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging beyond the v4.5 internal queue path.
+   Status: selected as active v4.8 planning scope.
 
 2. **Production Notification And Native Delivery Rollout**.
    Complete live WebSocket/API Gateway deployment, provider-backed push/email delivery, frontend/native notification visuals, and live smoke evidence.
@@ -36,4 +37,6 @@
 
 ## Current Planning Decision
 
-v4.7 is complete after research-first planning and full backend release-gate verification. The shipped scope is payment production activation automation: activation contract, live Stripe/TWINT provider readiness checks, webhook readiness evidence, direct refund execution, finance handoff export updates, and independent rollout controls. Final live activation status is `deferred` because real customer charging still requires approved Stripe live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement. The next recommended milestone is support provider expansion and CRM automation beyond the v4.5 internal queue path.
+v4.7 is complete after research-first planning and full backend release-gate verification. The shipped scope is payment production activation automation: activation contract, live Stripe/TWINT provider readiness checks, webhook readiness evidence, direct refund execution, finance handoff export updates, and independent rollout controls. Final live activation status is `deferred` because real customer charging still requires approved Stripe live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
+
+v4.8 is selected as the active next milestone: support provider expansion and CRM automation beyond the v4.5 internal queue path. The planned scope is approved third-party support adapters, delivery workers, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer messaging. The next likely milestone after v4.8 is production notification and native delivery rollout unless external payment activation prerequisites become available first.

@@ -1,49 +1,7 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-12 after selecting v4.7
+**Updated:** 2026-06-12 after selecting v4.8
 **Mode:** product functionality first
-
-## v4.4 Live Payment Provider Rollout
-
-**Status:** Completed local release gate 2026-06-11
-
-Goal: move the local Stripe-first payment provider MVP toward controlled production charging and operator readiness.
-
-Completed phases:
-
-- Phase 144: Live Payment Rollout Contract And Credential Readiness.
-- Phase 145: Production Checkout/Webhook Verification.
-- Phase 146: Refunds Invoices Tax And Dunning Readiness.
-- Phase 147: v4.4 Payment Release Gate And Support Audit.
-
-Closed scope:
-
-- Validate approved production provider credentials, webhook endpoints, production-safe smoke, and rollback procedures.
-- Add operational readiness for invoices, refunds, tax/accounting handoff, and dunning.
-- Keep broad multi-provider billing automation out of scope until live Stripe/TWINT fundamentals are verified.
-- Real customer charging remains deferred pending external approval and live provider setup.
-
-## v4.5 Support Evidence Integrations And Operations Handoff
-
-**Status:** Completed local release gate 2026-06-12
-**Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
-**Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
-
-Goal: connect the existing support-safe evidence packages to approved operational destinations and close the remaining manual handoff gap.
-
-Completed phases:
-
-- Phase 148: Support Destination Contract And Credential Readiness.
-- Phase 149: Support Evidence Export Destination Integration.
-- Phase 150: Operator Queue And Handoff Status Visibility.
-- Phase 151: v4.5 Support Integration Release Gate.
-
-Scope:
-
-- Requires approved connector, credential, or destination policy.
-- Starts with destination contract and credential readiness before any provider write.
-- Preserve metadata-only evidence boundaries and refusal behavior for unapproved external writes.
-- Keep broad CRM automation and customer messaging campaigns out of scope until support handoff basics are verified.
 
 ## v4.6 Rich Curriculum Authoring And Analytics Foundation
 
@@ -60,21 +18,21 @@ Completed phases:
 - Phase 154: Learning Analytics And Content Quality Signals.
 - Phase 155: v4.6 Curriculum Operations Release Gate.
 
-Scope:
+Closed scope:
 
 - Build on the v3.8 curriculum hierarchy and v4.0 adaptive learning signals.
-- Prioritize author review, content QA, and actionable learning analytics before deeper compliance automation.
-- Full production notification rollout remains an eligible alternative next milestone if infrastructure/provider/frontend ownership becomes available first.
+- Add internal authoring, review, publish, rollback, archive, and aggregate quality analytics.
+- Leave rich editor UI, production content migration, and warehouse BI for later product expansion.
 
 ## v4.7 Payment Production Activation And Provider Automation
 
-**Status:** Active planning
+**Status:** Completed backend release gate 2026-06-12
 **Roadmap:** `.planning/milestones/v4.7-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.7-REQUIREMENTS.md`
 
-Goal: turn the v4.4 Stripe/TWINT readiness foundation into approved production activation.
+Goal: turn the v4.4 Stripe/TWINT readiness foundation into approved production activation automation.
 
-Candidate phases:
+Completed phases:
 
 - Phase 156: Payment Production Activation Contract And Provider Readiness.
 - Phase 157: Live Provider Readiness API Checks.
@@ -82,8 +40,53 @@ Candidate phases:
 - Phase 159: Production Webhook Registration And Rollout Controls.
 - Phase 160: v4.7 Payment Activation Release Gate.
 
+Closed scope:
+
+- Added live Stripe/TWINT provider readiness checks, webhook readiness evidence, direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
+- Final live activation status is `deferred` pending approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
+
+## v4.8 Support Provider Expansion And CRM Automation
+
+**Status:** Active planning
+**Roadmap:** `.planning/milestones/v4.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.8-REQUIREMENTS.md`
+
+Goal: expand the v4.5 internal support queue into approved provider-backed support operations and controlled CRM/customer messaging.
+
+Candidate phases:
+
+- Phase 161: Support Provider Expansion Contract And Adapter Readiness.
+- Phase 162: Approved Third-Party Support Adapter And Delivery Worker.
+- Phase 163: Retry Workers And Two-Way Ticket Synchronization.
+- Phase 164: Support SLA Analytics And Controlled CRM Messaging.
+- Phase 165: v4.8 Support Provider Release Gate And Operations Audit.
+
 Scope:
 
-- Add provider-readiness checks and controlled activation APIs around live Stripe/TWINT setup.
-- Add direct refund execution and finance handoff evidence.
-- Keep real customer charging gated on explicit approval.
+- Add adapter readiness, provider delivery workers, bounded retry, provider ticket sync, support SLA analytics, and template-gated support messaging.
+- Keep metadata-only support evidence boundaries and destination approval gates.
+- Avoid broad marketing automation, unapproved provider writes, and unrelated security/compliance expansion during internal development.
+
+## Candidate v4.9 Production Notification And Native Delivery Rollout
+
+**Status:** Candidate next after v4.8
+
+Goal: complete live notification delivery beyond backend readiness.
+
+Candidate scope:
+
+- Live WebSocket/API Gateway deployment and smoke evidence.
+- Provider-backed push/email delivery.
+- Frontend/native notification visuals and token registration.
+- Delivery analytics and operational visibility.
+
+## Candidate v5.0 Product Expansion Or Final Payment Operations
+
+**Status:** Candidate after v4.9 or when external prerequisites unblock
+
+Potential scope:
+
+- Final live payment activation operations once external provider prerequisites are ready.
+- Native mobile app rollout and full localization governance.
+- Rich curriculum editor UI and production content migration.
+- Long-term adaptive sequencing, autonomous tutoring, and warehouse-backed analytics.
