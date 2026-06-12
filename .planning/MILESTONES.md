@@ -910,27 +910,36 @@ Known deferred items at close: approved Stripe live credentials, production webh
 
 ### v4.5 Support Evidence Integrations And Operations Handoff
 
-**Status:** Active planning
+**Status:** Completed local backend release gate 2026-06-12
+**Started:** 2026-06-12
+**Completed:** 2026-06-12
+**Audit:** `.planning/milestones/v4.5-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
-**Goal:** Connect support-safe evidence packages to approved operational destinations and expose operator-visible handoff status.
+**Phase evidence:** `.planning/phases/148-support-destination-contract-and-credential-readiness/`, `.planning/phases/149-support-evidence-export-destination-integration/`, `.planning/phases/150-operator-queue-and-handoff-status-visibility/`, `.planning/phases/151-v4-5-support-integration-release-gate/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Connect support-safe evidence packages to approved operational destinations and expose operator-visible handoff status while preserving metadata-only privacy and fail-closed external writes.
 **Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/4 complete
+**Plans:** 4/4 complete
+**Requirements:** 4/4 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 148: Support Destination Contract And Credential Readiness.
 - Phase 149: Support Evidence Export Destination Integration.
 - Phase 150: Operator Queue And Handoff Status Visibility.
 - Phase 151: v4.5 Support Integration Release Gate.
 
-Feature priorities:
+Key accomplishments:
 
-- Define approved support destinations, credential readiness, payload boundaries, and refusal behavior.
-- Implement metadata-only evidence package delivery to one approved destination with manual fallback preserved.
-- Add operator handoff queue/status visibility.
-- Verify refusal paths and update remaining feature planning.
+- Defined support destination modes, credential/readiness states, payload boundaries, attachment policy, lifecycle vocabulary, and refusal behavior before enabling any support-system write.
+- Selected `internal_queue` as the first approved path with `none_required` credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
+- Added fail-closed admin-only support handoff delivery that preserves manual preview/copy/download fallback and refuses contract-defined third-party destinations.
+- Added operator-visible delivery queue/detail endpoints with lifecycle state, bounded audit visibility, metadata-only response shaping, and read-only retry eligibility.
+- Added provider-failure lifecycle coverage and release-gate evidence with imported Phase 68/69/70 frontend support handoff evidence.
+- Completed focused support handoff tests, full admin report ops tests, Ruff, phase verification, and milestone integration audit.
+
+Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ### v4.6 Rich Curriculum Authoring And Analytics Foundation
 
@@ -957,4 +966,4 @@ Feature priorities:
 - Verify lifecycle safety and update future milestone recommendations.
 
 ---
-*Last updated: 2026-06-11 after planning v4.5 support integration and v4.6 curriculum operations milestones*
+*Last updated: 2026-06-12 after completing v4.5 support integration and preparing v4.6 curriculum operations*
