@@ -1,88 +1,64 @@
-# Requirements: v4.5 Support Evidence Integrations And Operations Handoff
+# v4.6 Requirements: Rich Curriculum Authoring And Analytics Foundation
 
-**Milestone:** v4.5
-**Status:** Complete
+**Status:** Active research-first planning
 **Created:** 2026-06-12
-**Research:** `.planning/research/SUMMARY.md`
+**Source:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`, v4.6 research artifacts
 
 ## Goal
 
-Connect STOA's existing support-safe evidence packages and operations metadata to approved support destinations, reducing manual copy/download handoff while preserving metadata-only evidence boundaries.
-
-The milestone should prove a controlled destination workflow, not a broad CRM platform. Existing `preview`, `copy`, and `download` modes remain supported, and unapproved external writes remain fail-closed.
+Turn STOA's curriculum catalog and exercise-bank foundation into an operable authoring, QA, and analytics workflow for internal curriculum improvement.
 
 ## Requirements
 
-### SUPPORTINT-01 Support Destination Contract And Credential Readiness
+### CURROPS-01 Curriculum Authoring Contract And QA Workflow
 
-Implementers and operators have a precise destination, credential, payload, and refusal contract before any live support-system write is enabled.
+- Define authoring lifecycle states for lessons, exercises, tags, subject/topic metadata, and review outcomes.
+- Define role responsibilities for author, reviewer, tutor/admin operator, and student-visible publication.
+- Define validation requirements for curriculum content completeness, language coverage, answer keys, hints, and difficulty metadata.
+- Preserve compatibility with existing v3.8 curriculum catalog/progress APIs.
 
-Acceptance criteria:
+### CURROPS-02 Admin Lesson And Exercise Authoring MVP
 
-- Contract defines approved destination modes, including manual modes plus candidate `internal_queue`, `shared_mailbox`, `zendesk_ticket`, `freshdesk_ticket`, and `helpscout_conversation`.
-- Contract identifies credential references, environment variables, secret ownership, provider account requirements, and operator approval gates for each selected destination.
-- Readiness checks expose configured, missing, refused, and dry-run-safe states without exposing secrets.
-- Metadata-only payload rules define allowed subject/body/reference/custom-field data, attachment policy, redaction rules, and outbound payload digest behavior.
-- Existing `external_write` refusal remains in place unless replaced by an explicitly approved destination mode with tests.
+- Add admin/tutor authoring workflows for lesson and exercise creation or editing.
+- Support draft, review, publish, archive, and rollback metadata.
+- Keep student-visible catalog stable while draft content is under review.
+- Add focused tests for lifecycle transitions and published-content visibility.
 
-### SUPPORTINT-02 Support Evidence Export Destination Integration
+### CURROPS-03 Learning Analytics And Content Quality Signals
 
-Backend support handoff can deliver a support-safe package to one approved destination path while retaining manual fallback.
+- Aggregate content quality signals from practice completion, skips, wrong answers, assignment outcomes, tutor feedback, and adaptive memory.
+- Expose admin/tutor analytics for weak topics, confusing exercises, stale lessons, and high-impact content gaps.
+- Keep analytics actionable and bounded before broader data warehouse or BI automation.
+- Preserve role boundaries and avoid exposing individual student-sensitive detail in aggregate views.
 
-Acceptance criteria:
+### VERIFY-29 v4.6 Curriculum Operations Release Gate
 
-- Delivery service validates destination readiness and package privacy before provider calls.
-- Selected destination adapter maps only the redacted support package summary, package ID, evidence references, tags, and approved custom fields.
-- Delivery records include lifecycle status, request/correlation IDs, timestamps, idempotency key, provider object ID/URL when available, retry count, and redacted refusal/failure reasons.
-- Provider failures, missing approval/config for the selected path, and unapproved destinations are recorded as failed/refused, not as generated-package success. Missing credential behavior for third-party destinations remains future provider-adapter scope because v4.5 selects `internal_queue` with `none_required` credentials.
-- Existing preview/copy/download behavior remains available and covered by focused tests.
-
-### SUPPORTINT-03 Operator Queue And Handoff Status Visibility
-
-Operators can inspect recent support handoff activity and understand whether a package is created, queued, sent, failed, refused, or retried.
-
-Acceptance criteria:
-
-- Admin-only list/detail APIs expose recent support handoff delivery records with bounded filters for status, destination, package ID, and date range.
-- Detail views include provider references, redacted failure/refusal reasons, retry count, correlation ID, and privacy validation summary.
-- Retry visibility is explicit, bounded, and unavailable for privacy-failed or unapproved destinations. Retry mutation/idempotency remains future worker scope.
-- Queue/status records do not expose raw report artifacts, secrets, authorization headers, presigned URLs, or unredacted outbound payloads.
-- Support workflow remains usable when external delivery is unavailable through clear manual fallback status.
-
-### VERIFY-28 v4.5 Support Integration Release Gate
-
-v4.5 closes with focused verification and updated remaining-feature planning.
-
-Acceptance criteria:
-
-- Focused backend and frontend checks pass for the selected delivery path, refusal paths, status visibility, and existing manual fallback.
-- Release evidence captures destination configuration status with secrets redacted, provider/write deferral or approval state, and privacy validation results.
-- Tests prove unapproved destinations, missing approval for the selected `internal_queue` path, provider failures, duplicate delivery requests, and privacy violations fail closed. Missing credentials for third-party provider adapters and duplicate retry mutations remain future scope because v4.5 does not enable credential-backed destinations or retry workers.
-- Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.5 support integration work.
-- Remaining work is explicit for additional support providers, two-way synchronization, SLA analytics, and broader CRM/customer messaging automation.
+- Run focused backend/frontend checks for authoring, lifecycle, and analytics behavior.
+- Capture evidence for draft-to-publish behavior, rollback/archive safety, and analytics correctness.
+- Update roadmap, state, feature-gap audit, and remaining-feature queue after v4.6.
+- Recommend whether the next milestone should be adaptive sequencing, native/mobile expansion, notification production rollout, or deeper analytics.
 
 ## Future Requirements
 
-- Additional live support destination writes after separate provider approval.
-- Two-way ticket synchronization and webhook ingestion.
-- Support SLA analytics beyond first-pass handoff status.
-- Broad CRM/customer messaging campaigns.
-- Native mobile support flows.
+- Full content management system.
+- Collaborative authoring and comments.
+- Automated content generation into published catalog without review.
+- Long-term adaptive sequencing across all curriculum content.
+- Full BI/data warehouse integration.
 
 ## Out of Scope
 
-- Unapproved external writes.
-- Raw report artifact exposure.
-- Direct S3 artifact links or presigned URLs.
-- Storing provider credentials in code, planning docs, payloads, or audit rows.
-- Broad customer messaging campaigns.
-- Replacing existing metadata-only report operations evidence boundaries.
+- Publishing AI-generated exercises without review.
+- Replacing existing curriculum catalog/progress APIs wholesale.
+- Broad compliance analytics unrelated to learning operations.
+- Native mobile authoring.
+- Large-scale data warehouse work before operational analytics prove value.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUPPORTINT-01 | Phase 148 | Complete |
-| SUPPORTINT-02 | Phase 149 | Complete |
-| SUPPORTINT-03 | Phase 150 | Complete |
-| VERIFY-28 | Phase 151 | Complete |
+| CURROPS-01 | Phase 152 | Planned |
+| CURROPS-02 | Phase 153 | Planned |
+| CURROPS-03 | Phase 154 | Planned |
+| VERIFY-29 | Phase 155 | Planned |

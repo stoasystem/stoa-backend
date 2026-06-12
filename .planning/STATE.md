@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.5
-milestone_name: Support Evidence Integrations And Operations Handoff
-status: complete
-last_updated: "2026-06-12T01:54:40+02:00"
-last_activity: 2026-06-12 - Phase 151 v4.5 support integration release gate completed
+milestone: v4.6
+milestone_name: Rich Curriculum Authoring And Analytics Foundation
+status: planning
+last_updated: "2026-06-12T09:23:21.375Z"
+last_activity: 2026-06-12
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.5 support evidence integrations and operations handoff.
+**Current focus:** v4.6 rich curriculum authoring and analytics foundation.
 
 ## Current Position
 
-Phase: 151 - v4.5 Support Integration Release Gate
-Plan: 151-01
-Status: Complete; ready for milestone audit and archive
-Last activity: 2026-06-12 - Phase 151 completed v4.5 support integration release gate
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-12 — Milestone v4.6 started
 
 ## Accumulated Context
 
@@ -51,10 +51,11 @@ Last activity: 2026-06-12 - Phase 151 completed v4.5 support integration release
 - Phase 149 completed the fail-closed `internal_queue` delivery path, admin-only sibling delivery endpoint, provider-neutral delivery lifecycle records, idempotency independent of package UUIDs, and refused-record handling for contract-defined unapproved destinations.
 - Phase 150 completed admin-only support handoff delivery queue/detail visibility with recent feed rows, pre-feed read-through coverage, bounded audit timelines, complete lifecycle state visibility, and read-only retry eligibility.
 - Phase 151 completed the v4.5 local backend release gate with provider-failure lifecycle coverage, focused/full backend gates, Ruff, imported frontend support handoff evidence from Phases 68/69/70, and updated remaining-feature documentation.
+- v4.6 should build on the v3.8 curriculum catalog/exercise-bank foundation and v4.0 adaptive-learning signals to add internal authoring, QA lifecycle, and actionable content analytics.
 
 ### Pending Todos
 
-- Audit and archive v4.5.
+- Research v4.6 curriculum authoring and analytics before finalizing requirements and roadmap.
 
 ### Blockers/Concerns
 
@@ -68,4 +69,4 @@ Last activity: 2026-06-12 - Phase 151 completed v4.5 support integration release
 
 ## Operator Next Steps
 
-- Run milestone audit, complete milestone, and prepare v4.6.
+- Complete v4.6 research, define requirements, create roadmap, then begin Phase 152.

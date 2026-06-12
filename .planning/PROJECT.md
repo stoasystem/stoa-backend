@@ -72,7 +72,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.5 Support Evidence Integrations And Operations Handoff on 2026-06-12 (local backend release gate)
-**Next planned milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation
+**Active milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation
 
 Delivered:
 
@@ -191,32 +191,23 @@ Completed phases:
 - Phase 150: Operator Queue And Handoff Status Visibility.
 - Phase 151: v4.5 Support Integration Release Gate.
 
-## Current Milestone: v4.5 Support Evidence Integrations And Operations Handoff
+## Current Milestone: v4.6 Rich Curriculum Authoring And Analytics Foundation
 
-Roadmap: `.planning/milestones/v4.5-ROADMAP.md`
-Requirements: `.planning/milestones/v4.5-REQUIREMENTS.md`
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
 
-**Status:** Completed local backend release gate on 2026-06-12.
+**Status:** Research-first planning.
 
-**Goal:** Connect support-safe evidence packages to approved operational destinations and add operator-visible handoff status.
+**Goal:** Add internal curriculum authoring, QA lifecycle, and actionable learning/content analytics on top of the existing curriculum and adaptive-learning foundations.
 
 **Target features:**
 
-- Support destination contract and credential readiness.
-- Support evidence export destination integration with preview/copy/download fallback.
-- Operator queue and handoff status visibility.
-- v4.5 release gate with refusal-path, redaction, and planning-doc evidence.
+- Curriculum authoring contract and QA workflow.
+- Admin lesson and exercise authoring MVP.
+- Learning analytics and content quality signals.
+- v4.6 release gate with lifecycle, analytics, docs, and next-milestone recommendation evidence.
 
-v4.5 completed the controlled `internal_queue` delivery path behind `SUPPORT_INTERNAL_QUEUE_APPROVED`, admin-only handoff queue/detail visibility, provider-failure lifecycle evidence, and release-gate documentation. Third-party support-system writes, retry workers, two-way provider sync, support SLA analytics, and broader CRM/customer messaging remain future work.
-
-## Next Milestone
-
-### v4.6 Rich Curriculum Authoring And Analytics Foundation
-
-Roadmap: `.planning/milestones/v4.6-ROADMAP.md`
-Requirements: `.planning/milestones/v4.6-REQUIREMENTS.md`
-
-Goal: add internal curriculum authoring, QA lifecycle, and actionable learning/content analytics on top of the existing curriculum and adaptive-learning foundations.
+This is now the active milestone because v3.8 created curriculum catalog/exercise-bank foundations and v4.0 added adaptive learning signals, but internal content authoring, QA lifecycle, and actionable content analytics remain operational gaps.
 
 ## Requirements
 
@@ -637,4 +628,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after completing v4.5 support evidence integrations milestone*
+*Last updated: 2026-06-12 after starting v4.6 curriculum authoring and analytics milestone*
