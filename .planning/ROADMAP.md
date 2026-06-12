@@ -14,7 +14,7 @@ Keep the existing FastAPI/Pydantic/DynamoDB stack. Do not build a broad CMS, BI 
 
 ## Phases
 
-- [ ] **Phase 152: Curriculum Authoring Contract And QA Workflow** - Define stable public IDs versus immutable versions, lifecycle state machines, validation rules, publish manifests, role boundaries, and legacy-readiness rules.
+- [x] **Phase 152: Curriculum Authoring Contract And QA Workflow** - Define stable public IDs versus immutable versions, lifecycle state machines, validation rules, publish manifests, role boundaries, and legacy-readiness rules.
 - [ ] **Phase 153: Admin Lesson And Exercise Authoring MVP** - Implement draft/review/publish/archive/rollback authoring workflows with published-only student reads, immutable versions, worklist visibility, and append-only audit evidence.
 - [ ] **Phase 154: Learning Analytics And Content Quality Signals** - Add bounded analytics signal capture and aggregate views for confusing exercises, weak topics, stale lessons, content gaps, and assignment-to-content feedback.
 - [ ] **Phase 155: v4.6 Curriculum Operations Release Gate** - Verify lifecycle safety, draft isolation, publish/rollback/archive behavior, analytics stability, docs, and next-milestone recommendation.
@@ -34,11 +34,11 @@ Keep the existing FastAPI/Pydantic/DynamoDB stack. Do not build a broad CMS, BI 
   4. Validation rules cover required content fields, answer keys, hints, difficulty, language metadata, subject/topic bindings, and legacy v3.8 readiness.
   5. Student/parent published-only visibility and admin/tutor preview boundaries are explicit.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 152-01: Define curriculum authoring contract and QA workflow.
+- [x] 152-01: Define curriculum authoring contract and QA workflow.
 
 ### Phase 153: Admin Lesson And Exercise Authoring MVP
 
@@ -103,7 +103,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 152 Curriculum Authoring Contract And QA Workflow | v4.6 | 0/1 | Planned | — |
+| 152 Curriculum Authoring Contract And QA Workflow | v4.6 | 1/1 | Complete | 2026-06-12 |
 | 153 Admin Lesson And Exercise Authoring MVP | v4.6 | 0/1 | Planned | — |
 | 154 Learning Analytics And Content Quality Signals | v4.6 | 0/1 | Planned | — |
 | 155 v4.6 Curriculum Operations Release Gate | v4.6 | 0/1 | Planned | — |
@@ -112,7 +112,7 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURROPS-01 | Phase 152 | Planned |
+| CURROPS-01 | Phase 152 | Complete |
 | CURROPS-02 | Phase 153 | Planned |
 | CURROPS-03 | Phase 154 | Planned |
 | VERIFY-29 | Phase 155 | Planned |

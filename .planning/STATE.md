@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.6
 milestone_name: Rich Curriculum Authoring And Analytics Foundation
-status: planning
-last_updated: "2026-06-12T09:23:21.375Z"
+status: in_progress
+last_updated: "2026-06-12T09:38:10.000Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Ready for Phase 152 planning
-Last activity: 2026-06-12 — v4.6 research-first roadmap created
+Phase: 153 - Admin Lesson And Exercise Authoring MVP
+Plan: 153-01
+Status: Ready for Phase 153 planning
+Last activity: 2026-06-12 — Phase 152 curriculum authoring contract completed
 
 ## Accumulated Context
 
@@ -52,10 +52,11 @@ Last activity: 2026-06-12 — v4.6 research-first roadmap created
 - Phase 150 completed admin-only support handoff delivery queue/detail visibility with recent feed rows, pre-feed read-through coverage, bounded audit timelines, complete lifecycle state visibility, and read-only retry eligibility.
 - Phase 151 completed the v4.5 local backend release gate with provider-failure lifecycle coverage, focused/full backend gates, Ruff, imported frontend support handoff evidence from Phases 68/69/70, and updated remaining-feature documentation.
 - v4.6 should build on the v3.8 curriculum catalog/exercise-bank foundation and v4.0 adaptive-learning signals to add internal authoring, QA lifecycle, and actionable content analytics.
+- Phase 152 completed the curriculum authoring contract, stable-public-ID versus immutable-version model, separate lifecycle state machines, publish manifest rules, validation requirements, role boundaries, and legacy readiness handoff for Phase 153.
 
 ### Pending Todos
 
-- Plan Phase 152: curriculum authoring contract and QA workflow.
+- Plan Phase 153: admin lesson and exercise authoring MVP.
 
 ### Blockers/Concerns
 
@@ -69,4 +70,4 @@ Last activity: 2026-06-12 — v4.6 research-first roadmap created
 
 ## Operator Next Steps
 
-- Begin Phase 152 with research-backed contract planning.
+- Begin Phase 153 implementation planning against `.planning/phases/152-curriculum-authoring-contract-and-qa-workflow/152-CURRICULUM-AUTHORING-CONTRACT.md`.

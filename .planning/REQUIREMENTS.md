@@ -89,7 +89,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURROPS-01 | Phase 152 | Planned |
+| CURROPS-01 | Phase 152 | Complete |
 | CURROPS-02 | Phase 153 | Planned |
 | CURROPS-03 | Phase 154 | Planned |
 | VERIFY-29 | Phase 155 | Planned |
