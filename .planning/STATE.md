@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.7
 milestone_name: Payment Production Activation And Provider Automation
 status: implementing
-last_updated: "2026-06-12T13:15:00+02:00"
+last_updated: "2026-06-12T13:45:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 158 - Direct Refund Execution And Finance Handoff
-Plan: 158-01
+Phase: 159 - Production Webhook Registration And Rollout Controls
+Plan: 159-01
 Status: Ready to plan
-Last activity: 2026-06-12 - Completed Phase 157 admin-only live provider readiness API checks with redacted Stripe/TWINT credential, price, webhook, refund, finance, and rollout evidence.
+Last activity: 2026-06-12 - Completed Phase 158 controlled direct refund execution with idempotency, audit persistence, billing projection updates, and finance handoff export evidence.
 
 ## Accumulated Context
 
@@ -40,11 +40,11 @@ Last activity: 2026-06-12 - Completed Phase 157 admin-only live provider readine
 - v4.7 should prioritize live Stripe/TWINT provider readiness checks, webhook endpoint registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
 - Real customer charging remains blocked until live credentials, provider readiness, finance acceptance, and explicit rollout approval are present.
 - Phase 156 accepted the production payment activation contract. TWINT is in scope with CHF, Switzerland customer-location, 5,000 CHF maximum, recurring support, no manual capture, 180-day refund-window, merchant onboarding, and `twint_payments` capability requirements.
-- Phase 157 added read-only provider readiness checks. Direct refund mutation remains disabled and must be implemented under explicit controls in Phase 158.
+- Phase 157 added read-only provider readiness checks and kept refund mutation disabled by default.
+- Phase 158 added direct refund execution behind `STRIPE_REFUNDS_ENABLED`, with idempotency replay, TWINT refund-window enforcement, provider failure no-mutation behavior, and finance export refund evidence.
 
 ### Pending Todos
 
-- Plan and implement Phase 158 direct refund execution and finance handoff.
 - Plan and implement Phase 159 production webhook registration and rollout controls.
 - Close Phase 160 with payment activation release evidence and updated feature gap docs.
 
@@ -57,4 +57,4 @@ Last activity: 2026-06-12 - Completed Phase 157 admin-only live provider readine
 
 ## Operator Next Steps
 
-- Start Phase 158 by planning controlled direct refund execution and finance handoff from the Phase 156 contract and Phase 157 readiness endpoint.
+- Start Phase 159 by planning webhook registration readiness and runtime rollout controls for checkout and refunds.

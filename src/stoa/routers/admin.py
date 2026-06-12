@@ -127,6 +127,18 @@ class SubscriptionProviderReadinessResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class SubscriptionRefundExecutionRequest(BaseModel):
+    amount: int = Field(..., ge=1)
+    reason: str = Field(..., min_length=1, max_length=500)
+    idempotency_key: str = Field(..., alias="idempotencyKey", min_length=8, max_length=200)
+
+
+class SubscriptionRefundExecutionResponse(BaseModel):
+    idempotencyStatus: str
+    refund: dict[str, Any] = Field(default_factory=dict)
+    billing: dict[str, Any] = Field(default_factory=dict)
+
+
 class SubscriptionRequestUpdateRequest(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
     admin_note: str | None = Field(default=None, max_length=500)
@@ -1013,6 +1025,24 @@ async def get_subscription_billing(
 ):
     """Open one parent provider billing record with recent event history."""
     return subscription_service.get_admin_billing(parent_id, settings=settings)
+
+
+@router.post("/subscriptions/billing/{parent_id}/refunds", response_model=SubscriptionRefundExecutionResponse)
+async def execute_subscription_refund(
+    parent_id: str,
+    body: SubscriptionRefundExecutionRequest,
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Execute a gated provider refund for an eligible billing record."""
+    return subscription_service.execute_billing_refund(
+        parent_id=parent_id,
+        amount=body.amount,
+        reason=body.reason,
+        idempotency_key=body.idempotency_key,
+        user=user,
+        settings=settings,
+    )
 
 
 @router.patch("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)

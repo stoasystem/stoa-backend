@@ -94,6 +94,6 @@ Acceptance criteria:
 |-------------|-------|--------|
 | PAYACT-01 | Phase 156 | Complete |
 | PAYACT-02 | Phase 157 | Complete |
-| PAYACT-03 | Phase 158 | Planned |
+| PAYACT-03 | Phase 158 | Complete |
 | PAYACT-04 | Phase 159 | Planned |
 | VERIFY-30 | Phase 160 | Planned |

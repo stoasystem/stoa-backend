@@ -7,7 +7,7 @@ import hmac
 import importlib
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -29,6 +29,7 @@ BILLING_ENTITY = "subscription_billing"
 BILLING_EVENT_ENTITY = "subscription_billing_event"
 BILLING_EVENT_DEDUPE_ENTITY = "subscription_billing_event_dedupe"
 BILLING_PROVIDER_LOOKUP_ENTITY = "subscription_billing_provider_lookup"
+BILLING_REFUND_IDEMPOTENCY_ENTITY = "subscription_billing_refund_idempotency"
 READINESS_STATES = {
     "test",
     "not_configured",
@@ -364,10 +365,11 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
     warnings.extend(twint["warnings"])
 
     finance = _finance_readiness()
-    refund = _provider_refund_capability_readiness(local=local, twint=twint)
+    refund = _provider_refund_capability_readiness(local=local, twint=twint, settings=settings)
+    refunds_allowed = bool(refund["mutationConfigured"] and local.get("livemode") and not provider_failure)
     rollout = {
         "checkout": "enabled" if local["checkoutAllowed"] else "disabled",
-        "refunds": "disabled",
+        "refunds": "enabled" if refunds_allowed else "disabled",
         "providerReadiness": "blocked",
         "activationState": "blocked",
         "rollbackAvailable": True,
@@ -390,7 +392,7 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
     return {
         "state": state,
         "checkoutAllowed": checkout_allowed,
-        "refundsAllowed": False,
+        "refundsAllowed": refunds_allowed,
         "providerMode": provider_mode,
         "credentials": {
             "apiKeyMode": provider_mode,
@@ -465,6 +467,99 @@ def handle_stripe_webhook(
         "eventType": event_type,
         "parentId": parent_id,
         "billingStatus": updated.get("billing_status"),
+    }
+
+
+def execute_billing_refund(
+    *,
+    parent_id: str,
+    amount: int,
+    reason: str,
+    idempotency_key: str,
+    user: dict[str, Any],
+    settings: Settings,
+) -> dict[str, Any]:
+    _require_parent(parent_id)
+    amount = _require_refund_amount(amount)
+    reason = _require_refund_reason(reason)
+    idempotency_key = _require_idempotency_key(idempotency_key)
+
+    existing_replay = _get_refund_idempotency(parent_id, idempotency_key)
+    if existing_replay:
+        return _refund_execution_response(
+            parent_id=parent_id,
+            idempotency_status="replayed",
+            idempotency_record=existing_replay,
+            settings=settings,
+        )
+
+    if not settings.stripe_refunds_enabled:
+        raise HTTPException(status_code=409, detail="Direct refund execution is not enabled")
+    if settings.is_production and not settings.stripe_api_key.strip().startswith("sk_live_"):
+        raise HTTPException(status_code=503, detail="Live Stripe API key is required for direct refunds")
+
+    existing = _get_billing_item(parent_id)
+    readiness = _refund_readiness(existing)
+    if not readiness["eligible"]:
+        raise HTTPException(status_code=409, detail={"message": "Billing record is not refundable", "refund": readiness})
+    if amount > int(readiness["eligibleAmount"] or 0):
+        raise HTTPException(status_code=409, detail="Refund amount exceeds remaining refundable amount")
+    if not _twint_refund_window_open(existing):
+        raise HTTPException(status_code=409, detail="TWINT refund window has expired")
+
+    now = now_iso()
+    actor = _actor_id(user)
+    _reserve_refund_idempotency(
+        parent_id=parent_id,
+        idempotency_key=idempotency_key,
+        amount=amount,
+        reason=reason,
+        actor=actor,
+        at=now,
+    )
+    try:
+        provider_refund = _create_provider_refund(
+            provider_charge_id=str(readiness.get("providerChargeId") or ""),
+            provider_payment_intent_id=str(readiness.get("providerPaymentIntentId") or ""),
+            amount=amount,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            settings=settings,
+        )
+    except Exception as exc:
+        _record_refund_idempotency_failure(
+            parent_id=parent_id,
+            idempotency_key=idempotency_key,
+            amount=amount,
+            reason=reason,
+            actor=actor,
+            at=now_iso(),
+        )
+        raise HTTPException(status_code=502, detail="Stripe refund creation failed") from exc
+
+    updated = _apply_direct_refund_result(
+        parent_id=parent_id,
+        existing=existing or {},
+        provider_refund=provider_refund,
+        amount=amount,
+        reason=reason,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        requested_at=now,
+    )
+    _record_refund_idempotency_success(
+        parent_id=parent_id,
+        idempotency_key=idempotency_key,
+        amount=amount,
+        reason=reason,
+        actor=actor,
+        at=now,
+        provider_refund_id=updated.get("refund_summary", {}).get("providerRefundId"),
+    )
+    return {
+        "idempotencyStatus": "new",
+        "refund": updated.get("refund_summary") or {},
+        "billing": _billing_response(updated, parent_id=parent_id, include_events=True, settings=settings),
     }
 
 
@@ -928,6 +1023,14 @@ def _provider_lookup_key(provider: str, object_type: str, object_id: str) -> dic
     }
 
 
+def _refund_idempotency_key(parent_id: str, idempotency_key: str) -> dict[str, str]:
+    digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+    return {
+        "PK": f"BILLING_REFUND_IDEMPOTENCY#{parent_id}#{digest}",
+        "SK": "SUMMARY",
+    }
+
+
 def _get_billing_item(parent_id: str) -> dict[str, Any] | None:
     response = get_table().get_item(Key=_billing_key(parent_id))
     item = response.get("Item")
@@ -1180,6 +1283,32 @@ def _retrieve_stripe_price(price_id: str, settings: Settings) -> dict[str, Any]:
     return _stripe_object_to_dict(price)
 
 
+def _create_provider_refund(
+    *,
+    provider_charge_id: str,
+    provider_payment_intent_id: str,
+    amount: int,
+    reason: str,
+    idempotency_key: str,
+    settings: Settings,
+) -> dict[str, Any]:
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    create_kwargs: dict[str, Any] = {
+        "amount": amount,
+        "metadata": {
+            "stoa_operator_reason": reason,
+            "stoa_idempotency_key": idempotency_key,
+        },
+    }
+    if provider_charge_id:
+        create_kwargs["charge"] = provider_charge_id
+    else:
+        create_kwargs["payment_intent"] = provider_payment_intent_id
+    refund = stripe.Refund.create(**create_kwargs, idempotency_key=idempotency_key)
+    return _stripe_object_to_dict(refund)
+
+
 def _stripe_capability_status(account: dict[str, Any], capability: str) -> str:
     capabilities = account.get("capabilities") or {}
     status = capabilities.get(capability)
@@ -1331,16 +1460,22 @@ def _last_observed_provider_event() -> dict[str, Any]:
     }
 
 
-def _provider_refund_capability_readiness(*, local: dict[str, Any], twint: dict[str, Any]) -> dict[str, Any]:
+def _provider_refund_capability_readiness(
+    *,
+    local: dict[str, Any],
+    twint: dict[str, Any],
+    settings: Settings,
+) -> dict[str, Any]:
+    mutation_configured = bool(settings.stripe_refunds_enabled)
     return {
         "provider": "stripe",
-        "mutationConfigured": False,
+        "mutationConfigured": mutation_configured,
         "eligibleWhenBillingState": ["active", "past_due", "payment_failed"],
         "requiresProviderReference": True,
         "requiresOperatorReason": True,
         "requiresIdempotencyKey": True,
         "twintRefundWindowDays": twint["constraints"]["refundWindowDays"],
-        "blockers": ["direct_refund_execution_not_enabled"],
+        "blockers": [] if mutation_configured else ["direct_refund_execution_not_enabled"],
         "warnings": [] if local.get("livemode") else ["refund_readiness_requires_live_provider_mode"],
     }
 
@@ -1893,6 +2028,274 @@ def _refund_readiness(item: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _require_refund_amount(amount: int) -> int:
+    try:
+        parsed = int(amount)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Refund amount must be an integer") from exc
+    if parsed <= 0:
+        raise HTTPException(status_code=422, detail="Refund amount must be positive")
+    return parsed
+
+
+def _require_refund_reason(reason: str) -> str:
+    cleaned = str(reason or "").strip()
+    if not cleaned:
+        raise HTTPException(status_code=422, detail="Refund reason is required")
+    return cleaned[:500]
+
+
+def _require_idempotency_key(idempotency_key: str) -> str:
+    cleaned = str(idempotency_key or "").strip()
+    if len(cleaned) < 8:
+        raise HTTPException(status_code=422, detail="Refund idempotency key must be at least 8 characters")
+    return cleaned[:200]
+
+
+def _twint_refund_window_open(item: dict[str, Any] | None) -> bool:
+    if not item:
+        return False
+    invoice = item.get("latest_invoice") or {}
+    payment_method = str(
+        item.get("payment_method_type") or invoice.get("paymentMethodType") or ""
+    ).lower()
+    if payment_method != "twint":
+        return True
+    paid_at = _parse_iso_datetime(
+        invoice.get("paidAt")
+        or item.get("last_provider_event_at")
+        or item.get("updated_at")
+    )
+    if paid_at is None:
+        return True
+    return datetime.now(timezone.utc) <= paid_at + timedelta(days=180)
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _get_refund_idempotency(parent_id: str, idempotency_key: str) -> dict[str, Any] | None:
+    item = get_table().get_item(Key=_refund_idempotency_key(parent_id, idempotency_key)).get("Item")
+    return dict(item) if item else None
+
+
+def _reserve_refund_idempotency(
+    *,
+    parent_id: str,
+    idempotency_key: str,
+    amount: int,
+    reason: str,
+    actor: str,
+    at: str,
+) -> None:
+    item = _refund_idempotency_item(
+        parent_id=parent_id,
+        idempotency_key=idempotency_key,
+        amount=amount,
+        reason=reason,
+        actor=actor,
+        status="in_progress",
+        at=at,
+        provider_refund_id=None,
+    )
+    try:
+        _transact_write([{"Put": {"Item": item, "ConditionExpression": "attribute_not_exists(PK)"}}])
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            raise HTTPException(status_code=409, detail="Refund idempotency key is already in use") from exc
+        raise
+
+
+def _record_refund_idempotency_failure(
+    *,
+    parent_id: str,
+    idempotency_key: str,
+    amount: int,
+    reason: str,
+    actor: str,
+    at: str,
+) -> None:
+    get_table().put_item(
+        Item=_refund_idempotency_item(
+            parent_id=parent_id,
+            idempotency_key=idempotency_key,
+            amount=amount,
+            reason=reason,
+            actor=actor,
+            status="failed",
+            at=at,
+            provider_refund_id=None,
+        )
+    )
+
+
+def _record_refund_idempotency_success(
+    *,
+    parent_id: str,
+    idempotency_key: str,
+    amount: int,
+    reason: str,
+    actor: str,
+    at: str,
+    provider_refund_id: str | None,
+) -> None:
+    get_table().put_item(
+        Item=_refund_idempotency_item(
+            parent_id=parent_id,
+            idempotency_key=idempotency_key,
+            amount=amount,
+            reason=reason,
+            actor=actor,
+            status="succeeded",
+            at=at,
+            provider_refund_id=provider_refund_id,
+        )
+    )
+
+
+def _refund_idempotency_item(
+    *,
+    parent_id: str,
+    idempotency_key: str,
+    amount: int,
+    reason: str,
+    actor: str,
+    status: str,
+    at: str,
+    provider_refund_id: str | None,
+) -> dict[str, Any]:
+    return {
+        **_refund_idempotency_key(parent_id, idempotency_key),
+        "entity_type": BILLING_REFUND_IDEMPOTENCY_ENTITY,
+        "parent_id": parent_id,
+        "idempotency_key_hash": hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest(),
+        "status": status,
+        "amount": amount,
+        "reason": reason,
+        "actor": actor,
+        "provider_refund_id": provider_refund_id,
+        "created_at": at,
+        "updated_at": at,
+    }
+
+
+def _refund_execution_response(
+    *,
+    parent_id: str,
+    idempotency_status: str,
+    idempotency_record: dict[str, Any],
+    settings: Settings,
+) -> dict[str, Any]:
+    billing = get_admin_billing(parent_id, settings=settings)
+    return {
+        "idempotencyStatus": idempotency_status,
+        "refund": billing.get("refund") or {
+            "state": idempotency_record.get("status"),
+            "providerRefundId": idempotency_record.get("provider_refund_id"),
+        },
+        "billing": billing,
+    }
+
+
+def _apply_direct_refund_result(
+    *,
+    parent_id: str,
+    existing: dict[str, Any],
+    provider_refund: dict[str, Any],
+    amount: int,
+    reason: str,
+    idempotency_key: str,
+    actor: str,
+    requested_at: str,
+) -> dict[str, Any]:
+    now = now_iso()
+    invoice = dict(existing.get("latest_invoice") or {})
+    previous_refunded = _amount_value(invoice.get("amountRefunded"), 0) or 0
+    invoice["amountRefunded"] = previous_refunded + amount
+    invoice["amountRemaining"] = max((_amount_value(invoice.get("amountPaid"), 0) or 0) - invoice["amountRefunded"], 0)
+    provider_refund_id = _provider_id_value(provider_refund.get("id")) or f"refund_{uuid4().hex}"
+    provider_state = str(provider_refund.get("status") or "requested")
+    refund_summary = {
+        **_refund_readiness({**existing, "latest_invoice": invoice}),
+        "state": provider_state,
+        "providerHandoffState": provider_state,
+        "refundedAmount": amount,
+        "currency": str(provider_refund.get("currency") or invoice.get("currency") or "CHF").upper(),
+        "requiresReason": False,
+        "providerRefundId": provider_refund_id,
+        "providerChargeId": _provider_id_value(provider_refund.get("charge")) or invoice.get("providerChargeId"),
+        "providerPaymentIntentId": _provider_id_value(provider_refund.get("payment_intent"))
+        or invoice.get("providerPaymentIntentId"),
+        "providerInvoiceId": _provider_id_value(provider_refund.get("invoice")) or invoice.get("providerInvoiceId"),
+        "reason": reason,
+        "idempotencyKey": idempotency_key,
+        "requestedBy": actor,
+        "requestedAt": requested_at,
+        "updatedAt": now,
+    }
+    updated = {
+        **existing,
+        **_billing_key(parent_id),
+        "entity_type": BILLING_ENTITY,
+        "parent_id": parent_id,
+        "latest_invoice": invoice,
+        "refund_summary": refund_summary,
+        "updated_at": now,
+    }
+    updated["accounting_handoff"] = _accounting_handoff(updated, parent_id=parent_id)
+    event_id = f"direct_refund_{provider_refund_id}"
+    event = {
+        **_billing_key(parent_id),
+        "SK": _billing_event_sk(now, event_id),
+        "entity_type": BILLING_EVENT_ENTITY,
+        "parent_id": parent_id,
+        "event_id": event_id,
+        "event_type": "direct_refund.created",
+        "event_at": now,
+        "provider": "stripe",
+        "provider_mode": updated.get("billing_mode"),
+        "provider_livemode": updated.get("provider_livemode"),
+        "billing_status": updated.get("billing_status"),
+        "processing_result": "processed",
+        "idempotency_status": "new",
+        "provider_refund_id": provider_refund_id,
+        "request_id": idempotency_key,
+        "requested_tier": updated.get("requested_tier"),
+        "payment_method_type": updated.get("payment_method_type"),
+        "twint_status": updated.get("twint_status"),
+    }
+    operations: list[dict[str, Any]] = [
+        {"Put": {"Item": updated}},
+        {"Put": {"Item": event, "ConditionExpression": "attribute_not_exists(PK)"}},
+        {
+            "Put": {
+                "Item": {
+                    **_provider_lookup_key("stripe", "refund", provider_refund_id),
+                    "entity_type": BILLING_PROVIDER_LOOKUP_ENTITY,
+                    "provider": "stripe",
+                    "object_type": "refund",
+                    "object_id": provider_refund_id,
+                    "parent_id": parent_id,
+                    "provider_mode": updated.get("billing_mode"),
+                    "provider_livemode": updated.get("provider_livemode"),
+                    "created_at": now,
+                }
+            }
+        },
+    ]
+    _transact_write(operations)
+    return updated
+
+
 def _dunning_projection(
     item: dict[str, Any] | None,
     *,
@@ -1975,6 +2378,13 @@ def _accounting_handoff(item: dict[str, Any] | None, *, parent_id: str) -> dict[
             "state": refund.get("state"),
             "providerRefundId": refund.get("providerRefundId"),
             "eligibleAmount": refund.get("eligibleAmount"),
+            "refundedAmount": refund.get("refundedAmount"),
+            "currency": refund.get("currency"),
+            "reason": refund.get("reason"),
+            "idempotencyKey": refund.get("idempotencyKey"),
+            "requestedBy": refund.get("requestedBy"),
+            "requestedAt": refund.get("requestedAt"),
+            "providerHandoffState": refund.get("providerHandoffState"),
         },
         "paymentMethodType": item.get("payment_method_type") or invoice.get("paymentMethodType"),
         "reconciliationId": invoice.get("reconciliationId") or provider_invoice_id,

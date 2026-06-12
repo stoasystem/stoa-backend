@@ -191,6 +191,61 @@ def _install_fakes(monkeypatch):
     return table, profiles
 
 
+def _put_active_billing(
+    table: FakeTable,
+    *,
+    parent_id: str = "parent-1",
+    payment_method_type: str = "twint",
+    last_provider_event_at: str | None = None,
+):
+    now = last_provider_event_at or subscription_service.now_iso()
+    item = {
+        "PK": f"SUBSCRIPTION_BILLING#{parent_id}",
+        "SK": "SUMMARY",
+        "entity_type": "subscription_billing",
+        "parent_id": parent_id,
+        "subscription_tier": "premium",
+        "requested_tier": "premium",
+        "billing_provider": "stripe",
+        "billing_mode": "live",
+        "billing_status": "active",
+        "provider_customer_id": "cus_live_parent",
+        "provider_subscription_id": "sub_live_parent",
+        "provider_price_id": "price_premium_live",
+        "provider_livemode": True,
+        "readiness_state": "live_enabled",
+        "readiness_blockers": [],
+        "twint_in_scope": True,
+        "twint_status": "eligible",
+        "payment_method_type": payment_method_type,
+        "latest_invoice": {
+            "providerInvoiceId": "in_live_parent",
+            "providerSubscriptionId": "sub_live_parent",
+            "providerPaymentIntentId": "pi_live_parent",
+            "providerChargeId": "ch_live_parent",
+            "hostedInvoiceUrl": "https://invoice.stripe.com/i/live",
+            "receiptUrl": "https://pay.stripe.com/receipts/live",
+            "invoiceStatus": "paid",
+            "currency": "CHF",
+            "amountDue": 1500,
+            "amountPaid": 1500,
+            "amountRemaining": 0,
+            "amountRefunded": 0,
+            "taxAmount": 115,
+            "taxStatus": "provider_managed",
+            "paymentMethodType": payment_method_type,
+            "reconciliationId": "STOA-2026-0002",
+        },
+        "last_provider_event_id": "evt_invoice_paid_live",
+        "last_provider_event_type": "invoice.paid",
+        "last_provider_event_at": now,
+        "created_at": now,
+        "updated_at": now,
+    }
+    table.items[(item["PK"], item["SK"])] = item
+    return item
+
+
 def test_parent_can_view_plan_options(monkeypatch):
     _install_fakes(monkeypatch)
     client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
@@ -649,6 +704,181 @@ def test_admin_provider_readiness_reports_live_success(monkeypatch):
     assert body["webhook"]["endpointMode"] == "https"
     assert body["finance"]["accountingExportAvailable"] is True
     assert body["blockers"] == []
+
+
+def test_admin_can_execute_direct_refund_and_export_finance_handoff(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    _put_active_billing(table)
+    captured: dict[str, object] = {}
+
+    def create_refund(**kwargs):
+        captured.update(kwargs)
+        return {
+            "id": "re_live_parent",
+            "status": "succeeded",
+            "amount": kwargs["amount"],
+            "currency": "chf",
+            "charge": kwargs["provider_charge_id"],
+            "payment_intent": kwargs["provider_payment_intent_id"],
+            "invoice": "in_live_parent",
+        }
+
+    monkeypatch.setattr(subscription_service, "_create_provider_refund", create_refund)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.post(
+        "/admin/subscriptions/billing/parent-1/refunds",
+        json={
+            "amount": 500,
+            "reason": "goodwill refund",
+            "idempotencyKey": "refund-key-001",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert captured["provider_charge_id"] == "ch_live_parent"
+    assert captured["amount"] == 500
+    assert captured["idempotency_key"] == "refund-key-001"
+    assert body["idempotencyStatus"] == "new"
+    assert body["refund"]["state"] == "succeeded"
+    assert body["refund"]["providerRefundId"] == "re_live_parent"
+    assert body["refund"]["refundedAmount"] == 500
+    assert body["refund"]["eligibleAmount"] == 1000
+    assert body["billing"]["latestInvoice"]["amountRefunded"] == 500
+    assert body["billing"]["accountingHandoff"]["refund"]["providerRefundId"] == "re_live_parent"
+    assert body["billing"]["accountingHandoff"]["refund"]["reason"] == "goodwill refund"
+    assert body["billing"]["accountingHandoff"]["refund"]["idempotencyKey"] == "refund-key-001"
+    assert body["billing"]["accountingHandoff"]["refund"]["requestedBy"] == "admin-1"
+
+    export_response = admin_client.get("/admin/subscriptions/billing/accounting-export")
+    export = export_response.json()["items"][0]
+    assert export["refund"]["providerRefundId"] == "re_live_parent"
+    assert export["refund"]["refundedAmount"] == 500
+    assert export["refund"]["providerHandoffState"] == "succeeded"
+
+
+def test_admin_direct_refund_requires_eligible_billing(monkeypatch):
+    _install_fakes(monkeypatch)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.post(
+        "/admin/subscriptions/billing/parent-1/refunds",
+        json={
+            "amount": 500,
+            "reason": "not eligible",
+            "idempotencyKey": "refund-key-002",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["message"] == "Billing record is not refundable"
+
+
+def test_admin_direct_refund_replays_duplicate_idempotency_key(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    _put_active_billing(table)
+    calls = {"count": 0}
+
+    def create_refund(**kwargs):
+        calls["count"] += 1
+        return {
+            "id": "re_idempotent_parent",
+            "status": "succeeded",
+            "amount": kwargs["amount"],
+            "currency": "chf",
+            "charge": kwargs["provider_charge_id"],
+            "payment_intent": kwargs["provider_payment_intent_id"],
+            "invoice": "in_live_parent",
+        }
+
+    monkeypatch.setattr(subscription_service, "_create_provider_refund", create_refund)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+    payload = {
+        "amount": 500,
+        "reason": "duplicate protection",
+        "idempotencyKey": "refund-key-003",
+    }
+
+    first = admin_client.post("/admin/subscriptions/billing/parent-1/refunds", json=payload)
+    second = admin_client.post("/admin/subscriptions/billing/parent-1/refunds", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["idempotencyStatus"] == "new"
+    assert second.json()["idempotencyStatus"] == "replayed"
+    assert calls["count"] == 1
+    assert second.json()["billing"]["latestInvoice"]["amountRefunded"] == 500
+
+
+def test_admin_direct_refund_provider_failure_does_not_mutate_billing(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    _put_active_billing(table)
+
+    def fail_refund(**kwargs):
+        raise RuntimeError("provider failed with sk_live_secret")
+
+    monkeypatch.setattr(subscription_service, "_create_provider_refund", fail_refund)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.post(
+        "/admin/subscriptions/billing/parent-1/refunds",
+        json={
+            "amount": 500,
+            "reason": "provider failure",
+            "idempotencyKey": "refund-key-004",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Stripe refund creation failed"
+    billing = admin_client.get("/admin/subscriptions/billing/parent-1").json()
+    assert billing["latestInvoice"]["amountRefunded"] == 0
+    assert billing["refund"]["state"] == "ready_for_provider"
+    assert "sk_live_secret" not in response.text
+
+
+def test_admin_direct_refund_blocks_expired_twint_window(monkeypatch):
+    table, _profiles = _install_fakes(monkeypatch)
+    _put_active_billing(table, last_provider_event_at="2025-01-01T00:00:00+00:00")
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_refunds_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.post(
+        "/admin/subscriptions/billing/parent-1/refunds",
+        json={
+            "amount": 500,
+            "reason": "expired twint window",
+            "idempotencyKey": "refund-key-005",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "TWINT refund window has expired"
 
 
 def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeypatch):
