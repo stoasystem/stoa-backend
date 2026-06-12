@@ -2,7 +2,7 @@
 
 **Status:** Active planning
 **Created:** 2026-06-12
-**Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
+**Research:** `.planning/research/SUMMARY.md`
 
 ## Goal
 
@@ -30,8 +30,8 @@ Build production payment activation features directly. Keep safety checks scoped
 **Success Criteria** (what must be TRUE):
 
   1. Live credential ownership, injection path, redacted validation, and blocker states are documented.
-  2. Standard/Premium live price IDs, CHF expectations, and TWINT capability checks are documented.
-  3. Webhook endpoint registration requirements and required event set are documented.
+  2. Standard/Premium live price IDs, CHF expectations, TWINT customer-location/onboarding requirements, 5,000 CHF maximum, no-manual-capture behavior, and `twint_payments` capability checks are documented.
+  3. HTTPS webhook endpoint registration requirements, signing secret ownership, quick 2xx handler expectations, and required event set are documented.
   4. Finance acceptance expectations for invoice/refund/tax/dunning/reconciliation evidence are documented.
   5. Phase 157 through Phase 160 implementation targets are explicit.
 
@@ -48,8 +48,8 @@ Plans:
 **Requirements**: PAYACT-02
 **Success Criteria** (what must be TRUE):
 
-  1. Readiness checks cover credential mode, price mapping, TWINT eligibility, webhook endpoint readiness, refund capability, and accounting metadata availability.
-  2. Missing credentials and provider API failures return redacted blocker states.
+  1. Readiness checks cover credential mode, price mapping, TWINT eligibility/capability status, webhook endpoint readiness, refund capability, and accounting metadata availability.
+  2. Missing credentials, test-only credentials, pending/inactive TWINT capability, and provider API failures return redacted blocker states.
   3. Admin responses expose actionable operator status without secrets or raw provider payloads.
   4. Focused tests cover missing/test/live/provider-failure/readiness-success fixtures.
 
@@ -66,7 +66,7 @@ Plans:
 **Requirements**: PAYACT-03
 **Success Criteria** (what must be TRUE):
 
-  1. Refund execution requires eligible billing state, provider reference, admin authorization, operator reason, and idempotency key.
+  1. Refund execution requires eligible billing state, provider reference, admin authorization, operator reason, idempotency key, remaining refundable amount, and refund-window eligibility.
   2. Refund result, provider reference, lifecycle status, billing projection, and audit evidence are persisted.
   3. Finance handoff export includes invoice, refund, tax/accounting, payment method, reconciliation, and dunning metadata.
   4. Tests cover approval, refusal, idempotency, provider failure, and export shape.
@@ -84,7 +84,7 @@ Plans:
 **Requirements**: PAYACT-04
 **Success Criteria** (what must be TRUE):
 
-  1. Webhook readiness checks verify endpoint mode, secret availability, required event subscriptions, and last observed event status.
+  1. Webhook readiness checks verify HTTPS endpoint mode, secret availability, required event subscriptions, quick 2xx handler readiness, and last observed event status.
   2. Live checkout and direct refunds can be enabled/disabled independently through explicit rollout controls.
   3. Rollout state is visible to admins without exposing secrets.
   4. Release evidence can distinguish activated, blocked, deferred, and canary-only rollout states.

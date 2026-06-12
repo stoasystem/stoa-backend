@@ -19,8 +19,9 @@ Implementers have a concrete production activation contract before enabling live
 Acceptance criteria:
 
 - Contract identifies live Stripe credential ownership, injection path, runtime validation, and redacted readiness evidence.
-- Contract identifies live Standard/Premium price IDs, CHF currency expectations, TWINT eligibility requirements, and provider capability checks.
-- Contract defines webhook endpoint registration requirements, webhook secret ownership, and event set required for launch.
+- Contract identifies live Standard/Premium price IDs, CHF currency expectations, TWINT customer-location requirements, 5,000 CHF maximum amount, no-manual-capture behavior, and `twint_payments` capability checks.
+- Contract defines TWINT merchant onboarding requirements for public website availability, visible legal/contact information, and CHF checkout pricing.
+- Contract defines HTTPS webhook endpoint registration requirements, webhook secret ownership, quick 2xx handler expectations, and event set required for launch.
 - Contract defines finance acceptance requirements for invoices, refunds, tax/accounting handoff, dunning, and reconciliation evidence.
 - Contract defines explicit rollout gates for live checkout, direct refund execution, and provider-readiness automation.
 
@@ -31,7 +32,7 @@ Operators can verify provider readiness without exposing secrets or creating rea
 Acceptance criteria:
 
 - Backend exposes admin-only provider readiness checks for credential mode, price mapping, webhook endpoint readiness, TWINT eligibility, refund capability, and accounting metadata availability.
-- Readiness checks use provider APIs or controlled adapters where credentials are present, and return fail-closed blocker states when credentials are absent.
+- Readiness checks use provider APIs or controlled adapters where credentials are present, including `twint_payments` capability status where available, and return fail-closed blocker states when credentials are absent, test-mode only, pending, inactive, or provider calls fail.
 - Responses redact secrets, raw provider payloads, card/payment details, and customer-sensitive payment data.
 - Tests cover missing credentials, test credentials, live-ready blocked state, provider API failure, and readiness success fixtures.
 
@@ -42,6 +43,7 @@ Operators can execute approved refund flows and export finance handoff evidence 
 Acceptance criteria:
 
 - Refund execution requires eligible billing state, provider reference, operator reason, idempotency key, and admin authorization.
+- Refund execution respects provider remaining-amount rules, TWINT's 180-day refund window, and full/partial refund behavior.
 - Refund execution persists request, result, provider reference, lifecycle status, and audit evidence.
 - Parent/admin billing views reflect refund status without exposing sensitive provider payloads.
 - Finance handoff export includes invoice, refund, tax/accounting, payment method, reconciliation, and dunning metadata needed for Swiss operations.
@@ -53,7 +55,7 @@ Live webhook and checkout rollout controls are ready for production activation.
 
 Acceptance criteria:
 
-- Webhook registration/readiness checks verify endpoint mode, secret availability, required event subscriptions, and last observed event status.
+- Webhook registration/readiness checks verify HTTPS endpoint mode, secret availability, required event subscriptions, quick 2xx handler readiness, and last observed event status.
 - Live checkout remains blocked until explicit rollout approval and provider readiness checks pass.
 - Rollout controls can enable/disable live checkout and refund execution independently.
 - Release evidence captures live-readiness status, blockers, and whether any approved live smoke occurred.
