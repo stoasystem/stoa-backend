@@ -15,7 +15,7 @@ Build production payment activation features directly. Keep safety checks scoped
 ## Phases
 
 - [x] **Phase 156: Payment Production Activation Contract And Provider Readiness** - Define live credential ownership, TWINT capability validation, price mapping, webhook registration, finance acceptance, rollout gates, and provider automation targets.
-- [ ] **Phase 157: Live Provider Readiness API Checks** - Add admin-only readiness checks for credentials, price mapping, TWINT eligibility, webhook endpoint state, refund capability, and accounting metadata.
+- [x] **Phase 157: Live Provider Readiness API Checks** - Add admin-only readiness checks for credentials, price mapping, TWINT eligibility, webhook endpoint state, refund capability, and accounting metadata.
 - [ ] **Phase 158: Direct Refund Execution And Finance Handoff** - Add controlled refund execution, idempotency, audit evidence, billing projection updates, and finance handoff export.
 - [ ] **Phase 159: Production Webhook Registration And Rollout Controls** - Verify webhook registration requirements, expose rollout controls for checkout/refunds, and capture readiness evidence.
 - [ ] **Phase 160: v4.7 Payment Activation Release Gate** - Verify provider readiness, refund execution, finance handoff, rollout controls, docs, and next milestone recommendation.
@@ -53,11 +53,11 @@ Plans:
   3. Admin responses expose actionable operator status without secrets or raw provider payloads.
   4. Focused tests cover missing/test/live/provider-failure/readiness-success fixtures.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 157-01: Implement live provider readiness API checks.
+- [x] 157-01: Implement live provider readiness API checks.
 
 ### Phase 158: Direct Refund Execution And Finance Handoff
 
@@ -118,7 +118,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 156 Payment Production Activation Contract And Provider Readiness | v4.7 | 1/1 | Complete | 2026-06-12 |
-| 157 Live Provider Readiness API Checks | v4.7 | 0/1 | Planned | - |
+| 157 Live Provider Readiness API Checks | v4.7 | 1/1 | Complete | 2026-06-12 |
 | 158 Direct Refund Execution And Finance Handoff | v4.7 | 0/1 | Planned | - |
 | 159 Production Webhook Registration And Rollout Controls | v4.7 | 0/1 | Planned | - |
 | 160 v4.7 Payment Activation Release Gate | v4.7 | 0/1 | Planned | - |
@@ -128,10 +128,10 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAYACT-01 | Phase 156 | Complete |
-| PAYACT-02 | Phase 157 | Planned |
+| PAYACT-02 | Phase 157 | Complete |
 | PAYACT-03 | Phase 158 | Planned |
 | PAYACT-04 | Phase 159 | Planned |
 | VERIFY-30 | Phase 160 | Planned |
 
 ---
-*Last updated: 2026-06-12 after completing Phase 156 activation contract.*
+*Last updated: 2026-06-12 after completing Phase 157 live provider readiness checks.*

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.7
 milestone_name: Payment Production Activation And Provider Automation
 status: implementing
-last_updated: "2026-06-12T12:45:00+02:00"
+last_updated: "2026-06-12T13:15:00+02:00"
 last_activity: 2026-06-12
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 157 - Live Provider Readiness API Checks
-Plan: 157-01
+Phase: 158 - Direct Refund Execution And Finance Handoff
+Plan: 158-01
 Status: Ready to plan
-Last activity: 2026-06-12 - Completed Phase 156 activation contract and implementation handoff for live Stripe/TWINT provider readiness, direct refunds, webhook registration, finance evidence, and rollout controls.
+Last activity: 2026-06-12 - Completed Phase 157 admin-only live provider readiness API checks with redacted Stripe/TWINT credential, price, webhook, refund, finance, and rollout evidence.
 
 ## Accumulated Context
 
@@ -40,10 +40,10 @@ Last activity: 2026-06-12 - Completed Phase 156 activation contract and implemen
 - v4.7 should prioritize live Stripe/TWINT provider readiness checks, webhook endpoint registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
 - Real customer charging remains blocked until live credentials, provider readiness, finance acceptance, and explicit rollout approval are present.
 - Phase 156 accepted the production payment activation contract. TWINT is in scope with CHF, Switzerland customer-location, 5,000 CHF maximum, recurring support, no manual capture, 180-day refund-window, merchant onboarding, and `twint_payments` capability requirements.
+- Phase 157 added read-only provider readiness checks. Direct refund mutation remains disabled and must be implemented under explicit controls in Phase 158.
 
 ### Pending Todos
 
-- Plan and implement Phase 157 live provider readiness API checks.
 - Plan and implement Phase 158 direct refund execution and finance handoff.
 - Plan and implement Phase 159 production webhook registration and rollout controls.
 - Close Phase 160 with payment activation release evidence and updated feature gap docs.
@@ -57,4 +57,4 @@ Last activity: 2026-06-12 - Completed Phase 156 activation contract and implemen
 
 ## Operator Next Steps
 
-- Start Phase 157 by planning admin-only provider readiness API checks from the Phase 156 implementation handoff.
+- Start Phase 158 by planning controlled direct refund execution and finance handoff from the Phase 156 contract and Phase 157 readiness endpoint.

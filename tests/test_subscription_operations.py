@@ -472,6 +472,185 @@ def test_production_checkout_reports_missing_live_configuration(monkeypatch):
     assert "missing_standard_price_id" in blockers
 
 
+def test_admin_provider_readiness_reports_missing_production_config(monkeypatch):
+    _install_fakes(monkeypatch)
+    settings = _settings(environment="production", stripe_live_charges_enabled=True)
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "not_configured"
+    assert body["checkoutAllowed"] is False
+    assert body["providerMode"] == "missing"
+    blockers = set(body["blockers"])
+    assert "missing_stripe_api_key" in blockers
+    assert "missing_stripe_webhook_secret" in blockers
+    assert "missing_standard_price_id" in blockers
+    assert "missing_premium_price_id" in blockers
+    assert "missing_stripe_webhook_endpoint_url" in blockers
+    assert body["credentials"]["apiKey"] == "missing"
+
+
+def test_admin_provider_readiness_rejects_test_key_in_production(monkeypatch):
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_test_not_live",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "not_configured"
+    assert body["checkoutAllowed"] is False
+    assert body["providerMode"] == "test"
+    assert "stripe_api_key_not_live" in body["blockers"]
+    assert "sk_test_not_live" not in response.text
+
+
+def test_admin_provider_readiness_reports_twint_pending(monkeypatch):
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_account",
+        lambda settings: {"capabilities": {"twint_payments": "pending"}},
+    )
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_price",
+        lambda price_id, settings: {
+            "id": price_id,
+            "currency": "chf",
+            "recurring": {"interval": "month"},
+            "livemode": True,
+            "active": True,
+        },
+    )
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=False,
+        stripe_twint_capability_confirmed=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "live_ready_but_blocked"
+    assert body["checkoutAllowed"] is False
+    assert body["twint"]["providerCapability"] == "pending"
+    assert body["twint"]["status"] == "pending"
+    assert "twint_capability_pending" in body["blockers"]
+    assert body["prices"]["standard"]["currency"] == "CHF"
+    assert body["prices"]["standard"]["recurring"] is True
+
+
+def test_admin_provider_readiness_redacts_provider_failures(monkeypatch):
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+
+    def fail_account(settings):
+        raise RuntimeError("provider exploded with sk_live_secret_value")
+
+    monkeypatch.setattr(subscription_service, "_retrieve_stripe_account", fail_account)
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_price",
+        lambda price_id, settings: (_ for _ in ()).throw(RuntimeError(f"failed {price_id}")),
+    )
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_secret_value",
+        stripe_webhook_secret="whsec_secret_value",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=True,
+        stripe_twint_capability_confirmed=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "provider_api_failed"
+    assert body["checkoutAllowed"] is False
+    assert "stripe_account_lookup_failed" in body["blockers"]
+    assert "standard_price_lookup_failed" in body["blockers"]
+    assert "sk_live_secret_value" not in response.text
+    assert "whsec_secret_value" not in response.text
+    assert "provider exploded" not in response.text
+
+
+def test_admin_provider_readiness_reports_live_success(monkeypatch):
+    _install_fakes(monkeypatch)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_account",
+        lambda settings: {"capabilities": {"twint_payments": "active"}},
+    )
+    monkeypatch.setattr(
+        subscription_service,
+        "_retrieve_stripe_price",
+        lambda price_id, settings: {
+            "id": price_id,
+            "currency": "chf",
+            "recurring": {"interval": "month"},
+            "livemode": True,
+            "active": True,
+        },
+    )
+    settings = _settings(
+        environment="production",
+        stripe_api_key="sk_live_ready",
+        stripe_webhook_secret="whsec_live",
+        stripe_standard_price_id="price_standard_live",
+        stripe_premium_price_id="price_premium_live",
+        stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
+        stripe_live_charges_enabled=True,
+        stripe_twint_capability_confirmed=True,
+    )
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
+
+    response = admin_client.get("/admin/subscriptions/billing/provider-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "live_enabled"
+    assert body["checkoutAllowed"] is True
+    assert body["refundsAllowed"] is False
+    assert body["providerMode"] == "live"
+    assert body["twint"]["providerCapability"] == "active"
+    assert body["twint"]["status"] == "eligible"
+    assert body["twint"]["constraints"]["currency"] == "CHF"
+    assert body["twint"]["constraints"]["manualCaptureSupported"] is False
+    assert body["twint"]["constraints"]["refundWindowDays"] == 180
+    assert body["prices"]["premium"]["currency"] == "CHF"
+    assert body["prices"]["premium"]["recurring"] is True
+    assert body["webhook"]["endpointMode"] == "https"
+    assert body["finance"]["accountingExportAvailable"] is True
+    assert body["blockers"] == []
+
+
 def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeypatch):
     table, profiles = _install_fakes(monkeypatch)
     secret = "whsec_test_secret"

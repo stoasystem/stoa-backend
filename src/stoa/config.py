@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_standard_price_id: str = ""
     stripe_premium_price_id: str = ""
+    stripe_webhook_endpoint_url: str = ""
     stripe_checkout_success_url: str = "http://localhost:5173/parent/subscription?checkout=success"
     stripe_checkout_cancel_url: str = "http://localhost:5173/parent/subscription?checkout=cancel"
     stripe_live_charges_enabled: bool = False

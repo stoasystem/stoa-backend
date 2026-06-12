@@ -29,7 +29,13 @@ BILLING_ENTITY = "subscription_billing"
 BILLING_EVENT_ENTITY = "subscription_billing_event"
 BILLING_EVENT_DEDUPE_ENTITY = "subscription_billing_event_dedupe"
 BILLING_PROVIDER_LOOKUP_ENTITY = "subscription_billing_provider_lookup"
-READINESS_STATES = {"test", "not_configured", "live_ready_but_blocked", "live_enabled"}
+READINESS_STATES = {
+    "test",
+    "not_configured",
+    "live_ready_but_blocked",
+    "live_enabled",
+    "provider_api_failed",
+}
 REQUEST_STATUSES = {"requested", "in_review", "approved", "applied", "rejected", "cancelled"}
 OPEN_STATUSES = {"requested", "in_review", "approved"}
 TERMINAL_STATUSES = {"applied", "rejected", "cancelled"}
@@ -293,6 +299,115 @@ def list_admin_accounting_handoff(
         if row.get("accountingHandoff", {}).get("providerInvoiceId")
         or row.get("accountingHandoff", {}).get("providerSubscriptionId")
     ]
+
+
+def get_provider_readiness(settings: Settings) -> dict[str, Any]:
+    """Return redacted, read-only provider activation readiness for admins."""
+    local = get_billing_readiness(settings)
+    api_key = settings.stripe_api_key.strip()
+    provider_mode = _api_key_mode(api_key)
+    blockers = list(local.get("blockers") or [])
+    warnings = list(local.get("warnings") or [])
+    provider_failure = False
+    account_capability_status = "unknown"
+
+    prices = {
+        "standard": _price_readiness("standard", settings.stripe_standard_price_id, settings=settings),
+        "premium": _price_readiness("premium", settings.stripe_premium_price_id, settings=settings),
+    }
+
+    should_check_provider = (
+        settings.is_production
+        and provider_mode == "live"
+        and bool(api_key)
+        and _stripe_sdk_available()
+    )
+    if should_check_provider:
+        try:
+            account = _retrieve_stripe_account(settings)
+            account_capability_status = _stripe_capability_status(account, "twint_payments")
+        except Exception:
+            provider_failure = True
+            blockers.append("stripe_account_lookup_failed")
+
+        for tier, price in prices.items():
+            if not price["configured"]:
+                continue
+            try:
+                provider_price = _retrieve_stripe_price(str(price["priceId"]), settings)
+                prices[tier].update(_provider_price_readiness(provider_price))
+            except Exception:
+                provider_failure = True
+                prices[tier]["providerLookup"] = "failed"
+                prices[tier]["blockers"].append(f"{tier}_price_lookup_failed")
+                blockers.append(f"{tier}_price_lookup_failed")
+    elif settings.is_production and provider_mode == "live" and not _stripe_sdk_available():
+        provider_failure = True
+
+    for tier, price in prices.items():
+        if price["configured"] and price.get("providerLookup") == "not_checked":
+            if settings.is_production and provider_mode == "live":
+                warnings.append(f"{tier}_price_provider_lookup_not_checked")
+        blockers.extend(price["blockers"])
+
+    webhook = _webhook_readiness(settings)
+    blockers.extend(webhook["blockers"])
+    warnings.extend(webhook["warnings"])
+
+    twint = _provider_twint_readiness(
+        local_twint=local.get("twint") or {},
+        capability_status=account_capability_status,
+        settings=settings,
+        provider_checked=should_check_provider and not provider_failure,
+    )
+    blockers.extend(twint["blockers"])
+    warnings.extend(twint["warnings"])
+
+    finance = _finance_readiness()
+    refund = _provider_refund_capability_readiness(local=local, twint=twint)
+    rollout = {
+        "checkout": "enabled" if local["checkoutAllowed"] else "disabled",
+        "refunds": "disabled",
+        "providerReadiness": "blocked",
+        "activationState": "blocked",
+        "rollbackAvailable": True,
+    }
+
+    if provider_failure:
+        state = "provider_api_failed"
+    else:
+        state = str(local["state"])
+    checkout_allowed = bool(local["checkoutAllowed"] and not blockers and not provider_failure)
+    if state == "live_ready_but_blocked":
+        checkout_allowed = False
+    if checkout_allowed:
+        rollout["providerReadiness"] = "ready"
+        rollout["activationState"] = "activated" if settings.stripe_live_charges_enabled else "approved_canary_only"
+    elif state == "live_ready_but_blocked":
+        rollout["providerReadiness"] = "ready"
+        rollout["activationState"] = "deferred"
+
+    return {
+        "state": state,
+        "checkoutAllowed": checkout_allowed,
+        "refundsAllowed": False,
+        "providerMode": provider_mode,
+        "credentials": {
+            "apiKeyMode": provider_mode,
+            "apiKey": _redacted_presence(api_key),
+            "webhookSecretConfigured": bool(settings.stripe_webhook_secret.strip()),
+            "standardPriceConfigured": bool(settings.stripe_standard_price_id.strip()),
+            "premiumPriceConfigured": bool(settings.stripe_premium_price_id.strip()),
+        },
+        "prices": prices,
+        "twint": twint,
+        "webhook": webhook,
+        "refund": refund,
+        "finance": finance,
+        "rollout": rollout,
+        "blockers": _unique(blockers),
+        "warnings": _unique(warnings),
+    }
 
 
 def handle_stripe_webhook(
@@ -1039,6 +1154,227 @@ def _load_stripe_sdk() -> Any:
 
 def _redacted_presence(value: str) -> str:
     return "configured" if value else "missing"
+
+
+def _api_key_mode(api_key: str) -> str:
+    if not api_key:
+        return "missing"
+    if api_key.startswith("sk_live_"):
+        return "live"
+    if api_key.startswith("sk_test_"):
+        return "test"
+    return "unknown"
+
+
+def _retrieve_stripe_account(settings: Settings) -> dict[str, Any]:
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    account = stripe.Account.retrieve()
+    return _stripe_object_to_dict(account)
+
+
+def _retrieve_stripe_price(price_id: str, settings: Settings) -> dict[str, Any]:
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    price = stripe.Price.retrieve(price_id)
+    return _stripe_object_to_dict(price)
+
+
+def _stripe_capability_status(account: dict[str, Any], capability: str) -> str:
+    capabilities = account.get("capabilities") or {}
+    status = capabilities.get(capability)
+    if status in {"active", "inactive", "pending"}:
+        return str(status)
+    return "unknown"
+
+
+def _price_readiness(tier: str, price_id: str, *, settings: Settings) -> dict[str, Any]:
+    configured = bool(price_id.strip())
+    blockers: list[str] = []
+    if settings.is_production and not configured:
+        blockers.append(f"missing_{tier}_price_id")
+    return {
+        "tier": tier,
+        "configured": configured,
+        "priceId": _redacted_identifier(price_id),
+        "providerLookup": "not_checked",
+        "currency": None,
+        "recurring": None,
+        "livemode": None,
+        "active": None,
+        "blockers": blockers,
+        "warnings": [],
+    }
+
+
+def _provider_price_readiness(price: dict[str, Any]) -> dict[str, Any]:
+    currency = str(price.get("currency") or "").upper() or None
+    recurring = bool(price.get("recurring"))
+    livemode = bool(price.get("livemode"))
+    active = bool(price.get("active", True))
+    blockers: list[str] = []
+    if currency != "CHF":
+        blockers.append("price_currency_not_chf")
+    if not recurring:
+        blockers.append("price_not_recurring")
+    if not livemode:
+        blockers.append("price_not_live")
+    if not active:
+        blockers.append("price_not_active")
+    return {
+        "providerLookup": "verified",
+        "currency": currency,
+        "recurring": recurring,
+        "livemode": livemode,
+        "active": active,
+        "blockers": blockers,
+        "warnings": [],
+    }
+
+
+def _provider_twint_readiness(
+    *,
+    local_twint: dict[str, Any],
+    capability_status: str,
+    settings: Settings,
+    provider_checked: bool,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    enabled = bool(local_twint.get("enabled"))
+    capability_confirmed = bool(local_twint.get("capabilityConfirmed"))
+    status = "disabled"
+    if enabled:
+        if not capability_confirmed:
+            status = "capability_unconfirmed"
+            blockers.append("twint_capability_unconfirmed")
+        elif provider_checked and capability_status in {"pending", "inactive"}:
+            status = capability_status
+            blockers.append(f"twint_capability_{capability_status}")
+        elif provider_checked and capability_status == "active":
+            status = "eligible" if settings.stripe_live_charges_enabled else "blocked_by_live_gate"
+        elif settings.is_production:
+            status = "unknown"
+            blockers.append("twint_capability_unknown")
+        else:
+            status = str(local_twint.get("status") or "eligible")
+
+    return {
+        "inScope": True,
+        "enabled": enabled,
+        "capabilityConfirmed": capability_confirmed,
+        "providerCapability": capability_status,
+        "status": status,
+        "constraints": {
+            "customerLocation": "CH",
+            "currency": "CHF",
+            "maximumAmount": 500000,
+            "maximumAmountCurrency": "CHF",
+            "recurringSupported": True,
+            "manualCaptureSupported": False,
+            "refundsSupported": True,
+            "partialRefundsSupported": True,
+            "refundWindowDays": 180,
+            "merchantOnboardingRequired": [
+                "functional_public_website",
+                "visible_legal_and_contact_information",
+                "checkout_prices_in_chf",
+            ],
+        },
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
+def _webhook_readiness(settings: Settings) -> dict[str, Any]:
+    endpoint = settings.stripe_webhook_endpoint_url.strip()
+    endpoint_configured = bool(endpoint)
+    endpoint_https = endpoint.startswith("https://")
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if settings.is_production and not endpoint_configured:
+        blockers.append("missing_stripe_webhook_endpoint_url")
+    elif endpoint_configured and not endpoint_https:
+        blockers.append("stripe_webhook_endpoint_not_https")
+    if settings.is_production and not settings.stripe_webhook_secret.strip():
+        blockers.append("missing_stripe_webhook_secret")
+    last_event = _last_observed_provider_event()
+    return {
+        "endpointConfigured": endpoint_configured,
+        "endpointMode": "https" if endpoint_https else "missing" if not endpoint_configured else "non_https",
+        "signingSecretConfigured": bool(settings.stripe_webhook_secret.strip()),
+        "requiredEventTypes": sorted(PROVIDER_EVENT_TYPES),
+        "quickAckExpected": True,
+        "lastObservedProviderEventAt": last_event.get("eventAt"),
+        "lastObservedEventType": last_event.get("eventType"),
+        "blockers": blockers,
+        "warnings": warnings,
+    }
+
+
+def _last_observed_provider_event() -> dict[str, Any]:
+    response = get_table().scan(
+        FilterExpression="entity_type = :entity",
+        ExpressionAttributeValues={":entity": BILLING_EVENT_ENTITY},
+    )
+    events = [
+        item
+        for item in response.get("Items", [])
+        if item.get("provider") == "stripe" and item.get("event_type") in PROVIDER_EVENT_TYPES
+    ]
+    if not events:
+        return {"eventAt": None, "eventType": None}
+    latest = sorted(events, key=lambda item: item.get("event_at", ""), reverse=True)[0]
+    return {
+        "eventAt": latest.get("event_at"),
+        "eventType": latest.get("event_type"),
+    }
+
+
+def _provider_refund_capability_readiness(*, local: dict[str, Any], twint: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "provider": "stripe",
+        "mutationConfigured": False,
+        "eligibleWhenBillingState": ["active", "past_due", "payment_failed"],
+        "requiresProviderReference": True,
+        "requiresOperatorReason": True,
+        "requiresIdempotencyKey": True,
+        "twintRefundWindowDays": twint["constraints"]["refundWindowDays"],
+        "blockers": ["direct_refund_execution_not_enabled"],
+        "warnings": [] if local.get("livemode") else ["refund_readiness_requires_live_provider_mode"],
+    }
+
+
+def _finance_readiness() -> dict[str, Any]:
+    return {
+        "accountingExportAvailable": True,
+        "invoiceMetadataAvailable": True,
+        "refundMetadataAvailable": True,
+        "taxMetadataAvailable": True,
+        "dunningMetadataAvailable": True,
+        "reconciliationMetadataAvailable": True,
+        "blockers": [],
+        "warnings": [],
+    }
+
+
+def _redacted_identifier(value: str) -> str | None:
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if len(cleaned) <= 8:
+        return "configured"
+    return f"...{cleaned[-6:]}"
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _create_provider_checkout_session(

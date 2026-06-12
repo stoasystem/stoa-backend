@@ -93,7 +93,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAYACT-01 | Phase 156 | Complete |
-| PAYACT-02 | Phase 157 | Planned |
+| PAYACT-02 | Phase 157 | Complete |
 | PAYACT-03 | Phase 158 | Planned |
 | PAYACT-04 | Phase 159 | Planned |
 | VERIFY-30 | Phase 160 | Planned |

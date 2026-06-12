@@ -111,6 +111,22 @@ class SubscriptionAccountingExportResponse(BaseModel):
     count: int
 
 
+class SubscriptionProviderReadinessResponse(BaseModel):
+    state: str
+    checkoutAllowed: bool
+    refundsAllowed: bool
+    providerMode: str
+    credentials: dict[str, Any] = Field(default_factory=dict)
+    prices: dict[str, Any] = Field(default_factory=dict)
+    twint: dict[str, Any] = Field(default_factory=dict)
+    webhook: dict[str, Any] = Field(default_factory=dict)
+    refund: dict[str, Any] = Field(default_factory=dict)
+    finance: dict[str, Any] = Field(default_factory=dict)
+    rollout: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class SubscriptionRequestUpdateRequest(BaseModel):
     status: str = Field(..., min_length=1, max_length=50)
     admin_note: str | None = Field(default=None, max_length=500)
@@ -978,6 +994,15 @@ async def list_subscription_accounting_export(
         settings=settings,
     )
     return SubscriptionAccountingExportResponse(items=items, count=len(items))
+
+
+@router.get("/subscriptions/billing/provider-readiness", response_model=SubscriptionProviderReadinessResponse)
+async def get_subscription_provider_readiness(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect redacted live provider readiness without creating provider mutations."""
+    return subscription_service.get_provider_readiness(settings)
 
 
 @router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)
