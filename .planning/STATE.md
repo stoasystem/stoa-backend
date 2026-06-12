@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.6
 milestone_name: Rich Curriculum Authoring And Analytics Foundation
 status: in_progress
-last_updated: "2026-06-12T09:38:10.000Z"
+last_updated: "2026-06-12T09:46:05.000Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 153 - Admin Lesson And Exercise Authoring MVP
-Plan: 153-01
-Status: Ready for Phase 153 planning
-Last activity: 2026-06-12 — Phase 152 curriculum authoring contract completed
+Phase: 154 - Learning Analytics And Content Quality Signals
+Plan: 154-01
+Status: Ready for Phase 154 planning
+Last activity: 2026-06-12 — Phase 153 admin curriculum authoring MVP completed
 
 ## Accumulated Context
 
@@ -53,10 +53,11 @@ Last activity: 2026-06-12 — Phase 152 curriculum authoring contract completed
 - Phase 151 completed the v4.5 local backend release gate with provider-failure lifecycle coverage, focused/full backend gates, Ruff, imported frontend support handoff evidence from Phases 68/69/70, and updated remaining-feature documentation.
 - v4.6 should build on the v3.8 curriculum catalog/exercise-bank foundation and v4.0 adaptive-learning signals to add internal authoring, QA lifecycle, and actionable content analytics.
 - Phase 152 completed the curriculum authoring contract, stable-public-ID versus immutable-version model, separate lifecycle state machines, publish manifest rules, validation requirements, role boundaries, and legacy readiness handoff for Phase 153.
+- Phase 153 completed a dedicated curriculum operations repository/service/admin route layer for draft, review, approve, request changes, publish, rollback, archive, preview, audit, and worklist behavior while preserving published-only student reads.
 
 ### Pending Todos
 
-- Plan Phase 153: admin lesson and exercise authoring MVP.
+- Plan Phase 154: learning analytics and content quality signals.
 
 ### Blockers/Concerns
 
@@ -70,4 +71,4 @@ Last activity: 2026-06-12 — Phase 152 curriculum authoring contract completed
 
 ## Operator Next Steps
 
-- Begin Phase 153 implementation planning against `.planning/phases/152-curriculum-authoring-contract-and-qa-workflow/152-CURRICULUM-AUTHORING-CONTRACT.md`.
+- Begin Phase 154 analytics planning against the version/public-ID fields added by Phase 153.

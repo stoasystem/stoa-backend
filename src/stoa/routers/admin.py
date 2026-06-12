@@ -28,6 +28,7 @@ from stoa.services import (
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
+    curriculum_ops_service,
     support_destination_service,
     support_handoff_service,
     subscription_service,
@@ -153,6 +154,62 @@ class StatsResponse(BaseModel):
     teacher_sla: dict[str, Any]
 
 
+class CurriculumExerciseDraftRequest(BaseModel):
+    exercise_id: str | None = Field(default=None, alias="exerciseId", max_length=200)
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    type: str = Field(default="text_input", min_length=1, max_length=50)
+    difficulty: str = Field(default="practice", min_length=1, max_length=80)
+    order: int | None = Field(default=None, ge=1, le=200)
+    answer_key: str | None = Field(default=None, alias="answerKey", max_length=2000)
+    explanation: str | None = Field(default=None, max_length=2000)
+    skills: list[str] = Field(default_factory=list)
+
+
+class CurriculumLessonDraftRequest(BaseModel):
+    public_lesson_id: str = Field(..., alias="publicLessonId", min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=300)
+    objective: str = Field(..., min_length=1, max_length=1000)
+    description: str | None = Field(default=None, max_length=2000)
+    subject_id: str = Field(..., alias="subjectId", min_length=1, max_length=100)
+    topic_id: str = Field(..., alias="topicId", min_length=1, max_length=200)
+    unit_id: str | None = Field(default=None, alias="unitId", max_length=200)
+    grade_level: str = Field(..., alias="gradeLevel", min_length=1, max_length=100)
+    difficulty: str = Field(default="practice", min_length=1, max_length=80)
+    estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=1, le=240)
+    language: str | None = Field(default=None, max_length=30)
+    exercises: list[CurriculumExerciseDraftRequest] = Field(default_factory=list)
+
+
+class CurriculumPublishRequest(BaseModel):
+    version_id: str = Field(..., alias="versionId", min_length=1, max_length=200)
+    expected_published_version_id: str | None = Field(
+        default=None,
+        alias="expectedPublishedVersionId",
+        max_length=200,
+    )
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class CurriculumReviewNoteRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class CurriculumVersionResponse(BaseModel):
+    publicLessonId: str
+    versionId: str
+    state: str
+    reviewState: str | None = None
+    updatedAt: str | None = None
+    updatedBy: str | None = None
+    lesson: dict[str, Any] | None = None
+    exercises: list[dict[str, Any]] | None = None
+
+
+class CurriculumWorklistResponse(BaseModel):
+    items: list[CurriculumVersionResponse]
+    count: int
+
+
 @router.get("/moderation/cases", response_model=ModerationCaseListResponse)
 async def list_moderation_cases(
     limit: int = Query(default=50, ge=1, le=100),
@@ -206,6 +263,122 @@ async def add_moderation_case_note(
 ):
     """Append an internal moderation note."""
     return moderation_service.add_note(case_id, body, user)
+
+
+@router.get("/curriculum/worklist", response_model=CurriculumWorklistResponse)
+async def list_curriculum_authoring_worklist(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """List internal curriculum authoring items awaiting operational action."""
+    return curriculum_ops_service.list_worklist(status=status, limit=limit)
+
+
+@router.post("/curriculum/lessons/drafts", response_model=CurriculumVersionResponse)
+async def create_curriculum_lesson_draft(
+    body: CurriculumLessonDraftRequest,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Create an internal lesson-plus-exercises authoring draft."""
+    return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), user)
+
+
+@router.get("/curriculum/lessons/{public_lesson_id}/preview", response_model=CurriculumVersionResponse)
+async def preview_curriculum_lesson_version(
+    public_lesson_id: str,
+    version_id: str = Query(..., alias="versionId"),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Preview an unpublished curriculum version without changing student reads."""
+    return curriculum_ops_service.preview_lesson(public_lesson_id, version_id)
+
+
+@router.post(
+    "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/submit-review",
+    response_model=CurriculumVersionResponse,
+)
+async def submit_curriculum_lesson_review(
+    public_lesson_id: str,
+    version_id: str,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Move a draft curriculum version into QA review."""
+    return curriculum_ops_service.submit_review(public_lesson_id, version_id, user)
+
+
+@router.post(
+    "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/approve",
+    response_model=CurriculumVersionResponse,
+)
+async def approve_curriculum_lesson_version(
+    public_lesson_id: str,
+    version_id: str,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Approve a reviewed curriculum version for admin publish."""
+    return curriculum_ops_service.approve(public_lesson_id, version_id, user)
+
+
+@router.post(
+    "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/request-changes",
+    response_model=CurriculumVersionResponse,
+)
+async def request_curriculum_lesson_changes(
+    public_lesson_id: str,
+    version_id: str,
+    body: CurriculumReviewNoteRequest,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return a curriculum version to authoring with review notes."""
+    return curriculum_ops_service.request_changes(public_lesson_id, version_id, user, body.reason)
+
+
+@router.post("/curriculum/lessons/{public_lesson_id}/publish")
+async def publish_curriculum_lesson_version(
+    public_lesson_id: str,
+    body: CurriculumPublishRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Publish an approved curriculum version through a conditional manifest update."""
+    return curriculum_ops_service.publish(
+        public_lesson_id,
+        body.version_id,
+        user,
+        expected_published_version_id=body.expected_published_version_id,
+        reason=body.reason,
+    )
+
+
+@router.post("/curriculum/lessons/{public_lesson_id}/rollback")
+async def rollback_curriculum_lesson_version(
+    public_lesson_id: str,
+    body: CurriculumPublishRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Rollback the published curriculum pointer to a previous safe version."""
+    return curriculum_ops_service.rollback(
+        public_lesson_id,
+        body.version_id,
+        user,
+        expected_published_version_id=body.expected_published_version_id,
+        reason=body.reason or "rollback requested",
+    )
+
+
+@router.post("/curriculum/lessons/{public_lesson_id}/archive")
+async def archive_curriculum_lesson_version(
+    public_lesson_id: str,
+    body: CurriculumPublishRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Archive a curriculum version when no active assignments block it."""
+    return curriculum_ops_service.archive(
+        public_lesson_id,
+        body.version_id,
+        user,
+        reason=body.reason or "archive requested",
+    )
 
 
 class ReportOperationResponse(BaseModel):
