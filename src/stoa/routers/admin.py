@@ -32,6 +32,7 @@ from stoa.services import (
     curriculum_ops_service,
     support_destination_service,
     support_handoff_service,
+    support_sla_service,
     subscription_service,
     teacher_reply_service,
 )
@@ -834,6 +835,13 @@ class SupportHandoffProviderSyncRequest(BaseModel):
     provider_updated_at: str = Field(..., min_length=1, max_length=100)
     provider_assignee: str | None = Field(default=None, max_length=200)
     provider_priority: str | None = Field(default=None, max_length=100)
+
+
+class SupportHandoffMessageRequest(BaseModel):
+    template: str = Field(..., min_length=1, max_length=100)
+    destination: str = Field(default="customer_email", min_length=1, max_length=100)
+    trigger: str = Field(default="manual", min_length=1, max_length=100)
+    customer_opted_out: bool = False
 
 
 class AuditRetentionReference(BaseModel):
@@ -1810,6 +1818,23 @@ async def list_support_handoff_deliveries(
     }
 
 
+@router.get("/reports/support-handoff-sla")
+async def get_support_handoff_sla(
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return metadata-only support handoff SLA and messaging analytics."""
+    return support_sla_service.build_support_sla_analytics(
+        settings=settings,
+        limit=limit,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
 @router.get("/reports/support-handoff-deliveries/{delivery_id}")
 async def get_support_handoff_delivery_detail(
     delivery_id: str,
@@ -1886,6 +1911,30 @@ async def sync_support_handoff_delivery_provider_status(
     if not delivery:
         raise HTTPException(status_code=404, detail="Support handoff delivery not found")
     return {"delivery": delivery}
+
+
+@router.post("/reports/support-handoff-deliveries/{delivery_id}/messages")
+async def send_support_handoff_message(
+    delivery_id: str,
+    request: Request,
+    body: SupportHandoffMessageRequest,
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Persist one controlled support/customer message outcome."""
+    message = support_sla_service.send_support_message(
+        delivery_id=delivery_id,
+        template=body.template,
+        destination=body.destination,
+        trigger=body.trigger,
+        actor=_operator_id(user),
+        request_id=_request_id(request),
+        settings=settings,
+        customer_opted_out=body.customer_opted_out,
+    )
+    if not message:
+        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
+    return {"message": message}
 
 
 @router.post("/reports/audit-retention/status")

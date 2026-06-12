@@ -441,6 +441,39 @@ def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> N
     )
 
 
+def put_support_crm_message_event(delivery_id: str, event: dict) -> None:
+    """Persist one metadata-only support CRM/customer message outcome."""
+    table = get_table()
+    item = {
+        "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
+        "SK": f"CRM_MESSAGE#{event['event_at']}#{event['message_id']}",
+        "entity_type": "SUPPORT_CRM_MESSAGE_EVENT",
+        **event,
+    }
+    table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)")
+    table.put_item(
+        Item={
+            **item,
+            "PK": "SUPPORT_CRM_MESSAGE_FEED",
+            "SK": f"MESSAGE#{event['event_at']}#{event['message_id']}",
+            "entity_type": "SUPPORT_CRM_MESSAGE_FEED",
+        }
+    )
+
+
+def list_support_crm_message_events(*, limit: int = 100, last_key: dict | None = None) -> dict:
+    """List recent metadata-only support CRM/customer message outcomes."""
+    table = get_table()
+    kwargs = {
+        "KeyConditionExpression": Key("PK").eq("SUPPORT_CRM_MESSAGE_FEED") & Key("SK").begins_with("MESSAGE#"),
+        "Limit": limit,
+        "ScanIndexForward": False,
+    }
+    if last_key:
+        kwargs["ExclusiveStartKey"] = last_key
+    return table.query(**kwargs)
+
+
 def list_support_handoff_delivery_summaries(
     *,
     status: str | None = None,

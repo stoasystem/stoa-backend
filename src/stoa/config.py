@@ -110,6 +110,16 @@ class Settings(BaseSettings):
     support_third_party_provider_api_key: str = ""
     support_third_party_provider_endpoint_url: str = ""
     support_third_party_provider_fail_delivery: bool = False
+    support_crm_messaging_approved: bool = False
+    support_crm_destination_approved: bool = False
+    support_crm_fail_delivery: bool = False
+    support_crm_approved_templates: List[str] = [
+        "support_receipt",
+        "status_update",
+        "resolution",
+        "escalation",
+    ]
+    support_crm_opt_out_delivery_ids: List[str] = []
 
 
 @lru_cache

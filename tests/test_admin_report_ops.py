@@ -3141,6 +3141,225 @@ def test_support_handoff_provider_sync_surfaces_unknown_status_conflict(monkeypa
     _assert_no_private_artifact_markers(response.json())
 
 
+def test_support_handoff_sla_analytics_exposes_overdue_and_provider_metrics(monkeypatch):
+    queued = _support_delivery_record(
+        delivery_id="support-delivery-overdue",
+        status="queued",
+        created_at="2026-06-11T01:00:00+00:00",
+    )
+    failed = _support_delivery_record(
+        delivery_id="support-delivery-provider-failed",
+        status="delivery_failed",
+        destination_mode="third_party_support",
+        retryable=True,
+        created_at="2026-06-12T01:00:00+00:00",
+    )
+    failed["provider_error_code"] = "provider_retry_failed"
+    resolved = _support_delivery_record(
+        delivery_id="support-delivery-resolved",
+        status="resolved",
+        destination_mode="third_party_support",
+        retryable=False,
+        created_at="2026-06-12T01:00:00+00:00",
+    )
+    message_event = {
+        "message_id": "message-1",
+        "event_at": "2026-06-12T02:00:00+00:00",
+        "delivery_id": "support-delivery-resolved",
+        "package_id": "support-handoff-1",
+        "actor": "admin-sub",
+        "source": "admin_api",
+        "destination": "customer_email",
+        "template": "resolution",
+        "template_version": "v1",
+        "trigger": "support_resolved",
+        "outcome": "sent",
+        "correlation_id": "req-message",
+        "delivery_status": "resolved",
+        "provider_ticket_id": "stoa-ticket-1",
+        "provider_status": "resolved",
+        "customer_visible": True,
+        "refusal_reasons": [],
+        "failure_reasons": [],
+    }
+    captured = {}
+
+    def list_deliveries(**kwargs):
+        captured.update(kwargs)
+        return {"Items": [queued, failed, resolved]}
+
+    monkeypatch.setattr(report_repo, "list_support_handoff_delivery_summaries", list_deliveries)
+    monkeypatch.setattr(report_repo, "list_support_crm_message_events", lambda **kwargs: {"Items": [message_event]})
+    settings = Settings(support_crm_messaging_approved=True, support_crm_destination_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.get("/admin/reports/support-handoff-sla", params={"limit": 25})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["sample_size"] == 3
+    assert data["sla"]["lifecycle_counts"]["queued"] == 1
+    assert data["sla"]["lifecycle_counts"]["resolved"] == 1
+    assert data["sla"]["lifecycle_counts"]["first_response"] == 1
+    assert data["sla"]["overdue_count"] >= 1
+    assert data["sla"]["overdue_deliveries"][0]["delivery_id"] == "support-delivery-overdue"
+    assert data["provider"]["third_party_count"] == 2
+    assert data["provider"]["failure_count"] == 1
+    assert data["provider"]["failure_rate"] == 0.5
+    assert data["retry"]["backlog_count"] == 2
+    assert data["messaging"]["outcome_counts"] == {"sent": 1}
+    assert captured["limit"] == 25
+    _assert_no_private_artifact_markers(data)
+
+
+def test_support_handoff_sla_is_admin_only(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "list_support_handoff_delivery_summaries",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("non-admin should not query analytics")),
+    )
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.get("/admin/reports/support-handoff-sla")
+
+    assert response.status_code == 403
+
+
+def test_support_handoff_message_send_persists_approved_template(monkeypatch):
+    events = []
+    current = _support_delivery_record(
+        delivery_id="support-delivery-provider",
+        status="acknowledged",
+        destination_mode="third_party_support",
+        retryable=False,
+    )
+    current["provider_ticket_id"] = "stoa-ticket-1"
+    current["provider_status"] = "open"
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_crm_message_event",
+        lambda delivery_id, event: events.append((delivery_id, event)),
+    )
+    settings = Settings(support_crm_messaging_approved=True, support_crm_destination_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/messages",
+        json={"template": "status_update", "destination": "customer_email", "trigger": "provider_status_changed"},
+        headers={"x-request-id": "req-message"},
+    )
+
+    assert response.status_code == 200
+    message = response.json()["message"]
+    assert message["outcome"] == "sent"
+    assert message["template"] == "status_update"
+    assert message["destination"] == "customer_email"
+    assert message["delivery_id"] == "support-delivery-provider"
+    assert message["provider_ticket_id"] == "stoa-ticket-1"
+    assert message["customer_visible"] is True
+    assert events[0][0] == "support-delivery-provider"
+    assert events[0][1]["correlation_id"] == "req-message"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(events)
+
+
+def test_support_handoff_message_refuses_unapproved_destination(monkeypatch):
+    events = []
+    current = _support_delivery_record(delivery_id="support-delivery-provider", destination_mode="third_party_support")
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_crm_message_event",
+        lambda delivery_id, event: events.append((delivery_id, event)),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=Settings()))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/messages",
+        json={"template": "support_receipt", "destination": "customer_email"},
+    )
+
+    assert response.status_code == 200
+    message = response.json()["message"]
+    assert message["outcome"] == "refused"
+    assert "support CRM messaging is not approved" in message["refusal_reasons"]
+    assert "support CRM destination is not approved" in message["refusal_reasons"]
+    assert events[0][1]["outcome"] == "refused"
+    _assert_no_private_artifact_markers(response.json())
+
+
+def test_support_handoff_message_refuses_customer_opt_out(monkeypatch):
+    events = []
+    current = _support_delivery_record(delivery_id="support-delivery-provider", destination_mode="third_party_support")
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_crm_message_event",
+        lambda delivery_id, event: events.append((delivery_id, event)),
+    )
+    settings = Settings(support_crm_messaging_approved=True, support_crm_destination_approved=True)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/messages",
+        json={"template": "escalation", "destination": "customer_email", "customer_opted_out": True},
+    )
+
+    assert response.status_code == 200
+    message = response.json()["message"]
+    assert message["outcome"] == "refused"
+    assert message["customer_visible"] is False
+    assert message["refusal_reasons"] == ["customer opted out of support CRM messaging"]
+    assert events[0][1]["outcome"] == "refused"
+
+
+def test_support_handoff_message_records_provider_failure(monkeypatch):
+    events = []
+    current = _support_delivery_record(delivery_id="support-delivery-provider", destination_mode="third_party_support")
+    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", lambda delivery_id: current)
+    monkeypatch.setattr(
+        report_repo,
+        "put_support_crm_message_event",
+        lambda delivery_id, event: events.append((delivery_id, event)),
+    )
+    settings = Settings(
+        support_crm_messaging_approved=True,
+        support_crm_destination_approved=True,
+        support_crm_fail_delivery=True,
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=settings))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/messages",
+        json={"template": "resolution", "destination": "support_crm"},
+    )
+
+    assert response.status_code == 200
+    message = response.json()["message"]
+    assert message["outcome"] == "failed"
+    assert message["failure_reasons"] == ["support CRM provider failed: [private-credential]"]
+    assert events[0][1]["outcome"] == "failed"
+    _assert_no_private_artifact_markers(response.json())
+    _assert_no_private_artifact_markers(events)
+
+
+def test_support_handoff_message_is_admin_only(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "get_support_handoff_delivery_record",
+        lambda delivery_id: (_ for _ in ()).throw(AssertionError("non-admin should not load delivery")),
+    )
+    client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
+
+    response = client.post(
+        "/admin/reports/support-handoff-deliveries/support-delivery-provider/messages",
+        json={"template": "support_receipt"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_support_handoff_package_composes_metadata_and_audits(monkeypatch):
     audit_rows = []
     job = {
