@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.6
-milestone_name: Rich Curriculum Authoring And Analytics Foundation
-status: complete
-last_updated: "2026-06-12T09:51:32.000Z"
+milestone: v4.7
+milestone_name: Payment Production Activation And Provider Automation
+status: planning
+last_updated: "2026-06-12T12:20:35+02:00"
 last_activity: 2026-06-12
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 5
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,57 +20,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.6 rich curriculum authoring and analytics foundation.
+**Current focus:** v4.7 payment production activation and provider automation.
 
 ## Current Position
 
-Phase: v4.6 complete
-Plan: —
-Status: Ready for milestone archive / next milestone planning
-Last activity: 2026-06-12 — Phase 155 v4.6 curriculum operations release gate passed
+Phase: 156 - Payment Production Activation Contract And Provider Readiness
+Plan: 156-01
+Status: Planning
+Last activity: 2026-06-12 - Synced current main with origin, rechecked `stoa_docs` remaining feature queue, and selected v4.7 payment production activation as the next feature-building milestone.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v3.3 completed manual subscription operations for parent requests and admin tier processing.
-- v3.9 completed the local Stripe-first payment provider MVP: checkout session creation, provider billing status, signed webhook lifecycle, parent payment UX, and admin billing visibility.
-- v4.0 through v4.3 completed adaptive learning, notification readiness, frontend mobile polish, and visual localization foundations.
-- The next active feature gap is support evidence integrations and operations handoff.
-- v4.5 should prioritize a controlled support destination contract, credential readiness, one approved delivery path, and operator-visible handoff status.
-- Phase 145 owns production checkout/webhook rollout plus TWINT-capable Stripe provider primitives and livemode gating.
-- Phase 146 owns refunds, invoices, dunning, Swiss tax/accounting handoff, and TWINT lifecycle behavior inside the same Stripe billing model.
-- Phase 144 completed the live payment rollout contract and confirmed no real customer charge was enabled.
-- Phase 145 completed fail-closed readiness states, provider lookup rows, TWINT eligibility metadata, and redacted parent/admin billing readiness surfaces.
-- Phase 146 completed invoice/receipt metadata, non-mutating refund readiness, dunning projections, Swiss accounting handoff export, and TWINT lifecycle propagation.
-- Phase 147 completed the v4.4 release gate and confirmed real customer charging remains deferred until external approval and live provider setup.
-- Real customer charging remains gated on approved provider credentials and explicit production rollout approval.
-- v4.5 research confirmed existing support handoff packages already preserve metadata-only manual preview/copy/download behavior and refuse unapproved external writes.
-- Phase 148 owns the support destination contract, credential/config readiness, payload rules, attachment policy, and refusal behavior before delivery implementation.
-- Phase 148 completed the support destination contract and selected `internal_queue` as the first approved Phase 149 destination path with `none_required` third-party credentials and `SUPPORT_INTERNAL_QUEUE_APPROVED=true` as the rollout approval gate.
-- Phase 149 completed the fail-closed `internal_queue` delivery path, admin-only sibling delivery endpoint, provider-neutral delivery lifecycle records, idempotency independent of package UUIDs, and refused-record handling for contract-defined unapproved destinations.
-- Phase 150 completed admin-only support handoff delivery queue/detail visibility with recent feed rows, pre-feed read-through coverage, bounded audit timelines, complete lifecycle state visibility, and read-only retry eligibility.
-- Phase 151 completed the v4.5 local backend release gate with provider-failure lifecycle coverage, focused/full backend gates, Ruff, imported frontend support handoff evidence from Phases 68/69/70, and updated remaining-feature documentation.
-- v4.6 should build on the v3.8 curriculum catalog/exercise-bank foundation and v4.0 adaptive-learning signals to add internal authoring, QA lifecycle, and actionable content analytics.
-- Phase 152 completed the curriculum authoring contract, stable-public-ID versus immutable-version model, separate lifecycle state machines, publish manifest rules, validation requirements, role boundaries, and legacy readiness handoff for Phase 153.
-- Phase 153 completed a dedicated curriculum operations repository/service/admin route layer for draft, review, approve, request changes, publish, rollback, archive, preview, audit, and worklist behavior while preserving published-only student reads.
-- Phase 154 completed bounded curriculum analytics signals and aggregate operator content-quality views with explicit privacy boundaries and no raw student-answer exposure.
-- Phase 155 completed the v4.6 release gate with full backend pytest, full Ruff, milestone audit, release evidence, and next-milestone recommendation.
+- v4.4 completed local live-payment readiness: Stripe/TWINT gates, checkout/webhook readiness, invoice/receipt metadata, non-mutating refund handoff, dunning projections, Swiss accounting export metadata, and rollout controls.
+- v4.5 completed support evidence integration through the controlled internal queue path, leaving third-party support provider adapters as future scope.
+- v4.6 completed curriculum authoring and analytics foundation with publish/rollback/archive safety and aggregate content-quality views.
+- `stoa_docs` remaining feature queue now recommends payment production activation and provider automation.
+- v4.7 should prioritize live Stripe/TWINT provider readiness checks, webhook endpoint registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
+- Real customer charging remains blocked until live credentials, provider readiness, finance acceptance, and explicit rollout approval are present.
 
 ### Pending Todos
 
-- Archive v4.6 and start the next milestone when ready.
+- Execute Phase 156 by writing the production payment activation contract and provider readiness handoff.
+- Plan and implement Phase 157 live provider readiness API checks.
+- Plan and implement Phase 158 direct refund execution and finance handoff.
+- Plan and implement Phase 159 production webhook registration and rollout controls.
+- Close Phase 160 with payment activation release evidence and updated feature gap docs.
 
 ### Blockers/Concerns
 
-- Live payment rollout requires approved production provider credentials before any real charging path is enabled.
-- Stripe-backed TWINT rollout may still require provider account capability checks, CHF eligibility verification, or external merchant onboarding state before live enablement.
-- Refund execution remains intentionally non-mutating; operators receive provider handoff metadata rather than direct refund mutation.
-- Swiss tax/accounting fields are provider-managed when provider data is unavailable locally.
-- Broad security/compliance testing should stay proportionate to touched payment paths during this internal development stage.
-- Support destination delivery remains fail-closed unless `SUPPORT_INTERNAL_QUEUE_APPROVED=true`; third-party destinations remain refused until separate secret-backed provider phases approve them.
-- v4.5 does not enable live third-party support-system writes; approved provider adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging remain future work.
+- Approved Stripe live credentials, live webhook secret, and live price IDs are external dependencies.
+- TWINT production validation may require Stripe account capability checks or merchant onboarding state.
+- Real customer charging and direct refunds must remain disabled until explicit rollout approval.
+- Keep safety checks focused on payment activation boundaries during this internal development milestone.
 
 ## Operator Next Steps
 
-- Recommended next milestone: Payment Production Activation And Provider Automation.
+- Start Phase 156 using `.planning/phases/156-payment-production-activation-contract-and-provider-readiness/156-01-PLAN.md`.

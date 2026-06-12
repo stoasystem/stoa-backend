@@ -22,6 +22,37 @@ Key accomplishments:
 
 Known deferred items at close: rich editor UI, production content migration, warehouse BI, automatic AI publication, full adaptive sequencing, and production deployment/live smoke.
 
+## Active
+
+### v4.7 Payment Production Activation And Provider Automation
+
+**Status:** Active planning
+**Started:** 2026-06-12
+**Roadmap:** `.planning/milestones/v4.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.7-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/156-payment-production-activation-contract-and-provider-readiness/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Turn the v4.4 payment readiness foundation into controlled production activation with provider-readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 156: Payment Production Activation Contract And Provider Readiness.
+- Phase 157: Live Provider Readiness API Checks.
+- Phase 158: Direct Refund Execution And Finance Handoff.
+- Phase 159: Production Webhook Registration And Rollout Controls.
+- Phase 160: v4.7 Payment Activation Release Gate.
+
+Feature priorities:
+
+- Define live Stripe/TWINT credential, price, capability, webhook, finance, and rollout acceptance.
+- Add admin-only provider-readiness API checks.
+- Add controlled direct refund execution and finance handoff export.
+- Add webhook readiness and independent rollout controls for checkout/refunds.
+- Close with focused payment activation release evidence.
+
 ### v1.0 Parent Portal Real Data Integration
 
 **Status:** Shipped 2026-06-02
@@ -961,31 +992,5 @@ Key accomplishments:
 
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
-### v4.6 Rich Curriculum Authoring And Analytics Foundation
-
-**Status:** Active research-first planning
-**Started:** 2026-06-12
-**Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
-**Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
-**Research:** `.planning/research/SUMMARY.md`
-**Goal:** Build internal curriculum authoring, QA, publication lifecycle, rollback/archive safety, and bounded content-quality analytics on top of the existing curriculum and adaptive-learning foundations.
-**Phases:** 4
-**Plans:** 0/4 complete
-**Requirements:** 0/4 complete
-
-Planned phases:
-
-- Phase 152: Curriculum Authoring Contract And QA Workflow.
-- Phase 153: Admin Lesson And Exercise Authoring MVP.
-- Phase 154: Learning Analytics And Content Quality Signals.
-- Phase 155: v4.6 Curriculum Operations Release Gate.
-
-Feature priorities:
-
-- Define stable public IDs versus immutable authoring versions, review state machines, publish manifests, validation rules, and preview/published boundaries.
-- Add admin/tutor authoring flows with draft/review/publish/archive/rollback, worklist visibility, and append-only audit.
-- Expose bounded aggregate content-quality analytics for weak topics, confusing exercises, stale lessons, content gaps, and assignment-to-content feedback.
-- Verify lifecycle safety, draft isolation, rollback/archive correctness, analytics stability, and existing v3.8/v4.0 compatibility.
-
 ---
-*Last updated: 2026-06-12 after v4.6 research-first roadmap refresh*
+*Last updated: 2026-06-12 after selecting v4.7 payment production activation*

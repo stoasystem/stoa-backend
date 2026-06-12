@@ -66,6 +66,8 @@ The completed-local v4.5 milestone connects support-safe evidence packages to ap
 
 The completed-local v4.6 milestone adds internal curriculum authoring, QA lifecycle, publish/rollback/archive safety, and bounded aggregate content-quality analytics while preserving published-only student/parent curriculum reads.
 
+The active v4.7 milestone turns the v4.4 payment readiness foundation into production activation and provider automation: live Stripe/TWINT readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -74,7 +76,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation on 2026-06-12 (local backend release gate)
-**Active milestone:** Ready for next milestone planning
+**Active milestone:** v4.7 Payment Production Activation And Provider Automation
 
 Delivered:
 
@@ -193,7 +195,7 @@ Completed phases:
 - Phase 150: Operator Queue And Handoff Status Visibility.
 - Phase 151: v4.5 Support Integration Release Gate.
 
-## Current Milestone: v4.6 Rich Curriculum Authoring And Analytics Foundation
+## Latest Completed Milestone: v4.6 Rich Curriculum Authoring And Analytics Foundation
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
@@ -209,9 +211,26 @@ Requirements: `.planning/REQUIREMENTS.md`
 - Learning analytics and content quality signals.
 - v4.6 release gate with lifecycle, analytics, docs, and next-milestone recommendation evidence.
 
-This is now the active milestone because v3.8 created curriculum catalog/exercise-bank foundations and v4.0 added adaptive learning signals, but internal content authoring, QA lifecycle, and actionable content analytics remain operational gaps.
-
 Outcome: v4.6 completed the backend contract, authoring lifecycle APIs, bounded analytics, full local pytest/Ruff release gate, and next-milestone recommendation. Payment production activation/provider automation is the recommended next milestone.
+
+## Current Milestone: v4.7 Payment Production Activation And Provider Automation
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+
+**Status:** Active planning.
+
+**Goal:** Turn the v4.4 payment readiness foundation into controlled production activation with provider-readiness checks, webhook registration readiness, direct refund execution, finance handoff, and explicit rollout controls.
+
+**Target features:**
+
+- Payment production activation contract and provider readiness.
+- Live provider readiness API checks.
+- Direct refund execution and finance handoff.
+- Production webhook registration and rollout controls.
+- v4.7 payment activation release gate.
+
+This is now the active milestone because real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval.
 
 ## Requirements
 
@@ -612,7 +631,8 @@ Known current resources:
 | Start v4.3 with frontend mobile and visual localization rollout | v4.1 delivered backend locale/mobile contracts and `/Users/zhdeng/stoa-frontend` exists; the next visible product gap is mobile-responsive UI and English/German visual localization | Complete locally - frontend release gate passed |
 | Start v4.4 with live payment provider rollout | v3.9 delivered the local Stripe-first billing MVP, but `stoa_docs` still has business-critical payment gaps around live credentials, checkout/webhook verification, Stripe-backed TWINT rollout, refunds, invoices, tax/accounting, and dunning | Complete locally - backend release gate passed |
 | Start v4.5 with support evidence integrations | Support handoff packages already exist, but approved destination integration and operator-visible handoff status remain manual gaps | Complete locally - backend release gate passed |
-| Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Planned after v4.5 |
+| Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Complete locally - backend release gate passed |
+| Start v4.7 payment production activation | v4.4 delivered local payment readiness, but live provider activation still needs approved Stripe/TWINT readiness checks, webhook registration, direct refunds, finance handoff, and explicit rollout controls | Active - milestone initialized |
 
 ## Evolution
 
@@ -632,4 +652,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after starting v4.6 curriculum authoring and analytics milestone*
+*Last updated: 2026-06-12 after selecting v4.7 payment production activation*

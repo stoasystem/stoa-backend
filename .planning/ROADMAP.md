@@ -1,121 +1,137 @@
-# Roadmap: v4.6 Rich Curriculum Authoring And Analytics Foundation
+# Roadmap: v4.7 Payment Production Activation And Provider Automation
 
-**Status:** Complete local backend release gate
+**Status:** Active planning
 **Created:** 2026-06-12
-**Research:** `.planning/research/SUMMARY.md`
+**Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
 
 ## Goal
 
-Build an internal curriculum operations layer on top of the v3.8 catalog and v4.0 adaptive-learning signals: authoring, QA, publication lifecycle, rollback/archive safety, and bounded content analytics.
+Turn the v4.4 payment readiness foundation into controlled production activation: approved live Stripe/TWINT credentials, provider-readiness API checks, direct refund execution, webhook registration readiness, finance handoff, and explicit rollout controls.
 
 ## Execution Bias
 
-Keep the existing FastAPI/Pydantic/DynamoDB stack. Do not build a broad CMS, BI platform, workflow engine, search stack, collaborative editor, or auto-publish automation. Protect existing student/parent/tutor published curriculum, progress, assignments, and adaptive-memory flows before adding analytics.
+Build production payment activation features directly. Keep safety checks scoped to payment activation boundaries: live credentials, checkout gates, refund execution, webhook registration, and finance evidence. Do not spend this milestone on broad unrelated security testing.
 
 ## Phases
 
-- [x] **Phase 152: Curriculum Authoring Contract And QA Workflow** - Define stable public IDs versus immutable versions, lifecycle state machines, validation rules, publish manifests, role boundaries, and legacy-readiness rules.
-- [x] **Phase 153: Admin Lesson And Exercise Authoring MVP** - Implement draft/review/publish/archive/rollback authoring workflows with published-only student reads, immutable versions, worklist visibility, and append-only audit evidence.
-- [x] **Phase 154: Learning Analytics And Content Quality Signals** - Add bounded analytics signal capture and aggregate views for confusing exercises, weak topics, stale lessons, content gaps, and assignment-to-content feedback.
-- [x] **Phase 155: v4.6 Curriculum Operations Release Gate** - Verify lifecycle safety, draft isolation, publish/rollback/archive behavior, analytics stability, docs, and next-milestone recommendation.
+- [ ] **Phase 156: Payment Production Activation Contract And Provider Readiness** - Define live credential ownership, TWINT capability validation, price mapping, webhook registration, finance acceptance, rollout gates, and provider automation targets.
+- [ ] **Phase 157: Live Provider Readiness API Checks** - Add admin-only readiness checks for credentials, price mapping, TWINT eligibility, webhook endpoint state, refund capability, and accounting metadata.
+- [ ] **Phase 158: Direct Refund Execution And Finance Handoff** - Add controlled refund execution, idempotency, audit evidence, billing projection updates, and finance handoff export.
+- [ ] **Phase 159: Production Webhook Registration And Rollout Controls** - Verify webhook registration requirements, expose rollout controls for checkout/refunds, and capture readiness evidence.
+- [ ] **Phase 160: v4.7 Payment Activation Release Gate** - Verify provider readiness, refund execution, finance handoff, rollout controls, docs, and next milestone recommendation.
 
 ## Phase Details
 
-### Phase 152: Curriculum Authoring Contract And QA Workflow
+### Phase 156: Payment Production Activation Contract And Provider Readiness
 
-**Goal**: Define the curriculum operations contract before any published curriculum mutation is implemented.
-**Depends on**: v3.8 curriculum catalog/exercise bank; v4.0 adaptive-learning memory and assignments
-**Requirements**: CURROPS-01
+**Goal**: Define the production payment activation contract before enabling provider automation or direct refund mutation.
+**Depends on**: v4.4 payment readiness foundation and v4.6 closeout
+**Requirements**: PAYACT-01
 **Success Criteria** (what must be TRUE):
 
-  1. Stable public `lesson_id` / `exercise_id` values are separated from immutable authoring `version_id` values.
-  2. Curriculum content, QA review outcomes, assignment state, and AI draft acceptance have separate allowed-transition matrices with role requirements and refusal reasons.
-  3. Publish units and manifests define how lesson/exercise bundles publish, roll back, archive, and preserve audit evidence without partial mixed states.
-  4. Validation rules cover required content fields, answer keys, hints, difficulty, language metadata, subject/topic bindings, and legacy v3.8 readiness.
-  5. Student/parent published-only visibility and admin/tutor preview boundaries are explicit.
+  1. Live credential ownership, injection path, redacted validation, and blocker states are documented.
+  2. Standard/Premium live price IDs, CHF expectations, and TWINT capability checks are documented.
+  3. Webhook endpoint registration requirements and required event set are documented.
+  4. Finance acceptance expectations for invoice/refund/tax/dunning/reconciliation evidence are documented.
+  5. Phase 157 through Phase 160 implementation targets are explicit.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 152-01: Define curriculum authoring contract and QA workflow.
+- [ ] 156-01: Define payment production activation and provider readiness contract.
 
-### Phase 153: Admin Lesson And Exercise Authoring MVP
+### Phase 157: Live Provider Readiness API Checks
 
-**Goal**: Implement internal authoring workflows that can safely create, review, publish, archive, and roll back lessons/exercises without leaking drafts or breaking published reads.
-**Depends on**: Phase 152
-**Requirements**: CURROPS-02
+**Goal**: Add admin-only provider readiness checks that verify production payment setup without creating real charges by default.
+**Depends on**: Phase 156
+**Requirements**: PAYACT-02
 **Success Criteria** (what must be TRUE):
 
-  1. Dedicated curriculum ops models, repository, service, and admin/tutor router exist for draft/review/publish/archive/rollback flows.
-  2. Immutable version snapshots, mutable summary/published pointers, append-only audit events, and worklist visibility are persisted in the existing DynamoDB table.
-  3. Publish and rollback use compare-and-set semantics and update published projections while preserving stable public IDs.
-  4. Student/parent catalog, lesson, exercise, progress, and assignment reads remain published-only while draft/review content exists.
-  5. Archive is guarded against active assignments and required historical references unless a safe migration/repoint path exists.
-  6. Focused tests prove legal/illegal transitions, draft isolation, publish idempotency, rollback/archive behavior, audit evidence, and no student/parent draft leakage.
+  1. Readiness checks cover credential mode, price mapping, TWINT eligibility, webhook endpoint readiness, refund capability, and accounting metadata availability.
+  2. Missing credentials and provider API failures return redacted blocker states.
+  3. Admin responses expose actionable operator status without secrets or raw provider payloads.
+  4. Focused tests cover missing/test/live/provider-failure/readiness-success fixtures.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 153-01: Implement admin curriculum authoring and publish safety MVP.
+- [ ] 157-01: Implement live provider readiness API checks.
 
-### Phase 154: Learning Analytics And Content Quality Signals
+### Phase 158: Direct Refund Execution And Finance Handoff
 
-**Goal**: Add bounded operational analytics that help staff prioritize curriculum QA without adding a warehouse or exposing student-sensitive detail.
-**Depends on**: Phase 153
-**Requirements**: CURROPS-03
+**Goal**: Add controlled refund execution and finance handoff export.
+**Depends on**: Phase 157
+**Requirements**: PAYACT-03
 **Success Criteria** (what must be TRUE):
 
-  1. Curriculum analytics signals are recorded or materialized from practice attempts, wrong answers, lesson completion, assignment outcomes, skips, adaptive memory, and publish/archive lifecycle events.
-  2. Analytics rows are keyed by stable public content IDs and immutable version IDs so edits and rollback do not rewrite historical interpretation.
-  3. Admin/tutor aggregate views expose weak topics, confusing exercises, stale lessons, content gaps, assignment-to-content feedback, and high-impact review priorities.
-  4. Metrics are segmented by source type, including self-practice, reviewed assignment, AI-draft assignment, skip, retry, and lesson completion.
-  5. Analytics avoid request-time full table scans through bounded aggregate rows, windows, pagination, and recompute/backfill helpers where needed.
-  6. Responses preserve aggregate privacy boundaries and do not expose raw student answers, answer keys, or per-student surveillance data.
+  1. Refund execution requires eligible billing state, provider reference, admin authorization, operator reason, and idempotency key.
+  2. Refund result, provider reference, lifecycle status, billing projection, and audit evidence are persisted.
+  3. Finance handoff export includes invoice, refund, tax/accounting, payment method, reconciliation, and dunning metadata.
+  4. Tests cover approval, refusal, idempotency, provider failure, and export shape.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 154-01: Add curriculum analytics and content quality signals.
+- [ ] 158-01: Implement direct refund execution and finance handoff export.
 
-### Phase 155: v4.6 Curriculum Operations Release Gate
+### Phase 159: Production Webhook Registration And Rollout Controls
 
-**Goal**: Close v4.6 with verification that authoring, publish safety, archive/rollback, analytics, and compatibility with existing curriculum/adaptive flows are locally release-ready.
-**Depends on**: Phase 154
-**Requirements**: VERIFY-29
+**Goal**: Add production webhook readiness and rollout controls for checkout and refunds.
+**Depends on**: Phase 158
+**Requirements**: PAYACT-04
 **Success Criteria** (what must be TRUE):
 
-  1. Focused backend gates pass for authoring lifecycle, draft isolation, publish/rollback/archive safety, and analytics aggregation.
-  2. Existing student/parent/tutor curriculum, practice, progress, and adaptive assignment flows remain compatible with published projections.
-  3. Release evidence captures role boundaries, privacy controls, publish idempotency, rollback correctness, archive refusal/guard behavior, analytics stability, and no draft leakage.
-  4. Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.6 scope and deferred CMS/BI/automation work.
-  5. Next-milestone recommendation is documented with options across adaptive sequencing, native/mobile expansion, notification production rollout, payment activation, support provider expansion, and deeper analytics.
+  1. Webhook readiness checks verify endpoint mode, secret availability, required event subscriptions, and last observed event status.
+  2. Live checkout and direct refunds can be enabled/disabled independently through explicit rollout controls.
+  3. Rollout state is visible to admins without exposing secrets.
+  4. Release evidence can distinguish activated, blocked, deferred, and canary-only rollout states.
 
-**Plans**: 1/1 plans complete
+**Plans**: 0/1 plans complete
 
 Plans:
 
-- [x] 155-01: Verify v4.6 curriculum operations release gate.
+- [ ] 159-01: Implement webhook readiness and rollout controls.
+
+### Phase 160: v4.7 Payment Activation Release Gate
+
+**Goal**: Close v4.7 with focused verification and updated remaining-feature planning.
+**Depends on**: Phase 159
+**Requirements**: VERIFY-30
+**Success Criteria** (what must be TRUE):
+
+  1. Focused backend tests and relevant checks pass or isolate documented pre-existing failures.
+  2. Provider readiness, refund execution, finance handoff, webhook registration, and rollout controls are verified.
+  3. Docs and feature-gap audit reflect completed v4.7 scope and live activation status.
+  4. Next milestone recommendation is updated from the remaining feature queue.
+
+**Plans**: 0/1 plans complete
+
+Plans:
+
+- [ ] 160-01: Verify v4.7 payment activation release gate.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 152 Curriculum Authoring Contract And QA Workflow | v4.6 | 1/1 | Complete | 2026-06-12 |
-| 153 Admin Lesson And Exercise Authoring MVP | v4.6 | 1/1 | Complete | 2026-06-12 |
-| 154 Learning Analytics And Content Quality Signals | v4.6 | 1/1 | Complete | 2026-06-12 |
-| 155 v4.6 Curriculum Operations Release Gate | v4.6 | 1/1 | Complete | 2026-06-12 |
+| 156 Payment Production Activation Contract And Provider Readiness | v4.7 | 0/1 | Planned | - |
+| 157 Live Provider Readiness API Checks | v4.7 | 0/1 | Planned | - |
+| 158 Direct Refund Execution And Finance Handoff | v4.7 | 0/1 | Planned | - |
+| 159 Production Webhook Registration And Rollout Controls | v4.7 | 0/1 | Planned | - |
+| 160 v4.7 Payment Activation Release Gate | v4.7 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURROPS-01 | Phase 152 | Complete |
-| CURROPS-02 | Phase 153 | Complete |
-| CURROPS-03 | Phase 154 | Complete |
-| VERIFY-29 | Phase 155 | Complete |
+| PAYACT-01 | Phase 156 | Planned |
+| PAYACT-02 | Phase 157 | Planned |
+| PAYACT-03 | Phase 158 | Planned |
+| PAYACT-04 | Phase 159 | Planned |
+| VERIFY-30 | Phase 160 | Planned |
 
 ---
-*Last updated: 2026-06-12 after v4.6 local backend release gate.*
+*Last updated: 2026-06-12 after selecting v4.7 payment production activation.*

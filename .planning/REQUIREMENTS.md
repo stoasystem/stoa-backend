@@ -1,95 +1,97 @@
-# v4.6 Requirements: Rich Curriculum Authoring And Analytics Foundation
+# Requirements: v4.7 Payment Production Activation And Provider Automation
 
-**Status:** Complete local backend release gate
+**Milestone:** v4.7
+**Status:** Active planning
 **Created:** 2026-06-12
-**Source:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`, v4.6 research artifacts
 
 ## Goal
 
-Turn STOA's curriculum catalog and exercise-bank foundation into an operable authoring, QA, and analytics workflow for internal curriculum improvement.
+Turn the v4.4 Stripe/TWINT readiness foundation into controlled production payment activation. v4.7 focuses on approved live provider credentials, TWINT capability validation, webhook endpoint registration, direct refund execution, provider readiness checks, finance acceptance, and rollout evidence.
+
+This is still an internal development milestone. Prioritize feature construction and provider automation. Keep checks focused on payment activation boundaries and do not broaden into unrelated security/compliance work.
 
 ## Requirements
 
-### CURROPS-01 Curriculum Authoring Contract And QA Workflow
+### PAYACT-01 Payment Production Activation Contract And Provider Readiness
 
-Internal curriculum operators have a precise contract for editing lessons and exercises without breaking published catalog, progress, assignment, or adaptive-memory semantics.
-
-Acceptance criteria:
-
-- Define stable public `lesson_id` / `exercise_id` semantics separately from immutable authoring `version_id` values.
-- Define lifecycle states and allowed transitions for curriculum content, QA review outcomes, assignment state, and AI draft acceptance without overloading one generic state machine.
-- Define author, reviewer, publisher/admin, tutor, and student-visible permission boundaries.
-- Define publish-unit and manifest rules for lesson-plus-exercise bundles, including conditional publish, rollback, archive, and audit requirements.
-- Define validation requirements for content completeness, answer keys, hints, difficulty, locale/language metadata, subject/topic bindings, and legacy v3.8 content readiness.
-- Require student/parent routes to read published projections only; draft/review preview remains admin/tutor-only.
-- Preserve compatibility with existing v3.8 curriculum catalog/progress APIs and v4.0 assignments/adaptive memory.
-
-### CURROPS-02 Admin Lesson And Exercise Authoring MVP
-
-Admins and authorized tutors can create, review, publish, archive, and roll back lesson/exercise content safely.
+Implementers have a concrete production activation contract before enabling live payment operations.
 
 Acceptance criteria:
 
-- Add dedicated curriculum ops models, repository, and service layers rather than expanding published curriculum read logic directly.
-- Add role-guarded admin/tutor endpoints for worklist, create/edit draft, submit review, approve/request changes, publish, archive, rollback, and preview.
-- Persist immutable version snapshots, mutable summary/published pointers, append-only audit events, and optional worklist feed rows in the existing DynamoDB table.
-- Publish and rollback use compare-and-set semantics and update published projections without changing stable public IDs.
-- Student-visible catalog, lesson, exercise, progress, and assignment reads remain stable while draft/review content exists.
-- Archive refuses or guards content with active assignments or required historical references unless a safe migration/repoint path exists.
-- Focused tests prove legal/illegal transitions, draft isolation, publish idempotency, rollback/archive behavior, audit evidence, and no student/parent draft leakage.
+- Contract identifies live Stripe credential ownership, injection path, runtime validation, and redacted readiness evidence.
+- Contract identifies live Standard/Premium price IDs, CHF currency expectations, TWINT eligibility requirements, and provider capability checks.
+- Contract defines webhook endpoint registration requirements, webhook secret ownership, and event set required for launch.
+- Contract defines finance acceptance requirements for invoices, refunds, tax/accounting handoff, dunning, and reconciliation evidence.
+- Contract defines explicit rollout gates for live checkout, direct refund execution, and provider-readiness automation.
 
-### CURROPS-03 Learning Analytics And Content Quality Signals
+### PAYACT-02 Live Provider Readiness API Checks
 
-Operators can see bounded content-health signals that prioritize curriculum QA without adding a warehouse or exposing student-sensitive details.
+Operators can verify provider readiness without exposing secrets or creating real customer charges by default.
 
 Acceptance criteria:
 
-- Record or materialize curriculum analytics signals from practice attempts, wrong answers, lesson completion, assignment outcomes, skips, adaptive memory, and publish/archive lifecycle events.
-- Keep analytics keyed by stable public content IDs and immutable version IDs so edits and rollback do not rewrite historical interpretation.
-- Provide bounded aggregate views for weak topics, confusing exercises, stale lessons, content coverage gaps, assignment-to-content feedback, and high-impact review priorities.
-- Segment metrics by source type, such as catalog self-practice, reviewed assignment, AI-draft assignment, skip, retry, and lesson completion.
-- Avoid request-time full table scans by using same-table aggregate rows, bounded windows, pagination, and recompute/backfill helpers where needed.
-- Preserve role boundaries with aggregate-only responses, cohort thresholds where relevant, and no raw student answers or answer-key leaks.
+- Backend exposes admin-only provider readiness checks for credential mode, price mapping, webhook endpoint readiness, TWINT eligibility, refund capability, and accounting metadata availability.
+- Readiness checks use provider APIs or controlled adapters where credentials are present, and return fail-closed blocker states when credentials are absent.
+- Responses redact secrets, raw provider payloads, card/payment details, and customer-sensitive payment data.
+- Tests cover missing credentials, test credentials, live-ready blocked state, provider API failure, and readiness success fixtures.
 
-### VERIFY-29 v4.6 Curriculum Operations Release Gate
+### PAYACT-03 Direct Refund Execution And Finance Handoff
 
-v4.6 closes with verification that curriculum authoring and analytics are safe for local backend release.
+Operators can execute approved refund flows and export finance handoff evidence under explicit controls.
 
 Acceptance criteria:
 
-- Focused backend checks pass for authoring lifecycle, draft isolation, publish/rollback/archive safety, and analytics aggregation.
-- Existing student/parent/tutor curriculum, practice, progress, and adaptive assignment flows remain compatible with published projections.
-- Release evidence captures role boundaries, privacy controls, publish idempotency, rollback correctness, archive refusal/guard behavior, analytics stability, and no draft leakage.
-- Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.6 scope and deferred broader CMS/BI/automation work.
-- Recommend whether the next milestone should target adaptive sequencing, native/mobile expansion, notification production rollout, payment activation, support provider expansion, or deeper analytics.
+- Refund execution requires eligible billing state, provider reference, operator reason, idempotency key, and admin authorization.
+- Refund execution persists request, result, provider reference, lifecycle status, and audit evidence.
+- Parent/admin billing views reflect refund status without exposing sensitive provider payloads.
+- Finance handoff export includes invoice, refund, tax/accounting, payment method, reconciliation, and dunning metadata needed for Swiss operations.
+- Tests cover approved refund, ineligible refund refusal, duplicate/idempotent refund request, provider failure, and handoff export shape.
+
+### PAYACT-04 Production Webhook Registration And Rollout Controls
+
+Live webhook and checkout rollout controls are ready for production activation.
+
+Acceptance criteria:
+
+- Webhook registration/readiness checks verify endpoint mode, secret availability, required event subscriptions, and last observed event status.
+- Live checkout remains blocked until explicit rollout approval and provider readiness checks pass.
+- Rollout controls can enable/disable live checkout and refund execution independently.
+- Release evidence captures live-readiness status, blockers, and whether any approved live smoke occurred.
+
+### VERIFY-30 v4.7 Payment Activation Release Gate
+
+v4.7 closes with payment activation evidence and updated remaining-feature planning.
+
+Acceptance criteria:
+
+- Focused backend tests and relevant static checks pass or isolate documented pre-existing failures.
+- Provider readiness, refund execution, finance handoff, webhook registration, and rollout controls are verified.
+- Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v4.7 work.
+- Final audit records live activation state: activated, blocked, deferred, or approved canary-only.
+- Next milestone recommendation is updated from the remaining feature queue.
 
 ## Future Requirements
 
-- Full content management system.
-- Collaborative authoring and comments.
-- Automated content generation into published catalog without review.
-- Long-term adaptive sequencing across all curriculum content.
-- Full BI/data warehouse integration.
-- Workflow engine, broad search stack, or warehouse-backed analytics platform.
-- Rich WYSIWYG authoring and collaborative editing.
-- Staged rollout/experimentation platform beyond simple preview/publish safety.
+- Support provider expansion and CRM automation beyond the v4.5 internal queue path.
+- Production notification and native delivery rollout.
+- Rich curriculum editor UI and production content migration.
+- Native mobile app rollout and full localization governance.
+- Long-term adaptive sequencing and warehouse-backed analytics.
 
 ## Out of Scope
 
-- Publishing AI-generated exercises without review.
-- Replacing existing curriculum catalog/progress APIs wholesale.
-- Broad compliance analytics unrelated to learning operations.
-- Native mobile authoring.
-- Large-scale data warehouse work before operational analytics prove value.
-- Hard deletion of published lessons/exercises.
-- Per-student surveillance dashboards for curriculum authors.
-- Generic report-builder or BI dashboard scope.
+- Unapproved real customer charges.
+- Broad CRM or marketing automation.
+- Multi-provider billing beyond Stripe-backed subscription operations unless a later milestone selects it.
+- Full accounting system replacement.
+- Native app payment flow changes.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURROPS-01 | Phase 152 | Complete |
-| CURROPS-02 | Phase 153 | Complete |
-| CURROPS-03 | Phase 154 | Complete |
-| VERIFY-29 | Phase 155 | Complete |
+| PAYACT-01 | Phase 156 | Planned |
+| PAYACT-02 | Phase 157 | Planned |
+| PAYACT-03 | Phase 158 | Planned |
+| PAYACT-04 | Phase 159 | Planned |
+| VERIFY-30 | Phase 160 | Planned |

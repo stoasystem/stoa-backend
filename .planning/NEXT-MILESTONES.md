@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-12 after completing v4.6
+**Updated:** 2026-06-12 after selecting v4.7
 **Mode:** product functionality first
 
 ## v4.4 Live Payment Provider Rollout
@@ -66,15 +66,24 @@ Scope:
 - Prioritize author review, content QA, and actionable learning analytics before deeper compliance automation.
 - Full production notification rollout remains an eligible alternative next milestone if infrastructure/provider/frontend ownership becomes available first.
 
-## Recommended Next: Payment Production Activation And Provider Automation
+## v4.7 Payment Production Activation And Provider Automation
 
-**Status:** Recommended next milestone
+**Status:** Active planning
+**Roadmap:** `.planning/milestones/v4.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.7-REQUIREMENTS.md`
 
 Goal: turn the v4.4 Stripe/TWINT readiness foundation into approved production activation.
 
 Candidate phases:
 
-- Credential and provider capability verification for live Stripe and TWINT.
-- Webhook endpoint registration and production readiness smoke.
-- Direct refund execution and provider-readiness API checks.
-- Finance/accounting acceptance and explicit rollout approval.
+- Phase 156: Payment Production Activation Contract And Provider Readiness.
+- Phase 157: Live Provider Readiness API Checks.
+- Phase 158: Direct Refund Execution And Finance Handoff.
+- Phase 159: Production Webhook Registration And Rollout Controls.
+- Phase 160: v4.7 Payment Activation Release Gate.
+
+Scope:
+
+- Add provider-readiness checks and controlled activation APIs around live Stripe/TWINT setup.
+- Add direct refund execution and finance handoff evidence.
+- Keep real customer charging gated on explicit approval.

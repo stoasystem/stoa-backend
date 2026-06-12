@@ -21,7 +21,7 @@
 
 ## Remaining Feature Build Queue
 
-1. **Payment Production Activation And Provider Automation**.
+1. **v4.7 Payment Production Activation And Provider Automation** - active.
    Complete approved live Stripe credentials, TWINT account validation, webhook endpoint registration, direct refund execution, provider-readiness API checks, and accounting/support destination integrations.
 
 2. **Support Provider Expansion And CRM Automation**.
@@ -35,4 +35,4 @@
 
 ## Current Planning Decision
 
-v4.6 is complete after research-first planning and local backend release-gate verification. The shipped scope is curriculum operations foundation: authoring contract, admin/tutor lifecycle APIs, compare-and-set publish/rollback, archive guards, audit evidence, bounded analytics signals, aggregate content-quality views, and full backend regression evidence. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval, so payment production activation is the recommended next milestone.
+v4.6 is complete after research-first planning and local backend release-gate verification. The shipped scope is curriculum operations foundation: authoring contract, admin/tutor lifecycle APIs, compare-and-set publish/rollback, archive guards, audit evidence, bounded analytics signals, aggregate content-quality views, and full backend regression evidence. Real customer charging remains blocked on approved Stripe live credentials, webhook endpoint registration, TWINT capability confirmation, finance acceptance, and explicit rollout approval, so v4.7 payment production activation is now the active next milestone.

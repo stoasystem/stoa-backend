@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-12 after completing v4.6 curriculum operations release gate
+**Updated:** 2026-06-12 after selecting v4.7 payment production activation
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -39,6 +39,8 @@ v4.4 completed the local live payment provider rollout foundation for Stripe/TWI
 v4.5 completed the local backend support integration and operations handoff scope: support destination contract/credential readiness, fail-closed `internal_queue` delivery behind `SUPPORT_INTERNAL_QUEUE_APPROVED`, admin-only delivery queue/detail visibility, provider-failure lifecycle evidence, imported support handoff frontend evidence, and release-gate documentation. Approved third-party provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging remain future scope.
 
 v4.6 completed the local backend rich curriculum authoring and analytics foundation: stable public ID versus immutable version contract, separate authoring/review/publish lifecycle, admin/tutor authoring endpoints, compare-and-set publish/rollback, archive guards, append-only audit evidence, bounded curriculum analytics signals, aggregate content-quality views, full backend regression evidence, and release-gate documentation. Rich editor UI, production content migration, warehouse BI, automatic AI publication, and full adaptive sequencing remain future scope.
+
+v4.7 is now selected as the active next milestone because payment production activation remains the highest business-critical `stoa_docs` gap after v4.6. The selected scope is live Stripe/TWINT provider readiness checks, webhook registration readiness, direct refund execution, finance handoff, and rollout controls.
 
 ## Completed Or Largely Complete
 
@@ -169,7 +171,7 @@ v4.6 completed the local backend rich curriculum authoring and analytics foundat
 
 ## Remaining Feature Build Order
 
-1. Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
+1. v4.7 Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
 2. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
 3. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
 4. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
