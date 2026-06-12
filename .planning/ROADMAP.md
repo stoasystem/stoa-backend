@@ -1,6 +1,6 @@
 # Roadmap: v4.8 Support Provider Expansion And CRM Automation
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-06-12
 **Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
 
@@ -18,7 +18,7 @@ Build support operations functionality directly. Keep checks scoped to destinati
 - [x] **Phase 162: Approved Third-Party Support Adapter And Delivery Worker** - Add adapter configuration/readiness and delivery worker behavior for provider ticket creation while preserving internal queue fallback. (completed 2026-06-12)
 - [x] **Phase 163: Retry Workers And Two-Way Ticket Synchronization** - Add bounded retry behavior and provider ticket status synchronization with stale/duplicate/conflict handling. (completed 2026-06-12)
 - [x] **Phase 164: Support SLA Analytics And Controlled CRM Messaging** - Add support SLA aggregates, overdue/failure analytics, and template-gated customer/support messaging. (completed 2026-06-12)
-- [ ] **Phase 165: v4.8 Support Provider Release Gate And Operations Audit** - Verify v4.8 behavior, update docs, record provider activation state, and select the next feature milestone.
+- [x] **Phase 165: v4.8 Support Provider Release Gate And Operations Audit** - Verify v4.8 behavior, update docs, record provider activation state, and select the next feature milestone. (completed 2026-06-12)
 
 ## Phase Details
 
@@ -111,7 +111,7 @@ Plans:
 
 Plans:
 
-- [ ] 165-01: Verify v4.8 support provider release gate.
+- [x] 165-01: Verify v4.8 support provider release gate.
 
 ## Progress
 
@@ -121,7 +121,7 @@ Plans:
 | 162 Approved Third-Party Support Adapter And Delivery Worker | v4.8 | 1/1 | Complete    | 2026-06-12 |
 | 163 Retry Workers And Two-Way Ticket Synchronization | v4.8 | 1/1 | Complete    | 2026-06-12 |
 | 164 Support SLA Analytics And Controlled CRM Messaging | v4.8 | 1/1 | Complete    | 2026-06-12 |
-| 165 v4.8 Support Provider Release Gate And Operations Audit | v4.8 | 0/1 | Planned | - |
+| 165 v4.8 Support Provider Release Gate And Operations Audit | v4.8 | 1/1 | Complete    | 2026-06-12 |
 
 ## Traceability
 
@@ -131,7 +131,7 @@ Plans:
 | SUPPORTPROV-02 | Phase 162 | Complete |
 | SUPPORTPROV-03 | Phase 163 | Complete |
 | SUPPORTPROV-04 | Phase 164 | Complete |
-| VERIFY-31 | Phase 165 | Planned |
+| VERIFY-31 | Phase 165 | Complete |
 
 ---
-*Last updated: 2026-06-12 after selecting v4.8 support provider expansion and CRM automation.*
+*Last updated: 2026-06-12 after completing v4.8 support provider expansion and CRM automation.*
