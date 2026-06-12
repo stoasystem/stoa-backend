@@ -1,6 +1,6 @@
 # v4.6 Requirements: Rich Curriculum Authoring And Analytics Foundation
 
-**Status:** Active research-first planning
+**Status:** Complete local backend release gate
 **Created:** 2026-06-12
 **Source:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`, v4.6 research artifacts
 
@@ -92,4 +92,4 @@ Acceptance criteria:
 | CURROPS-01 | Phase 152 | Complete |
 | CURROPS-02 | Phase 153 | Complete |
 | CURROPS-03 | Phase 154 | Complete |
-| VERIFY-29 | Phase 155 | Planned |
+| VERIFY-29 | Phase 155 | Complete |

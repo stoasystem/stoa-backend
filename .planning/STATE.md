@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v4.6
 milestone_name: Rich Curriculum Authoring And Analytics Foundation
-status: in_progress
+status: complete
 last_updated: "2026-06-12T09:51:32.000Z"
 last_activity: 2026-06-12
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 155 - v4.6 Curriculum Operations Release Gate
-Plan: 155-01
-Status: Ready for Phase 155 planning
-Last activity: 2026-06-12 — Phase 154 curriculum analytics and content quality signals completed
+Phase: v4.6 complete
+Plan: —
+Status: Ready for milestone archive / next milestone planning
+Last activity: 2026-06-12 — Phase 155 v4.6 curriculum operations release gate passed
 
 ## Accumulated Context
 
@@ -55,10 +55,11 @@ Last activity: 2026-06-12 — Phase 154 curriculum analytics and content quality
 - Phase 152 completed the curriculum authoring contract, stable-public-ID versus immutable-version model, separate lifecycle state machines, publish manifest rules, validation requirements, role boundaries, and legacy readiness handoff for Phase 153.
 - Phase 153 completed a dedicated curriculum operations repository/service/admin route layer for draft, review, approve, request changes, publish, rollback, archive, preview, audit, and worklist behavior while preserving published-only student reads.
 - Phase 154 completed bounded curriculum analytics signals and aggregate operator content-quality views with explicit privacy boundaries and no raw student-answer exposure.
+- Phase 155 completed the v4.6 release gate with full backend pytest, full Ruff, milestone audit, release evidence, and next-milestone recommendation.
 
 ### Pending Todos
 
-- Plan Phase 155: v4.6 curriculum operations release gate.
+- Archive v4.6 and start the next milestone when ready.
 
 ### Blockers/Concerns
 
@@ -72,4 +73,4 @@ Last activity: 2026-06-12 — Phase 154 curriculum analytics and content quality
 
 ## Operator Next Steps
 
-- Begin Phase 155 release-gate verification across curriculum authoring, analytics, compatibility, docs, and next-milestone recommendation.
+- Recommended next milestone: Payment Production Activation And Provider Automation.

@@ -1,6 +1,6 @@
 # Roadmap: v4.6 Rich Curriculum Authoring And Analytics Foundation
 
-**Status:** Active research-first planning
+**Status:** Complete local backend release gate
 **Created:** 2026-06-12
 **Research:** `.planning/research/SUMMARY.md`
 
@@ -17,7 +17,7 @@ Keep the existing FastAPI/Pydantic/DynamoDB stack. Do not build a broad CMS, BI 
 - [x] **Phase 152: Curriculum Authoring Contract And QA Workflow** - Define stable public IDs versus immutable versions, lifecycle state machines, validation rules, publish manifests, role boundaries, and legacy-readiness rules.
 - [x] **Phase 153: Admin Lesson And Exercise Authoring MVP** - Implement draft/review/publish/archive/rollback authoring workflows with published-only student reads, immutable versions, worklist visibility, and append-only audit evidence.
 - [x] **Phase 154: Learning Analytics And Content Quality Signals** - Add bounded analytics signal capture and aggregate views for confusing exercises, weak topics, stale lessons, content gaps, and assignment-to-content feedback.
-- [ ] **Phase 155: v4.6 Curriculum Operations Release Gate** - Verify lifecycle safety, draft isolation, publish/rollback/archive behavior, analytics stability, docs, and next-milestone recommendation.
+- [x] **Phase 155: v4.6 Curriculum Operations Release Gate** - Verify lifecycle safety, draft isolation, publish/rollback/archive behavior, analytics stability, docs, and next-milestone recommendation.
 
 ## Phase Details
 
@@ -93,11 +93,11 @@ Plans:
   4. Requirements, roadmap, state, feature-gap audit, and remaining-feature queue reflect completed v4.6 scope and deferred CMS/BI/automation work.
   5. Next-milestone recommendation is documented with options across adaptive sequencing, native/mobile expansion, notification production rollout, payment activation, support provider expansion, and deeper analytics.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 155-01: Verify v4.6 curriculum operations release gate.
+- [x] 155-01: Verify v4.6 curriculum operations release gate.
 
 ## Progress
 
@@ -106,7 +106,7 @@ Plans:
 | 152 Curriculum Authoring Contract And QA Workflow | v4.6 | 1/1 | Complete | 2026-06-12 |
 | 153 Admin Lesson And Exercise Authoring MVP | v4.6 | 1/1 | Complete | 2026-06-12 |
 | 154 Learning Analytics And Content Quality Signals | v4.6 | 1/1 | Complete | 2026-06-12 |
-| 155 v4.6 Curriculum Operations Release Gate | v4.6 | 0/1 | Planned | — |
+| 155 v4.6 Curriculum Operations Release Gate | v4.6 | 1/1 | Complete | 2026-06-12 |
 
 ## Traceability
 
@@ -115,7 +115,7 @@ Plans:
 | CURROPS-01 | Phase 152 | Complete |
 | CURROPS-02 | Phase 153 | Complete |
 | CURROPS-03 | Phase 154 | Complete |
-| VERIFY-29 | Phase 155 | Planned |
+| VERIFY-29 | Phase 155 | Complete |
 
 ---
-*Last updated: 2026-06-12 after v4.6 research-first roadmap refresh.*
+*Last updated: 2026-06-12 after v4.6 local backend release gate.*

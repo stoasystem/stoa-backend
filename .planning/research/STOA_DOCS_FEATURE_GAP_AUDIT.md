@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-12 after completing v4.5 support integration release gate
+**Updated:** 2026-06-12 after completing v4.6 curriculum operations release gate
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -38,6 +38,8 @@ v4.4 completed the local live payment provider rollout foundation for Stripe/TWI
 
 v4.5 completed the local backend support integration and operations handoff scope: support destination contract/credential readiness, fail-closed `internal_queue` delivery behind `SUPPORT_INTERNAL_QUEUE_APPROVED`, admin-only delivery queue/detail visibility, provider-failure lifecycle evidence, imported support handoff frontend evidence, and release-gate documentation. Approved third-party provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging remain future scope.
 
+v4.6 completed the local backend rich curriculum authoring and analytics foundation: stable public ID versus immutable version contract, separate authoring/review/publish lifecycle, admin/tutor authoring endpoints, compare-and-set publish/rollback, archive guards, append-only audit evidence, bounded curriculum analytics signals, aggregate content-quality views, full backend regression evidence, and release-gate documentation. Rich editor UI, production content migration, warehouse BI, automatic AI publication, and full adaptive sequencing remain future scope.
+
 ## Completed Or Largely Complete
 
 - Auth basics: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`.
@@ -63,6 +65,7 @@ v4.5 completed the local backend support integration and operations handoff scop
 - Production notification delivery readiness: production WebSocket/API Gateway contract, durable notification preferences, preference-aware delivery decisions, admin delivery status, digest preview readiness, metadata-safe digest payloads, push-ready preference flags, and clean local release evidence.
 - Frontend mobile and visual localization rollout: selected student, parent, tutor, and admin mobile viewport polish, targeted Playwright coverage, English/German language preference UI backed by locale APIs, `/auth/me` locale refresh behavior, and local frontend release-gate evidence.
 - Support integration and operations handoff: destination contract, controlled `internal_queue` delivery, admin-only delivery queue/detail visibility, provider-failure lifecycle coverage, imported frontend evidence, and local backend release-gate evidence.
+- Curriculum authoring and analytics foundation: stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, audit evidence, bounded content-quality analytics, and aggregate privacy-preserving operator views.
 
 ## v3.0 Closed MVP Gaps
 
@@ -156,21 +159,21 @@ v4.5 completed the local backend support integration and operations handoff scop
 
 ## Phase 2 / Future Expansion
 
-- Live payment-provider rollout with approved production credentials, TWINT production validation, invoices/receipts/refunds, tax/accounting, and dunning.
+- Payment production activation with approved live Stripe credentials, TWINT production validation, webhook registration, direct refund execution, provider readiness checks, and finance acceptance.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics.
-- Automatic student assignment of generated exercises and autonomous tutoring decisions.
-- Long-term adaptive exercise sequencing beyond v3.8 curriculum catalog/progress scope.
+- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions.
+- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
 - Native mobile apps, native push-token registration, and production mobile rollout.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
 - Approved third-party support provider adapters, retry workers, two-way sync, support SLA analytics, and broader CRM/customer messaging automation beyond the v4.5 controlled internal queue path.
 
 ## Remaining Feature Build Order
 
-1. v4.6 Rich curriculum authoring, production content QA, analytics, and deeper compliance operations.
-2. Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
-3. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
-4. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
-5. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+1. Payment production activation and provider automation: approved live Stripe credentials, TWINT account validation, webhook registration, direct refund execution, provider-readiness checks, and finance acceptance.
+2. Support provider expansion beyond v4.5: approved third-party adapters, retry workers, two-way sync, SLA analytics, and broader CRM/customer messaging.
+3. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+4. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+5. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
 
 ## v3.0 Scope Recommendation
 

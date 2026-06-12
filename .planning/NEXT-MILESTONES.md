@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-12 after activating v4.5
+**Updated:** 2026-06-12 after completing v4.6
 **Mode:** product functionality first
 
 ## v4.4 Live Payment Provider Rollout
@@ -25,13 +25,13 @@ Closed scope:
 
 ## v4.5 Support Evidence Integrations And Operations Handoff
 
-**Status:** Active planning
+**Status:** Completed local release gate 2026-06-12
 **Roadmap:** `.planning/milestones/v4.5-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.5-REQUIREMENTS.md`
 
 Goal: connect the existing support-safe evidence packages to approved operational destinations and close the remaining manual handoff gap.
 
-Active phases:
+Completed phases:
 
 - Phase 148: Support Destination Contract And Credential Readiness.
 - Phase 149: Support Evidence Export Destination Integration.
@@ -47,13 +47,13 @@ Scope:
 
 ## v4.6 Rich Curriculum Authoring And Analytics Foundation
 
-**Status:** Planned after v4.5
+**Status:** Completed local release gate 2026-06-12
 **Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
 **Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
 
 Goal: turn the curriculum catalog and exercise-bank foundation into a more operable authoring, QA, and insight workflow.
 
-Candidate phases:
+Completed phases:
 
 - Phase 152: Curriculum Authoring Contract And QA Workflow.
 - Phase 153: Admin Lesson And Exercise Authoring MVP.
@@ -65,3 +65,16 @@ Scope:
 - Build on the v3.8 curriculum hierarchy and v4.0 adaptive learning signals.
 - Prioritize author review, content QA, and actionable learning analytics before deeper compliance automation.
 - Full production notification rollout remains an eligible alternative next milestone if infrastructure/provider/frontend ownership becomes available first.
+
+## Recommended Next: Payment Production Activation And Provider Automation
+
+**Status:** Recommended next milestone
+
+Goal: turn the v4.4 Stripe/TWINT readiness foundation into approved production activation.
+
+Candidate phases:
+
+- Credential and provider capability verification for live Stripe and TWINT.
+- Webhook endpoint registration and production readiness smoke.
+- Direct refund execution and provider-readiness API checks.
+- Finance/accounting acceptance and explicit rollout approval.

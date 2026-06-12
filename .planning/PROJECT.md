@@ -64,6 +64,8 @@ The completed-local v4.4 milestone moved the Stripe-first payment provider MVP t
 
 The completed-local v4.5 milestone connects support-safe evidence packages to approved operational destinations and adds operator-visible handoff status while preserving metadata-only privacy boundaries.
 
+The completed-local v4.6 milestone adds internal curriculum authoring, QA lifecycle, publish/rollback/archive safety, and bounded aggregate content-quality analytics while preserving published-only student/parent curriculum reads.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -71,8 +73,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.5 Support Evidence Integrations And Operations Handoff on 2026-06-12 (local backend release gate)
-**Active milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation
+**Latest completed milestone:** v4.6 Rich Curriculum Authoring And Analytics Foundation on 2026-06-12 (local backend release gate)
+**Active milestone:** Ready for next milestone planning
 
 Delivered:
 
@@ -196,7 +198,7 @@ Completed phases:
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 
-**Status:** Research-first planning.
+**Status:** Completed local backend release gate 2026-06-12.
 
 **Goal:** Add internal curriculum authoring, QA lifecycle, and actionable learning/content analytics on top of the existing curriculum and adaptive-learning foundations.
 
@@ -208,6 +210,8 @@ Requirements: `.planning/REQUIREMENTS.md`
 - v4.6 release gate with lifecycle, analytics, docs, and next-milestone recommendation evidence.
 
 This is now the active milestone because v3.8 created curriculum catalog/exercise-bank foundations and v4.0 added adaptive learning signals, but internal content authoring, QA lifecycle, and actionable content analytics remain operational gaps.
+
+Outcome: v4.6 completed the backend contract, authoring lifecycle APIs, bounded analytics, full local pytest/Ruff release gate, and next-milestone recommendation. Payment production activation/provider automation is the recommended next milestone.
 
 ## Requirements
 

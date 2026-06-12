@@ -2,6 +2,26 @@
 
 ## Completed
 
+### v4.6 Rich Curriculum Authoring And Analytics Foundation
+
+**Status:** Completed local release gate 2026-06-12
+**Audit:** `.planning/milestones/v4.6-MILESTONE-AUDIT.md`
+**Roadmap archive:** `.planning/milestones/v4.6-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v4.6-REQUIREMENTS.md`
+**Phases:** 4
+**Plans:** 4
+**Requirements:** 4/4 v4.6 requirements complete
+
+Key accomplishments:
+
+- Defined the curriculum authoring contract with stable public IDs, immutable version IDs, separate lifecycles, role boundaries, validation, publish manifests, rollback, archive, and audit rules.
+- Added backend curriculum operations APIs for draft, review, approve/request changes, publish, rollback, archive, preview, worklist, and audit behavior.
+- Added bounded curriculum analytics signals and aggregate content-quality views with public/version IDs and source segmentation.
+- Preserved published-only student/parent curriculum reads and existing adaptive assignment behavior.
+- Verified with 369 backend tests and full Ruff.
+
+Known deferred items at close: rich editor UI, production content migration, warehouse BI, automatic AI publication, full adaptive sequencing, and production deployment/live smoke.
+
 ### v1.0 Parent Portal Real Data Integration
 
 **Status:** Shipped 2026-06-02
