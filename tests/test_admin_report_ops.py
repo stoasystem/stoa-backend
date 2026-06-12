@@ -3078,6 +3078,7 @@ def test_support_handoff_provider_sync_ignores_duplicate_event(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["delivery"]["status"] == "acknowledged"
+    assert response.json()["delivery"]["last_sync_result"] == "duplicate"
 
 
 def test_support_handoff_provider_sync_surfaces_stale_update(monkeypatch):

@@ -1848,11 +1848,12 @@ async def get_support_handoff_delivery_detail(
 async def retry_support_handoff_delivery(
     delivery_id: str,
     request: Request,
-    body: SupportHandoffRetryRequest = SupportHandoffRetryRequest(),
+    body: SupportHandoffRetryRequest | None = Body(default=None),
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
     """Retry one failed third-party support delivery without duplicating tickets."""
+    retry_request = body or SupportHandoffRetryRequest()
     delivery = support_destination_service.retry_provider_delivery(
         delivery_id=delivery_id,
         actor=_operator_id(user),
@@ -1861,7 +1862,7 @@ async def retry_support_handoff_delivery(
     )
     if not delivery:
         raise HTTPException(status_code=404, detail="Support handoff delivery not found")
-    return {"delivery": delivery, "reason": body.reason}
+    return {"delivery": delivery, "reason": retry_request.reason}
 
 
 @router.post("/reports/support-handoff-deliveries/{delivery_id}/provider-sync")

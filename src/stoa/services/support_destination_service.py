@@ -414,7 +414,7 @@ def sync_provider_ticket(
     safe_event_id = _safe_text(provider_event_id) or ""
     seen_events = [_safe_text(value) for value in record.get("provider_sync_event_ids", [])]
     if safe_event_id in seen_events:
-        return support_handoff_delivery_response(record)
+        return support_handoff_delivery_response({**record, "last_sync_result": "duplicate"})
 
     now = now_iso()
     current_provider_updated = _safe_text(record.get("provider_updated_at"))
