@@ -1,28 +1,7 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-12 after completing v4.8
+**Updated:** 2026-06-13 after selecting v4.9
 **Mode:** product functionality first
-
-## v4.6 Rich Curriculum Authoring And Analytics Foundation
-
-**Status:** Completed local release gate 2026-06-12
-**Roadmap:** `.planning/milestones/v4.6-ROADMAP.md`
-**Requirements:** `.planning/milestones/v4.6-REQUIREMENTS.md`
-
-Goal: turn the curriculum catalog and exercise-bank foundation into a more operable authoring, QA, and insight workflow.
-
-Completed phases:
-
-- Phase 152: Curriculum Authoring Contract And QA Workflow.
-- Phase 153: Admin Lesson And Exercise Authoring MVP.
-- Phase 154: Learning Analytics And Content Quality Signals.
-- Phase 155: v4.6 Curriculum Operations Release Gate.
-
-Closed scope:
-
-- Build on the v3.8 curriculum hierarchy and v4.0 adaptive learning signals.
-- Add internal authoring, review, publish, rollback, archive, and aggregate quality analytics.
-- Leave rich editor UI, production content migration, and warehouse BI for later product expansion.
 
 ## v4.7 Payment Production Activation And Provider Automation
 
@@ -31,14 +10,6 @@ Closed scope:
 **Requirements:** `.planning/milestones/v4.7-REQUIREMENTS.md`
 
 Goal: turn the v4.4 Stripe/TWINT readiness foundation into approved production activation automation.
-
-Completed phases:
-
-- Phase 156: Payment Production Activation Contract And Provider Readiness.
-- Phase 157: Live Provider Readiness API Checks.
-- Phase 158: Direct Refund Execution And Finance Handoff.
-- Phase 159: Production Webhook Registration And Rollout Controls.
-- Phase 160: v4.7 Payment Activation Release Gate.
 
 Closed scope:
 
@@ -53,40 +24,52 @@ Closed scope:
 
 Goal: expand the v4.5 internal support queue into approved provider-backed support operations and controlled CRM/customer messaging.
 
-Completed phases:
-
-- Phase 161: Support Provider Expansion Contract And Adapter Readiness.
-- Phase 162: Approved Third-Party Support Adapter And Delivery Worker.
-- Phase 163: Retry Workers And Two-Way Ticket Synchronization.
-- Phase 164: Support SLA Analytics And Controlled CRM Messaging.
-- Phase 165: v4.8 Support Provider Release Gate And Operations Audit.
-
 Closed scope:
 
-- Add adapter readiness, provider delivery workers, bounded retry, provider ticket sync, support SLA analytics, and template-gated support messaging.
-- Keep metadata-only support evidence boundaries and destination approval gates.
+- Added adapter readiness, provider delivery workers, bounded retry, provider ticket sync, support SLA analytics, and template-gated support messaging.
 - Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
-## Candidate v4.9 Production Notification And Native Delivery Rollout
+## v4.9 Production Notification And Native Delivery Rollout
 
-**Status:** Recommended next after v4.8
+**Status:** Active planning
+**Roadmap:** `.planning/milestones/v4.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.9-REQUIREMENTS.md`
 
 Goal: complete live notification delivery beyond backend readiness.
 
+Candidate phases:
+
+- Phase 166: Production Notification Rollout Contract And Ownership.
+- Phase 167: Live WebSocket API Gateway Deployment Readiness.
+- Phase 168: Provider-Backed Email Digest And Push Delivery.
+- Phase 169: Frontend And Native Notification UX Handoff.
+- Phase 170: v4.9 Production Notification Release Gate And Live Smoke.
+
+Scope:
+
+- Add live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification handoff, token registration contract, and live smoke evidence.
+- Keep existing durable notification fallback behavior and preference gates.
+- Avoid broad marketing/campaign automation and unrelated security/compliance expansion during internal development.
+
+## Candidate v5.0 Native Mobile And Full Localization Governance
+
+**Status:** Candidate after v4.9
+
+Goal: move beyond selected responsive frontend/localization polish into native mobile and complete localization operations.
+
 Candidate scope:
 
-- Live WebSocket/API Gateway deployment and smoke evidence.
-- Provider-backed push/email delivery.
-- Frontend/native notification visuals and token registration.
-- Delivery analytics and operational visibility.
+- Native app architecture and push-token integration.
+- Full localization governance, translation management, broad copy QA, and RTL readiness.
+- Production mobile smoke and app release handoff.
 
-## Candidate v5.0 Product Expansion Or Final Payment Operations
+## Candidate v5.1 Product Expansion Or Final External Activation
 
-**Status:** Candidate after v4.9 or when external prerequisites unblock
+**Status:** Candidate after v5.0 or when external prerequisites unblock
 
 Potential scope:
 
 - Final live payment activation operations once external provider prerequisites are ready.
-- Native mobile app rollout and full localization governance.
+- Real external support provider and CRM/customer transport activation after approved provider prerequisites are ready.
 - Rich curriculum editor UI and production content migration.
 - Long-term adaptive sequencing, autonomous tutoring, and warehouse-backed analytics.

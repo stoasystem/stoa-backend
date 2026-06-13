@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-12 after selecting v4.8 support provider expansion
+**Updated:** 2026-06-13 after selecting v4.9 production notification rollout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -43,6 +43,8 @@ v4.6 completed the local backend rich curriculum authoring and analytics foundat
 v4.7 completed the backend payment production activation automation scope: accepted activation contract, admin-only live Stripe/TWINT provider readiness checks, webhook registration readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls. Final live activation status is `deferred`: the backend automation is ready, but real customer charging remains blocked until approved live credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout control enablement are provided.
 
 v4.8 completed the local backend support provider expansion and CRM automation scope: provider-neutral adapter readiness, approved/configured third-party support delivery, bounded retry, two-way provider ticket synchronization, support SLA analytics, controlled CRM/customer message evidence, and release-gate verification. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
+
+v4.9 is now the active planning scope for production notification and native delivery rollout: live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, native push token registration, and live smoke evidence beyond the v4.2 backend readiness foundation.
 
 ## Completed Or Largely Complete
 
@@ -165,7 +167,7 @@ v4.8 completed the local backend support provider expansion and CRM automation s
 ## Phase 2 / Future Expansion
 
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
-- Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics.
+- Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: selected as active v4.9 scope.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
 - Native mobile apps, native push-token registration, and production mobile rollout.
@@ -174,7 +176,7 @@ v4.8 completed the local backend support provider expansion and CRM automation s
 
 ## Remaining Feature Build Order
 
-1. Full production notification rollout beyond backend readiness once infrastructure/provider/frontend ownership is available.
+1. Active v4.9 full production notification rollout beyond backend readiness: live WebSocket/API Gateway readiness, provider-backed email/push, frontend/native visuals, token registration, and live smoke evidence.
 2. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
 3. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
 4. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.

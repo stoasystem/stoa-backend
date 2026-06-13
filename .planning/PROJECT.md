@@ -70,6 +70,8 @@ The completed-local v4.7 milestone turns the v4.4 payment readiness foundation i
 
 The completed-local v4.8 milestone expands the v4.5 support handoff foundation beyond the internal queue into approved third-party provider adapters, retry workers, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer messaging. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, and rollout approval.
 
+The active v4.9 milestone promotes notification delivery from local WebSocket/backend readiness into production-deliverable capability: live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, native token registration, and live smoke evidence.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -78,7 +80,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v4.8 Support Provider Expansion And CRM Automation on 2026-06-12 (backend release gate; provider activation state `provider-ready`)
-**Recommended next milestone:** v4.9 Production Notification And Native Delivery Rollout
+**Active milestone:** v4.9 Production Notification And Native Delivery Rollout
 
 Delivered:
 
@@ -236,7 +238,24 @@ Requirements: `.planning/REQUIREMENTS.md`
 
 Outcome: v4.8 completed provider-neutral support adapter readiness, approved/configured third-party delivery, bounded retry, provider ticket sync, SLA analytics, and controlled CRM/customer message evidence. Final provider activation state is `provider-ready`: backend behavior is implemented and verified, but real external support-provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
-Recommended next milestone: v4.9 Production Notification And Native Delivery Rollout.
+## Current Milestone: v4.9 Production Notification And Native Delivery Rollout
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+
+**Status:** Active planning.
+
+**Goal:** Move notification delivery from local WebSocket/backend readiness into production-deliverable capability.
+
+**Target features:**
+
+- Production notification rollout contract and ownership.
+- Live WebSocket/API Gateway deployment readiness.
+- Provider-backed email digest and push delivery.
+- Frontend/native notification UX and token registration handoff.
+- v4.9 production notification release gate and live smoke.
+
+This is now the active milestone because `stoa_docs` remaining-feature planning identifies production notification and native delivery rollout as the next highest-value feature build after v4.8 support provider expansion.
 
 ## Requirements
 
@@ -640,6 +659,7 @@ Known current resources:
 | Plan v4.6 curriculum authoring and analytics | v3.8 and v4.0 created curriculum and adaptive-learning foundations; the next product value is internal authoring, QA, and actionable content analytics | Complete locally - backend release gate passed |
 | Start v4.7 payment production activation | v4.4 delivered local payment readiness, but live provider activation still needs approved Stripe/TWINT readiness checks, webhook registration, direct refunds, finance handoff, and explicit rollout controls | Complete locally - backend release gate passed; final live activation deferred |
 | Start v4.8 support provider expansion | v4.5 delivered internal queue support handoff, but approved third-party adapters, retry workers, two-way sync, SLA analytics, and controlled CRM/customer messaging remain the next support operations gap | Complete locally - backend release gate passed; provider activation state `provider-ready` |
+| Start v4.9 production notification rollout | v3.6 delivered local realtime notifications and v4.2 delivered backend production readiness, but live WebSocket/API Gateway deployment, provider-backed email/push, frontend/native visuals, token registration, and live smoke remain the next notification gap | Active - milestone initialized |
 
 ## Evolution
 
@@ -659,4 +679,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after completing v4.8 support provider expansion*
+*Last updated: 2026-06-13 after selecting v4.9 production notification rollout*

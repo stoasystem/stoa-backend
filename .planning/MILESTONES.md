@@ -86,6 +86,37 @@ Key accomplishments:
 
 Known deferred items at close: real external provider selection, approved production provider credentials, destination policy approval, real CRM/customer transport, and production notification/native delivery rollout.
 
+## Active
+
+### v4.9 Production Notification And Native Delivery Rollout
+
+**Status:** Active planning
+**Started:** 2026-06-13
+**Roadmap:** `.planning/milestones/v4.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v4.9-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/166-production-notification-rollout-contract-and-ownership/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Move notification delivery from local WebSocket/backend readiness into production-deliverable capability with live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, token registration, and live smoke evidence.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 166: Production Notification Rollout Contract And Ownership.
+- Phase 167: Live WebSocket API Gateway Deployment Readiness.
+- Phase 168: Provider-Backed Email Digest And Push Delivery.
+- Phase 169: Frontend And Native Notification UX Handoff.
+- Phase 170: v4.9 Production Notification Release Gate And Live Smoke.
+
+Feature priorities:
+
+- Define backend/frontend/native/infrastructure/provider ownership boundaries and rollout gates.
+- Add live WebSocket/API Gateway deployment readiness and operator-visible delivery status.
+- Add provider-backed email digest and push delivery with preference gating and redacted evidence.
+- Define frontend/native notification UX and token registration handoff.
+- Close with focused notification rollout release evidence and next milestone selection.
+
 ## Earlier Completed Milestones
 
 ### v1.0 Parent Portal Real Data Integration
@@ -1028,4 +1059,4 @@ Key accomplishments:
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ---
-*Last updated: 2026-06-12 after selecting v4.8 support provider expansion*
+*Last updated: 2026-06-13 after selecting v4.9 production notification rollout*

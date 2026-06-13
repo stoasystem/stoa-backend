@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-12
+**Updated:** 2026-06-13
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -25,6 +25,7 @@
 
 1. **Production Notification And Native Delivery Rollout**.
    Complete live WebSocket/API Gateway deployment, provider-backed push/email delivery, frontend/native notification visuals, and live smoke evidence.
+   Status: selected as active v4.9 planning scope.
 
 2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
@@ -36,4 +37,4 @@
 
 v4.8 is complete after backend release-gate verification. The shipped scope is support provider expansion and CRM automation beyond the v4.5 internal queue path: provider-neutral contract/readiness, approved third-party support delivery, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer message evidence. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
-v4.9 is the recommended next milestone: production notification and native delivery rollout, unless final live payment activation prerequisites become available first.
+v4.9 is selected as the active next milestone: production notification and native delivery rollout. The planned scope is live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, native token registration, preference-aware delivery behavior, and live smoke evidence. The next likely milestone after v4.9 is native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
