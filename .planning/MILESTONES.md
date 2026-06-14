@@ -173,7 +173,7 @@ Known deferred items at close: frontend demo fallback cleanup or explicit demo-o
 **Audit:** `.planning/milestones/v5.1-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.1-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/176-rich-curriculum-editor-and-migration-contract/`, `.planning/phases/177-admin-rich-curriculum-editor-ui-and-api-readiness/`, `.planning/phases/178-production-content-migration-pipeline-and-validation/`, `.planning/phases/179-assignment-automation-and-adaptive-sequencing-readiness/`, `.planning/phases/180-v5-1-curriculum-product-release-gate-and-handoff/`
+**Phase evidence:** `.planning/milestones/v5.1-phases/176-rich-curriculum-editor-and-migration-contract/`, `.planning/milestones/v5.1-phases/177-admin-rich-curriculum-editor-ui-and-api-readiness/`, `.planning/milestones/v5.1-phases/178-production-content-migration-pipeline-and-validation/`, `.planning/milestones/v5.1-phases/179-assignment-automation-and-adaptive-sequencing-readiness/`, `.planning/milestones/v5.1-phases/180-v5-1-curriculum-product-release-gate-and-handoff/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Move curriculum foundations into product-ready operations with rich editor readiness, production content migration, assignment automation readiness, and adaptive sequencing readiness.
 **Phases:** 5
