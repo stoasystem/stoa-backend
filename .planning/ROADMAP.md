@@ -18,7 +18,7 @@ Build curriculum product functionality directly. Keep verification focused on ed
 - [x] **Phase 177: Admin Rich Curriculum Editor UI And API Readiness** - Prepare backend/frontend handoff for rich lesson/exercise editing, validation, preview, diff, review, publish, rollback, and archive.
 - [x] **Phase 178: Production Content Migration Pipeline And Validation** - Define and/or build source manifests, dry-run/apply behavior, validation, conflict detection, migration evidence, and rollback metadata.
 - [x] **Phase 179: Assignment Automation And Adaptive Sequencing Readiness** - Define controlled assignment automation and sequencing signals using curriculum progress, AI drafts, memory, and analytics.
-- [ ] **Phase 180: v5.1 Curriculum Product Release Gate And Handoff** - Verify v5.1 docs/contracts/evidence, record rollout state, and select the next feature milestone.
+- [x] **Phase 180: v5.1 Curriculum Product Release Gate And Handoff** - Verify v5.1 docs/contracts/evidence, record rollout state, and select the next feature milestone.
 
 ## Phase Details
 
@@ -107,11 +107,11 @@ Plans:
   3. Release evidence records rollout state: contract-ready, editor-ready, migration-ready, assignment-ready, blocked, or deferred.
   4. Docs and feature-gap audit reflect completed v5.1 scope and next milestone recommendation.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 180-01: Verify v5.1 curriculum product release gate and handoff.
+- [x] 180-01: Verify v5.1 curriculum product release gate and handoff.
 
 ## Progress
 
@@ -121,7 +121,7 @@ Plans:
 | 177 Admin Rich Curriculum Editor UI And API Readiness | v5.1 | 1/1 | Complete | 2026-06-14 |
 | 178 Production Content Migration Pipeline And Validation | v5.1 | 1/1 | Complete | 2026-06-14 |
 | 179 Assignment Automation And Adaptive Sequencing Readiness | v5.1 | 1/1 | Complete | 2026-06-14 |
-| 180 v5.1 Curriculum Product Release Gate And Handoff | v5.1 | 0/1 | Planned | - |
+| 180 v5.1 Curriculum Product Release Gate And Handoff | v5.1 | 1/1 | Complete | 2026-06-14 |
 
 ## Traceability
 
@@ -131,7 +131,7 @@ Plans:
 | CURRICULUMXP-02 | Phase 177 | Complete |
 | CURRICULUMXP-03 | Phase 178 | Complete |
 | CURRICULUMXP-04 | Phase 179 | Complete |
-| VERIFY-34 | Phase 180 | Planned |
+| VERIFY-34 | Phase 180 | Complete |
 
 ---
-*Last updated: 2026-06-14 after completing Phase 179 assignment automation and adaptive sequencing readiness.*
+*Last updated: 2026-06-14 after completing Phase 180 v5.1 curriculum product release gate and handoff.*

@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-14 after selecting v5.1
+**Updated:** 2026-06-14 after completing v5.1 readiness
 **Mode:** product functionality first
 
 ## v5.0 Native Mobile And Full Localization Governance
@@ -18,13 +18,13 @@ Closed scope:
 
 ## v5.1 Rich Curriculum Editor And Production Content Migration
 
-**Status:** Active planning
+**Status:** Completed readiness release gate 2026-06-14
 **Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.1-REQUIREMENTS.md`
 
 Goal: move curriculum foundations into product-ready curriculum operations.
 
-Candidate phases:
+Completed phases:
 
 - Phase 176: Rich Curriculum Editor And Migration Contract.
 - Phase 177: Admin Rich Curriculum Editor UI And API Readiness.
@@ -32,9 +32,9 @@ Candidate phases:
 - Phase 179: Assignment Automation And Adaptive Sequencing Readiness.
 - Phase 180: v5.1 Curriculum Product Release Gate And Handoff.
 
-Scope:
+Closed scope:
 
-- Build editor readiness, production content migration, validation/rollback evidence, reviewed assignment readiness, and adaptive sequencing readiness.
+- Built editor readiness, production content migration contracts, validation/rollback evidence, reviewed assignment readiness, and adaptive sequencing readiness.
 - Keep generated content review-gated unless a later milestone selects autonomous publication.
 - Avoid external payment/support activation work while provider prerequisites remain unavailable.
 
