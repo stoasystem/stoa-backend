@@ -74,7 +74,7 @@ The completed-local v4.9 milestone promotes notification delivery from local Web
 
 The completed v5.0 milestone moves beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance: mobile app/API handoff, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence. It closed as `contract-ready`; frontend/native implementation and live activation remain separate follow-up work.
 
-The active v5.1 milestone moves curriculum foundations into product-ready operations: rich curriculum editor UI/API handoff, production content migration pipeline, validation/rollback evidence, assignment automation readiness, and adaptive sequencing readiness.
+The completed v5.1 milestone moves curriculum foundations into product-ready operations: rich curriculum editor UI/API handoff, production content migration pipeline, validation/rollback evidence, assignment automation readiness, and adaptive sequencing readiness. It closed as readiness-complete; full frontend editor implementation, production import, migration API/UI, candidate generation, and warehouse analytics remain separate follow-up work.
 
 ## Core Value
 
@@ -83,8 +83,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.0 Native Mobile And Full Localization Governance on 2026-06-14 (contract-ready release gate)
-**Active milestone:** v5.1 Rich Curriculum Editor And Production Content Migration
+**Latest completed milestone:** v5.1 Rich Curriculum Editor And Production Content Migration on 2026-06-14 (readiness-complete release gate)
+**Active milestone:** None — awaiting next milestone selection
 
 Delivered:
 
@@ -281,16 +281,17 @@ Audit: `.planning/milestones/v5.0-MILESTONE-AUDIT.md`
 
 Outcome: v5.0 completed a contract-ready mobile/localization handoff. Frontend demo fallback cleanup, native app/APNS/FCM/offline implementation, live push/provider activation, semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future locale activation remain deferred.
 
-## Current Milestone: v5.1 Rich Curriculum Editor And Production Content Migration
+## Latest Completed Milestone: v5.1 Rich Curriculum Editor And Production Content Migration
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v5.1-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.1-REQUIREMENTS.md`
+Audit: `.planning/milestones/v5.1-MILESTONE-AUDIT.md`
 
-**Status:** Active planning.
+**Status:** Completed 2026-06-14; rollout state readiness-complete.
 
 **Goal:** Move curriculum foundations into product-ready operations with rich editor readiness, production content migration, assignment automation readiness, and adaptive sequencing readiness.
 
-**Target features:**
+**Completed features:**
 
 - Rich curriculum editor and migration contract.
 - Admin rich curriculum editor UI and API readiness.
@@ -298,7 +299,7 @@ Requirements: `.planning/REQUIREMENTS.md`
 - Assignment automation and adaptive sequencing readiness.
 - v5.1 curriculum product release gate and handoff.
 
-This is now the active milestone because final payment/support external activation remains blocked on external prerequisites and `stoa_docs` product expansion points to rich curriculum editor UI, production content migration, adaptive sequencing, and analytics as the next buildable feature area.
+Outcome: v5.1 completed the curriculum product readiness layer while final payment/support external activation remains blocked on external prerequisites. Frontend editor implementation, backend rich-field expansion, production content import, migration API/UI, candidate generation, duplicate prevention, warehouse analytics, and fully autonomous tutoring remain deferred.
 
 ## Requirements
 
@@ -704,7 +705,7 @@ Known current resources:
 | Start v4.8 support provider expansion | v4.5 delivered internal queue support handoff, but approved third-party adapters, retry workers, two-way sync, SLA analytics, and controlled CRM/customer messaging remain the next support operations gap | Complete locally - backend release gate passed; provider activation state `provider-ready` |
 | Start v4.9 production notification rollout | v3.6 delivered local realtime notifications and v4.2 delivered backend production readiness, but live WebSocket/API Gateway deployment, provider-backed email/push, frontend/native visuals, token registration, and live smoke remain the next notification gap | Complete locally - backend release gate passed; rollout state `deferred` |
 | Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Complete - contract-ready release gate passed |
-| Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Active - milestone initialized |
+| Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Complete - readiness release gate passed |
 
 ## Evolution
 
@@ -724,4 +725,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 after selecting v5.1 rich curriculum editor and production content migration*
+*Last updated: 2026-06-14 after completing v5.1 rich curriculum editor and production content migration readiness*

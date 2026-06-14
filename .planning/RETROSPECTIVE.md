@@ -47,6 +47,51 @@
 
 ---
 
+## Milestone: v5.1 — Rich Curriculum Editor And Production Content Migration
+
+**Shipped:** 2026-06-14
+**Phases:** 5 | **Plans:** 5 | **Sessions:** 1
+
+### What Was Built
+
+- Rich curriculum editor and migration ownership contract.
+- Admin/tutor rich editor UI/API readiness handoff and UI-SPEC.
+- Production content migration manifest, dry-run, apply, evidence, conflict, validation, and rollback contract.
+- Assignment automation eligibility, duplicate prevention, sequencing signal, and visibility readiness.
+- Release gate evidence recording readiness-complete rollout state.
+
+### What Worked
+
+- The milestone reused v3.8, v4.0, and v4.6 foundations instead of reopening already-settled curriculum architecture.
+- Separating readiness from implementation kept frontend, production source content, and automation prerequisites visible.
+- Integration audit made the main risk explicit: readiness is coherent, but the product flows are not shipped implementations.
+
+### What Was Inefficient
+
+- The archive helper again left stale active references and placeholder accomplishments that required manual closeout.
+- Phase summaries do not include frontmatter, so audit summary extraction remains manual.
+- Nyquist validation artifacts are still missing for docs/readiness-only phases.
+
+### Patterns Established
+
+- Use `readiness-complete` for milestones that prepare a product surface without shipping the full UI/service implementation.
+- State deferred implementation work in release gate, audit, feature queue, and milestone ledger.
+- Treat editor, migration, and automation as separate rollout states rather than one ambiguous curriculum milestone state.
+
+### Key Lessons
+
+1. A readiness milestone should explicitly name non-shipped E2E flows so future work does not assume APIs/UI exist.
+2. Migration plans need source ownership and approval gates before implementation; otherwise the backend can only define contracts safely.
+3. Assignment automation should start with deterministic eligibility and duplicate prevention before ranking sophistication.
+
+### Cost Observations
+
+- Model mix: not recorded.
+- Sessions: 1 autonomous execution and closeout session.
+- Notable: Verification cost centered on cross-phase integration and deferred-scope clarity, not runtime test execution.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -54,14 +99,17 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v5.0 | 1 | 5 | Introduced explicit mobile/localization contract-ready release classification across backend, frontend, native, and localization ownership. |
+| v5.1 | 1 | 5 | Extended rollout-state discipline to curriculum readiness: editor-ready, migration-ready, assignment-ready, and deferred sequencing. |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
 | v5.0 | `git diff --check`; artifact traceability; English/German key parity evidence | Contract coverage for 5/5 requirements | 0 |
+| v5.1 | `git diff --check`; artifact traceability; integration audit | Readiness coverage for 5/5 requirements | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Release gates should name the exact rollout state, especially when external credentials, frontend workspaces, or native clients remain out of scope.
 2. Archive helpers reduce mechanical work but do not replace a final consistency pass across ROADMAP, REQUIREMENTS, PROJECT, STATE, and MILESTONES.
+3. Readiness milestones need a prominent list of intentionally incomplete E2E product flows.

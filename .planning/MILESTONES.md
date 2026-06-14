@@ -1,5 +1,19 @@
 # Milestones
 
+## v5.1 Rich Curriculum Editor And Production Content Migration (Shipped: 2026-06-14)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Defined the rich curriculum editor and migration contract across backend, frontend, content, curriculum QA, assignment, sequencing, and release ownership.
+- Produced the admin/tutor rich editor UI/API handoff and UI-SPEC against existing curriculum authoring routes.
+- Defined production content migration manifests, dry-run/apply validation, conflict handling, evidence, and rollback metadata.
+- Defined assignment automation eligibility, duplicate prevention, sequencing signals, and role visibility while preserving review gates.
+- Closed with readiness-complete rollout state; full frontend editor, production import, migration API/UI, candidate generation, and warehouse analytics remain deferred.
+
+---
+
 ## v5.0 Native Mobile And Full Localization Governance (Shipped: 2026-06-14)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -149,22 +163,24 @@ Key accomplishments:
 
 Known deferred items at close: frontend demo fallback cleanup or explicit demo-only gating before `frontend-ready`; native app/APNS/FCM SDK integration, secure token storage, deep-link routing, app-store release, and native offline cache; live push/provider activation; semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future-locale activation beyond English/German.
 
-## Active
+## Recently Completed
 
 ### v5.1 Rich Curriculum Editor And Production Content Migration
 
-**Status:** Active planning
+**Status:** Completed readiness release gate 2026-06-14
 **Started:** 2026-06-14
+**Completed:** 2026-06-14
+**Audit:** `.planning/milestones/v5.1-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.1-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/176-rich-curriculum-editor-and-migration-contract/`
+**Phase evidence:** `.planning/phases/176-rich-curriculum-editor-and-migration-contract/`, `.planning/phases/177-admin-rich-curriculum-editor-ui-and-api-readiness/`, `.planning/phases/178-production-content-migration-pipeline-and-validation/`, `.planning/phases/179-assignment-automation-and-adaptive-sequencing-readiness/`, `.planning/phases/180-v5-1-curriculum-product-release-gate-and-handoff/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Move curriculum foundations into product-ready operations with rich editor readiness, production content migration, assignment automation readiness, and adaptive sequencing readiness.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 176: Rich Curriculum Editor And Migration Contract.
 - Phase 177: Admin Rich Curriculum Editor UI And API Readiness.
@@ -178,6 +194,8 @@ Feature priorities:
 - Prepare admin/tutor rich curriculum editor UI and API readiness.
 - Define production content migration dry-run/apply/validation/rollback behavior.
 - Define assignment automation and adaptive sequencing readiness.
+
+Known deferred items at close: frontend rich curriculum editor implementation, backend rich-field payload expansion, draft update/patch, validation preview, diff and audit-read endpoints, production migration service/API/UI, source content import, candidate generation service, duplicate prevention helper, full adaptive sequencing engine, and warehouse-backed analytics.
 - Close with focused curriculum product release evidence and next milestone selection.
 
 ## Earlier Completed Milestones

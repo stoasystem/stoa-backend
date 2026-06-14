@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Rich Curriculum Editor And Production Content Migration
-status: complete
-last_updated: "2026-06-14T23:08:00+02:00"
-last_activity: 2026-06-14 - Completed Phase 180 v5.1 curriculum product release gate and handoff
+status: Awaiting next milestone
+last_updated: "2026-06-14T20:24:26.450Z"
+last_activity: 2026-06-14 — Milestone v5.1 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.1 rich curriculum editor and production content migration.
+**Current focus:** Awaiting next milestone selection.
 
 ## Current Position
 
-Phase: 180 - v5.1 Curriculum Product Release Gate And Handoff
-Plan: 180-01
-Status: Complete
-Last activity: 2026-06-14 - Completed Phase 180 v5.1 curriculum product release gate and handoff.
+Phase: Milestone v5.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-14 — Milestone v5.1 completed and archived
 
 ## Accumulated Context
 
@@ -39,11 +39,11 @@ Last activity: 2026-06-14 - Completed Phase 180 v5.1 curriculum product release 
 - v5.0 completed native/mobile and localization governance as `contract-ready`.
 - Final live payment/support external activation remains blocked on external prerequisites; internal development should continue with deeper product expansion.
 - `stoa_docs` remaining feature queue now points to rich curriculum editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics as the next buildable product expansion.
-- v5.1 should prioritize rich curriculum editor readiness, production content migration validation, assignment automation readiness, and adaptive sequencing readiness.
+- v5.1 completed rich curriculum editor readiness, production content migration validation, assignment automation readiness, and adaptive sequencing readiness as a readiness-complete milestone.
 
 ### Pending Todos
 
-- Run milestone audit and archive v5.1.
+- Start the next milestone with `/gsd-new-milestone`.
 
 ### Blockers/Concerns
 
@@ -54,4 +54,4 @@ Last activity: 2026-06-14 - Completed Phase 180 v5.1 curriculum product release 
 
 ## Operator Next Steps
 
-- Start Phase 176 using `.planning/phases/176-rich-curriculum-editor-and-migration-contract/176-01-PLAN.md`.
+- Start the next milestone with /gsd-new-milestone
