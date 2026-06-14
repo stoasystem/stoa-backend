@@ -18,7 +18,7 @@ Build notification delivery functionality directly. Keep verification focused on
 - [x] **Phase 167: Live WebSocket API Gateway Deployment Readiness** - Add or document CDK/runtime readiness for live WebSocket routes, configured delivery status, fanout fallback, stale cleanup, and admin status. (completed 2026-06-14)
 - [x] **Phase 168: Provider-Backed Email Digest And Push Delivery** - Add provider-backed digest and push delivery behavior with preference gating, token readiness, redacted result evidence, and provider failure handling. (completed 2026-06-14)
 - [x] **Phase 169: Frontend And Native Notification UX Handoff** - Define frontend/native API, WebSocket endpoint, token registration, notification center, preference UI, offline/reconnect, and fallback contracts. (completed 2026-06-14)
-- [ ] **Phase 170: v4.9 Production Notification Release Gate And Live Smoke** - Verify notification rollout behavior, docs, release evidence, live smoke status, and next milestone recommendation.
+- [x] **Phase 170: v4.9 Production Notification Release Gate And Live Smoke** - Verify notification rollout behavior, docs, release evidence, live smoke status, and next milestone recommendation. (completed 2026-06-14)
 
 ## Phase Details
 
@@ -107,11 +107,11 @@ Plans:
   3. Release evidence records rollout state: local-only, configured, provider-ready, live-smoked, blocked, or deferred.
   4. Docs and feature-gap audit reflect completed v4.9 scope and next milestone recommendation.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 170-01: Verify v4.9 production notification release gate and live smoke.
+- [x] 170-01: Verify v4.9 production notification release gate and live smoke.
 
 ## Progress
 
@@ -121,7 +121,7 @@ Plans:
 | 167 Live WebSocket API Gateway Deployment Readiness | v4.9 | 1/1 | Complete    | 2026-06-14 |
 | 168 Provider-Backed Email Digest And Push Delivery | v4.9 | 1/1 | Complete    | 2026-06-14 |
 | 169 Frontend And Native Notification UX Handoff | v4.9 | 1/1 | Complete    | 2026-06-14 |
-| 170 v4.9 Production Notification Release Gate And Live Smoke | v4.9 | 0/1 | Planned | - |
+| 170 v4.9 Production Notification Release Gate And Live Smoke | v4.9 | 1/1 | Complete    | 2026-06-14 |
 
 ## Traceability
 
@@ -131,7 +131,7 @@ Plans:
 | PRODNOTIF-02 | Phase 167 | Complete |
 | PRODNOTIF-03 | Phase 168 | Complete |
 | PRODNOTIF-04 | Phase 169 | Complete |
-| VERIFY-32 | Phase 170 | Planned |
+| VERIFY-32 | Phase 170 | Complete |
 
 ---
-*Last updated: 2026-06-13 after selecting v4.9 production notification and native delivery rollout.*
+*Last updated: 2026-06-14 after completing v4.9 production notification and native delivery rollout.*
