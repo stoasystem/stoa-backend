@@ -94,6 +94,6 @@ Acceptance criteria:
 |-------------|-------|--------|
 | PRODNOTIF-01 | Phase 166 | Complete |
 | PRODNOTIF-02 | Phase 167 | Complete |
-| PRODNOTIF-03 | Phase 168 | Planned |
+| PRODNOTIF-03 | Phase 168 | Complete |
 | PRODNOTIF-04 | Phase 169 | Planned |
 | VERIFY-32 | Phase 170 | Planned |

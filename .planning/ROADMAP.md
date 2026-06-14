@@ -16,7 +16,7 @@ Build notification delivery functionality directly. Keep verification focused on
 
 - [x] **Phase 166: Production Notification Rollout Contract And Ownership** - Define backend/frontend/native/infrastructure/provider ownership, live WebSocket expectations, email/push provider modes, live smoke boundaries, and rollout gates. (completed 2026-06-14)
 - [x] **Phase 167: Live WebSocket API Gateway Deployment Readiness** - Add or document CDK/runtime readiness for live WebSocket routes, configured delivery status, fanout fallback, stale cleanup, and admin status. (completed 2026-06-14)
-- [ ] **Phase 168: Provider-Backed Email Digest And Push Delivery** - Add provider-backed digest and push delivery behavior with preference gating, token readiness, redacted result evidence, and provider failure handling.
+- [x] **Phase 168: Provider-Backed Email Digest And Push Delivery** - Add provider-backed digest and push delivery behavior with preference gating, token readiness, redacted result evidence, and provider failure handling. (completed 2026-06-14)
 - [ ] **Phase 169: Frontend And Native Notification UX Handoff** - Define frontend/native API, WebSocket endpoint, token registration, notification center, preference UI, offline/reconnect, and fallback contracts.
 - [ ] **Phase 170: v4.9 Production Notification Release Gate And Live Smoke** - Verify notification rollout behavior, docs, release evidence, live smoke status, and next milestone recommendation.
 
@@ -71,11 +71,11 @@ Plans:
   3. Notification preferences and category/channel rules are honored for every delivery decision.
   4. Provider responses are redacted and useful for operator diagnostics.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 168-01: Implement provider-backed email digest and push delivery.
+- [x] 168-01: Implement provider-backed email digest and push delivery.
 
 ### Phase 169: Frontend And Native Notification UX Handoff
 
@@ -119,7 +119,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 166 Production Notification Rollout Contract And Ownership | v4.9 | 1/1 | Complete    | 2026-06-14 |
 | 167 Live WebSocket API Gateway Deployment Readiness | v4.9 | 1/1 | Complete    | 2026-06-14 |
-| 168 Provider-Backed Email Digest And Push Delivery | v4.9 | 0/1 | Planned | - |
+| 168 Provider-Backed Email Digest And Push Delivery | v4.9 | 1/1 | Complete    | 2026-06-14 |
 | 169 Frontend And Native Notification UX Handoff | v4.9 | 0/1 | Planned | - |
 | 170 v4.9 Production Notification Release Gate And Live Smoke | v4.9 | 0/1 | Planned | - |
 
@@ -129,7 +129,7 @@ Plans:
 |-------------|-------|--------|
 | PRODNOTIF-01 | Phase 166 | Complete |
 | PRODNOTIF-02 | Phase 167 | Complete |
-| PRODNOTIF-03 | Phase 168 | Planned |
+| PRODNOTIF-03 | Phase 168 | Complete |
 | PRODNOTIF-04 | Phase 169 | Planned |
 | VERIFY-32 | Phase 170 | Planned |
 

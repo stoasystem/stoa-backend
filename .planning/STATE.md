@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.9
 milestone_name: Production Notification And Native Delivery Rollout
 status: planning
-last_updated: "2026-06-14T11:32:42.433Z"
+last_updated: "2026-06-14T11:39:33.035Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 168
+Phase: 169
 Plan: Not started
 Status: Planned
 Last activity: 2026-06-14
@@ -43,7 +43,6 @@ Last activity: 2026-06-14
 
 ### Pending Todos
 
-- Add provider-backed email digest and push delivery in Phase 168.
 - Add frontend/native notification UX and token registration handoff in Phase 169.
 - Close v4.9 with release-gate evidence and next milestone selection in Phase 170.
 
@@ -56,4 +55,4 @@ Last activity: 2026-06-14
 
 ## Operator Next Steps
 
-- Start Phase 168 with provider-backed email digest and push delivery planning.
+- Start Phase 169 with frontend/native notification UX and token registration handoff planning.
