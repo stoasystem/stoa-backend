@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-13
+**Updated:** 2026-06-14
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -20,12 +20,13 @@
 - Frontend mobile and visual localization rollout with selected responsive core-flow polish and English/German language preference UI.
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
+- Production notification and native delivery backend rollout with live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, frontend/native handoff, and release state `deferred` pending external activation.
 
 ## Remaining Feature Build Queue
 
-1. **Production Notification And Native Delivery Rollout**.
-   Complete live WebSocket/API Gateway deployment, provider-backed push/email delivery, frontend/native notification visuals, and live smoke evidence.
-   Status: selected as active v4.9 planning scope.
+1. **Native Mobile And Full Localization Governance**.
+   Implement native/mobile-facing notification token capture, responsive/native notification UX, full localization governance, and client-side rollout controls using the v4.9 backend handoff.
+   Status: recommended next milestone unless payment/support external activation prerequisites become available first.
 
 2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
@@ -35,6 +36,6 @@
 
 ## Current Planning Decision
 
-v4.8 is complete after backend release-gate verification. The shipped scope is support provider expansion and CRM automation beyond the v4.5 internal queue path: provider-neutral contract/readiness, approved third-party support delivery, bounded retry, two-way ticket synchronization, support SLA analytics, and controlled CRM/customer message evidence. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
+v4.9 is complete after backend release-gate verification. The shipped scope promotes notification delivery from local/backend readiness into production-deliverable backend capability: live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, preference-aware delivery behavior, frontend/native handoff, and release evidence.
 
-v4.9 is selected as the active next milestone: production notification and native delivery rollout. The planned scope is live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, native token registration, preference-aware delivery behavior, and live smoke evidence. The next likely milestone after v4.9 is native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
+Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval. The next likely milestone is native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
