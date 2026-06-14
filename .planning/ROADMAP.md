@@ -17,7 +17,7 @@ Build mobile/localization readiness directly. Keep verification focused on route
 - [x] **Phase 171: Native Mobile And Localization Governance Contract** - Define backend/frontend/native/localization ownership, mobile-critical flows, supported locales, translation governance, push/offline handoff, and release evidence.
 - [x] **Phase 172: Mobile App API Readiness And Client Handoff** - Document and stabilize mobile-critical API contracts, client state behavior, app shell expectations, and frontend/native integration points.
 - [x] **Phase 173: Native Notification Token And Offline State Handoff** - Define native push token registration, notification UX, offline/read-through behavior, permission states, and mobile fallback contracts.
-- [ ] **Phase 174: Localization Governance Translation QA And Locale Coverage** - Define translation catalog workflow, coverage reporting, copy QA, missing-key behavior, RTL/future-locale readiness, and critical-flow locale coverage.
+- [x] **Phase 174: Localization Governance Translation QA And Locale Coverage** - Define translation catalog workflow, coverage reporting, copy QA, missing-key behavior, RTL/future-locale readiness, and critical-flow locale coverage.
 - [ ] **Phase 175: v5.0 Native Mobile Localization Release Gate And Handoff** - Verify v5.0 docs/contracts/evidence, record rollout state, and select the next feature milestone.
 
 ## Phase Details
@@ -89,11 +89,11 @@ Plans:
   3. Broad copy QA covers student, parent, tutor, admin, billing, notification, support, curriculum, and AI teacher tool surfaces.
   4. RTL and future-locale readiness are scoped with implemented versus deferred work.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 174-01: Define localization governance, translation QA, and locale coverage.
+- [x] 174-01: Define localization governance, translation QA, and locale coverage.
 
 ### Phase 175: v5.0 Native Mobile Localization Release Gate And Handoff
 
@@ -120,7 +120,7 @@ Plans:
 | 171 Native Mobile And Localization Governance Contract | v5.0 | 1/1 | Complete | 2026-06-14 |
 | 172 Mobile App API Readiness And Client Handoff | v5.0 | 1/1 | Complete | 2026-06-14 |
 | 173 Native Notification Token And Offline State Handoff | v5.0 | 1/1 | Complete | 2026-06-14 |
-| 174 Localization Governance Translation QA And Locale Coverage | v5.0 | 0/1 | Planned | - |
+| 174 Localization Governance Translation QA And Locale Coverage | v5.0 | 1/1 | Complete | 2026-06-14 |
 | 175 v5.0 Native Mobile Localization Release Gate And Handoff | v5.0 | 0/1 | Planned | - |
 
 ## Traceability
@@ -130,8 +130,8 @@ Plans:
 | MOBILELOC-01 | Phase 171 | Complete |
 | MOBILELOC-02 | Phase 172 | Complete |
 | MOBILELOC-03 | Phase 173 | Complete |
-| MOBILELOC-04 | Phase 174 | Planned |
+| MOBILELOC-04 | Phase 174 | Complete |
 | VERIFY-33 | Phase 175 | Planned |
 
 ---
-*Last updated: 2026-06-14 after completing Phase 173 native notification token and offline state handoff.*
+*Last updated: 2026-06-14 after completing Phase 174 localization governance translation QA and locale coverage.*

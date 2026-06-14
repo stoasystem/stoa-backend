@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Native Mobile And Full Localization Governance
 status: planning
-last_updated: "2026-06-14T21:14:00+02:00"
+last_updated: "2026-06-14T21:24:00+02:00"
 last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-14)
 
 ## Current Position
 
-Phase: 174 - Localization Governance Translation QA And Locale Coverage
+Phase: 175 - v5.0 Native Mobile Localization Release Gate And Handoff
 Plan: —
 Status: Ready for discussion/planning
-Last activity: 2026-06-14 - Completed Phase 173 native notification token and offline state handoff.
+Last activity: 2026-06-14 - Completed Phase 174 localization governance translation QA and locale coverage.
 
 ## Accumulated Context
 
@@ -42,7 +42,6 @@ Last activity: 2026-06-14 - Completed Phase 173 native notification token and of
 
 ### Pending Todos
 
-- Define localization governance, translation QA, and locale coverage in Phase 174.
 - Close v5.0 with release-gate evidence and next milestone selection in Phase 175.
 
 ### Blockers/Concerns
@@ -54,4 +53,4 @@ Last activity: 2026-06-14 - Completed Phase 173 native notification token and of
 
 ## Operator Next Steps
 
-- Start Phase 174: Localization Governance Translation QA And Locale Coverage.
+- Start Phase 175: v5.0 Native Mobile Localization Release Gate And Handoff.
