@@ -147,15 +147,38 @@ Key accomplishments:
 - Defined localization governance, English/German catalog parity evidence, broad copy QA scope, and future-locale/RTL readiness.
 - Closed with rollout state `contract-ready`; frontend/native implementation and live activation remain deferred.
 
+Known deferred items at close: frontend demo fallback cleanup or explicit demo-only gating before `frontend-ready`; native app/APNS/FCM SDK integration, secure token storage, deep-link routing, app-store release, and native offline cache; live push/provider activation; semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future-locale activation beyond English/German.
+
+## Active
+
+### v5.1 Rich Curriculum Editor And Production Content Migration
+
+**Status:** Active planning
+**Started:** 2026-06-14
+**Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.1-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/176-rich-curriculum-editor-and-migration-contract/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Move curriculum foundations into product-ready operations with rich editor readiness, production content migration, assignment automation readiness, and adaptive sequencing readiness.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 176: Rich Curriculum Editor And Migration Contract.
+- Phase 177: Admin Rich Curriculum Editor UI And API Readiness.
+- Phase 178: Production Content Migration Pipeline And Validation.
+- Phase 179: Assignment Automation And Adaptive Sequencing Readiness.
+- Phase 180: v5.1 Curriculum Product Release Gate And Handoff.
+
 Feature priorities:
 
-- Define backend/frontend/native/localization ownership and mobile-critical flows.
-- Prepare mobile app API readiness and client handoff.
-- Define native notification token registration and offline-state handoff.
-- Build localization governance, translation QA, locale coverage, and copy review workflow.
-- Close with focused client-ready release evidence and next milestone selection.
-
-Known deferred items at close: frontend demo fallback cleanup or explicit demo-only gating before `frontend-ready`; native app/APNS/FCM SDK integration, secure token storage, deep-link routing, app-store release, and native offline cache; live push/provider activation; semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future-locale activation beyond English/German.
+- Define rich editor, migration, curriculum QA, assignment, and adaptive sequencing contract.
+- Prepare admin/tutor rich curriculum editor UI and API readiness.
+- Define production content migration dry-run/apply/validation/rollback behavior.
+- Define assignment automation and adaptive sequencing readiness.
+- Close with focused curriculum product release evidence and next milestone selection.
 
 ## Earlier Completed Milestones
 
@@ -1099,4 +1122,4 @@ Key accomplishments:
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ---
-*Last updated: 2026-06-14 after completing v5.0 native mobile localization governance*
+*Last updated: 2026-06-14 after selecting v5.1 rich curriculum editor and production content migration*

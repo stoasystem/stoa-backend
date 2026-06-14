@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-14 after completing v5.0 native mobile localization governance
+**Updated:** 2026-06-14 after selecting v5.1 rich curriculum editor and production content migration
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -30,6 +30,7 @@
 
 2. **Later Product Expansion**.
    Rich curriculum editor UI, production content migration, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, warehouse-backed analytics, and deeper operations reporting.
+   Status: v5.1 selects rich curriculum editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness.
 
 ## Current Planning Decision
 
@@ -39,4 +40,4 @@ Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provid
 
 v5.0 is complete as a contract-ready native mobile and full localization governance milestone. The completed scope includes mobile app/API readiness, native notification token and offline-state handoff, translation management governance, broad copy QA scope, English/German key parity evidence, locale coverage rules, and client release evidence.
 
-The next likely milestone is final external activation if payment/support/provider prerequisites become available; otherwise product expansion such as rich curriculum editor UI, production content migration, adaptive sequencing, or warehouse-backed analytics.
+v5.1 is selected as the active next milestone because final payment/support/provider activation remains blocked on external prerequisites. The planned scope is rich curriculum editor readiness, production content migration pipeline, validation/rollback evidence, reviewed assignment automation readiness, and adaptive sequencing readiness. The next likely milestone after v5.1 is adaptive sequencing and warehouse analytics unless external activation prerequisites become available first.

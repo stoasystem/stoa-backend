@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.0
-milestone_name: Native Mobile Localization Release Gate And Handoff
-status: Awaiting next milestone
-last_updated: "2026-06-14T19:22:15.081Z"
-last_activity: 2026-06-14 — Milestone v5.0 completed and archived
+milestone: v5.1
+milestone_name: Rich Curriculum Editor And Production Content Migration
+status: planning
+last_updated: "2026-06-14T20:00:00+02:00"
+last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,38 +20,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Awaiting next milestone selection.
+**Current focus:** v5.1 rich curriculum editor and production content migration.
 
 ## Current Position
 
-Phase: Milestone v5.0 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-14 — Milestone v5.0 completed and archived
+Phase: 176 - Rich Curriculum Editor And Migration Contract
+Plan: 176-01
+Status: Planned
+Last activity: 2026-06-14 - Synced v5.0 completion to remote and selected v5.1 product expansion from the `stoa_docs` remaining-feature queue.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v4.1 completed backend mobile/multilingual foundations: mobile-ready route contracts, durable locale preferences, and language-safe response metadata.
-- v4.3 completed selected frontend mobile responsive polish and English/German preference UI in `/Users/zhdeng/stoa-frontend`.
-- v4.9 completed backend production notification/native delivery handoff with push token lifecycle records, provider-gated email/push delivery, and release state `deferred`.
-- `stoa_docs` remaining feature queue now recommends native mobile and full localization governance unless external activation prerequisites become available first.
-- v5.0 should prioritize mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence.
-- Internal development mode means verification should stay focused on route contracts, localization correctness, token/offline behavior, and release handoff rather than broad unrelated security/compliance sweeps.
+- v3.8 completed full multi-subject curriculum rollout with curriculum hierarchy, catalog/exercise APIs, student/parent curriculum UX, and tutor/admin signals.
+- v4.0 completed adaptive learning memory and reviewed assignment foundations.
+- v4.6 completed curriculum authoring, QA lifecycle, publish/rollback/archive, and bounded analytics foundation.
+- v5.0 completed native/mobile and localization governance as `contract-ready`.
+- Final live payment/support external activation remains blocked on external prerequisites; internal development should continue with deeper product expansion.
+- `stoa_docs` remaining feature queue now points to rich curriculum editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics as the next buildable product expansion.
+- v5.1 should prioritize rich curriculum editor readiness, production content migration validation, assignment automation readiness, and adaptive sequencing readiness.
 
 ### Pending Todos
 
-- Start the next milestone with `/gsd-new-milestone`.
+- Execute Phase 176 rich curriculum editor and migration contract planning.
+- Define admin rich curriculum editor UI and API readiness in Phase 177.
+- Define production content migration pipeline and validation in Phase 178.
+- Define assignment automation and adaptive sequencing readiness in Phase 179.
+- Close v5.1 with release-gate evidence and next milestone selection in Phase 180.
 
 ### Blockers/Concerns
 
-- Full native app implementation may require a separate native/mobile workspace.
-- Frontend implementation may require `/Users/zhdeng/stoa-frontend`.
-- Translation catalog ownership and copy QA need a stable product workflow before broad locale expansion.
-- Real app-store/native release, live push sends, and external provider activation remain outside backend-only planning unless separately approved.
-- v5.0 closed as `contract-ready`; frontend demo fallback cleanup, native mobile implementation, semantic localization QA, RTL, and future-locale activation remain deferred follow-up work.
+- Frontend rich editor implementation may require `/Users/zhdeng/stoa-frontend`.
+- Production content source material, ownership, and QA acceptance may remain external dependencies.
+- Assignment automation must preserve review gates for generated content.
+- Warehouse-backed analytics and fully autonomous tutoring should remain future scope unless explicitly selected.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 176 using `.planning/phases/176-rich-curriculum-editor-and-migration-contract/176-01-PLAN.md`.
