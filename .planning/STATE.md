@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
 milestone: v5.0
-milestone_name: Native Mobile And Full Localization Governance
-status: complete
-last_updated: "2026-06-14T21:34:00+02:00"
-last_activity: 2026-06-14
+milestone_name: Native Mobile Localization Release Gate And Handoff
+status: Awaiting next milestone
+last_updated: "2026-06-14T19:22:15.081Z"
+last_activity: 2026-06-14 — Milestone v5.0 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.0 native mobile and full localization governance.
+**Current focus:** Awaiting next milestone selection.
 
 ## Current Position
 
-Phase: 175 - v5.0 Native Mobile Localization Release Gate And Handoff
-Plan: 175-01
-Status: Complete
-Last activity: 2026-06-14 - Completed v5.0 native mobile localization release gate and handoff.
+Phase: Milestone v5.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-14 — Milestone v5.0 completed and archived
 
 ## Accumulated Context
 
@@ -42,7 +42,7 @@ Last activity: 2026-06-14 - Completed v5.0 native mobile localization release ga
 
 ### Pending Todos
 
-- Run milestone audit and archive v5.0.
+- Start the next milestone with `/gsd-new-milestone`.
 
 ### Blockers/Concerns
 
@@ -50,7 +50,8 @@ Last activity: 2026-06-14 - Completed v5.0 native mobile localization release ga
 - Frontend implementation may require `/Users/zhdeng/stoa-frontend`.
 - Translation catalog ownership and copy QA need a stable product workflow before broad locale expansion.
 - Real app-store/native release, live push sends, and external provider activation remain outside backend-only planning unless separately approved.
+- v5.0 closed as `contract-ready`; frontend demo fallback cleanup, native mobile implementation, semantic localization QA, RTL, and future-locale activation remain deferred follow-up work.
 
 ## Operator Next Steps
 
-- Run milestone audit and complete v5.0 archive.
+- Start the next milestone with /gsd-new-milestone

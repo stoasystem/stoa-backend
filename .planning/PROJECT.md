@@ -72,7 +72,7 @@ The completed-local v4.8 milestone expands the v4.5 support handoff foundation b
 
 The completed-local v4.9 milestone promotes notification delivery from local WebSocket/backend readiness into production-deliverable backend capability: live WebSocket/API Gateway readiness, provider-gated email/push delivery, frontend/native notification UX handoff, native token registration records, and release evidence. Final rollout state is `deferred` pending live deployment, provider activation, frontend implementation, native app work, and explicit rollout approval.
 
-The active v5.0 milestone moves beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance: mobile app/API handoff, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence.
+The completed v5.0 milestone moves beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance: mobile app/API handoff, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence. It closed as `contract-ready`; frontend/native implementation and live activation remain separate follow-up work.
 
 ## Core Value
 
@@ -81,8 +81,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v4.9 Production Notification And Native Delivery Rollout on 2026-06-14 (backend release gate; rollout state `deferred`)
-**Active milestone:** v5.0 Native Mobile And Full Localization Governance
+**Latest completed milestone:** v5.0 Native Mobile And Full Localization Governance on 2026-06-14 (contract-ready release gate)
+**Active milestone:** None — awaiting next milestone selection
 
 Delivered:
 
@@ -259,16 +259,17 @@ Requirements: `.planning/REQUIREMENTS.md`
 
 Outcome: v4.9 completed backend rollout readiness and handoff work. Live WebSocket/API Gateway smoke, real provider activation, frontend implementation, and native app work remain externally gated.
 
-## Current Milestone: v5.0 Native Mobile And Full Localization Governance
+## Latest Completed Milestone: v5.0 Native Mobile And Full Localization Governance
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v5.0-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.0-REQUIREMENTS.md`
+Audit: `.planning/milestones/v5.0-MILESTONE-AUDIT.md`
 
-**Status:** Active planning.
+**Status:** Completed 2026-06-14; rollout state `contract-ready`.
 
 **Goal:** Move beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance.
 
-**Target features:**
+**Completed features:**
 
 - Native mobile and localization governance contract.
 - Mobile app API readiness and client handoff.
@@ -276,7 +277,7 @@ Requirements: `.planning/REQUIREMENTS.md`
 - Localization governance, translation QA, and locale coverage.
 - v5.0 native mobile localization release gate and handoff.
 
-This is now the active milestone because `stoa_docs` remaining-feature planning identifies native mobile and full localization governance as the next highest-value feature build after v4.9 notification backend rollout.
+Outcome: v5.0 completed a contract-ready mobile/localization handoff. Frontend demo fallback cleanup, native app/APNS/FCM/offline implementation, live push/provider activation, semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future locale activation remain deferred.
 
 ## Requirements
 
@@ -681,7 +682,7 @@ Known current resources:
 | Start v4.7 payment production activation | v4.4 delivered local payment readiness, but live provider activation still needs approved Stripe/TWINT readiness checks, webhook registration, direct refunds, finance handoff, and explicit rollout controls | Complete locally - backend release gate passed; final live activation deferred |
 | Start v4.8 support provider expansion | v4.5 delivered internal queue support handoff, but approved third-party adapters, retry workers, two-way sync, SLA analytics, and controlled CRM/customer messaging remain the next support operations gap | Complete locally - backend release gate passed; provider activation state `provider-ready` |
 | Start v4.9 production notification rollout | v3.6 delivered local realtime notifications and v4.2 delivered backend production readiness, but live WebSocket/API Gateway deployment, provider-backed email/push, frontend/native visuals, token registration, and live smoke remain the next notification gap | Complete locally - backend release gate passed; rollout state `deferred` |
-| Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Active - milestone initialized |
+| Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Complete - contract-ready release gate passed |
 
 ## Evolution
 
@@ -701,4 +702,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 after selecting v5.0 native mobile localization governance*
+*Last updated: 2026-06-14 after completing v5.0 native mobile localization governance*

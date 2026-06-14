@@ -1,5 +1,19 @@
 # Milestones
 
+## v5.0 Native Mobile And Full Localization Governance (Shipped: 2026-06-14)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Defined backend, frontend/PWA, native, localization, content, and release ownership boundaries for mobile/localization rollout.
+- Produced mobile API readiness and client handoff guidance for core student, parent, tutor, admin, notification, billing, and support flows.
+- Defined native notification token lifecycle, offline/read-through behavior, permission states, reconnect behavior, and deep-link routing.
+- Defined localization governance, English/German catalog parity evidence, broad copy QA scope, and future-locale/RTL readiness.
+- Closed v5.0 with rollout state `contract-ready`; frontend/native implementation and live activation remain deferred.
+
+---
+
 ## v4.9 Production Notification And Native Delivery Rollout (Shipped: 2026-06-14)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -100,12 +114,14 @@ Key accomplishments:
 
 Known deferred items at close: real external provider selection, approved production provider credentials, destination policy approval, real CRM/customer transport, and production notification/native delivery rollout.
 
-## Active
+## Recently Completed
 
 ### v5.0 Native Mobile And Full Localization Governance
 
 **Status:** Completed local release gate 2026-06-14
 **Started:** 2026-06-14
+**Completed:** 2026-06-14
+**Audit:** `.planning/milestones/v5.0-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
 **Phase evidence:** `.planning/phases/171-native-mobile-and-localization-governance-contract/`, `.planning/phases/172-mobile-app-api-readiness-and-client-handoff/`, `.planning/phases/173-native-notification-token-and-offline-state-handoff/`, `.planning/phases/174-localization-governance-translation-qa-and-locale-coverage/`, `.planning/phases/175-v5-0-native-mobile-localization-release-gate-and-handoff/`
@@ -138,6 +154,8 @@ Feature priorities:
 - Define native notification token registration and offline-state handoff.
 - Build localization governance, translation QA, locale coverage, and copy review workflow.
 - Close with focused client-ready release evidence and next milestone selection.
+
+Known deferred items at close: frontend demo fallback cleanup or explicit demo-only gating before `frontend-ready`; native app/APNS/FCM SDK integration, secure token storage, deep-link routing, app-store release, and native offline cache; live push/provider activation; semantic copy-owner review, hardcoded-string inventory, mobile visual text-fit QA, RTL, and future-locale activation beyond English/German.
 
 ## Earlier Completed Milestones
 
@@ -1081,4 +1099,4 @@ Key accomplishments:
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ---
-*Last updated: 2026-06-14 after selecting v5.0 native mobile localization governance*
+*Last updated: 2026-06-14 after completing v5.0 native mobile localization governance*
