@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
 milestone: v4.9
-milestone_name: Production Notification And Native Delivery Rollout
-status: complete
-last_updated: "2026-06-14T11:44:30.818Z"
-last_activity: 2026-06-14
+milestone_name: Production Notification Release Gate And Live Smoke
+status: Awaiting next milestone
+last_updated: "2026-06-14T11:45:24.831Z"
+last_activity: 2026-06-14 — Milestone v4.9 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: none
-Plan: none
-Status: Complete
-Last activity: 2026-06-14
+Phase: Milestone v4.9 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-14 — Milestone v4.9 completed and archived
 
 ## Accumulated Context
 
@@ -54,4 +54,4 @@ Last activity: 2026-06-14
 
 ## Operator Next Steps
 
-- Start the next milestone when ready.
+- Start the next milestone with /gsd-new-milestone

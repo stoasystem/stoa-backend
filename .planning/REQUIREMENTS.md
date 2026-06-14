@@ -1,7 +1,7 @@
 # Requirements: v4.9 Production Notification And Native Delivery Rollout
 
 **Milestone:** v4.9
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-06-13
 
 ## Goal

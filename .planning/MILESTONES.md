@@ -1,5 +1,19 @@
 # Milestones
 
+## v4.9 Production Notification And Native Delivery Rollout (Shipped: 2026-06-14)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Defined production notification rollout ownership across backend, frontend, native, infrastructure, and providers.
+- Added live WebSocket/API Gateway readiness settings, rollout modes, stale cleanup visibility, and redacted admin delivery status evidence.
+- Added provider-gated email digest and push delivery with preference gating, token lifecycle records, and redacted send/refusal/failure evidence.
+- Documented frontend/native notification UX, WebSocket discovery, token registration, and no-demo-fallback handoff.
+- Closed with 411 backend tests passing, Ruff passing, and release state `deferred` pending external deployment/provider/frontend/native activation.
+
+---
+
 ## Completed
 
 ### v4.6 Rich Curriculum Authoring And Analytics Foundation
@@ -88,34 +102,7 @@ Known deferred items at close: real external provider selection, approved produc
 
 ## Active
 
-### v4.9 Production Notification And Native Delivery Rollout
-
-**Status:** Active planning
-**Started:** 2026-06-13
-**Roadmap:** `.planning/milestones/v4.9-ROADMAP.md`
-**Requirements:** `.planning/milestones/v4.9-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/166-production-notification-rollout-contract-and-ownership/`
-**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
-**Goal:** Move notification delivery from local WebSocket/backend readiness into production-deliverable capability with live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, token registration, and live smoke evidence.
-**Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
-
-Planned phases:
-
-- Phase 166: Production Notification Rollout Contract And Ownership.
-- Phase 167: Live WebSocket API Gateway Deployment Readiness.
-- Phase 168: Provider-Backed Email Digest And Push Delivery.
-- Phase 169: Frontend And Native Notification UX Handoff.
-- Phase 170: v4.9 Production Notification Release Gate And Live Smoke.
-
-Feature priorities:
-
-- Define backend/frontend/native/infrastructure/provider ownership boundaries and rollout gates.
-- Add live WebSocket/API Gateway deployment readiness and operator-visible delivery status.
-- Add provider-backed email digest and push delivery with preference gating and redacted evidence.
-- Define frontend/native notification UX and token registration handoff.
-- Close with focused notification rollout release evidence and next milestone selection.
+No active milestone. Next recommended milestone: native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
 
 ## Earlier Completed Milestones
 

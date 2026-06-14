@@ -1,6 +1,6 @@
 # Roadmap: v4.9 Production Notification And Native Delivery Rollout
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-06-13
 **Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
 
