@@ -16,7 +16,7 @@ Build curriculum product functionality directly. Keep verification focused on ed
 
 - [x] **Phase 176: Rich Curriculum Editor And Migration Contract** - Define editor, migration, QA, assignment, adaptive sequencing, and release handoff contract.
 - [x] **Phase 177: Admin Rich Curriculum Editor UI And API Readiness** - Prepare backend/frontend handoff for rich lesson/exercise editing, validation, preview, diff, review, publish, rollback, and archive.
-- [ ] **Phase 178: Production Content Migration Pipeline And Validation** - Define and/or build source manifests, dry-run/apply behavior, validation, conflict detection, migration evidence, and rollback metadata.
+- [x] **Phase 178: Production Content Migration Pipeline And Validation** - Define and/or build source manifests, dry-run/apply behavior, validation, conflict detection, migration evidence, and rollback metadata.
 - [ ] **Phase 179: Assignment Automation And Adaptive Sequencing Readiness** - Define controlled assignment automation and sequencing signals using curriculum progress, AI drafts, memory, and analytics.
 - [ ] **Phase 180: v5.1 Curriculum Product Release Gate And Handoff** - Verify v5.1 docs/contracts/evidence, record rollout state, and select the next feature milestone.
 
@@ -71,11 +71,11 @@ Plans:
   3. Apply mode writes migration evidence, version metadata, and audit records under explicit approval.
   4. Rollback/undo metadata protects existing published content.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 178-01: Define production content migration pipeline and validation.
+- [x] 178-01: Define production content migration pipeline and validation.
 
 ### Phase 179: Assignment Automation And Adaptive Sequencing Readiness
 
@@ -119,7 +119,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 176 Rich Curriculum Editor And Migration Contract | v5.1 | 1/1 | Complete | 2026-06-14 |
 | 177 Admin Rich Curriculum Editor UI And API Readiness | v5.1 | 1/1 | Complete | 2026-06-14 |
-| 178 Production Content Migration Pipeline And Validation | v5.1 | 0/1 | Planned | - |
+| 178 Production Content Migration Pipeline And Validation | v5.1 | 1/1 | Complete | 2026-06-14 |
 | 179 Assignment Automation And Adaptive Sequencing Readiness | v5.1 | 0/1 | Planned | - |
 | 180 v5.1 Curriculum Product Release Gate And Handoff | v5.1 | 0/1 | Planned | - |
 
@@ -129,9 +129,9 @@ Plans:
 |-------------|-------|--------|
 | CURRICULUMXP-01 | Phase 176 | Complete |
 | CURRICULUMXP-02 | Phase 177 | Complete |
-| CURRICULUMXP-03 | Phase 178 | Planned |
+| CURRICULUMXP-03 | Phase 178 | Complete |
 | CURRICULUMXP-04 | Phase 179 | Planned |
 | VERIFY-34 | Phase 180 | Planned |
 
 ---
-*Last updated: 2026-06-14 after completing Phase 177 admin rich curriculum editor UI and API readiness.*
+*Last updated: 2026-06-14 after completing Phase 178 production content migration pipeline and validation.*
