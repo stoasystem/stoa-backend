@@ -15,7 +15,7 @@ Build curriculum product functionality directly. Keep verification focused on ed
 ## Phases
 
 - [x] **Phase 176: Rich Curriculum Editor And Migration Contract** - Define editor, migration, QA, assignment, adaptive sequencing, and release handoff contract.
-- [ ] **Phase 177: Admin Rich Curriculum Editor UI And API Readiness** - Prepare backend/frontend handoff for rich lesson/exercise editing, validation, preview, diff, review, publish, rollback, and archive.
+- [x] **Phase 177: Admin Rich Curriculum Editor UI And API Readiness** - Prepare backend/frontend handoff for rich lesson/exercise editing, validation, preview, diff, review, publish, rollback, and archive.
 - [ ] **Phase 178: Production Content Migration Pipeline And Validation** - Define and/or build source manifests, dry-run/apply behavior, validation, conflict detection, migration evidence, and rollback metadata.
 - [ ] **Phase 179: Assignment Automation And Adaptive Sequencing Readiness** - Define controlled assignment automation and sequencing signals using curriculum progress, AI drafts, memory, and analytics.
 - [ ] **Phase 180: v5.1 Curriculum Product Release Gate And Handoff** - Verify v5.1 docs/contracts/evidence, record rollout state, and select the next feature milestone.
@@ -53,11 +53,11 @@ Plans:
   3. Frontend handoff identifies editor layout, review queue, diff/preview, and validation error implementation points.
   4. Published-only student/parent reads remain stable.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 177-01: Define rich editor UI and API readiness.
+- [x] 177-01: Define rich editor UI and API readiness.
 
 ### Phase 178: Production Content Migration Pipeline And Validation
 
@@ -118,7 +118,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 176 Rich Curriculum Editor And Migration Contract | v5.1 | 1/1 | Complete | 2026-06-14 |
-| 177 Admin Rich Curriculum Editor UI And API Readiness | v5.1 | 0/1 | Planned | - |
+| 177 Admin Rich Curriculum Editor UI And API Readiness | v5.1 | 1/1 | Complete | 2026-06-14 |
 | 178 Production Content Migration Pipeline And Validation | v5.1 | 0/1 | Planned | - |
 | 179 Assignment Automation And Adaptive Sequencing Readiness | v5.1 | 0/1 | Planned | - |
 | 180 v5.1 Curriculum Product Release Gate And Handoff | v5.1 | 0/1 | Planned | - |
@@ -128,10 +128,10 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CURRICULUMXP-01 | Phase 176 | Complete |
-| CURRICULUMXP-02 | Phase 177 | Planned |
+| CURRICULUMXP-02 | Phase 177 | Complete |
 | CURRICULUMXP-03 | Phase 178 | Planned |
 | CURRICULUMXP-04 | Phase 179 | Planned |
 | VERIFY-34 | Phase 180 | Planned |
 
 ---
-*Last updated: 2026-06-14 after completing Phase 176 rich curriculum editor and migration contract.*
+*Last updated: 2026-06-14 after completing Phase 177 admin rich curriculum editor UI and API readiness.*
