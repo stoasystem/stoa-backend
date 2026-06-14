@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-14 after completing v5.1 rich curriculum editor and production content migration readiness
+**Updated:** 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -22,22 +22,23 @@
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 - Production notification and native delivery backend rollout with live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, frontend/native handoff, and release state `deferred` pending external activation.
 - Native mobile and full localization governance with mobile API/client handoff, native notification/offline contracts, translation governance, English/German key parity evidence, broad copy QA scope, and rollout state `contract-ready`.
+- Rich curriculum editor and production content migration readiness with UI/API handoff, migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, adaptive sequencing readiness, and rollout state readiness-complete.
 
 ## Remaining Feature Build Queue
 
 1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-2. **Later Product Expansion**.
-   Rich curriculum editor UI, production content migration, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, warehouse-backed analytics, and deeper operations reporting.
-   Status: v5.1 selects rich curriculum editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness.
+2. **Active Product Expansion: Adaptive Sequencing And Warehouse Analytics**.
+   Multi-signal recommendation sequencing, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards.
+   Status: v5.2 selected and active planning started 2026-06-14.
+
+3. **Later Product Expansion**.
+   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, full autonomous tutoring decisions, automatic assignment delivery, live warehouse/BI deployment, and deeper operations reporting.
+   Status: remains future scope unless selected after v5.2.
 
 ## Current Planning Decision
 
-v4.9 is complete after backend release-gate verification. The shipped scope promotes notification delivery from local/backend readiness into production-deliverable backend capability: live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, preference-aware delivery behavior, frontend/native handoff, and release evidence.
+v5.1 is complete as a curriculum product readiness milestone because final payment/support/provider activation remains blocked on external prerequisites. The completed scope defines rich curriculum editor readiness, production content migration manifests and dry-run/apply validation, rollback evidence, reviewed assignment automation readiness, and adaptive sequencing readiness.
 
-Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval.
-
-v5.0 is complete as a contract-ready native mobile and full localization governance milestone. The completed scope includes mobile app/API readiness, native notification token and offline-state handoff, translation management governance, broad copy QA scope, English/German key parity evidence, locale coverage rules, and client release evidence.
-
-v5.1 is complete as a curriculum product readiness milestone because final payment/support/provider activation remains blocked on external prerequisites. The completed scope defines rich curriculum editor readiness, production content migration manifests and dry-run/apply validation, rollback evidence, reviewed assignment automation readiness, and adaptive sequencing readiness. The next likely milestone after v5.1 is adaptive sequencing and warehouse analytics unless external activation prerequisites become available first.
+v5.2 is now the active milestone. It should turn the v4.0 adaptive learning memory foundation, v4.6 curriculum analytics foundation, and v5.1 readiness contracts into deeper adaptive sequencing recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. During internal development, verification should prioritize product behavior and release evidence over broad unrelated security/compliance testing.

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.1
-milestone_name: Rich Curriculum Editor And Production Content Migration
-status: Awaiting next milestone
-last_updated: "2026-06-14T20:24:26.450Z"
-last_activity: 2026-06-14 — Milestone v5.1 completed and archived
+milestone: v5.2
+milestone_name: Adaptive Sequencing And Warehouse Analytics
+status: planning
+last_updated: "2026-06-14T21:00:00+02:00"
+last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,38 +20,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Awaiting next milestone selection.
+**Current focus:** v5.2 adaptive sequencing and warehouse analytics.
 
 ## Current Position
 
-Phase: Milestone v5.1 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-14 — Milestone v5.1 completed and archived
+Phase: 181 - Adaptive Sequencing And Warehouse Analytics Contract
+Plan: 181-01
+Status: Planned
+Last activity: 2026-06-14 - Synced v5.1 completion to remote and selected v5.2 product expansion from the `stoa_docs` remaining-feature queue.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v3.8 completed full multi-subject curriculum rollout with curriculum hierarchy, catalog/exercise APIs, student/parent curriculum UX, and tutor/admin signals.
 - v4.0 completed adaptive learning memory and reviewed assignment foundations.
-- v4.6 completed curriculum authoring, QA lifecycle, publish/rollback/archive, and bounded analytics foundation.
-- v5.0 completed native/mobile and localization governance as `contract-ready`.
+- v4.6 completed curriculum analytics with bounded aggregate content-quality signals.
+- v5.1 completed curriculum product readiness with rich editor handoff, migration readiness, assignment automation readiness, and adaptive sequencing readiness.
 - Final live payment/support external activation remains blocked on external prerequisites; internal development should continue with deeper product expansion.
-- `stoa_docs` remaining feature queue now points to rich curriculum editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics as the next buildable product expansion.
-- v5.1 completed rich curriculum editor readiness, production content migration validation, assignment automation readiness, and adaptive sequencing readiness as a readiness-complete milestone.
+- `stoa_docs` remaining feature queue now points to adaptive sequencing and warehouse-backed analytics after v5.1 curriculum readiness.
+- v5.2 should prioritize adaptive sequencing recommendations, assignment outcome feedback, warehouse analytics export/readiness, and operator dashboards.
 
 ### Pending Todos
 
-- Start the next milestone with `/gsd-new-milestone`.
+- Execute Phase 181 adaptive sequencing and warehouse analytics contract planning.
+- Implement adaptive sequencing recommendation engine in Phase 182.
+- Implement assignment outcome feedback loop in Phase 183.
+- Implement warehouse analytics export and operator dashboards in Phase 184.
+- Close v5.2 with release-gate evidence and next milestone selection in Phase 185.
 
 ### Blockers/Concerns
 
-- Frontend rich editor implementation may require `/Users/zhdeng/stoa-frontend`.
-- Production content source material, ownership, and QA acceptance may remain external dependencies.
-- Assignment automation must preserve review gates for generated content.
-- Warehouse-backed analytics and fully autonomous tutoring should remain future scope unless explicitly selected.
+- Live warehouse/BI deployment may remain a future infrastructure decision.
+- Fully autonomous tutoring and unreviewed generated assignment should remain out of scope unless explicitly selected.
+- Recommendation explanations must be useful without exposing raw internal ranking internals.
+- Existing reviewed assignment and curriculum publish/rollback boundaries must remain intact.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 181 using `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/181-01-PLAN.md`.

@@ -84,7 +84,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.1 Rich Curriculum Editor And Production Content Migration on 2026-06-14 (readiness-complete release gate)
-**Active milestone:** None — awaiting next milestone selection
+**Active milestone:** v5.2 Adaptive Sequencing And Warehouse Analytics, planning started 2026-06-14
 
 Delivered:
 
@@ -300,6 +300,26 @@ Audit: `.planning/milestones/v5.1-MILESTONE-AUDIT.md`
 - v5.1 curriculum product release gate and handoff.
 
 Outcome: v5.1 completed the curriculum product readiness layer while final payment/support external activation remains blocked on external prerequisites. Frontend editor implementation, backend rich-field expansion, production content import, migration API/UI, candidate generation, duplicate prevention, warehouse analytics, and fully autonomous tutoring remain deferred.
+
+## Active Milestone: v5.2 Adaptive Sequencing And Warehouse Analytics
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Current phase: `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/181-01-PLAN.md`
+
+**Status:** Active planning 2026-06-14.
+
+**Goal:** Turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
+
+**Planned phases:**
+
+- Phase 181: Adaptive Sequencing And Warehouse Analytics Contract.
+- Phase 182: Adaptive Sequencing Recommendation Engine.
+- Phase 183: Assignment Outcome Feedback Loop.
+- Phase 184: Warehouse Analytics Export And Operator Dashboards.
+- Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate.
+
+**Scope bias:** Build product capability first during internal development. Verification should stay focused on recommendation behavior, assignment outcome loops, analytics schemas, dashboard usefulness, and release evidence.
 
 ## Requirements
 
@@ -706,6 +726,7 @@ Known current resources:
 | Start v4.9 production notification rollout | v3.6 delivered local realtime notifications and v4.2 delivered backend production readiness, but live WebSocket/API Gateway deployment, provider-backed email/push, frontend/native visuals, token registration, and live smoke remain the next notification gap | Complete locally - backend release gate passed; rollout state `deferred` |
 | Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Complete - contract-ready release gate passed |
 | Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Complete - readiness release gate passed |
+| Start v5.2 adaptive sequencing and warehouse analytics | v5.1 completed curriculum product readiness while external activation remains blocked; the next buildable product gap is deeper recommendation sequencing, assignment outcome feedback, warehouse-ready analytics, and operator dashboards | Active planning |
 
 ## Evolution
 
@@ -725,4 +746,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 after completing v5.1 rich curriculum editor and production content migration readiness*
+*Last updated: 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics*

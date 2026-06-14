@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-14 after completing v5.1 rich curriculum editor and production content migration readiness
+**Updated:** 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -49,6 +49,8 @@ v4.9 completed the local backend production notification and native delivery rol
 v5.0 completed the native mobile and full localization governance scope as a contract-ready milestone: mobile API/client handoff, native notification token and offline-state contracts, translation management governance, broad copy QA scope, English/German key parity evidence, locale coverage rules, and client release evidence beyond the selected v4.3 frontend rollout.
 
 v5.1 completed the rich curriculum editor and production content migration readiness scope: editor UI/API handoff, UI-SPEC, production content migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, and adaptive sequencing readiness. The milestone is readiness-complete; actual frontend editor implementation, production source import, autonomous assignment enablement, and warehouse-backed sequencing remain future scope.
+
+v5.2 is now active planning for adaptive sequencing and warehouse analytics. It should build on v4.0 memory/assignment foundations, v4.6 curriculum analytics, and v5.1 sequencing readiness to define and implement multi-signal recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. Final live payment/support activation remains externally blocked, so internal feature work should continue here before revisiting provider activation.
 
 ## Completed Or Largely Complete
 
@@ -173,18 +175,18 @@ v5.1 completed the rich curriculum editor and production content migration readi
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.1 completed readiness/handoff scope; implementation remains future work.
-- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.1 completed readiness model; full sequencing engine remains future work.
+- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 selected for active planning with recommendation engine, outcome feedback, analytics export, and operator dashboard scope.
 - Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; full native app implementation, app-store release, and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Adaptive sequencing and warehouse-backed analytics after v5.1 curriculum product readiness, if external activation prerequisites remain blocked.
-2. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
-3. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
-4. Full frontend rich curriculum editor implementation and production content import when source content/ownership prerequisites are available.
-5. Full native app implementation and app-store release using the v5.0 contract if a native workspace is selected.
+1. Execute v5.2 adaptive sequencing and warehouse-backed analytics: sequencing contract, recommendation engine, assignment outcome feedback, analytics exports, and operator dashboards.
+2. Plan autonomous tutoring and assignment automation after v5.2 if recommendation/outcome signals are stable enough for controlled delivery.
+3. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
+4. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
+5. Full frontend rich curriculum editor implementation, production content import, native app implementation, and app-store release when the relevant workspace/content/prerequisite owners are available.
 
 ## v3.0 Scope Recommendation
 

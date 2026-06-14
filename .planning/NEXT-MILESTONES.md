@@ -1,22 +1,9 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-14 after completing v5.1 readiness
+**Updated:** 2026-06-14 after selecting v5.2
 **Mode:** product functionality first
 
-## v5.0 Native Mobile And Full Localization Governance
-
-**Status:** Completed local release gate 2026-06-14
-**Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
-
-Goal: move beyond selected responsive frontend/localization polish into native/mobile rollout readiness and complete localization governance.
-
-Closed scope:
-
-- Built mobile API/client handoff, native notification/offline contracts, translation governance, copy QA, locale coverage, and client-ready release evidence.
-- Final rollout state is `contract-ready`; frontend/native implementation, app-store release, and live push/provider activation remain future scope.
-
-## v5.1 Rich Curriculum Editor And Production Content Migration
+## Latest Completed: v5.1 Rich Curriculum Editor And Production Content Migration
 
 **Status:** Completed readiness release gate 2026-06-14
 **Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`
@@ -24,37 +11,44 @@ Closed scope:
 
 Goal: move curriculum foundations into product-ready curriculum operations.
 
-Completed phases:
-
-- Phase 176: Rich Curriculum Editor And Migration Contract.
-- Phase 177: Admin Rich Curriculum Editor UI And API Readiness.
-- Phase 178: Production Content Migration Pipeline And Validation.
-- Phase 179: Assignment Automation And Adaptive Sequencing Readiness.
-- Phase 180: v5.1 Curriculum Product Release Gate And Handoff.
-
 Closed scope:
 
 - Built editor readiness, production content migration contracts, validation/rollback evidence, reviewed assignment readiness, and adaptive sequencing readiness.
-- Keep generated content review-gated unless a later milestone selects autonomous publication.
-- Avoid external payment/support activation work while provider prerequisites remain unavailable.
+- Kept generated content review-gated and avoided external payment/support activation work while provider prerequisites remain unavailable.
 
-## Candidate v5.2 Adaptive Sequencing And Warehouse Analytics
+## Active v5.2 Adaptive Sequencing And Warehouse Analytics
 
-**Status:** Candidate after v5.1
+**Status:** Active planning 2026-06-14
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+
+Goal: turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
+
+Planned scope:
+
+- Phase 181: Adaptive sequencing and warehouse analytics contract.
+- Phase 182: Multi-signal recommendation generation, ranking, dedupe, rationale, freshness, and review flags.
+- Phase 183: Assignment outcome feedback loop for sequencing, progress, and content-quality signals.
+- Phase 184: Warehouse-ready analytics export schemas and operator dashboards.
+- Phase 185: Focused release gate and next milestone selection.
+
+## Candidate v5.3 Autonomous Tutoring And Assignment Automation
+
+**Status:** Candidate after v5.2
 
 Potential scope:
 
-- Deeper adaptive exercise sequencing.
-- Warehouse-backed learning/content analytics.
-- Cohort and curriculum quality dashboards.
-- Tutor/admin operational analytics.
+- Automatic assignment creation from reviewed AI exercise drafts and curriculum candidates.
+- Tutor-controlled autonomy levels, duplicate prevention, and student delivery rules.
+- Parent/tutor explanations for why assignments were generated or withheld.
+- Cost/quality guardrails for generated practice without unreviewed publication by default.
 
-## Candidate v5.3 External Activation Or Autonomous Tutoring
+## Candidate v5.4 External Activation Or Operations Expansion
 
-**Status:** Candidate after v5.2 or when external prerequisites unblock
+**Status:** Candidate after v5.2/v5.3 or when external prerequisites unblock
 
 Potential scope:
 
-- Final live payment activation operations once external provider prerequisites are ready.
+- Final live payment activation operations once Stripe/TWINT credentials, webhook registration, finance acceptance, and rollout approval are ready.
 - Real external support provider and CRM/customer transport activation after approved provider prerequisites are ready.
-- Autonomous tutoring decisions and automatic student assignment of reviewed/generated exercises.
+- Native app implementation, app-store release, or broader operations reporting if product activation remains blocked.

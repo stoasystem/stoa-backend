@@ -1,5 +1,38 @@
 # Milestones
 
+## Active
+
+### v5.2 Adaptive Sequencing And Warehouse Analytics
+
+**Status:** Active planning 2026-06-14
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/`
+**Goal:** Turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 181: Adaptive Sequencing And Warehouse Analytics Contract.
+- Phase 182: Adaptive Sequencing Recommendation Engine.
+- Phase 183: Assignment Outcome Feedback Loop.
+- Phase 184: Warehouse Analytics Export And Operator Dashboards.
+- Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate.
+
+Feature priorities:
+
+- Define multi-signal sequencing inputs, ranking, dedupe, freshness, rationale, review gates, and rollout states.
+- Promote reviewed assignment/curriculum/memory signals into useful recommendation candidates without enabling unreviewed autonomous tutoring.
+- Feed assignment outcomes back into sequencing, parent/tutor progress, and content-quality analytics.
+- Prepare warehouse-ready analytics schemas and operator dashboards for cohort progress, sequencing coverage, outcomes, quality, and intervention opportunities.
+- Keep internal-development verification focused on recommendation behavior, analytics contracts, and release evidence rather than broad unrelated security/compliance testing.
+
+Known out of scope for this milestone: final live payment/provider activation, real external support provider activation, unreviewed automatic publication, native app implementation, and live warehouse/BI deployment unless explicitly selected later.
+
+---
+
 ## v5.1 Rich Curriculum Editor And Production Content Migration (Shipped: 2026-06-14)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
