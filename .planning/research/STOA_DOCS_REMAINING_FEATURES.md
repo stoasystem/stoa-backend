@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-14
+**Updated:** 2026-06-14 after completing v5.0 native mobile localization governance
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -21,17 +21,14 @@
 - Adaptive learning memory, reviewed assignment workflows, next-practice recommendations, and parent/tutor progress signals.
 - Mobile/multilingual backend foundation with durable locale preferences, language-safe response metadata, and explicit deferred frontend/native scope.
 - Production notification and native delivery backend rollout with live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, frontend/native handoff, and release state `deferred` pending external activation.
+- Native mobile and full localization governance with mobile API/client handoff, native notification/offline contracts, translation governance, English/German key parity evidence, broad copy QA scope, and rollout state `contract-ready`.
 
 ## Remaining Feature Build Queue
 
-1. **Native Mobile And Full Localization Governance**.
-   Implement native/mobile-facing notification token capture, responsive/native notification UX, full localization governance, and client-side rollout controls using the v4.9 backend handoff.
-   Status: selected as active v5.0 planning scope.
-
-2. **Final Live Payment Activation Operations**.
+1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-3. **Later Product Expansion**.
+2. **Later Product Expansion**.
    Rich curriculum editor UI, production content migration, native apps, full autonomous tutoring decisions, long-term adaptive sequencing, warehouse-backed analytics, and deeper operations reporting.
 
 ## Current Planning Decision
@@ -40,4 +37,6 @@ v4.9 is complete after backend release-gate verification. The shipped scope prom
 
 Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval.
 
-v5.0 is selected as the active next milestone: native mobile and full localization governance. The planned scope is mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence. The next likely milestone after v5.0 is product expansion or final external activation, depending on whether payment/support provider prerequisites become available.
+v5.0 is complete as a contract-ready native mobile and full localization governance milestone. The completed scope includes mobile app/API readiness, native notification token and offline-state handoff, translation management governance, broad copy QA scope, English/German key parity evidence, locale coverage rules, and client release evidence.
+
+The next likely milestone is final external activation if payment/support/provider prerequisites become available; otherwise product expansion such as rich curriculum editor UI, production content migration, adaptive sequencing, or warehouse-backed analytics.

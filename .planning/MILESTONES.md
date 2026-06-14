@@ -104,24 +104,32 @@ Known deferred items at close: real external provider selection, approved produc
 
 ### v5.0 Native Mobile And Full Localization Governance
 
-**Status:** Active planning
+**Status:** Completed local release gate 2026-06-14
 **Started:** 2026-06-14
 **Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/171-native-mobile-and-localization-governance-contract/`
+**Phase evidence:** `.planning/phases/171-native-mobile-and-localization-governance-contract/`, `.planning/phases/172-mobile-app-api-readiness-and-client-handoff/`, `.planning/phases/173-native-notification-token-and-offline-state-handoff/`, `.planning/phases/174-localization-governance-translation-qa-and-locale-coverage/`, `.planning/phases/175-v5-0-native-mobile-localization-release-gate-and-handoff/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Move beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 171: Native Mobile And Localization Governance Contract.
 - Phase 172: Mobile App API Readiness And Client Handoff.
 - Phase 173: Native Notification Token And Offline State Handoff.
 - Phase 174: Localization Governance Translation QA And Locale Coverage.
 - Phase 175: v5.0 Native Mobile Localization Release Gate And Handoff.
+
+Key accomplishments:
+
+- Defined backend, frontend/PWA, future native, localization, content, and release ownership boundaries.
+- Produced mobile API readiness and client handoff guidance for core STOA role flows.
+- Defined native notification token lifecycle, offline/read-through behavior, permission states, reconnect behavior, and deep-link routing.
+- Defined localization governance, English/German catalog parity evidence, broad copy QA scope, and future-locale/RTL readiness.
+- Closed with rollout state `contract-ready`; frontend/native implementation and live activation remain deferred.
 
 Feature priorities:
 

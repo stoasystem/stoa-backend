@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-14 after selecting v5.0
+**Updated:** 2026-06-14 after completing v5.0
 **Mode:** product functionality first
 
 ## v4.8 Support Provider Expansion And CRM Automation
@@ -31,13 +31,13 @@ Closed scope:
 
 ## v5.0 Native Mobile And Full Localization Governance
 
-**Status:** Active planning
+**Status:** Completed local release gate 2026-06-14
 **Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
 
 Goal: move beyond selected responsive frontend/localization polish into native/mobile rollout readiness and complete localization governance.
 
-Candidate phases:
+Completed phases:
 
 - Phase 171: Native Mobile And Localization Governance Contract.
 - Phase 172: Mobile App API Readiness And Client Handoff.
@@ -51,9 +51,14 @@ Scope:
 - Keep canonical API values stable while improving localized display behavior.
 - Avoid full native app binary implementation inside this backend workspace unless a dedicated native workspace is selected.
 
+Outcome:
+
+- Final rollout state is `contract-ready`.
+- Native app implementation, app-store release, broad frontend copy cleanup, and live push/provider activation remain future scope.
+
 ## Candidate v5.1 Product Expansion Or Final External Activation
 
-**Status:** Candidate after v5.0 or when external prerequisites unblock
+**Status:** Candidate next milestone
 
 Potential scope:
 

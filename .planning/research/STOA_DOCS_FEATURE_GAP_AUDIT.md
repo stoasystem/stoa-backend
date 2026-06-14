@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-14 after selecting v5.0 native mobile localization governance
+**Updated:** 2026-06-14 after completing v5.0 native mobile localization governance
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -46,7 +46,7 @@ v4.8 completed the local backend support provider expansion and CRM automation s
 
 v4.9 completed the local backend production notification and native delivery rollout scope: live WebSocket/API Gateway readiness/status, provider-gated email digest and push delivery, push token lifecycle records, preference-aware delivery behavior, frontend/native handoff, and release evidence. Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval.
 
-v5.0 is now the active planning scope for native mobile and full localization governance: mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence beyond the selected v4.3 frontend rollout.
+v5.0 completed the native mobile and full localization governance scope as a contract-ready milestone: mobile API/client handoff, native notification token and offline-state contracts, translation management governance, broad copy QA scope, English/German key parity evidence, locale coverage rules, and client release evidence beyond the selected v4.3 frontend rollout.
 
 ## Completed Or Largely Complete
 
@@ -172,16 +172,16 @@ v5.0 is now the active planning scope for native mobile and full localization go
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
-- Native mobile apps, native push-token registration, and production mobile rollout. Status: selected as active v5.0 scope.
-- Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: selected as active v5.0 scope.
+- Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; full native app implementation, app-store release, and live provider activation remain future scope.
+- Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Active v5.0 native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+1. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
 2. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
 3. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
-4. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
+4. Full native app implementation and app-store release using the v5.0 contract if a native workspace is selected.
 5. Long-term autonomous tutoring and warehouse-backed operations reporting.
 
 ## v3.0 Scope Recommendation
