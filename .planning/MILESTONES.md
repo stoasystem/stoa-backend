@@ -124,7 +124,7 @@ Known deferred items at close: real external provider selection, approved produc
 **Audit:** `.planning/milestones/v5.0-MILESTONE-AUDIT.md`
 **Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/171-native-mobile-and-localization-governance-contract/`, `.planning/phases/172-mobile-app-api-readiness-and-client-handoff/`, `.planning/phases/173-native-notification-token-and-offline-state-handoff/`, `.planning/phases/174-localization-governance-translation-qa-and-locale-coverage/`, `.planning/phases/175-v5-0-native-mobile-localization-release-gate-and-handoff/`
+**Phase evidence:** `.planning/milestones/v5.0-phases/171-native-mobile-and-localization-governance-contract/`, `.planning/milestones/v5.0-phases/172-mobile-app-api-readiness-and-client-handoff/`, `.planning/milestones/v5.0-phases/173-native-notification-token-and-offline-state-handoff/`, `.planning/milestones/v5.0-phases/174-localization-governance-translation-qa-and-locale-coverage/`, `.planning/milestones/v5.0-phases/175-v5-0-native-mobile-localization-release-gate-and-handoff/`
 **Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 **Goal:** Move beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance.
 **Phases:** 5
