@@ -93,7 +93,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MOBILELOC-01 | Phase 171 | Complete |
-| MOBILELOC-02 | Phase 172 | Planned |
+| MOBILELOC-02 | Phase 172 | Complete |
 | MOBILELOC-03 | Phase 173 | Planned |
 | MOBILELOC-04 | Phase 174 | Planned |
 | VERIFY-33 | Phase 175 | Planned |
