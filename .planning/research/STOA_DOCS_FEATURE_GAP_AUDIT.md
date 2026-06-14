@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-13 after selecting v4.9 production notification rollout
+**Updated:** 2026-06-14 after selecting v5.0 native mobile localization governance
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -44,7 +44,9 @@ v4.7 completed the backend payment production activation automation scope: accep
 
 v4.8 completed the local backend support provider expansion and CRM automation scope: provider-neutral adapter readiness, approved/configured third-party support delivery, bounded retry, two-way provider ticket synchronization, support SLA analytics, controlled CRM/customer message evidence, and release-gate verification. Final provider activation state is `provider-ready`; real external provider and CRM/customer writes remain gated on approved provider selection, credentials, destination policy, templates, and rollout approval.
 
-v4.9 is now the active planning scope for production notification and native delivery rollout: live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification UX handoff, native push token registration, and live smoke evidence beyond the v4.2 backend readiness foundation.
+v4.9 completed the local backend production notification and native delivery rollout scope: live WebSocket/API Gateway readiness/status, provider-gated email digest and push delivery, push token lifecycle records, preference-aware delivery behavior, frontend/native handoff, and release evidence. Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval.
+
+v5.0 is now the active planning scope for native mobile and full localization governance: mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence beyond the selected v4.3 frontend rollout.
 
 ## Completed Or Largely Complete
 
@@ -167,20 +169,20 @@ v4.9 is now the active planning scope for production notification and native del
 ## Phase 2 / Future Expansion
 
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
-- Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: selected as active v4.9 scope.
+- Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations.
-- Native mobile apps, native push-token registration, and production mobile rollout.
-- Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces.
+- Native mobile apps, native push-token registration, and production mobile rollout. Status: selected as active v5.0 scope.
+- Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: selected as active v5.0 scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Active v4.9 full production notification rollout beyond backend readiness: live WebSocket/API Gateway readiness, provider-backed email/push, frontend/native visuals, token registration, and live smoke evidence.
-2. Native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
-3. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
-4. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
-5. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
+1. Active v5.0 native mobile app rollout and full localization governance beyond the selected v4.3 frontend scope.
+2. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
+3. Deeper curriculum product expansion: rich editor UI, production content migration, adaptive sequencing, and warehouse-backed analytics after v4.6 foundations prove value.
+4. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
+5. Long-term autonomous tutoring and warehouse-backed operations reporting.
 
 ## v3.0 Scope Recommendation
 

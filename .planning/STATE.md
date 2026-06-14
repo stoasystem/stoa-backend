@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.9
-milestone_name: Production Notification And Native Delivery Rollout
-status: Awaiting next milestone
-last_updated: "2026-06-14T11:45:24.831Z"
-last_activity: 2026-06-14 — Milestone v4.9 completed and archived
+milestone: v5.0
+milestone_name: Native Mobile And Full Localization Governance
+status: planning
+last_updated: "2026-06-14T12:15:00+02:00"
+last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,38 +20,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v4.9 production notification and native delivery rollout complete; next recommended milestone is native mobile and full localization governance.
+**Current focus:** v5.0 native mobile and full localization governance.
 
 ## Current Position
 
-Phase: Milestone v4.9 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-14 — Milestone v4.9 completed and archived
+Phase: 171 - Native Mobile And Localization Governance Contract
+Plan: 171-01
+Status: Planned
+Last activity: 2026-06-14 - Synced v4.9 completion to remote and selected v5.0 from the `stoa_docs` remaining-feature queue.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v3.6 completed local functional WebSocket realtime notifications with backend connection records, fanout helpers, delivery attempt metadata, frontend WebSocket client behavior, notification center cache sync, reconnect/offline states, and polling fallback.
-- v4.2 completed backend-local production notification delivery readiness: production WebSocket contracts, durable preferences, preference-aware delivery state/status behavior, email digest preview readiness, push-ready preference metadata, and clean local release evidence.
-- v4.3 completed selected frontend mobile/localization rollout but did not complete native apps or production notification visuals.
-- v4.8 completed support provider expansion and CRM automation with provider activation state `provider-ready`.
-- v4.9 completed live WebSocket/API Gateway readiness, provider-backed email/push delivery, frontend/native notification handoff, native token registration records, and release evidence.
+- v4.1 completed backend mobile/multilingual foundations: mobile-ready route contracts, durable locale preferences, and language-safe response metadata.
+- v4.3 completed selected frontend mobile responsive polish and English/German preference UI in `/Users/zhdeng/stoa-frontend`.
+- v4.9 completed backend production notification/native delivery handoff with push token lifecycle records, provider-gated email/push delivery, and release state `deferred`.
 - `stoa_docs` remaining feature queue now recommends native mobile and full localization governance unless external activation prerequisites become available first.
-- Internal development mode means verification should stay focused on delivery behavior, preferences, provider configuration, fallback behavior, and rollout evidence rather than broad unrelated security/compliance sweeps.
+- v5.0 should prioritize mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence.
+- Internal development mode means verification should stay focused on route contracts, localization correctness, token/offline behavior, and release handoff rather than broad unrelated security/compliance sweeps.
 
 ### Pending Todos
 
-- Select the next milestone.
+- Execute Phase 171 native mobile and localization governance contract planning.
+- Define mobile API readiness and client handoff in Phase 172.
+- Define native notification token and offline-state handoff in Phase 173.
+- Define localization governance, translation QA, and locale coverage in Phase 174.
+- Close v5.0 with release-gate evidence and next milestone selection in Phase 175.
 
 ### Blockers/Concerns
 
-- Live WebSocket deployment may require CDK/API Gateway ownership decisions beyond the local service behavior already implemented.
-- Provider-backed email/push delivery requires approved provider credentials, templates, sender/domain configuration, and native token provider setup.
-- Frontend/native visuals and token registration may require `/Users/zhdeng/stoa-frontend` or future native app workspaces.
-- Real user notification sends should remain gated until provider configuration and rollout approval are explicit.
+- Full native app implementation may require a separate native/mobile workspace.
+- Frontend implementation may require `/Users/zhdeng/stoa-frontend`.
+- Translation catalog ownership and copy QA need a stable product workflow before broad locale expansion.
+- Real app-store/native release, live push sends, and external provider activation remain outside backend-only planning unless separately approved.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 171 using `.planning/phases/171-native-mobile-and-localization-governance-contract/171-01-PLAN.md`.

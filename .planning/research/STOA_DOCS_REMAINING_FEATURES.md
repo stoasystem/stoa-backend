@@ -26,7 +26,7 @@
 
 1. **Native Mobile And Full Localization Governance**.
    Implement native/mobile-facing notification token capture, responsive/native notification UX, full localization governance, and client-side rollout controls using the v4.9 backend handoff.
-   Status: recommended next milestone unless payment/support external activation prerequisites become available first.
+   Status: selected as active v5.0 planning scope.
 
 2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
@@ -38,4 +38,6 @@
 
 v4.9 is complete after backend release-gate verification. The shipped scope promotes notification delivery from local/backend readiness into production-deliverable backend capability: live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, preference-aware delivery behavior, frontend/native handoff, and release evidence.
 
-Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval. The next likely milestone is native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
+Final rollout state is `deferred`: real live WebSocket/API Gateway smoke, provider activation, frontend implementation, and native apps remain gated on deployment/provider/client prerequisites and explicit rollout approval.
+
+v5.0 is selected as the active next milestone: native mobile and full localization governance. The planned scope is mobile app/API readiness, native notification token and offline-state handoff, translation management, broad copy QA, locale coverage, and client release evidence. The next likely milestone after v5.0 is product expansion or final external activation, depending on whether payment/support provider prerequisites become available.

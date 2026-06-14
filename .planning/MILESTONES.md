@@ -102,7 +102,34 @@ Known deferred items at close: real external provider selection, approved produc
 
 ## Active
 
-No active milestone. Next recommended milestone: native mobile and full localization governance unless final payment or support external activation prerequisites become available first.
+### v5.0 Native Mobile And Full Localization Governance
+
+**Status:** Active planning
+**Started:** 2026-06-14
+**Roadmap:** `.planning/milestones/v5.0-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.0-REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/171-native-mobile-and-localization-governance-contract/`
+**Feature gap audit:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
+**Goal:** Move beyond selected responsive frontend and backend locale foundations into native/mobile rollout readiness and full localization governance.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 171: Native Mobile And Localization Governance Contract.
+- Phase 172: Mobile App API Readiness And Client Handoff.
+- Phase 173: Native Notification Token And Offline State Handoff.
+- Phase 174: Localization Governance Translation QA And Locale Coverage.
+- Phase 175: v5.0 Native Mobile Localization Release Gate And Handoff.
+
+Feature priorities:
+
+- Define backend/frontend/native/localization ownership and mobile-critical flows.
+- Prepare mobile app API readiness and client handoff.
+- Define native notification token registration and offline-state handoff.
+- Build localization governance, translation QA, locale coverage, and copy review workflow.
+- Close with focused client-ready release evidence and next milestone selection.
 
 ## Earlier Completed Milestones
 
@@ -1046,4 +1073,4 @@ Key accomplishments:
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
 ---
-*Last updated: 2026-06-13 after selecting v4.9 production notification rollout*
+*Last updated: 2026-06-14 after selecting v5.0 native mobile localization governance*
