@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     # WebSocket realtime notifications
     websocket_api_endpoint: str = ""
     websocket_connection_ttl_seconds: int = 600
+    websocket_live_routes_configured: bool = False
+    websocket_live_connect_route: str = "$connect"
+    websocket_live_disconnect_route: str = "$disconnect"
+    websocket_live_message_route: str = "message"
+    websocket_live_deployed: bool = False
+    websocket_live_smoke_passed: bool = False
+    websocket_stale_cleanup_enabled: bool = True
 
     # Payment provider integration (v3.9)
     stripe_api_key: str = ""

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Any, Callable
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import boto3
@@ -103,6 +104,70 @@ def disconnect_connection(connection_id: str) -> dict[str, Any]:
 def cleanup_stale_connections(*, current_epoch: int | None = None) -> dict[str, Any]:
     removed = websocket_repo.delete_stale_connections(now_epoch=current_epoch or now_epoch())
     return {"removedConnectionIds": removed, "count": len(removed)}
+
+
+def readiness_status(*, connection_limit: int = 200) -> dict[str, Any]:
+    endpoint = str(settings.websocket_api_endpoint or "").strip()
+    routes_configured = bool(settings.websocket_live_routes_configured)
+    deployed = bool(settings.websocket_live_deployed)
+    live_smoke_passed = bool(settings.websocket_live_smoke_passed)
+    stale_cleanup_enabled = bool(settings.websocket_stale_cleanup_enabled)
+    active_connection_count = 0
+    stale_connection_count = 0
+    connection_status_error: str | None = None
+
+    try:
+        connections = websocket_repo.list_connections(limit=connection_limit)
+    except Exception:
+        connections = []
+        connection_status_error = "connection_repository_unavailable"
+
+    for connection in connections:
+        if _is_expired(connection):
+            stale_connection_count += 1
+        else:
+            active_connection_count += 1
+
+    blockers = _configuration_blockers(
+        endpoint=endpoint,
+        routes_configured=routes_configured,
+        deployed=deployed,
+        live_smoke_passed=live_smoke_passed,
+        stale_cleanup_enabled=stale_cleanup_enabled,
+        connection_status_error=connection_status_error,
+    )
+    mode = _readiness_mode(
+        endpoint=endpoint,
+        routes_configured=routes_configured,
+        deployed=deployed,
+        live_smoke_passed=live_smoke_passed,
+        stale_cleanup_enabled=stale_cleanup_enabled,
+    )
+
+    return {
+        "mode": mode,
+        "endpointConfigured": bool(endpoint),
+        "endpointHost": _endpoint_host(endpoint),
+        "routes": {
+            "configured": routes_configured,
+            "connect": settings.websocket_live_connect_route,
+            "disconnect": settings.websocket_live_disconnect_route,
+            "message": settings.websocket_live_message_route,
+        },
+        "deployed": deployed,
+        "liveSmokePassed": live_smoke_passed,
+        "connectionTtlSeconds": max(int(settings.websocket_connection_ttl_seconds), 1),
+        "connectionStatus": {
+            "activeConnectionCount": active_connection_count,
+            "staleConnectionCount": stale_connection_count,
+            "error": connection_status_error,
+        },
+        "staleCleanup": {
+            "enabled": stale_cleanup_enabled,
+            "staleConnectionCount": stale_connection_count,
+        },
+        "configurationBlockers": blockers,
+    }
 
 
 def fanout_notification_event_safe(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -271,6 +336,57 @@ def _is_expired(connection: dict[str, Any]) -> bool:
         return int(connection.get("expires_at") or 0) <= now_epoch()
     except (TypeError, ValueError):
         return True
+
+
+def _configuration_blockers(
+    *,
+    endpoint: str,
+    routes_configured: bool,
+    deployed: bool,
+    live_smoke_passed: bool,
+    stale_cleanup_enabled: bool,
+    connection_status_error: str | None,
+) -> list[str]:
+    blockers = []
+    if not endpoint:
+        blockers.append("websocket_api_endpoint_missing")
+    if endpoint and not routes_configured:
+        blockers.append("websocket_live_routes_not_configured")
+    if endpoint and routes_configured and not deployed:
+        blockers.append("websocket_live_deployment_not_marked_deployed")
+    if endpoint and routes_configured and deployed and not live_smoke_passed:
+        blockers.append("websocket_live_smoke_not_passed")
+    if endpoint and not stale_cleanup_enabled:
+        blockers.append("websocket_stale_cleanup_not_enabled")
+    if connection_status_error:
+        blockers.append(connection_status_error)
+    return blockers
+
+
+def _readiness_mode(
+    *,
+    endpoint: str,
+    routes_configured: bool,
+    deployed: bool,
+    live_smoke_passed: bool,
+    stale_cleanup_enabled: bool,
+) -> str:
+    if not endpoint:
+        return "local_only"
+    if not routes_configured or not stale_cleanup_enabled:
+        return "provider_blocked"
+    if not deployed:
+        return "configured"
+    if not live_smoke_passed:
+        return "deployed"
+    return "live_ready"
+
+
+def _endpoint_host(endpoint: str) -> str | None:
+    if not endpoint:
+        return None
+    parsed = urlparse(endpoint)
+    return parsed.netloc or parsed.path or "configured"
 
 
 def _record_delivery_attempt(item: dict[str, Any], attempt: dict[str, Any]) -> None:

@@ -50,11 +50,15 @@ class NotificationPreferenceResponse(BaseModel):
 
 class NotificationDeliveryStatusResponse(BaseModel):
     websocketConfigured: bool
+    websocketMode: str
+    websocketReadiness: dict[str, Any] = Field(default_factory=dict)
     preferenceCategories: list[str]
     preferenceChannels: list[str]
     recentEventCount: int
     categoryCounts: dict[str, int]
     realtimeDecisionCounts: dict[str, int]
+    deliveryAttemptCounts: dict[str, int] = Field(default_factory=dict)
+    recentDeliveryAttempts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class NotificationDigestItem(BaseModel):

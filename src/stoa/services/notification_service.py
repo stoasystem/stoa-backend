@@ -369,19 +369,40 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
     items = list_admin_events(limit=limit)
     category_counts: dict[str, int] = {}
     realtime_counts: dict[str, int] = {}
+    delivery_attempt_counts: dict[str, int] = {}
+    recent_delivery_attempts: list[dict[str, Any]] = []
     for item in items:
         category = str(item.get("deliveryCategory") or "unknown")
         category_counts[category] = category_counts.get(category, 0) + 1
         realtime = item.get("deliveryChannels", {}).get("realtime", {})
         decision = str(realtime.get("decision") or "unknown")
         realtime_counts[decision] = realtime_counts.get(decision, 0) + 1
+        for attempt in _websocket_delivery_attempts(item):
+            result_counts = _delivery_attempt_result_counts(attempt)
+            for status, count in result_counts.items():
+                delivery_attempt_counts[status] = delivery_attempt_counts.get(status, 0) + count
+            recent_delivery_attempts.append(
+                {
+                    "eventId": item.get("eventId"),
+                    "deliveryId": attempt.get("delivery_id"),
+                    "attemptedAt": attempt.get("attempted_at"),
+                    "targetChannels": attempt.get("target_channels") or [],
+                    "targetCount": _safe_int(attempt.get("target_count")),
+                    "resultCounts": result_counts,
+                }
+            )
+    websocket_readiness = websocket_service.readiness_status()
     return {
         "websocketConfigured": bool(settings.websocket_api_endpoint),
+        "websocketMode": websocket_readiness["mode"],
+        "websocketReadiness": websocket_readiness,
         "preferenceCategories": sorted(PREFERENCE_CATEGORIES),
         "preferenceChannels": sorted(PREFERENCE_CHANNELS),
         "recentEventCount": len(items),
         "categoryCounts": category_counts,
         "realtimeDecisionCounts": realtime_counts,
+        "deliveryAttemptCounts": delivery_attempt_counts,
+        "recentDeliveryAttempts": recent_delivery_attempts[-10:],
     }
 
 
@@ -432,6 +453,29 @@ def digest_preview(
         "pushProviderConfigured": False,
         "pushPreferencesSupported": True,
     }
+
+
+def _websocket_delivery_attempts(item: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = item.get("metadata") or {}
+    attempts = metadata.get("websocket_delivery_attempts") or []
+    return [attempt for attempt in attempts if isinstance(attempt, dict)]
+
+
+def _delivery_attempt_result_counts(attempt: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for result in attempt.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        status = str(result.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def digest_item(item: dict[str, Any], *, category: str) -> dict[str, Any]:

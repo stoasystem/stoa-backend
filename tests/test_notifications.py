@@ -2,8 +2,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
+from stoa.config import Settings
 from stoa.routers import notifications, questions, tutors
-from stoa.services import notification_service, teacher_assistance_service
+from stoa.services import notification_service, teacher_assistance_service, websocket_service
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
@@ -218,6 +219,87 @@ def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
     assert body["recentEventCount"] == 1
     assert body["categoryCounts"]["admin_operations"] == 1
     assert "realtime" in body["preferenceChannels"]
+    assert body["websocketMode"] == "local_only"
+    assert "websocket_api_endpoint_missing" in body["websocketReadiness"]["configurationBlockers"]
+
+
+def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monkeypatch):
+    events, _ = _install_notification_repo(monkeypatch)
+    test_settings = Settings(
+        websocket_api_endpoint="https://abc123.execute-api.eu-central-2.amazonaws.com/prod?token=secret",
+        websocket_live_routes_configured=True,
+        websocket_live_deployed=True,
+        websocket_live_smoke_passed=True,
+    )
+    monkeypatch.setattr(notification_service, "settings", test_settings)
+    monkeypatch.setattr(websocket_service, "settings", test_settings)
+    monkeypatch.setattr(
+        websocket_service.websocket_repo,
+        "list_connections",
+        lambda limit=200: [
+            {
+                "connection_id": "fresh-conn",
+                "expires_at": websocket_service.now_epoch() + 30,
+            },
+            {
+                "connection_id": "stale-conn",
+                "expires_at": websocket_service.now_epoch() - 30,
+            },
+        ][:limit],
+    )
+    events["notif-live"] = {
+        "event_id": "notif-live",
+        "recipient_id": "student-1",
+        "recipient_role": "student",
+        "event_type": "teacher_reply",
+        "target_type": "question",
+        "target_id": "question-1",
+        "title": "Teacher replied",
+        "summary": "Your teacher added a reply.",
+        "status": "created",
+        "created_at": "2026-06-14T10:00:00+00:00",
+        "metadata": {
+            "delivery_decision": notification_service.delivery_decision(
+                category="teacher_responses",
+                preferences=notification_service.default_preferences(),
+                realtime_configured=True,
+            ),
+            "websocket_delivery_attempts": [
+                {
+                    "delivery_id": "ws-live",
+                    "attempted_at": "2026-06-14T10:00:01+00:00",
+                    "target_channels": ["role:student", "user:student-1"],
+                    "target_count": 2,
+                    "results": [
+                        {"connection_id": "fresh-conn", "status": "delivered"},
+                        {"connection_id": "stale-conn", "status": "stale_removed"},
+                    ],
+                }
+            ],
+        },
+        "category": "teacher_responses",
+    }
+
+    client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
+    response = client.get("/admin/notifications/delivery-status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["websocketConfigured"] is True
+    assert body["websocketMode"] == "live_ready"
+    assert body["websocketReadiness"]["endpointHost"] == "abc123.execute-api.eu-central-2.amazonaws.com"
+    assert body["websocketReadiness"]["connectionStatus"]["activeConnectionCount"] == 1
+    assert body["websocketReadiness"]["connectionStatus"]["staleConnectionCount"] == 1
+    assert body["websocketReadiness"]["configurationBlockers"] == []
+    assert body["deliveryAttemptCounts"] == {"delivered": 1, "stale_removed": 1}
+    assert body["recentDeliveryAttempts"][0]["resultCounts"] == {
+        "delivered": 1,
+        "stale_removed": 1,
+    }
+    serialized = str(body)
+    assert "token=secret" not in serialized
+    assert "fresh-conn" not in serialized
+    assert "stale-conn" not in serialized
 
 
 def test_digest_preview_selects_digest_enabled_unread_notifications(monkeypatch):

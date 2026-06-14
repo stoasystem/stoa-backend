@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from stoa.config import Settings
 from stoa.services import notification_service, websocket_service
 
 
@@ -200,3 +201,47 @@ def test_stale_cleanup_removes_expired_connections(monkeypatch):
 
     assert result == {"removedConnectionIds": ["old"], "count": 1}
     assert set(connections) == {"fresh"}
+
+
+def test_readiness_status_distinguishes_live_rollout_modes(monkeypatch):
+    _install_websocket_repo(monkeypatch)
+    scenarios = [
+        ({}, "local_only"),
+        (
+            {
+                "websocket_api_endpoint": "https://abc.execute-api.eu-central-2.amazonaws.com/prod",
+            },
+            "provider_blocked",
+        ),
+        (
+            {
+                "websocket_api_endpoint": "https://abc.execute-api.eu-central-2.amazonaws.com/prod",
+                "websocket_live_routes_configured": True,
+            },
+            "configured",
+        ),
+        (
+            {
+                "websocket_api_endpoint": "https://abc.execute-api.eu-central-2.amazonaws.com/prod",
+                "websocket_live_routes_configured": True,
+                "websocket_live_deployed": True,
+            },
+            "deployed",
+        ),
+        (
+            {
+                "websocket_api_endpoint": "https://abc.execute-api.eu-central-2.amazonaws.com/prod",
+                "websocket_live_routes_configured": True,
+                "websocket_live_deployed": True,
+                "websocket_live_smoke_passed": True,
+            },
+            "live_ready",
+        ),
+    ]
+
+    for settings_kwargs, expected_mode in scenarios:
+        monkeypatch.setattr(websocket_service, "settings", Settings(**settings_kwargs))
+
+        status = websocket_service.readiness_status()
+
+        assert status["mode"] == expected_mode
