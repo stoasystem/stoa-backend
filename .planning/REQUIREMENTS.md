@@ -95,5 +95,5 @@ Acceptance criteria:
 | CURRICULUMXP-01 | Phase 176 | Complete |
 | CURRICULUMXP-02 | Phase 177 | Complete |
 | CURRICULUMXP-03 | Phase 178 | Complete |
-| CURRICULUMXP-04 | Phase 179 | Planned |
+| CURRICULUMXP-04 | Phase 179 | Complete |
 | VERIFY-34 | Phase 180 | Planned |

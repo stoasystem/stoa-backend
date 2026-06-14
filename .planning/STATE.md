@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Rich Curriculum Editor And Production Content Migration
 status: in_progress
-last_updated: "2026-06-14T22:38:00+02:00"
-last_activity: 2026-06-14 - Completed Phase 178 production content migration pipeline and validation
+last_updated: "2026-06-14T22:52:00+02:00"
+last_activity: 2026-06-14 - Completed Phase 179 assignment automation and adaptive sequencing readiness
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-14)
 
 ## Current Position
 
-Phase: 179 - Assignment Automation And Adaptive Sequencing Readiness
-Plan: 179-01
+Phase: 180 - v5.1 Curriculum Product Release Gate And Handoff
+Plan: 180-01
 Status: Ready for planning
-Last activity: 2026-06-14 - Completed Phase 178 production content migration pipeline and validation.
+Last activity: 2026-06-14 - Completed Phase 179 assignment automation and adaptive sequencing readiness.
 
 ## Accumulated Context
 
@@ -43,7 +43,6 @@ Last activity: 2026-06-14 - Completed Phase 178 production content migration pip
 
 ### Pending Todos
 
-- Define assignment automation and adaptive sequencing readiness in Phase 179.
 - Close v5.1 with release-gate evidence and next milestone selection in Phase 180.
 
 ### Blockers/Concerns
