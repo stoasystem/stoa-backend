@@ -97,6 +97,19 @@ class Settings(BaseSettings):
     websocket_live_smoke_passed: bool = False
     websocket_stale_cleanup_enabled: bool = True
 
+    # Provider-backed notifications (v4.9)
+    notification_email_provider: str = ""
+    notification_email_provider_approved: bool = False
+    notification_email_sender: str = "noreply@stoaedu.ch"
+    notification_email_digest_template: str = "notification_digest_v1"
+    notification_email_send_enabled: bool = False
+    notification_push_provider: str = ""
+    notification_push_provider_approved: bool = False
+    notification_push_provider_api_key: str = ""
+    notification_push_provider_endpoint_url: str = ""
+    notification_push_template: str = "notification_push_v1"
+    notification_push_send_enabled: bool = False
+
     # Payment provider integration (v3.9)
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""

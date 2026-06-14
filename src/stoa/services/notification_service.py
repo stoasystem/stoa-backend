@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any
+from urllib import request
 from uuid import uuid4
 
+import boto3
 from fastapi import HTTPException
 
 from stoa.config import settings
@@ -33,6 +37,8 @@ PREFERENCE_CATEGORIES = {
     "admin_operations",
 }
 PREFERENCE_CHANNELS = {"in_app", "realtime", "email_digest", "push"}
+PUSH_TOKEN_STATUSES = {"active", "revoked"}
+PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
 EVENT_CATEGORY_BY_TYPE = {
     "teacher_requested": "teacher_responses",
     "teacher_takeover": "teacher_responses",
@@ -107,6 +113,8 @@ def create_event(
     notification_repo.put_event(item)
     if delivery["channels"]["realtime"]["decision"] == "attempted":
         websocket_service.fanout_notification_event_safe(item)
+    if delivery["channels"]["push"]["decision"] == "deferred_push":
+        attempt_push_delivery_safe(item)
     return event_response(item)
 
 
@@ -396,6 +404,8 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
         "websocketConfigured": bool(settings.websocket_api_endpoint),
         "websocketMode": websocket_readiness["mode"],
         "websocketReadiness": websocket_readiness,
+        "emailProvider": email_provider_readiness(),
+        "pushProvider": push_provider_readiness(),
         "preferenceCategories": sorted(PREFERENCE_CATEGORIES),
         "preferenceChannels": sorted(PREFERENCE_CHANNELS),
         "recentEventCount": len(items),
@@ -449,9 +459,261 @@ def digest_preview(
         "count": len(items),
         "items": items,
         "deliveryMode": "preview_only",
-        "emailProviderConfigured": False,
-        "pushProviderConfigured": False,
+        "emailProviderConfigured": email_provider_readiness()["configured"],
+        "pushProviderConfigured": push_provider_readiness()["configured"],
         "pushPreferencesSupported": True,
+    }
+
+
+def send_digest(
+    user: dict[str, Any],
+    *,
+    category: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 25,
+    send_func: Any | None = None,
+) -> dict[str, Any]:
+    preview = digest_preview(user, category=category, since=since, until=until, limit=limit)
+    readiness = email_provider_readiness()
+    delivery_id = f"email-{uuid4().hex}"
+    event_ids = [str(item["eventId"]) for item in preview["items"]]
+    recipient_email = _safe_text(user.get("email"))
+    attempt = {
+        "delivery_id": delivery_id,
+        "attempted_at": now_iso(),
+        "channel": "email_digest",
+        "provider": readiness["provider"],
+        "provider_mode": readiness["mode"],
+        "template": settings.notification_email_digest_template,
+        "event_ids": event_ids,
+        "item_count": len(event_ids),
+        "recipient_email_hash": _hash_value(recipient_email) if recipient_email else None,
+        "status": "pending",
+        "provider_result": {},
+    }
+
+    if not event_ids:
+        attempt["status"] = "refused_no_digest_items"
+    elif not recipient_email:
+        attempt["status"] = "refused_missing_recipient_email"
+    elif readiness["mode"] == "disabled" or readiness["blockers"]:
+        attempt["status"] = "refused_provider_not_ready"
+    elif not settings.notification_email_send_enabled and send_func is None:
+        attempt["status"] = "refused_provider_send_disabled"
+    else:
+        try:
+            payload = {
+                "deliveryId": delivery_id,
+                "recipientEmail": recipient_email,
+                "subject": "STOA notification digest",
+                "html": _digest_email_html(preview["items"]),
+                "items": preview["items"],
+                "template": settings.notification_email_digest_template,
+            }
+            provider_result = send_func(payload) if send_func is not None else _send_email_digest_provider(payload)
+            attempt["status"] = "sent"
+            attempt["provider_result"] = _redacted_provider_result(provider_result)
+        except Exception as exc:
+            attempt["status"] = "failed"
+            attempt["provider_result"] = {"error": _redacted_error_class(exc)}
+
+    _record_event_attempts(event_ids, "email_digest_delivery_attempts", attempt)
+    return {
+        "deliveryId": delivery_id,
+        "status": attempt["status"],
+        "providerMode": readiness["mode"],
+        "template": attempt["template"],
+        "itemCount": len(event_ids),
+        "eventIds": event_ids,
+        "recipient": {"emailHash": attempt["recipient_email_hash"]},
+        "providerResult": attempt["provider_result"],
+    }
+
+
+def register_push_token(
+    user: dict[str, Any],
+    *,
+    platform: str,
+    token: str | None = None,
+    provider_token_reference: str | None = None,
+    device_id: str | None = None,
+) -> dict[str, Any]:
+    normalized_platform = _safe_text(platform).lower()
+    if normalized_platform not in PUSH_TOKEN_PLATFORMS:
+        raise HTTPException(status_code=400, detail="Unsupported push token platform")
+    clean_token = _safe_text(token)
+    clean_provider_reference = _safe_text(provider_token_reference)
+    if not clean_token and not clean_provider_reference:
+        raise HTTPException(status_code=400, detail="Push token or provider reference is required")
+    user_id = str(user.get("sub") or "")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated user is required")
+
+    token_hash = _hash_value(clean_token or clean_provider_reference)
+    token_reference = f"push-{token_hash[:16]}"
+    now = now_iso()
+    item = {
+        "entity_type": notification_repo.PUSH_TOKEN_ENTITY,
+        "user_id": user_id,
+        "role": str(user.get("role") or ""),
+        "platform": normalized_platform,
+        "token_reference": token_reference,
+        "token_hash": token_hash,
+        "provider_token_reference": clean_provider_reference or None,
+        "device_id_hash": _hash_value(device_id) if _safe_text(device_id) else None,
+        "status": "active",
+        "created_at": now,
+        "last_seen_at": now,
+        "revoked_at": None,
+    }
+    notification_repo.put_push_token(item)
+    return push_token_response(item)
+
+
+def revoke_push_token(user: dict[str, Any], token_reference: str) -> dict[str, Any]:
+    user_id = str(user.get("sub") or "")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated user is required")
+    updated = notification_repo.update_push_token(
+        user_id,
+        token_reference,
+        {"status": "revoked", "revoked_at": now_iso()},
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Push token not found")
+    return push_token_response(updated)
+
+
+def attempt_push_delivery_safe(item: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return attempt_push_delivery(item)
+    except Exception:
+        return None
+
+
+def attempt_push_delivery(
+    item: dict[str, Any],
+    *,
+    send_func: Any | None = None,
+) -> dict[str, Any]:
+    readiness = push_provider_readiness()
+    delivery_id = f"push-{uuid4().hex}"
+    recipient_id = str(item.get("recipient_id") or "")
+    tokens = notification_repo.list_push_tokens(recipient_id, status="active") if recipient_id else []
+    token_refs = [
+        str(token.get("provider_token_reference") or token.get("token_reference") or "")
+        for token in tokens
+        if str(token.get("provider_token_reference") or token.get("token_reference") or "").strip()
+    ]
+    attempt = {
+        "delivery_id": delivery_id,
+        "attempted_at": now_iso(),
+        "channel": "push",
+        "provider": readiness["provider"],
+        "provider_mode": readiness["mode"],
+        "template": settings.notification_push_template,
+        "token_count": len(token_refs),
+        "token_references": [_redacted_reference(token_ref) for token_ref in token_refs],
+        "status": "pending",
+        "provider_result": {},
+    }
+
+    if not recipient_id:
+        attempt["status"] = "refused_missing_recipient_id"
+    elif not token_refs:
+        attempt["status"] = "refused_missing_token"
+    elif readiness["mode"] == "disabled" or readiness["blockers"]:
+        attempt["status"] = "refused_provider_not_ready"
+    elif not settings.notification_push_send_enabled and send_func is None:
+        attempt["status"] = "refused_provider_send_disabled"
+    else:
+        try:
+            payload = {
+                "deliveryId": delivery_id,
+                "tokenReferences": token_refs,
+                "title": item.get("title"),
+                "body": item.get("summary"),
+                "data": {
+                    "eventId": item.get("event_id"),
+                    "eventType": item.get("event_type"),
+                    "targetType": item.get("target_type"),
+                    "targetId": item.get("target_id"),
+                },
+                "template": settings.notification_push_template,
+            }
+            provider_result = send_func(payload) if send_func is not None else _send_push_provider(payload)
+            attempt["status"] = "sent"
+            attempt["provider_result"] = _redacted_provider_result(provider_result)
+        except Exception as exc:
+            attempt["status"] = "failed"
+            attempt["provider_result"] = {"error": _redacted_error_class(exc)}
+
+    _record_event_attempts([str(item.get("event_id") or "")], "push_delivery_attempts", attempt)
+    return {
+        "deliveryId": delivery_id,
+        "status": attempt["status"],
+        "providerMode": readiness["mode"],
+        "tokenCount": len(token_refs),
+        "providerResult": attempt["provider_result"],
+    }
+
+
+def email_provider_readiness() -> dict[str, Any]:
+    provider = _safe_text(settings.notification_email_provider)
+    sender = _safe_text(settings.notification_email_sender)
+    template = _safe_text(settings.notification_email_digest_template)
+    blockers = []
+    if not provider:
+        blockers.append("missing_notification_email_provider")
+    if provider and not settings.notification_email_provider_approved:
+        blockers.append("notification_email_provider_not_approved")
+    if provider and not sender:
+        blockers.append("missing_notification_email_sender")
+    if provider and not template:
+        blockers.append("missing_notification_email_digest_template")
+    mode = "disabled"
+    if provider:
+        mode = "provider_ready" if not blockers and settings.notification_email_send_enabled else "configured"
+    return {
+        "provider": provider or "disabled",
+        "mode": mode,
+        "configured": bool(provider and not blockers),
+        "approved": bool(settings.notification_email_provider_approved),
+        "sendEnabled": bool(settings.notification_email_send_enabled),
+        "senderConfigured": bool(sender),
+        "template": template,
+        "blockers": blockers,
+    }
+
+
+def push_provider_readiness() -> dict[str, Any]:
+    provider = _safe_text(settings.notification_push_provider)
+    template = _safe_text(settings.notification_push_template)
+    api_key = _safe_text(settings.notification_push_provider_api_key)
+    endpoint = _safe_text(settings.notification_push_provider_endpoint_url)
+    blockers = []
+    if not provider:
+        blockers.append("missing_notification_push_provider")
+    if provider and not settings.notification_push_provider_approved:
+        blockers.append("notification_push_provider_not_approved")
+    if provider and not template:
+        blockers.append("missing_notification_push_template")
+    if provider and settings.notification_push_send_enabled and not endpoint:
+        blockers.append("missing_notification_push_provider_endpoint_url")
+    mode = "disabled"
+    if provider:
+        mode = "provider_ready" if not blockers and settings.notification_push_send_enabled else "configured"
+    return {
+        "provider": provider or "disabled",
+        "mode": mode,
+        "configured": bool(provider and not blockers),
+        "approved": bool(settings.notification_push_provider_approved),
+        "sendEnabled": bool(settings.notification_push_send_enabled),
+        "credentials": "configured" if api_key else "missing",
+        "endpointConfigured": bool(endpoint),
+        "template": template,
+        "blockers": blockers,
     }
 
 
@@ -535,6 +797,120 @@ def event_response(item: dict[str, Any]) -> dict[str, Any]:
         "deliveryCategory": item.get("category") or delivery.get("category"),
         "deliveryChannels": delivery.get("channels") or {},
     }
+
+
+def push_token_response(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tokenReference": item.get("token_reference"),
+        "platform": item.get("platform"),
+        "status": item.get("status"),
+        "tokenHashPrefix": str(item.get("token_hash") or "")[:12],
+        "hasProviderReference": bool(item.get("provider_token_reference")),
+        "createdAt": item.get("created_at"),
+        "lastSeenAt": item.get("last_seen_at"),
+        "revokedAt": item.get("revoked_at"),
+    }
+
+
+def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dict[str, Any]) -> None:
+    for event_id in [event_id for event_id in event_ids if event_id]:
+        item = notification_repo.get_event(event_id)
+        if not item:
+            continue
+        metadata = dict(item.get("metadata") or {})
+        attempts = list(metadata.get(metadata_key) or [])
+        attempts.append(attempt)
+        metadata[metadata_key] = attempts[-5:]
+        notification_repo.update_event(event_id, {"metadata": metadata})
+
+
+def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
+    ses = boto3.client("ses", region_name=settings.aws_region)
+    response = ses.send_email(
+        Source=settings.notification_email_sender,
+        Destination={"ToAddresses": [payload["recipientEmail"]]},
+        Message={
+            "Subject": {"Data": payload["subject"]},
+            "Body": {"Html": {"Data": payload["html"]}},
+        },
+    )
+    return {"messageId": response.get("MessageId")}
+
+
+def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
+    endpoint = _safe_text(settings.notification_push_provider_endpoint_url)
+    if not endpoint:
+        raise RuntimeError("notification push provider endpoint is not configured")
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    api_key = _safe_text(settings.notification_push_provider_api_key)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = request.Request(endpoint, data=body, headers=headers, method="POST")
+    with request.urlopen(req, timeout=5) as response:
+        raw = response.read().decode("utf-8")
+    return {"statusCode": response.status, "bodyHash": _hash_value(raw) if raw else None}
+
+
+def _digest_email_html(items: list[dict[str, Any]]) -> str:
+    rows = "".join(
+        f"<li><strong>{_html_escape(item.get('title'))}</strong>: {_html_escape(item.get('summary'))}</li>"
+        for item in items
+    )
+    return f"<h1>STOA notification digest</h1><ul>{rows}</ul>"
+
+
+def _redacted_provider_result(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"resultType": type(value).__name__}
+    safe: dict[str, Any] = {}
+    for key, raw in value.items():
+        key_text = str(key)
+        lowered = key_text.lower()
+        if any(marker in lowered for marker in ("secret", "token", "key", "authorization")):
+            safe[key_text] = "configured" if raw else "missing"
+            continue
+        if isinstance(raw, (str, int, float, bool)) or raw is None:
+            safe[key_text] = _redacted_text(raw) if isinstance(raw, str) else raw
+    return safe
+
+
+def _redacted_error_class(exc: Exception) -> str:
+    return type(exc).__name__
+
+
+def _redacted_reference(value: str) -> str:
+    text = _safe_text(value)
+    if not text:
+        return ""
+    digest = _hash_value(text)
+    return f"ref-{digest[:12]}"
+
+
+def _hash_value(value: Any) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()
+
+
+def _safe_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _redacted_text(value: str) -> str:
+    lowered = value.lower()
+    if any(marker in lowered for marker in ("secret", "token", "sk_live", "sk_test", "bearer ")):
+        return "[redacted]"
+    return value[:200]
+
+
+def _html_escape(value: Any) -> str:
+    text = _safe_text(value)
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
 
 
 def _visible_to_user(item: dict[str, Any], *, user_id: str, role: str) -> bool:

@@ -40,6 +40,42 @@ class NotificationPreferenceUpdate(BaseModel):
     preferences: dict[str, dict[str, bool]]
 
 
+class NotificationDigestSendRequest(BaseModel):
+    category: str | None = None
+    since: str | None = None
+    until: str | None = None
+    limit: int = Field(default=25, ge=1, le=100)
+
+
+class NotificationDigestSendResponse(BaseModel):
+    deliveryId: str
+    status: str
+    providerMode: str
+    template: str
+    itemCount: int
+    eventIds: list[str]
+    recipient: dict[str, Any]
+    providerResult: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationPushTokenRegisterRequest(BaseModel):
+    platform: str
+    token: str | None = None
+    providerTokenReference: str | None = None
+    deviceId: str | None = None
+
+
+class NotificationPushTokenResponse(BaseModel):
+    tokenReference: str
+    platform: str
+    status: str
+    tokenHashPrefix: str
+    hasProviderReference: bool
+    createdAt: str
+    lastSeenAt: str
+    revokedAt: str | None = None
+
+
 class NotificationPreferenceResponse(BaseModel):
     userId: str
     preferences: dict[str, dict[str, bool]]
@@ -52,6 +88,8 @@ class NotificationDeliveryStatusResponse(BaseModel):
     websocketConfigured: bool
     websocketMode: str
     websocketReadiness: dict[str, Any] = Field(default_factory=dict)
+    emailProvider: dict[str, Any] = Field(default_factory=dict)
+    pushProvider: dict[str, Any] = Field(default_factory=dict)
     preferenceCategories: list[str]
     preferenceChannels: list[str]
     recentEventCount: int
@@ -125,6 +163,42 @@ async def preview_notification_digest(
         until=until,
         limit=limit,
     )
+
+
+@router.post("/digest-send", response_model=NotificationDigestSendResponse)
+async def send_notification_digest(
+    body: NotificationDigestSendRequest,
+    user: dict = Depends(get_current_user),
+):
+    return notification_service.send_digest(
+        user,
+        category=body.category,
+        since=body.since,
+        until=body.until,
+        limit=body.limit,
+    )
+
+
+@router.post("/push-tokens", response_model=NotificationPushTokenResponse)
+async def register_notification_push_token(
+    body: NotificationPushTokenRegisterRequest,
+    user: dict = Depends(get_current_user),
+):
+    return notification_service.register_push_token(
+        user,
+        platform=body.platform,
+        token=body.token,
+        provider_token_reference=body.providerTokenReference,
+        device_id=body.deviceId,
+    )
+
+
+@router.delete("/push-tokens/{token_reference}", response_model=NotificationPushTokenResponse)
+async def revoke_notification_push_token(
+    token_reference: str,
+    user: dict = Depends(get_current_user),
+):
+    return notification_service.revoke_push_token(user, token_reference)
 
 
 @router.post("/{event_id}/read", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)

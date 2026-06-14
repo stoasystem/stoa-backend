@@ -46,6 +46,51 @@ def _install_notification_repo(monkeypatch):
     return events, preferences
 
 
+def _install_push_token_repo(monkeypatch):
+    tokens: dict[tuple[str, str], dict] = {}
+
+    def put_push_token(item):
+        tokens[(item["user_id"], item["token_reference"])] = dict(item)
+
+    def get_push_token(user_id, token_reference):
+        return tokens.get((user_id, token_reference))
+
+    def list_push_tokens(user_id=None, *, status=None, limit=100):
+        values = list(tokens.values())
+        if user_id is not None:
+            values = [token for token in values if token["user_id"] == user_id]
+        if status is not None:
+            values = [token for token in values if token["status"] == status]
+        return values[:limit]
+
+    def update_push_token(user_id, token_reference, updates):
+        item = tokens.get((user_id, token_reference))
+        if not item:
+            return None
+        item.update(updates)
+        return item
+
+    monkeypatch.setattr(notification_service.notification_repo, "put_push_token", put_push_token)
+    monkeypatch.setattr(notification_service.notification_repo, "get_push_token", get_push_token)
+    monkeypatch.setattr(notification_service.notification_repo, "list_push_tokens", list_push_tokens)
+    monkeypatch.setattr(notification_service.notification_repo, "update_push_token", update_push_token)
+    return tokens
+
+
+def _notification_provider_settings(**overrides):
+    defaults = {
+        "notification_email_provider": "ses",
+        "notification_email_provider_approved": True,
+        "notification_email_send_enabled": True,
+        "notification_push_provider": "native-relay",
+        "notification_push_provider_approved": True,
+        "notification_push_provider_endpoint_url": "https://push.example.test/send",
+        "notification_push_send_enabled": True,
+    }
+    defaults.update(overrides)
+    return Settings(**defaults)
+
+
 def test_notifications_list_read_and_archive_visible_events(monkeypatch):
     _install_notification_repo(monkeypatch)
     direct = notification_service.create_event(
@@ -369,6 +414,190 @@ def test_digest_preview_requires_digest_preference(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["count"] == 0
+
+
+def test_digest_send_refuses_unconfigured_provider_and_records_evidence(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["email_digest"] = True
+    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
+    created = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    result = notification_service.send_digest(
+        {"sub": "student-1", "role": "student", "email": "student@example.com"},
+        category="teacher_responses",
+    )
+
+    assert result["status"] == "refused_provider_not_ready"
+    attempts = events[created["eventId"]]["metadata"]["email_digest_delivery_attempts"]
+    assert attempts[0]["status"] == "refused_provider_not_ready"
+    assert attempts[0]["recipient_email_hash"]
+    assert "student@example.com" not in str(result)
+
+
+def test_digest_send_selects_enabled_items_and_redacts_provider_result(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["email_digest"] = True
+    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
+    created = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+    sent = []
+
+    def send_func(payload):
+        sent.append(payload)
+        return {"messageId": "msg-1", "apiKey": "provider-secret"}
+
+    result = notification_service.send_digest(
+        {"sub": "student-1", "role": "student", "email": "student@example.com"},
+        category="teacher_responses",
+        send_func=send_func,
+    )
+
+    assert result["status"] == "sent"
+    assert result["eventIds"] == [created["eventId"]]
+    assert sent[0]["recipientEmail"] == "student@example.com"
+    assert events[created["eventId"]]["metadata"]["email_digest_delivery_attempts"][0]["status"] == "sent"
+    assert "provider-secret" not in str(result)
+    assert result["providerResult"]["apiKey"] == "configured"
+
+
+def test_digest_send_honors_email_digest_opt_out(monkeypatch):
+    _install_notification_repo(monkeypatch)
+    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    result = notification_service.send_digest(
+        {"sub": "student-1", "role": "student", "email": "student@example.com"},
+        category="teacher_responses",
+        send_func=lambda payload: (_ for _ in ()).throw(AssertionError("send should not run")),
+    )
+
+    assert result["status"] == "refused_no_digest_items"
+    assert result["itemCount"] == 0
+
+
+def test_push_token_registration_and_revocation_redacts_raw_token(monkeypatch):
+    _install_push_token_repo(monkeypatch)
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+
+    response = client.post(
+        "/notifications/push-tokens",
+        json={
+            "platform": "ios",
+            "token": "native-token-secret",
+            "providerTokenReference": "provider-token-ref",
+            "deviceId": "device-secret",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["platform"] == "ios"
+    assert body["status"] == "active"
+    assert body["hasProviderReference"] is True
+    assert "native-token-secret" not in response.text
+    revoked = client.delete(f"/notifications/push-tokens/{body['tokenReference']}")
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+
+
+def test_push_delivery_records_missing_token_without_breaking_event(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    _install_push_token_repo(monkeypatch)
+    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["push"] = True
+    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
+
+    event = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    attempts = events[event["eventId"]]["metadata"]["push_delivery_attempts"]
+    assert attempts[0]["status"] == "refused_missing_token"
+    assert event["status"] == "created"
+
+
+def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch):
+    events, preferences = _install_notification_repo(monkeypatch)
+    _install_push_token_repo(monkeypatch)
+    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    prefs = notification_service.default_preferences()
+    prefs["teacher_responses"]["push"] = True
+    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
+    notification_service.register_push_token(
+        {"sub": "student-1", "role": "student"},
+        platform="ios",
+        provider_token_reference="provider-token-secret",
+    )
+    monkeypatch.setattr(
+        notification_service,
+        "_send_push_provider",
+        lambda payload: {"messageId": "push-token-secret"},
+    )
+    success = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-success",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    assert events[success["eventId"]]["metadata"]["push_delivery_attempts"][0]["status"] == "sent"
+    assert "provider-token-secret" not in str(events[success["eventId"]]["metadata"])
+    assert "push-token-secret" not in str(events[success["eventId"]]["metadata"])
+
+    def fail_push(payload):
+        raise RuntimeError("push failed with provider-token-secret")
+
+    monkeypatch.setattr(notification_service, "_send_push_provider", fail_push)
+    failed = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-failed",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+    )
+
+    failure_attempt = events[failed["eventId"]]["metadata"]["push_delivery_attempts"][0]
+    assert failure_attempt["status"] == "failed"
+    assert failure_attempt["provider_result"] == {"error": "RuntimeError"}
+    assert "provider-token-secret" not in str(failure_attempt)
 
 
 def test_digest_preview_filters_by_time_window(monkeypatch):
