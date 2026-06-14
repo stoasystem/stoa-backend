@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.9
 milestone_name: Production Notification And Native Delivery Rollout
 status: planning
-last_updated: "2026-06-14T11:39:33.035Z"
+last_updated: "2026-06-14T11:41:45.336Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 
 ## Current Position
 
-Phase: 169
+Phase: 170
 Plan: Not started
 Status: Planned
 Last activity: 2026-06-14
@@ -43,7 +43,6 @@ Last activity: 2026-06-14
 
 ### Pending Todos
 
-- Add frontend/native notification UX and token registration handoff in Phase 169.
 - Close v4.9 with release-gate evidence and next milestone selection in Phase 170.
 
 ### Blockers/Concerns
@@ -55,4 +54,4 @@ Last activity: 2026-06-14
 
 ## Operator Next Steps
 
-- Start Phase 169 with frontend/native notification UX and token registration handoff planning.
+- Start Phase 170 with v4.9 production notification release gate and live smoke evidence.
