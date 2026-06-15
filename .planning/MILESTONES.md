@@ -1,5 +1,41 @@
 # Milestones
 
+## Active
+
+### v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+
+**Status:** Active planning 2026-06-15
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/`
+**Goal:** Automatically route student teacher-help requests to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose SLA/load health.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Reduce waiting time after a student requests human help.
+- Route escalated questions to a suitable available teacher/tutor.
+- Reassign timed-out dispatches and show operator SLA/load health.
+- Preserve human teacher replies; this is not AI auto-answering.
+
+Implementation strategy:
+
+- Reuse existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA primitives.
+- Add dispatch planning, conditional claim metadata, timeout/reassignment, queue filters, and operator dashboard signals.
+- Keep live calendar/payroll/native push integrations future scope.
+
+Planned phases:
+
+- Phase 196: Teacher Dispatch And SLA Load Balancing Contract.
+- Phase 197: Dispatch Planner And Candidate Ranking.
+- Phase 198: Automatic Dispatch Claim And Reassignment Worker.
+- Phase 199: Teacher Queue And Operator Dispatch Visibility.
+- Phase 200: v5.5 Teacher Dispatch Release Gate.
+
+---
+
 ## v5.4 Frontend Learning Operations And Automation Dashboards (Shipped: 2026-06-15)
 
 **Status:** Completed local frontend release gate 2026-06-15

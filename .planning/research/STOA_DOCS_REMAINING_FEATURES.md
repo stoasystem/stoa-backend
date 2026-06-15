@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after completing v5.4 frontend learning operations and automation dashboards
+**Updated:** 2026-06-15 after selecting v5.5 automatic teacher dispatch and SLA load balancing
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -33,8 +33,8 @@
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
 2. **Later Product Expansion**.
-   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, automatic teacher/tutor dispatch for student teacher requests, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: remains future scope unless selected after v5.4.
+   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
+   Status: v5.5 selects automatic teacher/tutor dispatch for student teacher requests.
 
 ## Current Planning Decision
 
@@ -46,4 +46,4 @@ v5.3 is complete as an automation-ready backend/API milestone. It converted v5.2
 
 v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows through a no-demo-fallback API client, automation review console, learning operations dashboard, and family-safe assignment explanations. v5.4 did not implement automatic assignment of human teachers/tutors to student help requests.
 
-Recommended next selection: choose **Final Live Payment Activation Operations** only if Stripe/TWINT/finance/webhook prerequisites are approved. Otherwise choose the later product expansion lane with the highest available owner readiness: frontend rich curriculum editor implementation, native app buildout, or live warehouse/BI deployment.
+v5.5 is now the active milestone. Its purpose is automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation strategy is to build on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code, adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.

@@ -90,7 +90,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.4 Frontend Learning Operations And Automation Dashboards on 2026-06-15 (frontend-ready local release gate)
-**Active milestone:** None - awaiting next milestone selection.
+**Active milestone:** v5.5 Automatic Teacher Dispatch And SLA Load Balancing, planning started 2026-06-15.
 
 Delivered:
 
@@ -348,6 +348,28 @@ Phase evidence: `.planning/milestones/v5.4-phases/`
 - Phase 195: v5.4 Frontend Learning Operations Release Gate.
 
 **Outcome:** v5.4 closed as `frontend-ready` with `/Users/zhdeng/stoa-frontend` implementation commits `3364a39` and `ebeebba`. Verification passed `npm run build`, `npm run lint`, and `npx playwright test tests/e2e/learning-operations.spec.ts`. Production frontend deploy/live smoke, native apps, live warehouse/BI deployment, live notification delivery, automatic human teacher/tutor dispatch, and external provider activation remain deferred.
+
+## Active Milestone: v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Current phase: `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/196-01-PLAN.md`
+
+**Status:** Active planning 2026-06-15.
+
+**Function purpose:** Reduce waiting time after a student requests human help by automatically routing escalated questions to eligible teachers/tutors, reassigning timed-out requests, and exposing queue/SLA health to operators.
+
+**Implementation strategy:** Reuse existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA primitives. Add a dispatch planner, conditional claim metadata, timeout/reassignment worker, teacher queue filters, and operator dispatch dashboard. This is dispatch routing, not AI auto-answering.
+
+**Planned phases:**
+
+- Phase 196: Teacher Dispatch And SLA Load Balancing Contract.
+- Phase 197: Dispatch Planner And Candidate Ranking.
+- Phase 198: Automatic Dispatch Claim And Reassignment Worker.
+- Phase 199: Teacher Queue And Operator Dispatch Visibility.
+- Phase 200: v5.5 Teacher Dispatch Release Gate.
+
+**Scope bias:** Build product behavior first during internal development. Keep verification focused on dispatch correctness, SLA/load behavior, timeout/reassignment, queue visibility, and role-appropriate status.
 
 ## Requirements
 
@@ -757,6 +779,7 @@ Known current resources:
 | Start v5.2 adaptive sequencing and warehouse analytics | v5.1 completed curriculum product readiness while external activation remained blocked; the next buildable product gap was deeper recommendation sequencing, assignment outcome feedback, warehouse-ready analytics, and operator dashboards | ✓ Good |
 | Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
+| Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Active planning |
 
 ## Evolution
 
@@ -776,4 +799,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 after completing v5.4 frontend learning operations and automation dashboards*
+*Last updated: 2026-06-15 after selecting v5.5 automatic teacher dispatch and SLA load balancing*
