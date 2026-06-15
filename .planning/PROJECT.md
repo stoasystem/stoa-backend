@@ -80,6 +80,8 @@ The completed v5.2 milestone turns adaptive learning memory, reviewed assignment
 
 The completed v5.3 milestone turns those v5.2 recommendations into controlled assignment automation from reviewed sources: automation policy contracts, candidate batch preview, approved-batch assignment execution, deterministic source idempotency, role-safe automation metadata, and tutor/admin/family visibility handoff. It closed as `automation-ready`; frontend implementation, live notification delivery, native apps, live warehouse/BI deployment, fully unreviewed autonomous tutoring, and external provider activation remain future scope.
 
+The completed v5.4 milestone makes those v5.2/v5.3 learning operations usable in the frontend: tutor/admin automation review, operator learning dashboards, student assignment explanations, parent child progress explanations, and no-demo-fallback learning operations API integration. It closed as `frontend-ready`; production frontend deploy/live smoke, native apps, live warehouse/BI deployment, live notification delivery, automatic human tutor dispatch, and external provider activation remain future scope.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -87,8 +89,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.3 Controlled Assignment Automation on 2026-06-15 (automation-ready local release gate)
-**Active milestone:** v5.4 Frontend Learning Operations And Automation Dashboards, planning started 2026-06-15
+**Latest completed milestone:** v5.4 Frontend Learning Operations And Automation Dashboards on 2026-06-15 (frontend-ready local release gate)
+**Active milestone:** None - awaiting next milestone selection.
 
 Delivered:
 
@@ -326,23 +328,18 @@ Phase evidence: `.planning/milestones/v5.2-phases/`
 
 **Outcome:** v5.2 closed as `warehouse-ready` for backend/API readiness. Live warehouse/BI deployment, frontend dashboard integration, fully autonomous tutoring, automatic assignment delivery, and final payment/support provider activation remain deferred.
 
-## Active Milestone: v5.3 Controlled Assignment Automation
+## Latest Completed Milestone: v5.4 Frontend Learning Operations And Automation Dashboards
 
-## Active Milestone: v5.4 Frontend Learning Operations And Automation Dashboards
+Roadmap archive: `.planning/milestones/v5.4-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.4-REQUIREMENTS.md`
+Audit: `.planning/milestones/v5.4-MILESTONE-AUDIT.md`
+Phase evidence: `.planning/milestones/v5.4-phases/`
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Current phase: `.planning/phases/191-frontend-learning-operations-and-automation-dashboard-contract/191-01-PLAN.md`
+**Status:** Completed frontend-ready release gate 2026-06-15.
 
-**Status:** Active planning 2026-06-15.
+**Goal:** Make v5.2/v5.3 backend learning operations product-usable in tutor/admin/student/parent frontend workflows.
 
-**Function purpose:** Make v5.2/v5.3 backend learning operations usable in the product UI. Tutors/admins should be able to review recommendations, preview/execute controlled assignment automation, inspect learning dashboards, and families should understand why automated practice work appeared.
-
-**Implementation strategy:** Integrate existing backend APIs first: v5.3 automation preview/execute routes, adaptive assignment/progress routes, and v5.2 analytics dashboard/warehouse-readiness routes. Add backend work only when frontend integration exposes missing response fields, no-demo-fallback gaps, or unstable contracts.
-
-**Not this feature:** v5.4 does not automatically assign human teachers/tutors to student help requests.
-
-**Planned phases:**
+**Completed phases:**
 
 - Phase 191: Frontend Learning Operations And Automation Dashboard Contract.
 - Phase 192: Tutor Admin Automation Review Console.
@@ -350,7 +347,7 @@ Current phase: `.planning/phases/191-frontend-learning-operations-and-automation
 - Phase 194: Student Parent Assignment Explanation UX.
 - Phase 195: v5.4 Frontend Learning Operations Release Gate.
 
-**Scope bias:** Build product workflows first during internal development. Keep verification focused on UI/API contract correctness, no-demo-fallback behavior, role-safe explanations, and dashboard usefulness.
+**Outcome:** v5.4 closed as `frontend-ready` with `/Users/zhdeng/stoa-frontend` implementation commits `3364a39` and `ebeebba`. Verification passed `npm run build`, `npm run lint`, and `npx playwright test tests/e2e/learning-operations.spec.ts`. Production frontend deploy/live smoke, native apps, live warehouse/BI deployment, live notification delivery, automatic human teacher/tutor dispatch, and external provider activation remain deferred.
 
 ## Requirements
 
@@ -759,7 +756,7 @@ Known current resources:
 | Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Complete - readiness release gate passed |
 | Start v5.2 adaptive sequencing and warehouse analytics | v5.1 completed curriculum product readiness while external activation remained blocked; the next buildable product gap was deeper recommendation sequencing, assignment outcome feedback, warehouse-ready analytics, and operator dashboards | ✓ Good |
 | Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
-| Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still need usable frontend review, dashboard, and family explanation surfaces | Active planning |
+| Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 
 ## Evolution
 
@@ -779,4 +776,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 after selecting v5.4 frontend learning operations and automation dashboards*
+*Last updated: 2026-06-15 after completing v5.4 frontend learning operations and automation dashboards*

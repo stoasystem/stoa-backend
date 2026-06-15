@@ -182,6 +182,51 @@
 
 ---
 
+## Milestone: v5.4 — Frontend Learning Operations And Automation Dashboards
+
+**Shipped:** 2026-06-15
+**Phases:** 5 | **Plans:** 5 | **Sessions:** 1
+
+### What Was Built
+
+- No-demo-fallback frontend learning operations API/types/hooks for automation, assignment history, analytics dashboard, warehouse readiness/export, and parent progress.
+- Tutor/admin automation review console routes for preview, refusal review, approved execution, results, and assignment history.
+- Operator learning operations dashboards for sequencing coverage, assignment outcomes, quality hotspots, interventions, warehouse readiness, and export summary.
+- Student and parent assignment explanation surfaces that hide answer keys and internal ranking internals.
+- Focused Playwright e2e coverage for the Open Design finish pass across automation, dashboard, student, and parent role flows.
+
+### What Worked
+
+- Reusing the v5.2/v5.3 backend APIs kept the frontend work product-focused and avoided unnecessary backend scope.
+- Role-safe explanation checks made the family-facing privacy boundary executable instead of only documented.
+- Separating the Open Design finish-pass test commit from the implementation commit made verification evidence easier to review.
+
+### What Was Inefficient
+
+- The requested `open-design` skill set existed only as catalog entries plus an `agent-browser` workflow; the `agent-browser` CLI was not installed locally, so verification fell back to Playwright.
+- The archive helper again left stale active milestone references in `PROJECT.md`, `STATE.md`, `ROADMAP.md`, and `REQUIREMENTS.md`.
+- Phase directory archiving still needed manual movement after milestone completion.
+
+### Patterns Established
+
+- Frontend learning operations should use explicit no-demo-fallback clients and visible empty/error states when backend data is absent.
+- Student/parent assignment explanations need tests that assert absence of sensitive markers, not just presence of friendly copy.
+- Cross-workspace milestones should record both implementation and verification commits from the frontend repo.
+
+### Key Lessons
+
+1. A frontend-ready release gate should include role-flow e2e coverage, not only build and lint.
+2. Optional design-review/browser tooling needs a local availability check before relying on it for release evidence.
+3. Learning operations dashboards are more useful when no-live-warehouse states are first-class, not treated as missing data.
+
+### Cost Observations
+
+- Model mix: not recorded.
+- Sessions: 1 autonomous execution and closeout session.
+- Notable: Verification cost was concentrated in frontend build/lint and a focused Playwright e2e spec rather than broad backend testing.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -192,6 +237,7 @@
 | v5.1 | 1 | 5 | Extended rollout-state discipline to curriculum readiness: editor-ready, migration-ready, assignment-ready, and deferred sequencing. |
 | v5.2 | 1 | 5 | Promoted readiness planning into backend/API implementation while preserving review gates and explicit warehouse-ready boundaries. |
 | v5.3 | 1 | 5 | Closed the loop from recommendations to controlled assignment automation with preview-bound execution and source-idempotent assignment creation. |
+| v5.4 | 1 | 5 | Brought the backend learning operations capabilities into usable frontend role flows with no-demo-fallback behavior and focused Open Design e2e verification. |
 
 ### Cumulative Quality
 
@@ -201,6 +247,7 @@
 | v5.1 | `git diff --check`; artifact traceability; integration audit | Readiness coverage for 5/5 requirements | 0 |
 | v5.2 | 20 focused backend tests; targeted Ruff; integration audit | Backend/API coverage for 5/5 requirements | 0 |
 | v5.3 | 15 focused adaptive backend tests; targeted Ruff; code review; integration audit | Automation-ready coverage for 5/5 requirements | 0 |
+| v5.4 | Frontend build; frontend lint; focused Playwright e2e | Frontend role-flow coverage for 5/5 requirements | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 

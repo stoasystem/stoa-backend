@@ -1,39 +1,40 @@
 # Milestones
 
-## Active
+## v5.4 Frontend Learning Operations And Automation Dashboards (Shipped: 2026-06-15)
 
-### v5.4 Frontend Learning Operations And Automation Dashboards
-
-**Status:** Active planning 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/191-frontend-learning-operations-and-automation-dashboard-contract/`
+**Status:** Completed local frontend release gate 2026-06-15
+**Audit:** `.planning/milestones/v5.4-MILESTONE-AUDIT.md`
+**Roadmap:** `.planning/milestones/v5.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.4-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v5.4-phases/`
+**Frontend commits:** `/Users/zhdeng/stoa-frontend` `3364a39 feat: add learning operations dashboards`; `ebeebba test: cover learning operations dashboards`
 **Goal:** Make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `frontend-ready`
 
-Function purpose:
-
-- Surface controlled assignment automation and learning analytics in usable product workflows.
-- Help tutors/admins preview, approve, execute, and review automated practice assignments.
-- Help students/parents understand why automated assignments appeared and what they target.
-- Do not auto-dispatch human teachers/tutors for student help requests.
-
-Implementation strategy:
-
-- Prefer frontend integration against existing backend APIs.
-- Use v5.3 automation preview/execute routes and v5.2 analytics dashboard routes.
-- Add backend changes only for missing fields, no-demo-fallback states, or contract stabilization.
-- Keep role-safe boundaries for answer keys and internal ranking details.
-
-Planned phases:
+Completed phases:
 
 - Phase 191: Frontend Learning Operations And Automation Dashboard Contract.
 - Phase 192: Tutor Admin Automation Review Console.
 - Phase 193: Learning Operations Dashboard Integration.
 - Phase 194: Student Parent Assignment Explanation UX.
 - Phase 195: v5.4 Frontend Learning Operations Release Gate.
+
+Key accomplishments:
+
+- Defined the v5.4 frontend learning operations contract across tutor, admin, student, parent, API, state, and ownership boundaries.
+- Added no-demo-fallback frontend API/types/hooks for automation preview/execute, assignment history, analytics dashboard, warehouse readiness/export, and parent progress.
+- Added tutor/admin automation review console routes for preview, refusal review, approved execution, results, and assignment history.
+- Added operator learning operations dashboards for sequencing coverage, assignment outcomes, quality hotspots, interventions, warehouse readiness, and export summary.
+- Added student and parent assignment explanation pages without answer keys or internal ranking internals.
+- Verified with frontend `npm run build`, `npm run lint`, and `npx playwright test tests/e2e/learning-operations.spec.ts`.
+- Ran an Open Design finish pass against the implemented role flows. The `agent-browser` CLI was unavailable locally, so verification used Playwright e2e coverage for automation review, dashboard empty/warehouse states, and role-safe family explanations.
+
+Known deferred items at close: production frontend deploy/live smoke, native app implementation, live warehouse/BI deployment, live notification rollout, final payment/support external activation, and automatic human teacher/tutor dispatch for student help requests.
+
+---
 
 ## v5.3 Controlled Assignment Automation (Completed local release gate: 2026-06-15)
 

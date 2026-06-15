@@ -9,8 +9,12 @@
 Repository: `/Users/zhdeng/stoa-frontend`
 
 - Commit: `3364a39 feat: add learning operations dashboards`
+- Verification commit: `ebeebba test: cover learning operations dashboards`
 - Build: `npm run build` passed.
 - Lint: `npm run lint` passed.
+- E2E: `npx playwright test tests/e2e/learning-operations.spec.ts` passed.
+
+Open Design finish pass: the `agent-browser` CLI was not installed in this local environment, so final role-flow verification used focused Playwright e2e coverage instead.
 
 ## Delivered Scope
 
