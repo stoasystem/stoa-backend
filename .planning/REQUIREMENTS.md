@@ -1,4 +1,4 @@
-# Requirements: v5.3 Controlled Autonomous Tutoring And Assignment Automation
+# Requirements: v5.3 Controlled Assignment Automation
 
 **Milestone:** v5.3
 **Status:** Active planning
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Use STOA's reviewed AI drafts, adaptive sequencing recommendations, assignment lifecycle, and warehouse-ready analytics foundations to support controlled autonomous tutoring and assignment automation. v5.3 focuses on policy-bounded candidate batching, reviewed assignment creation, optional delivery states, operator review, and family-visible explanations.
+Use STOA's reviewed AI drafts, adaptive sequencing recommendations, assignment lifecycle, and warehouse-ready analytics foundations to support controlled assignment automation. v5.3 focuses on policy-bounded candidate batching, reviewed assignment creation, optional delivery states, operator review, and family-visible explanations.
 
 This is an internal development milestone. Prioritize functional learning product capability. Keep checks focused on automation behavior, duplicate prevention, assignment lifecycle correctness, role-visible explanation quality, and operator evidence.
 
@@ -60,7 +60,7 @@ Acceptance criteria:
 - Frontend/API handoff documents routes, payloads, empty states, error states, and no-automation behavior.
 - Tests or focused checks cover route contracts, explanation shape, no-automation empty states, and operator summary shape.
 
-### VERIFY-36 v5.3 Autonomous Tutoring Assignment Automation Release Gate
+### VERIFY-36 v5.3 Controlled Assignment Automation Release Gate
 
 v5.3 closes with controlled assignment automation evidence.
 

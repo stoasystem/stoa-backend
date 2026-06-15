@@ -1,8 +1,8 @@
-# Phase 186 Context: Controlled Autonomous Tutoring And Assignment Automation Contract
+# Phase 186 Context: Controlled Assignment Automation Contract
 
 ## Milestone
 
-v5.3 Controlled Autonomous Tutoring And Assignment Automation
+v5.3 Controlled Assignment Automation
 
 ## Why This Phase Exists
 

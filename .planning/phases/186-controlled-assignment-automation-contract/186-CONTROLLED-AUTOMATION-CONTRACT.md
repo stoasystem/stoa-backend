@@ -1,4 +1,4 @@
-# Controlled Autonomous Tutoring And Assignment Automation Contract
+# Controlled Assignment Automation Contract
 
 ## Purpose
 

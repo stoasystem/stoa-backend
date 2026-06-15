@@ -1,4 +1,4 @@
-# Roadmap: v5.3 Controlled Autonomous Tutoring And Assignment Automation
+# Roadmap: v5.3 Controlled Assignment Automation
 
 **Status:** Active planning
 **Created:** 2026-06-15
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Turn v5.2 adaptive sequencing recommendations into controlled assignment automation. v5.3 should let tutors/admins configure autonomy levels, batch reviewed candidates, create assignments safely from accepted AI drafts or curriculum exercises, expose delivery state to students/parents/tutors, and keep fully unreviewed tutoring out of scope.
+Turn v5.2 adaptive sequencing recommendations into controlled assignment automation. v5.3 should let tutors/admins configure automation levels, batch reviewed candidates, create assignments safely from accepted AI drafts or curriculum exercises, expose delivery state to students/parents/tutors, and keep fully unreviewed autonomous tutoring out of scope.
 
 ## Execution Bias
 
@@ -14,15 +14,15 @@ Build product capability directly. Keep checks focused on automation policy beha
 
 ## Phases
 
-- [ ] **Phase 186: Controlled Autonomous Tutoring And Assignment Automation Contract** - Define autonomy levels, source eligibility, review gates, duplicate rules, delivery states, role visibility, and rollout boundaries.
+- [ ] **Phase 186: Controlled Assignment Automation Contract** - Define automation levels, source eligibility, review gates, duplicate rules, delivery states, role visibility, and rollout boundaries.
 - [ ] **Phase 187: Automation Policy And Candidate Batch Planner** - Add or define policy-driven candidate selection from v5.2 recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
 - [ ] **Phase 188: Controlled Assignment Creation And Delivery Worker** - Add or define idempotent assignment creation/delivery from approved batches with clear refusal and result evidence.
 - [ ] **Phase 189: Tutor Admin Review UX Contracts And Family Visibility** - Define tutor/admin batch review, override, pause, and parent/student explanations for automated assignment delivery.
-- [ ] **Phase 190: v5.3 Autonomous Tutoring Assignment Automation Release Gate** - Verify v5.3 docs/contracts/evidence, record rollout state, and select the next feature milestone.
+- [ ] **Phase 190: v5.3 Controlled Assignment Automation Release Gate** - Verify v5.3 docs/contracts/evidence, record rollout state, and select the next feature milestone.
 
 ## Phase Details
 
-### Phase 186: Controlled Autonomous Tutoring And Assignment Automation Contract
+### Phase 186: Controlled Assignment Automation Contract
 
 **Goal**: Define the v5.3 automation contract before code expands.
 **Depends on**: v3.7 AI teacher tools, v4.0 reviewed assignments, v5.1 assignment automation readiness, v5.2 adaptive sequencing and assignment outcome feedback
@@ -39,7 +39,7 @@ Build product capability directly. Keep checks focused on automation policy beha
 
 Plans:
 
-- [ ] 186-01: Define controlled autonomous tutoring and assignment automation contract.
+- [ ] 186-01: Define controlled assignment automation contract.
 
 ### Phase 187: Automation Policy And Candidate Batch Planner
 
@@ -95,7 +95,7 @@ Plans:
 
 - [ ] 189-01: Define tutor/admin review UX contracts and family visibility.
 
-### Phase 190: v5.3 Autonomous Tutoring Assignment Automation Release Gate
+### Phase 190: v5.3 Controlled Assignment Automation Release Gate
 
 **Goal**: Close v5.3 with focused verification, handoff evidence, and updated remaining-feature planning.
 **Depends on**: Phase 189
@@ -117,11 +117,11 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 186 Controlled Autonomous Tutoring And Assignment Automation Contract | v5.3 | 0/1 | Planned | - |
+| 186 Controlled Assignment Automation Contract | v5.3 | 0/1 | Planned | - |
 | 187 Automation Policy And Candidate Batch Planner | v5.3 | 0/1 | Planned | - |
 | 188 Controlled Assignment Creation And Delivery Worker | v5.3 | 0/1 | Planned | - |
 | 189 Tutor Admin Review UX Contracts And Family Visibility | v5.3 | 0/1 | Planned | - |
-| 190 v5.3 Autonomous Tutoring Assignment Automation Release Gate | v5.3 | 0/1 | Planned | - |
+| 190 v5.3 Controlled Assignment Automation Release Gate | v5.3 | 0/1 | Planned | - |
 
 ## Traceability
 
@@ -134,4 +134,4 @@ Plans:
 | VERIFY-36 | Phase 190 | Planned |
 
 ---
-*Last updated: 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation.*
+*Last updated: 2026-06-15 after selecting v5.3 controlled assignment automation.*

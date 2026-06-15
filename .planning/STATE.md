@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
 milestone: v5.3
-milestone_name: Controlled Autonomous Tutoring And Assignment Automation
+milestone_name: Controlled Assignment Automation
 status: planning
 last_updated: "2026-06-15T12:00:00+02:00"
 last_activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 product expansion from the stoa_docs remaining-feature queue.
@@ -20,11 +20,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.3 controlled autonomous tutoring and assignment automation.
+**Current focus:** v5.3 controlled assignment automation.
 
 ## Current Position
 
-Phase: 186 - Controlled Autonomous Tutoring And Assignment Automation Contract
+Phase: 186 - Controlled Assignment Automation Contract
 Plan: 186-01
 Status: Planned
 Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 controlled automation from the `stoa_docs` remaining-feature queue.
@@ -42,7 +42,7 @@ Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 c
 
 ### Pending Todos
 
-- Execute Phase 186 controlled autonomous tutoring and assignment automation contract planning.
+- Execute Phase 186 controlled assignment automation contract planning.
 - Implement automation policy and candidate batch planner in Phase 187.
 - Implement controlled assignment creation and delivery worker in Phase 188.
 - Define tutor/admin review UX contracts and family visibility in Phase 189.
@@ -57,4 +57,4 @@ Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 c
 
 ## Operator Next Steps
 
-- Start Phase 186 using `.planning/phases/186-controlled-autonomous-tutoring-and-assignment-automation-contract/186-01-PLAN.md`.
+- Start Phase 186 using `.planning/phases/186-controlled-assignment-automation-contract/186-01-PLAN.md`.

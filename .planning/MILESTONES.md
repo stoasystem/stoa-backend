@@ -2,12 +2,12 @@
 
 ## Active
 
-### v5.3 Controlled Autonomous Tutoring And Assignment Automation
+### v5.3 Controlled Assignment Automation
 
 **Status:** Active planning 2026-06-15
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/186-controlled-autonomous-tutoring-and-assignment-automation-contract/`
+**Phase evidence:** `.planning/phases/186-controlled-assignment-automation-contract/`
 **Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation with tutor/admin policy boundaries, reviewed sources, idempotent creation/delivery, and family-visible explanations.
 **Phases:** 5
 **Plans:** 0/5 complete
@@ -15,11 +15,11 @@
 
 Planned phases:
 
-- Phase 186: Controlled Autonomous Tutoring And Assignment Automation Contract.
+- Phase 186: Controlled Assignment Automation Contract.
 - Phase 187: Automation Policy And Candidate Batch Planner.
 - Phase 188: Controlled Assignment Creation And Delivery Worker.
 - Phase 189: Tutor Admin Review UX Contracts And Family Visibility.
-- Phase 190: v5.3 Autonomous Tutoring Assignment Automation Release Gate.
+- Phase 190: v5.3 Controlled Assignment Automation Release Gate.
 
 Feature priorities:
 

@@ -16,7 +16,7 @@ Closed scope:
 - Built adaptive sequencing contract, multi-signal recommendation generation, assignment outcome feedback, warehouse-ready export schemas, and operator dashboard contracts.
 - Closed as `warehouse-ready` for backend/API readiness; live warehouse/BI deployment, frontend dashboard integration, fully autonomous tutoring, and automatic assignment delivery remain future scope.
 
-## Active v5.3 Controlled Autonomous Tutoring And Assignment Automation
+## Active v5.3 Controlled Assignment Automation
 
 **Status:** Active planning 2026-06-15
 **Roadmap:** `.planning/ROADMAP.md`
@@ -26,7 +26,7 @@ Goal: convert v5.2 recommendations into controlled assignment automation from re
 
 Planned scope:
 
-- Phase 186: Controlled autonomous tutoring and assignment automation contract.
+- Phase 186: Controlled assignment automation contract.
 - Phase 187: Automation policy and candidate batch planner.
 - Phase 188: Controlled assignment creation and delivery worker.
 - Phase 189: Tutor/admin review UX contracts and family visibility.
