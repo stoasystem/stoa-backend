@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation
+**Updated:** 2026-06-15 after selecting v5.4 frontend learning operations and automation dashboards
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -52,7 +52,9 @@ v5.1 completed the rich curriculum editor and production content migration readi
 
 v5.2 completed adaptive sequencing and warehouse analytics backend/API readiness. It built on v4.0 memory/assignment foundations, v4.6 curriculum analytics, and v5.1 sequencing readiness to implement multi-signal recommendations, assignment outcome feedback, warehouse-ready aggregate schemas, and operator dashboard contracts. Final live payment/support activation and live warehouse/BI deployment remain externally blocked/deferred.
 
-v5.3 is now active planning for controlled autonomous tutoring and assignment automation. It should build on v5.2 sequencing and assignment outcome signals to add autonomy levels, policy-bounded candidate batching, idempotent assignment creation/delivery from reviewed sources, tutor/admin review controls, and family-visible assignment explanations.
+v5.3 completed controlled assignment automation backend/API readiness. It built on v5.2 sequencing and assignment outcome signals to add autonomy levels, policy-bounded candidate batching, idempotent assignment creation/delivery from reviewed sources, tutor/admin review contracts, and family-visible assignment metadata.
+
+v5.4 is now active planning for frontend learning operations and automation dashboards. Its purpose is to make v5.2/v5.3 backend capabilities usable by tutors/admins/students/parents. The implementation strategy is to integrate existing automation preview/execute, adaptive assignment/progress, and analytics dashboard APIs in frontend workflows first, adding backend changes only for missing response fields, no-demo-fallback behavior, or unstable contracts. It is not automatic human teacher/tutor dispatch.
 
 ## Completed Or Largely Complete
 
@@ -176,16 +178,16 @@ v5.3 is now active planning for controlled autonomous tutoring and assignment au
 
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
-- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 selected for controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
-- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 now targets controlled autonomous delivery.
+- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 completed controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
+- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 completed controlled autonomous delivery backend/API readiness; v5.4 now targets frontend usability.
 - Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; full native app implementation, app-store release, and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Execute v5.3 controlled autonomous tutoring and assignment automation: automation contract, policy planner, approved-batch assignment creation/delivery, review UX contracts, and family explanations.
-2. Consider frontend operator dashboard integration or live warehouse/BI deployment if analytics ownership and infrastructure prerequisites become available.
+1. Execute v5.4 frontend learning operations and automation dashboards: tutor/admin automation console, operator dashboard integration, student/parent assignment explanations, and no-demo-fallback UI behavior.
+2. Consider automatic teacher/tutor dispatch for student help requests if queue ownership, tutor availability, load balancing, and SLA escalation become the next product priority.
 3. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
 4. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
 5. Full frontend rich curriculum editor implementation, production content import, native app implementation, and app-store release when the relevant workspace/content/prerequisite owners are available.

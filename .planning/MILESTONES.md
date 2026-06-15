@@ -2,7 +2,38 @@
 
 ## Active
 
-No active milestone. v5.3 completed local release gate on 2026-06-15 and is ready for archive cleanup.
+### v5.4 Frontend Learning Operations And Automation Dashboards
+
+**Status:** Active planning 2026-06-15
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/191-frontend-learning-operations-and-automation-dashboard-contract/`
+**Goal:** Make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Surface controlled assignment automation and learning analytics in usable product workflows.
+- Help tutors/admins preview, approve, execute, and review automated practice assignments.
+- Help students/parents understand why automated assignments appeared and what they target.
+- Do not auto-dispatch human teachers/tutors for student help requests.
+
+Implementation strategy:
+
+- Prefer frontend integration against existing backend APIs.
+- Use v5.3 automation preview/execute routes and v5.2 analytics dashboard routes.
+- Add backend changes only for missing fields, no-demo-fallback states, or contract stabilization.
+- Keep role-safe boundaries for answer keys and internal ranking details.
+
+Planned phases:
+
+- Phase 191: Frontend Learning Operations And Automation Dashboard Contract.
+- Phase 192: Tutor Admin Automation Review Console.
+- Phase 193: Learning Operations Dashboard Integration.
+- Phase 194: Student Parent Assignment Explanation UX.
+- Phase 195: v5.4 Frontend Learning Operations Release Gate.
 
 ## v5.3 Controlled Assignment Automation (Completed local release gate: 2026-06-15)
 

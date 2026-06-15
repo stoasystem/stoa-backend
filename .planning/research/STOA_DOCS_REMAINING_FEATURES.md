@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation
+**Updated:** 2026-06-15 after selecting v5.4 frontend learning operations and automation dashboards
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -24,19 +24,20 @@
 - Native mobile and full localization governance with mobile API/client handoff, native notification/offline contracts, translation governance, English/German key parity evidence, broad copy QA scope, and rollout state `contract-ready`.
 - Rich curriculum editor and production content migration readiness with UI/API handoff, migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, adaptive sequencing readiness, and rollout state readiness-complete.
 - Adaptive sequencing and warehouse analytics backend/API readiness with multi-signal recommendations, assignment outcome feedback, aggregate warehouse schemas, and operator dashboard contracts.
+- Controlled assignment automation backend/API readiness with policy-bounded candidate preview, approved-batch execution, deterministic source idempotency, result evidence, and role-safe automation metadata.
 
 ## Remaining Feature Build Queue
 
 1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-2. **Controlled Autonomous Tutoring And Assignment Automation**.
-   Build on v5.2 sequencing signals to support tutor/admin-controlled automatic assignment creation/delivery from reviewed recommendations.
-   Status: v5.3 selected and active planning started 2026-06-15.
+2. **Frontend Learning Operations And Automation Dashboards**.
+   Build product UI for v5.2/v5.3 learning operations: tutor/admin automation review, operator dashboards, and student/parent assignment explanations.
+   Status: v5.4 selected and active planning started 2026-06-15.
 
 3. **Later Product Expansion**.
-   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, full autonomous tutoring decisions, automatic assignment delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: remains future scope unless selected after v5.2.
+   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, automatic teacher/tutor dispatch for student teacher requests, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
+   Status: remains future scope unless selected after v5.4.
 
 ## Current Planning Decision
 
@@ -44,4 +45,6 @@ v5.1 is complete as a curriculum product readiness milestone because final payme
 
 v5.2 is complete as a backend/API readiness milestone. It turned the v4.0 adaptive learning memory foundation, v4.6 curriculum analytics foundation, and v5.1 readiness contracts into deeper adaptive sequencing recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. Final live warehouse/BI deployment remains deferred.
 
-v5.3 is now the active milestone. It should convert v5.2 recommendations into controlled assignment automation from accepted AI drafts, published curriculum exercises, and reviewed recommendation candidates. The milestone should prioritize autonomy levels, policy-bounded candidate batches, idempotent assignment creation/delivery, tutor/admin review controls, and family-visible explanations while keeping unreviewed autonomous tutoring out of scope.
+v5.3 is complete as an automation-ready backend/API milestone. It converted v5.2 recommendations into controlled assignment automation from accepted AI drafts, published curriculum exercises, and reviewed recommendation candidates. The completed scope includes autonomy levels, policy-bounded candidate batches, idempotent assignment creation/delivery, tutor/admin review contracts, and family-visible explanation metadata while keeping unreviewed autonomous tutoring out of scope.
+
+v5.4 is now the active milestone. Its purpose is to make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows. The implementation strategy is to integrate existing automation preview/execute, assignment/progress, and analytics dashboard APIs first, adding backend work only for missing response fields, no-demo-fallback states, or contract stabilization. v5.4 is not automatic assignment of human teachers/tutors to student help requests.

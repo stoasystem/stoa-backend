@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-15 after completing v5.3
+**Updated:** 2026-06-15 after selecting v5.4
 **Mode:** product functionality first
 
 ## Latest Completed: v5.3 Controlled Assignment Automation
@@ -14,22 +14,27 @@ Goal: convert v5.2 recommendations into controlled assignment automation from re
 
 Closed scope:
 
-- Defined controlled automation levels, source eligibility, review gates, duplicate rules, delivery states, role visibility, and rollout boundaries.
-- Added policy-bounded candidate preview from adaptive sequencing recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
-- Added approved-batch assignment execution with explicit approval, current-preview binding, deterministic source idempotency, conditional insert, per-item result evidence, and role-safe automation metadata.
-- Defined tutor/admin review UX contracts and family-safe student/parent visibility.
+- Added policy-bounded preview, approved-batch execution, deterministic source idempotency, per-item result evidence, and role-safe automation metadata.
 - Closed as `automation-ready`; frontend implementation, live notification delivery, native apps, live warehouse/BI, fully unreviewed autonomous tutoring, and external provider activation remain future scope.
 
-## Candidate v5.4 Frontend Learning Operations And Automation Dashboards
+## Active v5.4 Frontend Learning Operations And Automation Dashboards
 
-**Status:** Recommended next after v5.3
+**Status:** Active planning 2026-06-15
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
 
-Potential scope:
+Function purpose:
 
-- Frontend tutor/admin automation review controls for preview, approve, reject, pause/resume, execute, and result history.
-- Frontend operator dashboard integration for v5.2/v5.3 analytics and automation controls.
-- Student/parent family-safe automated assignment explanations.
-- No-demo-fallback handling for automation, analytics, and assignment review states.
+- Make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows.
+- Let operators preview and execute automated assignment batches, inspect analytics, and review intervention opportunities.
+- Let students/parents understand automated assignments without exposing answer keys or ranking internals.
+- This is not automatic teacher/tutor dispatch.
+
+Implementation strategy:
+
+- Integrate existing backend APIs first.
+- Focus on frontend contract, no-demo-fallback states, empty/error handling, and role-safe display.
+- Add backend work only for missing response fields or contract bugs discovered during integration.
 
 ## Candidate v5.5 External Activation Or Native App Buildout
 

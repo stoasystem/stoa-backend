@@ -88,7 +88,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.3 Controlled Assignment Automation on 2026-06-15 (automation-ready local release gate)
-**Active milestone:** None; v5.4 recommendation is Frontend Learning Operations And Automation Dashboards
+**Active milestone:** v5.4 Frontend Learning Operations And Automation Dashboards, planning started 2026-06-15
 
 Delivered:
 
@@ -328,23 +328,29 @@ Phase evidence: `.planning/milestones/v5.2-phases/`
 
 ## Active Milestone: v5.3 Controlled Assignment Automation
 
+## Active Milestone: v5.4 Frontend Learning Operations And Automation Dashboards
+
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
-Current phase: `.planning/phases/186-controlled-assignment-automation-contract/186-01-PLAN.md`
+Current phase: `.planning/phases/191-frontend-learning-operations-and-automation-dashboard-contract/191-01-PLAN.md`
 
 **Status:** Active planning 2026-06-15.
 
-**Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation from reviewed sources, with tutor/admin policy boundaries and family-visible explanations.
+**Function purpose:** Make v5.2/v5.3 backend learning operations usable in the product UI. Tutors/admins should be able to review recommendations, preview/execute controlled assignment automation, inspect learning dashboards, and families should understand why automated practice work appeared.
+
+**Implementation strategy:** Integrate existing backend APIs first: v5.3 automation preview/execute routes, adaptive assignment/progress routes, and v5.2 analytics dashboard/warehouse-readiness routes. Add backend work only when frontend integration exposes missing response fields, no-demo-fallback gaps, or unstable contracts.
+
+**Not this feature:** v5.4 does not automatically assign human teachers/tutors to student help requests.
 
 **Planned phases:**
 
-- Phase 186: Controlled Assignment Automation Contract.
-- Phase 187: Automation Policy And Candidate Batch Planner.
-- Phase 188: Controlled Assignment Creation And Delivery Worker.
-- Phase 189: Tutor Admin Review UX Contracts And Family Visibility.
-- Phase 190: v5.3 Controlled Assignment Automation Release Gate.
+- Phase 191: Frontend Learning Operations And Automation Dashboard Contract.
+- Phase 192: Tutor Admin Automation Review Console.
+- Phase 193: Learning Operations Dashboard Integration.
+- Phase 194: Student Parent Assignment Explanation UX.
+- Phase 195: v5.4 Frontend Learning Operations Release Gate.
 
-**Scope bias:** Build product capability first during internal development. Keep verification focused on automation behavior, duplicate prevention, assignment lifecycle correctness, role-visible explanations, and operator evidence.
+**Scope bias:** Build product workflows first during internal development. Keep verification focused on UI/API contract correctness, no-demo-fallback behavior, role-safe explanations, and dashboard usefulness.
 
 ## Requirements
 
@@ -752,7 +758,8 @@ Known current resources:
 | Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Complete - contract-ready release gate passed |
 | Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Complete - readiness release gate passed |
 | Start v5.2 adaptive sequencing and warehouse analytics | v5.1 completed curriculum product readiness while external activation remained blocked; the next buildable product gap was deeper recommendation sequencing, assignment outcome feedback, warehouse-ready analytics, and operator dashboards | ✓ Good |
-| Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remains blocked, so the next buildable product gap is controlled assignment automation from reviewed sources | Active planning |
+| Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
+| Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still need usable frontend review, dashboard, and family explanation surfaces | Active planning |
 
 ## Evolution
 
@@ -772,4 +779,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 after selecting v5.3 controlled assignment automation*
+*Last updated: 2026-06-15 after selecting v5.4 frontend learning operations and automation dashboards*
