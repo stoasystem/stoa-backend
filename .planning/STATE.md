@@ -4,13 +4,13 @@ milestone: v5.5
 milestone_name: Automatic Teacher Dispatch And SLA Load Balancing
 status: planning
 last_updated: "2026-06-15T23:55:00+02:00"
-last_activity: 2026-06-15 - Synced v5.4 completion to remote and selected v5.5 teacher dispatch from the stoa_docs remaining-feature queue.
+last_activity: 2026-06-15 - Completed v5.5 Phases 196-199 teacher dispatch implementation and verification.
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: 196 - Teacher Dispatch And SLA Load Balancing Contract
-Plan: 196-01
-Status: Planned
-Last activity: 2026-06-15 - Remote sync completed for v5.4 and v5.5 selected after checking `stoa_docs`, existing teacher queue code, and remaining product gaps.
+Phase: 200 - v5.5 Teacher Dispatch Release Gate
+Plan: 200-01
+Status: Ready for release gate
+Last activity: 2026-06-15 - Dispatch contract, planner, claim/reassignment worker, queue visibility, and operator dashboard completed.
 
 ## Accumulated Context
 
@@ -41,10 +41,6 @@ Last activity: 2026-06-15 - Remote sync completed for v5.4 and v5.5 selected aft
 
 ### Pending Todos
 
-- Execute Phase 196 teacher dispatch and SLA load balancing contract planning.
-- Implement dispatch planner and candidate ranking in Phase 197.
-- Implement automatic dispatch claim and reassignment worker in Phase 198.
-- Implement teacher queue and operator dispatch visibility in Phase 199.
 - Close v5.5 with release-gate evidence and next milestone selection in Phase 200.
 
 ### Blockers/Concerns

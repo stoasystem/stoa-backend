@@ -107,8 +107,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEACHDISP-01 | Phase 196 | Planned |
-| TEACHDISP-02 | Phase 197 | Planned |
-| TEACHDISP-03 | Phase 198 | Planned |
-| TEACHDISP-04 | Phase 199 | Planned |
+| TEACHDISP-01 | Phase 196 | Complete |
+| TEACHDISP-02 | Phase 197 | Complete |
+| TEACHDISP-03 | Phase 198 | Complete |
+| TEACHDISP-04 | Phase 199 | Complete |
 | VERIFY-38 | Phase 200 | Planned |

@@ -10,8 +10,8 @@
 **Phase evidence:** `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/`
 **Goal:** Automatically route student teacher-help requests to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose SLA/load health.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 4/5 complete
+**Requirements:** 4/5 complete
 
 Function purpose:
 
@@ -28,10 +28,10 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 196: Teacher Dispatch And SLA Load Balancing Contract.
-- Phase 197: Dispatch Planner And Candidate Ranking.
-- Phase 198: Automatic Dispatch Claim And Reassignment Worker.
-- Phase 199: Teacher Queue And Operator Dispatch Visibility.
+- Phase 196: Teacher Dispatch And SLA Load Balancing Contract. (complete)
+- Phase 197: Dispatch Planner And Candidate Ranking. (complete)
+- Phase 198: Automatic Dispatch Claim And Reassignment Worker. (complete)
+- Phase 199: Teacher Queue And Operator Dispatch Visibility. (complete)
 - Phase 200: v5.5 Teacher Dispatch Release Gate.
 
 ---

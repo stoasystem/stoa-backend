@@ -10,7 +10,7 @@ from stoa.db.repositories import question_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
-from stoa.services import notification_service, teacher_reply_service
+from stoa.services import notification_service, teacher_dispatch_service, teacher_reply_service
 
 router = APIRouter()
 
@@ -37,6 +37,14 @@ class ReplyResponse(BaseModel):
     status: str
 
 
+class DispatchPreviewRequest(BaseModel):
+    question_id: str = Field(..., min_length=1)
+
+
+class DispatchRunRequest(BaseModel):
+    question_id: str = Field(..., min_length=1)
+
+
 def _list_escalated_questions(limit: int = 50) -> list[dict]:
     """Scan for ESCALATED questions (small scale; replace with GSI for production)."""
     table = get_table()
@@ -49,23 +57,79 @@ def _list_escalated_questions(limit: int = 50) -> list[dict]:
     return result.get("Items", [])
 
 
+def _is_dispatch_restricted_to_other_teacher(item: dict[str, Any], teacher_id: str, now: str) -> bool:
+    return (
+        item.get("dispatch_status") == "dispatched"
+        and item.get("dispatched_teacher_id") not in (None, "", teacher_id)
+        and not teacher_dispatch_service._deadline_expired(item.get("dispatch_deadline_at"), now)
+    )
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 @router.get("/queue")
 async def get_queue(
-    user: dict = Depends(require_role("teacher", "admin")),
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
 ):
     """Return the list of questions awaiting teacher intervention."""
+    now = _now()
     questions = _list_escalated_questions()
-    return {"items": questions, "count": len(questions)}
+    viewer_id = user["sub"]
+    role = user.get("role")
+    if role != "admin":
+        questions = [
+            item
+            for item in questions
+            if not _is_dispatch_restricted_to_other_teacher(item, viewer_id, now)
+        ]
+    items = [teacher_dispatch_service.decorate_queue_item(item, viewer_id=viewer_id, now=now) for item in questions]
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/dispatch/preview")
+async def preview_dispatch(
+    body: DispatchPreviewRequest,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Preview candidate teacher dispatch without mutating state."""
+    item = question_repo.get_question(body.question_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if item.get("status") != QuestionStatus.ESCALATED.value:
+        raise HTTPException(status_code=409, detail="Question is not awaiting teacher dispatch")
+    return teacher_dispatch_service.plan_dispatch(item, now=_now())
+
+
+@router.post("/dispatch/run")
+async def run_dispatch(
+    body: DispatchRunRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Run automatic dispatch for one escalated question."""
+    result = teacher_dispatch_service.dispatch_question(body.question_id, now=_now())
+    if result["status"] == "not_found":
+        raise HTTPException(status_code=404, detail="Question not found")
+    if result["status"] == "not_dispatchable":
+        raise HTTPException(status_code=409, detail=result["reason"])
+    if result["status"] == "claim_conflict":
+        raise HTTPException(status_code=409, detail="Dispatch claim conflicted with another assignment")
+    return result
+
+
+@router.post("/dispatch/reassign-stale")
+async def reassign_stale_dispatches(
+    user: dict = Depends(require_role("admin")),
+):
+    """Reassign stale dispatch attempts that missed their accept deadline."""
+    return teacher_dispatch_service.reassign_timed_out_dispatches(now=_now())
 
 
 @router.post("/questions/{question_id}/takeover", response_model=TakeoverResponse)
 async def takeover(
     question_id: str,
-    user: dict = Depends(require_role("teacher")),
+    user: dict = Depends(require_role("teacher", "tutor")),
 ):
     """Lock a question to this teacher and start a session."""
     item = question_repo.get_question(question_id)
@@ -77,8 +141,10 @@ async def takeover(
         raise HTTPException(status_code=409, detail="Question is not awaiting teacher takeover")
 
     teacher_id = user["sub"]
-    session_id = str(uuid.uuid4())
     now = _now()
+    if _is_dispatch_restricted_to_other_teacher(item, teacher_id, now):
+        raise HTTPException(status_code=409, detail="Question is dispatched to another teacher")
+    session_id = str(uuid.uuid4())
     sla_fields = teacher_reply_service.compute_takeover_sla_fields(item, now)
 
     question_repo.update_status(
@@ -88,6 +154,8 @@ async def takeover(
         session_id=session_id,
         teacher_started_at=now,
         teacher_taken_over_at=now,
+        dispatch_status="accepted" if item.get("dispatch_status") == "dispatched" else item.get("dispatch_status"),
+        dispatch_accepted_at=now if item.get("dispatch_status") == "dispatched" else item.get("dispatch_accepted_at"),
         **sla_fields,
     )
 
@@ -116,7 +184,7 @@ async def takeover(
 async def reply(
     question_id: str,
     body: ReplyRequest,
-    user: dict = Depends(require_role("teacher")),
+    user: dict = Depends(require_role("teacher", "tutor")),
 ):
     """Post the teacher's reply to a question they have taken over."""
     item = question_repo.get_question(question_id)
@@ -165,7 +233,7 @@ async def reply(
 @router.put("/questions/{question_id}/resolve", status_code=status.HTTP_200_OK)
 async def resolve(
     question_id: str,
-    user: dict = Depends(require_role("teacher")),
+    user: dict = Depends(require_role("teacher", "tutor")),
 ):
     """Mark a question as resolved and close the teacher session."""
     item = question_repo.get_question(question_id)

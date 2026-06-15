@@ -69,3 +69,36 @@ def update_status(question_id: str, status: str, **extra_attrs) -> None:
         ExpressionAttributeNames=attr_names,
         ExpressionAttributeValues=attr_values,
     )
+
+
+def update_status_conditionally(
+    question_id: str,
+    status: str,
+    *,
+    condition_expression: str,
+    condition_names: dict | None = None,
+    condition_values: dict | None = None,
+    **extra_attrs,
+) -> bool:
+    """Update a question row when a DynamoDB condition still holds."""
+    table = get_table()
+    update_expr = "SET #s = :s"
+    attr_names = {"#s": "status", **(condition_names or {})}
+    attr_values = {":s": status, **(condition_values or {})}
+    for k, v in extra_attrs.items():
+        update_expr += f", {k} = :{k}"
+        attr_values[f":{k}"] = v
+
+    try:
+        table.update_item(
+            Key={"PK": f"QUESTION#{question_id}", "SK": "META"},
+            UpdateExpression=update_expr,
+            ConditionExpression=condition_expression,
+            ExpressionAttributeNames=attr_names,
+            ExpressionAttributeValues=attr_values,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+    return True

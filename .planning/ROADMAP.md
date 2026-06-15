@@ -27,10 +27,10 @@ Start from existing backend primitives and add dispatch behavior around them:
 
 ## Phases
 
-- [ ] **Phase 196: Teacher Dispatch And SLA Load Balancing Contract** - Define dispatch purpose, states, matching inputs, claim rules, timeout behavior, and visibility.
-- [ ] **Phase 197: Dispatch Planner And Candidate Ranking** - Add or define non-mutating candidate ranking for escalated questions.
-- [ ] **Phase 198: Automatic Dispatch Claim And Reassignment Worker** - Add or define idempotent dispatch claim, timeout, reassignment, and manual takeover compatibility.
-- [ ] **Phase 199: Teacher Queue And Operator Dispatch Visibility** - Add or define teacher queue/operator dashboard visibility for assigned work, load, and SLA risk.
+- [x] **Phase 196: Teacher Dispatch And SLA Load Balancing Contract** - Define dispatch purpose, states, matching inputs, claim rules, timeout behavior, and visibility.
+- [x] **Phase 197: Dispatch Planner And Candidate Ranking** - Add or define non-mutating candidate ranking for escalated questions.
+- [x] **Phase 198: Automatic Dispatch Claim And Reassignment Worker** - Add or define idempotent dispatch claim, timeout, reassignment, and manual takeover compatibility.
+- [x] **Phase 199: Teacher Queue And Operator Dispatch Visibility** - Add or define teacher queue/operator dashboard visibility for assigned work, load, and SLA risk.
 - [ ] **Phase 200: v5.5 Teacher Dispatch Release Gate** - Verify dispatch behavior, docs, evidence, and next milestone recommendation.
 
 ## Phase Details
@@ -48,11 +48,11 @@ Start from existing backend primitives and add dispatch behavior around them:
   4. Conflict and claim behavior prevents double assignment while preserving manual takeover compatibility.
   5. Teacher queue, operator dashboard, student status, notification, and rollout-state boundaries are explicit.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 196-01: Define teacher dispatch and SLA load balancing contract.
+- [x] 196-01: Define teacher dispatch and SLA load balancing contract.
 
 ### Phase 197: Dispatch Planner And Candidate Ranking
 
@@ -66,11 +66,11 @@ Plans:
   3. Planner ranks eligible candidates by load, SLA health, queue age, fairness, and last dispatch time.
   4. Focused tests cover eligible candidate selection, refusal reasons, fairness/load ordering, and no-candidate fallback.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 197-01: Implement dispatch planner and candidate ranking.
+- [x] 197-01: Implement dispatch planner and candidate ranking.
 
 ### Phase 198: Automatic Dispatch Claim And Reassignment Worker
 
@@ -85,11 +85,11 @@ Plans:
   4. Manual takeover can accept or override dispatch when allowed without corrupting SLA or assignment state.
   5. Focused tests cover idempotency, double-claim prevention, timeout, reassignment, manual takeover interaction, and no-candidate fallback.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 198-01: Implement automatic dispatch claim and reassignment worker.
+- [x] 198-01: Implement automatic dispatch claim and reassignment worker.
 
 ### Phase 199: Teacher Queue And Operator Dispatch Visibility
 
@@ -104,11 +104,11 @@ Plans:
   4. Notification/event handoff is documented for dispatched, accepted, timed out, reassigned, and replied states.
   5. Focused checks verify role-appropriate visibility for teacher, operator, and student surfaces.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 199-01: Implement teacher queue and operator dispatch visibility.
+- [x] 199-01: Implement teacher queue and operator dispatch visibility.
 
 ### Phase 200: v5.5 Teacher Dispatch Release Gate
 
@@ -133,21 +133,21 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 196 Teacher Dispatch And SLA Load Balancing Contract | v5.5 | 0/1 | Planned | - |
-| 197 Dispatch Planner And Candidate Ranking | v5.5 | 0/1 | Planned | - |
-| 198 Automatic Dispatch Claim And Reassignment Worker | v5.5 | 0/1 | Planned | - |
-| 199 Teacher Queue And Operator Dispatch Visibility | v5.5 | 0/1 | Planned | - |
+| 196 Teacher Dispatch And SLA Load Balancing Contract | v5.5 | 1/1 | Complete | 2026-06-15 |
+| 197 Dispatch Planner And Candidate Ranking | v5.5 | 1/1 | Complete | 2026-06-15 |
+| 198 Automatic Dispatch Claim And Reassignment Worker | v5.5 | 1/1 | Complete | 2026-06-15 |
+| 199 Teacher Queue And Operator Dispatch Visibility | v5.5 | 1/1 | Complete | 2026-06-15 |
 | 200 v5.5 Teacher Dispatch Release Gate | v5.5 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEACHDISP-01 | Phase 196 | Planned |
-| TEACHDISP-02 | Phase 197 | Planned |
-| TEACHDISP-03 | Phase 198 | Planned |
-| TEACHDISP-04 | Phase 199 | Planned |
+| TEACHDISP-01 | Phase 196 | Complete |
+| TEACHDISP-02 | Phase 197 | Complete |
+| TEACHDISP-03 | Phase 198 | Complete |
+| TEACHDISP-04 | Phase 199 | Complete |
 | VERIFY-38 | Phase 200 | Planned |
 
 ---
-*Last updated: 2026-06-15 after selecting v5.5 automatic teacher dispatch and SLA load balancing.*
+*Last updated: 2026-06-15 after completing v5.5 Phases 196-199.*

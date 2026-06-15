@@ -15,7 +15,15 @@ from stoa.models.question import (
     SubmitQuestionRequest,
 )
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
-from stoa.services import ai_service, learning_profile_service, moderation_service, notification_service, notify_service, ocr_service
+from stoa.services import (
+    ai_service,
+    learning_profile_service,
+    moderation_service,
+    notification_service,
+    notify_service,
+    ocr_service,
+    teacher_dispatch_service,
+)
 
 router = APIRouter()
 
@@ -206,7 +214,21 @@ async def request_teacher(
         student_id=user["sub"],
         subject=item["subject"],
     )
-    return {"question_id": question_id, "status": QuestionStatus.ESCALATED.value}
+    dispatch_question = {
+        **item,
+        "status": QuestionStatus.ESCALATED.value,
+        "teacher_requested_at": item.get("teacher_requested_at") or now,
+        "queue_visible_at": item.get("queue_visible_at") or now,
+    }
+    try:
+        dispatch = teacher_dispatch_service.dispatch_question(question_id, question=dispatch_question, now=now)
+    except Exception as exc:  # noqa: BLE001
+        dispatch = {
+            "questionId": question_id,
+            "status": "deferred",
+            "reason": type(exc).__name__,
+        }
+    return {"question_id": question_id, "status": QuestionStatus.ESCALATED.value, "dispatch": dispatch}
 
 
 @router.post("/{question_id}/feedback", status_code=status.HTTP_200_OK)

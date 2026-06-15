@@ -33,6 +33,7 @@ from stoa.services import (
     support_destination_service,
     support_handoff_service,
     support_sla_service,
+    teacher_dispatch_service,
     subscription_service,
     teacher_reply_service,
 )
@@ -1309,6 +1310,12 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         escalated=escalated,
         teacher_sla=teacher_reply_service.aggregate_teacher_sla(questions),
     )
+
+
+@router.get("/teacher-dispatch/dashboard")
+async def get_teacher_dispatch_dashboard(user: dict = Depends(require_role("admin"))):
+    """Return aggregate teacher dispatch, load, and SLA-risk visibility."""
+    return teacher_dispatch_service.build_dispatch_dashboard()
 
 
 def _binding_response(item: dict[str, Any]) -> ParentStudentBindingResponse:
