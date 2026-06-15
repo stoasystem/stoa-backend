@@ -121,6 +121,7 @@ def execute_assignment_automation_batch(
     policy: dict[str, Any],
     candidates: list[dict[str, Any]],
     user: dict[str, Any],
+    subject: str | None = None,
 ) -> dict[str, Any]:
     _require_teacher_or_admin(user)
     _require_student_visible(student_id, user)
@@ -137,6 +138,7 @@ def execute_assignment_automation_batch(
     preview = preview_assignment_automation_batch(
         student_id=student_id,
         policy=policy,
+        subject=subject,
         user=user,
     )
     if batch_id != preview["batchId"]:

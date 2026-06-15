@@ -87,6 +87,7 @@ class AssignmentAutomationExecuteRequest(BaseModel):
     approved: bool = Field(...)
     policy: AssignmentAutomationPolicyRequest = Field(default_factory=AssignmentAutomationPolicyRequest)
     candidates: list[AssignmentAutomationCandidateRequest] = Field(default_factory=list)
+    subject: str | None = None
 
 
 @router.get("/students/me/memory")
@@ -211,6 +212,7 @@ async def execute_assignment_automation_batch(
         approved=body.approved,
         policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
         candidates=[candidate.model_dump(by_alias=True) for candidate in body.candidates],
+        subject=body.subject,
         user=user,
     )
 

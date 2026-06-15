@@ -710,6 +710,123 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
     assert forged_response.json()["detail"] == "Candidate does not match current preview"
 
 
+def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibility(monkeypatch):
+    _, assignments = _install_memory_repo(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.question_repo,
+        "list_by_student",
+        lambda student_id, limit=500: {
+            "Items": [
+                {
+                    "question_id": "question-math",
+                    "student_id": student_id,
+                    "status": "ai_answered",
+                    "subject": "math",
+                    "knowledge_points": ["Linear equations"],
+                    "student_feedback": 2,
+                    "created_at": "2026-06-09T10:00:00+00:00",
+                },
+                {
+                    "question_id": "question-german",
+                    "student_id": student_id,
+                    "status": "ai_answered",
+                    "subject": "german",
+                    "knowledge_points": ["Grammar"],
+                    "student_feedback": 2,
+                    "created_at": "2026-06-09T11:00:00+00:00",
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda student_id: [])
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_progress", lambda student_id, subject_id=None: [])
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-math",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed math practice",
+                "created_by": "tutor-1",
+            },
+            {
+                "draft_id": "draft-german",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "german",
+                "topic_ids": ["grammar"],
+                "title": "Reviewed German practice",
+                "created_by": "tutor-1",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "get_draft",
+        lambda draft_id: {
+            "draft_id": draft_id,
+            "draft_type": "practice_exercise",
+            "status": "accepted",
+            "student_id": "student-1",
+            "subject": "math",
+            "topic_ids": ["linear-equations"],
+            "created_by": "tutor-1",
+            "items": [{"prompt": "Solve x + 2 = 5"}],
+            "answer_key": [{"answer": "3"}],
+        },
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "role": "student", "parent_id": "parent-1"},
+    )
+    monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
+    policy = {
+        "policyId": "policy-subject-1",
+        "autonomyLevel": "tutor_approved_batch",
+        "sourceTypes": ["ai_draft"],
+        "deliveryMode": "assigned",
+    }
+    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": policy, "subject": "math"},
+    )
+    assert preview.status_code == 200
+    assert [item["subject"] for item in preview.json()["selected"]] == ["math"]
+
+    execute = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": preview.json()["batchId"],
+            "approved": True,
+            "policy": policy,
+            "subject": "math",
+            "candidates": preview.json()["selected"],
+        },
+    )
+
+    assert execute.status_code == 200
+    assignment = execute.json()["results"][0]["assignment"]
+    assert assignment["subject"] == "math"
+    assert len(assignments) == 1
+
+    parent_progress = _app({"sub": "parent-1", "role": "parent"}).get(
+        "/adaptive/parents/me/children/student-1/progress"
+    )
+    assert parent_progress.status_code == 200
+    parent_assignment = parent_progress.json()["assignments"][0]
+    assert parent_assignment["automation"]["policyId"] == "policy-subject-1"
+    assert "answerKey" not in parent_assignment
+    assert "sourceSignals" not in parent_assignment["automation"]
+
+
 def test_reviewed_ai_draft_assignment_requires_draft_visibility(monkeypatch):
     _install_memory_repo(monkeypatch)
     monkeypatch.setattr(

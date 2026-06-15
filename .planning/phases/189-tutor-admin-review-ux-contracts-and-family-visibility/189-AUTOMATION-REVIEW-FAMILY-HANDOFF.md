@@ -67,6 +67,7 @@ Request:
   "batchId": "batch-abc123",
   "approved": true,
   "policy": { "...": "same policy used for preview" },
+  "subject": "math",
   "candidates": [{ "...": "selected preview candidate" }]
 }
 ```
@@ -74,6 +75,7 @@ Request:
 Execution rules:
 
 - `approved` must be explicit and true.
+- If preview used `subject`, execute must submit the same `subject` so server-side preview binding compares the same candidate scope.
 - `batchId` and candidate fields must match the current server-generated preview.
 - A stale preview returns `409 Automation batch preview is stale`; the frontend should refetch preview and preserve operator notes locally until the operator decides again.
 - Per-item statuses are `created`, `assigned`, `delivered`, `skipped`, `refused`, `duplicate`, or `failed`.
