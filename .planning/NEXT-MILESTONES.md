@@ -19,8 +19,8 @@ Closed scope:
 ## Latest Completed: v5.2 Adaptive Sequencing And Warehouse Analytics
 
 **Status:** Completed backend/API release gate 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap archive:** `.planning/milestones/v5.2-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v5.2-REQUIREMENTS.md`
 
 Goal: turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
 
