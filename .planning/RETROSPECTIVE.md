@@ -92,6 +92,51 @@
 
 ---
 
+## Milestone: v5.2 — Adaptive Sequencing And Warehouse Analytics
+
+**Shipped:** 2026-06-15
+**Phases:** 5 | **Plans:** 5 | **Sessions:** 1
+
+### What Was Built
+
+- Adaptive sequencing and warehouse analytics contract across backend, frontend, curriculum/tutor, analytics, and release ownership.
+- Multi-signal recommendation generation for remediation topics, curriculum exercises, reviewed AI drafts, and continuation lessons.
+- Assignment outcome feedback metadata, idempotent transition handling, aggregate analytics signals, and parent/tutor sequencing summaries.
+- Admin warehouse readiness, aggregate export schemas, and operator dashboard contracts.
+- Release gate evidence recording rollout state as `warehouse-ready`.
+
+### What Worked
+
+- The implementation phases stayed narrowly scoped to backend/API behavior and avoided reopening frontend/native/provider work.
+- Code review iterations caught duplicate side-effect and visibility risks before the release gate.
+- The integration audit confirmed the phase chain from recommendation flow to assignment feedback to operator analytics without adding broad unrelated checks.
+
+### What Was Inefficient
+
+- The milestone archive helper still required manual cleanup for duplicate `MILESTONES.md` entries, living roadmap state, and stale project references.
+- Phase summaries still do not expose structured frontmatter accomplishments, so top-level accomplishment extraction remained manual.
+- Nyquist validation artifacts were not generated, leaving validation coverage recorded as missing despite focused tests and integration review passing.
+
+### Patterns Established
+
+- Use `warehouse-ready` for backend/API analytics milestones that provide readiness/export contracts without live warehouse deployment.
+- Preserve review gates and explicitly set `autonomousDecision` false while improving recommendation ranking.
+- Keep analytics responses aggregate/operator-focused and make no-live-warehouse behavior explicit.
+
+### Key Lessons
+
+1. Assignment transition side effects need idempotency tokens or state-machine claiming before analytics and progress updates are safe.
+2. Recommendation visibility must treat reviewed AI drafts as manager-visible by default unless role-specific review gates are explicit.
+3. Warehouse readiness is clearer when source schemas and live export rows are distinguished in both code and release evidence.
+
+### Cost Observations
+
+- Model mix: not recorded.
+- Sessions: 1 autonomous execution and closeout session.
+- Notable: Verification cost was mostly focused pytest, targeted Ruff, and cross-phase wiring review after code review drove the risky fixes.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -100,6 +145,7 @@
 |-----------|----------|--------|------------|
 | v5.0 | 1 | 5 | Introduced explicit mobile/localization contract-ready release classification across backend, frontend, native, and localization ownership. |
 | v5.1 | 1 | 5 | Extended rollout-state discipline to curriculum readiness: editor-ready, migration-ready, assignment-ready, and deferred sequencing. |
+| v5.2 | 1 | 5 | Promoted readiness planning into backend/API implementation while preserving review gates and explicit warehouse-ready boundaries. |
 
 ### Cumulative Quality
 
@@ -107,9 +153,11 @@
 |-----------|-------|----------|-------------------|
 | v5.0 | `git diff --check`; artifact traceability; English/German key parity evidence | Contract coverage for 5/5 requirements | 0 |
 | v5.1 | `git diff --check`; artifact traceability; integration audit | Readiness coverage for 5/5 requirements | 0 |
+| v5.2 | 20 focused backend tests; targeted Ruff; integration audit | Backend/API coverage for 5/5 requirements | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Release gates should name the exact rollout state, especially when external credentials, frontend workspaces, or native clients remain out of scope.
 2. Archive helpers reduce mechanical work but do not replace a final consistency pass across ROADMAP, REQUIREMENTS, PROJECT, STATE, and MILESTONES.
 3. Readiness milestones need a prominent list of intentionally incomplete E2E product flows.
+4. Implementation milestones need idempotent transition side effects before analytics and progress projections can be trusted.

@@ -1,137 +1,38 @@
-# Roadmap: v5.2 Adaptive Sequencing And Warehouse Analytics
+# Roadmap: STOA
 
-**Status:** Complete
-**Created:** 2026-06-14
-**Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
+**Status:** Awaiting next milestone
+**Last updated:** 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics
 
-## Goal
+## Milestones
 
-Turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
+- **v5.2 Adaptive Sequencing And Warehouse Analytics** - Phases 181-185 shipped 2026-06-15. Archive: `.planning/milestones/v5.2-ROADMAP.md`
+- **v5.1 Rich Curriculum Editor And Production Content Migration** - Phases 176-180 shipped 2026-06-14. Archive: `.planning/milestones/v5.1-ROADMAP.md`
+- **v5.0 Native Mobile And Full Localization Governance** - Phases 171-175 shipped 2026-06-14. Archive: `.planning/milestones/v5.0-ROADMAP.md`
 
-## Execution Bias
+## Latest Completed
 
-Build learning product capability directly. Keep verification focused on recommendation behavior, assignment outcome loops, analytics schema quality, dashboard usefulness, and release evidence. Do not spend this milestone on broad unrelated security/compliance testing during internal development.
+### v5.2 Adaptive Sequencing And Warehouse Analytics
 
-## Phases
+**Status:** Shipped 2026-06-15 as `warehouse-ready` backend/API readiness.
+**Audit:** `.planning/milestones/v5.2-MILESTONE-AUDIT.md`
+**Requirements:** `.planning/milestones/v5.2-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v5.2-phases/`
 
-- [x] **Phase 181: Adaptive Sequencing And Warehouse Analytics Contract** - Define sequencing signals, ranking rules, review gates, warehouse/export boundaries, dashboard targets, and rollout states.
-- [x] **Phase 182: Adaptive Sequencing Recommendation Engine** - Add or define multi-signal recommendation generation, ranking, dedupe, freshness, rationale, and role-visible response shape.
-- [x] **Phase 183: Assignment Outcome Feedback Loop** - Connect assignment outcomes to sequencing signals, content-quality analytics, parent/tutor progress, and idempotent lifecycle behavior.
-- [x] **Phase 184: Warehouse Analytics Export And Operator Dashboards** - Define/export warehouse-ready schemas and admin analytics for cohort progress, sequencing coverage, outcomes, quality, and interventions.
-- [x] **Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate** - Verify v5.2 docs/contracts/evidence, record rollout state, and select the next feature milestone.
+Completed phases:
 
-## Phase Details
+- Phase 181: Adaptive Sequencing And Warehouse Analytics Contract.
+- Phase 182: Adaptive Sequencing Recommendation Engine.
+- Phase 183: Assignment Outcome Feedback Loop.
+- Phase 184: Warehouse Analytics Export And Operator Dashboards.
+- Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate.
 
-### Phase 181: Adaptive Sequencing And Warehouse Analytics Contract
+Outcome:
 
-**Goal**: Define the v5.2 adaptive sequencing and analytics contract before implementation expands.
-**Depends on**: v4.0 adaptive learning memory/assignment foundation, v4.6 curriculum analytics foundation, v5.1 curriculum product readiness, and `stoa_docs` remaining-feature audit
-**Requirements**: ADAPTWARE-01
-**Success Criteria** (what must be TRUE):
+- Multi-signal sequencing recommendations are implemented with review-gated visibility and duplicate/source suppression.
+- Assignment outcomes feed sequencing metadata, aggregate analytics, and parent/tutor summaries.
+- Admin warehouse readiness, aggregate export schemas, and operator dashboard contracts are available.
+- Live warehouse/BI deployment, scheduled exports, frontend dashboard integration, fully autonomous tutoring, and automatic assignment delivery remain future scope.
 
-  1. Backend, frontend, curriculum, tutor, analytics, and release ownership boundaries are documented.
-  2. Adaptive sequencing inputs, ranking, dedupe, freshness, explanation, and review gates are defined.
-  3. Recommendation candidates are mapped to curriculum exercises, reviewed AI drafts, remediation topics, and continuation lessons.
-  4. Warehouse analytics export/readiness boundaries, aggregate metrics, dashboard targets, and BI handoff are defined.
-  5. Phase 182 through Phase 185 implementation targets are concrete.
+## Next Milestone
 
-**Plans**: 1/1 plans complete
-
-Plans:
-
-- [x] 181-01: Define adaptive sequencing and warehouse analytics contract.
-
-### Phase 182: Adaptive Sequencing Recommendation Engine
-
-**Goal**: Improve next-work recommendations with multi-signal sequencing while preserving review gates.
-**Depends on**: Phase 181
-**Requirements**: ADAPTWARE-02
-**Success Criteria** (what must be TRUE):
-
-  1. Sequencing combines memory, progress, assignments, mistakes, content quality, and reviewed AI draft signals.
-  2. Candidate generation covers curriculum exercises, reviewed AI drafts, remediation topics, and continuation lessons.
-  3. Ranking exposes rationale, confidence, freshness, source signals, and review-required flags.
-  4. Active/completed/archived/rolled-back/unpublished content is deduped or suppressed appropriately.
-
-**Plans**: 1/1 plans complete
-
-Plans:
-
-- [x] 182-01: Implement adaptive sequencing recommendation engine.
-
-### Phase 183: Assignment Outcome Feedback Loop
-
-**Goal**: Make assignment outcomes feed sequencing and analytics consistently.
-**Depends on**: Phase 182
-**Requirements**: ADAPTWARE-03
-**Success Criteria** (what must be TRUE):
-
-  1. Assignment start/complete/skip/archive outcomes update sequencing and analytics signals.
-  2. Correctness, attempts, source content, topic/subject, and remediation metadata are recorded.
-  3. Skip/archive behavior affects future ranking without permanent suppression.
-  4. Parent/tutor progress summaries explain sequencing changes at a useful level.
-
-**Plans**: 1/1 plans complete
-
-Plans:
-
-- [x] 183-01: Implement assignment outcome feedback loop.
-
-### Phase 184: Warehouse Analytics Export And Operator Dashboards
-
-**Goal**: Prepare warehouse-backed analytics and actionable operator dashboards.
-**Depends on**: Phase 183
-**Requirements**: ADAPTWARE-04
-**Success Criteria** (what must be TRUE):
-
-  1. Warehouse-ready export schemas cover memory, assignments, curriculum progress, content quality, and aggregation windows.
-  2. Admin analytics expose cohort progress, sequencing coverage, outcomes, quality, stale content, and interventions.
-  3. Empty states and no-live-warehouse behavior are explicit.
-  4. Dashboard contracts are useful for tutor/admin operations.
-
-**Plans**: 1/1 plans complete
-
-Plans:
-
-- [x] 184-01: Implement warehouse analytics export and operator dashboards.
-
-### Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate
-
-**Goal**: Close v5.2 with focused verification, handoff evidence, and updated remaining-feature planning.
-**Depends on**: Phase 184
-**Requirements**: VERIFY-35
-**Success Criteria** (what must be TRUE):
-
-  1. Focused backend/frontend contract checks pass or isolate documented pre-existing failures.
-  2. Sequencing, outcome feedback, analytics export/readiness, dashboard contracts, and docs are verified.
-  3. Release evidence records rollout state: contract-ready, sequencing-ready, analytics-ready, warehouse-ready, blocked, or deferred.
-  4. Docs and feature-gap audit reflect completed v5.2 scope and next milestone recommendation.
-
-**Plans**: 1/1 plans complete
-
-Plans:
-
-- [x] 185-01: Verify v5.2 adaptive sequencing analytics release gate.
-
-## Progress
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
-| 181 Adaptive Sequencing And Warehouse Analytics Contract | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 182 Adaptive Sequencing Recommendation Engine | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 183 Assignment Outcome Feedback Loop | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 184 Warehouse Analytics Export And Operator Dashboards | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 185 v5.2 Adaptive Sequencing Analytics Release Gate | v5.2 | 1/1 | Complete | 2026-06-15 |
-
-## Traceability
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| ADAPTWARE-01 | Phase 181 | Complete |
-| ADAPTWARE-02 | Phase 182 | Complete |
-| ADAPTWARE-03 | Phase 183 | Complete |
-| ADAPTWARE-04 | Phase 184 | Complete |
-| VERIFY-35 | Phase 185 | Complete |
-
----
-*Last updated: 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics.*
+No active milestone is currently planned. Recommended next candidate: v5.3 Autonomous Tutoring And Assignment Automation unless external warehouse/payment/support prerequisites unblock first.

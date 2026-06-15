@@ -3,7 +3,7 @@
 **Updated:** 2026-06-15 after completing v5.2
 **Mode:** product functionality first
 
-## Latest Completed: v5.1 Rich Curriculum Editor And Production Content Migration
+## Previous Completed: v5.1 Rich Curriculum Editor And Production Content Migration
 
 **Status:** Completed readiness release gate 2026-06-14
 **Roadmap:** `.planning/milestones/v5.1-ROADMAP.md`

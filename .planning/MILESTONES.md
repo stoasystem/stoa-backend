@@ -1,43 +1,22 @@
 # Milestones
 
-## Active
+## v5.2 Adaptive Sequencing And Warehouse Analytics (Shipped: 2026-06-15)
 
-### v5.2 Adaptive Sequencing And Warehouse Analytics
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+**Audit:** `.planning/milestones/v5.2-MILESTONE-AUDIT.md`
+**Roadmap:** `.planning/milestones/v5.2-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.2-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v5.2-phases/`
 
-**Status:** Completed backend/API release gate 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/`
-**Goal:** Turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
-**Phases:** 5
-**Plans:** 5/5 complete
-**Requirements:** 5/5 complete
-
-Completed phases:
-
-- Phase 181: Adaptive Sequencing And Warehouse Analytics Contract.
-- Phase 182: Adaptive Sequencing Recommendation Engine.
-- Phase 183: Assignment Outcome Feedback Loop.
-- Phase 184: Warehouse Analytics Export And Operator Dashboards.
-- Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate.
-
-Feature priorities:
-
-- Define multi-signal sequencing inputs, ranking, dedupe, freshness, rationale, review gates, and rollout states.
-- Promote reviewed assignment/curriculum/memory signals into useful recommendation candidates without enabling unreviewed autonomous tutoring.
-- Feed assignment outcomes back into sequencing, parent/tutor progress, and content-quality analytics.
-- Prepare warehouse-ready analytics schemas and operator dashboards for cohort progress, sequencing coverage, outcomes, quality, and intervention opportunities.
-- Keep internal-development verification focused on recommendation behavior, analytics contracts, and release evidence rather than broad unrelated security/compliance testing.
-
-Known out of scope for this milestone: final live payment/provider activation, real external support provider activation, unreviewed automatic publication, native app implementation, and live warehouse/BI deployment unless explicitly selected later.
-
-Key accomplishments:
+**Key accomplishments:**
 
 - Defined the adaptive sequencing and warehouse analytics contract.
 - Implemented multi-signal sequencing recommendations with review-gated visibility and duplicate/source suppression.
 - Added assignment outcome feedback metadata, aggregate analytics signals, and parent/tutor sequencing summaries.
 - Added warehouse readiness, aggregate export schemas, and operator dashboard contracts.
 - Closed with rollout state `warehouse-ready` for backend/API readiness.
+
+Known deferred items at close: live warehouse/BI deployment, scheduled export jobs, frontend operator dashboard integration, fully autonomous tutoring, automatic assignment delivery, and final payment/support provider activation.
 
 ---
 
@@ -237,6 +216,7 @@ Feature priorities:
 - Define assignment automation and adaptive sequencing readiness.
 
 Known deferred items at close: frontend rich curriculum editor implementation, backend rich-field payload expansion, draft update/patch, validation preview, diff and audit-read endpoints, production migration service/API/UI, source content import, candidate generation service, duplicate prevention helper, full adaptive sequencing engine, and warehouse-backed analytics.
+
 - Close with focused curriculum product release evidence and next milestone selection.
 
 ## Earlier Completed Milestones

@@ -76,6 +76,8 @@ The completed v5.0 milestone moves beyond selected responsive frontend and backe
 
 The completed v5.1 milestone moves curriculum foundations into product-ready operations: rich curriculum editor UI/API handoff, production content migration pipeline, validation/rollback evidence, assignment automation readiness, and adaptive sequencing readiness. It closed as readiness-complete; full frontend editor implementation, production import, migration API/UI, candidate generation, and warehouse analytics remain separate follow-up work.
 
+The completed v5.2 milestone turns adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into backend/API-ready adaptive sequencing and warehouse analytics: multi-signal recommendations, assignment outcome feedback, aggregate warehouse export/readiness, and operator dashboard contracts. It closed as `warehouse-ready`; live warehouse/BI deployment, frontend dashboard integration, fully autonomous tutoring, and automatic assignment delivery remain future scope.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -205,8 +207,8 @@ Completed phases:
 
 ## Latest Completed Milestone: v4.7 Payment Production Activation And Provider Automation
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v4.7-ROADMAP.md`
+Requirements archive: `.planning/milestones/v4.7-REQUIREMENTS.md`
 
 **Status:** Completed backend release gate 2026-06-12; final live activation deferred pending external provider prerequisites.
 
@@ -225,8 +227,8 @@ Outcome: v4.7 completed live Stripe/TWINT provider readiness checks, webhook rea
 
 ## Latest Milestone: v4.8 Support Provider Expansion And CRM Automation
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v4.8-ROADMAP.md`
+Requirements archive: `.planning/milestones/v4.8-REQUIREMENTS.md`
 
 **Status:** Completed local backend release gate on 2026-06-12.
 
@@ -244,8 +246,8 @@ Outcome: v4.8 completed provider-neutral support adapter readiness, approved/con
 
 ## Completed Milestone: v4.9 Production Notification And Native Delivery Rollout
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v4.9-ROADMAP.md`
+Requirements archive: `.planning/milestones/v4.9-REQUIREMENTS.md`
 
 **Status:** Complete locally; external rollout deferred.
 
@@ -303,9 +305,10 @@ Outcome: v5.1 completed the curriculum product readiness layer while final payme
 
 ## Latest Completed Milestone: v5.2 Adaptive Sequencing And Warehouse Analytics
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Current phase: `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/181-01-PLAN.md`
+Roadmap archive: `.planning/milestones/v5.2-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.2-REQUIREMENTS.md`
+Audit: `.planning/milestones/v5.2-MILESTONE-AUDIT.md`
+Phase evidence: `.planning/milestones/v5.2-phases/`
 
 **Status:** Completed backend/API release gate 2026-06-15.
 
@@ -746,4 +749,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics*
+*Last updated: 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics*
