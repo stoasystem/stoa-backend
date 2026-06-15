@@ -45,6 +45,8 @@ def _install_memory_repo(monkeypatch):
             items = [item for item in items if item["status"] == status]
         if not include_archived:
             items = [item for item in items if item["status"] != "archived"]
+        if limit is None:
+            return [dict(item) for item in items]
         return [dict(item) for item in items[:limit]]
 
     repo = adaptive_learning_service.adaptive_learning_repo
@@ -134,8 +136,7 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     assert tutor_response.status_code == 200
     assert snapshots[0]["topic_id"] == "linear-equations"
     assert tutor_response.json()["memorySnapshots"][0]["recent_questions"] == ["question-1"]
-    assert tutor_response.json()["recommendations"][0]["reviewRequired"] is True
-    assert tutor_response.json()["recommendations"][0]["autonomousDecision"] is False
+    assert all(item["topicId"] != "linear-equations" for item in tutor_response.json()["recommendations"])
     assert tutor_response.json()["locale"]["effectiveLocale"] == "de"
     assert tutor_response.json()["locale"]["canonicalValuesStable"] is True
 
@@ -150,6 +151,117 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     assert parent_body["locale"]["effectiveLocale"] == "de"
     assert "recent_questions" not in parent_body["weakAreas"][0]
     assert "evidenceQuestionIds" not in parent_body["weakAreas"][0]
+
+
+def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.curriculum_service,
+        "list_exercises",
+        lambda **kwargs: {
+            "items": [
+                {
+                    "id": "challenge-1",
+                    "prompt": "Solve a linear equation",
+                    "subjectId": "math",
+                    "topicId": "linear-equations",
+                    "rolloutState": "active",
+                }
+            ],
+            "count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-1",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed linear equation practice",
+                "created_by": "tutor-1",
+            }
+        ],
+    )
+
+    response = _app({"sub": "tutor-1", "role": "tutor"}).get(
+        "/adaptive/students/student-1/recommendations"
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0]["type"] == "reviewed_ai_draft"
+    assert items[0]["candidateId"] == "reviewed_ai_draft:draft-1"
+    assert items[0]["sourceType"] == "ai_draft"
+    assert items[0]["confidence"] in {"medium", "high"}
+    assert items[0]["reviewRequired"] is True
+    assert items[0]["autonomousDecision"] is False
+    assert items[0]["sourceSignals"]["reviewedDraftAvailable"] is True
+    assert "question-1" not in str(items[0]["sourceSignals"])
+
+    student_response = _app({"sub": "student-1", "role": "student"}).get(
+        "/adaptive/students/me/memory"
+    )
+
+    assert student_response.status_code == 200
+    assert all(item["type"] != "reviewed_ai_draft" for item in student_response.json()["recommendations"])
+
+
+def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
+    _, assignments = _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    assignments["assignment-completed"] = {
+        "assignment_id": "assignment-completed",
+        "student_id": "student-1",
+        "status": "completed",
+        "source_type": "curriculum_exercise",
+        "source_id": "challenge-1",
+        "title": "Completed linear equations",
+        "subject": "math",
+        "topic_ids": ["linear-equations"],
+        "items": [],
+        "answer_key": [],
+        "created_at": "2026-06-10T00:00:00+00:00",
+        "updated_at": "2026-06-10T00:00:00+00:00",
+    }
+    monkeypatch.setattr(
+        adaptive_learning_service.curriculum_service,
+        "list_exercises",
+        lambda **kwargs: {
+            "items": [
+                {
+                    "id": "challenge-1",
+                    "prompt": "Already completed",
+                    "subjectId": "math",
+                    "topicId": "linear-equations",
+                    "rolloutState": "active",
+                },
+                {
+                    "id": "challenge-2",
+                    "prompt": "Fresh linear equation check",
+                    "subjectId": "math",
+                    "topicId": "linear-equations",
+                    "rolloutState": "active",
+                },
+            ],
+            "count": 2,
+        },
+    )
+    monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
+
+    response = _app({"sub": "tutor-1", "role": "tutor"}).get(
+        "/adaptive/students/student-1/recommendations"
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert all(item.get("sourceId") != "challenge-1" for item in items)
+    assert any(item.get("sourceId") == "challenge-2" for item in items)
 
 
 def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(monkeypatch):

@@ -17,6 +17,7 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.services import (
+    ai_teacher_tools_service,
     curriculum_analytics_service,
     curriculum_service,
     learning_profile_service,
@@ -61,7 +62,7 @@ def get_memory_summary(
         for snapshot in snapshots:
             adaptive_learning_repo.put_memory_snapshot(snapshot)
         stored = snapshots
-    recommendations = _next_practice_recommendations(student_id, profile, snapshots, normalized_subject)
+    recommendations = _next_practice_recommendations(student_id, profile, snapshots, normalized_subject, user)
     return _memory_response(
         student_id=student_id,
         user=user,
@@ -437,47 +438,324 @@ def _next_practice_recommendations(
     profile: dict[str, Any],
     snapshots: list[dict[str, Any]],
     subject: str | None,
+    user: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    assignments = adaptive_learning_repo.list_assignments(student_id=student_id)
-    assigned_topic_ids = {
-        topic_id
-        for assignment in assignments
-        if assignment.get("status") in {"recommended", "assigned", "started"}
-        for topic_id in assignment.get("topic_ids", [])
-    }
-    recommendations = []
-    for topic in profile.get("weakTopics", [])[:5]:
+    assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
+    assignment_state = _assignment_signal_state(assignments)
+    signal_index = _sequencing_signal_index(profile, snapshots, subject)
+    drafts = _safe_reviewed_ai_drafts(student_id, user) if _can_manage_assignments(user) else []
+    candidates: list[dict[str, Any]] = []
+
+    for signal in signal_index.values():
+        if _topic_has_active_assignment(signal, assignment_state):
+            continue
+        candidates.append(_remediation_candidate(signal, assignment_state))
+        candidates.extend(_curriculum_exercise_candidates(signal, assignment_state))
+        candidates.extend(_reviewed_draft_candidates(signal, drafts, assignment_state))
+
+    if not candidates:
+        candidates.extend(_continuation_candidates(snapshots, subject, assignment_state))
+
+    ranked = sorted(
+        _dedupe_candidates(candidate for candidate in candidates if not _candidate_suppressed(candidate, assignment_state)),
+        key=lambda candidate: (-candidate["score"], candidate["candidateId"]),
+    )
+    return [_recommendation_response(candidate) for candidate in ranked[:5]]
+
+
+def _sequencing_signal_index(
+    profile: dict[str, Any],
+    snapshots: list[dict[str, Any]],
+    subject: str | None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    signals: dict[tuple[str, str], dict[str, Any]] = {}
+    for position, topic in enumerate(profile.get("weakTopics", [])[:10]):
         topic_subject = _safe_subject(topic.get("subject"))
         if subject and topic_subject != subject:
             continue
-        topic_id = topic.get("topicId") or topic.get("topic_id")
-        if not topic_id or topic_id in assigned_topic_ids:
+        topic_id = str(topic.get("topicId") or topic.get("topic_id") or "")
+        if not topic_id:
             continue
-        recommendations.append(
-            {
-                "type": "next_practice",
-                "subject": topic_subject,
-                "topicId": topic_id,
-                "label": topic.get("label") or topic_id,
-                "rationale": "Recent evidence suggests this is a useful next practice area.",
-                "reviewRequired": True,
-                "autonomousDecision": False,
-            }
+        signal = signals.setdefault(
+            (topic_subject, topic_id),
+            _empty_signal(topic_subject, topic_id, topic.get("label") or topic_id),
         )
-    if not recommendations and snapshots:
-        snapshot = snapshots[0]
-        recommendations.append(
-            {
-                "type": "maintenance",
-                "subject": snapshot["subject"],
-                "topicId": snapshot["topic_id"],
-                "label": snapshot["topic_id"],
-                "rationale": "Continue with one short reviewed practice item to keep memory fresh.",
-                "reviewRequired": True,
-                "autonomousDecision": False,
-            }
+        signal["weakTopicCount"] = max(signal["weakTopicCount"], int(topic.get("count") or 1))
+        signal["profileRank"] = min(signal["profileRank"], position + 1)
+        signal["latestEvidenceAt"] = topic.get("latestEvidenceAt") or signal.get("latestEvidenceAt")
+
+    for snapshot in snapshots:
+        topic_subject = _safe_subject(snapshot.get("subject"))
+        if subject and topic_subject != subject:
+            continue
+        topic_id = str(snapshot.get("topic_id") or "")
+        if not topic_id:
+            continue
+        signal = signals.setdefault((topic_subject, topic_id), _empty_signal(topic_subject, topic_id, topic_id))
+        signal["snapshotWeak"] = bool(snapshot.get("weak_topics") or snapshot.get("struggling_concepts"))
+        signal["mistakeAttempts"] = max(signal["mistakeAttempts"], len(snapshot.get("recent_exercise_attempts") or []))
+        signal["progressCount"] = max(signal["progressCount"], len(snapshot.get("recent_curriculum_progress") or []))
+        freshness = snapshot.get("freshness") or {}
+        signal["freshness"] = freshness or signal.get("freshness")
+        signal["latestEvidenceAt"] = (
+            freshness.get("lastEvidenceAt")
+            or snapshot.get("last_updated_at")
+            or signal.get("latestEvidenceAt")
         )
-    return recommendations
+    return signals
+
+
+def _empty_signal(subject: str, topic_id: str, label: str) -> dict[str, Any]:
+    return {
+        "subject": subject,
+        "topicId": topic_id,
+        "label": label,
+        "weakTopicCount": 0,
+        "profileRank": 999,
+        "snapshotWeak": False,
+        "mistakeAttempts": 0,
+        "progressCount": 0,
+        "freshness": {"status": "unknown", "lastEvidenceAt": None},
+        "latestEvidenceAt": None,
+    }
+
+
+def _assignment_signal_state(assignments: list[dict[str, Any]]) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "active_topics": set(),
+        "skipped_topics": set(),
+        "suppressed_sources": set(),
+        "topic_statuses": {},
+    }
+    for assignment in assignments:
+        status = str(assignment.get("status") or "")
+        source_key = (str(assignment.get("source_type") or ""), str(assignment.get("source_id") or ""))
+        topic_ids = [str(topic_id) for topic_id in assignment.get("topic_ids", []) if topic_id]
+        if status in {"recommended", "assigned", "started"}:
+            state["active_topics"].update(topic_ids)
+            state["suppressed_sources"].add(source_key)
+        if status in {"completed", "archived"}:
+            state["suppressed_sources"].add(source_key)
+        if status == "skipped":
+            state["skipped_topics"].update(topic_ids)
+        for topic_id in topic_ids:
+            state["topic_statuses"].setdefault(topic_id, set()).add(status)
+    return state
+
+
+def _topic_has_active_assignment(signal: dict[str, Any], assignment_state: dict[str, Any]) -> bool:
+    return signal["topicId"] in assignment_state["active_topics"]
+
+
+def _remediation_candidate(signal: dict[str, Any], assignment_state: dict[str, Any]) -> dict[str, Any]:
+    score = 50 + (signal["weakTopicCount"] * 6) + (signal["mistakeAttempts"] * 4)
+    if signal["snapshotWeak"]:
+        score += 8
+    if signal["topicId"] in assignment_state["skipped_topics"]:
+        score -= 12
+    return _candidate(
+        candidate_type="remediation_topic",
+        source_type="memory_snapshot",
+        source_id=f"{signal['subject']}:{signal['topicId']}",
+        signal=signal,
+        label=signal["label"],
+        rationale="Recent learning evidence points to this topic as the next reviewed remediation area.",
+        score=score,
+        review_flags=["tutor_review_required"],
+        source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
+    )
+
+
+def _curriculum_exercise_candidates(signal: dict[str, Any], assignment_state: dict[str, Any]) -> list[dict[str, Any]]:
+    exercises = _safe_curriculum_exercises(signal["subject"], signal["topicId"])
+    candidates = []
+    for exercise in exercises[:2]:
+        exercise_id = str(exercise.get("id") or "")
+        if not exercise_id:
+            continue
+        score = 64 + (signal["weakTopicCount"] * 6) + (signal["mistakeAttempts"] * 4)
+        if signal["topicId"] in assignment_state["skipped_topics"]:
+            score -= 10
+        candidates.append(
+            _candidate(
+                candidate_type="curriculum_exercise",
+                source_type="curriculum_exercise",
+                source_id=exercise_id,
+                signal=signal,
+                label=str(exercise.get("prompt") or exercise.get("title") or signal["label"]),
+                rationale="A reviewed curriculum exercise is available for this weak topic.",
+                score=score,
+                review_flags=["tutor_review_required", "published_curriculum_only"],
+                source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=True),
+            )
+        )
+    return candidates
+
+
+def _reviewed_draft_candidates(
+    signal: dict[str, Any],
+    drafts: list[dict[str, Any]],
+    assignment_state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidates = []
+    for draft in drafts:
+        topic_ids = {str(topic_id) for topic_id in draft.get("topic_ids", [])}
+        draft_subject = _safe_subject(draft.get("subject"))
+        if signal["topicId"] not in topic_ids or draft_subject != signal["subject"]:
+            continue
+        draft_id = str(draft.get("draft_id") or "")
+        if not draft_id:
+            continue
+        score = 70 + (signal["weakTopicCount"] * 5) + (signal["mistakeAttempts"] * 3)
+        candidates.append(
+            _candidate(
+                candidate_type="reviewed_ai_draft",
+                source_type="ai_draft",
+                source_id=draft_id,
+                signal=signal,
+                label=str(draft.get("title") or "Reviewed practice exercise"),
+                rationale="A tutor-reviewed AI practice draft matches this learning need.",
+                score=score,
+                review_flags=["accepted_draft_only", "tutor_review_required"],
+                source_signals=_source_signals(signal, assignment_state, reviewed_draft=True, curriculum_available=False),
+            )
+        )
+    return candidates
+
+
+def _continuation_candidates(
+    snapshots: list[dict[str, Any]],
+    subject: str | None,
+    assignment_state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidates = []
+    for snapshot in snapshots:
+        topic_subject = _safe_subject(snapshot.get("subject"))
+        topic_id = str(snapshot.get("topic_id") or "")
+        if not topic_id or (subject and topic_subject != subject) or topic_id in assignment_state["active_topics"]:
+            continue
+        signal = _empty_signal(topic_subject, topic_id, topic_id)
+        signal["freshness"] = snapshot.get("freshness") or signal["freshness"]
+        signal["latestEvidenceAt"] = signal["freshness"].get("lastEvidenceAt") or snapshot.get("last_updated_at")
+        candidates.append(
+            _candidate(
+                candidate_type="continuation_lesson",
+                source_type="curriculum_topic",
+                source_id=f"{topic_subject}:{topic_id}",
+                signal=signal,
+                label=topic_id,
+                rationale="Continue with one short reviewed practice item to keep learning memory fresh.",
+                score=30,
+                review_flags=["tutor_review_required"],
+                source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
+            )
+        )
+        if candidates:
+            break
+    return candidates
+
+
+def _safe_curriculum_exercises(subject: str, topic_id: str) -> list[dict[str, Any]]:
+    try:
+        return curriculum_service.list_exercises(subject_id=subject, topic_id=topic_id, include_preview=False).get("items", [])
+    except Exception:  # pragma: no cover - defensive around optional data sources in partial test doubles
+        return []
+
+
+def _safe_reviewed_ai_drafts(student_id: str, user: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        drafts = ai_teacher_tools_repo.list_drafts(
+            student_id=student_id,
+            status="accepted",
+            draft_type="practice_exercise",
+            limit=None,
+        )
+        return [draft for draft in drafts if ai_teacher_tools_service._can_view_draft(draft, user)]  # noqa: SLF001
+    except Exception:  # pragma: no cover - defensive around optional data sources in partial test doubles
+        return []
+
+
+def _candidate(
+    *,
+    candidate_type: str,
+    source_type: str,
+    source_id: str,
+    signal: dict[str, Any],
+    label: str,
+    rationale: str,
+    score: int,
+    review_flags: list[str],
+    source_signals: dict[str, Any],
+) -> dict[str, Any]:
+    freshness = signal.get("freshness") or {"status": "unknown", "lastEvidenceAt": signal.get("latestEvidenceAt")}
+    return {
+        "candidateId": f"{candidate_type}:{source_id}",
+        "type": candidate_type,
+        "sourceType": source_type,
+        "sourceId": source_id,
+        "subject": signal["subject"],
+        "topicId": signal["topicId"],
+        "label": label,
+        "rationale": rationale,
+        "confidence": _confidence_bucket(score),
+        "freshness": {
+            "status": freshness.get("status", "unknown"),
+            "lastEvidenceAt": freshness.get("lastEvidenceAt") or signal.get("latestEvidenceAt"),
+            "source": "adaptive_sequencing",
+        },
+        "sourceSignals": source_signals,
+        "reviewRequired": True,
+        "autonomousDecision": False,
+        "reviewFlags": sorted(set(review_flags)),
+        "score": score,
+    }
+
+
+def _source_signals(
+    signal: dict[str, Any],
+    assignment_state: dict[str, Any],
+    *,
+    reviewed_draft: bool,
+    curriculum_available: bool,
+) -> dict[str, Any]:
+    return {
+        "weakTopicCount": signal["weakTopicCount"],
+        "mistakeAttempts": signal["mistakeAttempts"],
+        "curriculumProgressCount": signal["progressCount"],
+        "reviewedDraftAvailable": reviewed_draft,
+        "curriculumExerciseAvailable": curriculum_available,
+        "assignmentStatuses": sorted(assignment_state["topic_statuses"].get(signal["topicId"], set())),
+    }
+
+
+def _candidate_suppressed(candidate: dict[str, Any], assignment_state: dict[str, Any]) -> bool:
+    source_key = (candidate["sourceType"], candidate["sourceId"])
+    if source_key in assignment_state["suppressed_sources"]:
+        return True
+    return candidate["topicId"] in assignment_state["active_topics"]
+
+
+def _dedupe_candidates(candidates: Any) -> list[dict[str, Any]]:
+    best: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        existing = best.get(candidate["candidateId"])
+        if not existing or candidate["score"] > existing["score"]:
+            best[candidate["candidateId"]] = candidate
+    return list(best.values())
+
+
+def _recommendation_response(candidate: dict[str, Any]) -> dict[str, Any]:
+    response = dict(candidate)
+    response.pop("score", None)
+    return response
+
+
+def _confidence_bucket(score: int) -> str:
+    if score >= 85:
+        return "high"
+    if score >= 60:
+        return "medium"
+    return "low"
 
 
 def _require_student_visible(student_id: str, user: dict[str, Any]) -> None:

@@ -74,7 +74,7 @@ def list_assignments(
     student_id: str,
     status: str | None = None,
     include_archived: bool = False,
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> list[dict[str, Any]]:
     table = get_table()
     filter_expr = Attr("entity_type").eq(ASSIGNMENT_ENTITY) & Attr("student_id").eq(student_id)
@@ -82,5 +82,18 @@ def list_assignments(
         filter_expr = filter_expr & Attr("status").eq(status)
     if not include_archived:
         filter_expr = filter_expr & Attr("status").ne("archived")
-    resp = table.scan(FilterExpression=filter_expr, Limit=limit)
-    return sorted(resp.get("Items", []), key=lambda item: item.get("created_at", ""), reverse=True)
+    scan_kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
+    if limit:
+        scan_kwargs["Limit"] = limit
+    items: list[dict[str, Any]] = []
+    while True:
+        resp = table.scan(**scan_kwargs)
+        items.extend(resp.get("Items", []))
+        if limit and len(items) >= limit:
+            items = items[:limit]
+            break
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)

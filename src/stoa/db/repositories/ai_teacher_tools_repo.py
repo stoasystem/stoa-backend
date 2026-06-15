@@ -47,17 +47,27 @@ def list_drafts(
     student_id: str | None = None,
     status: str | None = None,
     draft_type: str | None = None,
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> list[dict[str, Any]]:
-    response = get_table().scan(
-        FilterExpression=Attr("entity_type").eq(DRAFT_ENTITY),
-        Limit=limit,
-    )
-    items = response.get("Items", [])
+    filter_expr = Attr("entity_type").eq(DRAFT_ENTITY)
     if student_id is not None:
-        items = [item for item in items if item.get("student_id") == student_id]
+        filter_expr = filter_expr & Attr("student_id").eq(student_id)
     if status is not None:
-        items = [item for item in items if item.get("status") == status]
+        filter_expr = filter_expr & Attr("status").eq(status)
     if draft_type is not None:
-        items = [item for item in items if item.get("draft_type") == draft_type]
+        filter_expr = filter_expr & Attr("draft_type").eq(draft_type)
+    scan_kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
+    if limit:
+        scan_kwargs["Limit"] = limit
+    items: list[dict[str, Any]] = []
+    while True:
+        response = get_table().scan(**scan_kwargs)
+        items.extend(response.get("Items", []))
+        if limit and len(items) >= limit:
+            items = items[:limit]
+            break
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
     return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)

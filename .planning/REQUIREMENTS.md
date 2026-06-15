@@ -93,7 +93,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ADAPTWARE-01 | Phase 181 | Complete |
-| ADAPTWARE-02 | Phase 182 | Planned |
+| ADAPTWARE-02 | Phase 182 | Complete |
 | ADAPTWARE-03 | Phase 183 | Planned |
 | ADAPTWARE-04 | Phase 184 | Planned |
 | VERIFY-35 | Phase 185 | Planned |

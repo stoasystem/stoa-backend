@@ -15,7 +15,7 @@ Build learning product capability directly. Keep verification focused on recomme
 ## Phases
 
 - [x] **Phase 181: Adaptive Sequencing And Warehouse Analytics Contract** - Define sequencing signals, ranking rules, review gates, warehouse/export boundaries, dashboard targets, and rollout states.
-- [ ] **Phase 182: Adaptive Sequencing Recommendation Engine** - Add or define multi-signal recommendation generation, ranking, dedupe, freshness, rationale, and role-visible response shape.
+- [x] **Phase 182: Adaptive Sequencing Recommendation Engine** - Add or define multi-signal recommendation generation, ranking, dedupe, freshness, rationale, and role-visible response shape.
 - [ ] **Phase 183: Assignment Outcome Feedback Loop** - Connect assignment outcomes to sequencing signals, content-quality analytics, parent/tutor progress, and idempotent lifecycle behavior.
 - [ ] **Phase 184: Warehouse Analytics Export And Operator Dashboards** - Define/export warehouse-ready schemas and admin analytics for cohort progress, sequencing coverage, outcomes, quality, and interventions.
 - [ ] **Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate** - Verify v5.2 docs/contracts/evidence, record rollout state, and select the next feature milestone.
@@ -53,11 +53,11 @@ Plans:
   3. Ranking exposes rationale, confidence, freshness, source signals, and review-required flags.
   4. Active/completed/archived/rolled-back/unpublished content is deduped or suppressed appropriately.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 182-01: Implement adaptive sequencing recommendation engine.
+- [x] 182-01: Implement adaptive sequencing recommendation engine.
 
 ### Phase 183: Assignment Outcome Feedback Loop
 
@@ -118,7 +118,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 181 Adaptive Sequencing And Warehouse Analytics Contract | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 182 Adaptive Sequencing Recommendation Engine | v5.2 | 0/1 | Planned | - |
+| 182 Adaptive Sequencing Recommendation Engine | v5.2 | 1/1 | Complete | 2026-06-15 |
 | 183 Assignment Outcome Feedback Loop | v5.2 | 0/1 | Planned | - |
 | 184 Warehouse Analytics Export And Operator Dashboards | v5.2 | 0/1 | Planned | - |
 | 185 v5.2 Adaptive Sequencing Analytics Release Gate | v5.2 | 0/1 | Planned | - |
@@ -128,7 +128,7 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ADAPTWARE-01 | Phase 181 | Complete |
-| ADAPTWARE-02 | Phase 182 | Planned |
+| ADAPTWARE-02 | Phase 182 | Complete |
 | ADAPTWARE-03 | Phase 183 | Planned |
 | ADAPTWARE-04 | Phase 184 | Planned |
 | VERIFY-35 | Phase 185 | Planned |
