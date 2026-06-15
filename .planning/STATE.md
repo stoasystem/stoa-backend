@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.3
 milestone_name: Controlled Assignment Automation
-status: planning
+status: complete
 last_updated: "2026-06-15T12:00:00+02:00"
 last_activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 product expansion from the stoa_docs remaining-feature queue.
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: 190 - v5.3 Controlled Assignment Automation Release Gate
-Plan: 190-01
-Status: Phase 189 complete; ready to close v5.3 release gate
-Last activity: 2026-06-15 - Completed Phase 189 tutor/admin review UX contracts and family visibility.
+Phase: v5.3 complete
+Plan: milestone audit and archive
+Status: v5.3 release gate complete as automation-ready
+Last activity: 2026-06-15 - Completed Phase 190 v5.3 controlled assignment automation release gate.
 
 ## Accumulated Context
 
@@ -42,7 +42,7 @@ Last activity: 2026-06-15 - Completed Phase 189 tutor/admin review UX contracts 
 
 ### Pending Todos
 
-- Close v5.3 with release-gate evidence and next milestone selection in Phase 190.
+- Archive v5.3 after milestone audit and cleanup.
 
 ### Blockers/Concerns
 
@@ -53,4 +53,4 @@ Last activity: 2026-06-15 - Completed Phase 189 tutor/admin review UX contracts 
 
 ## Operator Next Steps
 
-- Start Phase 186 using `.planning/phases/186-controlled-assignment-automation-contract/186-01-PLAN.md`.
+- Run milestone audit, archive v5.3, then start v5.4 when selected.

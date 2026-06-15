@@ -78,6 +78,8 @@ The completed v5.1 milestone moves curriculum foundations into product-ready ope
 
 The completed v5.2 milestone turns adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into backend/API-ready adaptive sequencing and warehouse analytics: multi-signal recommendations, assignment outcome feedback, aggregate warehouse export/readiness, and operator dashboard contracts. It closed as `warehouse-ready`; live warehouse/BI deployment, frontend dashboard integration, fully autonomous tutoring, and automatic assignment delivery remain future scope.
 
+The completed v5.3 milestone turns those v5.2 recommendations into controlled assignment automation from reviewed sources: automation policy contracts, candidate batch preview, approved-batch assignment execution, deterministic source idempotency, role-safe automation metadata, and tutor/admin/family visibility handoff. It closed as `automation-ready`; frontend implementation, live notification delivery, native apps, live warehouse/BI deployment, fully unreviewed autonomous tutoring, and external provider activation remain future scope.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -85,8 +87,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.2 Adaptive Sequencing And Warehouse Analytics on 2026-06-15 (warehouse-ready backend/API release gate)
-**Active milestone:** v5.3 Controlled Assignment Automation, planning started 2026-06-15
+**Latest completed milestone:** v5.3 Controlled Assignment Automation on 2026-06-15 (automation-ready local release gate)
+**Active milestone:** None; v5.4 recommendation is Frontend Learning Operations And Automation Dashboards
 
 Delivered:
 

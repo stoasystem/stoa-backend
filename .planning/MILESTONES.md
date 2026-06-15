@@ -2,18 +2,21 @@
 
 ## Active
 
-### v5.3 Controlled Assignment Automation
+No active milestone. v5.3 completed local release gate on 2026-06-15 and is ready for archive cleanup.
 
-**Status:** Active planning 2026-06-15
+## v5.3 Controlled Assignment Automation (Completed local release gate: 2026-06-15)
+
+**Status:** Completed local release gate 2026-06-15
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Phase evidence:** `.planning/phases/186-controlled-assignment-automation-contract/`
 **Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation with tutor/admin policy boundaries, reviewed sources, idempotent creation/delivery, and family-visible explanations.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `automation-ready`
 
-Planned phases:
+Completed phases:
 
 - Phase 186: Controlled Assignment Automation Contract.
 - Phase 187: Automation Policy And Candidate Batch Planner.
@@ -21,13 +24,13 @@ Planned phases:
 - Phase 189: Tutor Admin Review UX Contracts And Family Visibility.
 - Phase 190: v5.3 Controlled Assignment Automation Release Gate.
 
-Feature priorities:
+Key accomplishments:
 
-- Define autonomy levels and reviewed-source eligibility before automation expands.
-- Build policy-bounded candidate batches from v5.2 recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
-- Create assignments idempotently from approved batches with per-item result evidence.
-- Expose tutor/admin review controls and student/parent explanations without answer keys or internal ranking internals.
-- Keep fully unreviewed autonomous tutoring, live notification delivery, native apps, and external provider activation out of this milestone.
+- Defined autonomy levels and reviewed-source eligibility before automation expands.
+- Built policy-bounded candidate batches from v5.2 recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
+- Created assignments idempotently from approved batches with current-preview binding, deterministic source IDs, conditional insert, and per-item result evidence.
+- Enforced AI draft visibility before assignment materialization.
+- Defined tutor/admin review controls and student/parent explanations without answer keys or internal ranking internals.
 
 Known out of scope for this milestone: unreviewed AI-generated assignment publication, final live payment/support activation, live push/native delivery, live warehouse/BI deployment, and native app implementation.
 
