@@ -33,9 +33,23 @@ def _install_memory_repo(monkeypatch):
         item = assignments.get(assignment_id)
         return dict(item) if item else None
 
-    def update_assignment(assignment_id, updates):
+    def update_assignment(
+        assignment_id,
+        updates,
+        *,
+        expected_status=None,
+        expected_pending_token=None,
+        expected_pending_state=None,
+    ):
         if assignment_id not in assignments:
             return None
+        if expected_status is not None and assignments[assignment_id]["status"] != expected_status:
+            return dict(assignments[assignment_id])
+        current_pending = assignments[assignment_id].get("pending_sequencing_effect") or {}
+        if expected_pending_token is not None and current_pending.get("transitionToken") != expected_pending_token:
+            return dict(assignments[assignment_id])
+        if expected_pending_state is not None and current_pending.get("state") != expected_pending_state:
+            return dict(assignments[assignment_id])
         assignments[assignment_id].update(updates)
         return dict(assignments[assignment_id])
 
@@ -128,6 +142,22 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
         "created_at": "2026-06-10T00:00:00+00:00",
         "updated_at": "2026-06-10T00:00:00+00:00",
     }
+    assignments["assignment-completed"] = {
+        "assignment_id": "assignment-completed",
+        "student_id": "student-1",
+        "status": "completed",
+        "source_type": "curriculum_exercise",
+        "source_id": "challenge-1",
+        "title": "Completed practice",
+        "subject": "math",
+        "topic_ids": ["linear-equations"],
+        "items": [{"prompt": "Completed prompt"}],
+        "answer_key": [{"answer": "hidden"}],
+        "student_answer": "raw answer must stay private",
+        "completion_result": {"correct": True, "attemptCount": 1},
+        "created_at": "2026-06-10T00:00:00+00:00",
+        "updated_at": "2026-06-10T00:00:00+00:00",
+    }
 
     tutor_response = _app({"sub": "tutor-1", "role": "tutor"}).post(
         "/adaptive/students/student-1/memory/refresh"
@@ -147,10 +177,13 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     assert parent_response.status_code == 200
     parent_body = parent_response.json()
     assert parent_body["assignedPracticeCount"] == 1
+    assert parent_body["completedPracticeCount"] == 1
     assert parent_body["freshness"]["status"] == "fresh"
     assert parent_body["locale"]["effectiveLocale"] == "de"
     assert "recent_questions" not in parent_body["weakAreas"][0]
     assert "evidenceQuestionIds" not in parent_body["weakAreas"][0]
+    assert "raw answer must stay private" not in str(parent_body["completedAssignments"])
+    assert "studentAnswer" not in parent_body["completedAssignments"][0]
 
 
 def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monkeypatch):
@@ -203,6 +236,7 @@ def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monk
     assert items[0]["autonomousDecision"] is False
     assert items[0]["sourceSignals"]["reviewedDraftAvailable"] is True
     assert "question-1" not in str(items[0]["sourceSignals"])
+    assert response.json()["sequencingSummary"]["topCandidateType"] == "reviewed_ai_draft"
 
     student_response = _app({"sub": "student-1", "role": "student"}).get(
         "/adaptive/students/me/memory"
@@ -306,14 +340,23 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
     )
     repeated = student_client.post(
         f"/adaptive/assignments/{assignment_id}/complete",
-        json={"studentAnswer": "2/4", "correct": False},
+        json={"studentAnswer": "conflicting retry answer", "correct": True},
     )
 
     assert started.status_code == 200
+    assert started.json()["sequencingFeedback"]["event"] == "started"
+    assert started.json()["sequencingFeedback"]["rankingEffect"] == "active_assignment_suppresses_duplicates"
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
+    assert completed.json()["completionResult"] == {"correct": False, "attemptCount": 1}
+    assert completed.json()["sequencingFeedback"]["event"] == "completed"
+    assert completed.json()["sequencingFeedback"]["remediationTopicIds"] == ["fractions"]
+    assert completed.json()["sequencingFeedback"]["rankingEffect"] == "completion_adds_remediation_pressure"
     assert "answerKey" not in completed.json()
     assert repeated.status_code == 200
+    assert repeated.json()["completionResult"] == {"correct": False, "attemptCount": 1}
+    assert repeated.json()["studentAnswer"] == "2/4"
+    assert repeated.json()["sequencingFeedback"] == completed.json()["sequencingFeedback"]
     assert attempts == []
 
     forbidden = _app({"sub": "student-2", "role": "student"}).post(
@@ -398,9 +441,14 @@ def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
     )
     second = student_client.post(
         f"/adaptive/assignments/{assignment_id}/complete",
-        json={"studentAnswer": "1", "correct": True},
+        json={"studentAnswer": "conflicting retry", "correct": False},
     )
 
     assert first.status_code == 200
     assert second.status_code == 200
+    assert first.json()["sequencingFeedback"]["sourceType"] == "curriculum_exercise"
+    assert first.json()["sequencingFeedback"]["topicIds"] == ["algebra"]
+    assert second.json()["studentAnswer"] == "1"
+    assert second.json()["completionResult"] == {"correct": True, "attemptCount": 1}
+    assert second.json()["sequencingFeedback"] == first.json()["sequencingFeedback"]
     assert completed_lessons == ["lesson-1"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db.dynamodb import get_table
@@ -56,16 +57,40 @@ def get_assignment(assignment_id: str) -> dict[str, Any] | None:
     return resp.get("Item")
 
 
-def update_assignment(assignment_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+def update_assignment(
+    assignment_id: str,
+    updates: dict[str, Any],
+    *,
+    expected_status: str | None = None,
+    expected_pending_token: str | None = None,
+    expected_pending_state: str | None = None,
+) -> dict[str, Any] | None:
     table = get_table()
     update_expr = "SET " + ", ".join(f"#{key} = :{key}" for key in updates)
-    resp = table.update_item(
-        Key={"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"},
-        UpdateExpression=update_expr,
-        ExpressionAttributeNames={f"#{key}": key for key in updates},
-        ExpressionAttributeValues={f":{key}": value for key, value in updates.items()},
-        ReturnValues="ALL_NEW",
-    )
+    kwargs: dict[str, Any] = {
+        "Key": {"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"},
+        "UpdateExpression": update_expr,
+        "ExpressionAttributeNames": {f"#{key}": key for key in updates},
+        "ExpressionAttributeValues": {f":{key}": value for key, value in updates.items()},
+        "ReturnValues": "ALL_NEW",
+    }
+    condition = None
+    if expected_status is not None:
+        condition = Attr("status").eq(expected_status)
+    if expected_pending_token is not None:
+        pending_condition = Attr("pending_sequencing_effect.transitionToken").eq(expected_pending_token)
+        condition = pending_condition if condition is None else condition & pending_condition
+    if expected_pending_state is not None:
+        state_condition = Attr("pending_sequencing_effect.state").eq(expected_pending_state)
+        condition = state_condition if condition is None else condition & state_condition
+    if condition is not None:
+        kwargs["ConditionExpression"] = condition
+    try:
+        resp = table.update_item(**kwargs)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return get_assignment(assignment_id)
+        raise
     return resp.get("Attributes")
 
 

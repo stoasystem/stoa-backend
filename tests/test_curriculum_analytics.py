@@ -102,7 +102,21 @@ def test_adaptive_assignment_transitions_record_content_quality_signals(monkeypa
     repo = adaptive_learning_service.adaptive_learning_repo
     monkeypatch.setattr(repo, "get_assignment", lambda assignment_id: dict(assignments[assignment_id]))
 
-    def update_assignment(assignment_id, updates):
+    def update_assignment(
+        assignment_id,
+        updates,
+        *,
+        expected_status=None,
+        expected_pending_token=None,
+        expected_pending_state=None,
+    ):
+        if expected_status is not None and assignments[assignment_id]["status"] != expected_status:
+            return dict(assignments[assignment_id])
+        current_pending = assignments[assignment_id].get("pending_sequencing_effect") or {}
+        if expected_pending_token is not None and current_pending.get("transitionToken") != expected_pending_token:
+            return dict(assignments[assignment_id])
+        if expected_pending_state is not None and current_pending.get("state") != expected_pending_state:
+            return dict(assignments[assignment_id])
         assignments[assignment_id].update(updates)
         return dict(assignments[assignment_id])
 
@@ -128,10 +142,114 @@ def test_adaptive_assignment_transitions_record_content_quality_signals(monkeypa
     assert completed["status"] == "completed"
     assert [item["signal_type"] for item in state["signals"]] == [
         "assignment_skipped",
+        "assignment_skipped",
         "assignment_completed",
         "assignment_completed",
     ]
     assert "raw answer must not be stored" not in str(state["signals"])
+
+
+def test_adaptive_assignment_start_and_archive_record_feedback_signals(monkeypatch):
+    state = _install_analytics_repo(monkeypatch)
+    assignments = {
+        "assignment-1": {
+            "assignment_id": "assignment-1",
+            "student_id": "student-1",
+            "status": "assigned",
+            "source_type": "curriculum_exercise",
+            "source_id": "exercise-1",
+            "subject": "math",
+            "topic_ids": ["algebra"],
+            "lesson_id": "lesson-1",
+            "exercise_id": "exercise-1",
+            "items": [],
+            "version_id": "version-1",
+        }
+    }
+    repo = adaptive_learning_service.adaptive_learning_repo
+    monkeypatch.setattr(repo, "get_assignment", lambda assignment_id: dict(assignments[assignment_id]))
+
+    def update_assignment(
+        assignment_id,
+        updates,
+        *,
+        expected_status=None,
+        expected_pending_token=None,
+        expected_pending_state=None,
+    ):
+        if expected_status is not None and assignments[assignment_id]["status"] != expected_status:
+            return dict(assignments[assignment_id])
+        current_pending = assignments[assignment_id].get("pending_sequencing_effect") or {}
+        if expected_pending_token is not None and current_pending.get("transitionToken") != expected_pending_token:
+            return dict(assignments[assignment_id])
+        if expected_pending_state is not None and current_pending.get("state") != expected_pending_state:
+            return dict(assignments[assignment_id])
+        assignments[assignment_id].update(updates)
+        return dict(assignments[assignment_id])
+
+    monkeypatch.setattr(repo, "update_assignment", update_assignment)
+
+    started = adaptive_learning_service.transition_assignment(
+        assignment_id="assignment-1",
+        action="start",
+        user={"sub": "student-1", "role": "student"},
+    )
+    archived = adaptive_learning_service.transition_assignment(
+        assignment_id="assignment-1",
+        action="archive",
+        user={"sub": "tutor-1", "role": "tutor"},
+    )
+
+    assert started["status"] == "started"
+    assert started["sequencingFeedback"]["event"] == "started"
+    assert archived["status"] == "archived"
+    assert archived["sequencingFeedback"]["rankingEffect"] == "archive_suppresses_exact_source"
+    assert [item["signal_type"] for item in state["signals"]] == [
+        "assignment_started",
+        "assignment_started",
+        "assignment_archived",
+        "assignment_archived",
+    ]
+    assert state["signals"][0]["metadata"]["event"] == "started"
+    assert state["signals"][0]["metadata"]["topicIds"] == ["algebra"]
+
+
+def test_losing_conditional_transition_does_not_emit_side_effects(monkeypatch):
+    state = _install_analytics_repo(monkeypatch)
+    assignment = {
+        "assignment_id": "assignment-1",
+        "student_id": "student-1",
+        "status": "assigned",
+        "source_type": "curriculum_exercise",
+        "source_id": "exercise-1",
+        "subject": "math",
+        "topic_ids": ["algebra"],
+        "lesson_id": "lesson-1",
+        "exercise_id": "exercise-1",
+        "items": [],
+        "version_id": "version-1",
+    }
+    repo = adaptive_learning_service.adaptive_learning_repo
+    monkeypatch.setattr(repo, "get_assignment", lambda assignment_id: dict(assignment))
+    monkeypatch.setattr(
+        repo,
+        "update_assignment",
+        lambda assignment_id, updates, *, expected_status=None, expected_pending_token=None, expected_pending_state=None: {
+            **assignment,
+            "status": "started",
+            "updated_at": updates["updated_at"],
+            "transition_token": "transition-owned-by-other-request",
+        },
+    )
+
+    response = adaptive_learning_service.transition_assignment(
+        assignment_id="assignment-1",
+        action="start",
+        user={"sub": "student-1", "role": "student"},
+    )
+
+    assert response["status"] == "started"
+    assert state["signals"] == []
 
 
 def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypatch):
@@ -146,7 +264,9 @@ def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypa
                 "topic_id": "algebra",
                 "total_count": 5,
                 "signal_wrong_answer_count": 2,
+                "signal_assignment_started_count": 1,
                 "signal_assignment_skipped_count": 1,
+                "signal_assignment_archived_count": 1,
                 "signal_assignment_completed_count": 1,
                 "source_reviewed_assignment_count": 3,
                 "updated_at": "2026-06-12T09:00:00+00:00",
@@ -160,6 +280,8 @@ def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypa
     assert response.status_code == 200
     body = response.json()
     assert body["items"][0]["publicId"] == "exercise-1"
+    assert body["items"][0]["assignmentStarts"] == 1
+    assert body["items"][0]["assignmentArchives"] == 1
     assert body["items"][0]["priorityScore"] == 7
     assert body["privacy"] == {
         "aggregateOnly": True,

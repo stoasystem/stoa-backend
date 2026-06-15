@@ -99,6 +99,7 @@ async def get_student_recommendations(
     return {
         "studentId": student_id,
         "items": summary["recommendations"],
+        "sequencingSummary": summary["sequencingSummary"],
         "reviewRequired": True,
         "autonomousDecision": False,
         "locale": adaptive_learning_service.locale_contract(user),

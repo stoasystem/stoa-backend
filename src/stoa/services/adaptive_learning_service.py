@@ -63,6 +63,11 @@ def get_memory_summary(
             adaptive_learning_repo.put_memory_snapshot(snapshot)
         stored = snapshots
     recommendations = _next_practice_recommendations(student_id, profile, snapshots, normalized_subject, user)
+    assignments = adaptive_learning_repo.list_assignments(
+        student_id=student_id,
+        include_archived=_can_manage_assignments(user),
+        limit=None,
+    )
     return _memory_response(
         student_id=student_id,
         user=user,
@@ -70,6 +75,7 @@ def get_memory_summary(
         generated_snapshots=snapshots,
         stored_snapshots=stored,
         recommendations=recommendations,
+        assignments=assignments,
     )
 
 
@@ -164,43 +170,99 @@ def transition_assignment(
         _require_teacher_or_admin(user)
     else:
         raise HTTPException(status_code=400, detail="Unsupported assignment action")
+    if item.get("pending_sequencing_effect"):
+        _apply_pending_assignment_effect(item)
+        item = _existing_assignment(assignment_id)
 
     previous_status = str(item.get("status") or "")
     now = now_iso()
-    updates: dict[str, Any] = {"updated_at": now}
+    transition_token = f"transition-{uuid4().hex}"
+    updates: dict[str, Any] = {"updated_at": now, "transition_token": transition_token}
+    side_effect: str | None = None
 
     if action == "start":
         if previous_status in {"assigned", "recommended"}:
-            updates.update({"status": "started", "started_at": item.get("started_at") or now})
+            updates.update(
+                {
+                    "status": "started",
+                    "started_at": item.get("started_at") or now,
+                    "sequencing_feedback": _assignment_sequencing_feedback(item, event="started", recorded_at=now),
+                }
+            )
+            side_effect = "started"
         elif previous_status not in {"started", "completed"}:
             raise HTTPException(status_code=409, detail="Assignment cannot be started from its current state")
     elif action == "complete":
         if previous_status not in {"assigned", "recommended", "started", "completed"}:
             raise HTTPException(status_code=409, detail="Assignment cannot be completed from its current state")
+        already_completed = previous_status == "completed"
+        attempt_count = _assignment_attempt_count(item) if already_completed else _assignment_attempt_count(item) + 1
+        completion_result = item.get("completion_result") if already_completed else (
+            {"correct": correct, "attemptCount": attempt_count} if correct is not None else None
+        )
+        sequencing_feedback = item.get("sequencing_feedback") if already_completed else _assignment_sequencing_feedback(
+            item,
+            event="completed",
+            recorded_at=now,
+            correct=correct,
+            attempt_count=attempt_count,
+        )
         updates.update(
             {
                 "status": "completed",
                 "started_at": item.get("started_at") or now,
                 "completed_at": item.get("completed_at") or now,
-                "student_answer": student_answer,
-                "completion_result": {"correct": correct} if correct is not None else None,
+                "student_answer": item.get("student_answer") if already_completed else student_answer,
+                "completion_result": completion_result,
+                "sequencing_feedback": sequencing_feedback,
             }
         )
         if previous_status != "completed":
-            _record_assignment_progress(item, correct=correct, student_answer=student_answer)
-            curriculum_analytics_service.record_assignment_outcome(item, correct=correct)
+            side_effect = "completed"
     elif action == "skip":
         if previous_status in {"completed", "archived"}:
             raise HTTPException(status_code=409, detail="Completed or archived assignments cannot be skipped")
-        updates.update({"status": "skipped", "skipped_at": item.get("skipped_at") or now, "skip_note": _clean_note(note)})
+        updates.update(
+            {
+                "status": "skipped",
+                "skipped_at": item.get("skipped_at") or now,
+                "skip_note": _clean_note(note),
+                "sequencing_feedback": _assignment_sequencing_feedback(item, event="skipped", recorded_at=now),
+            }
+        )
         if previous_status != "skipped":
-            curriculum_analytics_service.record_assignment_skipped(item)
+            side_effect = "skipped"
     elif action == "archive":
-        updates.update({"status": "archived", "archived_at": item.get("archived_at") or now, "archive_note": _clean_note(note)})
+        updates.update(
+            {
+                "status": "archived",
+                "archived_at": item.get("archived_at") or now,
+                "archive_note": _clean_note(note),
+                "sequencing_feedback": _assignment_sequencing_feedback(item, event="archived", recorded_at=now),
+            }
+        )
+        if previous_status != "archived":
+            side_effect = "archived"
 
-    updated = adaptive_learning_repo.update_assignment(assignment_id, updates)
+    if side_effect == "completed":
+        updates["pending_sequencing_effect"] = _pending_assignment_effect(
+            event=side_effect,
+            correct=correct,
+            transition_token=transition_token,
+        )
+    updated = adaptive_learning_repo.update_assignment(assignment_id, updates, expected_status=previous_status)
     if not updated:
         raise HTTPException(status_code=404, detail="Assignment not found")
+    if updated.get("transition_token") == transition_token and side_effect:
+        if side_effect == "completed":
+            _apply_pending_assignment_effect(updated)
+            curriculum_analytics_service.record_assignment_outcome(updated, correct=correct)
+        elif side_effect == "started":
+            curriculum_analytics_service.record_assignment_started(updated)
+        elif side_effect == "skipped":
+            curriculum_analytics_service.record_assignment_skipped(updated)
+        elif side_effect == "archived":
+            curriculum_analytics_service.record_assignment_archived(updated)
     return assignment_response(updated, user=user)
 
 
@@ -216,6 +278,7 @@ def parent_progress_signal(student_id: str, user: dict[str, Any]) -> dict[str, A
         "studentId": student_id,
         "weakAreas": memory["weakTopics"],
         "recommendations": memory["recommendations"],
+        "sequencingSummary": _sequencing_summary(memory["recommendations"], assignments["items"]),
         "assignedPracticeCount": len(active),
         "completedPracticeCount": len(completed),
         "freshness": memory["freshness"],
@@ -261,13 +324,151 @@ def assignment_response(item: dict[str, Any], *, user: dict[str, Any]) -> dict[s
         "archivedAt": item.get("archived_at"),
         "dueAt": item.get("due_at"),
         "note": item.get("note"),
-        "studentAnswer": item.get("student_answer"),
         "completionResult": item.get("completion_result"),
+        "sequencingFeedback": item.get("sequencing_feedback"),
         "locale": locale_contract(user),
     }
+    if user.get("role") != "parent":
+        response["studentAnswer"] = item.get("student_answer")
     if _can_manage_assignments(user):
         response["answerKey"] = item.get("answer_key") or []
     return response
+
+
+def _assignment_attempt_count(item: dict[str, Any]) -> int:
+    result = item.get("completion_result") if isinstance(item.get("completion_result"), dict) else {}
+    try:
+        return int(result.get("attemptCount") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _pending_assignment_effect(
+    *,
+    event: str,
+    correct: bool | None,
+    transition_token: str,
+) -> dict[str, Any]:
+    return {
+        "state": "pending",
+        "event": event,
+        "correct": correct,
+        "transitionToken": transition_token,
+    }
+
+
+def _apply_pending_assignment_effect(item: dict[str, Any]) -> None:
+    effect = item.get("pending_sequencing_effect")
+    if not isinstance(effect, dict) or not effect.get("event") or effect.get("state") not in {"pending", "processing"}:
+        return
+    claimed = _claim_pending_assignment_effect(item, effect)
+    if not claimed:
+        return
+    claimed_effect = claimed.get("pending_sequencing_effect") or {}
+    event = str(claimed_effect.get("event"))
+    correct = claimed_effect.get("correct") if isinstance(claimed_effect.get("correct"), bool) else None
+    if event == "completed":
+        _record_assignment_progress(claimed, correct=correct, student_answer=None)
+    adaptive_learning_repo.update_assignment(
+        str(claimed.get("assignment_id") or ""),
+        {"pending_sequencing_effect": {}, "sequencing_effect_applied_at": now_iso()},
+        expected_status=str(claimed.get("status") or ""),
+        expected_pending_token=str(claimed_effect.get("transitionToken") or ""),
+        expected_pending_state="processing",
+    )
+
+
+def _claim_pending_assignment_effect(item: dict[str, Any], effect: dict[str, Any]) -> dict[str, Any] | None:
+    token = str(effect.get("transitionToken") or "")
+    if not token:
+        return None
+    claim_token = f"effect-claim-{uuid4().hex}"
+    claimed_effect = {**effect, "state": "processing", "claimToken": claim_token}
+    claimed = adaptive_learning_repo.update_assignment(
+        str(item.get("assignment_id") or ""),
+        {"pending_sequencing_effect": claimed_effect},
+        expected_status=str(item.get("status") or ""),
+        expected_pending_token=token,
+        expected_pending_state=str(effect.get("state") or "pending"),
+    )
+    if not claimed:
+        return None
+    current_effect = claimed.get("pending_sequencing_effect") or {}
+    if current_effect.get("claimToken") != claim_token or current_effect.get("state") != "processing":
+        return None
+    return claimed
+
+
+def _assignment_sequencing_feedback(
+    item: dict[str, Any],
+    *,
+    event: str,
+    recorded_at: str,
+    correct: bool | None = None,
+    attempt_count: int | None = None,
+) -> dict[str, Any]:
+    topic_ids = [str(topic_id) for topic_id in item.get("topic_ids", []) if topic_id]
+    feedback: dict[str, Any] = {
+        "event": event,
+        "recordedAt": recorded_at,
+        "sourceType": item.get("source_type"),
+        "sourceId": item.get("source_id"),
+        "subject": item.get("subject"),
+        "topicIds": topic_ids,
+        "remediationTopicIds": topic_ids if event in {"completed", "skipped"} and correct is False else [],
+        "rankingEffect": _ranking_effect(event, correct),
+    }
+    if correct is not None:
+        feedback["correct"] = correct
+    if attempt_count is not None:
+        feedback["attemptCount"] = attempt_count
+    return feedback
+
+
+def _ranking_effect(event: str, correct: bool | None) -> str:
+    if event == "started":
+        return "active_assignment_suppresses_duplicates"
+    if event == "completed" and correct is False:
+        return "completion_adds_remediation_pressure"
+    if event == "completed":
+        return "completion_reduces_exact_source_priority"
+    if event == "skipped":
+        return "skip_temporarily_reduces_priority"
+    if event == "archived":
+        return "archive_suppresses_exact_source"
+    return "none"
+
+
+def _sequencing_summary(
+    recommendations: list[dict[str, Any]],
+    assignments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    assignment_items = assignments or []
+    status_counts = Counter(str(item.get("status") or "") for item in assignment_items)
+    top = recommendations[0] if recommendations else {}
+    return {
+        "recommendedCount": len(recommendations),
+        "topCandidateType": top.get("type"),
+        "topTopicId": top.get("topicId"),
+        "topConfidence": top.get("confidence"),
+        "activeAssignments": sum(status_counts.get(status, 0) for status in ("recommended", "assigned", "started")),
+        "completedAssignments": status_counts.get("completed", 0),
+        "skippedAssignments": status_counts.get("skipped", 0),
+        "archivedAssignments": status_counts.get("archived", 0),
+        "explanation": _sequencing_summary_explanation(recommendations, status_counts),
+    }
+
+
+def _sequencing_summary_explanation(recommendations: list[dict[str, Any]], status_counts: Counter[str]) -> str:
+    if not recommendations:
+        if any(status_counts.get(status, 0) for status in ("recommended", "assigned", "started")):
+            return "Active reviewed assignments already cover the current sequencing priorities."
+        return "No reviewed next-work recommendation is available from current signals."
+    if status_counts.get("skipped", 0):
+        return "Skipped work lowers priority temporarily while remediation remains available if evidence stays weak."
+    if status_counts.get("completed", 0):
+        return "Completed assignments reduce exact-source repeats while nearby remediation can still be recommended."
+    return str(recommendations[0].get("rationale") or "Recommendations are based on recent learning and assignment signals.")
 
 
 def _build_memory_snapshots(
@@ -351,6 +552,7 @@ def _memory_response(
     generated_snapshots: list[dict[str, Any]],
     stored_snapshots: list[dict[str, Any]],
     recommendations: list[dict[str, Any]],
+    assignments: list[dict[str, Any]],
 ) -> dict[str, Any]:
     role = str(user.get("role") or "")
     visible_snapshots = stored_snapshots or generated_snapshots
@@ -368,6 +570,7 @@ def _memory_response(
         "strengthTopics": profile.get("strengthTopics", []),
         "memorySnapshots": visible_snapshots,
         "recommendations": recommendations,
+        "sequencingSummary": _sequencing_summary(recommendations, assignments),
         "freshness": _overall_freshness(visible_snapshots),
         "updatedAt": now_iso(),
     }
@@ -430,6 +633,7 @@ def _record_assignment_progress(item: dict[str, Any], *, correct: bool | None, s
         subject_id=str(item.get("subject") or ""),
         lesson_id=str(lesson_id or ""),
         topic_id=str((item.get("topic_ids") or [""])[0]),
+        attempt_id=f"assignment-{item.get('assignment_id')}",
     )
 
 

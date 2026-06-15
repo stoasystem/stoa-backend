@@ -146,16 +146,18 @@ def mark_lesson_completed(user_id: str, lesson: dict) -> None:
 
 
 def record_attempt(user_id: str, challenge_id: str, correct: bool,
-                   subject_id: str = "", lesson_id: str = "", topic_id: str = "") -> None:
+                   subject_id: str = "", lesson_id: str = "", topic_id: str = "",
+                   attempt_id: str | None = None) -> None:
     """Record a wrong answer for the mistakes review feature."""
     if correct:
         return
     from datetime import datetime, timezone
     import uuid
     table = get_table()
+    attempt_key = attempt_id or str(uuid.uuid4())
     table.put_item(Item={
         "PK": f"MISTAKES#{user_id}",
-        "SK": f"ATTEMPT#{uuid.uuid4()}",
+        "SK": f"ATTEMPT#{attempt_key}",
         "user_id": user_id,
         "challenge_id": challenge_id,
         "subject_id": subject_id,

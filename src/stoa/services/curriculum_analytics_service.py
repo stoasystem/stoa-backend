@@ -14,8 +14,10 @@ QUALITY_SIGNALS = {
     "practice_attempt",
     "wrong_answer",
     "lesson_completed",
+    "assignment_started",
     "assignment_completed",
     "assignment_skipped",
+    "assignment_archived",
     "publish",
     "archive",
     "adaptive_memory_refresh",
@@ -66,49 +68,23 @@ def record_lesson_completed(*, student_id: str, lesson: dict[str, Any]) -> None:
 
 
 def record_assignment_outcome(item: dict[str, Any], *, correct: bool | None) -> None:
-    signal_type = "assignment_completed"
-    source_type = _source_type(item)
-    metadata = {"correct": correct, "studentHash": _stable_subject_hash(str(item.get("student_id") or ""))}
-    if item.get("exercise_id"):
-        _safe_record(
-            signal_type=signal_type,
-            public_id=str(item.get("exercise_id")),
-            content_type="exercise",
-            version_id=item.get("version_id"),
-            subject_id=item.get("subject"),
-            topic_id=_first_topic(item),
-            source_type=source_type,
-            metadata=metadata,
-        )
-    if item.get("lesson_id"):
-        _safe_record(
-            signal_type=signal_type,
-            public_id=str(item.get("lesson_id")),
-            content_type="lesson",
-            version_id=item.get("version_id"),
-            subject_id=item.get("subject"),
-            topic_id=_first_topic(item),
-            source_type=source_type,
-            metadata=metadata,
-        )
+    metadata = _assignment_metadata(item, event="completed", correct=correct)
+    _record_assignment_targets(item, signal_type="assignment_completed", metadata=metadata)
+
+
+def record_assignment_started(item: dict[str, Any]) -> None:
+    metadata = _assignment_metadata(item, event="started")
+    _record_assignment_targets(item, signal_type="assignment_started", metadata=metadata)
 
 
 def record_assignment_skipped(item: dict[str, Any]) -> None:
-    source_type = _source_type(item)
-    metadata = {"studentHash": _stable_subject_hash(str(item.get("student_id") or ""))}
-    public_id = item.get("exercise_id") or item.get("lesson_id")
-    content_type = "exercise" if item.get("exercise_id") else "lesson"
-    if public_id:
-        _safe_record(
-            signal_type="assignment_skipped",
-            public_id=str(public_id),
-            content_type=content_type,
-            version_id=item.get("version_id"),
-            subject_id=item.get("subject"),
-            topic_id=_first_topic(item),
-            source_type=source_type,
-            metadata=metadata,
-        )
+    metadata = _assignment_metadata(item, event="skipped")
+    _record_assignment_targets(item, signal_type="assignment_skipped", metadata=metadata)
+
+
+def record_assignment_archived(item: dict[str, Any]) -> None:
+    metadata = _assignment_metadata(item, event="archived")
+    _record_assignment_targets(item, signal_type="assignment_archived", metadata=metadata)
 
 
 def record_publish_event(version: dict[str, Any], *, operation: str) -> None:
@@ -187,6 +163,8 @@ def _safe_record(
 def _metric_response(row: dict[str, Any]) -> dict[str, Any]:
     wrong = int(row.get("signal_wrong_answer_count") or 0)
     skipped = int(row.get("signal_assignment_skipped_count") or 0)
+    started = int(row.get("signal_assignment_started_count") or 0)
+    archived = int(row.get("signal_assignment_archived_count") or 0)
     completed = int(row.get("signal_lesson_completed_count") or 0) + int(
         row.get("signal_assignment_completed_count") or 0
     )
@@ -201,7 +179,9 @@ def _metric_response(row: dict[str, Any]) -> dict[str, Any]:
         "topicId": row.get("topic_id"),
         "totalSignals": int(row.get("total_count") or 0),
         "wrongAnswers": wrong,
+        "assignmentStarts": started,
         "assignmentSkips": skipped,
+        "assignmentArchives": archived,
         "completions": completed,
         "publishEvents": publish_events,
         "archiveEvents": archive_events,
@@ -217,6 +197,53 @@ def _source_type(item: dict[str, Any]) -> str:
     if raw == "curriculum_exercise":
         return "reviewed_assignment"
     return raw or "reviewed_assignment"
+
+
+def _record_assignment_targets(
+    item: dict[str, Any],
+    *,
+    signal_type: str,
+    metadata: dict[str, Any],
+) -> None:
+    for target in _assignment_targets(item):
+        _safe_record(
+            signal_type=signal_type,
+            public_id=target["public_id"],
+            content_type=target["content_type"],
+            version_id=item.get("version_id"),
+            subject_id=item.get("subject"),
+            topic_id=_first_topic(item),
+            source_type=_source_type(item),
+            metadata=metadata,
+        )
+
+
+def _assignment_targets(item: dict[str, Any]) -> list[dict[str, str]]:
+    targets = []
+    if item.get("exercise_id"):
+        targets.append({"public_id": str(item.get("exercise_id")), "content_type": "exercise"})
+    if item.get("lesson_id"):
+        targets.append({"public_id": str(item.get("lesson_id")), "content_type": "lesson"})
+    if not targets and item.get("source_type") == "ai_draft" and item.get("source_id"):
+        targets.append({"public_id": str(item.get("source_id")), "content_type": "ai_draft"})
+    return targets
+
+
+def _assignment_metadata(
+    item: dict[str, Any],
+    *,
+    event: str,
+    correct: bool | None = None,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "event": event,
+        "studentHash": _stable_subject_hash(str(item.get("student_id") or "")),
+        "sourceType": item.get("source_type"),
+        "topicIds": [str(topic_id) for topic_id in item.get("topic_ids", [])],
+    }
+    if correct is not None:
+        metadata["correct"] = correct
+    return metadata
 
 
 def _first_topic(item: dict[str, Any]) -> str:

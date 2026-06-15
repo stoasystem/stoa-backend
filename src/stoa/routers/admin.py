@@ -265,7 +265,9 @@ class CurriculumQualityMetricResponse(BaseModel):
     topicId: str | None = None
     totalSignals: int
     wrongAnswers: int
+    assignmentStarts: int = 0
     assignmentSkips: int
+    assignmentArchives: int = 0
     completions: int
     publishEvents: int
     archiveEvents: int
