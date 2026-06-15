@@ -1,109 +1,12 @@
-# Requirements: v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+# Requirements: Awaiting Next Milestone
 
-**Milestone:** v5.5
-**Status:** Active planning
-**Created:** 2026-06-15
+**Status:** No active milestone
+**Last completed milestone:** v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+**Completed:** 2026-06-15
 
-## Purpose
+The v5.5 requirements are archived at `.planning/milestones/v5.5-REQUIREMENTS.md`.
 
-Reduce waiting time after a student requests human help. v5.5 is automatic teacher/tutor dispatch for student teacher-request queues: the system should route escalated questions to the best available teacher/tutor, track dispatch attempts, reassign timed-out work, and expose SLA/load state to operators.
-
-This is not automatic answering and not automatic practice assignment. The teacher still writes the human reply; the system only improves routing, claiming, reassignment, and visibility.
-
-## Implementation Strategy
-
-Build on the existing teacher-request flow:
-
-- `POST /questions/{id}/request-teacher` already marks questions escalated and records `teacher_requested_at` / `queue_visible_at`.
-- `GET /teachers/queue` already lists escalated questions.
-- `POST /teachers/questions/{id}/takeover` already locks a question for a teacher and records takeover SLA fields.
-- `teacher_reply_service` already computes request-to-takeover, first-reply, and resolved SLA metrics.
-
-Add a dispatch layer around those primitives:
-
-- Teacher/tutor availability profile and subject capability contract.
-- Dispatch candidate ranking by subject match, active load, recent SLA, last assignment time, and paused/offline state.
-- Conditional assignment/claim metadata so one request is not assigned to two teachers.
-- Timeout and reassignment rules when a dispatched teacher does not accept or reply in time.
-- Operator visibility for queue health, dispatch attempts, load balancing, and SLA risk.
-
-## Requirements
-
-### TEACHDISP-01 Dispatch Contract And Matching Model
-
-Implementers have a concrete dispatch contract before code expands.
-
-Acceptance criteria:
-
-- Contract defines teacher/tutor availability, subject capability, role eligibility, load metrics, and pause/offline states.
-- Contract defines dispatch states: unassigned, dispatched, accepted, active, timed_out, reassigned, declined, resolved.
-- Contract defines matching/ranking inputs: subject, teacher capability, active load, recent SLA, last dispatch, queue age, and escalation priority.
-- Contract defines conflict/claim behavior to prevent double assignment.
-- Contract defines frontend/operator visibility and release states.
-
-### TEACHDISP-02 Dispatch Planner And Candidate Ranking
-
-The system can rank eligible teachers/tutors for an escalated question without mutating production state.
-
-Acceptance criteria:
-
-- Planner returns selected and refused teacher candidates with reason codes.
-- Planner respects subject capability, availability, max active sessions, paused/offline state, and role eligibility.
-- Planner ranks by load, SLA health, queue age, and fairness/last dispatch time.
-- Planner exposes a stable response shape for operator preview and tests.
-
-### TEACHDISP-03 Automatic Dispatch Claim And Reassignment Worker
-
-The system can assign or reassign escalated teacher requests safely.
-
-Acceptance criteria:
-
-- Dispatch worker conditionally claims an escalated question for one selected teacher/tutor.
-- Dispatch metadata records dispatch ID, candidate teacher, reason, SLA deadline, attempt count, and previous assignees.
-- Timeout worker releases or reassigns stale dispatched work according to policy.
-- Manual takeover remains compatible and can override dispatch when allowed.
-- Tests cover idempotency, double-claim prevention, timeout, reassignment, manual takeover interaction, and no-candidate fallback.
-
-### TEACHDISP-04 Teacher Queue And Operator Dispatch Visibility
-
-Teachers and operators can understand assigned work and dispatch health.
-
-Acceptance criteria:
-
-- Teacher queue distinguishes available queue items, dispatched-to-me items, stale dispatches, and manually available items.
-- Operator dashboard exposes queue age, assigned load, dispatch attempts, timeout/reassignment counts, SLA risk, and no-candidate reasons.
-- Student status remains simple: waiting, assigned, active, replied, or resolved.
-- Notifications/events are documented for dispatched, accepted, timed out, reassigned, and replied states.
-
-### VERIFY-38 v5.5 Teacher Dispatch Release Gate
-
-v5.5 closes with dispatch behavior evidence.
-
-Acceptance criteria:
-
-- Focused backend/frontend contract checks pass or isolate documented pre-existing failures.
-- Dispatch planner, claim/reassignment worker, teacher queue visibility, operator dashboard, and docs are verified.
-- Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v5.5 work.
-- Final audit records rollout state: contract-ready, planner-ready, dispatch-ready, queue-ready, blocked, or deferred.
-- Next milestone recommendation is updated from the remaining feature queue.
-
-## Future Requirements
-
-- Live staffing calendar integration.
-- Payroll/compensation automation based on SLA.
-- Native push for teacher dispatch.
-- Cross-timezone teacher scheduling.
-- External provider activation for payments/support.
-
-## Out of Scope
-
-- AI auto-answering instead of teacher replies.
-- Replacing teacher manual reply and resolve workflows.
-- Fully autonomous tutoring decisions.
-- Payment/support live provider activation.
-- Native app implementation.
-
-## Traceability
+## Last Completed Requirements
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -112,3 +15,10 @@ Acceptance criteria:
 | TEACHDISP-03 | Phase 198 | Complete |
 | TEACHDISP-04 | Phase 199 | Complete |
 | VERIFY-38 | Phase 200 | Complete |
+
+## Next Step
+
+Create the next milestone to establish fresh active requirements.
+
+---
+*Last updated: 2026-06-15 after archiving v5.5 teacher dispatch.*

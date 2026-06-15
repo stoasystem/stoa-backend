@@ -1,13 +1,12 @@
 # Milestones
 
-## Active
-
-### v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+## v5.5 Automatic Teacher Dispatch And SLA Load Balancing (Shipped: 2026-06-15)
 
 **Status:** Completed backend dispatch-ready release gate 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/`
+**Audit:** `.planning/milestones/v5.5-MILESTONE-AUDIT.md`
+**Roadmap:** `.planning/milestones/v5.5-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.5-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v5.5-phases/`
 **Goal:** Automatically route student teacher-help requests to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose SLA/load health.
 **Phases:** 5
 **Plans:** 5/5 complete
@@ -27,7 +26,7 @@ Implementation strategy:
 - Add dispatch planning, conditional claim metadata, timeout/reassignment, queue filters, and operator dashboard signals.
 - Keep live calendar/payroll/native push integrations future scope.
 
-Planned phases:
+Completed phases:
 
 - Phase 196: Teacher Dispatch And SLA Load Balancing Contract. (complete)
 - Phase 197: Dispatch Planner And Candidate Ranking. (complete)
@@ -44,6 +43,12 @@ Key accomplishments:
 - Verified with focused backend tests, Ruff, and code review.
 
 Known deferred items at close: production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and final payment/support external provider activation.
+
+---
+
+## Active
+
+No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ---
 

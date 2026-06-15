@@ -227,6 +227,51 @@
 
 ---
 
+## Milestone: v5.5 — Automatic Teacher Dispatch And SLA Load Balancing
+
+**Shipped:** 2026-06-15
+**Phases:** 5 | **Plans:** 5 | **Sessions:** 1
+
+### What Was Built
+
+- Automatic teacher dispatch contract with explicit state model, role eligibility, ranking inputs, claim behavior, timeout/reassignment rules, and visibility boundaries.
+- Dispatch planner and candidate ranking for teacher/tutor profiles, including selected/refused payloads and reason codes.
+- Conditional dispatch claim and stale reassignment behavior that preserves manual teacher takeover compatibility.
+- Teacher queue decoration/filtering plus admin dispatch dashboard aggregates for load, attempts, timeouts, SLA risk, and no-candidate reasons.
+- Release gate evidence recording rollout state as `dispatch-ready`.
+
+### What Worked
+
+- Building around existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA primitives kept the scope narrow.
+- Code review caught the two meaningful integration risks: stale post-escalation reads and dispatch dependency failures blocking manual escalation.
+- Focused tests covered planner ranking, claim conflicts, fresh escalation snapshots, stale reassignment, takeover interaction, queue filtering, and content-safe dashboard output.
+
+### What Was Inefficient
+
+- The archive helper created snapshots but duplicated the active v5.5 milestone entry and left living ROADMAP/REQUIREMENTS content active.
+- Phase summaries still do not expose structured frontmatter accomplishments, so milestone accomplishments needed manual repair.
+- Phase-level Nyquist `VALIDATION.md` artifacts are still missing, even though phase verification and focused tests passed.
+
+### Patterns Established
+
+- Dispatch should be best-effort from student escalation so the manual teacher queue remains available if profile/ranking dependencies fail.
+- Claiming assigned work needs conditional writes and a fresh escalated snapshot to avoid eventual-consistency gaps.
+- Student status should stay simple while teacher/operator views can expose richer dispatch/SLA state.
+
+### Key Lessons
+
+1. Automatic routing must fail open to manual queue visibility; escalation itself is more important than immediate dispatch.
+2. Timeout reassignment needs previous-assignee tracking to avoid repeatedly selecting the same stale teacher.
+3. Operator dashboards can be useful without exposing question content or internal teacher ranking details.
+
+### Cost Observations
+
+- Model mix: not recorded.
+- Sessions: 1 autonomous execution and closeout session.
+- Notable: Verification cost was concentrated in focused backend tests, targeted Ruff, and integration/code-review fixes around dispatch consistency.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -238,6 +283,7 @@
 | v5.2 | 1 | 5 | Promoted readiness planning into backend/API implementation while preserving review gates and explicit warehouse-ready boundaries. |
 | v5.3 | 1 | 5 | Closed the loop from recommendations to controlled assignment automation with preview-bound execution and source-idempotent assignment creation. |
 | v5.4 | 1 | 5 | Brought the backend learning operations capabilities into usable frontend role flows with no-demo-fallback behavior and focused Open Design e2e verification. |
+| v5.5 | 1 | 5 | Converted manual teacher-help escalation into backend dispatch-ready routing with conditional claims, stale reassignment, and operator SLA/load visibility. |
 
 ### Cumulative Quality
 
@@ -248,6 +294,7 @@
 | v5.2 | 20 focused backend tests; targeted Ruff; integration audit | Backend/API coverage for 5/5 requirements | 0 |
 | v5.3 | 15 focused adaptive backend tests; targeted Ruff; code review; integration audit | Automation-ready coverage for 5/5 requirements | 0 |
 | v5.4 | Frontend build; frontend lint; focused Playwright e2e | Frontend role-flow coverage for 5/5 requirements | 0 |
+| v5.5 | 16 focused backend tests; targeted Ruff; code review; milestone audit | Dispatch-ready backend coverage for 5/5 requirements | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 

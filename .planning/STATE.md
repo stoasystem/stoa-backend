@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v5.5
 milestone_name: Automatic Teacher Dispatch And SLA Load Balancing
-status: planning
-last_updated: "2026-06-15T23:55:00+02:00"
-last_activity: 2026-06-15 - Completed v5.5 teacher dispatch release gate.
+status: Awaiting next milestone
+last_updated: "2026-06-15T22:15:11.149Z"
+last_activity: 2026-06-15 — Milestone v5.5 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.5 automatic teacher dispatch and SLA load balancing.
+**Current focus:** Planning next milestone.
 
 ## Current Position
 
 Phase: Milestone v5.5 complete
 Plan: —
-Status: Ready for milestone audit
-Last activity: 2026-06-15 - v5.5 dispatch-ready release gate completed.
+Status: Awaiting next milestone
+Last activity: 2026-06-15 — Milestone v5.5 completed and archived
 
 ## Accumulated Context
 
@@ -41,15 +41,14 @@ Last activity: 2026-06-15 - v5.5 dispatch-ready release gate completed.
 
 ### Pending Todos
 
-- Run v5.5 milestone audit, archive completion, and cleanup.
+- Select the next milestone from the remaining feature queue.
 
 ### Blockers/Concerns
 
-- Teacher/tutor availability may initially be a local profile/metadata contract rather than live calendar integration.
-- Dispatch must avoid double assignment and must preserve teacher manual takeover semantics.
-- Student-facing state should stay simple and should not expose internal teacher scoring.
-- Broad security/compliance testing is not the priority during this internal development milestone.
+- Production scheduled worker/CDK wiring for automatic stale-dispatch reassignment remains deferred.
+- Live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, and payroll/compensation automation remain future scope.
+- Final external payment/support provider activation remains gated outside this milestone.
 
 ## Operator Next Steps
 
-- Start Phase 196 using `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/196-01-PLAN.md`.
+- Start the next milestone with /gsd-new-milestone
