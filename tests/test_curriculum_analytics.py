@@ -291,3 +291,112 @@ def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypa
     }
     assert "correct_answer" not in str(body)
     assert "student-1" not in str(body)
+
+
+def test_curriculum_warehouse_readiness_and_export_are_aggregate_only(monkeypatch):
+    _install_analytics_repo(
+        monkeypatch,
+        metrics=[
+            {
+                "public_id": "exercise-1",
+                "content_type": "exercise",
+                "version_id": "version-1",
+                "subject_id": "math",
+                "topic_id": "algebra",
+                "total_count": 6,
+                "signal_wrong_answer_count": 2,
+                "signal_assignment_started_count": 1,
+                "signal_assignment_skipped_count": 1,
+                "signal_assignment_archived_count": 0,
+                "signal_assignment_completed_count": 2,
+                "updated_at": "2026-06-12T09:00:00+00:00",
+            }
+        ],
+    )
+    client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, include_admin=True))
+
+    readiness = client.get("/admin/curriculum/analytics/warehouse-readiness")
+    export = client.get("/admin/curriculum/analytics/warehouse-export?contentType=exercise")
+
+    assert readiness.status_code == 200
+    readiness_body = readiness.json()
+    assert readiness_body["state"] == "api-ready"
+    assert readiness_body["liveWarehouseConfigured"] is False
+    assert readiness_body["blockers"] == ["live_warehouse_not_configured"]
+    assert readiness_body["privacy"]["rawStudentAnswers"] is False
+    source_names = {source["name"] for source in readiness_body["sources"] if source["name"] != "warehouse"}
+    assert source_names == set(readiness_body["sourceSchemas"])
+    assert readiness_body["sourceSchemas"]["content_quality_metrics"]["rowState"] == "exported"
+    assert readiness_body["sourceSchemas"]["learning_memory"]["rowState"] == "schema-only"
+
+    assert export.status_code == 200
+    export_body = export.json()
+    assert export_body["schemaVersion"] == "stoa.curriculum_analytics.v1"
+    assert export_body["sourceSchemas"]["assignment_outcomes"]["rowState"] == "schema-only"
+    assert export_body["items"][0]["metricId"] == "exercise:exercise-1:version-1"
+    assert export_body["items"][0]["metrics"]["assignmentStarts"] == 1
+    assert export_body["items"][0]["metrics"]["assignmentCompletions"] == 2
+    assert export_body["window"]["liveWarehouseRequired"] is False
+    assert export_body["window"]["sampled"] is True
+    assert "student-1" not in str(export_body)
+    assert "correct_answer" not in str(export_body)
+
+
+def test_curriculum_analytics_dashboard_summarizes_operator_actions(monkeypatch):
+    _install_analytics_repo(
+        monkeypatch,
+        metrics=[
+            {
+                "public_id": "exercise-1",
+                "content_type": "exercise",
+                "version_id": "version-1",
+                "subject_id": "math",
+                "topic_id": "algebra",
+                "total_count": 8,
+                "signal_wrong_answer_count": 2,
+                "signal_assignment_started_count": 2,
+                "signal_assignment_skipped_count": 1,
+                "signal_assignment_archived_count": 1,
+                "signal_assignment_completed_count": 1,
+                "signal_lesson_completed_count": 3,
+                "updated_at": "2026-06-12T09:00:00+00:00",
+            },
+            {
+                "public_id": "lesson-2",
+                "content_type": "lesson",
+                "version_id": "version-2",
+                "subject_id": "math",
+                "topic_id": "geometry",
+                "total_count": 3,
+                "signal_lesson_completed_count": 3,
+                "updated_at": "2026-06-12T10:00:00+00:00",
+            },
+        ],
+    )
+    client = TestClient(_app_for_user({"sub": "tutor-1", "role": "tutor"}, include_admin=True))
+
+    response = client.get("/admin/curriculum/analytics/dashboard?subjectId=math")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sampleSize"] == 2
+    assert body["sampled"] is True
+    assert body["summary"]["assignmentStarts"] == 2
+    assert body["summary"]["lessonCompletions"] == 6
+    assert body["sequencingCoverage"]["assignmentCompletions"] == 1
+    assert body["qualityHotspots"][0]["publicId"] == "exercise-1"
+    assert body["interventions"][0]["reasons"] == ["wrong_answers", "assignment_skips", "assignment_archives"]
+    assert body["emptyState"] is None
+
+
+def test_curriculum_analytics_dashboard_empty_state(monkeypatch):
+    _install_analytics_repo(monkeypatch, metrics=[])
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
+
+    response = client.get("/admin/curriculum/analytics/dashboard")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sampleSize"] == 0
+    assert body["emptyState"] == "No aggregate learning analytics have been recorded yet."
+    assert body["summary"]["totalSignals"] == 0

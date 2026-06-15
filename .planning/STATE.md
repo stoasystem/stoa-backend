@@ -7,10 +7,10 @@ last_updated: "2026-06-15T00:00:00+02:00"
 last_activity: 2026-06-15
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-14)
 
 ## Current Position
 
-Phase: 184 - Warehouse Analytics Export And Operator Dashboards
-Plan: 184-01
-Status: Phase 183 complete; ready to plan warehouse analytics export and operator dashboards
-Last activity: 2026-06-15 - Completed Phase 183 assignment outcome feedback loop.
+Phase: 185 - v5.2 Adaptive Sequencing Analytics Release Gate
+Plan: 185-01
+Status: Phase 184 complete; ready to verify v5.2 release gate
+Last activity: 2026-06-15 - Completed Phase 184 warehouse analytics export and operator dashboards.
 
 ## Accumulated Context
 
@@ -42,7 +42,6 @@ Last activity: 2026-06-15 - Completed Phase 183 assignment outcome feedback loop
 
 ### Pending Todos
 
-- Plan and implement warehouse analytics export and operator dashboards in Phase 184.
 - Close v5.2 with release-gate evidence and next milestone selection in Phase 185.
 
 ### Blockers/Concerns

@@ -268,6 +268,8 @@ class CurriculumQualityMetricResponse(BaseModel):
     assignmentStarts: int = 0
     assignmentSkips: int
     assignmentArchives: int = 0
+    assignmentCompletions: int = 0
+    lessonCompletions: int = 0
     completions: int
     publishEvents: int
     archiveEvents: int
@@ -278,6 +280,69 @@ class CurriculumQualityMetricResponse(BaseModel):
 class CurriculumQualityResponse(BaseModel):
     items: list[CurriculumQualityMetricResponse]
     count: int
+    privacy: dict[str, bool]
+
+
+class CurriculumWarehouseReadinessResponse(BaseModel):
+    state: str
+    exportAllowed: bool
+    liveWarehouseConfigured: bool
+    schemaVersion: str
+    sources: list[dict[str, Any]]
+    sourceSchemas: dict[str, dict[str, Any]]
+    lastMetricAt: str | None = None
+    blockers: list[str]
+    warnings: list[str]
+    privacy: dict[str, bool]
+
+
+class CurriculumWarehouseExportMetrics(BaseModel):
+    totalSignals: int
+    wrongAnswers: int
+    assignmentStarts: int
+    assignmentSkips: int
+    assignmentArchives: int
+    assignmentCompletions: int
+    lessonCompletions: int
+    completions: int
+    publishEvents: int
+    archiveEvents: int
+    priorityScore: int
+
+
+class CurriculumWarehouseExportRow(BaseModel):
+    metricId: str
+    schemaVersion: str
+    publicId: str | None = None
+    contentType: str | None = None
+    versionId: str | None = None
+    subjectId: str | None = None
+    topicId: str | None = None
+    metrics: CurriculumWarehouseExportMetrics
+    aggregationWindow: str
+    updatedAt: str | None = None
+
+
+class CurriculumWarehouseExportResponse(BaseModel):
+    schemaVersion: str
+    sourceSchemas: dict[str, dict[str, Any]]
+    items: list[CurriculumWarehouseExportRow]
+    count: int
+    filters: dict[str, Any]
+    window: dict[str, Any]
+    privacy: dict[str, bool]
+
+
+class CurriculumAnalyticsDashboardResponse(BaseModel):
+    generatedAt: str
+    filters: dict[str, Any]
+    sampleSize: int
+    sampled: bool
+    summary: dict[str, int]
+    sequencingCoverage: dict[str, int]
+    qualityHotspots: list[CurriculumQualityMetricResponse]
+    interventions: list[dict[str, Any]]
+    emptyState: str | None = None
     privacy: dict[str, bool]
 
 
@@ -357,6 +422,46 @@ async def get_curriculum_content_quality(
     """Return aggregate-only curriculum quality metrics for operators."""
     return curriculum_analytics_service.content_quality_summary(
         content_type=content_type,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        limit=limit,
+    )
+
+
+@router.get("/curriculum/analytics/warehouse-readiness", response_model=CurriculumWarehouseReadinessResponse)
+async def get_curriculum_warehouse_readiness(
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return local warehouse analytics readiness without requiring live BI infrastructure."""
+    return curriculum_analytics_service.warehouse_readiness()
+
+
+@router.get("/curriculum/analytics/warehouse-export", response_model=CurriculumWarehouseExportResponse)
+async def get_curriculum_warehouse_export(
+    content_type: str | None = Query(default=None, alias="contentType"),
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    topic_id: str | None = Query(default=None, alias="topicId"),
+    limit: int = Query(default=100, ge=1, le=250),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return bounded aggregate rows shaped for future warehouse ingestion."""
+    return curriculum_analytics_service.warehouse_export(
+        content_type=content_type,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        limit=limit,
+    )
+
+
+@router.get("/curriculum/analytics/dashboard", response_model=CurriculumAnalyticsDashboardResponse)
+async def get_curriculum_analytics_dashboard(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    topic_id: str | None = Query(default=None, alias="topicId"),
+    limit: int = Query(default=100, ge=1, le=250),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return aggregate operator dashboard signals for curriculum and sequencing health."""
+    return curriculum_analytics_service.operator_dashboard(
         subject_id=subject_id,
         topic_id=topic_id,
         limit=limit,

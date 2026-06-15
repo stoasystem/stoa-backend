@@ -72,7 +72,7 @@ def list_metrics(
     content_type: str | None = None,
     subject_id: str | None = None,
     topic_id: str | None = None,
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> list[dict[str, Any]]:
     table = get_table()
     filter_expr = Attr("entity_type").eq(METRIC_ENTITY)
@@ -82,6 +82,18 @@ def list_metrics(
         filter_expr = filter_expr & Attr("subject_id").eq(subject_id)
     if topic_id:
         filter_expr = filter_expr & Attr("topic_id").eq(topic_id)
-    resp = table.scan(FilterExpression=filter_expr, Limit=limit)
-    return resp.get("Items", [])
-
+    scan_kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
+    if limit:
+        scan_kwargs["Limit"] = limit
+    items: list[dict[str, Any]] = []
+    while True:
+        resp = table.scan(**scan_kwargs)
+        items.extend(resp.get("Items", []))
+        if limit and len(items) >= limit:
+            items = items[:limit]
+            break
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+    return items

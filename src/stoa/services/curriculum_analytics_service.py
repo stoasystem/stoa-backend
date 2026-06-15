@@ -128,6 +128,87 @@ def content_quality_summary(
     }
 
 
+def warehouse_readiness() -> dict[str, Any]:
+    rows = curriculum_analytics_repo.list_metrics(limit=1)
+    has_metrics = bool(rows)
+    return {
+        "state": "api-ready" if has_metrics else "empty",
+        "exportAllowed": True,
+        "liveWarehouseConfigured": False,
+        "schemaVersion": "stoa.curriculum_analytics.v1",
+        "sources": _warehouse_sources(),
+        "sourceSchemas": _warehouse_source_schemas(),
+        "lastMetricAt": rows[0].get("updated_at") if has_metrics else None,
+        "blockers": ["live_warehouse_not_configured"],
+        "warnings": [] if has_metrics else ["no_aggregate_metrics_recorded"],
+        "privacy": _analytics_privacy_contract(),
+    }
+
+
+def warehouse_export(
+    *,
+    content_type: str | None = None,
+    subject_id: str | None = None,
+    topic_id: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    rows = curriculum_analytics_repo.list_metrics(
+        content_type=content_type,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        limit=limit,
+    )
+    items = [_warehouse_export_row(row) for row in rows[:limit]]
+    return {
+        "schemaVersion": "stoa.curriculum_analytics.v1",
+        "sourceSchemas": _warehouse_source_schemas(),
+        "items": items,
+        "count": len(items),
+        "filters": {
+            "contentType": content_type,
+            "subjectId": subject_id,
+            "topicId": topic_id,
+            "limit": limit,
+        },
+        "window": {
+            "type": "latest_aggregate_metrics",
+            "aggregation": "lifetime",
+            "liveWarehouseRequired": False,
+            "sampled": True,
+        },
+        "privacy": _analytics_privacy_contract(),
+    }
+
+
+def operator_dashboard(
+    *,
+    subject_id: str | None = None,
+    topic_id: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    rows = curriculum_analytics_repo.list_metrics(subject_id=subject_id, topic_id=topic_id, limit=limit)
+    metrics = [_metric_response(row) for row in rows]
+    metrics.sort(key=lambda item: item["priorityScore"], reverse=True)
+    summary = _dashboard_summary(metrics)
+    return {
+        "generatedAt": datetime.now(UTC).isoformat(),
+        "filters": {"subjectId": subject_id, "topicId": topic_id, "limit": limit},
+        "sampleSize": len(metrics),
+        "sampled": True,
+        "summary": summary,
+        "sequencingCoverage": {
+            "assignmentStarts": summary["assignmentStarts"],
+            "assignmentCompletions": summary["assignmentCompletions"],
+            "assignmentSkips": summary["assignmentSkips"],
+            "assignmentArchives": summary["assignmentArchives"],
+        },
+        "qualityHotspots": metrics[:5],
+        "interventions": _dashboard_interventions(metrics),
+        "emptyState": None if metrics else "No aggregate learning analytics have been recorded yet.",
+        "privacy": _analytics_privacy_contract(),
+    }
+
+
 def _safe_record(
     *,
     signal_type: str,
@@ -165,9 +246,9 @@ def _metric_response(row: dict[str, Any]) -> dict[str, Any]:
     skipped = int(row.get("signal_assignment_skipped_count") or 0)
     started = int(row.get("signal_assignment_started_count") or 0)
     archived = int(row.get("signal_assignment_archived_count") or 0)
-    completed = int(row.get("signal_lesson_completed_count") or 0) + int(
-        row.get("signal_assignment_completed_count") or 0
-    )
+    lesson_completed = int(row.get("signal_lesson_completed_count") or 0)
+    assignment_completed = int(row.get("signal_assignment_completed_count") or 0)
+    completed = lesson_completed + assignment_completed
     publish_events = int(row.get("signal_publish_count") or 0)
     archive_events = int(row.get("signal_archive_count") or 0)
     priority = wrong * 3 + skipped * 2 + publish_events + archive_events - completed
@@ -182,11 +263,126 @@ def _metric_response(row: dict[str, Any]) -> dict[str, Any]:
         "assignmentStarts": started,
         "assignmentSkips": skipped,
         "assignmentArchives": archived,
+        "assignmentCompletions": assignment_completed,
+        "lessonCompletions": lesson_completed,
         "completions": completed,
         "publishEvents": publish_events,
         "archiveEvents": archive_events,
         "priorityScore": priority,
         "updatedAt": row.get("updated_at"),
+    }
+
+
+def _warehouse_export_row(row: dict[str, Any]) -> dict[str, Any]:
+    metric = _metric_response(row)
+    return {
+        "metricId": f"{metric['contentType']}:{metric['publicId']}:{metric['versionId']}",
+        "schemaVersion": "stoa.curriculum_analytics.v1",
+        "publicId": metric["publicId"],
+        "contentType": metric["contentType"],
+        "versionId": metric["versionId"],
+        "subjectId": metric["subjectId"],
+        "topicId": metric["topicId"],
+        "metrics": {
+            "totalSignals": metric["totalSignals"],
+            "wrongAnswers": metric["wrongAnswers"],
+            "assignmentStarts": metric["assignmentStarts"],
+            "assignmentSkips": metric["assignmentSkips"],
+            "assignmentArchives": metric["assignmentArchives"],
+            "assignmentCompletions": metric["assignmentCompletions"],
+            "lessonCompletions": metric["lessonCompletions"],
+            "completions": metric["completions"],
+            "publishEvents": metric["publishEvents"],
+            "archiveEvents": metric["archiveEvents"],
+            "priorityScore": metric["priorityScore"],
+        },
+        "aggregationWindow": "lifetime",
+        "updatedAt": metric["updatedAt"],
+    }
+
+
+def _dashboard_summary(metrics: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "contentItems": len(metrics),
+        "totalSignals": sum(item["totalSignals"] for item in metrics),
+        "wrongAnswers": sum(item["wrongAnswers"] for item in metrics),
+        "assignmentStarts": sum(item["assignmentStarts"] for item in metrics),
+        "assignmentSkips": sum(item["assignmentSkips"] for item in metrics),
+        "assignmentArchives": sum(item["assignmentArchives"] for item in metrics),
+        "assignmentCompletions": sum(item["assignmentCompletions"] for item in metrics),
+        "lessonCompletions": sum(item["lessonCompletions"] for item in metrics),
+        "completions": sum(item["completions"] for item in metrics),
+        "qualityHotspots": sum(1 for item in metrics if item["priorityScore"] > 0),
+    }
+
+
+def _dashboard_interventions(metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    interventions = []
+    for item in metrics:
+        if item["priorityScore"] <= 0:
+            continue
+        reasons = []
+        if item["wrongAnswers"]:
+            reasons.append("wrong_answers")
+        if item["assignmentSkips"]:
+            reasons.append("assignment_skips")
+        if item["assignmentArchives"]:
+            reasons.append("assignment_archives")
+        interventions.append(
+            {
+                "publicId": item["publicId"],
+                "contentType": item["contentType"],
+                "subjectId": item["subjectId"],
+                "topicId": item["topicId"],
+                "priorityScore": item["priorityScore"],
+                "reasons": reasons,
+            }
+        )
+    return interventions[:5]
+
+
+def _warehouse_sources() -> list[dict[str, Any]]:
+    return [
+        {"name": "learning_memory", "state": "schema-ready"},
+        {"name": "assignment_outcomes", "state": "schema-ready"},
+        {"name": "curriculum_progress", "state": "schema-ready"},
+        {"name": "content_quality_metrics", "state": "export-ready"},
+        {"name": "operator_interventions", "state": "schema-ready"},
+        {"name": "warehouse", "state": "not_configured"},
+    ]
+
+
+def _warehouse_source_schemas() -> dict[str, dict[str, Any]]:
+    return {
+        "learning_memory": {
+            "rowState": "schema-only",
+            "fields": ["studentHash", "subjectId", "topicId", "freshnessStatus", "lastEvidenceAt"],
+        },
+        "assignment_outcomes": {
+            "rowState": "schema-only",
+            "fields": ["assignmentHash", "sourceType", "subjectId", "topicIds", "event", "correct", "attemptCount"],
+        },
+        "curriculum_progress": {
+            "rowState": "schema-only",
+            "fields": ["studentHash", "subjectId", "topicId", "lessonId", "status", "completedAt"],
+        },
+        "content_quality_metrics": {
+            "rowState": "exported",
+            "fields": ["metricId", "publicId", "contentType", "versionId", "subjectId", "topicId", "metrics"],
+        },
+        "operator_interventions": {
+            "rowState": "derived",
+            "fields": ["publicId", "contentType", "subjectId", "topicId", "priorityScore", "reasons"],
+        },
+    }
+
+
+def _analytics_privacy_contract() -> dict[str, bool]:
+    return {
+        "aggregateOnly": True,
+        "rawStudentAnswers": False,
+        "answerKeys": False,
+        "studentIdentifiers": False,
     }
 
 
