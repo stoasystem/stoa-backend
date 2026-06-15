@@ -86,7 +86,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.2 Adaptive Sequencing And Warehouse Analytics on 2026-06-15 (warehouse-ready backend/API release gate)
-**Active milestone:** None; ready for next milestone selection
+**Active milestone:** v5.3 Controlled Autonomous Tutoring And Assignment Automation, planning started 2026-06-15
 
 Delivered:
 
@@ -323,6 +323,26 @@ Phase evidence: `.planning/milestones/v5.2-phases/`
 - Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate.
 
 **Outcome:** v5.2 closed as `warehouse-ready` for backend/API readiness. Live warehouse/BI deployment, frontend dashboard integration, fully autonomous tutoring, automatic assignment delivery, and final payment/support provider activation remain deferred.
+
+## Active Milestone: v5.3 Controlled Autonomous Tutoring And Assignment Automation
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Current phase: `.planning/phases/186-controlled-autonomous-tutoring-and-assignment-automation-contract/186-01-PLAN.md`
+
+**Status:** Active planning 2026-06-15.
+
+**Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation from reviewed sources, with tutor/admin policy boundaries and family-visible explanations.
+
+**Planned phases:**
+
+- Phase 186: Controlled Autonomous Tutoring And Assignment Automation Contract.
+- Phase 187: Automation Policy And Candidate Batch Planner.
+- Phase 188: Controlled Assignment Creation And Delivery Worker.
+- Phase 189: Tutor Admin Review UX Contracts And Family Visibility.
+- Phase 190: v5.3 Autonomous Tutoring Assignment Automation Release Gate.
+
+**Scope bias:** Build product capability first during internal development. Keep verification focused on automation behavior, duplicate prevention, assignment lifecycle correctness, role-visible explanations, and operator evidence.
 
 ## Requirements
 
@@ -730,6 +750,7 @@ Known current resources:
 | Start v5.0 native mobile and localization governance | v4.1 delivered backend mobile/locale foundations, v4.3 delivered selected frontend mobile/localization, and v4.9 delivered notification/native handoff; the next gap is native/mobile rollout readiness and full localization governance | Complete - contract-ready release gate passed |
 | Start v5.1 rich curriculum editor and migration | v3.8/v4.6 delivered curriculum catalog, authoring lifecycle, and analytics foundations; final external activation remains blocked, so the next buildable product gap is rich editor UI, production content migration, assignment automation readiness, and adaptive sequencing readiness | Complete - readiness release gate passed |
 | Start v5.2 adaptive sequencing and warehouse analytics | v5.1 completed curriculum product readiness while external activation remained blocked; the next buildable product gap was deeper recommendation sequencing, assignment outcome feedback, warehouse-ready analytics, and operator dashboards | ✓ Good |
+| Start v5.3 controlled autonomous tutoring and assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remains blocked, so the next buildable product gap is controlled assignment automation from reviewed sources | Active planning |
 
 ## Evolution
 
@@ -749,4 +770,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics*
+*Last updated: 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation*

@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics
+**Updated:** 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -51,6 +51,8 @@ v5.0 completed the native mobile and full localization governance scope as a con
 v5.1 completed the rich curriculum editor and production content migration readiness scope: editor UI/API handoff, UI-SPEC, production content migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, and adaptive sequencing readiness. The milestone is readiness-complete; actual frontend editor implementation, production source import, autonomous assignment enablement, and warehouse-backed sequencing remain future scope.
 
 v5.2 completed adaptive sequencing and warehouse analytics backend/API readiness. It built on v4.0 memory/assignment foundations, v4.6 curriculum analytics, and v5.1 sequencing readiness to implement multi-signal recommendations, assignment outcome feedback, warehouse-ready aggregate schemas, and operator dashboard contracts. Final live payment/support activation and live warehouse/BI deployment remain externally blocked/deferred.
+
+v5.3 is now active planning for controlled autonomous tutoring and assignment automation. It should build on v5.2 sequencing and assignment outcome signals to add autonomy levels, policy-bounded candidate batching, idempotent assignment creation/delivery from reviewed sources, tutor/admin review controls, and family-visible assignment explanations.
 
 ## Completed Or Largely Complete
 
@@ -174,15 +176,15 @@ v5.2 completed adaptive sequencing and warehouse analytics backend/API readiness
 
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
-- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.1 completed readiness/handoff scope; implementation remains future work.
-- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; controlled autonomous delivery remains future scope.
+- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 selected for controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
+- Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 now targets controlled autonomous delivery.
 - Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; full native app implementation, app-store release, and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Plan autonomous tutoring and assignment automation after v5.2 if recommendation/outcome signals are stable enough for controlled delivery.
+1. Execute v5.3 controlled autonomous tutoring and assignment automation: automation contract, policy planner, approved-batch assignment creation/delivery, review UX contracts, and family explanations.
 2. Consider frontend operator dashboard integration or live warehouse/BI deployment if analytics ownership and infrastructure prerequisites become available.
 3. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
 4. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.

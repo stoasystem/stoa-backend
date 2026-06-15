@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics
+**Updated:** 2026-06-15 after selecting v5.3 controlled autonomous tutoring and assignment automation
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -32,7 +32,7 @@
 
 2. **Controlled Autonomous Tutoring And Assignment Automation**.
    Build on v5.2 sequencing signals to support tutor/admin-controlled automatic assignment creation/delivery from reviewed recommendations.
-   Status: candidate v5.3 if product signals are accepted as stable enough.
+   Status: v5.3 selected and active planning started 2026-06-15.
 
 3. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, full autonomous tutoring decisions, automatic assignment delivery, live warehouse/BI deployment, and deeper operations reporting.
@@ -43,3 +43,5 @@
 v5.1 is complete as a curriculum product readiness milestone because final payment/support/provider activation remains blocked on external prerequisites. The completed scope defines rich curriculum editor readiness, production content migration manifests and dry-run/apply validation, rollback evidence, reviewed assignment automation readiness, and adaptive sequencing readiness.
 
 v5.2 is complete as a backend/API readiness milestone. It turned the v4.0 adaptive learning memory foundation, v4.6 curriculum analytics foundation, and v5.1 readiness contracts into deeper adaptive sequencing recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. Final live warehouse/BI deployment remains deferred.
+
+v5.3 is now the active milestone. It should convert v5.2 recommendations into controlled assignment automation from accepted AI drafts, published curriculum exercises, and reviewed recommendation candidates. The milestone should prioritize autonomy levels, policy-bounded candidate batches, idempotent assignment creation/delivery, tutor/admin review controls, and family-visible explanations while keeping unreviewed autonomous tutoring out of scope.

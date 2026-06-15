@@ -1,5 +1,38 @@
 # Milestones
 
+## Active
+
+### v5.3 Controlled Autonomous Tutoring And Assignment Automation
+
+**Status:** Active planning 2026-06-15
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Phase evidence:** `.planning/phases/186-controlled-autonomous-tutoring-and-assignment-automation-contract/`
+**Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation with tutor/admin policy boundaries, reviewed sources, idempotent creation/delivery, and family-visible explanations.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Planned phases:
+
+- Phase 186: Controlled Autonomous Tutoring And Assignment Automation Contract.
+- Phase 187: Automation Policy And Candidate Batch Planner.
+- Phase 188: Controlled Assignment Creation And Delivery Worker.
+- Phase 189: Tutor Admin Review UX Contracts And Family Visibility.
+- Phase 190: v5.3 Autonomous Tutoring Assignment Automation Release Gate.
+
+Feature priorities:
+
+- Define autonomy levels and reviewed-source eligibility before automation expands.
+- Build policy-bounded candidate batches from v5.2 recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
+- Create assignments idempotently from approved batches with per-item result evidence.
+- Expose tutor/admin review controls and student/parent explanations without answer keys or internal ranking internals.
+- Keep fully unreviewed autonomous tutoring, live notification delivery, native apps, and external provider activation out of this milestone.
+
+Known out of scope for this milestone: unreviewed AI-generated assignment publication, final live payment/support activation, live push/native delivery, live warehouse/BI deployment, and native app implementation.
+
+---
+
 ## v5.2 Adaptive Sequencing And Warehouse Analytics (Shipped: 2026-06-15)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks

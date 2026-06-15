@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.2
-milestone_name: Adaptive Sequencing And Warehouse Analytics
-status: Awaiting next milestone
-last_updated: "2026-06-15T09:25:00.699Z"
-last_activity: 2026-06-15 — Milestone v5.2 completed and archived
+milestone: v5.3
+milestone_name: Controlled Autonomous Tutoring And Assignment Automation
+status: planning
+last_updated: "2026-06-15T12:00:00+02:00"
+last_activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 product expansion from the stoa_docs remaining-feature queue.
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,37 +20,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** Awaiting next milestone selection.
+**Current focus:** v5.3 controlled autonomous tutoring and assignment automation.
 
 ## Current Position
 
-Phase: Milestone v5.2 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-15 — Milestone v5.2 completed and archived
+Phase: 186 - Controlled Autonomous Tutoring And Assignment Automation Contract
+Plan: 186-01
+Status: Planned
+Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 controlled automation from the `stoa_docs` remaining-feature queue.
 
 ## Accumulated Context
 
 ### Decisions
 
+- v3.7 completed reviewed AI teacher tool drafts and exercise draft lifecycle.
 - v4.0 completed adaptive learning memory and reviewed assignment foundations.
-- v4.6 completed curriculum analytics with bounded aggregate content-quality signals.
-- v5.1 completed curriculum product readiness with rich editor handoff, migration readiness, assignment automation readiness, and adaptive sequencing readiness.
-- Final live payment/support external activation remains blocked on external prerequisites; internal development should continue with deeper product expansion.
+- v5.1 completed assignment automation and adaptive sequencing readiness.
 - v5.2 completed adaptive sequencing recommendations, assignment outcome feedback, warehouse analytics export/readiness, and operator dashboards.
-- `stoa_docs` remaining feature queue now recommends v5.3 Autonomous Tutoring And Assignment Automation unless external activation prerequisites unblock first.
+- Final live payment/support activation remains blocked on external prerequisites; internal development should continue with learning product automation.
+- v5.3 should prioritize controlled automation, not fully unreviewed autonomous tutoring.
 
 ### Pending Todos
 
-- Start the next milestone when selected.
+- Execute Phase 186 controlled autonomous tutoring and assignment automation contract planning.
+- Implement automation policy and candidate batch planner in Phase 187.
+- Implement controlled assignment creation and delivery worker in Phase 188.
+- Define tutor/admin review UX contracts and family visibility in Phase 189.
+- Close v5.3 with release-gate evidence and next milestone selection in Phase 190.
 
 ### Blockers/Concerns
 
-- Live warehouse/BI deployment remains a future infrastructure decision.
-- Fully autonomous tutoring and unreviewed generated assignment should remain out of scope unless explicitly selected.
-- Recommendation explanations must be useful without exposing raw internal ranking internals.
-- Existing reviewed assignment and curriculum publish/rollback boundaries must remain intact.
+- Fully autonomous tutoring and unreviewed generated assignment remain out of scope unless explicitly selected later.
+- Automation must suppress duplicate, stale, completed, archived, rolled-back, unpublished, and low-confidence candidates.
+- Student/parent payloads must stay explanation-focused and must not expose answer keys or internal ranking internals.
+- Live notification/push delivery, native apps, and external provider activation remain separate future work.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 186 using `.planning/phases/186-controlled-autonomous-tutoring-and-assignment-automation-contract/186-01-PLAN.md`.
