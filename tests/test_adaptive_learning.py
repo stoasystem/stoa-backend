@@ -298,6 +298,146 @@ def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
     assert any(item.get("sourceId") == "challenge-2" for item in items)
 
 
+def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeypatch):
+    _, assignments = _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.curriculum_service,
+        "list_exercises",
+        lambda **kwargs: {
+            "items": [
+                {
+                    "id": "challenge-1",
+                    "prompt": "Solve a linear equation",
+                    "subjectId": "math",
+                    "topicId": "linear-equations",
+                    "rolloutState": "active",
+                }
+            ],
+            "count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-1",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed linear equation practice",
+                "created_by": "tutor-1",
+                "student_delivery_status": "not_delivered",
+            }
+        ],
+    )
+
+    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={
+            "policy": {
+                "policyId": "policy-1",
+                "sourceTypes": ["ai_draft"],
+                "maxAssignmentsPerStudent": 1,
+                "confidenceThreshold": "medium",
+                "deliveryMode": "recommended",
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview"
+    assert body["reviewRequired"] is True
+    assert body["autonomousDecision"] is False
+    assert body["summary"]["selectedCount"] == 1
+    assert body["selected"][0]["sourceType"] == "ai_draft"
+    assert body["selected"][0]["sourceId"] == "draft-1"
+    assert body["selected"][0]["proposedStatus"] == "recommended"
+    assert body["selected"][0]["reviewStatus"] == "reviewed_source"
+    assert body["summary"]["refusalCounts"]["source_type_not_allowed"] >= 1
+    assert all(item["refusalCode"] == "source_type_not_allowed" for item in body["refused"])
+    assert assignments == {}
+
+
+def test_assignment_automation_preview_refuses_paused_policy(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
+
+    response = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={
+            "policy": {
+                "policyId": "policy-paused",
+                "status": "paused",
+                "pausedReason": "Tutor paused automation during exams.",
+                "sourceTypes": ["memory_snapshot"],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected"] == []
+    assert body["summary"]["selectedCount"] == 0
+    assert body["summary"]["refusalCounts"]["policy_paused"] >= 1
+    assert body["refused"][0]["refusalReason"] == "Tutor paused automation during exams."
+
+
+def test_assignment_automation_preview_refuses_out_of_scope_student(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
+
+    response = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={
+            "policy": {
+                "policyId": "policy-student-2",
+                "studentIds": ["student-2"],
+                "sourceTypes": ["memory_snapshot"],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected"] == []
+    assert body["summary"]["refusalCounts"]["student_out_of_scope"] >= 1
+    assert all(item["refusalCode"] == "student_out_of_scope" for item in body["refused"])
+
+
+def test_assignment_automation_preview_rejects_unsupported_policy_values(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+
+    bad_source = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": {"sourceTypes": ["typo_source"]}},
+    )
+    bad_blank_source = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": {"sourceTypes": [""]}},
+    )
+    bad_delivery = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": {"deliveryMode": "delivered"}},
+    )
+
+    assert bad_source.status_code == 400
+    assert bad_source.json()["detail"] == "Unsupported automation source type: typo_source"
+    assert bad_blank_source.status_code == 400
+    assert bad_blank_source.json()["detail"] == "Blank policy values are not supported"
+    assert bad_delivery.status_code == 400
+    assert bad_delivery.json()["detail"] == "Unsupported value: delivered"
+
+
 def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(monkeypatch):
     _install_memory_repo(monkeypatch)
     attempts: list[dict] = []

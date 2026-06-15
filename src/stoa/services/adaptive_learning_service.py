@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -29,6 +31,10 @@ ASSIGNMENT_STATUSES = {"draft", "recommended", "assigned", "started", "completed
 CREATABLE_STATUSES = {"draft", "recommended", "assigned"}
 STUDENT_ACTIONS = {"start", "complete", "skip"}
 STALE_AFTER_DAYS = 14
+AUTOMATION_LEVELS = {"off", "suggest_only", "tutor_approved_batch", "auto_create_reviewed", "future_auto_deliver"}
+AUTOMATION_DELIVERY_MODES = {"draft", "recommended", "assigned"}
+AUTOMATION_SOURCE_TYPES = {"ai_draft", "curriculum_exercise", "memory_snapshot", "curriculum_topic"}
+CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
 
 
 def now_iso() -> str:
@@ -126,6 +132,57 @@ def create_assignment(
     }
     adaptive_learning_repo.put_assignment(item)
     return assignment_response(item, user=user)
+
+
+def preview_assignment_automation_batch(
+    *,
+    student_id: str,
+    policy: dict[str, Any],
+    user: dict[str, Any],
+    subject: str | None = None,
+) -> dict[str, Any]:
+    _require_teacher_or_admin(user)
+    _require_student_visible(student_id, user)
+    normalized_policy = _automation_policy(policy, student_id=student_id, user=user)
+    summary = get_memory_summary(student_id=student_id, user=user, subject=subject)
+    assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
+    assignment_state = _assignment_signal_state(assignments)
+    selected: list[dict[str, Any]] = []
+    refused: list[dict[str, Any]] = []
+
+    for recommendation in summary.get("recommendations", []):
+        refusal = _automation_refusal(recommendation, normalized_policy, assignment_state)
+        candidate = _automation_candidate(recommendation, normalized_policy)
+        if refusal:
+            refused.append({**candidate, **refusal})
+            continue
+        if len(selected) >= normalized_policy["maxAssignmentsPerStudent"]:
+            refused.append(
+                {
+                    **candidate,
+                    "refusalCode": "max_assignments_reached",
+                    "refusalReason": "Policy maximum selected assignments for this student was reached.",
+                }
+            )
+            continue
+        selected.append(candidate)
+
+    batch = {
+        "batchId": _automation_batch_id(student_id, normalized_policy, selected, refused),
+        "policyId": normalized_policy["policyId"],
+        "policy": normalized_policy,
+        "studentId": student_id,
+        "createdBy": _actor_id(user),
+        "createdAt": now_iso(),
+        "status": "preview",
+        "selected": selected,
+        "refused": refused,
+        "summary": _automation_batch_summary(selected, refused),
+        "reviewRequired": True,
+        "autonomousDecision": False,
+        "locale": locale_contract(user),
+    }
+    return batch
 
 
 def list_assignments(
@@ -333,6 +390,190 @@ def assignment_response(item: dict[str, Any], *, user: dict[str, Any]) -> dict[s
     if _can_manage_assignments(user):
         response["answerKey"] = item.get("answer_key") or []
     return response
+
+
+def _automation_policy(policy: dict[str, Any], *, student_id: str, user: dict[str, Any]) -> dict[str, Any]:
+    now = now_iso()
+    policy_id = str(_policy_value(policy, "policyId", "policy_id", default=f"policy-{student_id}"))
+    autonomy_level = _choice(str(_policy_value(policy, "autonomyLevel", "autonomy_level", default="suggest_only")), AUTOMATION_LEVELS)
+    status = _choice(str(_policy_value(policy, "status", default="active")), {"active", "paused", "off"})
+    if autonomy_level == "off":
+        status = "off"
+    source_types_provided = "sourceTypes" in policy or "source_types" in policy
+    requested_source_types = _string_list(_policy_value(policy, "sourceTypes", "source_types", default=[]), allow_blank=False)
+    unsupported_source_types = sorted(set(requested_source_types) - AUTOMATION_SOURCE_TYPES)
+    if unsupported_source_types:
+        raise HTTPException(status_code=400, detail=f"Unsupported automation source type: {unsupported_source_types[0]}")
+    if source_types_provided and not requested_source_types:
+        raise HTTPException(status_code=400, detail="At least one automation source type is required")
+    source_types = requested_source_types if source_types_provided else ["ai_draft", "curriculum_exercise"]
+    if not source_types:
+        source_types = ["ai_draft", "curriculum_exercise"]
+    confidence = str(_policy_value(policy, "confidenceThreshold", "confidence_threshold", default="medium"))
+    confidence = _choice(confidence, set(CONFIDENCE_RANK))
+    return {
+        "policyId": policy_id,
+        "targetStudentId": student_id,
+        "name": str(_policy_value(policy, "name", default="Controlled assignment automation")),
+        "status": status,
+        "autonomyLevel": autonomy_level,
+        "studentIds": _string_list(_policy_value(policy, "studentIds", "student_ids", default=[])) or [student_id],
+        "subjectIds": _string_list(_policy_value(policy, "subjectIds", "subject_ids", default=[])),
+        "topicIds": _string_list(_policy_value(policy, "topicIds", "topic_ids", default=[])),
+        "sourceTypes": sorted(set(source_types)),
+        "maxAssignmentsPerStudent": _positive_int(_policy_value(policy, "maxAssignmentsPerStudent", "max_assignments_per_student", default=3), 3),
+        "confidenceThreshold": confidence,
+        "freshnessDays": _positive_int(_policy_value(policy, "freshnessDays", "freshness_days", default=STALE_AFTER_DAYS), STALE_AFTER_DAYS),
+        "dueInDays": _positive_int(_policy_value(policy, "dueInDays", "due_in_days", default=7), 7),
+        "deliveryMode": _choice(str(_policy_value(policy, "deliveryMode", "delivery_mode", default="recommended")), AUTOMATION_DELIVERY_MODES),
+        "createdBy": str(_policy_value(policy, "createdBy", "created_by", default=_actor_id(user))),
+        "createdAt": str(_policy_value(policy, "createdAt", "created_at", default=now)),
+        "updatedAt": now,
+        "pausedReason": _clean_note(_policy_value(policy, "pausedReason", "paused_reason", default=None)),
+    }
+
+
+def _automation_refusal(
+    recommendation: dict[str, Any],
+    policy: dict[str, Any],
+    assignment_state: dict[str, Any],
+) -> dict[str, str] | None:
+    if policy["status"] == "off":
+        return {"refusalCode": "automation_off", "refusalReason": "Automation is disabled for this policy."}
+    if policy["status"] == "paused":
+        return {"refusalCode": "policy_paused", "refusalReason": policy.get("pausedReason") or "Policy is paused."}
+    if str(policy["targetStudentId"]) not in set(policy["studentIds"]):
+        return {"refusalCode": "student_out_of_scope", "refusalReason": "Candidate student is outside policy scope."}
+    if str(recommendation.get("sourceType") or "") not in set(policy["sourceTypes"]):
+        return {"refusalCode": "source_type_not_allowed", "refusalReason": "Candidate source type is outside policy scope."}
+    if policy["subjectIds"] and str(recommendation.get("subject") or "") not in set(policy["subjectIds"]):
+        return {"refusalCode": "subject_out_of_scope", "refusalReason": "Candidate subject is outside policy scope."}
+    if policy["topicIds"] and str(recommendation.get("topicId") or "") not in set(policy["topicIds"]):
+        return {"refusalCode": "topic_out_of_scope", "refusalReason": "Candidate topic is outside policy scope."}
+    confidence = str(recommendation.get("confidence") or "low")
+    if CONFIDENCE_RANK.get(confidence, 0) < CONFIDENCE_RANK[policy["confidenceThreshold"]]:
+        return {"refusalCode": "low_confidence", "refusalReason": "Candidate confidence is below policy threshold."}
+    if _automation_candidate_stale(recommendation, policy["freshnessDays"]):
+        return {"refusalCode": "stale_candidate", "refusalReason": "Candidate evidence is outside the policy freshness window."}
+    source_key = (str(recommendation.get("sourceType") or ""), str(recommendation.get("sourceId") or ""))
+    if source_key in assignment_state["suppressed_sources"] or str(recommendation.get("topicId") or "") in assignment_state["active_topics"]:
+        return {"refusalCode": "duplicate_or_active", "refusalReason": "Candidate duplicates active, completed, or archived assignment work."}
+    if recommendation.get("reviewRequired") is not True or recommendation.get("autonomousDecision") is not False:
+        return {"refusalCode": "review_boundary_missing", "refusalReason": "Candidate does not preserve review-required automation boundaries."}
+    return None
+
+
+def _automation_candidate_stale(recommendation: dict[str, Any], freshness_days: int) -> bool:
+    freshness = recommendation.get("freshness") if isinstance(recommendation.get("freshness"), dict) else {}
+    if freshness.get("status") == "stale":
+        return True
+    last_evidence_at = freshness.get("lastEvidenceAt")
+    parsed = _parse_time(str(last_evidence_at)) if last_evidence_at else None
+    if not parsed:
+        return False
+    return (datetime.now(timezone.utc) - parsed).days > freshness_days
+
+
+def _automation_candidate(recommendation: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    topic_id = str(recommendation.get("topicId") or "")
+    due_at = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=policy["dueInDays"])
+    return {
+        "candidateId": recommendation.get("candidateId"),
+        "type": recommendation.get("type"),
+        "sourceType": recommendation.get("sourceType"),
+        "sourceId": recommendation.get("sourceId"),
+        "title": recommendation.get("label"),
+        "subject": recommendation.get("subject"),
+        "topicId": topic_id,
+        "topicIds": [topic_id] if topic_id else [],
+        "confidence": recommendation.get("confidence"),
+        "freshness": recommendation.get("freshness") or {},
+        "rationale": recommendation.get("rationale"),
+        "expectedImpact": _automation_expected_impact(recommendation),
+        "reviewStatus": "reviewed_source" if recommendation.get("sourceType") in {"ai_draft", "curriculum_exercise"} else "recommendation_review_required",
+        "proposedStatus": policy["deliveryMode"],
+        "dueAt": due_at.isoformat(),
+        "sourceSignals": recommendation.get("sourceSignals") or {},
+        "reviewRequired": True,
+        "autonomousDecision": False,
+    }
+
+
+def _automation_expected_impact(recommendation: dict[str, Any]) -> str:
+    candidate_type = str(recommendation.get("type") or "")
+    if candidate_type == "reviewed_ai_draft":
+        return "Turn a tutor-reviewed AI practice draft into a controlled assignment candidate."
+    if candidate_type == "curriculum_exercise":
+        return "Use a published curriculum exercise to reinforce the recommended topic."
+    if candidate_type == "remediation_topic":
+        return "Flag a weak topic for tutor-reviewed remediation assignment planning."
+    return "Keep learning momentum with a reviewed next-work candidate."
+
+
+def _automation_batch_summary(selected: list[dict[str, Any]], refused: list[dict[str, Any]]) -> dict[str, Any]:
+    refused_counts = Counter(str(item.get("refusalCode") or "unknown") for item in refused)
+    topics = Counter(str(item.get("topicId") or "") for item in selected if item.get("topicId"))
+    return {
+        "selectedCount": len(selected),
+        "refusedCount": len(refused),
+        "topTopics": [topic for topic, _count in topics.most_common(5)],
+        "duplicateCount": refused_counts.get("duplicate_or_active", 0),
+        "lowConfidenceCount": refused_counts.get("low_confidence", 0),
+        "staleCount": refused_counts.get("stale_candidate", 0),
+        "reviewRequiredCount": sum(1 for item in selected if item.get("reviewRequired")),
+        "refusalCounts": dict(sorted(refused_counts.items())),
+    }
+
+
+def _automation_batch_id(
+    student_id: str,
+    policy: dict[str, Any],
+    selected: list[dict[str, Any]],
+    refused: list[dict[str, Any]],
+) -> str:
+    payload = {
+        "studentId": student_id,
+        "policyId": policy["policyId"],
+        "selected": [item.get("candidateId") for item in selected],
+        "refused": [[item.get("candidateId"), item.get("refusalCode")] for item in refused],
+    }
+    digest = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    return f"batch-{digest}"
+
+
+def _choice(value: str, allowed: set[str]) -> str:
+    if value not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported value: {value}")
+    return value
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(parsed, 1)
+
+
+def _policy_value(policy: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if key in policy:
+            return policy[key]
+    return default
+
+
+def _string_list(value: Any, *, allow_blank: bool = True) -> list[str]:
+    if isinstance(value, str):
+        if not value.strip() and not allow_blank:
+            raise HTTPException(status_code=400, detail="Blank policy values are not supported")
+        return [value] if value else []
+    if not value:
+        return []
+    if isinstance(value, list):
+        if not allow_blank and any(not str(item).strip() for item in value):
+            raise HTTPException(status_code=400, detail="Blank policy values are not supported")
+        return [str(item) for item in value if item]
+    return []
 
 
 def _assignment_attempt_count(item: dict[str, Any]) -> int:

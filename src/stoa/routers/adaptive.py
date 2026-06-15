@@ -29,6 +29,32 @@ class AssignmentTransitionRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class AssignmentAutomationPolicyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    policy_id: str | None = Field(default=None, alias="policyId", max_length=120)
+    name: str | None = Field(default=None, max_length=200)
+    status: str = "active"
+    autonomy_level: str = Field(default="suggest_only", alias="autonomyLevel")
+    student_ids: list[str] = Field(default_factory=list, alias="studentIds")
+    subject_ids: list[str] = Field(default_factory=list, alias="subjectIds")
+    topic_ids: list[str] = Field(default_factory=list, alias="topicIds")
+    source_types: list[str] = Field(default_factory=list, alias="sourceTypes")
+    max_assignments_per_student: int = Field(default=3, alias="maxAssignmentsPerStudent", ge=1, le=20)
+    confidence_threshold: str = Field(default="medium", alias="confidenceThreshold")
+    freshness_days: int = Field(default=14, alias="freshnessDays", ge=1, le=180)
+    due_in_days: int = Field(default=7, alias="dueInDays", ge=1, le=365)
+    delivery_mode: str = Field(default="recommended", alias="deliveryMode")
+    paused_reason: str | None = Field(default=None, alias="pausedReason", max_length=500)
+
+
+class AssignmentAutomationPreviewRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    policy: AssignmentAutomationPolicyRequest = Field(default_factory=AssignmentAutomationPolicyRequest)
+    subject: str | None = None
+
+
 @router.get("/students/me/memory")
 async def get_my_memory(
     subject: str | None = Query(default=None),
@@ -119,6 +145,22 @@ async def list_student_assignments(
         user=user,
         status=status,
         include_archived=include_archived,
+    )
+
+
+@router.post("/students/{student_id}/assignment-automation/batches/preview")
+async def preview_assignment_automation_batch(
+    student_id: str,
+    body: AssignmentAutomationPreviewRequest | None = None,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Preview policy-bounded assignment automation candidates without creating assignments."""
+    body = body or AssignmentAutomationPreviewRequest()
+    return adaptive_learning_service.preview_assignment_automation_batch(
+        student_id=student_id,
+        policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
+        subject=body.subject,
+        user=user,
     )
 
 
