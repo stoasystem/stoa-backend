@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after selecting v5.4 frontend learning operations and automation dashboards
+**Updated:** 2026-06-15 after completing v5.4 frontend learning operations and automation dashboards
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -25,17 +25,14 @@
 - Rich curriculum editor and production content migration readiness with UI/API handoff, migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, adaptive sequencing readiness, and rollout state readiness-complete.
 - Adaptive sequencing and warehouse analytics backend/API readiness with multi-signal recommendations, assignment outcome feedback, aggregate warehouse schemas, and operator dashboard contracts.
 - Controlled assignment automation backend/API readiness with policy-bounded candidate preview, approved-batch execution, deterministic source idempotency, result evidence, and role-safe automation metadata.
+- Frontend learning operations dashboards with no-demo-fallback API integration, tutor/admin automation review console, operator analytics dashboard, and student/parent assignment explanations.
 
 ## Remaining Feature Build Queue
 
 1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-2. **Frontend Learning Operations And Automation Dashboards**.
-   Build product UI for v5.2/v5.3 learning operations: tutor/admin automation review, operator dashboards, and student/parent assignment explanations.
-   Status: v5.4 selected and active planning started 2026-06-15.
-
-3. **Later Product Expansion**.
+2. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, automatic teacher/tutor dispatch for student teacher requests, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
    Status: remains future scope unless selected after v5.4.
 
@@ -47,4 +44,6 @@ v5.2 is complete as a backend/API readiness milestone. It turned the v4.0 adapti
 
 v5.3 is complete as an automation-ready backend/API milestone. It converted v5.2 recommendations into controlled assignment automation from accepted AI drafts, published curriculum exercises, and reviewed recommendation candidates. The completed scope includes autonomy levels, policy-bounded candidate batches, idempotent assignment creation/delivery, tutor/admin review contracts, and family-visible explanation metadata while keeping unreviewed autonomous tutoring out of scope.
 
-v5.4 is now the active milestone. Its purpose is to make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows. The implementation strategy is to integrate existing automation preview/execute, assignment/progress, and analytics dashboard APIs first, adding backend work only for missing response fields, no-demo-fallback states, or contract stabilization. v5.4 is not automatic assignment of human teachers/tutors to student help requests.
+v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows through a no-demo-fallback API client, automation review console, learning operations dashboard, and family-safe assignment explanations. v5.4 did not implement automatic assignment of human teachers/tutors to student help requests.
+
+Recommended next selection: choose **Final Live Payment Activation Operations** only if Stripe/TWINT/finance/webhook prerequisites are approved. Otherwise choose the later product expansion lane with the highest available owner readiness: frontend rich curriculum editor implementation, native app buildout, or live warehouse/BI deployment.

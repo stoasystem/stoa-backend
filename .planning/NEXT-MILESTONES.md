@@ -1,40 +1,24 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-15 after selecting v5.4
+**Updated:** 2026-06-15 after completing v5.4
 **Mode:** product functionality first
 
-## Latest Completed: v5.3 Controlled Assignment Automation
+## Latest Completed: v5.4 Frontend Learning Operations And Automation Dashboards
 
-**Status:** Completed local release gate 2026-06-15
-**Roadmap archive:** `.planning/milestones/v5.3-ROADMAP.md`
-**Requirements archive:** `.planning/milestones/v5.3-REQUIREMENTS.md`
-**Audit:** `.planning/milestones/v5.3-MILESTONE-AUDIT.md`
+**Status:** Completed local frontend release gate 2026-06-15
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Frontend commit:** `/Users/zhdeng/stoa-frontend` `3364a39 feat: add learning operations dashboards`
 
-Goal: convert v5.2 recommendations into controlled assignment automation from reviewed sources.
+Goal: make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows.
 
 Closed scope:
 
-- Added policy-bounded preview, approved-batch execution, deterministic source idempotency, per-item result evidence, and role-safe automation metadata.
-- Closed as `automation-ready`; frontend implementation, live notification delivery, native apps, live warehouse/BI, fully unreviewed autonomous tutoring, and external provider activation remain future scope.
-
-## Active v5.4 Frontend Learning Operations And Automation Dashboards
-
-**Status:** Active planning 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-
-Function purpose:
-
-- Make v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows.
-- Let operators preview and execute automated assignment batches, inspect analytics, and review intervention opportunities.
-- Let students/parents understand automated assignments without exposing answer keys or ranking internals.
-- This is not automatic teacher/tutor dispatch.
-
-Implementation strategy:
-
-- Integrate existing backend APIs first.
-- Focus on frontend contract, no-demo-fallback states, empty/error handling, and role-safe display.
-- Add backend work only for missing response fields or contract bugs discovered during integration.
+- Added no-demo-fallback frontend learning operations API client, TypeScript contracts, and React Query hooks.
+- Added tutor/admin automation review console for preview, refusal review, approved execution, results, and assignment history.
+- Added admin/organization learning operations dashboard for analytics, sequencing coverage, quality hotspots, interventions, warehouse readiness, and export summary.
+- Added student and parent assignment explanation surfaces without answer keys or internal ranking internals.
+- Closed as `frontend-ready`; production frontend deploy/live smoke, native app rollout, live warehouse/BI deployment, and provider activation remain future scope.
 
 ## Candidate v5.5 External Activation Or Native App Buildout
 
