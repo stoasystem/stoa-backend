@@ -14,7 +14,7 @@ Build product capability directly. Keep checks focused on automation policy beha
 
 ## Phases
 
-- [ ] **Phase 186: Controlled Assignment Automation Contract** - Define automation levels, source eligibility, review gates, duplicate rules, delivery states, role visibility, and rollout boundaries.
+- [x] **Phase 186: Controlled Assignment Automation Contract** - Define automation levels, source eligibility, review gates, duplicate rules, delivery states, role visibility, and rollout boundaries.
 - [ ] **Phase 187: Automation Policy And Candidate Batch Planner** - Add or define policy-driven candidate selection from v5.2 recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
 - [ ] **Phase 188: Controlled Assignment Creation And Delivery Worker** - Add or define idempotent assignment creation/delivery from approved batches with clear refusal and result evidence.
 - [ ] **Phase 189: Tutor Admin Review UX Contracts And Family Visibility** - Define tutor/admin batch review, override, pause, and parent/student explanations for automated assignment delivery.
@@ -35,11 +35,11 @@ Build product capability directly. Keep checks focused on automation policy beha
   4. Duplicate, stale, completed, archived, rolled-back, unpublished, and low-confidence candidates are refused or suppressed.
   5. Phase 187 through Phase 190 implementation targets are concrete.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 186-01: Define controlled assignment automation contract.
+- [x] 186-01: Define controlled assignment automation contract.
 
 ### Phase 187: Automation Policy And Candidate Batch Planner
 
@@ -117,7 +117,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 186 Controlled Assignment Automation Contract | v5.3 | 0/1 | Planned | - |
+| 186 Controlled Assignment Automation Contract | v5.3 | 1/1 | Complete | 2026-06-15 |
 | 187 Automation Policy And Candidate Batch Planner | v5.3 | 0/1 | Planned | - |
 | 188 Controlled Assignment Creation And Delivery Worker | v5.3 | 0/1 | Planned | - |
 | 189 Tutor Admin Review UX Contracts And Family Visibility | v5.3 | 0/1 | Planned | - |
@@ -127,7 +127,7 @@ Plans:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTOASSIGN-01 | Phase 186 | Planned |
+| AUTOASSIGN-01 | Phase 186 | Complete |
 | AUTOASSIGN-02 | Phase 187 | Planned |
 | AUTOASSIGN-03 | Phase 188 | Planned |
 | AUTOASSIGN-04 | Phase 189 | Planned |

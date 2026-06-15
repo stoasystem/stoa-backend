@@ -7,10 +7,10 @@ last_updated: "2026-06-15T12:00:00+02:00"
 last_activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 product expansion from the stoa_docs remaining-feature queue.
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: 186 - Controlled Assignment Automation Contract
-Plan: 186-01
-Status: Planned
-Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 controlled automation from the `stoa_docs` remaining-feature queue.
+Phase: 187 - Automation Policy And Candidate Batch Planner
+Plan: 187-01
+Status: Phase 186 complete; ready to implement policy and candidate batch planner
+Last activity: 2026-06-15 - Completed Phase 186 controlled assignment automation contract.
 
 ## Accumulated Context
 
@@ -42,7 +42,6 @@ Last activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 c
 
 ### Pending Todos
 
-- Execute Phase 186 controlled assignment automation contract planning.
 - Implement automation policy and candidate batch planner in Phase 187.
 - Implement controlled assignment creation and delivery worker in Phase 188.
 - Define tutor/admin review UX contracts and family visibility in Phase 189.

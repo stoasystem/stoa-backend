@@ -93,7 +93,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTOASSIGN-01 | Phase 186 | Planned |
+| AUTOASSIGN-01 | Phase 186 | Complete |
 | AUTOASSIGN-02 | Phase 187 | Planned |
 | AUTOASSIGN-03 | Phase 188 | Planned |
 | AUTOASSIGN-04 | Phase 189 | Planned |
