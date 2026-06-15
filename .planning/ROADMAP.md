@@ -111,7 +111,7 @@ Plans:
 
 Plans:
 
-- [ ] 190-01: Verify v5.3 autonomous tutoring assignment automation release gate.
+- [ ] 190-01: Verify v5.3 controlled assignment automation release gate.
 
 ## Progress
 
