@@ -29,9 +29,9 @@ Build product workflows directly. During internal development, prioritize end-to
 ## Phases
 
 - [x] **Phase 191: Frontend Learning Operations And Automation Dashboard Contract** - Define purpose, UI surfaces, API dependencies, role-safe data boundaries, and implementation handoff.
-- [ ] **Phase 192: Tutor Admin Automation Review Console** - Build or define preview/approve/execute/result UI for controlled assignment automation.
-- [ ] **Phase 193: Learning Operations Dashboard Integration** - Build or define dashboard UI for sequencing coverage, assignment outcomes, warehouse readiness, and interventions.
-- [ ] **Phase 194: Student Parent Assignment Explanation UX** - Build or define family-safe assignment explanations and progress views.
+- [x] **Phase 192: Tutor Admin Automation Review Console** - Build or define preview/approve/execute/result UI for controlled assignment automation.
+- [x] **Phase 193: Learning Operations Dashboard Integration** - Build or define dashboard UI for sequencing coverage, assignment outcomes, warehouse readiness, and interventions.
+- [x] **Phase 194: Student Parent Assignment Explanation UX** - Build or define family-safe assignment explanations and progress views.
 - [ ] **Phase 195: v5.4 Frontend Learning Operations Release Gate** - Verify UI/API contracts, evidence, docs, and next milestone recommendation.
 
 ## Phase Details
@@ -67,11 +67,11 @@ Plans:
   3. Duplicate, refused, low-confidence, stale, and paused-policy states are visible without exposing internal ranking internals.
   4. Focused checks cover preview, execute, partial results, empty states, and backend error states.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 192-01: Build or define tutor/admin automation review console.
+- [x] 192-01: Build or define tutor/admin automation review console.
 
 ### Phase 193: Learning Operations Dashboard Integration
 
@@ -85,11 +85,11 @@ Plans:
   3. Empty and no-live-warehouse states are explicit and useful during internal development.
   4. Focused checks cover dashboard rendering and no-live-warehouse behavior.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 193-01: Build or define learning operations dashboard integration.
+- [x] 193-01: Build or define learning operations dashboard integration.
 
 ### Phase 194: Student Parent Assignment Explanation UX
 
@@ -103,11 +103,11 @@ Plans:
   3. Answer keys and internal ranking internals remain hidden from student and parent surfaces.
   4. Focused checks cover role-safe payload rendering and no-assignment states.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 194-01: Build or define student/parent assignment explanation UX.
+- [x] 194-01: Build or define student/parent assignment explanation UX.
 
 ### Phase 195: v5.4 Frontend Learning Operations Release Gate
 
@@ -133,9 +133,9 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 191 Frontend Learning Operations And Automation Dashboard Contract | v5.4 | 1/1 | Complete | 2026-06-15 |
-| 192 Tutor Admin Automation Review Console | v5.4 | 0/1 | Planned | - |
-| 193 Learning Operations Dashboard Integration | v5.4 | 0/1 | Planned | - |
-| 194 Student Parent Assignment Explanation UX | v5.4 | 0/1 | Planned | - |
+| 192 Tutor Admin Automation Review Console | v5.4 | 1/1 | Complete | 2026-06-15 |
+| 193 Learning Operations Dashboard Integration | v5.4 | 1/1 | Complete | 2026-06-15 |
+| 194 Student Parent Assignment Explanation UX | v5.4 | 1/1 | Complete | 2026-06-15 |
 | 195 v5.4 Frontend Learning Operations Release Gate | v5.4 | 0/1 | Planned | - |
 
 ## Traceability
@@ -143,9 +143,9 @@ Plans:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FRONTOPS-01 | Phase 191 | Complete |
-| FRONTOPS-02 | Phase 192 | Planned |
-| FRONTOPS-03 | Phase 193 | Planned |
-| FRONTOPS-04 | Phase 194 | Planned |
+| FRONTOPS-02 | Phase 192 | Complete |
+| FRONTOPS-03 | Phase 193 | Complete |
+| FRONTOPS-04 | Phase 194 | Complete |
 | VERIFY-37 | Phase 195 | Planned |
 
 ---

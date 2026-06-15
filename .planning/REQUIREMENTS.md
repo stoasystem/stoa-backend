@@ -100,7 +100,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FRONTOPS-01 | Phase 191 | Complete |
-| FRONTOPS-02 | Phase 192 | Planned |
-| FRONTOPS-03 | Phase 193 | Planned |
-| FRONTOPS-04 | Phase 194 | Planned |
+| FRONTOPS-02 | Phase 192 | Complete |
+| FRONTOPS-03 | Phase 193 | Complete |
+| FRONTOPS-04 | Phase 194 | Complete |
 | VERIFY-37 | Phase 195 | Planned |
