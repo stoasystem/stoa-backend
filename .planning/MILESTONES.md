@@ -7,9 +7,10 @@ No active milestone. v5.3 completed local release gate on 2026-06-15 and is read
 ## v5.3 Controlled Assignment Automation (Completed local release gate: 2026-06-15)
 
 **Status:** Completed local release gate 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Phase evidence:** `.planning/phases/186-controlled-assignment-automation-contract/`
+**Roadmap:** `.planning/milestones/v5.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.3-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.3-MILESTONE-AUDIT.md`
+**Phase evidence:** `.planning/milestones/v5.3-phases/`
 **Goal:** Convert v5.2 adaptive sequencing recommendations into controlled assignment automation with tutor/admin policy boundaries, reviewed sources, idempotent creation/delivery, and family-visible explanations.
 **Phases:** 5
 **Plans:** 5/5 complete

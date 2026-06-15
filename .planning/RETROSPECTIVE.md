@@ -137,6 +137,51 @@
 
 ---
 
+## Milestone: v5.3 — Controlled Assignment Automation
+
+**Shipped:** 2026-06-15
+**Phases:** 5 | **Plans:** 5 | **Sessions:** 1
+
+### What Was Built
+
+- Controlled assignment automation contract with reviewed-source boundaries, autonomy levels, refusal rules, and rollout states.
+- Policy-bounded candidate preview from adaptive recommendations, accepted AI drafts, curriculum exercises, and assignment outcomes.
+- Approved-batch assignment execution with explicit approval, current-preview binding, deterministic source IDs, conditional insert, and per-item result evidence.
+- Role-safe automation metadata in assignment responses and AI draft visibility enforcement before materialization.
+- Tutor/admin review UX and family visibility handoff, plus release gate evidence recording rollout state as `automation-ready`.
+
+### What Worked
+
+- Code review caught major assignment idempotency, forged-candidate, and visibility risks before Phase 188 was committed.
+- The milestone audit caught a cross-phase subject-scoped preview/execute gap that focused unit tests had missed.
+- Keeping live provider, frontend, native, and warehouse work out of scope let the backend automation path become concrete without broadening the release gate.
+
+### What Was Inefficient
+
+- The execute route initially diverged from the preview route by omitting `subject`, showing that route-pair contracts need paired request tests.
+- Idempotency required several iterations: pre-read dedupe, deterministic automation keys, deterministic source IDs, and finally conditional insert.
+- Archive cleanup still required manual consistency work across roadmap snapshots, live requirements, milestone indexes, and phase directory moves.
+
+### Patterns Established
+
+- Preview-bound execution should recompute the same scoped preview and reject stale or forged candidates.
+- Automation-created assignment rows need source-based uniqueness plus conditional writes to avoid duplicate rows and data loss.
+- Family visibility tests should cover automation-created assignments, not only legacy assignment privacy.
+
+### Key Lessons
+
+1. Any preview/execute pair must carry identical scoping fields or the server-side replay binding will fail real frontend flows.
+2. Deterministic IDs are not enough for idempotency; writes must be conditional to avoid overwriting existing progress.
+3. Integration audit is most valuable after apparently passing tests, because it checks the documented E2E flow rather than only the coded happy path.
+
+### Cost Observations
+
+- Model mix: not recorded.
+- Sessions: 1 autonomous execution and closeout session.
+- Notable: Most cost was spent in review/fix loops around idempotency and cross-phase route binding, not broad test runtime.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -146,6 +191,7 @@
 | v5.0 | 1 | 5 | Introduced explicit mobile/localization contract-ready release classification across backend, frontend, native, and localization ownership. |
 | v5.1 | 1 | 5 | Extended rollout-state discipline to curriculum readiness: editor-ready, migration-ready, assignment-ready, and deferred sequencing. |
 | v5.2 | 1 | 5 | Promoted readiness planning into backend/API implementation while preserving review gates and explicit warehouse-ready boundaries. |
+| v5.3 | 1 | 5 | Closed the loop from recommendations to controlled assignment automation with preview-bound execution and source-idempotent assignment creation. |
 
 ### Cumulative Quality
 
@@ -154,6 +200,7 @@
 | v5.0 | `git diff --check`; artifact traceability; English/German key parity evidence | Contract coverage for 5/5 requirements | 0 |
 | v5.1 | `git diff --check`; artifact traceability; integration audit | Readiness coverage for 5/5 requirements | 0 |
 | v5.2 | 20 focused backend tests; targeted Ruff; integration audit | Backend/API coverage for 5/5 requirements | 0 |
+| v5.3 | 15 focused adaptive backend tests; targeted Ruff; code review; integration audit | Automation-ready coverage for 5/5 requirements | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -161,3 +208,4 @@
 2. Archive helpers reduce mechanical work but do not replace a final consistency pass across ROADMAP, REQUIREMENTS, PROJECT, STATE, and MILESTONES.
 3. Readiness milestones need a prominent list of intentionally incomplete E2E product flows.
 4. Implementation milestones need idempotent transition side effects before analytics and progress projections can be trusted.
+5. Preview/execute route pairs need explicit tests for every shared scope field, especially when the execute path recomputes server-side state.

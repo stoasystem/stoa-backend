@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-15)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.3 controlled assignment automation.
+**Current focus:** Planning next milestone.
 
 ## Current Position
 
-Phase: v5.3 complete
-Plan: milestone audit and archive
-Status: v5.3 release gate complete as automation-ready
-Last activity: 2026-06-15 - Completed Phase 190 v5.3 controlled assignment automation release gate.
+Phase: next milestone selection
+Plan: none active
+Status: v5.3 archived as automation-ready
+Last activity: 2026-06-15 - Archived v5.3 controlled assignment automation after passed milestone audit.
 
 ## Accumulated Context
 
@@ -42,7 +42,7 @@ Last activity: 2026-06-15 - Completed Phase 190 v5.3 controlled assignment autom
 
 ### Pending Todos
 
-- Archive v5.3 after milestone audit and cleanup.
+- Start v5.4 when selected.
 
 ### Blockers/Concerns
 
@@ -53,4 +53,4 @@ Last activity: 2026-06-15 - Completed Phase 190 v5.3 controlled assignment autom
 
 ## Operator Next Steps
 
-- Run milestone audit, archive v5.3, then start v5.4 when selected.
+- Start v5.4 Frontend Learning Operations And Automation Dashboards when selected.

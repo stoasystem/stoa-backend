@@ -6,8 +6,9 @@
 ## Latest Completed: v5.3 Controlled Assignment Automation
 
 **Status:** Completed local release gate 2026-06-15
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap archive:** `.planning/milestones/v5.3-ROADMAP.md`
+**Requirements archive:** `.planning/milestones/v5.3-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.3-MILESTONE-AUDIT.md`
 
 Goal: convert v5.2 recommendations into controlled assignment automation from reviewed sources.
 
