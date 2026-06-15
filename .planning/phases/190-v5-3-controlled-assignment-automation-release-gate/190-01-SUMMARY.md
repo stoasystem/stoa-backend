@@ -10,7 +10,7 @@
 
 ## Verification
 
-- `.venv/bin/pytest tests/test_adaptive_learning.py` -> 14 passed.
+- `.venv/bin/pytest tests/test_adaptive_learning.py` -> 15 passed.
 - `.venv/bin/ruff check src/stoa/services/adaptive_learning_service.py src/stoa/routers/adaptive.py src/stoa/db/repositories/adaptive_learning_repo.py tests/test_adaptive_learning.py` -> passed.
 - Planning traceability inspection -> passed.
 
