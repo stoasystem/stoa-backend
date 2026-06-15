@@ -111,4 +111,4 @@ Acceptance criteria:
 | TEACHDISP-02 | Phase 197 | Complete |
 | TEACHDISP-03 | Phase 198 | Complete |
 | TEACHDISP-04 | Phase 199 | Complete |
-| VERIFY-38 | Phase 200 | Planned |
+| VERIFY-38 | Phase 200 | Complete |

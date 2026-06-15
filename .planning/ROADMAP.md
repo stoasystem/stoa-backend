@@ -31,7 +31,7 @@ Start from existing backend primitives and add dispatch behavior around them:
 - [x] **Phase 197: Dispatch Planner And Candidate Ranking** - Add or define non-mutating candidate ranking for escalated questions.
 - [x] **Phase 198: Automatic Dispatch Claim And Reassignment Worker** - Add or define idempotent dispatch claim, timeout, reassignment, and manual takeover compatibility.
 - [x] **Phase 199: Teacher Queue And Operator Dispatch Visibility** - Add or define teacher queue/operator dashboard visibility for assigned work, load, and SLA risk.
-- [ ] **Phase 200: v5.5 Teacher Dispatch Release Gate** - Verify dispatch behavior, docs, evidence, and next milestone recommendation.
+- [x] **Phase 200: v5.5 Teacher Dispatch Release Gate** - Verify dispatch behavior, docs, evidence, and next milestone recommendation.
 
 ## Phase Details
 
@@ -123,11 +123,11 @@ Plans:
   4. Final audit records rollout state: contract-ready, planner-ready, dispatch-ready, queue-ready, blocked, or deferred.
   5. Next milestone recommendation is updated from the remaining feature queue.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 200-01: Verify v5.5 teacher dispatch release gate.
+- [x] 200-01: Verify v5.5 teacher dispatch release gate.
 
 ## Progress
 
@@ -137,7 +137,7 @@ Plans:
 | 197 Dispatch Planner And Candidate Ranking | v5.5 | 1/1 | Complete | 2026-06-15 |
 | 198 Automatic Dispatch Claim And Reassignment Worker | v5.5 | 1/1 | Complete | 2026-06-15 |
 | 199 Teacher Queue And Operator Dispatch Visibility | v5.5 | 1/1 | Complete | 2026-06-15 |
-| 200 v5.5 Teacher Dispatch Release Gate | v5.5 | 0/1 | Planned | - |
+| 200 v5.5 Teacher Dispatch Release Gate | v5.5 | 1/1 | Complete | 2026-06-15 |
 
 ## Traceability
 
@@ -147,7 +147,7 @@ Plans:
 | TEACHDISP-02 | Phase 197 | Complete |
 | TEACHDISP-03 | Phase 198 | Complete |
 | TEACHDISP-04 | Phase 199 | Complete |
-| VERIFY-38 | Phase 200 | Planned |
+| VERIFY-38 | Phase 200 | Complete |
 
 ---
-*Last updated: 2026-06-15 after completing v5.5 Phases 196-199.*
+*Last updated: 2026-06-15 after completing v5.5 teacher dispatch release gate.*

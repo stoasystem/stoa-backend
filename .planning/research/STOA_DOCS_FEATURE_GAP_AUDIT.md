@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-06-15 after selecting v5.5 automatic teacher dispatch and SLA load balancing
+**Updated:** 2026-06-15 after completing v5.5 automatic teacher dispatch and SLA load balancing
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -56,7 +56,7 @@ v5.3 completed controlled assignment automation backend/API readiness. It built 
 
 v5.4 completed frontend learning operations and automation dashboards. It made v5.2/v5.3 backend capabilities usable by tutors/admins/students/parents through frontend automation review, learning operations dashboards, and family-safe assignment explanations. It did not implement automatic human teacher/tutor dispatch.
 
-v5.5 is now active planning for automatic teacher dispatch and SLA load balancing. It should build on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
+v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
 ## Completed Or Largely Complete
 
@@ -85,6 +85,7 @@ v5.5 is now active planning for automatic teacher dispatch and SLA load balancin
 - Support integration and operations handoff: destination contract, controlled `internal_queue` delivery, admin-only delivery queue/detail visibility, provider-failure lifecycle coverage, imported frontend evidence, and local backend release-gate evidence.
 - Curriculum authoring and analytics foundation: stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, audit evidence, bounded content-quality analytics, and aggregate privacy-preserving operator views.
 - Payment production activation automation: live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
+- Automatic teacher dispatch and SLA load balancing: dispatch planner, teacher/tutor candidate ranking, conditional dispatch claim metadata, timeout reassignment, teacher queue dispatch filters, and admin dispatch/SLA dashboard.
 
 ## v3.0 Closed MVP Gaps
 
@@ -182,18 +183,17 @@ v5.5 is now active planning for automatic teacher dispatch and SLA load balancin
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final rollout deferred pending external deployment/provider/client prerequisites.
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 completed controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 completed controlled autonomous delivery backend/API readiness; v5.4 now targets frontend usability.
-- Automatic teacher/tutor dispatch for student help requests. Status: v5.5 selected for dispatch planning, matching, claim/reassignment, queue visibility, and SLA/load dashboards.
+- Automatic teacher/tutor dispatch for student help requests. Status: v5.5 completed backend dispatch planning, matching, claim/reassignment, queue visibility, and SLA/load dashboards; production scheduling, live staffing calendar, frontend dashboard implementation, and native push remain future scope.
 - Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; full native app implementation, app-store release, and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Execute v5.5 automatic teacher dispatch and SLA load balancing: dispatch contract, teacher/tutor candidate ranking, conditional claim/reassignment worker, teacher queue filters, and operator dispatch/SLA dashboard.
-2. Consider frontend rich curriculum editor implementation, native app buildout, or live warehouse/BI deployment after dispatch unless external activation prerequisites unblock.
-3. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
-4. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
-5. Full frontend rich curriculum editor implementation, production content import, native app implementation, and app-store release when the relevant workspace/content/prerequisite owners are available.
+1. Consider frontend rich curriculum editor implementation, native app buildout, or live warehouse/BI deployment after dispatch unless external activation prerequisites unblock.
+2. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
+3. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
+4. Full frontend rich curriculum editor implementation, production content import, native app implementation, and app-store release when the relevant workspace/content/prerequisite owners are available.
 
 ## v3.0 Scope Recommendation
 

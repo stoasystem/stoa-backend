@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after selecting v5.5 automatic teacher dispatch and SLA load balancing
+**Updated:** 2026-06-15 after completing v5.5 automatic teacher dispatch and SLA load balancing
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -26,6 +26,7 @@
 - Adaptive sequencing and warehouse analytics backend/API readiness with multi-signal recommendations, assignment outcome feedback, aggregate warehouse schemas, and operator dashboard contracts.
 - Controlled assignment automation backend/API readiness with policy-bounded candidate preview, approved-batch execution, deterministic source idempotency, result evidence, and role-safe automation metadata.
 - Frontend learning operations dashboards with no-demo-fallback API integration, tutor/admin automation review console, operator analytics dashboard, and student/parent assignment explanations.
+- Automatic teacher dispatch and SLA load balancing with dispatch planning, teacher/tutor candidate ranking, conditional claim metadata, timeout reassignment, teacher queue filtering, and operator queue/SLA dashboard visibility.
 
 ## Remaining Feature Build Queue
 
@@ -34,7 +35,7 @@
 
 2. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: v5.5 selects automatic teacher/tutor dispatch for student teacher requests.
+   Status: v5.5 completed automatic teacher/tutor dispatch backend readiness for student teacher requests.
 
 ## Current Planning Decision
 
@@ -46,4 +47,4 @@ v5.3 is complete as an automation-ready backend/API milestone. It converted v5.2
 
 v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows through a no-demo-fallback API client, automation review console, learning operations dashboard, and family-safe assignment explanations. v5.4 did not implement automatic assignment of human teachers/tutors to student help requests.
 
-v5.5 is now the active milestone. Its purpose is automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation strategy is to build on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code, adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
+v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.

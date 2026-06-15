@@ -4,14 +4,15 @@
 
 ### v5.5 Automatic Teacher Dispatch And SLA Load Balancing
 
-**Status:** Active planning 2026-06-15
+**Status:** Completed backend dispatch-ready release gate 2026-06-15
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Phase evidence:** `.planning/phases/196-teacher-dispatch-and-sla-load-balancing-contract/`
 **Goal:** Automatically route student teacher-help requests to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose SLA/load health.
 **Phases:** 5
-**Plans:** 4/5 complete
-**Requirements:** 4/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `dispatch-ready`
 
 Function purpose:
 
@@ -32,7 +33,17 @@ Planned phases:
 - Phase 197: Dispatch Planner And Candidate Ranking. (complete)
 - Phase 198: Automatic Dispatch Claim And Reassignment Worker. (complete)
 - Phase 199: Teacher Queue And Operator Dispatch Visibility. (complete)
-- Phase 200: v5.5 Teacher Dispatch Release Gate.
+- Phase 200: v5.5 Teacher Dispatch Release Gate. (complete)
+
+Key accomplishments:
+
+- Defined the automatic teacher dispatch contract and state model.
+- Added dispatch planner and candidate ranking from teacher/tutor profile metadata.
+- Added conditional dispatch claim metadata and stale reassignment behavior.
+- Updated request-teacher, teacher queue, takeover, and admin dashboard routes for dispatch state.
+- Verified with focused backend tests, Ruff, and code review.
+
+Known deferred items at close: production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and final payment/support external provider activation.
 
 ---
 
