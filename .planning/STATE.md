@@ -7,10 +7,10 @@ last_updated: "2026-06-15T12:00:00+02:00"
 last_activity: 2026-06-15 - Synced v5.2 completion to remote and selected v5.3 product expansion from the stoa_docs remaining-feature queue.
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-15)
 
 ## Current Position
 
-Phase: 189 - Tutor Admin Review UX Contracts And Family Visibility
-Plan: 189-01
-Status: Phase 188 complete; ready to define tutor/admin review UX contracts and family visibility
-Last activity: 2026-06-15 - Completed Phase 188 controlled assignment creation and delivery worker.
+Phase: 190 - v5.3 Controlled Assignment Automation Release Gate
+Plan: 190-01
+Status: Phase 189 complete; ready to close v5.3 release gate
+Last activity: 2026-06-15 - Completed Phase 189 tutor/admin review UX contracts and family visibility.
 
 ## Accumulated Context
 
@@ -42,7 +42,6 @@ Last activity: 2026-06-15 - Completed Phase 188 controlled assignment creation a
 
 ### Pending Todos
 
-- Define tutor/admin review UX contracts and family visibility in Phase 189.
 - Close v5.3 with release-gate evidence and next milestone selection in Phase 190.
 
 ### Blockers/Concerns

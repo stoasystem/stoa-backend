@@ -96,5 +96,5 @@ Acceptance criteria:
 | AUTOASSIGN-01 | Phase 186 | Complete |
 | AUTOASSIGN-02 | Phase 187 | Complete |
 | AUTOASSIGN-03 | Phase 188 | Complete |
-| AUTOASSIGN-04 | Phase 189 | Planned |
+| AUTOASSIGN-04 | Phase 189 | Complete |
 | VERIFY-36 | Phase 190 | Planned |
