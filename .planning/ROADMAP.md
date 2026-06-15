@@ -1,6 +1,6 @@
 # Roadmap: v5.2 Adaptive Sequencing And Warehouse Analytics
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-06-14
 **Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
 
@@ -18,7 +18,7 @@ Build learning product capability directly. Keep verification focused on recomme
 - [x] **Phase 182: Adaptive Sequencing Recommendation Engine** - Add or define multi-signal recommendation generation, ranking, dedupe, freshness, rationale, and role-visible response shape.
 - [x] **Phase 183: Assignment Outcome Feedback Loop** - Connect assignment outcomes to sequencing signals, content-quality analytics, parent/tutor progress, and idempotent lifecycle behavior.
 - [x] **Phase 184: Warehouse Analytics Export And Operator Dashboards** - Define/export warehouse-ready schemas and admin analytics for cohort progress, sequencing coverage, outcomes, quality, and interventions.
-- [ ] **Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate** - Verify v5.2 docs/contracts/evidence, record rollout state, and select the next feature milestone.
+- [x] **Phase 185: v5.2 Adaptive Sequencing Analytics Release Gate** - Verify v5.2 docs/contracts/evidence, record rollout state, and select the next feature milestone.
 
 ## Phase Details
 
@@ -107,11 +107,11 @@ Plans:
   3. Release evidence records rollout state: contract-ready, sequencing-ready, analytics-ready, warehouse-ready, blocked, or deferred.
   4. Docs and feature-gap audit reflect completed v5.2 scope and next milestone recommendation.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 185-01: Verify v5.2 adaptive sequencing analytics release gate.
+- [x] 185-01: Verify v5.2 adaptive sequencing analytics release gate.
 
 ## Progress
 
@@ -121,7 +121,7 @@ Plans:
 | 182 Adaptive Sequencing Recommendation Engine | v5.2 | 1/1 | Complete | 2026-06-15 |
 | 183 Assignment Outcome Feedback Loop | v5.2 | 1/1 | Complete | 2026-06-15 |
 | 184 Warehouse Analytics Export And Operator Dashboards | v5.2 | 1/1 | Complete | 2026-06-15 |
-| 185 v5.2 Adaptive Sequencing Analytics Release Gate | v5.2 | 0/1 | Planned | - |
+| 185 v5.2 Adaptive Sequencing Analytics Release Gate | v5.2 | 1/1 | Complete | 2026-06-15 |
 
 ## Traceability
 
@@ -131,7 +131,7 @@ Plans:
 | ADAPTWARE-02 | Phase 182 | Complete |
 | ADAPTWARE-03 | Phase 183 | Complete |
 | ADAPTWARE-04 | Phase 184 | Complete |
-| VERIFY-35 | Phase 185 | Planned |
+| VERIFY-35 | Phase 185 | Complete |
 
 ---
 *Last updated: 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics.*

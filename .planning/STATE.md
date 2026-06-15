@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.2
 milestone_name: Adaptive Sequencing And Warehouse Analytics
-status: planning
+status: verifying
 last_updated: "2026-06-15T00:00:00+02:00"
 last_activity: 2026-06-15
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-06-14)
 
 Phase: 185 - v5.2 Adaptive Sequencing Analytics Release Gate
 Plan: 185-01
-Status: Phase 184 complete; ready to verify v5.2 release gate
-Last activity: 2026-06-15 - Completed Phase 184 warehouse analytics export and operator dashboards.
+Status: Phase 185 complete; ready for milestone audit and archive
+Last activity: 2026-06-15 - Completed v5.2 adaptive sequencing analytics release gate.
 
 ## Accumulated Context
 
@@ -42,7 +42,7 @@ Last activity: 2026-06-15 - Completed Phase 184 warehouse analytics export and o
 
 ### Pending Todos
 
-- Close v5.2 with release-gate evidence and next milestone selection in Phase 185.
+- Run v5.2 milestone audit, completion, and cleanup.
 
 ### Blockers/Concerns
 

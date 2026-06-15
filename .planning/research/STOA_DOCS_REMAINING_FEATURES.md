@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-14 after selecting v5.2 adaptive sequencing and warehouse analytics
+**Updated:** 2026-06-15 after completing v5.2 adaptive sequencing and warehouse analytics
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -23,15 +23,16 @@
 - Production notification and native delivery backend rollout with live WebSocket readiness/status, provider-gated email digest and push delivery, push token lifecycle records, frontend/native handoff, and release state `deferred` pending external activation.
 - Native mobile and full localization governance with mobile API/client handoff, native notification/offline contracts, translation governance, English/German key parity evidence, broad copy QA scope, and rollout state `contract-ready`.
 - Rich curriculum editor and production content migration readiness with UI/API handoff, migration manifests, dry-run/apply validation, rollback evidence, reviewed assignment readiness, adaptive sequencing readiness, and rollout state readiness-complete.
+- Adaptive sequencing and warehouse analytics backend/API readiness with multi-signal recommendations, assignment outcome feedback, aggregate warehouse schemas, and operator dashboard contracts.
 
 ## Remaining Feature Build Queue
 
 1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-2. **Active Product Expansion: Adaptive Sequencing And Warehouse Analytics**.
-   Multi-signal recommendation sequencing, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards.
-   Status: v5.2 selected and active planning started 2026-06-14.
+2. **Controlled Autonomous Tutoring And Assignment Automation**.
+   Build on v5.2 sequencing signals to support tutor/admin-controlled automatic assignment creation/delivery from reviewed recommendations.
+   Status: candidate v5.3 if product signals are accepted as stable enough.
 
 3. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, full autonomous tutoring decisions, automatic assignment delivery, live warehouse/BI deployment, and deeper operations reporting.
@@ -41,4 +42,4 @@
 
 v5.1 is complete as a curriculum product readiness milestone because final payment/support/provider activation remains blocked on external prerequisites. The completed scope defines rich curriculum editor readiness, production content migration manifests and dry-run/apply validation, rollback evidence, reviewed assignment automation readiness, and adaptive sequencing readiness.
 
-v5.2 is now the active milestone. It should turn the v4.0 adaptive learning memory foundation, v4.6 curriculum analytics foundation, and v5.1 readiness contracts into deeper adaptive sequencing recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. During internal development, verification should prioritize product behavior and release evidence over broad unrelated security/compliance testing.
+v5.2 is complete as a backend/API readiness milestone. It turned the v4.0 adaptive learning memory foundation, v4.6 curriculum analytics foundation, and v5.1 readiness contracts into deeper adaptive sequencing recommendations, assignment outcome feedback, warehouse-ready analytics schemas, and operator dashboards. Final live warehouse/BI deployment remains deferred.

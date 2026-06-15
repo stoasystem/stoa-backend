@@ -4,16 +4,16 @@
 
 ### v5.2 Adaptive Sequencing And Warehouse Analytics
 
-**Status:** Active planning 2026-06-14
+**Status:** Completed backend/API release gate 2026-06-15
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Phase evidence:** `.planning/phases/181-adaptive-sequencing-and-warehouse-analytics-contract/`
 **Goal:** Turn adaptive learning memory, reviewed assignments, curriculum analytics, and curriculum product readiness into deeper adaptive sequencing and warehouse-backed analytics readiness.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
-Planned phases:
+Completed phases:
 
 - Phase 181: Adaptive Sequencing And Warehouse Analytics Contract.
 - Phase 182: Adaptive Sequencing Recommendation Engine.
@@ -30,6 +30,14 @@ Feature priorities:
 - Keep internal-development verification focused on recommendation behavior, analytics contracts, and release evidence rather than broad unrelated security/compliance testing.
 
 Known out of scope for this milestone: final live payment/provider activation, real external support provider activation, unreviewed automatic publication, native app implementation, and live warehouse/BI deployment unless explicitly selected later.
+
+Key accomplishments:
+
+- Defined the adaptive sequencing and warehouse analytics contract.
+- Implemented multi-signal sequencing recommendations with review-gated visibility and duplicate/source suppression.
+- Added assignment outcome feedback metadata, aggregate analytics signals, and parent/tutor sequencing summaries.
+- Added warehouse readiness, aggregate export schemas, and operator dashboard contracts.
+- Closed with rollout state `warehouse-ready` for backend/API readiness.
 
 ---
 
