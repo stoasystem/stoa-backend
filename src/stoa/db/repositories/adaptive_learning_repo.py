@@ -51,6 +51,27 @@ def put_assignment(item: dict[str, Any]) -> None:
     )
 
 
+def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    table = get_table()
+    stored = {
+        "PK": f"ASSIGNMENT#{item['assignment_id']}",
+        "SK": "META",
+        "entity_type": ASSIGNMENT_ENTITY,
+        **item,
+    }
+    try:
+        table.put_item(
+            Item=stored,
+            ConditionExpression=Attr("PK").not_exists(),
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            existing = get_assignment(str(item["assignment_id"]))
+            return existing or item, False
+        raise
+    return stored, True
+
+
 def get_assignment(assignment_id: str) -> dict[str, Any] | None:
     table = get_table()
     resp = table.get_item(Key={"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"})

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -53,6 +55,38 @@ class AssignmentAutomationPreviewRequest(BaseModel):
 
     policy: AssignmentAutomationPolicyRequest = Field(default_factory=AssignmentAutomationPolicyRequest)
     subject: str | None = None
+
+
+class AssignmentAutomationCandidateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    candidate_id: str = Field(..., alias="candidateId", min_length=1)
+    type: str | None = None
+    source_type: str = Field(..., alias="sourceType", min_length=1)
+    source_id: str = Field(..., alias="sourceId", min_length=1)
+    title: str | None = Field(default=None, max_length=200)
+    subject: str | None = None
+    topic_id: str | None = Field(default=None, alias="topicId")
+    topic_ids: list[str] = Field(default_factory=list, alias="topicIds")
+    confidence: str = "medium"
+    rationale: str | None = None
+    expected_impact: str | None = Field(default=None, alias="expectedImpact")
+    review_status: str | None = Field(default=None, alias="reviewStatus")
+    proposed_status: str | None = Field(default=None, alias="proposedStatus")
+    due_at: str | None = Field(default=None, alias="dueAt")
+    source_signals: dict[str, Any] = Field(default_factory=dict, alias="sourceSignals")
+    review_required: bool = Field(default=True, alias="reviewRequired")
+    autonomous_decision: bool = Field(default=False, alias="autonomousDecision")
+    approved: bool = True
+
+
+class AssignmentAutomationExecuteRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    batch_id: str = Field(..., alias="batchId", min_length=1, max_length=160)
+    approved: bool = Field(...)
+    policy: AssignmentAutomationPolicyRequest = Field(default_factory=AssignmentAutomationPolicyRequest)
+    candidates: list[AssignmentAutomationCandidateRequest] = Field(default_factory=list)
 
 
 @router.get("/students/me/memory")
@@ -160,6 +194,23 @@ async def preview_assignment_automation_batch(
         student_id=student_id,
         policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
         subject=body.subject,
+        user=user,
+    )
+
+
+@router.post("/students/{student_id}/assignment-automation/batches/execute")
+async def execute_assignment_automation_batch(
+    student_id: str,
+    body: AssignmentAutomationExecuteRequest,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Create reviewed assignments from an approved automation batch."""
+    return adaptive_learning_service.execute_assignment_automation_batch(
+        student_id=student_id,
+        batch_id=body.batch_id,
+        approved=body.approved,
+        policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
+        candidates=[candidate.model_dump(by_alias=True) for candidate in body.candidates],
         user=user,
     )
 

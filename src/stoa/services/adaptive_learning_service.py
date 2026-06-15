@@ -99,10 +99,118 @@ def create_assignment(
     _require_teacher_or_admin(user)
     if status not in CREATABLE_STATUSES:
         raise HTTPException(status_code=400, detail="Assignment must start as draft, recommended, or assigned")
-    source = _assignment_source(source_type, source_id, student_id)
+    item = _create_assignment_item(
+        student_id=student_id,
+        source_type=source_type,
+        source_id=source_id,
+        user=user,
+        title=title,
+        status=status,
+        due_at=due_at,
+        note=note,
+    )
+    adaptive_learning_repo.put_assignment(item)
+    return assignment_response(item, user=user)
+
+
+def execute_assignment_automation_batch(
+    *,
+    student_id: str,
+    batch_id: str,
+    approved: bool,
+    policy: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    _require_teacher_or_admin(user)
+    _require_student_visible(student_id, user)
+    if not approved:
+        raise HTTPException(status_code=400, detail="Approved batch execution requires approval")
+    if not candidates:
+        raise HTTPException(status_code=400, detail="At least one approved candidate is required")
+    replay_policy = _automation_policy(policy, student_id=student_id, user=user)
+    existing_assignments = adaptive_learning_repo.list_assignments(
+        student_id=student_id,
+        include_archived=True,
+        limit=None,
+    )
+    preview = preview_assignment_automation_batch(
+        student_id=student_id,
+        policy=policy,
+        user=user,
+    )
+    if batch_id != preview["batchId"]:
+        replay = _automation_duplicate_replay(
+            student_id=student_id,
+            batch_id=batch_id,
+            policy=replay_policy,
+            candidates=candidates,
+            existing_assignments=existing_assignments,
+            user=user,
+        )
+        if replay:
+            return replay
+        raise HTTPException(status_code=409, detail="Automation batch preview is stale")
+    normalized_policy = preview["policy"]
+    selected_by_id = {str(candidate.get("candidateId") or ""): candidate for candidate in preview["selected"]}
+    assignment_state = _assignment_signal_state(existing_assignments)
+    results: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        requested_candidate = _automation_execution_candidate(candidate, normalized_policy)
+        preview_candidate = selected_by_id.get(requested_candidate["candidateId"])
+        if not preview_candidate:
+            raise HTTPException(status_code=409, detail="Candidate is not selected in current preview")
+        normalized_candidate = _automation_execution_candidate(preview_candidate, normalized_policy)
+        _require_candidate_matches_preview(requested_candidate, normalized_candidate)
+        normalized_candidate["approved"] = requested_candidate["approved"]
+        result = _execute_assignment_automation_candidate(
+            student_id=student_id,
+            batch_id=batch_id,
+            policy=normalized_policy,
+            candidate=normalized_candidate,
+            assignment_state=assignment_state,
+            existing_assignments=existing_assignments,
+            user=user,
+        )
+        results.append(result)
+        if result.get("assignmentItem"):
+            assignment_item = result.pop("assignmentItem")
+            existing_assignments.append(assignment_item)
+            assignment_state = _assignment_signal_state(existing_assignments)
+
+    return {
+        "batchId": batch_id,
+        "policyId": normalized_policy["policyId"],
+        "studentId": student_id,
+        "status": "completed",
+        "approved": True,
+        "createdBy": _actor_id(user),
+        "createdAt": now_iso(),
+        "results": results,
+        "summary": _automation_execution_summary(results),
+        "reviewRequired": True,
+        "autonomousDecision": False,
+        "locale": locale_contract(user),
+    }
+
+
+def _create_assignment_item(
+    *,
+    student_id: str,
+    source_type: str,
+    source_id: str,
+    user: dict[str, Any],
+    title: str | None = None,
+    status: str = "assigned",
+    due_at: str | None = None,
+    note: str | None = None,
+    automation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    source = _assignment_source(source_type, source_id, student_id, user=user)
     created_at = now_iso()
     item = {
-        "assignment_id": f"assignment-{uuid4().hex}",
+        "assignment_id": automation.get("assignmentId") if automation else f"assignment-{uuid4().hex}",
         "student_id": student_id,
         "status": status,
         "source_type": source["sourceType"],
@@ -130,8 +238,14 @@ def create_assignment(
         "student_answer": None,
         "completion_result": None,
     }
-    adaptive_learning_repo.put_assignment(item)
-    return assignment_response(item, user=user)
+    if automation:
+        item["automation"] = automation
+        item["automation_key"] = automation["automationKey"]
+        item["automation_policy_id"] = automation["policyId"]
+        item["automation_batch_id"] = automation["batchId"]
+        item["automation_candidate_id"] = automation["candidateId"]
+        item["delivery_state"] = automation["deliveryState"]
+    return item
 
 
 def preview_assignment_automation_batch(
@@ -166,6 +280,7 @@ def preview_assignment_automation_batch(
             )
             continue
         selected.append(candidate)
+        _mark_automation_candidate_selected(assignment_state, candidate)
 
     batch = {
         "batchId": _automation_batch_id(student_id, normalized_policy, selected, refused),
@@ -385,6 +500,9 @@ def assignment_response(item: dict[str, Any], *, user: dict[str, Any]) -> dict[s
         "sequencingFeedback": item.get("sequencing_feedback"),
         "locale": locale_contract(user),
     }
+    automation = _assignment_automation_response(item, user)
+    if automation:
+        response["automation"] = automation
     if user.get("role") != "parent":
         response["studentAnswer"] = item.get("student_answer")
     if _can_manage_assignments(user):
@@ -499,6 +617,17 @@ def _automation_candidate(recommendation: dict[str, Any], policy: dict[str, Any]
     }
 
 
+def _mark_automation_candidate_selected(assignment_state: dict[str, Any], candidate: dict[str, Any]) -> None:
+    source_key = (str(candidate.get("sourceType") or ""), str(candidate.get("sourceId") or ""))
+    topic_ids = [str(topic_id) for topic_id in candidate.get("topicIds", []) if topic_id]
+    if candidate.get("topicId"):
+        topic_ids.append(str(candidate["topicId"]))
+    assignment_state["suppressed_sources"].add(source_key)
+    assignment_state["active_topics"].update(topic_ids)
+    for topic_id in topic_ids:
+        assignment_state["topic_statuses"].setdefault(topic_id, set()).add(str(candidate.get("proposedStatus") or "selected"))
+
+
 def _automation_expected_impact(recommendation: dict[str, Any]) -> str:
     candidate_type = str(recommendation.get("type") or "")
     if candidate_type == "reviewed_ai_draft":
@@ -539,6 +668,393 @@ def _automation_batch_id(
     }
     digest = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:12]
     return f"batch-{digest}"
+
+
+def _automation_execution_candidate(candidate: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    topic_ids = _string_list(candidate.get("topicIds") or candidate.get("topic_ids"))
+    topic_id = str(candidate.get("topicId") or candidate.get("topic_id") or (topic_ids[0] if topic_ids else ""))
+    if topic_id and topic_id not in topic_ids:
+        topic_ids = [topic_id, *topic_ids]
+    source_type = str(candidate.get("sourceType") or candidate.get("source_type") or "")
+    proposed_status = str(candidate.get("proposedStatus") or candidate.get("proposed_status") or policy["deliveryMode"])
+    proposed_status = _choice(proposed_status, CREATABLE_STATUSES)
+    if proposed_status != policy["deliveryMode"]:
+        raise HTTPException(status_code=400, detail="Candidate proposed status must match policy delivery mode")
+    return {
+        "candidateId": str(candidate.get("candidateId") or candidate.get("candidate_id") or ""),
+        "type": candidate.get("type"),
+        "sourceType": source_type,
+        "sourceId": str(candidate.get("sourceId") or candidate.get("source_id") or ""),
+        "title": candidate.get("title"),
+        "subject": _safe_subject(candidate.get("subject")),
+        "topicId": topic_id,
+        "topicIds": topic_ids,
+        "confidence": str(candidate.get("confidence") or "low"),
+        "freshness": candidate.get("freshness") if isinstance(candidate.get("freshness"), dict) else {},
+        "rationale": candidate.get("rationale"),
+        "expectedImpact": candidate.get("expectedImpact") or candidate.get("expected_impact"),
+        "reviewStatus": candidate.get("reviewStatus") or candidate.get("review_status"),
+        "proposedStatus": proposed_status,
+        "dueAt": candidate.get("dueAt") or candidate.get("due_at"),
+        "sourceSignals": candidate.get("sourceSignals") or candidate.get("source_signals") or {},
+        "reviewRequired": candidate.get("reviewRequired", candidate.get("review_required", True)),
+        "autonomousDecision": candidate.get("autonomousDecision", candidate.get("autonomous_decision", False)),
+        "approved": candidate.get("approved", True),
+    }
+
+
+def _require_candidate_matches_preview(requested: dict[str, Any], preview: dict[str, Any]) -> None:
+    compared_fields = ("candidateId", "sourceType", "sourceId", "proposedStatus")
+    for field in compared_fields:
+        if str(requested.get(field) or "") != str(preview.get(field) or ""):
+            raise HTTPException(status_code=409, detail="Candidate does not match current preview")
+
+
+def _execute_assignment_automation_candidate(
+    *,
+    student_id: str,
+    batch_id: str,
+    policy: dict[str, Any],
+    candidate: dict[str, Any],
+    assignment_state: dict[str, Any],
+    existing_assignments: list[dict[str, Any]],
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    automation_key = _automation_key(student_id, batch_id, policy, candidate)
+    base = _automation_result_base(candidate, automation_key)
+    if candidate["approved"] is not True:
+        return {**base, "status": "skipped", "reason": "Candidate was not approved for execution."}
+    existing_by_key = _find_assignment_by_automation_key(existing_assignments, automation_key)
+    if existing_by_key:
+        return {
+            **base,
+            "status": "duplicate",
+            "reason": "Automation key already created an assignment.",
+            "assignmentId": existing_by_key.get("assignment_id"),
+            "assignment": assignment_response(existing_by_key, user=user),
+        }
+    if candidate["sourceType"] not in {"ai_draft", "curriculum_exercise"}:
+        return {
+            **base,
+            "status": "refused",
+            "reason": "Candidate source cannot create a reviewed assignment.",
+            "refusalCode": "unsupported_assignment_source",
+        }
+    existing_by_source = _find_assignment_by_source(existing_assignments, candidate["sourceType"], candidate["sourceId"])
+    if existing_by_source:
+        return {
+            **base,
+            "status": "duplicate",
+            "reason": "Source already has assignment history for this student.",
+            "assignmentId": existing_by_source.get("assignment_id"),
+            "assignment": assignment_response(existing_by_source, user=user),
+        }
+    refusal = _automation_refusal(candidate, policy, assignment_state)
+    if refusal:
+        return {
+            **base,
+            "status": "refused",
+            "reason": refusal["refusalReason"],
+            "refusalCode": refusal["refusalCode"],
+        }
+
+    try:
+        automation = _automation_assignment_metadata(
+            student_id=student_id,
+            batch_id=batch_id,
+            policy=policy,
+            candidate=candidate,
+            automation_key=automation_key,
+            user=user,
+        )
+        item = _create_assignment_item(
+            student_id=student_id,
+            source_type=candidate["sourceType"],
+            source_id=candidate["sourceId"],
+            user=user,
+            title=candidate.get("title"),
+            status=candidate["proposedStatus"],
+            due_at=candidate.get("dueAt"),
+            note=str(candidate.get("rationale") or ""),
+            automation=automation,
+        )
+        stored, created = _put_assignment_if_absent(item)
+    except HTTPException as exc:
+        return {
+            **base,
+            "status": "failed" if exc.status_code >= 500 else "refused",
+            "reason": str(exc.detail),
+            "refusalCode": "source_not_assignable",
+        }
+    if not created:
+        return {
+            **base,
+            "status": "duplicate",
+            "reason": "Source already has assignment history for this student.",
+            "assignmentId": stored.get("assignment_id"),
+            "assignment": assignment_response(stored, user=user),
+        }
+
+    result_status = _automation_delivery_state(candidate["proposedStatus"])
+    return {
+        **base,
+        "status": result_status,
+        "reason": "Reviewed assignment created from approved automation batch.",
+        "assignmentId": stored.get("assignment_id"),
+        "assignment": assignment_response(stored, user=user),
+        "assignmentItem": stored,
+        "evidence": {
+            "policyId": policy["policyId"],
+            "batchId": batch_id,
+            "candidateId": candidate["candidateId"],
+            "sourceType": candidate["sourceType"],
+            "sourceId": candidate["sourceId"],
+            "deliveryState": result_status,
+            "reviewRequired": True,
+            "autonomousDecision": False,
+        },
+    }
+
+
+def _automation_duplicate_replay(
+    *,
+    student_id: str,
+    batch_id: str,
+    policy: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    existing_assignments: list[dict[str, Any]],
+    user: dict[str, Any],
+) -> dict[str, Any] | None:
+    results: list[dict[str, Any]] = []
+    for candidate in candidates:
+        normalized_candidate = _automation_execution_candidate(candidate, policy)
+        automation_key = _automation_key(student_id, batch_id, policy, normalized_candidate)
+        base = _automation_result_base(normalized_candidate, automation_key)
+        existing = _find_assignment_by_automation_key(existing_assignments, automation_key)
+        if existing:
+            results.append(
+                {
+                    **base,
+                    "status": "duplicate",
+                    "reason": "Automation key already created an assignment.",
+                    "assignmentId": existing.get("assignment_id"),
+                    "assignment": assignment_response(existing, user=user),
+                }
+            )
+            continue
+        if normalized_candidate["approved"] is not True:
+            results.append({**base, "status": "skipped", "reason": "Candidate was not approved for execution."})
+            continue
+        if normalized_candidate["sourceType"] not in {"ai_draft", "curriculum_exercise"}:
+            results.append(
+                {
+                    **base,
+                    "status": "refused",
+                    "reason": "Candidate source cannot create a reviewed assignment.",
+                    "refusalCode": "unsupported_assignment_source",
+                }
+            )
+            continue
+        source_duplicate = _find_assignment_by_source(
+            existing_assignments,
+            normalized_candidate["sourceType"],
+            normalized_candidate["sourceId"],
+        )
+        if not source_duplicate:
+            return None
+        results.append(
+            {
+                **base,
+                "status": "duplicate",
+                "reason": "Source already has assignment history for this student.",
+                "assignmentId": source_duplicate.get("assignment_id"),
+                "assignment": assignment_response(source_duplicate, user=user),
+            }
+        )
+    return {
+        "batchId": batch_id,
+        "policyId": policy["policyId"],
+        "studentId": student_id,
+        "status": "completed",
+        "approved": True,
+        "createdBy": _actor_id(user),
+        "createdAt": now_iso(),
+        "results": results,
+        "summary": _automation_execution_summary(results),
+        "reviewRequired": True,
+        "autonomousDecision": False,
+        "locale": locale_contract(user),
+    }
+
+
+def _automation_assignment_metadata(
+    *,
+    student_id: str,
+    batch_id: str,
+    policy: dict[str, Any],
+    candidate: dict[str, Any],
+    automation_key: str,
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    delivery_state = _automation_delivery_state(candidate["proposedStatus"])
+    return {
+        "assignmentId": _automation_source_assignment_id(student_id, candidate),
+        "automationKey": automation_key,
+        "policyId": policy["policyId"],
+        "batchId": batch_id,
+        "candidateId": candidate["candidateId"],
+        "studentId": student_id,
+        "autonomyLevel": policy["autonomyLevel"],
+        "deliveryMode": policy["deliveryMode"],
+        "deliveryState": delivery_state,
+        "createdBy": _actor_id(user),
+        "createdByRole": str(user.get("role") or ""),
+        "createdAt": now_iso(),
+        "sourceType": candidate["sourceType"],
+        "sourceId": candidate["sourceId"],
+        "sourceSignals": candidate.get("sourceSignals") or {},
+        "expectedImpact": candidate.get("expectedImpact"),
+        "reviewStatus": candidate.get("reviewStatus"),
+        "reviewRequired": True,
+        "autonomousDecision": False,
+        "explanation": _automation_assignment_explanation(candidate, policy),
+        "resultEvidence": {
+            "policyStatus": policy["status"],
+            "confidence": candidate.get("confidence"),
+            "subject": candidate.get("subject"),
+            "topicIds": candidate.get("topicIds") or [],
+            "proposedStatus": candidate["proposedStatus"],
+        },
+    }
+
+
+def _automation_result_base(candidate: dict[str, Any], automation_key: str) -> dict[str, Any]:
+    return {
+        "candidateId": candidate["candidateId"],
+        "sourceType": candidate["sourceType"],
+        "sourceId": candidate["sourceId"],
+        "automationKey": automation_key,
+    }
+
+
+def _automation_key(
+    student_id: str,
+    batch_id: str,
+    policy: dict[str, Any],
+    candidate: dict[str, Any],
+) -> str:
+    payload = {
+        "studentId": student_id,
+        "batchId": batch_id,
+        "policyId": policy["policyId"],
+        "candidateId": candidate["candidateId"],
+        "sourceType": candidate["sourceType"],
+        "sourceId": candidate["sourceId"],
+    }
+    digest = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:20]
+    return f"automation-{digest}"
+
+
+def _automation_source_assignment_id(student_id: str, candidate: dict[str, Any]) -> str:
+    payload = {
+        "studentId": student_id,
+        "sourceType": candidate["sourceType"],
+        "sourceId": candidate["sourceId"],
+    }
+    digest = hashlib.sha1(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:20]
+    return f"assignment-source-{digest}"
+
+
+def _automation_delivery_state(status: str) -> str:
+    if status == "draft":
+        return "created"
+    if status == "recommended":
+        return "delivered"
+    if status == "assigned":
+        return "assigned"
+    return "created"
+
+
+def _automation_execution_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = Counter(str(item.get("status") or "unknown") for item in results)
+    return {
+        "totalCount": len(results),
+        "createdCount": counts.get("created", 0),
+        "assignedCount": counts.get("assigned", 0),
+        "deliveredCount": counts.get("delivered", 0),
+        "skippedCount": counts.get("skipped", 0),
+        "refusedCount": counts.get("refused", 0),
+        "duplicateCount": counts.get("duplicate", 0),
+        "failedCount": counts.get("failed", 0),
+        "resultCounts": dict(sorted(counts.items())),
+    }
+
+
+def _find_assignment_by_automation_key(assignments: list[dict[str, Any]], automation_key: str) -> dict[str, Any] | None:
+    for assignment in assignments:
+        if assignment.get("automation_key") == automation_key:
+            return assignment
+        automation = assignment.get("automation") if isinstance(assignment.get("automation"), dict) else {}
+        if automation.get("automationKey") == automation_key:
+            return assignment
+    return None
+
+
+def _find_assignment_by_source(
+    assignments: list[dict[str, Any]],
+    source_type: str,
+    source_id: str,
+) -> dict[str, Any] | None:
+    for assignment in assignments:
+        if assignment.get("source_type") == source_type and assignment.get("source_id") == source_id:
+            return assignment
+    return None
+
+
+def _put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    put_if_absent = getattr(adaptive_learning_repo, "put_assignment_if_absent", None)
+    if callable(put_if_absent):
+        return put_if_absent(item)
+    existing = adaptive_learning_repo.get_assignment(str(item["assignment_id"]))
+    if existing:
+        return existing, False
+    adaptive_learning_repo.put_assignment(item)
+    return item, True
+
+
+def _assignment_automation_response(item: dict[str, Any], user: dict[str, Any]) -> dict[str, Any] | None:
+    automation = item.get("automation")
+    if not isinstance(automation, dict):
+        return None
+    response = {
+        "policyId": automation.get("policyId"),
+        "batchId": automation.get("batchId"),
+        "candidateId": automation.get("candidateId"),
+        "autonomyLevel": automation.get("autonomyLevel"),
+        "deliveryState": automation.get("deliveryState") or item.get("delivery_state"),
+        "reviewRequired": automation.get("reviewRequired", True),
+        "autonomousDecision": automation.get("autonomousDecision", False),
+        "explanation": automation.get("explanation"),
+        "createdBy": automation.get("createdBy"),
+        "createdAt": automation.get("createdAt"),
+    }
+    if _can_manage_assignments(user):
+        response.update(
+            {
+                "automationKey": automation.get("automationKey"),
+                "deliveryMode": automation.get("deliveryMode"),
+                "sourceSignals": automation.get("sourceSignals") or {},
+                "resultEvidence": automation.get("resultEvidence") or {},
+            }
+        )
+    return response
+
+
+def _automation_assignment_explanation(candidate: dict[str, Any], policy: dict[str, Any]) -> str:
+    topic = candidate.get("topicId") or "the current learning target"
+    if policy["autonomyLevel"] == "tutor_approved_batch":
+        return f"Tutor-approved practice was assigned for {topic} based on recent learning signals."
+    return f"Reviewed practice was prepared for {topic} based on recent learning signals."
 
 
 def _choice(value: str, allowed: set[str]) -> str:
@@ -817,7 +1333,7 @@ def _memory_response(
     }
 
 
-def _assignment_source(source_type: str, source_id: str, student_id: str) -> dict[str, Any]:
+def _assignment_source(source_type: str, source_id: str, student_id: str, *, user: dict[str, Any]) -> dict[str, Any]:
     if source_type == "curriculum_exercise":
         exercise = practice_repo.get_challenge(source_id)
         if not exercise:
@@ -837,6 +1353,7 @@ def _assignment_source(source_type: str, source_id: str, student_id: str) -> dic
         draft = ai_teacher_tools_repo.get_draft(source_id)
         if not draft:
             raise HTTPException(status_code=404, detail="AI teacher draft not found")
+        ai_teacher_tools_service._require_can_view_draft(draft, user)  # noqa: SLF001
         if draft.get("draft_type") != "practice_exercise" or draft.get("status") != "accepted":
             raise HTTPException(status_code=409, detail="Only accepted practice exercise drafts can be assigned")
         if str(draft.get("student_id") or "") != student_id:

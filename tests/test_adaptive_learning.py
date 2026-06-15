@@ -29,6 +29,12 @@ def _install_memory_repo(monkeypatch):
     def put_assignment(item):
         assignments[item["assignment_id"]] = dict(item)
 
+    def put_assignment_if_absent(item):
+        if item["assignment_id"] in assignments:
+            return dict(assignments[item["assignment_id"]]), False
+        assignments[item["assignment_id"]] = dict(item)
+        return dict(item), True
+
     def get_assignment(assignment_id):
         item = assignments.get(assignment_id)
         return dict(item) if item else None
@@ -67,6 +73,7 @@ def _install_memory_repo(monkeypatch):
     monkeypatch.setattr(repo, "put_memory_snapshot", put_memory_snapshot)
     monkeypatch.setattr(repo, "list_memory_snapshots", list_memory_snapshots)
     monkeypatch.setattr(repo, "put_assignment", put_assignment)
+    monkeypatch.setattr(repo, "put_assignment_if_absent", put_assignment_if_absent)
     monkeypatch.setattr(repo, "get_assignment", get_assignment)
     monkeypatch.setattr(repo, "update_assignment", update_assignment)
     monkeypatch.setattr(repo, "list_assignments", list_assignments)
@@ -438,6 +445,303 @@ def test_assignment_automation_preview_rejects_unsupported_policy_values(monkeyp
     assert bad_delivery.json()["detail"] == "Unsupported value: delivered"
 
 
+def test_assignment_automation_execute_creates_assignments_idempotently(monkeypatch):
+    _, assignments = _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-1",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed linear equation practice",
+                "created_by": "tutor-1",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "get_draft",
+        lambda draft_id: {
+            "draft_id": draft_id,
+            "draft_type": "practice_exercise",
+            "status": "accepted",
+            "student_id": "student-1",
+            "subject": "math",
+            "topic_ids": ["linear-equations"],
+            "created_by": "tutor-1",
+            "items": [{"prompt": "Simplify 2/4"}],
+            "answer_key": [{"answer": "1/2"}],
+        },
+    )
+    policy = {
+        "policyId": "policy-automation-1",
+        "autonomyLevel": "tutor_approved_batch",
+        "sourceTypes": ["ai_draft"],
+        "deliveryMode": "assigned",
+    }
+    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": policy},
+    )
+    assert preview.status_code == 200
+    payload = {
+        "batchId": preview.json()["batchId"],
+        "approved": True,
+        "policy": policy,
+        "candidates": preview.json()["selected"],
+    }
+
+    first = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json=payload,
+    )
+    second = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    body = first.json()
+    assignment = body["results"][0]["assignment"]
+    assert body["summary"]["assignedCount"] == 1
+    assert body["results"][0]["status"] == "assigned"
+    assert assignment["status"] == "assigned"
+    assert assignment["automation"]["policyId"] == "policy-automation-1"
+    assert assignment["automation"]["batchId"] == preview.json()["batchId"]
+    assert assignment["automation"]["deliveryState"] == "assigned"
+    assert assignment["automation"]["sourceSignals"]["reviewedDraftAvailable"] is True
+    assert assignment["answerKey"] == [{"answer": "1/2"}]
+    assert len(assignments) == 1
+
+    assert second.status_code == 200
+    assert second.json()["summary"]["duplicateCount"] == 1
+    assert second.json()["results"][0]["status"] == "duplicate"
+    assert second.json()["results"][0]["assignmentId"] == assignment["assignmentId"]
+    assert len(assignments) == 1
+
+    student_assignment = _app({"sub": "student-1", "role": "student"}).get(
+        f"/adaptive/assignments/{assignment['assignmentId']}"
+    )
+    assert student_assignment.status_code == 200
+    student_body = student_assignment.json()
+    assert "answerKey" not in student_body
+    assert "sourceSignals" not in student_body["automation"]
+    assert student_body["automation"]["explanation"] == (
+        "Tutor-approved practice was assigned for linear-equations based on recent learning signals."
+    )
+
+
+def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch):
+    _, assignments = _install_memory_repo(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.question_repo,
+        "list_by_student",
+        lambda student_id, limit=500: {
+            "Items": [
+                {
+                    "question_id": "question-linear",
+                    "student_id": student_id,
+                    "status": "ai_answered",
+                    "subject": "math",
+                    "knowledge_points": ["Linear equations"],
+                    "student_feedback": 2,
+                    "created_at": "2026-06-09T10:00:00+00:00",
+                },
+                {
+                    "question_id": "question-fractions",
+                    "student_id": student_id,
+                    "status": "ai_answered",
+                    "subject": "math",
+                    "knowledge_points": ["Fractions"],
+                    "student_feedback": 2,
+                    "created_at": "2026-06-09T11:00:00+00:00",
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda student_id: [])
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_progress", lambda student_id, subject_id=None: [])
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-2",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed linear equation practice",
+                "created_by": "admin-1",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "get_draft",
+        lambda draft_id: {
+            "draft_id": draft_id,
+            "draft_type": "practice_exercise",
+            "status": "accepted",
+            "student_id": "student-1",
+            "subject": "math",
+            "topic_ids": ["linear-equations"],
+            "created_by": "admin-1",
+            "items": [{"prompt": "Solve x + 2 = 5"}],
+            "answer_key": [{"answer": "3"}],
+        },
+    )
+    policy = {
+        "policyId": "policy-partial-1",
+        "autonomyLevel": "tutor_approved_batch",
+        "sourceTypes": ["ai_draft", "memory_snapshot"],
+        "deliveryMode": "recommended",
+        "maxAssignmentsPerStudent": 3,
+    }
+    preview = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": policy},
+    )
+    assert preview.status_code == 200
+    selected = preview.json()["selected"]
+    assert {item["sourceType"] for item in selected} == {"ai_draft", "memory_snapshot"}
+
+    response = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": preview.json()["batchId"],
+            "approved": True,
+            "policy": policy,
+            "candidates": selected,
+        },
+    )
+    retry = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": preview.json()["batchId"],
+            "approved": True,
+            "policy": policy,
+            "candidates": selected,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["deliveredCount"] == 1
+    assert body["summary"]["refusedCount"] == 1
+    assert body["summary"]["duplicateCount"] == 0
+    result_by_id = {item["candidateId"]: item for item in body["results"]}
+    memory_candidate_id = next(item["candidateId"] for item in selected if item["sourceType"] == "memory_snapshot")
+    assert result_by_id["reviewed_ai_draft:draft-2"]["status"] == "delivered"
+    assert result_by_id[memory_candidate_id]["status"] == "refused"
+    assert result_by_id[memory_candidate_id]["refusalCode"] == "unsupported_assignment_source"
+    assert retry.status_code == 200
+    retry_by_id = {item["candidateId"]: item for item in retry.json()["results"]}
+    assert retry_by_id["reviewed_ai_draft:draft-2"]["status"] == "duplicate"
+    assert retry_by_id[memory_candidate_id]["status"] == "refused"
+    assert len(assignments) == 1
+
+
+def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "list_drafts",
+        lambda **kwargs: [
+            {
+                "draft_id": "draft-1",
+                "draft_type": "practice_exercise",
+                "status": "accepted",
+                "student_id": "student-1",
+                "subject": "math",
+                "topic_ids": ["linear-equations"],
+                "title": "Reviewed linear equation practice",
+                "created_by": "tutor-1",
+            }
+        ],
+    )
+    policy = {
+        "policyId": "policy-forged-1",
+        "autonomyLevel": "tutor_approved_batch",
+        "sourceTypes": ["ai_draft"],
+        "deliveryMode": "recommended",
+    }
+    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": policy},
+    )
+    assert preview.status_code == 200
+    forged = dict(preview.json()["selected"][0])
+    forged["sourceId"] = "draft-forged"
+
+    stale = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": "batch-not-current",
+            "approved": True,
+            "policy": policy,
+            "candidates": preview.json()["selected"],
+        },
+    )
+    forged_response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": preview.json()["batchId"],
+            "approved": True,
+            "policy": policy,
+            "candidates": [forged],
+        },
+    )
+
+    assert stale.status_code == 409
+    assert stale.json()["detail"] == "Automation batch preview is stale"
+    assert forged_response.status_code == 409
+    assert forged_response.json()["detail"] == "Candidate does not match current preview"
+
+
+def test_reviewed_ai_draft_assignment_requires_draft_visibility(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    monkeypatch.setattr(
+        adaptive_learning_service.ai_teacher_tools_repo,
+        "get_draft",
+        lambda draft_id: {
+            "draft_id": draft_id,
+            "draft_type": "practice_exercise",
+            "status": "accepted",
+            "student_id": "student-1",
+            "subject": "math",
+            "topic_ids": ["fractions"],
+            "created_by": "other-tutor",
+            "items": [{"prompt": "Simplify 2/4"}],
+            "answer_key": [{"answer": "1/2"}],
+        },
+    )
+
+    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+        "/adaptive/assignments",
+        json={
+            "studentId": "student-1",
+            "sourceType": "ai_draft",
+            "sourceId": "draft-private",
+            "status": "assigned",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Draft is not visible to this user"
+
+
 def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(monkeypatch):
     _install_memory_repo(monkeypatch)
     attempts: list[dict] = []
@@ -451,6 +755,7 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
             "student_id": "student-1",
             "subject": "math",
             "topic_ids": ["fractions"],
+            "created_by": "tutor-1",
             "items": [{"prompt": "Simplify 2/4"}],
             "answer_key": [{"answer": "1/2"}],
         },
