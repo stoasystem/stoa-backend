@@ -1,5 +1,42 @@
 # Milestones
 
+## Active: v5.6 Native Mobile App And Offline Push Readiness
+
+**Status:** Active planning
+**Started:** 2026-06-16
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.6-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.6-REQUIREMENTS.md`
+**Goal:** Turn the completed mobile/API, notification, assignment, and teacher-dispatch readiness work into a concrete native mobile app and offline/push implementation plan for students, parents, teachers/tutors, and admins.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 5 active
+**Release target:** `native-mobile-ready`
+
+Function purpose:
+
+- Make STOA's core learning workflows usable from a native mobile client.
+- Support student assignment review, parent progress review, teacher help-request handling, and admin/operator visibility on mobile.
+- Add push-token, deep-link, offline read-through, and sync contracts around existing backend features.
+- Convert prior contract-ready native/mobile work into implementable frontend/native/backend tasks.
+
+Implementation strategy:
+
+- Reuse v5.0 mobile API/client handoff, v4.9 notification/native delivery readiness, v5.3 assignment automation, v5.4 learning operations UI contracts, and v5.5 teacher dispatch state.
+- Define the native app shell, auth/session model, role navigation, API contract, push token registration, deep links, offline cache boundaries, and release gate.
+- Keep internal product build velocity high; production app-store release, live APNS/FCM credentials, final payment activation, and external provider activation remain separate prerequisites.
+
+Planned phases:
+
+- Phase 201: Native Mobile App And Offline Push Readiness Contract. (active)
+- Phase 202: Native App Shell Auth And Role Navigation.
+- Phase 203: Native Push Token Deep Link And Notification Delivery.
+- Phase 204: Offline Read Through Assignment Report And Help Request UX.
+- Phase 205: v5.6 Native Mobile Offline Push Release Gate.
+
+---
+
 ## v5.5 Automatic Teacher Dispatch And SLA Load Balancing (Shipped: 2026-06-15)
 
 **Status:** Completed backend dispatch-ready release gate 2026-06-15
@@ -43,12 +80,6 @@ Key accomplishments:
 - Verified with focused backend tests, Ruff, and code review.
 
 Known deferred items at close: production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and final payment/support external provider activation.
-
----
-
-## Active
-
-No active milestone. Start the next milestone with `$gsd-new-milestone`.
 
 ---
 

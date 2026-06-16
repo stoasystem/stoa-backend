@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-06-15 after completing v5.5 automatic teacher dispatch and SLA load balancing
+**Updated:** 2026-06-16 after starting v5.6 native mobile app and offline push readiness
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -35,7 +35,7 @@
 
 2. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: v5.5 completed automatic teacher/tutor dispatch backend readiness for student teacher requests.
+   Status: v5.6 now selects native apps, offline read-through, push/deep links, and mobile role workflows as the next internal feature build. v5.5 completed automatic teacher/tutor dispatch backend readiness for student teacher requests.
 
 ## Current Planning Decision
 
@@ -48,3 +48,5 @@ v5.3 is complete as an automation-ready backend/API milestone. It converted v5.2
 v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learning operations usable in frontend tutor/admin/student/parent workflows through a no-demo-fallback API client, automation review console, learning operations dashboard, and family-safe assignment explanations. v5.4 did not implement automatic assignment of human teachers/tutors to student help requests.
 
 v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
+
+v5.6 is active as the next internal product-functionality milestone because final payment/support activation remains externally gated and native/mobile rollout remains a visible Phase 2 product gap. The purpose is to make STOA's core learning workflows usable from a native mobile client: student assignments/progress/reports/help status, parent child progress/report summaries, teacher/tutor dispatched help requests, admin/operator health, actionable push notifications, deep links, and offline read-through. The implementation strategy is to reuse v5.0 mobile API/client handoff, v4.9 notification/native delivery readiness, v5.3 assignment automation, v5.4 learning operations UX contracts, and v5.5 teacher dispatch metadata while keeping live APNS/FCM credentials, app-store release, final live payment activation, and external support provider activation as separate prerequisites.
