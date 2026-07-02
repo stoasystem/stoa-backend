@@ -2,151 +2,164 @@
 
 **Status:** Active planning
 **Created:** 2026-07-02
-**Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
+**Updated:** 2026-07-02 after code-reality audit
+**Research:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
 
 ## Goal
 
-Complete the product-operation details required for real user usage before starting native app buildout: paid access, usage tracking, account verification, login verification codes, billing state, and admin visibility.
+Complete the real-user operational layer before any native app buildout: paid entitlement, usage ledger, account/email verification, login-code policy, customer billing state, and admin support visibility.
 
-## Purpose
+## Current Reality
 
-STOA has many advanced learning, reporting, dispatch, and billing foundations, but several basic production-facing details are still incomplete. If those remain missing, a real user can sign up, pay, use quota, or recover/login to an account without the platform having a reliable source of truth for entitlement, usage, and verification state.
+The codebase already has useful foundations:
 
-v5.6 answers: "When a real parent/student pays, logs in, verifies email, consumes quota, and needs support/admin inspection, what exact backend state changes and admin/customer surfaces prove the product is working?"
+- Cognito-backed password registration/login/refresh/logout and forgot/reset password.
+- Parent subscription and billing endpoints.
+- Stripe checkout, webhook handling, billing events, rollout controls, refunds, and accounting handoff.
+- Daily question quota counters.
+- Admin user update and subscription billing/request views.
+
+The current gaps are lower-level product correctness:
+
+- Registration marks email as verified by backend policy instead of running a real email verification lifecycle.
+- Login has no separate login-code flow; it is password-only Cognito auth.
+- Billing activation updates the parent profile, but student question quota reads the student's own `subscription_tier`.
+- Usage is an atomic daily counter, not a durable ledger that can explain product area, entitlement source, period, and idempotency.
+- Parent/admin views do not yet expose a complete paid entitlement, usage, and verification support picture.
 
 ## Implementation Strategy
 
-- Re-audit existing billing, subscription, quota, auth, email verification, password reset, and admin visibility paths before coding.
-- Build a unified entitlement/usage model that connects paid billing state to effective plan limits and per-user/per-student usage ledgers.
-- Replace the current placeholder email verification policy with explicit verification-code lifecycle and status transitions.
-- Add or complete login verification code flows where required by product policy, while preserving existing Cognito-backed password login/session refresh.
-- Add admin and customer-facing billing/usage/verification visibility so support can explain account state without inspecting raw data stores.
-- Prioritize functionality and internal product completeness; avoid broad unrelated security/compliance work in this internal-development phase.
+- Keep Cognito password auth and existing billing routes stable.
+- Add an effective entitlement resolver before changing quota enforcement.
+- Add a durable usage ledger beside existing counters, then reconcile counters from ledger behavior.
+- Implement real email verification and resolve login-code product policy explicitly.
+- Add customer/admin visibility after entitlement and ledger semantics are stable.
+- Focus on functionality and internal product completeness; avoid broad unrelated security/compliance work in this phase.
 
 ## Phases
 
-- [ ] **Phase 201: Core Product Operations Gap Audit And Contract** - Audit current paid access, usage, auth verification, login code, email verification, and admin visibility gaps; define exact state model and implementation boundaries.
-- [ ] **Phase 202: Paid Entitlements And Usage Ledger** - Connect billing/subscription state to effective plan limits and create a durable usage ledger/admin query surface.
-- [ ] **Phase 203: Email Verification And Login Code Completion** - Implement or complete verification-code lifecycle for email verification and login-code flows required by product policy.
-- [ ] **Phase 204: Customer And Admin Billing Usage Visibility** - Expose parent/customer and admin surfaces for plan, payment, entitlement, usage, verification, and support state.
-- [ ] **Phase 205: v5.6 Core Product Operations Release Gate** - Verify end-to-end paid/usage/auth-verification behavior, update docs, and recommend the next milestone.
+- [x] **Phase 201: Core Product Operations Gap Audit And Contract** - Document current code reality, classify gaps, and lock implementation order.
+- [ ] **Phase 202: Effective Entitlements And Paid Access Enforcement** - Resolve paid access from parent billing/manual overrides and apply it to student usage limits.
+- [ ] **Phase 203: Usage Ledger And Quota Reconciliation** - Add durable plan-governed usage events and reconcile daily/monthly counters.
+- [ ] **Phase 204: Email Verification And Login Code Policy** - Replace placeholder email verification and decide/implement login-code behavior.
+- [ ] **Phase 205: Customer Admin Visibility And Release Gate** - Expose customer/admin support state and close v5.6 with focused verification.
 
 ## Phase Details
 
 ### Phase 201: Core Product Operations Gap Audit And Contract
 
-**Goal**: Establish the exact missing backend/product details for paid access, usage ledger, account verification, login codes, email verification, and admin visibility.
+**Goal**: Establish the real feature state from code and reset the development plan around the missing paid/auth/usage details.
 **Depends on**: Existing auth/account lifecycle, subscription operations, billing provider readiness, daily quota tracking, admin user views, and current `stoa_docs` gap list.
 **Requirements**: COREOPS-01
 **Success Criteria** (what must be TRUE):
 
-  1. Existing paid, subscription, quota, billing, auth, forgot/reset password, email verification, and admin visibility behavior is documented from code.
-  2. Missing flows are classified as must-build now, defer, or external prerequisite.
-  3. Effective entitlement state is defined from subscription tier, billing status, manual admin overrides, and provider events.
-  4. Usage ledger events, dimensions, retention, admin queries, and customer-facing summaries are defined.
-  5. Verification-code lifecycle for email verification and login-code policy is defined.
+  1. Current auth/register/login/forgot/reset/email-verification behavior is documented with code references.
+  2. Current subscription/billing/manual-plan behavior is documented with code references.
+  3. Current quota/usage/admin/customer visibility behavior is documented with code references.
+  4. Missing flows are classified as must-build now, defer, or external prerequisite.
+  5. Phase 202-205 implementation order is updated around the real gaps.
 
-**Plans**: 0/1 plans complete
+**Plans**: 1/1 plans complete
 
 Plans:
 
-- [ ] 201-01: Audit and define core product operations completion contract.
+- [x] 201-01: Audit and define core product operations completion contract.
 
-### Phase 202: Paid Entitlements And Usage Ledger
+### Phase 202: Effective Entitlements And Paid Access Enforcement
 
-**Goal**: Make paid plan state and quota usage reliable enough for real user operations.
+**Goal**: Make paid plan state determine actual usable limits for linked students.
 **Depends on**: Phase 201
 **Requirements**: COREOPS-02
 **Success Criteria** (what must be TRUE):
 
-  1. Effective entitlement calculation is deterministic and auditable.
-  2. Question/AI/OCR/teacher-help or other plan-governed usage writes durable usage events.
-  3. Daily/monthly counters derive from or reconcile with the usage ledger.
-  4. Admins can inspect usage by parent/student/user, period, product area, and entitlement source.
-  5. Tests cover free, paid, pending payment, canceled/expired, manual override, and quota exhaustion states.
+  1. Effective entitlement resolver combines student profile, parent binding, parent subscription tier, billing status, manual overrides, rollout controls, cancellation/expiry, and pending payment.
+  2. Student question quota uses effective entitlement instead of only the student's local `subscription_tier`.
+  3. Active parent paid billing can grant the intended student limits; canceled/expired/past-due states fall back according to policy.
+  4. Manual admin overrides remain supported and visible as entitlement source.
+  5. Tests cover free student, paid parent-linked student, pending checkout, active invoice-paid, canceled/expired, manual override, and missing binding.
 
 **Plans**: 0/1 plans created
 
 Plans:
 
-- [ ] 202-01: Implement paid entitlement and usage ledger.
+- [ ] 202-01: Implement effective entitlements and paid access enforcement.
 
-### Phase 203: Email Verification And Login Code Completion
+### Phase 203: Usage Ledger And Quota Reconciliation
 
-**Goal**: Complete user verification details that currently behave as placeholders or partial Cognito handoffs.
+**Goal**: Make plan-governed usage durable, inspectable, and reconcilable with counters.
 **Depends on**: Phase 202
 **Requirements**: COREOPS-03
 **Success Criteria** (what must be TRUE):
 
-  1. Email verification has explicit requested, sent, verified, expired, failed, and resent states.
-  2. Verification codes are stored/validated through a backend-mediated lifecycle with expiry and attempt limits.
-  3. Login verification-code behavior is implemented or explicitly scoped to a supported policy such as password login plus email verification.
-  4. Forgot/reset password remains compatible with existing Cognito behavior.
-  5. Tests cover successful verification, wrong code, expired code, resend, already verified, and login/account-state effects.
+  1. Plan-governed actions write usage events with actor, subject, product area, action, quantity, entitlement source, period, and idempotency metadata.
+  2. Existing daily question counters remain compatible while usage ledger is introduced.
+  3. Question submission, OCR/AI answer generation, teacher-help request, and chat/hint counters have a clear ledger/counter policy.
+  4. Admin usage query can inspect usage by parent/student/user, period, product area, and entitlement source.
+  5. Tests cover idempotent event writes, quota exhaustion, ledger/counter consistency, and basic admin usage queries.
 
 **Plans**: 0/1 plans created
 
 Plans:
 
-- [ ] 203-01: Implement email verification and login code completion.
+- [ ] 203-01: Implement usage ledger and quota reconciliation.
 
-### Phase 204: Customer And Admin Billing Usage Visibility
+### Phase 204: Email Verification And Login Code Policy
 
-**Goal**: Make plan, payment, entitlement, usage, and verification state visible enough for customer self-service and admin support.
+**Goal**: Turn verification from placeholder metadata into explicit account flows.
 **Depends on**: Phase 203
 **Requirements**: COREOPS-04
 **Success Criteria** (what must be TRUE):
 
-  1. Parent/customer subscription views distinguish plan, billing status, entitlement status, renewal/cancel state, and usage summary.
-  2. Admin views show account verification status, usage ledger summary, current entitlement, billing provider state, and support-relevant timestamps.
-  3. Admin actions needed for internal development are explicit, audited, and bounded.
-  4. API responses avoid silent demo fallback and expose actionable state for frontend implementation.
-  5. Tests cover customer and admin response shapes for the main paid/auth/usage states.
+  1. Registration no longer silently treats new emails as product-verified unless intentionally configured for an internal environment.
+  2. Email verification supports requested, sent, verified, expired, failed, resent, wrong-code, and already-verified states.
+  3. Verification codes have expiry, attempt limits, resend behavior, and account-state effects.
+  4. Login-code policy is explicit: either implement a supported email login-code flow or formally keep login password-only and remove unsupported UI/API expectations.
+  5. Forgot/reset password remains compatible with existing Cognito behavior.
 
 **Plans**: 0/1 plans created
 
 Plans:
 
-- [ ] 204-01: Implement customer and admin billing usage visibility.
+- [ ] 204-01: Implement email verification and login code policy.
 
-### Phase 205: v5.6 Core Product Operations Release Gate
+### Phase 205: Customer Admin Visibility And Release Gate
 
-**Goal**: Close v5.6 with end-to-end verification of paid access, usage ledger, verification codes, customer/admin visibility, and updated next-stage docs.
+**Goal**: Make paid/auth/usage state explainable to customers and admins, then close v5.6.
 **Depends on**: Phase 204
 **Requirements**: VERIFY-39
 **Success Criteria** (what must be TRUE):
 
-  1. Focused backend tests pass for paid entitlement, usage ledger, verification code, login/account state, and admin/customer visibility.
-  2. Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v5.6 work.
-  3. Release evidence identifies exact commit SHAs and any frontend/native follow-up requirements.
-  4. Final audit records rollout state: contract-ready, entitlement-ready, usage-ready, verification-ready, support-visible, blocked, or deferred.
-  5. Next milestone recommendation is updated from the remaining feature queue.
+  1. Parent/customer views expose effective plan, billing status, entitlement source, usage summary, and email verification state.
+  2. Admin views expose account verification status, effective entitlement, usage ledger summary, billing provider state, and support timestamps.
+  3. Focused backend tests pass for paid entitlement, usage ledger, verification code, login/account state, and customer/admin visibility.
+  4. Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v5.6 work.
+  5. Final audit records rollout state and recommends v5.7.
 
 **Plans**: 0/1 plans created
 
 Plans:
 
-- [ ] 205-01: Verify v5.6 core product operations release gate.
+- [ ] 205-01: Verify customer/admin visibility and v5.6 release gate.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 201 Core Product Operations Gap Audit And Contract | v5.6 | 0/1 | Active | - |
-| 202 Paid Entitlements And Usage Ledger | v5.6 | 0/1 | Planned | - |
-| 203 Email Verification And Login Code Completion | v5.6 | 0/1 | Planned | - |
-| 204 Customer And Admin Billing Usage Visibility | v5.6 | 0/1 | Planned | - |
-| 205 v5.6 Core Product Operations Release Gate | v5.6 | 0/1 | Planned | - |
+| 201 Core Product Operations Gap Audit And Contract | v5.6 | 1/1 | Complete | 2026-07-02 |
+| 202 Effective Entitlements And Paid Access Enforcement | v5.6 | 0/1 | Active | - |
+| 203 Usage Ledger And Quota Reconciliation | v5.6 | 0/1 | Planned | - |
+| 204 Email Verification And Login Code Policy | v5.6 | 0/1 | Planned | - |
+| 205 Customer Admin Visibility And Release Gate | v5.6 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COREOPS-01 | Phase 201 | Planned |
+| COREOPS-01 | Phase 201 | Complete |
 | COREOPS-02 | Phase 202 | Planned |
 | COREOPS-03 | Phase 203 | Planned |
 | COREOPS-04 | Phase 204 | Planned |
 | VERIFY-39 | Phase 205 | Planned |
 
 ---
-*Last updated: 2026-07-02 after correcting v5.6 toward core product operations completion.*
+*Last updated: 2026-07-02 after code-reality audit and task reordering.*

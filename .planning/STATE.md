@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.6
 milestone_name: Core Product Operations Completion
-status: Active planning
+status: Active implementation planning
 last_updated: "2026-07-02T00:00:00Z"
-last_activity: 2026-07-02 — Corrected v5.6 scope from native app readiness to core paid/auth/usage product operations
+last_activity: 2026-07-02 — Completed Phase 201 current-reality audit and moved v5.6 to Phase 202 entitlement enforcement
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-02)
 
 ## Current Position
 
-Phase: 201 Core Product Operations Gap Audit And Contract
-Plan: 201-01 Audit and define core product operations completion contract
-Status: Active planning
-Last activity: 2026-07-02 — User identified incomplete core details: paid functionality, backend usage records, login verification codes, email verification, and related operational flows.
+Phase: 202 Effective Entitlements And Paid Access Enforcement
+Plan: 202-01 Implement effective entitlements and paid access enforcement
+Status: Active implementation planning
+Last activity: 2026-07-02 — Current code reality audit identified gaps in parent-paid student entitlement, durable usage ledger, email verification lifecycle, login-code policy, and customer/admin support visibility.
 
 ## Accumulated Context
 
@@ -35,15 +35,16 @@ Last activity: 2026-07-02 — User identified incomplete core details: paid func
 
 - The earlier v5.6 native app plan was premature because core product operations are not complete enough for real users.
 - Native app buildout remains a future milestone after paid/auth/usage correctness.
-- v5.6 now focuses on paid entitlements, usage ledger, login/email verification details, customer billing state, and admin support visibility.
+- v5.6 now focuses on effective entitlements, usage ledger reconciliation, email verification lifecycle, login-code policy, customer billing state, and admin support visibility.
+- Parent paid billing currently updates the parent profile, while student question quota currently reads the student's local `subscription_tier`; this is the first implementation gap to close.
 - Internal development should prioritize functional completeness over broad security/compliance test expansion for this phase.
 
 ### Pending Todos
 
-- Audit current auth, subscription, billing, quota, email verification, and admin visibility implementation.
-- Define effective entitlement state and usage ledger event model.
-- Define email verification and login-code product policy before implementation.
-- Implement paid/auth/usage visibility for customers and admins.
+- Implement Phase 202 effective entitlement resolver and paid access enforcement.
+- Implement Phase 203 usage ledger and quota reconciliation.
+- Implement Phase 204 email verification lifecycle and login-code policy.
+- Implement Phase 205 customer/admin visibility and release gate.
 - Keep native app, live APNS/FCM, app-store publication, and external support activation deferred.
 
 ### Blockers/Concerns

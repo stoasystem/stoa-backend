@@ -126,7 +126,7 @@ Admin/support surfaces should expose:
 
 ## Follow-Up Phases
 
-- Phase 202: paid entitlements and usage ledger.
-- Phase 203: email verification and login code completion.
-- Phase 204: customer and admin billing/usage visibility.
-- Phase 205: release gate, evidence, and next milestone decision.
+- Phase 202: effective entitlements and paid access enforcement.
+- Phase 203: usage ledger and quota reconciliation.
+- Phase 204: email verification and login code policy.
+- Phase 205: customer/admin visibility, release gate, evidence, and next milestone decision.

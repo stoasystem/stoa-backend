@@ -8,34 +8,34 @@
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.6-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.6-REQUIREMENTS.md`
-**Goal:** Complete paid access, usage records, login verification code policy, email verification, billing state, and admin/customer visibility before native app buildout.
+**Goal:** Complete paid entitlement, usage ledger, login-code policy, email verification, billing state, and admin/customer visibility before native app buildout.
 **Phases:** 5
-**Plans:** 0/5 complete
+**Plans:** 1/5 complete
 **Requirements:** 5 active
 **Release target:** `core-ops-ready`
 
 Function purpose:
 
-- Ensure paid users receive the correct effective entitlement.
-- Record plan-governed usage in a durable backend ledger.
+- Ensure paid parent subscriptions grant the correct linked-student effective entitlement.
+- Record and reconcile plan-governed usage in a durable backend ledger.
 - Complete email verification and login verification-code behavior as explicit product flows.
 - Give parents/customers and admins clear billing, usage, verification, and support state.
 
 Implementation strategy:
 
 - Audit current auth, billing, subscription, quota, usage, verification, and admin code paths.
-- Define deterministic effective entitlement from plan, provider billing state, manual override, rollout controls, cancellation/expiry, and pending payment.
-- Add durable usage ledger requirements before relying only on daily counters.
+- Define deterministic effective entitlement from student profile, parent binding, parent billing state, manual override, rollout controls, cancellation/expiry, and pending payment.
+- Add durable usage ledger requirements beside existing counters.
 - Define verification-code lifecycle for email verification and login-code policy while preserving existing Cognito-backed flows.
 - Defer native app implementation until core paid/auth/usage operations are reliable.
 
 Planned phases:
 
-- Phase 201: Core Product Operations Gap Audit And Contract. (active)
-- Phase 202: Paid Entitlements And Usage Ledger.
-- Phase 203: Email Verification And Login Code Completion.
-- Phase 204: Customer And Admin Billing Usage Visibility.
-- Phase 205: v5.6 Core Product Operations Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
+- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
+- Phase 203: Usage Ledger And Quota Reconciliation.
+- Phase 204: Email Verification And Login Code Policy.
+- Phase 205: Customer Admin Visibility And Release Gate.
 
 ---
 

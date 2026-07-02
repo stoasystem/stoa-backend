@@ -21,33 +21,33 @@ Closed scope:
 
 ## Active: v5.6 Core Product Operations Completion
 
-**Status:** Active planning
+**Status:** Phase 201 complete; Phase 202 active
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 
 Function purpose:
 
 - Complete real-user product details before native app work.
-- Make paid entitlement state reliable and visible.
-- Record user/student usage in a durable backend ledger.
+- Make parent-paid entitlement state reliable for linked students.
+- Record and reconcile user/student usage in a durable backend ledger.
 - Complete email verification and login verification-code policy.
 - Expose customer/admin billing, usage, verification, and support state.
 
 Implementation strategy:
 
 - Audit existing auth, subscription, billing, quota, usage, verification, and admin code paths.
-- Build deterministic effective entitlement from subscription tier, billing provider state, manual overrides, rollout controls, cancellation/expiry, and pending payment.
-- Add a usage ledger for plan-governed actions such as question submission, OCR/AI usage, and teacher-help requests.
+- Build deterministic effective entitlement from student profile, parent binding, parent subscription tier, billing provider state, manual overrides, rollout controls, cancellation/expiry, and pending payment.
+- Add a usage ledger and reconcile it with current counters for plan-governed actions such as question submission, OCR/AI usage, teacher-help requests, chat, and hints.
 - Complete verification-code lifecycle with expiry, resend, attempt limits, and account-state effects.
 - Keep native apps, live APNS/FCM, app-store release, and external support activation as later milestones.
 
 Planned scope:
 
-- Phase 201: Core Product Operations Gap Audit And Contract.
-- Phase 202: Paid Entitlements And Usage Ledger.
-- Phase 203: Email Verification And Login Code Completion.
-- Phase 204: Customer And Admin Billing Usage Visibility.
-- Phase 205: v5.6 Core Product Operations Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
+- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
+- Phase 203: Usage Ledger And Quota Reconciliation.
+- Phase 204: Email Verification And Login Code Policy.
+- Phase 205: Customer Admin Visibility And Release Gate.
 
 ## Candidate v5.7 Frontend Rich Curriculum Editor Or Native App Buildout
 

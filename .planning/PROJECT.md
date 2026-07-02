@@ -84,7 +84,7 @@ The completed v5.4 milestone makes those v5.2/v5.3 learning operations usable in
 
 The completed v5.5 milestone turns the manual teacher queue/takeover workflow into backend dispatch-ready routing: teacher/tutor candidate ranking, conditional dispatch claims, stale reassignment behavior, teacher queue filtering, takeover compatibility, and admin dispatch SLA/load visibility. It closed as `dispatch-ready`; production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain future scope.
 
-The active v5.6 milestone corrects the next priority toward core product operations completion before native app buildout: paid entitlement state, durable usage records, login verification code policy, email verification lifecycle, customer billing state, and admin support visibility. Native apps, live APNS/FCM credentials, app-store publication, final live payment activation, and external support provider activation remain later prerequisites.
+The active v5.6 milestone corrects the next priority toward core product operations completion before native app buildout: parent-paid linked-student entitlement, durable usage ledger and counter reconciliation, login-code policy, email verification lifecycle, customer billing state, and admin support visibility. Native apps, live APNS/FCM credentials, app-store publication, final live payment activation, and external support provider activation remain later prerequisites.
 
 ## Core Value
 
@@ -384,19 +384,19 @@ Milestone roadmap: `.planning/milestones/v5.6-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.6-REQUIREMENTS.md`
 Active phase: `.planning/phases/201-core-product-operations-gap-audit-and-contract/`
 
-**Status:** Active planning corrected 2026-07-02.
+**Status:** Phase 201 complete; Phase 202 active as of 2026-07-02.
 
-**Function purpose:** Complete the paid/auth/usage details required for real users: effective paid entitlement, backend usage records, email verification, login verification-code policy, customer billing state, and admin support visibility.
+**Function purpose:** Complete the paid/auth/usage details required for real users: parent-paid linked-student entitlement, backend usage ledger, email verification, login-code policy, customer billing state, and admin support visibility.
 
-**Implementation strategy:** Audit existing auth, subscription, billing, quota, usage, verification, and admin paths before coding. Define deterministic effective entitlement, add durable usage ledger requirements, complete verification-code lifecycle and login-code policy, and expose customer/admin visibility. Defer native app implementation until these core operations are reliable.
+**Implementation strategy:** Build from the current code reality. Existing billing updates parent profile tiers, while question quota reads the student's own tier; close that entitlement gap first. Then add a usage ledger beside the existing counters, implement email verification/login-code policy, and expose customer/admin visibility. Defer native app implementation until these core operations are reliable.
 
 **Planned phases:**
 
-- Phase 201: Core Product Operations Gap Audit And Contract.
-- Phase 202: Paid Entitlements And Usage Ledger.
-- Phase 203: Email Verification And Login Code Completion.
-- Phase 204: Customer And Admin Billing Usage Visibility.
-- Phase 205: v5.6 Core Product Operations Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
+- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
+- Phase 203: Usage Ledger And Quota Reconciliation.
+- Phase 204: Email Verification And Login Code Policy.
+- Phase 205: Customer Admin Visibility And Release Gate.
 
 ## Requirements
 
@@ -807,7 +807,7 @@ Known current resources:
 | Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
-| Correct v5.6 toward core product operations completion | User testing showed paid functionality, usage records, login verification codes, email verification, and related support details are still incomplete; these real-user basics should precede native app buildout | Active planning |
+| Reorder v5.6 from current code reality | Code audit showed billing activation updates parent state, question quota reads student tier, usage is counter-only, registration bypasses email verification, and login code is absent; the next tasks must close those real gaps before native app buildout | Active planning |
 
 ## Evolution
 
@@ -827,4 +827,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 after correcting v5.6 toward core product operations completion*
+*Last updated: 2026-07-02 after code-reality audit and v5.6 task reordering*
