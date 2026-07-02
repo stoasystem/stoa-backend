@@ -1,6 +1,6 @@
 # Next Three Milestones
 
-**Updated:** 2026-06-16 after starting v5.6
+**Updated:** 2026-07-02 after correcting v5.6
 **Mode:** product functionality first
 
 ## Latest Completed: v5.5 Automatic Teacher Dispatch And SLA Load Balancing
@@ -18,9 +18,8 @@ Closed scope:
 - Added conditional dispatch claim metadata and stale reassignment behavior.
 - Updated request-teacher, teacher queue, takeover, and admin dashboard routes for dispatch state.
 - Verified with focused backend tests and Ruff; closed as `dispatch-ready`.
-- Live calendar, payroll, native push, frontend dashboard implementation, production scheduled worker wiring, and live production smoke remain future scope.
 
-## Active: v5.6 Native Mobile App And Offline Push Readiness
+## Active: v5.6 Core Product Operations Completion
 
 **Status:** Active planning
 **Roadmap:** `.planning/ROADMAP.md`
@@ -28,36 +27,38 @@ Closed scope:
 
 Function purpose:
 
-- Make STOA's highest-frequency learning workflows usable from a native mobile client.
-- Let students review assignments/progress/reports and track teacher-help status.
-- Let parents review child progress/reports and assignment explanations.
-- Let teachers/tutors see dispatched help requests and notification-driven workflows.
-- Define push/deep-link behavior and offline read-through around existing backend capabilities.
+- Complete real-user product details before native app work.
+- Make paid entitlement state reliable and visible.
+- Record user/student usage in a durable backend ledger.
+- Complete email verification and login verification-code policy.
+- Expose customer/admin billing, usage, verification, and support state.
 
 Implementation strategy:
 
-- Reuse v5.0 mobile API/client handoff, v4.9 notification/native delivery readiness, v5.3 assignment automation, v5.4 learning operations UX contracts, and v5.5 teacher dispatch metadata.
-- Define app shell, auth/session, role navigation, push-token lifecycle, deep-link payloads, offline cache boundaries, stale indicators, and release gate.
-- Keep internal product work moving while treating live APNS/FCM credentials, app-store publication, final live payments, and external support provider activation as separate prerequisites.
+- Audit existing auth, subscription, billing, quota, usage, verification, and admin code paths.
+- Build deterministic effective entitlement from subscription tier, billing provider state, manual overrides, rollout controls, cancellation/expiry, and pending payment.
+- Add a usage ledger for plan-governed actions such as question submission, OCR/AI usage, and teacher-help requests.
+- Complete verification-code lifecycle with expiry, resend, attempt limits, and account-state effects.
+- Keep native apps, live APNS/FCM, app-store release, and external support activation as later milestones.
 
 Planned scope:
 
-- Phase 201: Native Mobile App And Offline Push Readiness Contract.
-- Phase 202: Native App Shell Auth And Role Navigation.
-- Phase 203: Native Push Token Deep Link And Notification Delivery.
-- Phase 204: Offline Read Through Assignment Report And Help Request UX.
-- Phase 205: v5.6 Native Mobile Offline Push Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract.
+- Phase 202: Paid Entitlements And Usage Ledger.
+- Phase 203: Email Verification And Login Code Completion.
+- Phase 204: Customer And Admin Billing Usage Visibility.
+- Phase 205: v5.6 Core Product Operations Release Gate.
 
-## Candidate v5.7 Frontend Rich Curriculum Editor Or Warehouse Deployment
+## Candidate v5.7 Frontend Rich Curriculum Editor Or Native App Buildout
 
-**Status:** Candidate after v5.6, unless external activation prerequisites unblock
+**Status:** Candidate after v5.6, depending on core operations completion and owner readiness
 
 Potential scope:
 
 - Frontend rich curriculum editor implementation from the v5.1/v4.6 authoring readiness work.
+- Native iOS/Android app buildout once account/payment/usage correctness is reliable.
 - Production source import and migration API/UI if content owners are ready.
 - Live warehouse/BI deployment and scheduled exports if analytics infrastructure ownership is ready.
-- Broader operator reporting for curriculum quality, assignment outcomes, and dispatch/learning operations.
 
 ## Candidate v5.8 External Activation Or Support/Payment Closeout
 
@@ -65,6 +66,6 @@ Potential scope:
 
 Potential scope:
 
-- Final live payment activation operations once approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and rollout enablement are available.
+- Final live payment activation once approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and rollout enablement are available.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
-- Production app-store/TestFlight/Play internal testing release after live native provider prerequisites are available.
+- Production app-store/TestFlight/Play internal testing release after native and provider prerequisites are available.

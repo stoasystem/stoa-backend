@@ -1,39 +1,41 @@
 # Milestones
 
-## Active: v5.6 Native Mobile App And Offline Push Readiness
+## Active: v5.6 Core Product Operations Completion
 
 **Status:** Active planning
-**Started:** 2026-06-16
+**Started:** 2026-07-02
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.6-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.6-REQUIREMENTS.md`
-**Goal:** Turn the completed mobile/API, notification, assignment, and teacher-dispatch readiness work into a concrete native mobile app and offline/push implementation plan for students, parents, teachers/tutors, and admins.
+**Goal:** Complete paid access, usage records, login verification code policy, email verification, billing state, and admin/customer visibility before native app buildout.
 **Phases:** 5
 **Plans:** 0/5 complete
 **Requirements:** 5 active
-**Release target:** `native-mobile-ready`
+**Release target:** `core-ops-ready`
 
 Function purpose:
 
-- Make STOA's core learning workflows usable from a native mobile client.
-- Support student assignment review, parent progress review, teacher help-request handling, and admin/operator visibility on mobile.
-- Add push-token, deep-link, offline read-through, and sync contracts around existing backend features.
-- Convert prior contract-ready native/mobile work into implementable frontend/native/backend tasks.
+- Ensure paid users receive the correct effective entitlement.
+- Record plan-governed usage in a durable backend ledger.
+- Complete email verification and login verification-code behavior as explicit product flows.
+- Give parents/customers and admins clear billing, usage, verification, and support state.
 
 Implementation strategy:
 
-- Reuse v5.0 mobile API/client handoff, v4.9 notification/native delivery readiness, v5.3 assignment automation, v5.4 learning operations UI contracts, and v5.5 teacher dispatch state.
-- Define the native app shell, auth/session model, role navigation, API contract, push token registration, deep links, offline cache boundaries, and release gate.
-- Keep internal product build velocity high; production app-store release, live APNS/FCM credentials, final payment activation, and external provider activation remain separate prerequisites.
+- Audit current auth, billing, subscription, quota, usage, verification, and admin code paths.
+- Define deterministic effective entitlement from plan, provider billing state, manual override, rollout controls, cancellation/expiry, and pending payment.
+- Add durable usage ledger requirements before relying only on daily counters.
+- Define verification-code lifecycle for email verification and login-code policy while preserving existing Cognito-backed flows.
+- Defer native app implementation until core paid/auth/usage operations are reliable.
 
 Planned phases:
 
-- Phase 201: Native Mobile App And Offline Push Readiness Contract. (active)
-- Phase 202: Native App Shell Auth And Role Navigation.
-- Phase 203: Native Push Token Deep Link And Notification Delivery.
-- Phase 204: Offline Read Through Assignment Report And Help Request UX.
-- Phase 205: v5.6 Native Mobile Offline Push Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract. (active)
+- Phase 202: Paid Entitlements And Usage Ledger.
+- Phase 203: Email Verification And Login Code Completion.
+- Phase 204: Customer And Admin Billing Usage Visibility.
+- Phase 205: v5.6 Core Product Operations Release Gate.
 
 ---
 

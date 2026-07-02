@@ -1,113 +1,109 @@
-# Requirements: v5.6 Native Mobile App And Offline Push Readiness
+# Requirements: v5.6 Core Product Operations Completion
 
 **Milestone:** v5.6
 **Status:** Active planning
-**Created:** 2026-06-16
+**Created:** 2026-07-02
 **Research:** `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Purpose
 
-Build the next internal product milestone around native mobile app readiness, offline read-through, and push/deep-link behavior.
+Complete the operational product details that must work before real users can reliably use STOA: paid access, usage tracking, login verification code policy, email verification, customer billing state, and admin support visibility.
 
-v5.6 is not just a mobile shell. It should make STOA's core student, parent, teacher/tutor, and operator workflows implementable in a native client: login, role-aware navigation, assignments, reports/progress, help-request dispatch, notifications, and offline-friendly read states.
+The previous v5.6 native app plan was premature. Native apps remain useful later, but they should not precede core account/payment/usage correctness.
 
 ## Implementation Strategy
 
-Reuse completed foundations instead of inventing a separate mobile product:
-
-- v5.0 mobile API/client handoff and native notification/offline contracts.
-- v4.9 production notification and native delivery backend readiness.
-- v5.3 controlled assignment automation backend/API readiness.
-- v5.4 frontend learning operations and family explanation UX.
-- v5.5 automatic teacher dispatch metadata and SLA/load visibility.
-
-Prioritize feature buildout for internal development. Keep broad production security/compliance testing, live APNS/FCM credentials, app-store release, final payment activation, and real third-party support activation outside the critical path unless prerequisites become available.
+- Audit the existing auth, billing, subscription, quota, and admin code paths before implementation.
+- Define a deterministic entitlement model from manual plan state, provider billing state, rollout controls, and admin overrides.
+- Add a durable usage ledger for plan-governed actions such as questions, OCR/AI usage, and teacher-help requests.
+- Complete email verification and login-code behavior with explicit state transitions, expiry, resend, and failure handling.
+- Expose customer/admin visibility for plan, usage, verification, billing, and support status.
+- Keep focus on functional completeness during internal development; broad production security testing is not the priority for this phase.
 
 ## Requirements
 
-### NATIVEAPP-01 Native Mobile App And Offline Push Contract
+### COREOPS-01 Core Product Operations Gap Audit And Contract
 
-Implementers have a concrete app/client/backend contract before code expands.
-
-Acceptance criteria:
-
-- Contract defines supported roles, first native screens, required API calls, session refresh behavior, and role navigation.
-- Contract maps mobile flows for student assignments, student reports/progress, parent child progress, teacher dispatched help requests, and admin/operator visibility.
-- Contract defines push notification event types, deep-link targets, token lifecycle, and provider-gated behavior.
-- Contract defines offline read-through cache boundaries, stale indicators, retry/sync behavior, and conflict boundaries.
-- Contract identifies frontend/native workspace ownership, backend API gaps, and release-state labels.
-
-### NATIVEAPP-02 Native App Shell Auth And Role Navigation
-
-Native clients can start from a real authenticated shell and navigate by role.
+Implementers have a concrete contract for the missing paid/auth/usage details before code expands.
 
 Acceptance criteria:
 
-- App shell supports login/session refresh/logout against existing auth routes or documented client auth handoff.
-- Student, parent, teacher/tutor, and admin role homes are mapped to concrete backend-backed screens.
-- Navigation preserves locale preference and language-safe route metadata where available.
-- Empty/loading/error states do not use silent demo fallback for parent-critical or teacher-critical flows.
-- Focused checks cover at least student, parent, and teacher/tutor navigation contracts.
+- Existing auth, subscription, billing, quota, usage, email verification, forgot/reset password, and admin visibility behavior is documented from code.
+- Missing details are classified as must-build now, defer, or external prerequisite.
+- Effective entitlement state is defined from subscription tier, billing status, manual admin override, provider events, and rollout controls.
+- Usage ledger event types, dimensions, retention, summaries, and admin query requirements are defined.
+- Verification-code lifecycle for email verification and login-code policy is defined.
 
-### NATIVEAPP-03 Native Push Token Deep Link And Notification Delivery
+### COREOPS-02 Paid Entitlements And Usage Ledger
 
-Native clients can register push tokens and open actionable notifications.
-
-Acceptance criteria:
-
-- Push token registration/update/delete behavior is implemented or mapped to existing notification readiness APIs.
-- Notification events for assignments, teacher dispatch, teacher reply, report/progress update, and admin/operator action map to deep-link targets.
-- Provider-gated behavior is explicit when APNS/FCM/live delivery credentials are absent.
-- Read/archive/preference state remains compatible with existing notification center behavior.
-- Focused tests or contract checks cover token lifecycle, deep-link payload shape, and no-provider fallback.
-
-### NATIVEAPP-04 Offline Read Through Assignment Report And Help Request UX
-
-Core mobile read flows remain usable during intermittent connectivity.
+Paid access and plan-governed usage are tracked through reliable backend state.
 
 Acceptance criteria:
 
-- Student assignment list/detail, parent child progress/report summary, and teacher dispatched queue/detail have offline read-through cache boundaries.
-- Stale data is visibly marked with last-synced metadata.
-- Mutations that cannot safely complete offline are queued only when idempotent or otherwise blocked with clear retry state.
-- Help-request/teacher-dispatch status can be refreshed without exposing internal ranking details.
-- Focused checks cover offline cache hydration, stale rendering, reconnect refresh, and role-safe data boundaries.
+- Effective entitlement calculation is deterministic, testable, and exposed through a stable internal service/API shape.
+- Plan-governed actions write durable usage events with actor, subject, product area, period, entitlement source, and idempotency metadata.
+- Daily/monthly counters can derive from or reconcile with usage ledger state.
+- Admins can inspect usage by parent/student/user, period, product area, and entitlement source.
+- Tests cover free, paid, pending payment, canceled/expired, manual override, and quota exhaustion states.
 
-### VERIFY-39 v5.6 Native Mobile Offline Push Release Gate
+### COREOPS-03 Email Verification And Login Code Completion
 
-v5.6 closes with implementation evidence, documentation updates, and next milestone recommendation.
+Account verification and login-code behavior are explicit product flows, not placeholders.
 
 Acceptance criteria:
 
-- Native/mobile app shell, push/deep-link, offline read-through, assignment/report/help-request flows, and docs are verified.
+- Email verification supports requested, sent, verified, expired, failed, and resent states.
+- Verification codes have expiry, resend, attempt-limit, and already-verified behavior.
+- Login verification-code policy is implemented or explicitly resolved to the supported product policy.
+- Forgot/reset password remains compatible with existing Cognito-backed behavior.
+- Tests cover success, wrong code, expired code, resend, already verified, and account/login effects.
+
+### COREOPS-04 Customer And Admin Billing Usage Visibility
+
+Customers and admins can understand paid access, usage, and verification state without inspecting raw data stores.
+
+Acceptance criteria:
+
+- Parent/customer subscription views distinguish plan, billing status, entitlement status, renewal/cancel state, and usage summary.
+- Admin views expose account verification status, usage ledger summary, effective entitlement, billing provider state, and support timestamps.
+- Required internal admin actions are explicit, bounded, and audit-friendly.
+- API responses avoid silent demo fallback and expose actionable frontend state.
+- Tests cover customer/admin response shapes for key paid/auth/usage states.
+
+### VERIFY-39 v5.6 Core Product Operations Release Gate
+
+v5.6 closes with end-to-end evidence for the core product operations flows.
+
+Acceptance criteria:
+
+- Focused tests pass for paid entitlement, usage ledger, verification code, login/account state, and customer/admin visibility.
 - Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect completed v5.6 work.
-- Release evidence identifies backend/frontend/native commits or explicitly documents if the milestone remains contract-only.
-- Final audit records rollout state: contract-ready, app-shell-ready, push-ready, offline-ready, native-mobile-ready, blocked, or deferred.
+- Release evidence identifies backend/frontend commits and explicitly documents deferred native app, live provider, or production rollout items.
+- Final audit records rollout state: contract-ready, entitlement-ready, usage-ready, verification-ready, support-visible, blocked, or deferred.
 - Next milestone recommendation is updated from the remaining feature queue.
 
 ## Future Requirements
 
-- App-store/TestFlight/Play internal testing release.
-- Live APNS/FCM production credentials and provider smoke.
+- Native iOS/Android app buildout after core account/payment/usage correctness.
+- Live APNS/FCM provider credentials and app-store release.
 - Rich curriculum editor frontend implementation.
 - Live warehouse/BI deployment.
-- Final live payment/support provider activation.
-- Fully unreviewed autonomous tutoring decisions.
+- Real external support provider/CRM activation.
 
 ## Out of Scope
 
-- Final live Stripe/TWINT customer charging.
+- Native app implementation in this milestone.
+- Final live Stripe/TWINT customer charging unless external prerequisites are ready.
 - Real external support provider or CRM/customer writes.
 - Fully autonomous AI tutoring without human review.
-- Broad compliance/security hardening unrelated to native mobile functionality.
-- Production app-store publication unless external prerequisites are ready.
+- Broad compliance/security hardening unrelated to paid/auth/usage functionality.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NATIVEAPP-01 | Phase 201 | Planned |
-| NATIVEAPP-02 | Phase 202 | Planned |
-| NATIVEAPP-03 | Phase 203 | Planned |
-| NATIVEAPP-04 | Phase 204 | Planned |
+| COREOPS-01 | Phase 201 | Planned |
+| COREOPS-02 | Phase 202 | Planned |
+| COREOPS-03 | Phase 203 | Planned |
+| COREOPS-04 | Phase 204 | Planned |
 | VERIFY-39 | Phase 205 | Planned |

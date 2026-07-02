@@ -84,7 +84,7 @@ The completed v5.4 milestone makes those v5.2/v5.3 learning operations usable in
 
 The completed v5.5 milestone turns the manual teacher queue/takeover workflow into backend dispatch-ready routing: teacher/tutor candidate ranking, conditional dispatch claims, stale reassignment behavior, teacher queue filtering, takeover compatibility, and admin dispatch SLA/load visibility. It closed as `dispatch-ready`; production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain future scope.
 
-The active v5.6 milestone turns the completed mobile/API, notification, assignment automation, learning operations, and teacher-dispatch readiness into native mobile app and offline/push readiness: app shell, auth/session, role navigation, push-token lifecycle, deep links, offline read-through, stale indicators, and mobile-first student/parent/teacher/operator workflows. Live APNS/FCM credentials, app-store publication, final live payment activation, and external support provider activation remain separate prerequisites.
+The active v5.6 milestone corrects the next priority toward core product operations completion before native app buildout: paid entitlement state, durable usage records, login verification code policy, email verification lifecycle, customer billing state, and admin support visibility. Native apps, live APNS/FCM credentials, app-store publication, final live payment activation, and external support provider activation remain later prerequisites.
 
 ## Core Value
 
@@ -94,7 +94,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.5 Automatic Teacher Dispatch And SLA Load Balancing on 2026-06-15 (dispatch-ready backend release gate)
-**Active milestone:** v5.6 Native Mobile App And Offline Push Readiness (active planning)
+**Active milestone:** v5.6 Core Product Operations Completion (active planning)
 
 Delivered:
 
@@ -376,27 +376,27 @@ Phase evidence: `.planning/milestones/v5.5-phases/`
 
 **Outcome:** v5.5 closed as `dispatch-ready` with backend implementation commit `7f1d759`, audit commit `849b97a`, and release gate commit `e5ce750`. Verification passed 16 focused backend tests and targeted Ruff. Production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain deferred.
 
-## Active Milestone: v5.6 Native Mobile App And Offline Push Readiness
+## Active Milestone: v5.6 Core Product Operations Completion
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 Milestone roadmap: `.planning/milestones/v5.6-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.6-REQUIREMENTS.md`
-Active phase: `.planning/phases/201-native-mobile-app-and-offline-push-readiness-contract/`
+Active phase: `.planning/phases/201-core-product-operations-gap-audit-and-contract/`
 
-**Status:** Active planning started 2026-06-16.
+**Status:** Active planning corrected 2026-07-02.
 
-**Function purpose:** Make STOA's core learning workflows usable from a native mobile client: student assignments/progress/reports/help status, parent child progress/report summaries, teacher/tutor dispatched help requests, admin/operator health, actionable push notifications, deep links, and offline read-through.
+**Function purpose:** Complete the paid/auth/usage details required for real users: effective paid entitlement, backend usage records, email verification, login verification-code policy, customer billing state, and admin support visibility.
 
-**Implementation strategy:** Reuse v5.0 mobile API/client handoff, v4.9 notification/native delivery readiness, v5.3 assignment automation, v5.4 learning operations UX contracts, and v5.5 teacher dispatch metadata. Define app shell, auth/session, role navigation, push-token lifecycle, deep-link payloads, offline cache boundaries, stale indicators, and release evidence. Keep live APNS/FCM credentials, app-store release, final live payment activation, and external support activation outside the critical path unless prerequisites become available.
+**Implementation strategy:** Audit existing auth, subscription, billing, quota, usage, verification, and admin paths before coding. Define deterministic effective entitlement, add durable usage ledger requirements, complete verification-code lifecycle and login-code policy, and expose customer/admin visibility. Defer native app implementation until these core operations are reliable.
 
 **Planned phases:**
 
-- Phase 201: Native Mobile App And Offline Push Readiness Contract.
-- Phase 202: Native App Shell Auth And Role Navigation.
-- Phase 203: Native Push Token Deep Link And Notification Delivery.
-- Phase 204: Offline Read Through Assignment Report And Help Request UX.
-- Phase 205: v5.6 Native Mobile Offline Push Release Gate.
+- Phase 201: Core Product Operations Gap Audit And Contract.
+- Phase 202: Paid Entitlements And Usage Ledger.
+- Phase 203: Email Verification And Login Code Completion.
+- Phase 204: Customer And Admin Billing Usage Visibility.
+- Phase 205: v5.6 Core Product Operations Release Gate.
 
 ## Requirements
 
@@ -807,7 +807,7 @@ Known current resources:
 | Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
-| Start v5.6 native mobile app and offline push readiness | Payment/support external activation remains blocked, while native apps, mobile push, and offline mobile workflows remain visible `stoa_docs` product gaps; v5.0, v4.9, v5.3, v5.4, and v5.5 provide enough foundation to build the mobile product path now | Active planning |
+| Correct v5.6 toward core product operations completion | User testing showed paid functionality, usage records, login verification codes, email verification, and related support details are still incomplete; these real-user basics should precede native app buildout | Active planning |
 
 ## Evolution
 
@@ -827,4 +827,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-16 after starting v5.6 native mobile app and offline push readiness*
+*Last updated: 2026-07-02 after correcting v5.6 toward core product operations completion*

@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
 milestone: v5.6
-milestone_name: Native Mobile App And Offline Push Readiness
+milestone_name: Core Product Operations Completion
 status: Active planning
-last_updated: "2026-06-16T08:26:01Z"
-last_activity: 2026-06-16 — Started v5.6 native mobile app and offline push readiness planning
+last_updated: "2026-07-02T00:00:00Z"
+last_activity: 2026-07-02 — Corrected v5.6 scope from native app readiness to core paid/auth/usage product operations
 progress:
   total_phases: 5
   completed_phases: 0
@@ -17,41 +17,41 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-16)
+See: .planning/PROJECT.md (updated 2026-07-02)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.6 Native Mobile App And Offline Push Readiness.
+**Current focus:** v5.6 Core Product Operations Completion.
 
 ## Current Position
 
-Phase: 201 Native Mobile App And Offline Push Readiness Contract
-Plan: 201-01 Define native mobile app offline and push readiness contract
+Phase: 201 Core Product Operations Gap Audit And Contract
+Plan: 201-01 Audit and define core product operations completion contract
 Status: Active planning
-Last activity: 2026-06-16 — Started v5.6 planning after v5.5 dispatch-ready completion.
+Last activity: 2026-07-02 — User identified incomplete core details: paid functionality, backend usage records, login verification codes, email verification, and related operational flows.
 
 ## Accumulated Context
 
 ### Decisions
 
-- `stoa_docs` still leaves several Phase 2 product expansion items: native apps, live notification delivery, rich curriculum editor implementation, production content import, live warehouse/BI, and external activation.
-- Final live payment activation remains blocked by approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
-- External support provider/CRM writes remain blocked by provider selection, credentials, destination policy, templates, and rollout approval.
-- Internal development should continue with buildable product functionality instead of waiting on external activation prerequisites.
-- v5.6 will focus on native mobile app, offline read-through, push/deep links, and role workflows because it reuses v5.0 mobile readiness, v4.9 notification readiness, v5.3/v5.4 learning operations, and v5.5 teacher dispatch.
+- The earlier v5.6 native app plan was premature because core product operations are not complete enough for real users.
+- Native app buildout remains a future milestone after paid/auth/usage correctness.
+- v5.6 now focuses on paid entitlements, usage ledger, login/email verification details, customer billing state, and admin support visibility.
+- Internal development should prioritize functional completeness over broad security/compliance test expansion for this phase.
 
 ### Pending Todos
 
-- Complete Phase 201 contract and ownership mapping.
-- Decide whether implementation belongs in `/Users/zhdeng/stoa-frontend`, a native workspace, or backend contract/API updates.
-- Identify backend API gaps for mobile push-token lifecycle, offline read-through metadata, and deep-link payloads.
-- Keep v5.7 candidates visible: frontend rich curriculum editor implementation, production content import, live warehouse/BI deployment, or external activation if prerequisites unblock.
+- Audit current auth, subscription, billing, quota, email verification, and admin visibility implementation.
+- Define effective entitlement state and usage ledger event model.
+- Define email verification and login-code product policy before implementation.
+- Implement paid/auth/usage visibility for customers and admins.
+- Keep native app, live APNS/FCM, app-store publication, and external support activation deferred.
 
 ### Blockers/Concerns
 
-- Live APNS/FCM provider credentials and app-store release are external prerequisites and should not block internal app/readiness work.
-- Payment and external support activation remain externally gated.
-- Fully unreviewed autonomous tutoring remains out of scope.
+- Final live Stripe/TWINT activation still depends on external provider prerequisites.
+- Login-code behavior must be reconciled with the current Cognito-backed password/session model.
+- Usage ledger design must avoid breaking existing daily quota behavior while making usage auditable.
 
 ## Operator Next Steps
 
-- Execute Phase 201 using `.planning/phases/201-native-mobile-app-and-offline-push-readiness-contract/201-01-PLAN.md`.
+- Execute Phase 201 using `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-01-PLAN.md`.
