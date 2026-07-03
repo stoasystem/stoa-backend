@@ -16,7 +16,7 @@ from stoa.db.repositories import practice_repo, question_repo, report_repo, user
 from stoa.deps import get_current_user, require_role
 from stoa.models.report import WeeklyReportResponse
 from stoa.models.user import SubscriptionTier
-from stoa.services import learning_profile_service, subscription_service
+from stoa.services import learning_profile_service, subscription_service, usage_ledger_service
 
 router = APIRouter()
 
@@ -260,6 +260,23 @@ class ParentBillingResponse(BaseModel):
     effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
     updatedAt: str | None = None
     events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ParentChildUsageSummaryResponse(BaseModel):
+    studentId: str
+    parentId: str | None = None
+    quotaPeriod: str
+    action: str
+    consumed: int
+    limit: int
+    remaining: int
+    effectivePlan: str | None = None
+    entitlementSource: str | None = None
+    billingState: str | None = None
+    reconciliation: dict[str, Any] = Field(default_factory=dict)
+    partial: bool = False
+    stale: bool = False
+    unreconciled: bool = False
 
 
 def _resolve_parent_profile(user: dict, settings: Settings) -> ResolvedParent:
@@ -812,6 +829,26 @@ async def get_child_learning_profile(
         questions=questions,
         mistakes=mistakes,
     )
+
+
+@router.get("/me/children/{child_id}/usage", response_model=ParentChildUsageSummaryResponse)
+async def get_child_usage_summary(
+    child_id: str,
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return a privacy-safe quota usage summary for an authorized child."""
+    resolved = _resolve_parent_profile(user, settings)
+    _get_owned_child_profile(resolved, child_id)
+    summary = usage_ledger_service.build_student_usage_summary(
+        student_id=child_id,
+        settings=settings,
+        day=day,
+    )
+    if summary.get("parentId") not in (None, resolved.parent_user_id):
+        raise HTTPException(status_code=403, detail="Not your child usage")
+    return summary
 
 
 @router.get("/me/children/{child_id}/history", response_model=ParentChildHistoryResponse)

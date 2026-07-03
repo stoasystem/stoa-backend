@@ -24,6 +24,7 @@ from stoa.services import (
     notify_service,
     ocr_service,
     teacher_dispatch_service,
+    usage_ledger_service,
 )
 
 router = APIRouter()
@@ -35,7 +36,7 @@ def _check_daily_limit(
     settings: Settings,
     *,
     entitlement: dict[str, Any] | None = None,
-) -> None:
+) -> dict[str, Any]:
     """Raise 429 if the student has exceeded their daily question quota."""
     limits = {
         "free": settings.free_tier_daily_question_limit,
@@ -57,6 +58,13 @@ def _check_daily_limit(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily question limit ({limit}) reached for your plan{suffix}",
         )
+    return {
+        "quotaPeriod": today,
+        "counterKey": f"USAGE#{student_id}/QUESTION#{today}",
+        "counterValue": count,
+        "limit": limit,
+        "expiresAt": expires_at,
+    }
 
 
 def _question_response(item: dict[str, Any]) -> QuestionResponse:
@@ -120,13 +128,44 @@ async def submit_question(
     language = student_profile.get("language", "de")
     grade = student_profile.get("grade", "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
+    question_id = str(uuid.uuid4())
+    idempotency_key = usage_ledger_service.build_question_idempotency_key(
+        question_id,
+        body.idempotency_key,
+    )
+    quota_period = usage_ledger_service.today_period()
 
-    _check_daily_limit(student_id, subscription_tier, settings, entitlement=entitlement)
+    if body.idempotency_key:
+        existing_usage = usage_ledger_service.get_question_usage_event(
+            student_id=student_id,
+            quota_period=quota_period,
+            idempotency_key=idempotency_key,
+        )
+        if existing_usage and existing_usage.get("question_id"):
+            existing_question = question_repo.get_question(str(existing_usage["question_id"]))
+            if existing_question:
+                return _question_response(existing_question)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Question submission is already recorded; retry later",
+            )
+
+    usage_counter = _check_daily_limit(student_id, subscription_tier, settings, entitlement=entitlement)
 
     content, ocr_metadata, ocr_text = _build_question_content(body, settings)
 
-    question_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    usage_ledger_service.record_question_usage_event(
+        student_id=student_id,
+        question_id=question_id,
+        quota_period=usage_counter["quotaPeriod"],
+        idempotency_key=idempotency_key,
+        counter_key=usage_counter["counterKey"],
+        counter_value=usage_counter["counterValue"],
+        quantity=1,
+        entitlement=entitlement,
+        created_at=now,
+    )
 
     item = {
         "question_id": question_id,

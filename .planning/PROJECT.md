@@ -84,7 +84,9 @@ The completed v5.4 milestone makes those v5.2/v5.3 learning operations usable in
 
 The completed v5.5 milestone turns the manual teacher queue/takeover workflow into backend dispatch-ready routing: teacher/tutor candidate ranking, conditional dispatch claims, stale reassignment behavior, teacher queue filtering, takeover compatibility, and admin dispatch SLA/load visibility. It closed as `dispatch-ready`; production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain future scope.
 
-The completed v5.6 milestone makes paid access real for linked students: parent-paid or manually overridden access now resolves into deterministic effective entitlement and question quota behavior. Usage ledger, email/login verification, and parent/admin operations visibility remain promoted into their own follow-up milestones v5.7, v5.8, and v5.9.
+The completed v5.6 milestone makes paid access real for linked students: parent-paid or manually overridden access now resolves into deterministic effective entitlement and question quota behavior.
+
+The completed v5.7 milestone makes question usage durable and support-visible: successful quota-governed question submissions now write privacy-safe usage ledger events, can be reconciled with daily counters, and can be summarized for parents/admins without exposing private question content or billing internals.
 
 ## Core Value
 
@@ -93,8 +95,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.6 Effective Entitlements And Paid Access Enforcement on 2026-07-03 (entitlement-ready backend release gate)
-**Active milestone:** v5.7 Usage Ledger And Quota Reconciliation (active planning)
+**Latest completed milestone:** v5.7 Usage Ledger And Quota Reconciliation on 2026-07-03 (usage-ledger-ready backend release gate)
+**Next planned milestone:** v5.8 Email Verification And Login Code Policy
 
 Delivered:
 
@@ -402,28 +404,29 @@ Phase evidence: `.planning/milestones/v5.6-phases/`
 
 **Follow-up milestones:**
 
-- v5.7 Usage Ledger And Quota Reconciliation.
 - v5.8 Email Verification And Login Code Policy.
 - v5.9 Parent Admin Operations Visibility.
 
-## Active Milestone: v5.7 Usage Ledger And Quota Reconciliation
+## Completed Milestone: v5.7 Usage Ledger And Quota Reconciliation
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 
-**Status:** Active planning started 2026-07-03 after v5.6 made effective entitlement authoritative for question quota.
+**Status:** Completed local backend release gate 2026-07-03 with rollout state `usage-ledger-ready`.
 
 **Function purpose:** Turn quota usage from counter-only behavior into durable, queryable usage ledger events and reconcile those events with existing daily quota counters.
 
 **Implementation strategy:** Keep the existing atomic daily counter as the enforcement primitive. Add a privacy-safe usage ledger for quota-governed actions, starting with question submissions, then add repeatable reconciliation and enough parent/admin support visibility to explain usage state. Keep email verification, login-code policy, and the full operations console in v5.8 and v5.9.
 
-**Planned phases:**
+**Completed phases:**
 
-- Phase 207: Usage Ledger Contract And Idempotency. (active)
+- Phase 207: Usage Ledger Contract And Idempotency.
 - Phase 208: Question Usage Ledger Recording.
 - Phase 209: Quota Counter Reconciliation.
 - Phase 210: Usage Visibility And Focused Tests.
 - Phase 211: v5.7 Usage Ledger Release Gate.
+
+**Outcome:** v5.7 added privacy-safe usage ledger events for question submissions, optional idempotency keys, counter-versus-ledger reconciliation, bounded counter repair, parent child usage summaries, and admin usage/reconciliation support endpoints. Focused usage ledger, question, entitlement, and subscription operation tests plus Ruff passed. Full operations console remains v5.9 scope.
 
 **Follow-up milestones:**
 
@@ -686,15 +689,17 @@ Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREME
 - UI-09: admin artifact rollback UI - Phase 60.
 - VERIFY-05: v2.2 release gate and safe fixture verification - Phase 61.
 
-### Active
-
-Milestone v5.7 requirements are active:
+Milestone v5.7 requirements are complete:
 
 - LEDGER-01: usage ledger contract and idempotency - Phase 207.
 - LEDGER-02: question usage ledger recording - Phase 208.
 - RECON-01: quota counter reconciliation - Phase 209.
 - USAGE-01: usage visibility and support summaries - Phase 210.
 - VERIFY-40: v5.7 usage ledger release gate - Phase 211.
+
+### Active
+
+No active milestone requirements. v5.8 requirements should be created when the next milestone starts.
 
 ### Out of Scope
 

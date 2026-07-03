@@ -25,6 +25,7 @@ class SubmitQuestionRequest(BaseModel):
     subject: str = Field(..., pattern="^(math|physics|german|english)$")
     image_s3_key: Optional[str] = None
     corrected_text: Optional[str] = Field(default=None, min_length=5, max_length=2000)
+    idempotency_key: Optional[str] = Field(default=None, alias="idempotencyKey", min_length=8, max_length=200)
 
 
 class QuestionOcrMetadata(BaseModel):

@@ -1,16 +1,20 @@
 # Milestones
 
-## Active: v5.7 Usage Ledger And Quota Reconciliation
+## v5.7 Usage Ledger And Quota Reconciliation (Completed: 2026-07-03)
 
-**Status:** Active planning
+**Status:** Completed local backend release gate 2026-07-03
 **Started:** 2026-07-03
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
+**Audit:** `.planning/v5.7-MILESTONE-AUDIT.md`
+**Milestone roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v5.7-phases/`
 **Goal:** Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile them with quota counters.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 5 active
-**Release target:** `usage-ledger-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `usage-ledger-ready`
 
 Function purpose:
 
@@ -26,13 +30,24 @@ Implementation strategy:
 - Keep the counter path as enforcement and add ledger/reconciliation around it.
 - Expose bounded usage summaries after reconciliation behavior exists.
 
-Planned phases:
+Completed phases:
 
-- Phase 207: Usage Ledger Contract And Idempotency. (active)
+- Phase 207: Usage Ledger Contract And Idempotency.
 - Phase 208: Question Usage Ledger Recording.
 - Phase 209: Quota Counter Reconciliation.
 - Phase 210: Usage Visibility And Focused Tests.
 - Phase 211: v5.7 Usage Ledger Release Gate.
+
+Key accomplishments:
+
+- Added durable, privacy-safe usage ledger rows for successful student question submissions.
+- Added optional request idempotency key handling and duplicate ledger prevention.
+- Kept the existing atomic daily question counter as the quota enforcement primitive.
+- Added counter-versus-ledger reconciliation with read-only preview and explicit bounded counter repair.
+- Added parent child usage and admin support usage/reconciliation endpoints.
+- Verified with focused usage ledger, question, entitlement, and subscription operation tests plus Ruff.
+
+Known deferred items at close: email verification and login-code policy, full parent/admin operations console, native apps, live Stripe/TWINT production activation, and ledger coverage for future quota-governed actions.
 
 ---
 

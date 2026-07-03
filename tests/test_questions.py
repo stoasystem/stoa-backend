@@ -58,6 +58,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     )
     monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -110,6 +111,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
     monkeypatch.setattr(questions.ocr_service, "extract_text_from_s3", lambda bucket, key: "Equation from image")
     monkeypatch.setattr(questions.question_repo, "put_question", lambda item: None)
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -221,3 +223,110 @@ def test_record_daily_question_usage_returns_none_on_condition_failure(monkeypat
     monkeypatch.setattr(questions.question_repo, "get_table", lambda: FakeTable())
 
     assert questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 2, 1) is None
+
+
+def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
+    stored = {}
+    ledger_calls = []
+
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "premium",
+            "source": "provider_billing",
+            "limits": {"dailyAiQuestionLimit": settings.premium_tier_daily_question_limit},
+            "parentId": "parent-1",
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda student_id, day, limit, expires_at: 7,
+    )
+    monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
+    monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **kwargs: {"answer": "AI answer", "steps": [], "hints": [], "similar_exercises": []},
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "get_question_usage_event",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "record_question_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": "question-submit-1",
+        },
+    )
+
+    assert response.status_code == 201
+    assert ledger_calls[0]["student_id"] == "student-1"
+    assert ledger_calls[0]["question_id"] == stored["question_id"]
+    assert ledger_calls[0]["counter_value"] == 7
+    assert ledger_calls[0]["idempotency_key"] == "question-submit-1"
+    assert ledger_calls[0]["entitlement"]["effectivePlan"] == "premium"
+
+
+def test_submit_question_idempotent_retry_without_question_does_not_increment_counter(monkeypatch):
+    usage_calls = []
+
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "get_question_usage_event",
+        lambda **kwargs: {"question_id": "question-existing"},
+    )
+    monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: None)
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *args: usage_calls.append(args) or 1,
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": "question-submit-1",
+        },
+    )
+
+    assert response.status_code == 409
+    assert usage_calls == []

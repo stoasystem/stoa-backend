@@ -1,6 +1,6 @@
 # Roadmap: v5.7 Usage Ledger And Quota Reconciliation
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Prior milestone:** v5.6 Effective Entitlements And Paid Access Enforcement
 
@@ -31,11 +31,11 @@ v5.7 closes that gap by adding usage ledger events and reconciliation while keep
 
 ## Phases
 
-- [ ] **Phase 207: Usage Ledger Contract And Idempotency** - Define durable usage event schema, privacy boundaries, idempotency keys, write ordering, and reconciliation model.
-- [ ] **Phase 208: Question Usage Ledger Recording** - Record durable usage events for successful question quota increments using the v5.6 effective entitlement snapshot.
-- [ ] **Phase 209: Quota Counter Reconciliation** - Compare ledger event totals with daily counter rows and report safe reconciliation status.
-- [ ] **Phase 210: Usage Visibility And Focused Tests** - Expose parent/admin usage summaries with consumed, limit, remaining, effective plan, and reconciliation state.
-- [ ] **Phase 211: v5.7 Usage Ledger Release Gate** - Close v5.7 with verification evidence, docs, audit, and v5.8 handoff.
+- [x] **Phase 207: Usage Ledger Contract And Idempotency** - Define durable usage event schema, privacy boundaries, idempotency keys, write ordering, and reconciliation model.
+- [x] **Phase 208: Question Usage Ledger Recording** - Record durable usage events for successful question quota increments using the v5.6 effective entitlement snapshot.
+- [x] **Phase 209: Quota Counter Reconciliation** - Compare ledger event totals with daily counter rows and report safe reconciliation status.
+- [x] **Phase 210: Usage Visibility And Focused Tests** - Expose parent/admin usage summaries with consumed, limit, remaining, effective plan, and reconciliation state.
+- [x] **Phase 211: v5.7 Usage Ledger Release Gate** - Close v5.7 with verification evidence, docs, audit, and v5.8 handoff.
 
 ## Phase Details
 
@@ -108,21 +108,21 @@ v5.7 closes that gap by adding usage ledger events and reconciliation while keep
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 207 Usage Ledger Contract And Idempotency | v5.7 | 0/1 | Active | - |
-| 208 Question Usage Ledger Recording | v5.7 | 0/1 | Planned | - |
-| 209 Quota Counter Reconciliation | v5.7 | 0/1 | Planned | - |
-| 210 Usage Visibility And Focused Tests | v5.7 | 0/1 | Planned | - |
-| 211 v5.7 Usage Ledger Release Gate | v5.7 | 0/1 | Planned | - |
+| 207 Usage Ledger Contract And Idempotency | v5.7 | 1/1 | Complete | 2026-07-03 |
+| 208 Question Usage Ledger Recording | v5.7 | 1/1 | Complete | 2026-07-03 |
+| 209 Quota Counter Reconciliation | v5.7 | 1/1 | Complete | 2026-07-03 |
+| 210 Usage Visibility And Focused Tests | v5.7 | 1/1 | Complete | 2026-07-03 |
+| 211 v5.7 Usage Ledger Release Gate | v5.7 | 1/1 | Complete | 2026-07-03 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEDGER-01 | Phase 207 | Planned |
-| LEDGER-02 | Phase 208 | Planned |
-| RECON-01 | Phase 209 | Planned |
-| USAGE-01 | Phase 210 | Planned |
-| VERIFY-40 | Phase 211 | Planned |
+| LEDGER-01 | Phase 207 | Complete |
+| LEDGER-02 | Phase 208 | Complete |
+| RECON-01 | Phase 209 | Complete |
+| USAGE-01 | Phase 210 | Complete |
+| VERIFY-40 | Phase 211 | Complete |
 
 ---
-*Last updated: 2026-07-03 after v5.7 milestone initialization.*
+*Last updated: 2026-07-03 after v5.7 usage-ledger release gate.*

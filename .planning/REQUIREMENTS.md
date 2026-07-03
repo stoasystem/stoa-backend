@@ -1,7 +1,7 @@
 # Requirements: v5.7 Usage Ledger And Quota Reconciliation
 
 **Milestone:** v5.7
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Prior milestone:** v5.6 Effective Entitlements And Paid Access Enforcement
 
@@ -82,8 +82,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEDGER-01 | Phase 207 | Planned |
-| LEDGER-02 | Phase 208 | Planned |
-| RECON-01 | Phase 209 | Planned |
-| USAGE-01 | Phase 210 | Planned |
-| VERIFY-40 | Phase 211 | Planned |
+| LEDGER-01 | Phase 207 | Complete |
+| LEDGER-02 | Phase 208 | Complete |
+| RECON-01 | Phase 209 | Complete |
+| USAGE-01 | Phase 210 | Complete |
+| VERIFY-40 | Phase 211 | Complete |
