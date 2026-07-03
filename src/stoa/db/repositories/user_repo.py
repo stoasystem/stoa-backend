@@ -97,6 +97,14 @@ def list_parent_student_bindings(parent_id: str) -> list[dict]:
     return resp.get("Items", [])
 
 
+def list_student_parent_bindings(student_id: str) -> list[dict]:
+    table = get_table()
+    resp = table.query(
+        KeyConditionExpression=Key("PK").eq(f"USER#{student_id}") & Key("SK").begins_with("PARENT#"),
+    )
+    return resp.get("Items", [])
+
+
 def update_student_parent_link(student_id: str, parent_id: str, relationship: str = "child") -> None:
     table = get_table()
     table.update_item(

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.6
 milestone_name: Effective Entitlements And Paid Access Enforcement
-status: Active planning
-last_updated: "2026-07-03T00:00:00Z"
-last_activity: 2026-07-03 — Promoted core operations phases into full feature milestones and made v5.6 entitlement-focused
+status: Complete
+last_updated: "2026-07-03T12:57:00Z"
+last_activity: 2026-07-03 — Completed v5.6 entitlement-ready backend release gate
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.6 Effective Entitlements And Paid Access Enforcement.
+**Current focus:** v5.6 Effective Entitlements And Paid Access Enforcement complete; v5.7 Usage Ledger And Quota Reconciliation is next.
 
 ## Current Position
 
-Phase: 202 Entitlement Contract And Access Policy
-Plan: 202-01 Define entitlement contract and access policy
-Status: Active planning
-Last activity: 2026-07-03 — User clarified that entitlements, usage ledger, verification, and visibility must be complete milestones, not small phases.
+Phase: 206 v5.6 Entitlement Release Gate
+Plan: 206-01 Close v5.6 entitlement release gate
+Status: Complete
+Last activity: 2026-07-03 — v5.6 completed with rollout state entitlement-ready.
 
 ## Accumulated Context
 
@@ -39,21 +39,18 @@ Last activity: 2026-07-03 — User clarified that entitlements, usage ledger, ve
 - v5.8 is email verification and login-code policy.
 - v5.9 is parent/admin operations visibility and final core-ops closeout.
 - Native app buildout remains future work after core account/payment/usage correctness.
+- v5.6 completed effective entitlement resolver, student question quota enforcement, and parent/admin entitlement visibility.
 
 ### Pending Todos
 
-- Execute Phase 202 entitlement contract and access policy.
-- Implement Phase 203 entitlement resolver service and parent-child mapping.
-- Implement Phase 204 student paid access enforcement.
-- Implement Phase 205 entitlement visibility and focused tests.
-- Close v5.6 through Phase 206 release gate.
+- Start v5.7 Usage Ledger And Quota Reconciliation.
 
 ### Blockers/Concerns
 
 - Final live Stripe/TWINT activation still depends on external provider prerequisites.
-- Effective entitlement must not break existing manual subscription and billing flows.
+- Effective entitlement is implemented locally and verified against focused tests; production deployment/live smoke remains separate.
 - Broader usage ledger, verification, and operations visibility are intentionally separate follow-up milestones.
 
 ## Operator Next Steps
 
-- Start Phase 202: Entitlement Contract And Access Policy.
+- Start v5.7: Usage Ledger And Quota Reconciliation.

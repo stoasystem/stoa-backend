@@ -205,6 +205,7 @@ class ParentSubscriptionResponse(BaseModel):
     plans: dict[str, dict[str, Any]]
     pendingRequest: ParentSubscriptionRequestResponse | None = None
     billing: dict[str, Any] = Field(default_factory=dict)
+    effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ParentCheckoutSessionCreate(BaseModel):
@@ -256,6 +257,7 @@ class ParentBillingResponse(BaseModel):
     manualOverrideAt: str | None = None
     manualOverrideBy: str | None = None
     manualOverrideSource: str | None = None
+    effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
     updatedAt: str | None = None
     events: list[dict[str, Any]] = Field(default_factory=list)
 

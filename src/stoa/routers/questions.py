@@ -19,6 +19,7 @@ from stoa.services import (
     ai_service,
     learning_profile_service,
     moderation_service,
+    entitlement_service,
     notification_service,
     notify_service,
     ocr_service,
@@ -28,21 +29,33 @@ from stoa.services import (
 router = APIRouter()
 
 
-def _check_daily_limit(student_id: str, subscription_tier: str, settings: Settings) -> None:
+def _check_daily_limit(
+    student_id: str,
+    subscription_tier: str,
+    settings: Settings,
+    *,
+    entitlement: dict[str, Any] | None = None,
+) -> None:
     """Raise 429 if the student has exceeded their daily question quota."""
     limits = {
         "free": settings.free_tier_daily_question_limit,
         "standard": settings.standard_tier_daily_question_limit,
         "premium": settings.premium_tier_daily_question_limit,
     }
-    limit = limits.get(subscription_tier, settings.free_tier_daily_question_limit)
+    effective_plan = (entitlement or {}).get("effectivePlan") or subscription_tier
+    limit = int(
+        ((entitlement or {}).get("limits") or {}).get("dailyAiQuestionLimit")
+        or limits.get(effective_plan, settings.free_tier_daily_question_limit)
+    )
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     expires_at = int(datetime.now(timezone.utc).timestamp()) + 172800
     count = question_repo.record_daily_question_usage(student_id, today, limit, expires_at)
     if count is None:
+        blocking_reason = (entitlement or {}).get("blockingReason")
+        suffix = f" ({blocking_reason})" if blocking_reason else ""
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily question limit ({limit}) reached for your plan",
+            detail=f"Daily question limit ({limit}) reached for your plan{suffix}",
         )
 
 
@@ -99,11 +112,16 @@ async def submit_question(
     student_id = user["sub"]
     student_profile = user_repo.get_user(student_id) or {}
     subscription_tier = student_profile.get("subscription_tier", "free")
+    entitlement = entitlement_service.resolve_student_entitlement(
+        student_id,
+        settings=settings,
+        student_profile=student_profile,
+    )
     language = student_profile.get("language", "de")
     grade = student_profile.get("grade", "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
 
-    _check_daily_limit(student_id, subscription_tier, settings)
+    _check_daily_limit(student_id, subscription_tier, settings, entitlement=entitlement)
 
     content, ocr_metadata, ocr_text = _build_question_content(body, settings)
 
@@ -127,6 +145,7 @@ async def submit_question(
         "teacher_response": None,
         "knowledge_points": [],
         "topic_seeds": [],
+        "entitlement": entitlement,
         "student_feedback": None,
         "created_at": now,
         "resolved_at": None,

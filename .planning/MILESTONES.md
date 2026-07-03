@@ -1,18 +1,19 @@
 # Milestones
 
-## Active: v5.6 Effective Entitlements And Paid Access Enforcement
+## v5.6 Effective Entitlements And Paid Access Enforcement (Completed: 2026-07-03)
 
-**Status:** Active planning
+**Status:** Completed local backend release gate 2026-07-03
 **Started:** 2026-07-03
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
+**Audit:** `.planning/v5.6-MILESTONE-AUDIT.md`
 **Milestone roadmap:** `.planning/milestones/v5.6-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.6-REQUIREMENTS.md`
 **Goal:** Make parent-paid or manually overridden access translate into deterministic linked-student entitlement and quota behavior.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 5 active
-**Release target:** `entitlement-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `entitlement-ready`
 
 Function purpose:
 
@@ -29,13 +30,22 @@ Implementation strategy:
 - Integrate resolver into question quota first.
 - Keep usage ledger, verification, and full operations visibility as separate follow-up milestones.
 
-Planned phases:
+Completed phases:
 
-- Phase 202: Entitlement Contract And Access Policy. (active)
+- Phase 202: Entitlement Contract And Access Policy.
 - Phase 203: Entitlement Resolver Service And Parent Child Mapping.
 - Phase 204: Student Paid Access Enforcement.
 - Phase 205: Entitlement Visibility And Focused Tests.
 - Phase 206: v5.6 Entitlement Release Gate.
+
+Key accomplishments:
+
+- Added an effective entitlement resolver for student, active parent binding, parent profile, provider billing, manual override, billing state, period, rollout summary, and deterministic fallback behavior.
+- Made student question quota use effective entitlement limits rather than only the student's local `subscription_tier`.
+- Added effective entitlement summaries to parent/customer subscription responses and admin billing responses.
+- Verified with focused entitlement, question, and subscription operation tests plus Ruff.
+
+Known deferred items at close: durable usage ledger and quota reconciliation, email verification and login-code policy, full parent/admin operations visibility, native apps, and final live Stripe/TWINT activation.
 
 ---
 

@@ -99,6 +99,7 @@ class SubscriptionBillingResponse(BaseModel):
     manualOverrideAt: str | None = None
     manualOverrideBy: str | None = None
     manualOverrideSource: str | None = None
+    effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
     updatedAt: str | None = None
     events: list[dict[str, Any]] = Field(default_factory=list)
 

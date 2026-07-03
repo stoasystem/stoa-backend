@@ -38,6 +38,15 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
     )
     monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
         questions.question_repo,
         "record_daily_question_usage",
         lambda student_id, day, limit, expires_at: usage_calls.append((student_id, limit)) or 1,
@@ -78,6 +87,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     assert stored["ocr_text"] == "raw OCR text from image"
     assert stored["original_content"] == "Please solve the image"
     assert stored["corrected_text"] == "Solve 2x + 4 = 10"
+    assert stored["entitlement"]["effectivePlan"] == "free"
     assert usage_calls == [("student-1", 2)]
 
 
@@ -86,6 +96,15 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         questions.user_repo,
         "get_user",
         lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
+            "blockingReason": None,
+        },
     )
     monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
     monkeypatch.setattr(questions.ocr_service, "extract_text_from_s3", lambda bucket, key: "Equation from image")
@@ -156,6 +175,29 @@ def test_check_daily_limit_uses_atomic_counter(monkeypatch):
 
     assert calls[0][0] == "student-1"
     assert calls[0][2] == 2
+
+
+def test_check_daily_limit_uses_effective_entitlement(monkeypatch):
+    calls = []
+    settings = _settings()
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda student_id, day, limit, expires_at: calls.append((student_id, day, limit, expires_at)) or 1,
+    )
+
+    questions._check_daily_limit(
+        "student-1",
+        "free",
+        settings,
+        entitlement={
+            "effectivePlan": "premium",
+            "limits": {"dailyAiQuestionLimit": 100},
+            "blockingReason": None,
+        },
+    )
+
+    assert calls[0][2] == 100
 
 
 def test_check_daily_limit_rejects_when_counter_condition_fails(monkeypatch):

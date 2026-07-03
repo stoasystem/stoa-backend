@@ -1,6 +1,6 @@
 # Roadmap: v5.6 Effective Entitlements And Paid Access Enforcement
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Research:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
 
@@ -43,11 +43,11 @@ Phase 201 found:
 
 ## Phases
 
-- [ ] **Phase 202: Entitlement Contract And Access Policy** - Define effective entitlement inputs, outputs, state precedence, fallback behavior, and test matrix.
-- [ ] **Phase 203: Entitlement Resolver Service And Parent Child Mapping** - Implement resolver service using student profile, parent binding, parent profile, billing record, and manual override signals.
-- [ ] **Phase 204: Student Paid Access Enforcement** - Integrate resolver into question quota and plan-governed access checks.
-- [ ] **Phase 205: Entitlement Visibility And Focused Tests** - Expose effective entitlement summaries to customer/admin surfaces and add focused tests.
-- [ ] **Phase 206: v5.6 Entitlement Release Gate** - Close v5.6 with evidence, docs, and v5.7 handoff.
+- [x] **Phase 202: Entitlement Contract And Access Policy** - Define effective entitlement inputs, outputs, state precedence, fallback behavior, and test matrix.
+- [x] **Phase 203: Entitlement Resolver Service And Parent Child Mapping** - Implement resolver service using student profile, parent binding, parent profile, billing record, and manual override signals.
+- [x] **Phase 204: Student Paid Access Enforcement** - Integrate resolver into question quota and plan-governed access checks.
+- [x] **Phase 205: Entitlement Visibility And Focused Tests** - Expose effective entitlement summaries to customer/admin surfaces and add focused tests.
+- [x] **Phase 206: v5.6 Entitlement Release Gate** - Close v5.6 with evidence, docs, and v5.7 handoff.
 
 ## Phase Details
 
@@ -121,21 +121,21 @@ Phase 201 found:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 201 Core Product Operations Gap Audit And Contract | Pre-v5.6 | 1/1 | Complete | 2026-07-02 |
-| 202 Entitlement Contract And Access Policy | v5.6 | 0/1 | Active | - |
-| 203 Entitlement Resolver Service And Parent Child Mapping | v5.6 | 0/1 | Planned | - |
-| 204 Student Paid Access Enforcement | v5.6 | 0/1 | Planned | - |
-| 205 Entitlement Visibility And Focused Tests | v5.6 | 0/1 | Planned | - |
-| 206 v5.6 Entitlement Release Gate | v5.6 | 0/1 | Planned | - |
+| 202 Entitlement Contract And Access Policy | v5.6 | 1/1 | Complete | 2026-07-03 |
+| 203 Entitlement Resolver Service And Parent Child Mapping | v5.6 | 1/1 | Complete | 2026-07-03 |
+| 204 Student Paid Access Enforcement | v5.6 | 1/1 | Complete | 2026-07-03 |
+| 205 Entitlement Visibility And Focused Tests | v5.6 | 1/1 | Complete | 2026-07-03 |
+| 206 v5.6 Entitlement Release Gate | v5.6 | 1/1 | Complete | 2026-07-03 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENTITLE-01 | Phase 202 | Planned |
-| ENTITLE-02 | Phase 203 | Planned |
-| ENTITLE-03 | Phase 204 | Planned |
-| ENTITLE-04 | Phase 205 | Planned |
-| VERIFY-39 | Phase 206 | Planned |
+| ENTITLE-01 | Phase 202 | Complete |
+| ENTITLE-02 | Phase 203 | Complete |
+| ENTITLE-03 | Phase 204 | Complete |
+| ENTITLE-04 | Phase 205 | Complete |
+| VERIFY-39 | Phase 206 | Complete |
 
 ---
-*Last updated: 2026-07-03 after promoting core operations phases into full milestones.*
+*Last updated: 2026-07-03 after v5.6 entitlement release gate.*

@@ -1,7 +1,7 @@
 # Requirements: v5.6 Effective Entitlements And Paid Access Enforcement
 
 **Milestone:** v5.6
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Research:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
 
@@ -82,8 +82,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENTITLE-01 | Phase 202 | Planned |
-| ENTITLE-02 | Phase 203 | Planned |
-| ENTITLE-03 | Phase 204 | Planned |
-| ENTITLE-04 | Phase 205 | Planned |
-| VERIFY-39 | Phase 206 | Planned |
+| ENTITLE-01 | Phase 202 | Complete |
+| ENTITLE-02 | Phase 203 | Complete |
+| ENTITLE-03 | Phase 204 | Complete |
+| ENTITLE-04 | Phase 205 | Complete |
+| VERIFY-39 | Phase 206 | Complete |

@@ -20,7 +20,7 @@ from stoa.config import Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
-from stoa.services import notification_service
+from stoa.services import entitlement_service, notification_service
 
 
 REQUEST_ENTITY = "subscription_request"
@@ -109,12 +109,18 @@ def get_parent_subscription(parent_id: str, settings: Settings | None = None) ->
     billing = _billing_response(_get_billing_item(parent_id), parent_id=parent_id, settings=settings)
     if billing["status"] == "none":
         billing["subscriptionTier"] = current_tier
+    effective_entitlements = (
+        entitlement_service.list_parent_child_entitlements(parent_id, settings=settings)
+        if settings
+        else []
+    )
     return {
         "parentId": parent_id,
         "currentTier": current_tier,
         "plans": PLAN_BENEFITS,
         "pendingRequest": _request_response(_latest_open_request(parent_id)),
         "billing": billing,
+        "effectiveEntitlements": effective_entitlements,
     }
 
 
@@ -232,6 +238,11 @@ def get_parent_billing(parent_id: str, settings: Settings | None = None) -> dict
     response = _billing_response(item, parent_id=parent_id, include_events=True, settings=settings)
     if response["status"] == "none":
         response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
+    if settings:
+        response["effectiveEntitlements"] = entitlement_service.list_parent_child_entitlements(
+            parent_id,
+            settings=settings,
+        )
     return response
 
 
@@ -286,6 +297,11 @@ def get_admin_billing(parent_id: str, settings: Settings | None = None) -> dict[
     )
     if response["status"] == "none":
         response["subscriptionTier"] = _normalize_tier(profile.get("subscription_tier"))
+    if settings:
+        response["effectiveEntitlements"] = entitlement_service.list_parent_child_entitlements(
+            parent_id,
+            settings=settings,
+        )
     return response
 
 

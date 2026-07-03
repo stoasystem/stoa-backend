@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
 from stoa.routers import admin, billing, parents
-from stoa.services import subscription_service
+from stoa.services import entitlement_service, subscription_service
 
 
 class FakeTable:
@@ -120,6 +120,14 @@ def _profiles():
             "role": "parent",
             "subscription_tier": "free",
         },
+        "student-1": {
+            "user_id": "student-1",
+            "email": "student@example.com",
+            "role": "student",
+            "subscription_tier": "free",
+            "parent_id": "parent-1",
+            "parent_binding_status": "active",
+        },
         "admin-1": {
             "user_id": "admin-1",
             "email": "admin@example.com",
@@ -167,6 +175,13 @@ def _install_fakes(monkeypatch):
     def get_user(user_id):
         return profiles.get(user_id)
 
+    def list_parent_student_bindings(parent_id):
+        return [
+            dict(item)
+            for (pk, sk), item in table.items.items()
+            if pk == f"USER#{parent_id}" and sk.startswith("CHILD#")
+        ]
+
     def update_item(Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
         if Key["PK"].startswith("USER#") and Key["SK"] == "PROFILE":
             user_id = Key["PK"].removeprefix("USER#")
@@ -186,8 +201,32 @@ def _install_fakes(monkeypatch):
 
     table.update_item = update_item
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
+    monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: False)
     monkeypatch.setattr(subscription_service.user_repo, "get_user", get_user)
+    monkeypatch.setattr(entitlement_service, "get_table", lambda: table)
+    monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
+    monkeypatch.setattr(
+        entitlement_service.user_repo,
+        "list_parent_student_bindings",
+        list_parent_student_bindings,
+    )
+    monkeypatch.setattr(
+        entitlement_service.user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: table.items.get((f"USER#{parent_id}", f"CHILD#{student_id}")),
+    )
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
+    table.put_item(
+        Item={
+            "PK": "USER#parent-1",
+            "SK": "CHILD#student-1",
+            "entity_type": "parent_student_binding",
+            "parent_id": "parent-1",
+            "student_id": "student-1",
+            "status": "active",
+            "relationship": "child",
+        }
+    )
     return table, profiles
 
 
@@ -258,6 +297,8 @@ def test_parent_can_view_plan_options(monkeypatch):
     assert body["plans"]["standard"]["dailyAiQuestionLimit"] == 30
     assert body["pendingRequest"] is None
     assert body["billing"]["status"] == "none"
+    assert body["effectiveEntitlements"][0]["studentId"] == "student-1"
+    assert body["effectiveEntitlements"][0]["effectivePlan"] == "free"
 
 
 def test_parent_can_create_subscription_request_once(monkeypatch):
@@ -434,6 +475,7 @@ def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkey
     subscription = client.get("/parents/me/subscription").json()
     assert subscription["billing"]["status"] == "checkout_pending"
     assert subscription["billing"]["requestedTier"] == "standard"
+    assert subscription["effectiveEntitlements"][0]["blockingReason"] == "checkout_pending"
 
     admin_response = admin_client.get("/admin/subscriptions/billing")
     assert admin_response.status_code == 200
@@ -1436,3 +1478,5 @@ def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):
     assert billing_status["status"] == "manual_override"
     assert billing_status["subscriptionTier"] == "standard"
     assert billing_status["manualOverrideSource"] == created["requestId"]
+    assert billing_status["effectiveEntitlements"][0]["effectivePlan"] == "standard"
+    assert billing_status["effectiveEntitlements"][0]["source"] == "manual_override"
