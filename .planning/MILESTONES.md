@@ -1,41 +1,68 @@
 # Milestones
 
-## Active: v5.6 Core Product Operations Completion
+## Active: v5.6 Effective Entitlements And Paid Access Enforcement
 
 **Status:** Active planning
-**Started:** 2026-07-02
+**Started:** 2026-07-03
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.6-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.6-REQUIREMENTS.md`
-**Goal:** Complete paid entitlement, usage ledger, login-code policy, email verification, billing state, and admin/customer visibility before native app buildout.
+**Goal:** Make parent-paid or manually overridden access translate into deterministic linked-student entitlement and quota behavior.
 **Phases:** 5
-**Plans:** 1/5 complete
+**Plans:** 0/5 complete
 **Requirements:** 5 active
-**Release target:** `core-ops-ready`
+**Release target:** `entitlement-ready`
 
 Function purpose:
 
-- Ensure paid parent subscriptions grant the correct linked-student effective entitlement.
-- Record and reconcile plan-governed usage in a durable backend ledger.
-- Complete email verification and login verification-code behavior as explicit product flows.
-- Give parents/customers and admins clear billing, usage, verification, and support state.
+- Resolve effective entitlement from student profile, parent binding, parent billing, manual override, rollout controls, and billing state.
+- Make student question quota use effective entitlement rather than only local student tier.
+- Preserve existing billing, checkout, webhook, manual override, and daily counter behavior.
+- Give parents/customers and admins enough entitlement explanation for support.
 
 Implementation strategy:
 
-- Audit current auth, billing, subscription, quota, usage, verification, and admin code paths.
-- Define deterministic effective entitlement from student profile, parent binding, parent billing state, manual override, rollout controls, cancellation/expiry, and pending payment.
-- Add durable usage ledger requirements beside existing counters.
-- Define verification-code lifecycle for email verification and login-code policy while preserving existing Cognito-backed flows.
-- Defer native app implementation until core paid/auth/usage operations are reliable.
+- Start from Phase 201 current-reality audit.
+- Define entitlement contract and precedence before code.
+- Implement resolver service using existing single-table/repository patterns.
+- Integrate resolver into question quota first.
+- Keep usage ledger, verification, and full operations visibility as separate follow-up milestones.
 
 Planned phases:
 
-- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
-- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
-- Phase 203: Usage Ledger And Quota Reconciliation.
-- Phase 204: Email Verification And Login Code Policy.
-- Phase 205: Customer Admin Visibility And Release Gate.
+- Phase 202: Entitlement Contract And Access Policy. (active)
+- Phase 203: Entitlement Resolver Service And Parent Child Mapping.
+- Phase 204: Student Paid Access Enforcement.
+- Phase 205: Entitlement Visibility And Focused Tests.
+- Phase 206: v5.6 Entitlement Release Gate.
+
+---
+
+## Planned: v5.7 Usage Ledger And Quota Reconciliation
+
+**Status:** Planned after v5.6
+**Roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
+**Goal:** Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile them with quota counters.
+
+---
+
+## Planned: v5.8 Email Verification And Login Code Policy
+
+**Status:** Planned after v5.7
+**Roadmap:** `.planning/milestones/v5.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.8-REQUIREMENTS.md`
+**Goal:** Replace placeholder email verification and clarify/implement token-compatible login-code behavior.
+
+---
+
+## Planned: v5.9 Parent Admin Operations Visibility
+
+**Status:** Planned after v5.8
+**Roadmap:** `.planning/milestones/v5.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.9-REQUIREMENTS.md`
+**Goal:** Provide final support-grade visibility for entitlement, billing, usage, and verification state.
 
 ---
 

@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-07-02 after correcting v5.6 toward core product operations completion
+**Updated:** 2026-07-03 after promoting final-polish work into complete milestones
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -35,7 +35,7 @@
 
 2. **Later Product Expansion**.
    Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: v5.6 now selects core paid/auth/usage product operations before native apps: parent-paid linked-student entitlement, usage ledger and quota reconciliation, login-code policy, email verification lifecycle, customer billing state, and admin support visibility. v5.5 completed automatic teacher/tutor dispatch backend readiness for student teacher requests.
+   Status: final-polish work is split into complete milestones. v5.6 targets effective entitlements and paid access enforcement; v5.7 targets usage ledger and quota reconciliation; v5.8 targets email verification and login-code policy; v5.9 targets parent/admin operations visibility. v5.5 completed automatic teacher/tutor dispatch backend readiness for student teacher requests.
 
 ## Current Planning Decision
 
@@ -49,4 +49,4 @@ v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learni
 
 v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
 
-v5.6 is active as the next internal product-functionality milestone because user testing and code audit showed core product operations remain incomplete. Current billing activation updates parent profile state, while question quota reads the student's local tier; usage is counter-only rather than a durable ledger; registration marks email as verified through backend admin policy; and login-code behavior is absent. The next task order is effective entitlements and paid access enforcement, usage ledger and quota reconciliation, email verification and login-code policy, then customer/admin visibility and release gate. Native apps, live APNS/FCM, app-store release, final live payment activation, and external support activation remain later prerequisites.
+v5.6 is active as a complete entitlement milestone because current billing activation updates parent profile state while question quota reads the student's local tier. v5.7, v5.8, and v5.9 are planned as separate complete milestones for usage ledger/quota reconciliation, email verification/login-code policy, and parent/admin operations visibility. Native apps, live APNS/FCM, app-store release, final live payment activation, and external support activation remain later prerequisites.

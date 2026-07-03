@@ -1,101 +1,89 @@
-# Requirements: v5.6 Core Product Operations Completion
+# Requirements: v5.6 Effective Entitlements And Paid Access Enforcement
 
 **Milestone:** v5.6
 **Status:** Active planning
-**Created:** 2026-07-02
-**Updated:** 2026-07-02 after code-reality audit
+**Created:** 2026-07-03
 **Research:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
 
 ## Purpose
 
-Complete the operational product details that must work before real users can reliably use STOA: paid access, usage tracking, login verification code policy, email verification, customer billing state, and admin support visibility.
+Make paid access real. A parent payment or admin override must translate into deterministic linked-student access and quota behavior.
 
-The previous native app plan was premature. Native apps remain useful later, but they should not precede core account/payment/usage correctness.
+This milestone is intentionally narrower than the previous v5.6 core-operations bundle. Usage ledger, email/login verification, and broader parent/admin visibility are promoted to separate milestones.
 
 ## Requirements
 
-### COREOPS-01 Core Product Operations Gap Audit And Contract
-
-Implementers have a code-grounded audit of the missing paid/auth/usage details before code expands.
+### ENTITLE-01 Entitlement Contract And Access Policy
 
 Acceptance criteria:
 
-- Existing auth/register/login/forgot/reset/email-verification behavior is documented with code references.
-- Existing subscription, billing, manual plan, webhook, and rollout-control behavior is documented with code references.
-- Existing quota/usage behavior and admin/customer visibility are documented with code references.
-- Missing details are classified as must-build now, defer, or external prerequisite.
-- Phase 202-205 implementation order is updated from the real gaps.
+- Entitlement inputs are defined: student profile, parent binding, parent subscription tier, billing status, manual override, rollout controls, cancellation/expiry, and pending payment.
+- Entitlement output shape is defined: effective plan, source, limits, billing state, period, blocking reason, and support explanation.
+- State precedence is explicit for manual override, active provider billing, pending checkout, canceled/expired, failed payment, free tier, and missing binding.
+- Question quota is the first enforced product area.
+- Test matrix is documented before implementation.
 
-### COREOPS-02 Effective Entitlements And Paid Access Enforcement
-
-Paid access affects actual student limits through a deterministic entitlement resolver.
+### ENTITLE-02 Entitlement Resolver Service And Parent Child Mapping
 
 Acceptance criteria:
 
-- Effective entitlement resolver combines student profile, parent binding, parent subscription tier, billing status, manual overrides, rollout controls, cancellation/expiry, and pending payment.
-- Student question quota uses effective entitlement rather than only the student's local `subscription_tier`.
-- Active paid parent billing can grant linked student limits according to product policy.
-- Pending, canceled, expired, failed-payment, missing-binding, and manual-override states have deterministic fallback behavior.
-- Tests cover free student, paid parent-linked student, pending checkout, active invoice-paid, canceled/expired, manual override, and missing binding.
+- Resolver reads existing user, parent binding, parent profile, and billing rows using current single-table/repository patterns.
+- Linked student entitlement can derive from active parent billing.
+- Manual override remains supported and represented as an entitlement source.
+- Missing/inactive parent binding falls back deterministically.
+- Resolver returns a stable response shape for internal callers and future APIs.
 
-### COREOPS-03 Usage Ledger And Quota Reconciliation
-
-Plan-governed usage is durably recorded and inspectable.
+### ENTITLE-03 Student Paid Access Enforcement
 
 Acceptance criteria:
 
-- Usage event records include actor, subject, parent/student relationship where available, product area, action, quantity, entitlement source, period, idempotency key, and timestamp.
-- Existing daily question counters remain compatible while ledger writes are introduced.
-- Question submission, OCR/AI answer generation, teacher-help request, chat, and hint usage have a clear ledger/counter policy.
-- Admin can inspect usage by parent/student/user, period, product area, and entitlement source.
-- Tests cover idempotent event writes, quota exhaustion, ledger/counter consistency, and admin usage queries.
+- Question submission quota uses effective entitlement instead of only the student's local `subscription_tier`.
+- Free/standard/premium limits still map to existing settings.
+- Access denial response is actionable and does not expose billing internals.
+- Existing daily counter behavior remains stable.
+- Tests cover free, standard, premium, pending, canceled/expired, manual override, and missing binding states.
 
-### COREOPS-04 Email Verification And Login Code Policy
-
-Account verification and login-code behavior are explicit product flows, not placeholders.
+### ENTITLE-04 Entitlement Visibility And Focused Tests
 
 Acceptance criteria:
 
-- Registration no longer silently treats new emails as product-verified unless intentionally configured for an internal environment.
-- Email verification supports requested, sent, verified, expired, failed, resent, wrong-code, and already-verified states.
-- Verification codes have expiry, resend, attempt-limit, and account-state behavior.
-- Login-code policy is explicit: implement a supported email login-code flow or formally keep login password-only and remove unsupported UI/API expectations.
-- Forgot/reset password remains compatible with existing Cognito-backed behavior.
+- Parent/customer subscription or account response includes an effective entitlement summary.
+- Admin user or subscription response includes entitlement source and support explanation.
+- Existing billing response shapes remain backward compatible.
+- Focused tests cover parent/customer and admin response shapes.
+- Remaining broader operations visibility is handed off to v5.9.
 
-### VERIFY-39 Customer Admin Visibility And v5.6 Release Gate
-
-v5.6 closes with customer/admin visibility and end-to-end evidence for the core product operations flows.
+### VERIFY-39 v5.6 Entitlement Release Gate
 
 Acceptance criteria:
 
-- Parent/customer views distinguish effective plan, billing status, entitlement source, renewal/cancel state, usage summary, and email verification status.
-- Admin views expose account verification status, usage ledger summary, effective entitlement, billing provider state, and support timestamps.
-- Focused tests pass for paid entitlement, usage ledger, verification code, login/account state, and customer/admin visibility.
-- Release evidence identifies backend/frontend commits and explicitly documents deferred native app, live provider, or production rollout items.
-- Final audit records rollout state and updates the next milestone recommendation.
+- Entitlement contract, resolver, quota enforcement, visibility, and tests are complete.
+- Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect v5.6 completion.
+- Release evidence identifies commit SHAs and deferred items.
+- Final audit records rollout state: entitlement-ready, blocked, or deferred.
+- v5.7 usage ledger milestone handoff is updated.
 
-## Future Requirements
+## Future Milestones
 
+- v5.7 Usage Ledger And Quota Reconciliation.
+- v5.8 Email Verification And Login Code Policy.
+- v5.9 Parent Admin Operations Visibility.
 - Native iOS/Android app buildout after core account/payment/usage correctness.
-- Live APNS/FCM provider credentials and app-store release.
-- Rich curriculum editor frontend implementation.
-- Live warehouse/BI deployment.
-- Real external support provider/CRM activation.
 
 ## Out of Scope
 
-- Native app implementation in this milestone.
-- Final live Stripe/TWINT customer charging unless external prerequisites are ready.
-- Real external support provider or CRM/customer writes.
-- Fully autonomous AI tutoring without human review.
-- Broad compliance/security hardening unrelated to paid/auth/usage functionality.
+- Durable usage ledger implementation beyond entitlement-summary fields.
+- Email verification and login-code implementation.
+- Full parent/admin operations console.
+- Native app implementation.
+- Final live Stripe/TWINT activation unless external prerequisites are ready.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COREOPS-01 | Phase 201 | Complete |
-| COREOPS-02 | Phase 202 | Planned |
-| COREOPS-03 | Phase 203 | Planned |
-| COREOPS-04 | Phase 204 | Planned |
-| VERIFY-39 | Phase 205 | Planned |
+| ENTITLE-01 | Phase 202 | Planned |
+| ENTITLE-02 | Phase 203 | Planned |
+| ENTITLE-03 | Phase 204 | Planned |
+| ENTITLE-04 | Phase 205 | Planned |
+| VERIFY-39 | Phase 206 | Planned |

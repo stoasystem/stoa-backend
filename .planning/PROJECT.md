@@ -84,7 +84,7 @@ The completed v5.4 milestone makes those v5.2/v5.3 learning operations usable in
 
 The completed v5.5 milestone turns the manual teacher queue/takeover workflow into backend dispatch-ready routing: teacher/tutor candidate ranking, conditional dispatch claims, stale reassignment behavior, teacher queue filtering, takeover compatibility, and admin dispatch SLA/load visibility. It closed as `dispatch-ready`; production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain future scope.
 
-The active v5.6 milestone corrects the next priority toward core product operations completion before native app buildout: parent-paid linked-student entitlement, durable usage ledger and counter reconciliation, login-code policy, email verification lifecycle, customer billing state, and admin support visibility. Native apps, live APNS/FCM credentials, app-store publication, final live payment activation, and external support provider activation remain later prerequisites.
+The active v5.6 milestone is now narrowed to a complete feature build for effective entitlements and paid access enforcement: parent-paid or manually overridden access must translate into deterministic linked-student entitlement and quota behavior. Usage ledger, email/login verification, and parent/admin operations visibility are promoted into their own follow-up milestones v5.7, v5.8, and v5.9.
 
 ## Core Value
 
@@ -94,7 +94,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.5 Automatic Teacher Dispatch And SLA Load Balancing on 2026-06-15 (dispatch-ready backend release gate)
-**Active milestone:** v5.6 Core Product Operations Completion (active planning)
+**Active milestone:** v5.6 Effective Entitlements And Paid Access Enforcement (active planning)
 
 Delivered:
 
@@ -376,7 +376,7 @@ Phase evidence: `.planning/milestones/v5.5-phases/`
 
 **Outcome:** v5.5 closed as `dispatch-ready` with backend implementation commit `7f1d759`, audit commit `849b97a`, and release gate commit `e5ce750`. Verification passed 16 focused backend tests and targeted Ruff. Production scheduled worker/CDK wiring, live staffing calendar integration, frontend operator dashboard implementation, native push dispatch notifications, payroll/compensation automation, and live production smoke remain deferred.
 
-## Active Milestone: v5.6 Core Product Operations Completion
+## Active Milestone: v5.6 Effective Entitlements And Paid Access Enforcement
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
@@ -384,19 +384,25 @@ Milestone roadmap: `.planning/milestones/v5.6-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.6-REQUIREMENTS.md`
 Active phase: `.planning/phases/201-core-product-operations-gap-audit-and-contract/`
 
-**Status:** Phase 201 complete; Phase 202 active as of 2026-07-02.
+**Status:** Active planning started 2026-07-03 after promoting the remaining final-polish work into complete milestones.
 
-**Function purpose:** Complete the paid/auth/usage details required for real users: parent-paid linked-student entitlement, backend usage ledger, email verification, login-code policy, customer billing state, and admin support visibility.
+**Function purpose:** Make paid access real for linked students. Parent billing or manual overrides must resolve into an effective student entitlement and enforce the correct question quota.
 
-**Implementation strategy:** Build from the current code reality. Existing billing updates parent profile tiers, while question quota reads the student's own tier; close that entitlement gap first. Then add a usage ledger beside the existing counters, implement email verification/login-code policy, and expose customer/admin visibility. Defer native app implementation until these core operations are reliable.
+**Implementation strategy:** Build from the Phase 201 code audit. Existing billing updates parent profile tiers, while question quota reads the student's own tier; close that entitlement gap first. Keep billing/webhook/manual flows stable, implement a resolver service, enforce it in question quota, and expose entitlement summary. Defer usage ledger, verification, and full operations visibility to v5.7-v5.9.
 
 **Planned phases:**
 
-- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
-- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
-- Phase 203: Usage Ledger And Quota Reconciliation.
-- Phase 204: Email Verification And Login Code Policy.
-- Phase 205: Customer Admin Visibility And Release Gate.
+- Phase 202: Entitlement Contract And Access Policy. (active)
+- Phase 203: Entitlement Resolver Service And Parent Child Mapping.
+- Phase 204: Student Paid Access Enforcement.
+- Phase 205: Entitlement Visibility And Focused Tests.
+- Phase 206: v5.6 Entitlement Release Gate.
+
+**Follow-up milestones:**
+
+- v5.7 Usage Ledger And Quota Reconciliation.
+- v5.8 Email Verification And Login Code Policy.
+- v5.9 Parent Admin Operations Visibility.
 
 ## Requirements
 
@@ -807,7 +813,7 @@ Known current resources:
 | Start v5.3 controlled assignment automation | v5.2 completed recommendation, outcome, analytics, and operator dashboard readiness; final external activation remained blocked, so the next buildable product gap was controlled assignment automation from reviewed sources | Complete - automation-ready release gate passed |
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
-| Reorder v5.6 from current code reality | Code audit showed billing activation updates parent state, question quota reads student tier, usage is counter-only, registration bypasses email verification, and login code is absent; the next tasks must close those real gaps before native app buildout | Active planning |
+| Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 now focuses only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Active planning |
 
 ## Evolution
 
@@ -827,4 +833,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-02 after code-reality audit and v5.6 task reordering*
+*Last updated: 2026-07-03 after promoting final-polish work into complete milestones*

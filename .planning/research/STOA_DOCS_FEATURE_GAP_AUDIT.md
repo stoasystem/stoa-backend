@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-07-02 after correcting v5.6 toward core product operations completion
+**Updated:** 2026-07-03 after promoting final-polish work into complete milestones
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -58,7 +58,7 @@ v5.4 completed frontend learning operations and automation dashboards. It made v
 
 v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
-v5.6 is active as the next internal feature-build milestone, corrected away from native app buildout after user testing and code audit showed lower-level real-user details are still incomplete. Current billing activation updates parent profile state, while question quota reads the student's local tier; usage is counter-only rather than a durable ledger; registration marks email as verified through backend admin policy; and login-code behavior is absent. v5.6 now targets effective entitlements and paid access enforcement, usage ledger and quota reconciliation, email verification and login-code policy, then customer/admin visibility and release gate.
+The final-polish work is now promoted into complete feature milestones instead of being treated as phases inside one broad milestone. v5.6 targets effective entitlements and paid access enforcement because current billing activation updates parent profile state while question quota reads the student's local tier. v5.7 targets usage ledger and quota reconciliation. v5.8 targets email verification and login-code policy. v5.9 targets parent/admin operations visibility and final core-ops closeout.
 
 ## Completed Or Largely Complete
 
@@ -186,16 +186,17 @@ v5.6 is active as the next internal feature-build milestone, corrected away from
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 completed controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 completed controlled autonomous delivery backend/API readiness; v5.4 now targets frontend usability.
 - Automatic teacher/tutor dispatch for student help requests. Status: v5.5 completed backend dispatch planning, matching, claim/reassignment, queue visibility, and SLA/load dashboards; production scheduling, live staffing calendar, frontend dashboard implementation, and native push remain future scope.
-- Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; deferred until after v5.6 core paid/auth/usage operations are reliable. App-store release and live provider activation remain future scope.
+- Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; deferred until after the v5.6-v5.9 entitlement, usage, verification, and operations visibility milestones are reliable. App-store release and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Execute v5.6 core product operations completion: effective entitlements for parent-paid linked students, usage ledger and quota reconciliation, login/email verification policy, customer billing state, and admin support visibility.
-2. Consider frontend rich curriculum editor implementation, native app buildout, production content import, or live warehouse/BI deployment after v5.6 unless external activation prerequisites unblock.
-3. Final live payment activation operations after external credentials, webhook registration, TWINT approval, finance acceptance, and explicit rollout approval are available.
-4. Real external support provider and CRM/customer transport activation after external provider prerequisites are approved.
+1. Execute v5.6 Effective Entitlements And Paid Access Enforcement.
+2. Execute v5.7 Usage Ledger And Quota Reconciliation.
+3. Execute v5.8 Email Verification And Login Code Policy.
+4. Execute v5.9 Parent Admin Operations Visibility.
+5. Consider frontend rich curriculum editor implementation, native app buildout, production content import, or live warehouse/BI deployment after final core-ops polish unless external activation prerequisites unblock.
 
 ## v3.0 Scope Recommendation
 

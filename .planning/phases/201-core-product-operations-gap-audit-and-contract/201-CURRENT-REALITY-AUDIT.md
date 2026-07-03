@@ -1,4 +1,4 @@
-# v5.6 Current Reality Audit: Core Product Operations
+# Current Reality Audit: Core Product Operations Final Polish
 
 **Date:** 2026-07-02
 **Scope:** paid functionality, usage records, login verification code policy, email verification, customer/admin billing and support visibility.
@@ -34,31 +34,31 @@ The product is not yet ready to treat those foundations as a complete real-user 
 | Admin billing API | Admin can list/open billing, readiness, rollout controls, refunds, accounting export, and subscription requests. | `src/stoa/routers/admin.py:1089` | Lacks admin usage ledger and account verification operations. |
 | Admin user update | Admin can directly update `subscription_tier` and `is_active`. | `src/stoa/routers/admin.py:1062` | Manual override should become explicit entitlement source with reason/audit semantics. |
 
-## Must-Build Now
+## Must-Build Milestone Queue
 
-1. Effective entitlement resolver:
+1. v5.6 Effective entitlement resolver and paid access enforcement:
    - Resolve entitlement from student profile, parent binding, parent billing/profile state, manual override, rollout state, and current billing status.
    - Use it in question quota and later other plan-governed actions.
 
-2. Parent-to-student paid access:
+2. v5.6 Parent-to-student paid access:
    - Active parent subscription must grant intended limits to linked students.
    - Missing/inactive bindings must have deterministic fallback.
 
-3. Usage ledger:
+3. v5.7 Usage ledger:
    - Add durable event rows for question submission, OCR/AI generation, teacher-help request, chat, and hint usage.
    - Keep current counters compatible while adding ledger writes.
 
-4. Email verification lifecycle:
+4. v5.8 Email verification lifecycle:
    - Add request/send/verify/resend/expire/fail states.
    - Stop presenting all new accounts as product-verified unless internal bypass is explicitly enabled.
 
-5. Login-code policy:
+5. v5.8 Login-code policy:
    - Choose one supported product policy:
      - keep password login and remove login-code expectation, or
      - implement a supported Cognito-compatible login code flow.
    - Do not add a fake code flow that cannot produce valid Cognito tokens.
 
-6. Customer/admin visibility:
+6. v5.9 Customer/admin visibility:
    - Parent sees effective plan, billing state, usage summary, and email verification state.
    - Admin sees entitlement source, usage ledger summary, verification status, billing provider state, and support timestamps.
 
@@ -77,7 +77,7 @@ The product is not yet ready to treat those foundations as a complete real-user 
 
 ## Implementation Order
 
-1. Phase 202: effective entitlement resolver and paid access enforcement.
-2. Phase 203: usage ledger and quota reconciliation.
-3. Phase 204: email verification and login-code policy.
-4. Phase 205: customer/admin visibility and release gate.
+1. v5.6 Effective Entitlements And Paid Access Enforcement.
+2. v5.7 Usage Ledger And Quota Reconciliation.
+3. v5.8 Email Verification And Login Code Policy.
+4. v5.9 Parent Admin Operations Visibility.

@@ -1,71 +1,99 @@
-# Next Three Milestones
+# Next Product Milestones
 
-**Updated:** 2026-07-02 after correcting v5.6
-**Mode:** product functionality first
+**Updated:** 2026-07-03 after promoting core operations phases into milestones
+**Mode:** final polish, product functionality first
 
-## Latest Completed: v5.5 Automatic Teacher Dispatch And SLA Load Balancing
+## Completed Planning Audit: Phase 201 Core Product Operations Gap Audit
 
-**Status:** Completed backend dispatch-ready release gate 2026-06-15
-**Roadmap archive:** `.planning/milestones/v5.5-ROADMAP.md`
-**Requirements archive:** `.planning/milestones/v5.5-REQUIREMENTS.md`
-**Audit:** `.planning/milestones/v5.5-MILESTONE-AUDIT.md`
+**Status:** Complete 2026-07-02
+**Evidence:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
 
-Goal: automatically route student teacher-help requests to eligible teachers/tutors, reduce waiting time, reassign timed-out requests, and expose queue/SLA health.
+Key finding: the remaining work should not be treated as small phases. Entitlements, usage ledger, verification, and operations visibility are each complete product capabilities.
 
-Closed scope:
+## Active: v5.6 Effective Entitlements And Paid Access Enforcement
 
-- Added dispatch planner and teacher/tutor candidate ranking.
-- Added conditional dispatch claim metadata and stale reassignment behavior.
-- Updated request-teacher, teacher queue, takeover, and admin dashboard routes for dispatch state.
-- Verified with focused backend tests and Ruff; closed as `dispatch-ready`.
-
-## Active: v5.6 Core Product Operations Completion
-
-**Status:** Phase 201 complete; Phase 202 active
+**Status:** Active planning
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 
-Function purpose:
+Purpose:
 
-- Complete real-user product details before native app work.
-- Make parent-paid entitlement state reliable for linked students.
-- Record and reconcile user/student usage in a durable backend ledger.
-- Complete email verification and login verification-code policy.
-- Expose customer/admin billing, usage, verification, and support state.
+- Make paid access real for linked students.
+- Resolve entitlement from student profile, parent binding, parent billing, manual override, rollout controls, and billing state.
+- Enforce effective entitlement in question quota.
+- Provide enough entitlement visibility for parent/admin support.
 
-Implementation strategy:
+Detailed build scope:
 
-- Audit existing auth, subscription, billing, quota, usage, verification, and admin code paths.
-- Build deterministic effective entitlement from student profile, parent binding, parent subscription tier, billing provider state, manual overrides, rollout controls, cancellation/expiry, and pending payment.
-- Add a usage ledger and reconcile it with current counters for plan-governed actions such as question submission, OCR/AI usage, teacher-help requests, chat, and hints.
-- Complete verification-code lifecycle with expiry, resend, attempt limits, and account-state effects.
-- Keep native apps, live APNS/FCM, app-store release, and external support activation as later milestones.
+- Phase 202: Entitlement Contract And Access Policy.
+- Phase 203: Entitlement Resolver Service And Parent Child Mapping.
+- Phase 204: Student Paid Access Enforcement.
+- Phase 205: Entitlement Visibility And Focused Tests.
+- Phase 206: v5.6 Entitlement Release Gate.
 
-Planned scope:
+## Planned: v5.7 Usage Ledger And Quota Reconciliation
 
-- Phase 201: Core Product Operations Gap Audit And Contract. (complete)
-- Phase 202: Effective Entitlements And Paid Access Enforcement. (active)
-- Phase 203: Usage Ledger And Quota Reconciliation.
-- Phase 204: Email Verification And Login Code Policy.
-- Phase 205: Customer Admin Visibility And Release Gate.
+**Status:** Planned after v5.6
+**Roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
 
-## Candidate v5.7 Frontend Rich Curriculum Editor Or Native App Buildout
+Purpose:
 
-**Status:** Candidate after v5.6, depending on core operations completion and owner readiness
+- Turn usage tracking from counter-only behavior into a durable, queryable ledger.
+- Reconcile question/chat/hint counters with usage events.
+- Enable admin and future parent usage summaries.
 
-Potential scope:
+Detailed build scope:
 
-- Frontend rich curriculum editor implementation from the v5.1/v4.6 authoring readiness work.
-- Native iOS/Android app buildout once account/payment/usage correctness is reliable.
-- Production source import and migration API/UI if content owners are ready.
-- Live warehouse/BI deployment and scheduled exports if analytics infrastructure ownership is ready.
+- Phase 207: Usage Ledger Contract And Access Patterns.
+- Phase 208: Usage Event Repository And Service.
+- Phase 209: Plan-Governed Action Instrumentation.
+- Phase 210: Quota Reconciliation And Admin Usage Query.
+- Phase 211: v5.7 Usage Ledger Release Gate.
 
-## Candidate v5.8 External Activation Or Support/Payment Closeout
+## Planned: v5.8 Email Verification And Login Code Policy
 
-**Status:** Candidate when owner/prerequisite readiness improves
+**Status:** Planned after v5.7
+**Roadmap:** `.planning/milestones/v5.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.8-REQUIREMENTS.md`
 
-Potential scope:
+Purpose:
 
-- Final live payment activation once approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and rollout enablement are available.
-- Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
-- Production app-store/TestFlight/Play internal testing release after native and provider prerequisites are available.
+- Replace `admin_marked_verified` placeholder behavior with real account verification lifecycle.
+- Decide and implement a token-compatible login-code policy or explicitly keep login password-only.
+- Keep Cognito forgot/reset password stable.
+
+Detailed build scope:
+
+- Phase 212: Verification Policy And Cognito Compatibility Contract.
+- Phase 213: Email Verification Code Service.
+- Phase 214: Registration And Account-State Integration.
+- Phase 215: Login-Code Policy Implementation And UI/API Handoff.
+- Phase 216: v5.8 Verification Release Gate.
+
+## Planned: v5.9 Parent Admin Operations Visibility
+
+**Status:** Planned after v5.8
+**Roadmap:** `.planning/milestones/v5.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.9-REQUIREMENTS.md`
+
+Purpose:
+
+- Make entitlement, billing, usage, and verification state understandable to parents/customers and admins.
+- Provide final support-grade polish before moving back to larger product expansion such as native apps or rich curriculum editor implementation.
+
+Detailed build scope:
+
+- Phase 217: Customer Account Operations Contract.
+- Phase 218: Admin Support Operations Contract.
+- Phase 219: Backend Aggregation APIs.
+- Phase 220: Frontend/Admin Handoff And Focused Tests.
+- Phase 221: v5.9 Core Operations Closeout.
+
+## Later Candidates
+
+- Native iOS/Android app buildout.
+- Frontend rich curriculum editor implementation.
+- Production content import and migration UI/API.
+- Live warehouse/BI deployment.
+- Final external payment/support activation when prerequisites unblock.

@@ -7,12 +7,12 @@
 
 - Audited current auth, registration, login, forgot/reset, subscription, billing, quota, usage, parent, and admin behavior from code.
 - Documented current reality in `201-CURRENT-REALITY-AUDIT.md`.
-- Reordered v5.6 from broad core-ops planning into concrete implementation phases:
-  - Phase 202: effective entitlements and paid access enforcement.
-  - Phase 203: usage ledger and quota reconciliation.
-  - Phase 204: email verification and login-code policy.
-  - Phase 205: customer/admin visibility and release gate.
-- Added `201-NEXT-DEVELOPMENT-TASKS.md` as the implementation task queue.
+- Reordered the remaining final-polish work from one broad core-ops plan into complete feature milestones:
+  - v5.6: effective entitlements and paid access enforcement.
+  - v5.7: usage ledger and quota reconciliation.
+  - v5.8: email verification and login-code policy.
+  - v5.9: parent/admin operations visibility.
+- Added `201-NEXT-DEVELOPMENT-TASKS.md` as the milestone queue.
 - Updated roadmap, requirements, state, milestone, project, and stoa_docs gap docs.
 
 ## Key Findings
@@ -25,4 +25,4 @@
 
 ## Next
 
-Proceed to Phase 202: implement effective entitlement resolver and paid access enforcement for linked students.
+Proceed to v5.6 Phase 202: define entitlement contract and access policy, then implement effective entitlement resolver and paid access enforcement for linked students through phases 203-206.

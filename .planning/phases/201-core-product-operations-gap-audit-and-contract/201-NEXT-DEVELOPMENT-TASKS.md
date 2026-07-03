@@ -1,92 +1,107 @@
-# v5.6 Next Development Tasks
+# Final-Polish Product Milestone Queue
 
-**Date:** 2026-07-02
+**Date:** 2026-07-03
 **Basis:** `201-CURRENT-REALITY-AUDIT.md`
 
-## Phase 202: Effective Entitlements And Paid Access Enforcement
+Phase 201 identified that the remaining entitlement, usage, verification, and operations-visibility work is too large to treat as a few implementation phases inside one broad milestone. The work is now split into complete feature milestones. v5.6 is active; v5.7 through v5.9 are planned follow-up milestones.
 
-Task 202-A: Create entitlement resolver.
+## v5.6: Effective Entitlements And Paid Access Enforcement
 
-- Inputs: user profile, parent/student binding, parent profile, parent billing summary, manual override, billing status, rollout controls.
-- Output: effective plan, limits, entitlement source, billing state, period, blocking reason, support explanation.
-- First integration point: question quota.
+Purpose: make paid access actually affect linked student usage limits.
 
-Task 202-B: Apply parent paid entitlement to linked students.
+Implementation phases:
 
-- If parent billing is active and child binding is active, student gets paid plan limits.
-- If billing is checkout_pending/past_due/canceled/payment_failed, use explicit fallback policy.
-- If no active binding exists, keep student free unless student has direct override.
+- Phase 202: Entitlement Contract And Access Policy.
+- Phase 203: Entitlement Resolver Service And Parent Child Mapping.
+- Phase 204: Student Paid Access Enforcement.
+- Phase 205: Entitlement Visibility And Focused Tests.
+- Phase 206: v5.6 Entitlement Release Gate.
 
-Task 202-C: Replace misleading auth plan output.
+Detailed tasks:
 
-- Stop returning hardcoded `subscriptionStatus="trial"` and `plan="free_trial"` when real entitlement is available.
-- Add tests for student/parent/admin profile outputs.
+- Define effective entitlement inputs: student profile tier, parent billing status, parent profile tier, parent-child binding, manual override, rollout controls, failed/pending/canceled payment states, and internal/test bypasses.
+- Implement a resolver service that returns effective plan, limits, entitlement source, current period, blocking reason, and support/admin explanation.
+- Apply active parent paid entitlement to linked students when the binding is active and the billing state allows access.
+- Keep free/pending/canceled/payment-failed states deterministic; do not silently grant paid access when the source state is ambiguous.
+- Replace misleading auth profile output such as hardcoded `subscriptionStatus="trial"` and `plan="free_trial"` where a real effective entitlement is available.
+- Enforce resolved entitlement in question quota first; leave other plan-governed actions to v5.7 instrumentation unless they already share the same quota gate.
+- Add focused tests for linked-student paid quota, free fallback, pending/canceled fallback, manual override, parent/admin visibility shape, and resolver edge cases.
 
-## Phase 203: Usage Ledger And Quota Reconciliation
+Release gate:
 
-Task 203-A: Add usage event repository/service.
+- Backend tests pass for entitlement resolver and question quota enforcement.
+- Parent-paid linked student can use the intended quota in local/integration evidence.
+- Free or inactive billing does not receive paid quota.
+- Admin/manual override behavior is explicit and test-covered.
+- Roadmap, requirements, state, and milestone summary are updated.
 
-- Event fields: event ID, actor user ID, subject/student ID, parent ID, product area, action, quantity, entitlement source, period key, idempotency key, created at.
-- Use DynamoDB single-table patterns unless a specific access pattern proves insufficient.
+## v5.7: Usage Ledger And Quota Reconciliation
 
-Task 203-B: Write usage events for plan-governed actions.
+Purpose: record user/student consumption durably enough for support, billing review, quota investigation, and later customer-facing usage summaries.
 
-- Question submit.
-- OCR/AI answer generation.
-- Teacher-help request.
-- Chat message.
-- Hint request.
+Detailed tasks:
 
-Task 203-C: Keep counters compatible.
+- Define usage event contract: event ID, actor user ID, subject/student ID, parent ID, product area, action, quantity, entitlement source, plan period, idempotency key, created-at timestamp, and display-safe metadata.
+- Add usage event repository/service using the existing DynamoDB patterns unless an access pattern requires a new table/index.
+- Write idempotent usage events for question submit, OCR/AI answer generation, teacher-help request, chat message, and hint request.
+- Keep the current question counter as the enforcement path until ledger reconciliation is proven.
+- Add reconciliation/projection behavior that can compare counters with ledger events for the same student and period.
+- Add admin usage query by parent/student/user, period, product area, action, and entitlement source.
+- Prepare parent/customer usage summary response shape for v5.9 visibility.
 
-- Current daily question counter remains the enforcement path until ledger is proven.
-- Add reconciliation behavior or summary projection for admin/customer display.
+Release gate:
 
-Task 203-D: Add admin usage query.
+- Ledger writes are idempotent and do not double-count retried requests.
+- Existing quota tests remain compatible.
+- Admin can inspect usage events/summaries without raw database access.
+- Reconciliation evidence documents how current counters and ledger rows agree.
 
-- Query by parent/student/user, period, product area, and entitlement source.
-- Start with bounded scans if acceptable for internal development; optimize later if access patterns require it.
+## v5.8: Email Verification And Login Code Policy
 
-## Phase 204: Email Verification And Login Code Policy
+Purpose: make account verification real and remove ambiguity around login-code behavior.
 
-Task 204-A: Replace placeholder email verification status.
+Detailed tasks:
 
-- Registration should create `pending_verification` unless an explicit internal bypass flag is enabled.
-- Add verification request/send/verify/resend/expire/fail states.
+- Replace default product verification state with `pending_verification` unless an explicit internal bypass flag is active.
+- Add verification request/send/verify/resend/expire/fail/already-verified behavior.
+- Store code material safely with expiry, attempt count, resend count, last-sent timestamp, and invalidation of replaced active codes.
+- Add endpoints and service logic for request verification, resend verification, and confirm verification.
+- Define login-code policy:
+  - Low-risk path: password login remains primary and email code is only account verification.
+  - If product requires login-by-code, implement a Cognito-compatible custom-auth or equivalent session-producing design.
+- Preserve existing Cognito forgot/reset password behavior.
+- Add customer/admin-visible verification state fields for v5.9.
 
-Task 204-B: Add verification code storage and validation.
+Release gate:
 
-- Store hashed or otherwise non-plain code material, expiry, attempts, resend count, last sent at.
-- Confirm wrong-code, expired, already-verified, and resend behavior.
+- New account verification state is no longer misleading.
+- Wrong, expired, resent, already-verified, and successful code paths are test-covered.
+- Login-code policy is explicit in API behavior and docs.
+- Existing password login, refresh, logout, forgot, and reset flows remain stable.
 
-Task 204-C: Decide login-code policy.
+## v5.9: Parent Admin Operations Visibility
 
-- Preferred low-risk policy for current architecture: password login remains primary; email verification code is separate.
-- If product requires login-by-code, plan Cognito custom auth or another token-compatible design before implementation.
+Purpose: make the effective account state visible to parents and admins so support does not need direct database inspection.
 
-Task 204-D: Keep forgot/reset password stable.
+Detailed tasks:
 
-- Existing Cognito forgot/reset behavior remains the password recovery path.
+- Add parent account summary with current plan, effective entitlement, billing status, current-period usage summary, email verification state, and available actions.
+- Add admin account detail with entitlement source, manual override state, billing provider status, recent provider event, usage summary/recent events, quota state, verification status, and support timestamps.
+- Add bounded support actions where the backend already has safe primitives; leave risky write operations to later explicit requirements.
+- Connect frontend/admin handoff contracts so product surfaces know exactly which fields are available.
+- Produce final core-operations closeout evidence: backend tests, API response samples, docs, and next-expansion decision.
 
-## Phase 205: Customer/Admin Visibility And Release Gate
+Release gate:
 
-Task 205-A: Parent/customer account state.
+- Parent/customer and admin response shapes cover entitlement, billing, usage, and verification.
+- Admin-only API checks are documented.
+- Final audit decides whether native app, rich curriculum editor UI, live warehouse/BI, external support activation, or production content import should be next.
 
-- Add effective plan, billing status, entitlement source, usage summary, and email verification state to subscription/account views.
+## Later Expansion Candidates
 
-Task 205-B: Admin support state.
-
-- Add account verification status, effective entitlement, usage ledger summary, billing provider status, and support timestamps to admin views.
-
-Task 205-C: Release gate tests.
-
-- Focused backend tests for:
-  - parent-paid linked student quota
-  - free/pending/canceled/manual override entitlement
-  - usage ledger write/idempotency
-  - email verification success/wrong/expired/resend
-  - customer/admin response shapes
-
-Task 205-D: Update milestone docs.
-
-- Requirements, roadmap, state, gap audit, remaining-feature queue, and final milestone audit.
+- Native iOS/Android app implementation and app-store rollout.
+- Live APNS/FCM provider activation.
+- Final live Stripe/TWINT production activation after provider/finance prerequisites are available.
+- External support provider/CRM activation.
+- Rich curriculum editor frontend implementation and production content import.
+- Live warehouse/BI deployment.

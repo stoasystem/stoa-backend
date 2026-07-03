@@ -1,14 +1,16 @@
-# Core Product Operations Completion Contract
+# Core Product Operations Milestone Contract
 
 ## Function Purpose
 
-v5.6 completes the product-operation layer that real users depend on before mobile app expansion:
+The final product-operation layer that real users depend on before mobile app expansion is split into complete feature milestones:
 
 - Paid access must translate into effective entitlement.
 - User/student usage must be durably recorded and inspectable.
 - Email verification must be a real stateful flow.
 - Login verification-code policy must be explicit.
 - Parents/customers and admins must see understandable billing, usage, and verification state.
+
+The first milestone, v5.6, is intentionally narrowed to effective entitlements and paid access enforcement because that is the revenue-to-access path. Usage ledger, email/login verification, and full parent/admin visibility are large enough to be their own milestones.
 
 ## Not This Feature
 
@@ -124,9 +126,49 @@ Admin/support surfaces should expose:
 - Support-relevant timestamps.
 - Bounded admin actions with audit evidence where needed.
 
-## Follow-Up Phases
+## Milestone Split
 
-- Phase 202: effective entitlements and paid access enforcement.
-- Phase 203: usage ledger and quota reconciliation.
-- Phase 204: email verification and login code policy.
-- Phase 205: customer/admin visibility, release gate, evidence, and next milestone decision.
+### v5.6 Effective Entitlements And Paid Access Enforcement
+
+Purpose: make paid access real for linked students. Parent billing or manual override must resolve into deterministic student entitlement and question quota behavior.
+
+Internal phases:
+
+- Phase 202: entitlement contract and access policy.
+- Phase 203: entitlement resolver service and parent-child mapping.
+- Phase 204: student paid access enforcement.
+- Phase 205: entitlement visibility and focused tests.
+- Phase 206: v5.6 entitlement release gate.
+
+### v5.7 Usage Ledger And Quota Reconciliation
+
+Purpose: make plan-governed usage durably inspectable and reconcilable without breaking current quota enforcement.
+
+Expected build areas:
+
+- Usage event schema, repository, idempotency, and period keys.
+- Ledger writes for question submission, OCR/AI generation, teacher-help requests, chat, and hints.
+- Counter compatibility and reconciliation projections.
+- Admin usage query and parent/customer usage-summary handoff.
+
+### v5.8 Email Verification And Login Code Policy
+
+Purpose: replace placeholder verification state with a real account lifecycle and settle login-code behavior explicitly.
+
+Expected build areas:
+
+- Verification request/send/verify/resend/expire/fail states.
+- Safe code storage, expiry, attempt limits, resend limits, and already-verified behavior.
+- Registration updates and explicit internal bypass controls.
+- Login-code policy implementation or explicit de-scope while preserving Cognito password sessions.
+
+### v5.9 Parent Admin Operations Visibility
+
+Purpose: make parent and admin surfaces show the effective account state without database inspection.
+
+Expected build areas:
+
+- Parent account state summary with entitlement, billing, usage, verification, and support actions.
+- Admin support account detail with entitlement source, usage summaries, verification state, billing provider state, and timestamps.
+- Frontend/admin handoff contracts.
+- Final core-operations release gate and next expansion decision.
