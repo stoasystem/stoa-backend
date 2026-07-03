@@ -100,7 +100,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.9 Parent Admin Operations Visibility on 2026-07-03 (operations-visible backend release gate)
-**Next planned milestone:** TBD after frontend/native account operations UI and production smoke planning.
+**Active milestone:** v5.10 Account Operations Frontend And Production Readiness
 
 Delivered:
 
@@ -484,6 +484,31 @@ Phase evidence: `.planning/milestones/v5.9-phases/`
 
 **Known deferred items:** frontend/native account operations UI, production deploy/live smoke, broad CRM/customer messaging, analytics warehouse/cross-account search, native apps, final live Stripe/TWINT activation, and actual Cognito custom-auth passwordless login-code support.
 
+## Active Milestone: v5.10 Account Operations Frontend And Production Readiness
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.10-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.10-REQUIREMENTS.md`
+Completed phase: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/`
+Next phase: Phase 223 Email Verification UX Integration
+
+**Status:** Active. Phase 222 completed 2026-07-03 after reconciling current backend/frontend reality; Phase 223 is next.
+
+**Function purpose:** Make the completed backend account operations stack usable in the frontend: email verification UX, parent account operations UI, admin support detail, and production read-only readiness.
+
+**Implementation strategy:** Keep v5.6-v5.9 backend primitives stable unless frontend integration finds a concrete contract bug. Add typed frontend clients and query keys first, then parent/admin/auth surfaces, then focused frontend evidence and a production read-only smoke checklist.
+
+**Planned phases:**
+
+- Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
+- Phase 223: Email Verification UX Integration. (next)
+- Phase 224: Parent Account Operations UI.
+- Phase 225: Admin Account Operations Console.
+- Phase 226: v5.10 Frontend And Production Readiness Gate.
+
+**Deferred beyond v5.10:** additional usage ledger action coverage, Cognito custom-auth passwordless login-code, native/mobile app buildout, live Stripe/TWINT activation, external provider activation, and warehouse/BI.
+
 ## Requirements
 
 ### Validated
@@ -766,7 +791,13 @@ Milestone v5.9 requirements are complete:
 
 ### Active
 
-No active milestone requirements. Next milestone requirements should be created when the next milestone starts.
+Milestone v5.10 requirements are active:
+
+- FRONTOPS-01: reality refresh and frontend contract - Phase 222.
+- FRONTOPS-02: email verification UX integration - Phase 223.
+- FRONTOPS-03: parent account operations UI - Phase 224.
+- FRONTOPS-04: admin account operations console - Phase 225.
+- VERIFY-43: v5.10 frontend and production readiness gate - Phase 226.
 
 ### Out of Scope
 
@@ -924,6 +955,7 @@ Known current resources:
 | Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 focused only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Complete - entitlement-ready release gate passed |
 | Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
+| Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend has no account-operations clients/routes and no complete email verification confirm/resend UX | Active; Phase 222 complete |
 
 ## Evolution
 
@@ -943,4 +975,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after promoting final-polish work into complete milestones*
+*Last updated: 2026-07-03 after reconciling v5.9 backend completion with v5.10 frontend account-operations planning*

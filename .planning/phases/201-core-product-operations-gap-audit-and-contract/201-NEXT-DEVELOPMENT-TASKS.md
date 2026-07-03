@@ -3,7 +3,9 @@
 **Date:** 2026-07-03
 **Basis:** `201-CURRENT-REALITY-AUDIT.md`
 
-Phase 201 identified that the remaining entitlement, usage, verification, and operations-visibility work is too large to treat as a few implementation phases inside one broad milestone. The work is now split into complete feature milestones. v5.6 is active; v5.7 through v5.9 are planned follow-up milestones.
+Phase 201 identified that the remaining entitlement, usage, verification, and operations-visibility work was too large to treat as a few implementation phases inside one broad milestone. The work was split into complete feature milestones.
+
+**Historical status update, 2026-07-03:** v5.6 through v5.9 are now complete local backend milestones. The active milestone has moved to v5.10 frontend account operations and production-readiness planning.
 
 ## v5.6: Effective Entitlements And Paid Access Enforcement
 

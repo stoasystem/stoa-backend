@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.9
-milestone_name: Parent Admin Operations Visibility
-status: complete
-last_updated: "2026-07-03T16:35:00.000Z"
-last_activity: 2026-07-03
+milestone: v5.10
+milestone_name: Account Operations Frontend And Production Readiness
+status: Active
+last_updated: "2026-07-03T20:40:11.000Z"
+last_activity: 2026-07-03 — Completed Phase 222 reality refresh and moved v5.10 to Phase 223 frontend implementation planning
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -20,45 +20,40 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.9 Parent Admin Operations Visibility complete; next milestone is not started.
+**Current focus:** v5.10 Account Operations Frontend And Production Readiness.
 
 ## Current Position
 
-Phase: 221 v5.9 Operations Visibility Release Gate
-Plan: 221-01
-Status: Complete
-Last activity: 2026-07-03 — Milestone v5.9 completed
+Phase: 223 Email Verification UX Integration
+Plan: 223-01 Email verification frontend integration plan
+Status: Planned
+Last activity: 2026-07-03 — Phase 222 completed; next work is frontend auth verification UX.
 
 ## Accumulated Context
 
 ### Decisions
 
-- The remaining final-polish work is milestone-sized, not phase-sized.
-- v5.6 is narrowed to effective entitlements and paid access enforcement.
-- v5.7 is usage ledger and quota reconciliation.
-- v5.8 is email verification and login-code policy.
-- v5.9 is parent/admin operations visibility and final core-ops closeout.
-- Native app buildout remains future work after core account/payment/usage correctness.
-- v5.6 completed effective entitlement resolver, student question quota enforcement, and parent/admin entitlement visibility.
-- v5.7 completed privacy-safe question usage ledger events, idempotency keys, counter reconciliation, parent/admin usage summaries, and focused tests.
-- v5.8 completed Cognito sign-up email verification, registration/login enforcement, resend/expiry operations, bounded admin verification support visibility, and explicit deferred login-code policy.
-- v5.9 completed parent/admin account operations visibility with consolidated billing, entitlement, usage, verification, binding, and support-state summaries.
+- v5.6-v5.9 are complete as local backend milestones.
+- v5.10 is frontend-first: email verification UX, parent account operations UI, admin account operations console, and production read-only readiness.
+- Phase 222 completed the current-reality refresh and corrected stale v5.6-v5.9 planning assumptions.
+- Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
+- Additional usage ledger action coverage remains future scope after question-submission ledger readiness.
+- Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
+- Native app buildout remains future work after web frontend account operations are usable.
 
 ### Pending Todos
 
-- Choose the next milestone.
-- Frontend/native account operations UI remains future work.
-- Production deploy/live smoke for account operations endpoints remains future work.
+- Implement Phase 223 email verification UX integration.
+- Implement Phase 224 parent account operations UI.
+- Implement Phase 225 admin account operations console.
+- Close v5.10 through Phase 226 frontend and production readiness gate.
 
 ### Blockers/Concerns
 
+- Frontend workspace is outside this backend repo; implementation work may need `/Users/zhdeng/stoa-frontend`.
+- Production deploy/live smoke remains separate from local functional readiness.
 - Final live Stripe/TWINT activation still depends on external provider prerequisites.
-- Effective entitlement is implemented locally and verified against focused tests; production deployment/live smoke remains separate.
-- Usage ledger is implemented for question submissions only; additional quota-governed actions remain future scope.
-- Login-code/passwordless is explicitly deferred until Cognito custom auth triggers and replay/rate-limit storage are designed.
-- Raw verification codes and provider secrets must not be stored in DynamoDB.
-- Full frontend/native parent/admin operations console remains future scope.
 
 ## Operator Next Steps
 
-- Start the next milestone with `$gsd-new-milestone` when scope is selected.
+- Start Phase 223 by defining and implementing frontend auth verification clients, route states, and tests in `/Users/zhdeng/stoa-frontend`.

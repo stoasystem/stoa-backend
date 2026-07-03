@@ -1,5 +1,47 @@
 # Milestones
 
+## Active: v5.10 Account Operations Frontend And Production Readiness
+
+**Status:** Active
+**Started:** 2026-07-03
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
+**Goal:** Turn completed backend account operations, email verification, entitlement, and usage state into frontend-visible workflows with production read-only readiness.
+**Phases:** 5
+**Plans:** 1/5 complete
+**Requirements:** 1/5 complete, 4 active
+**Release target:** `frontend-account-ops-ready`
+
+Function purpose:
+
+- Make email verification usable in the frontend instead of backend-only.
+- Expose parent account operations state through a parent-facing UI.
+- Expose admin account operations detail through a support workflow.
+- Prepare production read-only verification for the account operations surface.
+
+Implementation strategy:
+
+- Start with a reality refresh because old final-polish audit docs are stale after v5.6-v5.9 completion.
+- Add frontend clients/query keys before pages.
+- Keep backend primitive changes limited to contract fixes discovered during frontend integration.
+- Prioritize functionality and usable states over broad security/compliance testing during internal development.
+
+Planned phases:
+
+- Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
+- Phase 223: Email Verification UX Integration. (next)
+- Phase 224: Parent Account Operations UI.
+- Phase 225: Admin Account Operations Console.
+- Phase 226: v5.10 Frontend And Production Readiness Gate.
+
+Phase 222 evidence: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/222-VERIFICATION.md`.
+
+Known deferred items: additional usage ledger coverage for non-question actions, passwordless/login-code custom auth, native app buildout, live Stripe/TWINT activation, external provider activation, and warehouse/BI.
+
+---
+
 ## v5.9 Parent Admin Operations Visibility (Completed: 2026-07-03)
 
 **Status:** Completed local backend release gate 2026-07-03

@@ -1,99 +1,73 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-03 after promoting core operations phases into milestones
+**Updated:** 2026-07-03 after reconciling v5.9 completion with current frontend gaps
 **Mode:** final polish, product functionality first
 
-## Completed Planning Audit: Phase 201 Core Product Operations Gap Audit
+## Current Reality
 
-**Status:** Complete 2026-07-02
-**Evidence:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
+v5.6-v5.9 are complete local backend milestones:
 
-Key finding: the remaining work should not be treated as small phases. Entitlements, usage ledger, verification, and operations visibility are each complete product capabilities.
+- v5.6 made paid entitlement effective for linked-student question quota.
+- v5.7 added privacy-safe question usage ledger events, idempotency, and reconciliation.
+- v5.8 added Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior.
+- v5.9 added parent/admin account operations aggregation APIs.
 
-## Active: v5.6 Effective Entitlements And Paid Access Enforcement
+The next gap is frontend and production-readiness, not another backend entitlement/usage/verification foundation phase.
 
-**Status:** Active planning
+## Active: v5.10 Account Operations Frontend And Production Readiness
+
+**Status:** Active
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
 
 Purpose:
 
-- Make paid access real for linked students.
-- Resolve entitlement from student profile, parent binding, parent billing, manual override, rollout controls, and billing state.
-- Enforce effective entitlement in question quota.
-- Provide enough entitlement visibility for parent/admin support.
+- Make email verification usable in the web frontend.
+- Make parent account operations visible through a parent UI surface.
+- Make admin parent account operations inspectable through a support console.
+- Prepare production read-only smoke for account operations and verification paths.
 
 Detailed build scope:
 
-- Phase 202: Entitlement Contract And Access Policy.
-- Phase 203: Entitlement Resolver Service And Parent Child Mapping.
-- Phase 204: Student Paid Access Enforcement.
-- Phase 205: Entitlement Visibility And Focused Tests.
-- Phase 206: v5.6 Entitlement Release Gate.
+- Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
+- Phase 223: Email Verification UX Integration. (next)
+- Phase 224: Parent Account Operations UI.
+- Phase 225: Admin Account Operations Console.
+- Phase 226: v5.10 Frontend And Production Readiness Gate.
 
-## Planned: v5.7 Usage Ledger And Quota Reconciliation
+## Planned: v5.11 Additional Usage Ledger Coverage
 
-**Status:** Planned after v5.6
-**Roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
+**Status:** Planned after v5.10
 
 Purpose:
 
-- Turn usage tracking from counter-only behavior into a durable, queryable ledger.
-- Reconcile question/chat/hint counters with usage events.
-- Enable admin and future parent usage summaries.
+- Extend usage ledger beyond question submissions only.
+- Cover chat, hints, teacher-help requests, and any practice/generation action that affects paid limits or support explanations.
+- Keep existing question quota enforcement stable.
 
-Detailed build scope:
+Likely build scope:
 
-- Phase 207: Usage Ledger Contract And Access Patterns.
-- Phase 208: Usage Event Repository And Service.
-- Phase 209: Plan-Governed Action Instrumentation.
-- Phase 210: Quota Reconciliation And Admin Usage Query.
-- Phase 211: v5.7 Usage Ledger Release Gate.
+- Contract for governed action taxonomy and idempotency.
+- Ledger instrumentation for chat/hints/teacher-help/practice generation.
+- Reconciliation or summary behavior per action.
+- Parent/admin usage UI handoff updates.
 
-## Planned: v5.8 Email Verification And Login Code Policy
+## Planned: v5.12 Next Product Expansion Selection
 
-**Status:** Planned after v5.7
-**Roadmap:** `.planning/milestones/v5.8-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.8-REQUIREMENTS.md`
+**Status:** Planned decision after v5.10/v5.11 reality
 
-Purpose:
+Candidate directions:
 
-- Replace `admin_marked_verified` placeholder behavior with real account verification lifecycle.
-- Decide and implement a token-compatible login-code policy or explicitly keep login password-only.
-- Keep Cognito forgot/reset password stable.
-
-Detailed build scope:
-
-- Phase 212: Verification Policy And Cognito Compatibility Contract.
-- Phase 213: Email Verification Code Service.
-- Phase 214: Registration And Account-State Integration.
-- Phase 215: Login-Code Policy Implementation And UI/API Handoff.
-- Phase 216: v5.8 Verification Release Gate.
-
-## Planned: v5.9 Parent Admin Operations Visibility
-
-**Status:** Planned after v5.8
-**Roadmap:** `.planning/milestones/v5.9-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.9-REQUIREMENTS.md`
-
-Purpose:
-
-- Make entitlement, billing, usage, and verification state understandable to parents/customers and admins.
-- Provide final support-grade polish before moving back to larger product expansion such as native apps or rich curriculum editor implementation.
-
-Detailed build scope:
-
-- Phase 217: Customer Account Operations Contract.
-- Phase 218: Admin Support Operations Contract.
-- Phase 219: Backend Aggregation APIs.
-- Phase 220: Frontend/Admin Handoff And Focused Tests.
-- Phase 221: v5.9 Core Operations Closeout.
-
-## Later Candidates
-
-- Native iOS/Android app buildout.
-- Frontend rich curriculum editor implementation.
+- Native/mobile account operations client.
+- Rich curriculum editor frontend implementation.
 - Production content import and migration UI/API.
 - Live warehouse/BI deployment.
-- Final external payment/support activation when prerequisites unblock.
+- Final external payment/support/notification activation when prerequisites unblock.
+
+## Deferred External Activation
+
+- Final live Stripe/TWINT charging still needs approved live credentials, registered production webhook endpoint, TWINT approval, finance acceptance, and explicit rollout enablement.
+- Real external support provider and CRM/customer messaging still need approved provider selection, credentials, destination policy, templates, and rollout approval.
+- Live notification provider/native push activation remains outside the v5.10 web account operations scope.

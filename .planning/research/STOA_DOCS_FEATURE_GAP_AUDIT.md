@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-07-03 after promoting final-polish work into complete milestones
+**Updated:** 2026-07-03 after reconciling v5.9 backend completion and starting v5.10 frontend account-operations planning
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -58,7 +58,7 @@ v5.4 completed frontend learning operations and automation dashboards. It made v
 
 v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
-The final-polish work is now promoted into complete feature milestones instead of being treated as phases inside one broad milestone. v5.6 targets effective entitlements and paid access enforcement because current billing activation updates parent profile state while question quota reads the student's local tier. v5.7 targets usage ledger and quota reconciliation. v5.8 targets email verification and login-code policy. v5.9 targets parent/admin operations visibility and final core-ops closeout.
+The final-polish backend work is now complete through v5.9. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. The next product gap is frontend usability and production-readiness for these backend capabilities.
 
 ## Completed Or Largely Complete
 
@@ -186,17 +186,16 @@ The final-polish work is now promoted into complete feature milestones instead o
 - Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 completed controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 completed controlled autonomous delivery backend/API readiness; v5.4 now targets frontend usability.
 - Automatic teacher/tutor dispatch for student help requests. Status: v5.5 completed backend dispatch planning, matching, claim/reassignment, queue visibility, and SLA/load dashboards; production scheduling, live staffing calendar, frontend dashboard implementation, and native push remain future scope.
-- Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; deferred until after the v5.6-v5.9 entitlement, usage, verification, and operations visibility milestones are reliable. App-store release and live provider activation remain future scope.
+- Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; deferred until after web frontend account operations and verification UX are usable. App-store release and live provider activation remain future scope.
 - Translation management, broad copy QA, RTL support, and full localization governance beyond selected English/German frontend surfaces. Status: v5.0 governance-ready; broad frontend copy cleanup and RTL implementation remain future scope.
 - Real external support provider and CRM/customer transport activation after approved provider selection, credentials, destination policy, templates, and rollout approval.
 
 ## Remaining Feature Build Order
 
-1. Execute v5.6 Effective Entitlements And Paid Access Enforcement.
-2. Execute v5.7 Usage Ledger And Quota Reconciliation.
-3. Execute v5.8 Email Verification And Login Code Policy.
-4. Execute v5.9 Parent Admin Operations Visibility.
-5. Consider frontend rich curriculum editor implementation, native app buildout, production content import, or live warehouse/BI deployment after final core-ops polish unless external activation prerequisites unblock.
+1. Execute v5.10 Account Operations Frontend And Production Readiness.
+2. Extend usage ledger coverage beyond question submissions for chat, hints, teacher-help requests, and practice/generation actions where product limits or support explanations require it.
+3. Consider native app buildout, frontend rich curriculum editor implementation, production content import, or live warehouse/BI deployment after web account operations are usable unless external activation prerequisites unblock.
+4. Execute final live payment/support/notification activation only when external provider prerequisites are approved.
 
 ## v3.0 Scope Recommendation
 
