@@ -1,5 +1,53 @@
 # Milestones
 
+## v5.9 Parent Admin Operations Visibility (Completed: 2026-07-03)
+
+**Status:** Completed local backend release gate 2026-07-03
+**Started:** 2026-07-03
+**Roadmap:** `.planning/milestones/v5.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.9-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.9-MILESTONE-AUDIT.md`
+**Phase evidence:** `.planning/milestones/v5.9-phases/`
+**Goal:** Provide bounded parent/admin operations visibility that composes entitlement, billing, usage, verification, and binding state into support-grade account summaries.
+**Phases:** 5
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `operations-visible`
+
+Function purpose:
+
+- Give parents one consolidated summary of account operations state.
+- Give admins a bounded support-grade parent operations detail.
+- Compose v5.6 entitlement, v5.7 usage ledger/reconciliation, and v5.8 verification state without new storage.
+- Preserve privacy boundaries by omitting raw learning content, provider payloads, auth tokens, private artifact keys, and verification codes.
+
+Implementation strategy:
+
+- Define the shared operations visibility contract before routes.
+- Add a shared account operations aggregation service.
+- Expose parent-scoped summary first, then admin detail with bounded event visibility.
+- Close with focused regression tests, docs, audit, and archive evidence.
+
+Completed phases:
+
+- Phase 217: Account Operations Visibility Contract.
+- Phase 218: Parent Account Operations Summary.
+- Phase 219: Admin Parent Operations Detail.
+- Phase 220: Privacy Regression Tests And Operations Evidence.
+- Phase 221: v5.9 Operations Visibility Release Gate.
+
+Key accomplishments:
+
+- Added `GET /parents/me/account-operations`.
+- Added `GET /admin/account-operations/parents/{parent_id}`.
+- Added shared `account_operations_service` aggregation for parent profile, billing, child binding, entitlement, usage, verification, and support state.
+- Added support-state blocker/warning signals for unverified accounts, inactive billing, missing children, non-active bindings, and unreconciled usage.
+- Verified with focused parent/admin account operations tests and targeted Ruff.
+
+Known deferred items at close: frontend/native account operations UI, production deploy/live smoke, broad CRM/customer messaging, analytics warehouse/cross-account search, native apps, final live Stripe/TWINT activation, and actual Cognito custom-auth passwordless login-code support.
+
+---
+
 ## v5.8 Email Verification And Login Code Policy (Completed: 2026-07-03)
 
 **Status:** Completed local backend release gate 2026-07-03
@@ -144,15 +192,6 @@ Key accomplishments:
 - Verified with focused entitlement, question, and subscription operation tests plus Ruff.
 
 Known deferred items at close: durable usage ledger and quota reconciliation, email verification and login-code policy, full parent/admin operations visibility, native apps, and final live Stripe/TWINT activation.
-
----
-
-## Planned: v5.9 Parent Admin Operations Visibility
-
-**Status:** Planned after v5.8
-**Roadmap:** `.planning/milestones/v5.9-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.9-REQUIREMENTS.md`
-**Goal:** Provide final support-grade visibility for entitlement, billing, usage, and verification state.
 
 ---
 

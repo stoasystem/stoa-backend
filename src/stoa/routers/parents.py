@@ -16,7 +16,12 @@ from stoa.db.repositories import practice_repo, question_repo, report_repo, user
 from stoa.deps import get_current_user, require_role
 from stoa.models.report import WeeklyReportResponse
 from stoa.models.user import SubscriptionTier
-from stoa.services import learning_profile_service, subscription_service, usage_ledger_service
+from stoa.services import (
+    account_operations_service,
+    learning_profile_service,
+    subscription_service,
+    usage_ledger_service,
+)
 
 router = APIRouter()
 
@@ -277,6 +282,15 @@ class ParentChildUsageSummaryResponse(BaseModel):
     partial: bool = False
     stale: bool = False
     unreconciled: bool = False
+
+
+class ParentAccountOperationsResponse(BaseModel):
+    parentId: str
+    parent: dict[str, Any] = Field(default_factory=dict)
+    billing: dict[str, Any] = Field(default_factory=dict)
+    children: list[dict[str, Any]] = Field(default_factory=list)
+    usage: list[dict[str, Any]] = Field(default_factory=list)
+    supportState: dict[str, Any] = Field(default_factory=dict)
 
 
 def _resolve_parent_profile(user: dict, settings: Settings) -> ResolvedParent:
@@ -708,6 +722,21 @@ async def get_my_subscription_billing(
     """Return provider billing status for the authenticated parent."""
     resolved = _resolve_parent_profile(user, settings)
     return subscription_service.get_parent_billing(resolved.parent_user_id, settings=settings)
+
+
+@router.get("/me/account-operations", response_model=ParentAccountOperationsResponse)
+async def get_my_account_operations(
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    user: dict = Depends(require_role("parent")),
+    settings: Settings = Depends(get_settings),
+):
+    """Return a consolidated parent account operations summary."""
+    resolved = _resolve_parent_profile(user, settings)
+    return account_operations_service.build_parent_operations_summary(
+        resolved.parent_user_id,
+        settings=settings,
+        day=day,
+    )
 
 
 @router.post(

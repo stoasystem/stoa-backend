@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.8
-milestone_name: Email Verification And Login Code Policy
+milestone: v5.9
+milestone_name: Parent Admin Operations Visibility
 status: complete
-last_updated: "2026-07-03T16:45:00.000Z"
-last_activity: 2026-07-03 — Milestone v5.8 completed and archived
+last_updated: "2026-07-03T16:35:00.000Z"
+last_activity: 2026-07-03
 progress:
   total_phases: 5
   completed_phases: 5
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.8 Email Verification And Login Code Policy complete; v5.9 Parent Admin Operations Visibility is next.
+**Current focus:** v5.9 Parent Admin Operations Visibility complete; next milestone is not started.
 
 ## Current Position
 
-Phase: Milestone v5.8 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-03 — Milestone v5.8 completed with rollout state `policy-deferred`
+Phase: 221 v5.9 Operations Visibility Release Gate
+Plan: 221-01
+Status: Complete
+Last activity: 2026-07-03 — Milestone v5.9 completed
 
 ## Accumulated Context
 
@@ -42,10 +42,13 @@ Last activity: 2026-07-03 — Milestone v5.8 completed with rollout state `polic
 - v5.6 completed effective entitlement resolver, student question quota enforcement, and parent/admin entitlement visibility.
 - v5.7 completed privacy-safe question usage ledger events, idempotency keys, counter reconciliation, parent/admin usage summaries, and focused tests.
 - v5.8 completed Cognito sign-up email verification, registration/login enforcement, resend/expiry operations, bounded admin verification support visibility, and explicit deferred login-code policy.
+- v5.9 completed parent/admin account operations visibility with consolidated billing, entitlement, usage, verification, binding, and support-state summaries.
 
 ### Pending Todos
 
-- Start v5.9 Parent Admin Operations Visibility.
+- Choose the next milestone.
+- Frontend/native account operations UI remains future work.
+- Production deploy/live smoke for account operations endpoints remains future work.
 
 ### Blockers/Concerns
 
@@ -54,8 +57,8 @@ Last activity: 2026-07-03 — Milestone v5.8 completed with rollout state `polic
 - Usage ledger is implemented for question submissions only; additional quota-governed actions remain future scope.
 - Login-code/passwordless is explicitly deferred until Cognito custom auth triggers and replay/rate-limit storage are designed.
 - Raw verification codes and provider secrets must not be stored in DynamoDB.
-- Full parent/admin operations console remains v5.9 scope.
+- Full frontend/native parent/admin operations console remains future scope.
 
 ## Operator Next Steps
 
-- Start v5.9 with `$gsd-new-milestone`.
+- Start the next milestone with `$gsd-new-milestone` when scope is selected.

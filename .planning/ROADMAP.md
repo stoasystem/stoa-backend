@@ -1,126 +1,123 @@
-# Roadmap: v5.8 Email Verification And Login Code Policy
+# Roadmap: v5.9 Parent Admin Operations Visibility
 
 **Status:** Complete
 **Created:** 2026-07-03
-**Prior milestone:** v5.7 Usage Ledger And Quota Reconciliation
+**Prior milestone:** v5.8 Email Verification And Login Code Policy
 
 ## Goal
 
-Make email verification and login-code behavior explicit, enforceable, and compatible with the existing Cognito-backed account lifecycle.
+Provide bounded parent/admin operations visibility that composes entitlement, billing, usage, verification, and binding state into support-grade account summaries.
 
 ## Why This Is Its Own Milestone
 
-Account verification affects every role and can easily break onboarding if it is mixed into broader operations-console work. v5.8 isolates the account lifecycle contract first: what verification states exist, what unverified users can do, how resends/expiry behave, and whether login-code behavior is actually production authentication or a deferred placeholder.
+The backend now has the necessary primitives: effective entitlements from v5.6, usage ledger/reconciliation from v5.7, and account verification state from v5.8. v5.9 closes the final backend operations gap by making those primitives visible together without waiting for a broad frontend console or external CRM integration.
 
 ## Current Reality
 
-- Registration already stores user profiles and parent/student binding metadata.
-- Existing account lifecycle tests mention email verification policy and parent binding behavior.
-- Standard Cognito login and forgot-password flows exist.
-- Login-code/passwordless behavior needs a clear provider-compatible policy before clients can rely on it.
+- Parent subscription and billing endpoints exist.
+- Parent child usage endpoint exists for one child at a time.
+- Admin billing, usage, reconciliation, and verification support endpoints exist as separate slices.
+- No single bounded account operations view composes billing, entitlement, usage, verification, and binding state for parent/admin support.
 
 ## Implementation Strategy
 
-- Define the verification state contract before changing auth behavior.
-- Preserve current role onboarding and parent/student binding compatibility.
-- Enforce email verification only where policy says it is required.
-- Add resend/expiry/support visibility after state semantics are clear.
-- Decide login-code policy explicitly: implement a safe Cognito-compatible flow or gate/defer it with clear responses.
+- Add a shared account operations aggregation service.
+- Reuse existing repository/service helpers instead of adding infrastructure.
+- Add parent-facing summary first, then admin detail with bounded event visibility.
+- Keep response privacy-safe: no raw learning content, private artifact keys, provider payload internals, auth tokens, or verification codes.
+- Close with focused regression tests and release evidence.
 
 ## Phases
 
-- [x] **Phase 212: Email Verification Contract And Account State Policy** - Define account verification states, route policy, binding implications, and test matrix.
-- [x] **Phase 213: Registration Verification Enforcement** - Persist and enforce verification policy through registration/login-compatible account lifecycle paths.
-- [x] **Phase 214: Verification Resend And Expiry Operations** - Add resend/expiry behavior and bounded support visibility for verification state.
-- [x] **Phase 215: Login Code Policy And Auth Lifecycle Tests** - Implement or explicitly gate login-code/passwordless behavior and protect existing auth lifecycle flows.
-- [x] **Phase 216: v5.8 Verification Release Gate** - Close v5.8 with evidence, docs, audit, and v5.9 handoff.
+- [x] **Phase 217: Account Operations Visibility Contract** - Define shared account operations response contract, support states, privacy boundaries, and data sources.
+- [x] **Phase 218: Parent Account Operations Summary** - Add parent-scoped consolidated account operations summary.
+- [x] **Phase 219: Admin Parent Operations Detail** - Add admin support-grade parent operations detail and bounded attention states.
+- [x] **Phase 220: Privacy Regression Tests And Operations Evidence** - Verify privacy boundaries and compatibility with existing auth/billing/usage behavior.
+- [x] **Phase 221: v5.9 Operations Visibility Release Gate** - Close v5.9 with evidence, docs, audit, and handoff.
 
 ## Phase Details
 
-### Phase 212: Email Verification Contract And Account State Policy
+### Phase 217: Account Operations Visibility Contract
 
-**Goal**: Define verification state semantics before implementation.
-**Depends on**: Existing Cognito-backed auth and v5.6/v5.7 account/payment/usage correctness.
-**Requirements**: EMAIL-01
+**Goal**: Define the shared account operations aggregation model before exposing routes.
+**Depends on**: v5.6 entitlement, v5.7 usage ledger, v5.8 verification.
+**Requirements**: OPSVIS-01
 **Success Criteria**:
 
-1. Verification states cover registered, unverified, pending verification, verified, expired, resend-limited, and blocked states.
-2. Registration/profile response shape for verification status is defined without provider internals.
-3. Parent/student binding behavior is explicit for unverified parties.
-4. Route-level policy identifies what unverified users can and cannot do.
-5. Test matrix is documented for role onboarding, parent binding, and blocked/allowed states.
+1. Contract includes parent profile, billing, children, binding, entitlement, usage, verification, and support state.
+2. Aggregation reuses existing services and introduces no new table/index/provider payload storage.
+3. Support states include ready, attention, and blocked with bounded blocker/warning codes.
+4. Privacy boundaries are documented.
+5. Phase artifacts capture data sources and future handoff.
 
-### Phase 213: Registration Verification Enforcement
+### Phase 218: Parent Account Operations Summary
 
-**Goal**: Make registration and login-compatible account lifecycle paths follow the verification policy.
-**Depends on**: Phase 212.
-**Requirements**: EMAIL-02
+**Goal**: Give parents one consolidated account operations summary.
+**Depends on**: Phase 217.
+**Requirements**: PARENTOPS-01
 **Success Criteria**:
 
-1. New registrations record verification policy metadata and initial verification state.
-2. Post-registration token/login behavior follows the chosen verification policy.
-3. Student, parent, teacher, admin, and tutor-role alias onboarding remain compatible.
-4. Parent-student binding creation respects verification-gated access semantics.
-5. Focused auth lifecycle tests cover unverified and verified registration states.
+1. `GET /parents/me/account-operations` returns parent, billing, child, entitlement, usage, verification, and support state.
+2. Parent identity is resolved through existing parent JWT/profile ownership logic.
+3. Response omits admin-only billing event internals and private learning/provider data.
+4. Focused test covers ready parent account operations state.
 
-### Phase 214: Verification Resend And Expiry Operations
+### Phase 219: Admin Parent Operations Detail
 
-**Goal**: Make verification recovery safe and support-visible.
-**Depends on**: Phase 213.
-**Requirements**: EMAIL-03
+**Goal**: Give admins a bounded support-grade parent account operations detail.
+**Depends on**: Phase 218.
+**Requirements**: ADMINOPS-01
 **Success Criteria**:
 
-1. Resend verification is exposed or documented through a Cognito-compatible backend operation.
-2. Repeated resend attempts are rate-limited or idempotency-safe.
-3. Expired/stale verification state responses are actionable and provider-redacted.
-4. Admin/support can inspect bounded verification status.
-5. Focused tests cover resend, throttling/idempotency, expiry, and support visibility.
+1. `GET /admin/account-operations/parents/{parent_id}` returns account operations detail for one parent.
+2. Response includes bounded billing events and child binding/verification/usage state.
+3. Missing/non-parent accounts return bounded 404.
+4. Focused test covers blockers and warnings for unverified accounts and non-active bindings.
 
-### Phase 215: Login Code Policy And Auth Lifecycle Tests
+### Phase 220: Privacy Regression Tests And Operations Evidence
 
-**Goal**: Resolve login-code/passwordless behavior without breaking standard Cognito flows.
-**Depends on**: Phase 214.
-**Requirements**: LOGIN-01
+**Goal**: Verify account operations visibility without regressing prior account/payment/usage behavior.
+**Depends on**: Phase 219.
+**Requirements**: OPSVERIFY-01
 **Success Criteria**:
 
-1. Login-code policy is classified as supported, provider-gated, or deferred.
-2. Supported login-code flow returns real Cognito-compatible authenticated sessions with expiry/replay/rate-limit protection, or deferred behavior returns clear non-production responses.
-3. Existing forgot-password and standard login flows remain backward compatible.
-4. Tests prove unsupported/deferred behavior cannot be mistaken for production auth.
-5. Auth lifecycle tests cover registration, verification, forgot-password, and login-code policy together.
+1. Focused parent/admin account operations tests pass.
+2. Adjacent subscription, usage, auth lifecycle, and parent authorization tests pass.
+3. Ruff passes for new/modified modules.
+4. Release evidence records residual production deploy/live smoke status.
 
-### Phase 216: v5.8 Verification Release Gate
+### Phase 221: v5.9 Operations Visibility Release Gate
 
-**Goal**: Close v5.8 as a complete backend account lifecycle milestone.
-**Depends on**: Phase 215.
-**Requirements**: VERIFY-41
+**Goal**: Close v5.9 as a completed backend operations visibility milestone.
+**Depends on**: Phase 220.
+**Requirements**: VERIFY-42
 **Success Criteria**:
 
-1. Verification contract, enforcement, resend/expiry operations, login-code policy, and focused tests are complete.
-2. Requirements, roadmap, state, and milestone history reflect v5.8 completion.
+1. Account operations contract, parent summary, admin detail, tests, docs, and audit are complete.
+2. Requirements, roadmap, state, and milestone history reflect v5.9 completion.
 3. Release evidence identifies commit SHAs, focused tests, lint checks, and residual full-suite status.
-4. Final audit records rollout state: `verification-ready`, `policy-deferred`, `blocked`, or `deferred`.
-5. v5.9 parent/admin operations visibility handoff is updated.
+4. Final audit records rollout state: `operations-visible`, `blocked`, or `deferred`.
+5. Frontend/native/production smoke handoff is updated.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 212 Email Verification Contract And Account State Policy | v5.8 | 1/1 | Complete | 2026-07-03 |
-| 213 Registration Verification Enforcement | v5.8 | 1/1 | Complete | 2026-07-03 |
-| 214 Verification Resend And Expiry Operations | v5.8 | 1/1 | Complete | 2026-07-03 |
-| 215 Login Code Policy And Auth Lifecycle Tests | v5.8 | 1/1 | Complete | 2026-07-03 |
-| 216 v5.8 Verification Release Gate | v5.8 | 1/1 | Complete | 2026-07-03 |
+| 217 Account Operations Visibility Contract | v5.9 | 1/1 | Complete | 2026-07-03 |
+| 218 Parent Account Operations Summary | v5.9 | 1/1 | Complete | 2026-07-03 |
+| 219 Admin Parent Operations Detail | v5.9 | 1/1 | Complete | 2026-07-03 |
+| 220 Privacy Regression Tests And Operations Evidence | v5.9 | 1/1 | Complete | 2026-07-03 |
+| 221 v5.9 Operations Visibility Release Gate | v5.9 | 1/1 | Complete | 2026-07-03 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EMAIL-01 | Phase 212 | Complete |
-| EMAIL-02 | Phase 213 | Complete |
-| EMAIL-03 | Phase 214 | Complete |
-| LOGIN-01 | Phase 215 | Complete |
-| VERIFY-41 | Phase 216 | Complete |
+| OPSVIS-01 | Phase 217 | Complete |
+| PARENTOPS-01 | Phase 218 | Complete |
+| ADMINOPS-01 | Phase 219 | Complete |
+| OPSVERIFY-01 | Phase 220 | Complete |
+| VERIFY-42 | Phase 221 | Complete |
 
 ---
-*Last updated: 2026-07-03 after v5.8 verification release gate.*
+*Last updated: 2026-07-03 after v5.9 operations visibility release gate.*

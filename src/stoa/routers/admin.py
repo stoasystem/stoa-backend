@@ -28,6 +28,7 @@ from stoa.services import (
     report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
+    account_operations_service,
     curriculum_analytics_service,
     curriculum_ops_service,
     support_destination_service,
@@ -243,6 +244,15 @@ class AccountVerificationSupportResponse(BaseModel):
     emailVerificationResendCount: int = 0
     resendAllowed: bool = False
     parentBindingStatus: str | None = None
+
+
+class AccountOperationsParentDetailResponse(BaseModel):
+    parentId: str
+    parent: dict[str, Any] = Field(default_factory=dict)
+    billing: dict[str, Any] = Field(default_factory=dict)
+    children: list[dict[str, Any]] = Field(default_factory=list)
+    usage: list[dict[str, Any]] = Field(default_factory=list)
+    supportState: dict[str, Any] = Field(default_factory=dict)
 
 
 class StatsResponse(BaseModel):
@@ -1308,6 +1318,29 @@ async def get_account_verification_support(
     if not profile:
         raise HTTPException(status_code=404, detail="User not found")
     return AccountVerificationSupportResponse(**account_verification_service.support_summary(profile))
+
+
+@router.get(
+    "/account-operations/parents/{parent_id}",
+    response_model=AccountOperationsParentDetailResponse,
+)
+async def get_parent_account_operations(
+    parent_id: str,
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return support-grade parent account operations detail."""
+    try:
+        return account_operations_service.build_admin_parent_operations_detail(
+            parent_id,
+            settings=settings,
+            day=day,
+        )
+    except ValueError as exc:
+        if str(exc) == "parent_not_found":
+            raise HTTPException(status_code=404, detail="Parent not found") from exc
+        raise
 
 
 @router.post("/subscriptions/billing/{parent_id}/refunds", response_model=SubscriptionRefundExecutionResponse)

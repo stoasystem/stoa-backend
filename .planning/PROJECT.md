@@ -90,6 +90,8 @@ The completed v5.7 milestone makes question usage durable and support-visible: s
 
 The completed v5.8 milestone replaces placeholder email verification for new registrations with Cognito sign-up confirmation, enforces verified email before token return, adds resend/expiry/support visibility, and explicitly defers login-code/passwordless behavior until a real Cognito custom-auth flow exists.
 
+The completed v5.9 milestone composes parent/admin account operations visibility across billing, entitlement, usage, verification, and child binding state with privacy-safe parent summaries and bounded admin support detail.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -97,8 +99,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.8 Email Verification And Login Code Policy on 2026-07-03 (policy-deferred backend release gate)
-**Next planned milestone:** v5.9 Parent Admin Operations Visibility
+**Latest completed milestone:** v5.9 Parent Admin Operations Visibility on 2026-07-03 (operations-visible backend release gate)
+**Next planned milestone:** TBD after frontend/native account operations UI and production smoke planning.
 
 Delivered:
 
@@ -455,7 +457,32 @@ Audit archive: `.planning/milestones/v5.8-MILESTONE-AUDIT.md`
 
 **Outcome:** v5.8 added Cognito `sign_up`/`confirm_sign_up` email verification for new registrations, blocked token return until verification is complete, added resend/expired-state handling, exposed bounded admin verification support status, and explicitly deferred login-code/passwordless behavior without minting placeholder tokens. Focused auth lifecycle, entitlement, usage, and Ruff checks passed.
 
-**Follow-up milestone:** v5.9 Parent Admin Operations Visibility will use the verified account lifecycle state as part of broader support-grade visibility for entitlement, billing, usage, and verification.
+**Follow-up milestone:** v5.9 Parent Admin Operations Visibility used the verified account lifecycle state as part of broader support-grade visibility for entitlement, billing, usage, and verification.
+
+## Completed Milestone: v5.9 Parent Admin Operations Visibility
+
+Roadmap archive: `.planning/milestones/v5.9-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.9-REQUIREMENTS.md`
+Audit archive: `.planning/milestones/v5.9-MILESTONE-AUDIT.md`
+Phase evidence: `.planning/milestones/v5.9-phases/`
+
+**Status:** Completed local backend release gate 2026-07-03 with rollout state `operations-visible`.
+
+**Function purpose:** Give parents and admins one support-grade view of account operations state across entitlement, billing, usage, verification, and parent/student binding health.
+
+**Implementation strategy:** Add a shared aggregation service that reuses existing v5.6 entitlement, v5.7 usage ledger/reconciliation, and v5.8 verification helpers. Expose a parent-scoped summary and an admin-scoped support detail without raw learning content, provider payload internals, private artifact keys, auth tokens, or verification codes.
+
+**Completed phases:**
+
+- Phase 217: Account Operations Visibility Contract.
+- Phase 218: Parent Account Operations Summary.
+- Phase 219: Admin Parent Operations Detail.
+- Phase 220: Privacy Regression Tests And Operations Evidence.
+- Phase 221: v5.9 Operations Visibility Release Gate.
+
+**Outcome:** v5.9 added `/parents/me/account-operations` and `/admin/account-operations/parents/{parent_id}` backed by a shared account operations aggregation service. Responses compose billing, entitlement, usage, verification, child binding, and support-state signals while staying metadata-only. Focused parent/admin operations tests and Ruff passed.
+
+**Known deferred items:** frontend/native account operations UI, production deploy/live smoke, broad CRM/customer messaging, analytics warehouse/cross-account search, native apps, final live Stripe/TWINT activation, and actual Cognito custom-auth passwordless login-code support.
 
 ## Requirements
 
@@ -729,9 +756,17 @@ Milestone v5.8 requirements are complete:
 - LOGIN-01: login code policy and token compatibility - Phase 215.
 - VERIFY-41: v5.8 verification release gate - Phase 216.
 
+Milestone v5.9 requirements are complete:
+
+- OPSVIS-01: operations visibility contract - Phase 217.
+- PARENTOPS-01: parent account operations summary - Phase 218.
+- ADMINOPS-01: admin account operations detail - Phase 219.
+- OPSVERIFY-01: privacy and regression verification - Phase 220.
+- VERIFY-42: v5.9 operations visibility release gate - Phase 221.
+
 ### Active
 
-No active milestone requirements. v5.9 requirements should be created when the next milestone starts.
+No active milestone requirements. Next milestone requirements should be created when the next milestone starts.
 
 ### Out of Scope
 
@@ -888,6 +923,7 @@ Known current resources:
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
 | Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 focused only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Complete - entitlement-ready release gate passed |
 | Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
+| Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 
 ## Evolution
 

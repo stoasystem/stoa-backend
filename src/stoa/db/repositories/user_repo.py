@@ -1,5 +1,5 @@
 """DynamoDB access patterns for the User entity."""
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.dynamodb import get_table
 
 
@@ -23,6 +23,22 @@ def get_user_by_email(email: str) -> dict | None:
     )
     items = resp.get("Items", [])
     return items[0] if items else None
+
+
+def list_children_by_parent_scan(parent_id: str) -> list[dict]:
+    """Return student profiles that still use the legacy parent_id profile link."""
+    table = get_table()
+    scan_kwargs = {
+        "FilterExpression": Attr("parent_id").eq(parent_id) & Attr("role").eq("student"),
+    }
+    children: list[dict] = []
+    while True:
+        resp = table.scan(**scan_kwargs)
+        children.extend(resp.get("Items", []))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            return children
+        scan_kwargs["ExclusiveStartKey"] = last_key
 
 
 def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict:

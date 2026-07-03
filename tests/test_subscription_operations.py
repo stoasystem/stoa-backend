@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
 from stoa.routers import admin, billing, parents
-from stoa.services import entitlement_service, subscription_service
+from stoa.services import account_operations_service, entitlement_service, subscription_service
 
 
 class FakeTable:
@@ -216,6 +216,12 @@ def _install_fakes(monkeypatch):
         lambda parent_id, student_id: table.items.get((f"USER#{parent_id}", f"CHILD#{student_id}")),
     )
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
+    monkeypatch.setattr(account_operations_service.user_repo, "get_user", get_user)
+    monkeypatch.setattr(
+        account_operations_service.user_repo,
+        "list_children_by_parent_scan",
+        lambda parent_id: [],
+    )
     table.put_item(
         Item={
             "PK": "USER#parent-1",
@@ -228,6 +234,32 @@ def _install_fakes(monkeypatch):
         }
     )
     return table, profiles
+
+
+def _patch_account_usage(monkeypatch):
+    def usage_summary(*, student_id, settings, day=None, entitlement=None):
+        return {
+            "studentId": student_id,
+            "parentId": (entitlement or {}).get("parentId"),
+            "quotaPeriod": day or "2026-07-03",
+            "action": "question_submission",
+            "consumed": 2,
+            "limit": int(((entitlement or {}).get("limits") or {}).get("dailyAiQuestionLimit") or 5),
+            "remaining": 3,
+            "effectivePlan": (entitlement or {}).get("effectivePlan"),
+            "entitlementSource": (entitlement or {}).get("source"),
+            "billingState": (entitlement or {}).get("billingState"),
+            "reconciliation": {"status": "matched"},
+            "partial": False,
+            "stale": False,
+            "unreconciled": False,
+        }
+
+    monkeypatch.setattr(
+        account_operations_service.usage_ledger_service,
+        "build_student_usage_summary",
+        usage_summary,
+    )
 
 
 def _put_active_billing(
@@ -283,6 +315,79 @@ def _put_active_billing(
     }
     table.items[(item["PK"], item["SK"])] = item
     return item
+
+
+def test_parent_account_operations_combines_billing_entitlement_usage_and_verification(monkeypatch):
+    table, profiles = _install_fakes(monkeypatch)
+    _patch_account_usage(monkeypatch)
+    _put_active_billing(table)
+    profiles["parent-1"].update(
+        {
+            "email_verification_status": "verified",
+            "email_verification_required": False,
+        }
+    )
+    profiles["student-1"].update(
+        {
+            "email_verification_status": "verified",
+            "email_verification_required": False,
+        }
+    )
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
+
+    response = client.get("/parents/me/account-operations?day=2026-07-03")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["parentId"] == "parent-1"
+    assert body["billing"]["status"] == "active"
+    assert body["children"][0]["studentId"] == "student-1"
+    assert body["children"][0]["entitlement"]["effectivePlan"] == "premium"
+    assert body["children"][0]["usage"]["consumed"] == 2
+    assert body["parent"]["verification"]["emailVerificationStatus"] == "verified"
+    assert body["supportState"]["state"] == "ready"
+
+
+def test_admin_account_operations_surfaces_attention_state(monkeypatch):
+    table, profiles = _install_fakes(monkeypatch)
+    _patch_account_usage(monkeypatch)
+    _put_active_billing(table)
+    profiles["parent-1"].update(
+        {
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        }
+    )
+    profiles["student-1"].update(
+        {
+            "email_verification_status": "expired_verification",
+            "email_verification_required": True,
+        }
+    )
+    table.items[("USER#parent-1", "CHILD#student-1")]["status"] = "active_pending_verification"
+    client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))
+
+    response = client.get("/admin/account-operations/parents/parent-1?day=2026-07-03")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["parentId"] == "parent-1"
+    assert body["billing"]["events"] == []
+    assert body["children"][0]["binding"]["status"] == "active_pending_verification"
+    assert "parent_email_unverified" in body["supportState"]["blockers"]
+    assert "child_email_unverified" in body["supportState"]["warnings"]
+    assert "child_binding_active_pending_verification" in body["supportState"]["warnings"]
+
+
+def test_admin_account_operations_returns_404_for_missing_parent(monkeypatch):
+    _install_fakes(monkeypatch)
+    _patch_account_usage(monkeypatch)
+    client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))
+
+    response = client.get("/admin/account-operations/parents/missing-parent")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Parent not found"
 
 
 def test_parent_can_view_plan_options(monkeypatch):
