@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-07-03 after reconciling v5.9 backend completion and starting v5.10 frontend account-operations planning
+**Updated:** 2026-07-03 after completing v5.10 frontend account-operations readiness
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -58,7 +58,7 @@ v5.4 completed frontend learning operations and automation dashboards. It made v
 
 v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
-The final-polish backend work is now complete through v5.9. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. The next product gap is frontend usability and production-readiness for these backend capabilities.
+The final-polish backend work is complete through v5.9, and v5.10 has now made the account operations stack usable in the web frontend. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. v5.10 added frontend email verification UX, parent account operations UI, admin account operations console, focused e2e coverage, backend contract evidence, and a production read-only smoke checklist. The next product gap is additional usage-ledger coverage beyond question submissions.
 
 ## Completed Or Largely Complete
 

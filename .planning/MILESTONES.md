@@ -1,8 +1,8 @@
 # Milestones
 
-## Active: v5.10 Account Operations Frontend And Production Readiness
+## v5.10 Account Operations Frontend And Production Readiness (Completed: 2026-07-03)
 
-**Status:** Active
+**Status:** Completed local frontend/readiness release gate 2026-07-03
 **Started:** 2026-07-03
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -10,9 +10,9 @@
 **Milestone requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
 **Goal:** Turn completed backend account operations, email verification, entitlement, and usage state into frontend-visible workflows with production read-only readiness.
 **Phases:** 5
-**Plans:** 1/5 complete
-**Requirements:** 1/5 complete, 4 active
-**Release target:** `frontend-account-ops-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `frontend-account-ops-ready`
 
 Function purpose:
 
@@ -28,17 +28,32 @@ Implementation strategy:
 - Keep backend primitive changes limited to contract fixes discovered during frontend integration.
 - Prioritize functionality and usable states over broad security/compliance testing during internal development.
 
-Planned phases:
+Completed phases:
 
 - Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
-- Phase 223: Email Verification UX Integration. (next)
+- Phase 223: Email Verification UX Integration.
 - Phase 224: Parent Account Operations UI.
 - Phase 225: Admin Account Operations Console.
 - Phase 226: v5.10 Frontend And Production Readiness Gate.
 
-Phase 222 evidence: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/222-VERIFICATION.md`.
+Phase evidence: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/`, `.planning/phases/223-email-verification-ux-integration/`, `.planning/phases/224-parent-account-operations-ui/`, `.planning/phases/225-admin-account-operations-console/`, `.planning/phases/226-v5-10-frontend-and-production-readiness-gate/`.
+
+Key accomplishments:
+
+- Added frontend email verification resend/confirm UX and login/register pending-verification states.
+- Added parent account operations dashboard entry and `/parent/account-operations`.
+- Added admin account operations support console and subscription handoff links.
+- Verified frontend lint/build, 15 focused frontend e2e tests, and 35 backend focused contract tests.
+- Captured production read-only smoke checklist.
 
 Known deferred items: additional usage ledger coverage for non-question actions, passwordless/login-code custom auth, native app buildout, live Stripe/TWINT activation, external provider activation, and warehouse/BI.
+
+---
+
+## Active: v5.11 Additional Usage Ledger Coverage
+
+**Status:** Planned
+**Goal:** Extend usage ledger coverage beyond question submissions for account operations explanations and paid-limit governance.
 
 ---
 

@@ -1,6 +1,6 @@
 # Roadmap: v5.10 Account Operations Frontend And Production Readiness
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-03
 **Reality refresh:** `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/222-CURRENT-REALITY-REFRESH.md`
 **Prior milestone:** v5.9 Parent Admin Operations Visibility
@@ -55,7 +55,7 @@ Frontend evidence:
 - [x] **Phase 223: Email Verification UX Integration** - Add frontend auth clients and pages/states for verification confirm/resend and login/register pending states.
 - [x] **Phase 224: Parent Account Operations UI** - Add parent account operations API types/hooks and parent-visible account state page or dashboard section.
 - [x] **Phase 225: Admin Account Operations Console** - Add admin account operations API types/hooks and support-grade parent detail workflow.
-- [ ] **Phase 226: v5.10 Frontend And Production Readiness Gate** - Verify frontend build/lint/e2e, backend contract compatibility, docs, and production read-only smoke checklist.
+- [x] **Phase 226: v5.10 Frontend And Production Readiness Gate** - Verify frontend build/lint/e2e, backend contract compatibility, docs, and production read-only smoke checklist.
 
 ## Phase Details
 
@@ -132,7 +132,7 @@ Frontend evidence:
 | 223 Email Verification UX Integration | v5.10 | 1/1 | Complete | 2026-07-03 |
 | 224 Parent Account Operations UI | v5.10 | 1/1 | Complete | 2026-07-03 |
 | 225 Admin Account Operations Console | v5.10 | 1/1 | Complete | 2026-07-03 |
-| 226 v5.10 Frontend And Production Readiness Gate | v5.10 | 0/1 | Planned | - |
+| 226 v5.10 Frontend And Production Readiness Gate | v5.10 | 1/1 | Complete | 2026-07-03 |
 
 ## Traceability
 
@@ -142,4 +142,4 @@ Frontend evidence:
 | FRONTOPS-02 | Phase 223 | Complete |
 | FRONTOPS-03 | Phase 224 | Complete |
 | FRONTOPS-04 | Phase 225 | Complete |
-| VERIFY-43 | Phase 226 | Planned |
+| VERIFY-43 | Phase 226 | Complete |

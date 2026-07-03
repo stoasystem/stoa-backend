@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-03 after reconciling v5.9 completion with current frontend gaps
+**Updated:** 2026-07-03 after completing v5.10 frontend account operations readiness
 **Mode:** final polish, product functionality first
 
 ## Current Reality
@@ -12,11 +12,11 @@ v5.6-v5.9 are complete local backend milestones:
 - v5.8 added Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior.
 - v5.9 added parent/admin account operations aggregation APIs.
 
-The next gap is frontend and production-readiness, not another backend entitlement/usage/verification foundation phase.
+v5.10 has now closed the frontend and production-readiness gap for email verification, parent account operations, and admin account operations.
 
-## Active: v5.10 Account Operations Frontend And Production Readiness
+## Completed: v5.10 Account Operations Frontend And Production Readiness
 
-**Status:** Active
+**Status:** Completed local frontend/readiness release gate 2026-07-03
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
@@ -29,17 +29,17 @@ Purpose:
 - Make admin parent account operations inspectable through a support console.
 - Prepare production read-only smoke for account operations and verification paths.
 
-Detailed build scope:
+Completed build scope:
 
 - Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
-- Phase 223: Email Verification UX Integration. (next)
-- Phase 224: Parent Account Operations UI.
-- Phase 225: Admin Account Operations Console.
-- Phase 226: v5.10 Frontend And Production Readiness Gate.
+- Phase 223: Email Verification UX Integration. (complete)
+- Phase 224: Parent Account Operations UI. (complete)
+- Phase 225: Admin Account Operations Console. (complete)
+- Phase 226: v5.10 Frontend And Production Readiness Gate. (complete)
 
-## Planned: v5.11 Additional Usage Ledger Coverage
+## Active: v5.11 Additional Usage Ledger Coverage
 
-**Status:** Planned after v5.10
+**Status:** Recommended next milestone
 
 Purpose:
 

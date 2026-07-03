@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.10
 milestone_name: Account Operations Frontend And Production Readiness
-status: Active
-last_updated: "2026-07-03T22:40:00.000Z"
-last_activity: 2026-07-03 — Completed Phase 225 admin account operations console and moved v5.10 to Phase 226 readiness gate
+status: Complete
+last_updated: "2026-07-03T23:15:00.000Z"
+last_activity: 2026-07-03 — Completed Phase 226 readiness gate and closed v5.10 frontend account operations milestone
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-03)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.10 Account Operations Frontend And Production Readiness.
+**Current focus:** v5.10 completed; next recommended milestone is v5.11 Additional Usage Ledger Coverage.
 
 ## Current Position
 
-Phase: 226 v5.10 Frontend And Production Readiness Gate
+Phase: v5.10 complete
 Plan: —
-Status: Planned
-Last activity: 2026-07-03 — Phase 225 completed; next work is v5.10 frontend and production readiness gate.
+Status: Complete
+Last activity: 2026-07-03 — Phase 226 completed with frontend lint/build/e2e, backend focused contract tests, release gate, and production read-only smoke checklist.
 
 ## Accumulated Context
 
@@ -39,6 +39,7 @@ Last activity: 2026-07-03 — Phase 225 completed; next work is v5.10 frontend a
 - Phase 223 completed frontend email verification resend/confirm clients, register/login verification states, shared verification UI, and focused auth e2e coverage.
 - Phase 224 completed the parent account operations API client/query, dashboard card, detail route, support-state UI, and focused parent account operations e2e coverage.
 - Phase 225 completed the admin account operations API client/query, direct lookup route, subscription handoff links, support-state detail UI, billing evidence/events display, and focused admin account operations e2e coverage.
+- Phase 226 completed the v5.10 readiness gate: frontend lint/build, 15 focused frontend e2e tests, 35 backend focused contract tests, release evidence, and production read-only smoke planning.
 - Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
 - Additional usage ledger action coverage remains future scope after question-submission ledger readiness.
 - Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
@@ -46,7 +47,7 @@ Last activity: 2026-07-03 — Phase 225 completed; next work is v5.10 frontend a
 
 ### Pending Todos
 
-- Close v5.10 through Phase 226 frontend and production readiness gate.
+- Start v5.11 Additional Usage Ledger Coverage when ready.
 
 ### Blockers/Concerns
 
@@ -56,4 +57,4 @@ Last activity: 2026-07-03 — Phase 225 completed; next work is v5.10 frontend a
 
 ## Operator Next Steps
 
-- Start Phase 226 by running the v5.10 readiness gate across frontend account verification, parent account operations, admin account operations, backend contract checks, docs, and production read-only smoke planning.
+- Recommended next step: start v5.11 Additional Usage Ledger Coverage for chat, hints, teacher-help, and practice/generation actions that should appear in paid limits or support explanations.
