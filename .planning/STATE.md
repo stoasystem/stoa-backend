@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.10
 milestone_name: Account Operations Frontend And Production Readiness
 status: Active
-last_updated: "2026-07-03T22:05:00.000Z"
-last_activity: 2026-07-03 — Completed Phase 224 parent account operations UI and moved v5.10 to Phase 225 admin account operations console
+last_updated: "2026-07-03T22:40:00.000Z"
+last_activity: 2026-07-03 — Completed Phase 225 admin account operations console and moved v5.10 to Phase 226 readiness gate
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 225 Admin Account Operations Console
+Phase: 226 v5.10 Frontend And Production Readiness Gate
 Plan: —
 Status: Planned
-Last activity: 2026-07-03 — Phase 224 completed; next work is admin account operations console.
+Last activity: 2026-07-03 — Phase 225 completed; next work is v5.10 frontend and production readiness gate.
 
 ## Accumulated Context
 
@@ -38,6 +38,7 @@ Last activity: 2026-07-03 — Phase 224 completed; next work is admin account op
 - Phase 222 completed the current-reality refresh and corrected stale v5.6-v5.9 planning assumptions.
 - Phase 223 completed frontend email verification resend/confirm clients, register/login verification states, shared verification UI, and focused auth e2e coverage.
 - Phase 224 completed the parent account operations API client/query, dashboard card, detail route, support-state UI, and focused parent account operations e2e coverage.
+- Phase 225 completed the admin account operations API client/query, direct lookup route, subscription handoff links, support-state detail UI, billing evidence/events display, and focused admin account operations e2e coverage.
 - Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
 - Additional usage ledger action coverage remains future scope after question-submission ledger readiness.
 - Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
@@ -45,7 +46,6 @@ Last activity: 2026-07-03 — Phase 224 completed; next work is admin account op
 
 ### Pending Todos
 
-- Implement Phase 225 admin account operations console.
 - Close v5.10 through Phase 226 frontend and production readiness gate.
 
 ### Blockers/Concerns
@@ -56,4 +56,4 @@ Last activity: 2026-07-03 — Phase 224 completed; next work is admin account op
 
 ## Operator Next Steps
 
-- Start Phase 225 by defining and implementing frontend admin account operations clients, route states, and tests in `/Users/zhdeng/stoa-frontend`.
+- Start Phase 226 by running the v5.10 readiness gate across frontend account verification, parent account operations, admin account operations, backend contract checks, docs, and production read-only smoke planning.

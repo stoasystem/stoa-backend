@@ -54,7 +54,7 @@ Frontend evidence:
 - [x] **Phase 222: Reality Refresh And Frontend Account Operations Contract** - Reconcile code, docs, stoa_docs, and frontend gaps; define exact frontend/API contract.
 - [x] **Phase 223: Email Verification UX Integration** - Add frontend auth clients and pages/states for verification confirm/resend and login/register pending states.
 - [x] **Phase 224: Parent Account Operations UI** - Add parent account operations API types/hooks and parent-visible account state page or dashboard section.
-- [ ] **Phase 225: Admin Account Operations Console** - Add admin account operations API types/hooks and support-grade parent detail workflow.
+- [x] **Phase 225: Admin Account Operations Console** - Add admin account operations API types/hooks and support-grade parent detail workflow.
 - [ ] **Phase 226: v5.10 Frontend And Production Readiness Gate** - Verify frontend build/lint/e2e, backend contract compatibility, docs, and production read-only smoke checklist.
 
 ## Phase Details
@@ -131,7 +131,7 @@ Frontend evidence:
 | 222 Reality Refresh And Frontend Account Operations Contract | v5.10 | 1/1 | Complete | 2026-07-03 |
 | 223 Email Verification UX Integration | v5.10 | 1/1 | Complete | 2026-07-03 |
 | 224 Parent Account Operations UI | v5.10 | 1/1 | Complete | 2026-07-03 |
-| 225 Admin Account Operations Console | v5.10 | 0/1 | Planned | - |
+| 225 Admin Account Operations Console | v5.10 | 1/1 | Complete | 2026-07-03 |
 | 226 v5.10 Frontend And Production Readiness Gate | v5.10 | 0/1 | Planned | - |
 
 ## Traceability
@@ -141,5 +141,5 @@ Frontend evidence:
 | FRONTOPS-01 | Phase 222 | Complete |
 | FRONTOPS-02 | Phase 223 | Complete |
 | FRONTOPS-03 | Phase 224 | Complete |
-| FRONTOPS-04 | Phase 225 | Planned |
+| FRONTOPS-04 | Phase 225 | Complete |
 | VERIFY-43 | Phase 226 | Planned |

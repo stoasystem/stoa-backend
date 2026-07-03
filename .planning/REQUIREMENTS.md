@@ -85,5 +85,5 @@ Acceptance criteria:
 | FRONTOPS-01 | Phase 222 | Complete |
 | FRONTOPS-02 | Phase 223 | Complete |
 | FRONTOPS-03 | Phase 224 | Complete |
-| FRONTOPS-04 | Phase 225 | Planned |
+| FRONTOPS-04 | Phase 225 | Complete |
 | VERIFY-43 | Phase 226 | Planned |
