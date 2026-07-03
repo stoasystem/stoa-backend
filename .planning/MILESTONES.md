@@ -1,14 +1,48 @@
 # Milestones
 
+## Active: v5.8 Email Verification And Login Code Policy
+
+**Status:** Active planning
+**Started:** 2026-07-03
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Goal:** Replace placeholder email verification behavior and clarify token-compatible login-code/passwordless policy.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 5 active
+**Release target:** `verification-ready` or `policy-deferred`
+
+Function purpose:
+
+- Define backend-visible email verification states and route policy.
+- Enforce registration/account lifecycle behavior without breaking role onboarding or parent/student binding.
+- Add safe verification resend/expiry behavior and bounded support visibility.
+- Resolve login-code/passwordless behavior as Cognito-compatible production auth or explicitly gated/deferred behavior.
+
+Implementation strategy:
+
+- Define state and route policy before enforcement changes.
+- Preserve current Cognito login, forgot-password, role onboarding, and parent/student binding behavior.
+- Keep raw verification codes and provider secrets out of DynamoDB.
+- Close with focused auth lifecycle tests and release evidence before v5.9 operations visibility.
+
+Planned phases:
+
+- Phase 212: Email Verification Contract And Account State Policy.
+- Phase 213: Registration Verification Enforcement.
+- Phase 214: Verification Resend And Expiry Operations.
+- Phase 215: Login Code Policy And Auth Lifecycle Tests.
+- Phase 216: v5.8 Verification Release Gate.
+
+---
+
 ## v5.7 Usage Ledger And Quota Reconciliation (Completed: 2026-07-03)
 
 **Status:** Completed local backend release gate 2026-07-03
 **Started:** 2026-07-03
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
 **Audit:** `.planning/v5.7-MILESTONE-AUDIT.md`
-**Milestone roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
 **Phase evidence:** `.planning/milestones/v5.7-phases/`
 **Goal:** Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile them with quota counters.
 **Phases:** 5
@@ -97,15 +131,6 @@ Key accomplishments:
 - Verified with focused entitlement, question, and subscription operation tests plus Ruff.
 
 Known deferred items at close: durable usage ledger and quota reconciliation, email verification and login-code policy, full parent/admin operations visibility, native apps, and final live Stripe/TWINT activation.
-
----
-
-## Planned: v5.8 Email Verification And Login Code Policy
-
-**Status:** Planned after v5.7
-**Roadmap:** `.planning/milestones/v5.8-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.8-REQUIREMENTS.md`
-**Goal:** Replace placeholder email verification and clarify/implement token-compatible login-code behavior.
 
 ---
 

@@ -96,7 +96,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.7 Usage Ledger And Quota Reconciliation on 2026-07-03 (usage-ledger-ready backend release gate)
-**Next planned milestone:** v5.8 Email Verification And Login Code Policy
+**Active milestone:** v5.8 Email Verification And Login Code Policy, started 2026-07-03
 
 Delivered:
 
@@ -380,10 +380,8 @@ Phase evidence: `.planning/milestones/v5.5-phases/`
 
 ## Completed Milestone: v5.6 Effective Entitlements And Paid Access Enforcement
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.6-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.6-REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v5.6-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.6-REQUIREMENTS.md`
 Phase evidence: `.planning/milestones/v5.6-phases/`
 
 **Status:** Completed local backend release gate 2026-07-03 with rollout state `entitlement-ready`.
@@ -409,8 +407,8 @@ Phase evidence: `.planning/milestones/v5.6-phases/`
 
 ## Completed Milestone: v5.7 Usage Ledger And Quota Reconciliation
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v5.7-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.7-REQUIREMENTS.md`
 
 **Status:** Completed local backend release gate 2026-07-03 with rollout state `usage-ledger-ready`.
 
@@ -432,6 +430,27 @@ Requirements: `.planning/REQUIREMENTS.md`
 
 - v5.8 Email Verification And Login Code Policy.
 - v5.9 Parent Admin Operations Visibility.
+
+## Active Milestone: v5.8 Email Verification And Login Code Policy
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+
+**Status:** Active planning, started 2026-07-03 after v5.7.
+
+**Function purpose:** Replace placeholder or ambiguous account verification behavior with an explicit backend contract for registration, email verification states, resend/expiry handling, and login-code/passwordless policy.
+
+**Implementation strategy:** Define the verification state and route policy first, then enforce it through registration and account lifecycle paths without breaking existing role onboarding or parent/student binding. Add safe resend/expiry behavior and bounded support visibility, then either implement a Cognito-compatible login-code flow or gate/defer unsupported behavior so clients cannot mistake placeholders for production authentication.
+
+**Planned phases:**
+
+- Phase 212: Email Verification Contract And Account State Policy.
+- Phase 213: Registration Verification Enforcement.
+- Phase 214: Verification Resend And Expiry Operations.
+- Phase 215: Login Code Policy And Auth Lifecycle Tests.
+- Phase 216: v5.8 Verification Release Gate.
+
+**Follow-up milestone:** v5.9 Parent Admin Operations Visibility will use the verified account lifecycle state as part of broader support-grade visibility for entitlement, billing, usage, and verification.
 
 ## Requirements
 
@@ -699,7 +718,13 @@ Milestone v5.7 requirements are complete:
 
 ### Active
 
-No active milestone requirements. v5.8 requirements should be created when the next milestone starts.
+Milestone v5.8 requirements are active:
+
+- EMAIL-01: email verification contract and state model - Phase 212.
+- EMAIL-02: registration verification enforcement - Phase 213.
+- EMAIL-03: verification resend and expiry operations - Phase 214.
+- LOGIN-01: login code policy and token compatibility - Phase 215.
+- VERIFY-41: v5.8 verification release gate - Phase 216.
 
 ### Out of Scope
 
@@ -855,6 +880,7 @@ Known current resources:
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
 | Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 focused only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Complete - entitlement-ready release gate passed |
+| Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Active planning |
 
 ## Evolution
 

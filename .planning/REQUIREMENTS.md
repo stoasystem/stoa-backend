@@ -1,89 +1,88 @@
-# Requirements: v5.7 Usage Ledger And Quota Reconciliation
+# Requirements: v5.8 Email Verification And Login Code Policy
 
-**Milestone:** v5.7
-**Status:** Complete
+**Milestone:** v5.8
+**Status:** Active planning
 **Created:** 2026-07-03
-**Prior milestone:** v5.6 Effective Entitlements And Paid Access Enforcement
+**Prior milestone:** v5.7 Usage Ledger And Quota Reconciliation
 
 ## Purpose
 
-Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile those events with quota counters.
+Make account verification behavior explicit and enforceable. Registration, email verification, resend/expiry, and any login-code/passwordless behavior must have a clear backend policy instead of placeholder or ambiguous flows.
 
-v5.6 made effective entitlement authoritative for question quota. v5.7 makes usage evidence durable enough for support, reconciliation, and future parent/admin operations visibility.
+v5.8 protects the parent/student account lifecycle before the broader v5.9 operations visibility milestone. It should preserve existing role onboarding, parent-student binding, and Cognito token compatibility while clarifying what is supported now and what is intentionally deferred.
 
 ## Requirements
 
-### LEDGER-01 Usage Ledger Contract And Idempotency
+### EMAIL-01 Email Verification Contract And State Model
 
 Acceptance criteria:
 
-- Usage ledger event schema is defined for quota-governed actions, starting with student question submissions.
-- Event fields include actor/student, parent context when available, action, quantity, entitlement snapshot, effective plan/source, quota period, counter key, idempotency key, request/question correlation, timestamps, and privacy-safe metadata.
-- Idempotency rules prevent duplicate ledger rows for retried question submissions or repeated writes.
-- Ledger write ordering relative to the atomic quota counter is explicit.
-- Privacy boundaries forbid raw question content, provider secrets, private S3 keys, invoice internals, and unredacted billing payloads.
+- Account verification states are defined for registered, unverified, pending verification, verified, expired verification, resend-limited, and blocked states.
+- Registration output and stored user profile metadata expose verification status without leaking Cognito internals.
+- Parent/student binding behavior is explicit when one or both accounts are unverified.
+- Verification policy identifies which routes require verified email immediately and which remain allowed for onboarding/support.
+- Test matrix is documented before enforcement changes.
 
-### LEDGER-02 Question Usage Ledger Recording
-
-Acceptance criteria:
-
-- Successful student question quota increments write durable ledger events.
-- Ledger events store the effective entitlement snapshot used for the quota decision.
-- Failed or refused quota attempts do not create consumed-usage events unless explicitly classified as refused audit metadata.
-- Existing daily counter behavior remains stable.
-- Tests cover free, paid parent entitlement, manual override, pending/blocked entitlement, retry/idempotency, and quota exhaustion paths.
-
-### RECON-01 Quota Counter Reconciliation
+### EMAIL-02 Registration Verification Enforcement
 
 Acceptance criteria:
 
-- Reconciliation can compare daily counter rows with ledger event totals for a student/action/day.
-- Reconciliation reports matched, ledger-missing, counter-missing, and count-mismatch states.
-- Reconciliation is read-only by default and safe to run repeatedly.
-- Any repair behavior is deterministic, bounded, and explicitly separated from preview/report mode.
-- Tests cover matching counts, missing ledger rows, missing counter rows, mismatched counts, and repeated reconciliation runs.
+- New registrations record email verification policy metadata and initial verification state.
+- Login or token-return behavior after registration follows the chosen verification policy.
+- Existing student, parent, teacher, and admin role onboarding remains compatible.
+- Parent-student binding creation does not silently grant fully active access when verification policy blocks it.
+- Focused tests cover parent registration, student registration with parent email, unverified states, verified states, and role aliases.
 
-### USAGE-01 Usage Visibility And Support Summaries
-
-Acceptance criteria:
-
-- Parent/customer usage summary can show consumed, limit, remaining, effective plan, and reconciliation status for linked students.
-- Admin/support usage summary can inspect student usage ledger and reconciliation status without exposing private question content or billing internals.
-- Existing parent/admin subscription and entitlement responses remain backward compatible.
-- Visibility surfaces identify when ledger data is partial, stale, or unreconciled.
-- Broader operations console work remains handed off to v5.9.
-
-### VERIFY-40 v5.7 Usage Ledger Release Gate
+### EMAIL-03 Verification Resend And Expiry Operations
 
 Acceptance criteria:
 
-- Ledger contract, question usage recording, reconciliation, visibility, and tests are complete.
-- Requirements, roadmap, state, and remaining-feature queue reflect v5.7 completion.
+- Backend exposes a safe resend-verification operation or explicitly documents the Cognito-compatible equivalent.
+- Resend behavior is rate-limited or idempotency-safe enough for repeated user attempts.
+- Expired or stale verification states produce actionable responses without exposing provider internals.
+- Admin/support can inspect verification status at a bounded level suitable for account support.
+- Tests cover resend success, resend throttling/idempotency, expired state handling, and support visibility.
+
+### LOGIN-01 Login Code Policy And Token Compatibility
+
+Acceptance criteria:
+
+- Login-code/passwordless behavior is explicitly classified as supported, provider-gated, or deferred.
+- If supported in this milestone, the implementation produces Cognito-compatible authenticated sessions and has expiry, replay, and rate-limit protections.
+- If deferred, existing placeholder login-code behavior is gated so clients cannot mistake it for production authentication.
+- Forgot-password and standard Cognito login flows remain backward compatible.
+- Tests cover the chosen policy, unsupported/deferred responses, and existing auth lifecycle flows.
+
+### VERIFY-41 v5.8 Verification Release Gate
+
+Acceptance criteria:
+
+- Email verification contract, enforcement, resend/expiry operations, login-code policy, and focused tests are complete.
+- Requirements, roadmap, state, and milestone history reflect v5.8 completion.
 - Release evidence identifies commit SHAs, focused tests, lint checks, and residual full-suite status.
-- Final audit records rollout state: `usage-ledger-ready`, `blocked`, or `deferred`.
-- v5.8 email verification/login-code policy handoff is updated.
+- Final audit records rollout state: `verification-ready`, `policy-deferred`, `blocked`, or `deferred`.
+- v5.9 parent/admin operations visibility handoff is updated.
 
 ## Future Milestones
 
-- v5.8 Email Verification And Login Code Policy.
 - v5.9 Parent Admin Operations Visibility.
 - Native iOS/Android app buildout after core account/payment/usage correctness.
 
 ## Out of Scope
 
-- Email verification and login-code implementation.
 - Full parent/admin operations console.
 - Native app implementation.
 - Final live Stripe/TWINT activation.
-- Replacing DynamoDB with an analytics warehouse.
-- Storing raw question content, answer content, private S3 keys, or provider billing payloads in usage ledger rows.
+- Replacing Cognito with a custom identity provider.
+- Storing raw verification codes or provider secrets in DynamoDB.
+- Broad fraud/risk scoring beyond verification rate limits and replay protection.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEDGER-01 | Phase 207 | Complete |
-| LEDGER-02 | Phase 208 | Complete |
-| RECON-01 | Phase 209 | Complete |
-| USAGE-01 | Phase 210 | Complete |
-| VERIFY-40 | Phase 211 | Complete |
+| EMAIL-01 | Phase 212 | Planned |
+| EMAIL-02 | Phase 213 | Planned |
+| EMAIL-03 | Phase 214 | Planned |
+| LOGIN-01 | Phase 215 | Planned |
+| VERIFY-41 | Phase 216 | Planned |
