@@ -40,12 +40,20 @@ class FakeCognito:
     def __init__(self):
         self.calls = []
 
+    def sign_up(self, **kwargs):
+        self.calls.append(("sign_up", kwargs))
+        return {"UserSub": "cognito-user-sub"}
+
     def admin_create_user(self, **kwargs):
         self.calls.append(("admin_create_user", kwargs))
         return {}
 
     def admin_set_user_password(self, **kwargs):
         self.calls.append(("admin_set_user_password", kwargs))
+        return {}
+
+    def admin_update_user_attributes(self, **kwargs):
+        self.calls.append(("admin_update_user_attributes", kwargs))
         return {}
 
     def admin_add_user_to_group(self, **kwargs):
@@ -62,6 +70,14 @@ class FakeCognito:
 
     def confirm_forgot_password(self, **kwargs):
         self.calls.append(("confirm_forgot_password", kwargs))
+        return {}
+
+    def resend_confirmation_code(self, **kwargs):
+        self.calls.append(("resend_confirmation_code", kwargs))
+        return {"CodeDeliveryDetails": {"Destination": "s***@example.com", "DeliveryMedium": "EMAIL"}}
+
+    def confirm_sign_up(self, **kwargs):
+        self.calls.append(("confirm_sign_up", kwargs))
         return {}
 
 
@@ -102,14 +118,23 @@ def test_register_records_email_verification_policy_and_parent_binding(monkeypat
 
     assert response.status_code == 201
     body = response.json()
-    assert body["accessToken"] == "access-token"
-    assert body["emailVerificationStatus"] == "admin_marked_verified"
-    assert stored["email_verification_policy"] == "cognito_email_verified_by_backend_admin_create_user"
-    assert stored["email_verification_required"] is False
+    assert body["accessToken"] == ""
+    assert body["emailVerificationStatus"] == "pending_verification"
+    assert body["emailVerificationRequired"] is True
+    assert body["accountActivationStatus"] == "pending_email_verification"
+    assert body["user"]["emailVerificationStatus"] == "pending_verification"
+    assert fake.calls[0][0] == "sign_up"
+    assert fake.calls[0][1]["ClientId"] == "student-client"
+    assert fake.calls[0][1]["UserAttributes"] == [{"Name": "email", "Value": "student@example.com"}]
+    assert fake.calls[1][0] == "admin_update_user_attributes"
+    assert stored["user_id"] == "cognito-user-sub"
+    assert stored["email_verification_policy"] == "cognito_sign_up_confirm_sign_up"
+    assert stored["email_verification_required"] is True
     assert stored["parent_id"] == "parent-1"
-    assert stored["parent_binding_status"] == "active"
+    assert stored["parent_binding_status"] == "active_pending_verification"
     assert bindings[0]["parent_id"] == "parent-1"
     assert bindings[0]["student_id"] == stored["user_id"]
+    assert bindings[0]["status"] == "active_pending_verification"
     assert bindings[0]["source"] == "student_registration"
 
 
@@ -152,6 +177,218 @@ def test_register_keeps_one_sided_parent_email_pending(monkeypatch):
     assert stored["parent_binding_status"] == "pending_parent_confirmation"
     assert "parent_id" not in stored
     assert bindings == []
+
+
+def test_confirm_email_verification_activates_profile(monkeypatch):
+    fake = FakeCognito()
+    updates = []
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "email": "student@example.com",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    }
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda user_id, fields: updates.append((user_id, fields)) or {**profile, **fields},
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "123456"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "confirmed"
+    assert body["emailVerificationStatus"] == "verified"
+    assert body["emailVerificationRequired"] is False
+    assert fake.calls[0][0] == "confirm_sign_up"
+    assert updates[0][0] == "student-1"
+    assert updates[0][1]["email_verification_status"] == "verified"
+
+
+def test_login_blocks_unverified_profile_after_cognito_auth(monkeypatch):
+    fake = FakeCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/login",
+        json={"email": "student@example.com", "password": "ValidPass123!"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "email_verification_required"
+
+
+def test_login_allows_verified_profile(monkeypatch):
+    fake = FakeCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "verified",
+            "email_verification_required": False,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/login",
+        json={"email": "student@example.com", "password": "ValidPass123!"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["accessToken"] == "access-token"
+    assert response.json()["emailVerificationStatus"] == "verified"
+
+
+def test_resend_email_verification_is_idempotent_during_cooldown(monkeypatch):
+    fake = FakeCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+            "email_verification_last_resend_at": auth._utc_now_iso(),
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "student@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "already_requested"
+    assert fake.calls == []
+
+
+def test_resend_email_verification_records_provider_delivery(monkeypatch):
+    fake = FakeCognito()
+    updates = []
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "email": "student@example.com",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    }
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda user_id, fields: updates.append((user_id, fields)) or {**profile, **fields},
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "student@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "sent"
+    assert fake.calls[-1][0] == "resend_confirmation_code"
+    assert updates[0][1]["email_verification_resend_count"] == 1
+
+
+def test_confirm_email_verification_marks_expired_code(monkeypatch):
+    class ExpiredCognito(FakeCognito):
+        def confirm_sign_up(self, **kwargs):
+            raise _client_error("ExpiredCodeException")
+
+    updates = []
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "email": "student@example.com",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    }
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: ExpiredCognito())
+    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda user_id, fields: updates.append((user_id, fields)) or {**profile, **fields},
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "expired"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Verification code expired"
+    assert updates[0][1]["email_verification_status"] == "expired_verification"
+
+
+def test_login_code_policy_is_deferred_without_tokens():
+    request = _auth_client().post(
+        "/auth/login-code/request",
+        json={"email": "student@example.com"},
+    )
+    confirm = _auth_client().post(
+        "/auth/login-code/confirm",
+        json={"email": "student@example.com", "code": "123456"},
+    )
+
+    assert request.status_code == 200
+    assert request.json()["status"] == "deferred"
+    assert "accessToken" not in request.json()
+    assert confirm.status_code == 200
+    assert confirm.json()["policy"] == "deferred_cognito_custom_auth_required"
+
+
+def test_admin_can_inspect_account_verification_status(monkeypatch):
+    monkeypatch.setattr(
+        admin.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "email": "student@example.com",
+            "email_verification_status": "expired_verification",
+            "email_verification_required": True,
+            "email_verification_policy": "cognito_sign_up_confirm_sign_up",
+            "email_verification_resend_count": 2,
+            "parent_binding_status": "active_pending_verification",
+        },
+    )
+
+    response = _admin_client().get("/admin/account-verification/student-1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["userId"] == "student-1"
+    assert body["emailVerificationStatus"] == "expired_verification"
+    assert body["accountActivationStatus"] == "pending_email_verification"
+    assert body["emailVerificationPolicy"] == "cognito_sign_up_confirm_sign_up"
+    assert body["parentBindingStatus"] == "active_pending_verification"
 
 
 def test_forgot_password_is_enumeration_safe_for_unknown_email(monkeypatch):

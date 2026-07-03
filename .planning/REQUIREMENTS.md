@@ -1,7 +1,7 @@
 # Requirements: v5.8 Email Verification And Login Code Policy
 
 **Milestone:** v5.8
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Prior milestone:** v5.7 Usage Ledger And Quota Reconciliation
 
@@ -81,8 +81,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EMAIL-01 | Phase 212 | Planned |
-| EMAIL-02 | Phase 213 | Planned |
-| EMAIL-03 | Phase 214 | Planned |
-| LOGIN-01 | Phase 215 | Planned |
-| VERIFY-41 | Phase 216 | Planned |
+| EMAIL-01 | Phase 212 | Complete |
+| EMAIL-02 | Phase 213 | Complete |
+| EMAIL-03 | Phase 214 | Complete |
+| LOGIN-01 | Phase 215 | Complete |
+| VERIFY-41 | Phase 216 | Complete |

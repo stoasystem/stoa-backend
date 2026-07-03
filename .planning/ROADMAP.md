@@ -1,6 +1,6 @@
 # Roadmap: v5.8 Email Verification And Login Code Policy
 
-**Status:** Active planning
+**Status:** Complete
 **Created:** 2026-07-03
 **Prior milestone:** v5.7 Usage Ledger And Quota Reconciliation
 
@@ -29,11 +29,11 @@ Account verification affects every role and can easily break onboarding if it is
 
 ## Phases
 
-- [ ] **Phase 212: Email Verification Contract And Account State Policy** - Define account verification states, route policy, binding implications, and test matrix.
-- [ ] **Phase 213: Registration Verification Enforcement** - Persist and enforce verification policy through registration/login-compatible account lifecycle paths.
-- [ ] **Phase 214: Verification Resend And Expiry Operations** - Add resend/expiry behavior and bounded support visibility for verification state.
-- [ ] **Phase 215: Login Code Policy And Auth Lifecycle Tests** - Implement or explicitly gate login-code/passwordless behavior and protect existing auth lifecycle flows.
-- [ ] **Phase 216: v5.8 Verification Release Gate** - Close v5.8 with evidence, docs, audit, and v5.9 handoff.
+- [x] **Phase 212: Email Verification Contract And Account State Policy** - Define account verification states, route policy, binding implications, and test matrix.
+- [x] **Phase 213: Registration Verification Enforcement** - Persist and enforce verification policy through registration/login-compatible account lifecycle paths.
+- [x] **Phase 214: Verification Resend And Expiry Operations** - Add resend/expiry behavior and bounded support visibility for verification state.
+- [x] **Phase 215: Login Code Policy And Auth Lifecycle Tests** - Implement or explicitly gate login-code/passwordless behavior and protect existing auth lifecycle flows.
+- [x] **Phase 216: v5.8 Verification Release Gate** - Close v5.8 with evidence, docs, audit, and v5.9 handoff.
 
 ## Phase Details
 
@@ -106,21 +106,21 @@ Account verification affects every role and can easily break onboarding if it is
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 212 Email Verification Contract And Account State Policy | v5.8 | 0/1 | Active | - |
-| 213 Registration Verification Enforcement | v5.8 | 0/1 | Planned | - |
-| 214 Verification Resend And Expiry Operations | v5.8 | 0/1 | Planned | - |
-| 215 Login Code Policy And Auth Lifecycle Tests | v5.8 | 0/1 | Planned | - |
-| 216 v5.8 Verification Release Gate | v5.8 | 0/1 | Planned | - |
+| 212 Email Verification Contract And Account State Policy | v5.8 | 1/1 | Complete | 2026-07-03 |
+| 213 Registration Verification Enforcement | v5.8 | 1/1 | Complete | 2026-07-03 |
+| 214 Verification Resend And Expiry Operations | v5.8 | 1/1 | Complete | 2026-07-03 |
+| 215 Login Code Policy And Auth Lifecycle Tests | v5.8 | 1/1 | Complete | 2026-07-03 |
+| 216 v5.8 Verification Release Gate | v5.8 | 1/1 | Complete | 2026-07-03 |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EMAIL-01 | Phase 212 | Planned |
-| EMAIL-02 | Phase 213 | Planned |
-| EMAIL-03 | Phase 214 | Planned |
-| LOGIN-01 | Phase 215 | Planned |
-| VERIFY-41 | Phase 216 | Planned |
+| EMAIL-01 | Phase 212 | Complete |
+| EMAIL-02 | Phase 213 | Complete |
+| EMAIL-03 | Phase 214 | Complete |
+| LOGIN-01 | Phase 215 | Complete |
+| VERIFY-41 | Phase 216 | Complete |
 
 ---
-*Last updated: 2026-07-03 after v5.8 milestone initialization.*
+*Last updated: 2026-07-03 after v5.8 verification release gate.*

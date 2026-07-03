@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_current_user
-from stoa.services import locale_service
+from stoa.services import account_verification_service, locale_service
 
 router = APIRouter()
 
@@ -46,6 +46,9 @@ class UserOut(BaseModel):
     effectiveLocale: str
     subscriptionStatus: str = "trial"
     plan: str = "free_trial"
+    emailVerificationStatus: str | None = None
+    emailVerificationRequired: bool = False
+    accountActivationStatus: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -54,6 +57,8 @@ class AuthResponse(BaseModel):
     onboardingStatus: str | None = None
     verificationStatus: str | None = None
     emailVerificationStatus: str | None = None
+    emailVerificationRequired: bool = False
+    accountActivationStatus: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -75,6 +80,39 @@ class ResetPasswordRequest(BaseModel):
     confirmationCode: str = Field(..., min_length=1, max_length=100)
     newPassword: str = Field(..., min_length=1, max_length=256)
     role: str | None = None
+
+
+class EmailVerificationRequest(BaseModel):
+    email: EmailStr
+    role: str | None = None
+
+
+class EmailVerificationConfirmRequest(EmailVerificationRequest):
+    confirmationCode: str = Field(..., min_length=1, max_length=100)
+
+
+class EmailVerificationResponse(BaseModel):
+    status: str
+    emailVerificationStatus: str
+    emailVerificationRequired: bool
+    accountActivationStatus: str
+    resendAllowed: bool = False
+    delivery: dict | None = None
+
+
+class LoginCodeRequest(BaseModel):
+    email: EmailStr
+    role: str | None = None
+
+
+class LoginCodeConfirmRequest(LoginCodeRequest):
+    code: str = Field(..., min_length=1, max_length=100)
+
+
+class LoginCodePolicyResponse(BaseModel):
+    status: str = "deferred"
+    policy: str = account_verification_service.LOGIN_CODE_POLICY
+    reason: str
 
 
 class PasswordResetResponse(BaseModel):
@@ -132,6 +170,7 @@ def _get_cognito(settings: Settings):
 def _build_user_out(profile: dict) -> UserOut:
     role = _display_role(profile.get("role", "student"))
     effective_locale = locale_service.effective_locale(profile)
+    verification = account_verification_service.public_state(profile)
     return UserOut(
         id=profile.get("user_id", ""),
         name=profile.get("name") or profile.get("email", "").split("@")[0],
@@ -142,6 +181,9 @@ def _build_user_out(profile: dict) -> UserOut:
         effectiveLocale=effective_locale,
         subscriptionStatus="trial",
         plan="free_trial",
+        emailVerificationStatus=verification["emailVerificationStatus"],
+        emailVerificationRequired=verification["emailVerificationRequired"],
+        accountActivationStatus=verification["accountActivationStatus"],
     )
 
 
@@ -159,7 +201,26 @@ def _role_for_password_flow(email: str, role: str | None) -> str | None:
 
 
 def _email_verification_status(profile: dict) -> str:
-    return profile.get("email_verification_status") or "admin_marked_verified"
+    return account_verification_service.verification_status(profile)
+
+
+def _auth_response_for_profile(
+    *,
+    access_token: str,
+    profile: dict,
+    onboarding_status: str | None = None,
+    verification_status: str | None = None,
+) -> AuthResponse:
+    verification = account_verification_service.public_state(profile)
+    return AuthResponse(
+        accessToken=access_token,
+        user=_build_user_out(profile),
+        onboardingStatus=onboarding_status,
+        verificationStatus=verification_status,
+        emailVerificationStatus=verification["emailVerificationStatus"],
+        emailVerificationRequired=verification["emailVerificationRequired"],
+        accountActivationStatus=verification["accountActivationStatus"],
+    )
 
 
 def _norm_email(value: str | None) -> str:
@@ -229,13 +290,17 @@ def _bind_parent_student_if_possible(parent_email: str | None, student_profile: 
     student_id = student_profile.get("user_id")
     if not parent_id or not student_id:
         return None
+    binding_status = account_verification_service.binding_status_for_profiles(
+        student_profile,
+        parent,
+    )
     student_profile["parent_id"] = parent_id
-    student_profile["parent_binding_status"] = "active"
+    student_profile["parent_binding_status"] = binding_status
     return user_repo.put_parent_student_binding(
         parent_id=parent_id,
         student_id=student_id,
         relationship="child",
-        status="active",
+        status=binding_status,
         source="student_registration",
         actor="system",
         created_at=_utc_now_iso(),
@@ -258,12 +323,18 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
     student_id = child.get("user_id")
     if not parent_id or not student_id:
         return None
-    user_repo.update_student_parent_link(student_id, parent_id, child.get("relationship", "child"))
+    binding_status = account_verification_service.binding_status_for_profiles(
+        parent_profile,
+        child,
+    )
+    if binding_status == "active":
+        user_repo.update_student_parent_link(student_id, parent_id, child.get("relationship", "child"))
+    parent_profile["child_binding_status"] = binding_status
     return user_repo.put_parent_student_binding(
         parent_id=parent_id,
         student_id=student_id,
         relationship=child.get("relationship", "child"),
-        status="active",
+        status=binding_status,
         source="parent_registration",
         actor="system",
         created_at=_utc_now_iso(),
@@ -276,30 +347,30 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
-    """Create a Cognito user and DynamoDB profile, return tokens + user."""
+    """Create a Cognito user and DynamoDB profile, then require email verification."""
     cognito = _get_cognito(settings)
-    user_id = str(uuid.uuid4())
     role = _normalise_role(body.role)
+    client_id = _client_id_for_role(role, settings)
 
     try:
-        cognito.admin_create_user(
-            UserPoolId=settings.cognito_user_pool_id,
-            Username=body.email,
-            TemporaryPassword=body.password,
-            MessageAction="SUPPRESS",
-            UserAttributes=[
-                {"Name": "email", "Value": body.email},
-                {"Name": "email_verified", "Value": "true"},
-                {"Name": "custom:role", "Value": role},
-                {"Name": "custom:subscription_tier", "Value": "free"},
-            ],
-        )
-        cognito.admin_set_user_password(
-            UserPoolId=settings.cognito_user_pool_id,
+        signup_resp = cognito.sign_up(
+            ClientId=client_id,
             Username=body.email,
             Password=body.password,
-            Permanent=True,
+            UserAttributes=[{"Name": "email", "Value": body.email}],
         )
+        user_id = signup_resp.get("UserSub") or str(uuid.uuid4())
+        try:
+            cognito.admin_update_user_attributes(
+                UserPoolId=settings.cognito_user_pool_id,
+                Username=body.email,
+                UserAttributes=[
+                    {"Name": "custom:role", "Value": role},
+                    {"Name": "custom:subscription_tier", "Value": "free"},
+                ],
+            )
+        except ClientError:
+            pass
         # Add user to the role group so the access token carries cognito:groups.
         # Retry once on transient failure; deps.py has a self-healing fallback but
         # it's better to get the group right at registration time.
@@ -376,10 +447,7 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         "subjects": subjects,
         "parent_name": parent_name,
         "parent_email": parent_email,
-        "email_verification_status": "admin_marked_verified",
-        "email_verification_policy": "cognito_email_verified_by_backend_admin_create_user",
-        "email_verification_required": False,
-        "email_verification_decision_at": _utc_now_iso(),
+        **account_verification_service.registration_profile_fields(_utc_now_iso()),
         "subscription_tier": "free",
         "created_at": _utc_now_iso(),
     }
@@ -396,27 +464,13 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         _bind_existing_child_if_possible(profile, child_email)
     user_repo.put_user(profile)
 
-    # Log the user in immediately to return tokens
-    client_id = _client_id_for_role(role, settings)
-    try:
-        resp = cognito.initiate_auth(
-            AuthFlow="USER_PASSWORD_AUTH",
-            AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
-            ClientId=client_id,
-        )
-        access_token = resp["AuthenticationResult"]["AccessToken"]
-    except ClientError:
-        # Registration succeeded even if auto-login fails
-        access_token = ""
-
     verification_status = "pending_review" if role == "teacher" else None
 
-    return AuthResponse(
-        accessToken=access_token,
-        user=_build_user_out(profile),
-        onboardingStatus="completed" if role != "teacher" else "pending_review",
-        verificationStatus=verification_status,
-        emailVerificationStatus=_email_verification_status(profile),
+    return _auth_response_for_profile(
+        access_token="",
+        profile=profile,
+        onboarding_status="email_verification_required" if role != "teacher" else "pending_review",
+        verification_status=verification_status,
     )
 
 
@@ -448,6 +502,14 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
         code = e.response["Error"]["Code"]
         if code in ("NotAuthorizedException", "UserNotFoundException"):
             raise HTTPException(status_code=401, detail="Invalid email or password")
+        if code == "UserNotConfirmedException":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "email_verification_required",
+                    "message": "Email verification is required before login.",
+                },
+            )
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
@@ -456,12 +518,181 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
     profile = user_repo.get_user_by_email(body.email)
     if not profile:
         profile = {"user_id": "", "email": body.email, "role": role}
+    if not account_verification_service.can_return_tokens(profile):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "email_verification_required",
+                "message": "Email verification is required before login.",
+                "emailVerificationStatus": _email_verification_status(profile),
+                "accountActivationStatus": account_verification_service.account_activation_status(profile),
+            },
+        )
 
-    return AuthResponse(
-        accessToken=access_token,
-        user=_build_user_out(profile),
-        onboardingStatus="completed",
-        emailVerificationStatus=_email_verification_status(profile),
+    return _auth_response_for_profile(
+        access_token=access_token,
+        profile=profile,
+        onboarding_status="completed",
+    )
+
+
+@router.post("/email-verification/resend", response_model=EmailVerificationResponse)
+async def resend_email_verification(
+    body: EmailVerificationRequest,
+    settings: Settings = Depends(get_settings),
+):
+    """Resend Cognito's sign-up confirmation code without exposing provider internals."""
+    profile = user_repo.get_user_by_email(body.email)
+    if not profile:
+        return EmailVerificationResponse(
+            status="accepted",
+            emailVerificationStatus=account_verification_service.STATUS_PENDING,
+            emailVerificationRequired=True,
+            accountActivationStatus=account_verification_service.PENDING_EMAIL,
+            resendAllowed=False,
+        )
+    public_state = account_verification_service.public_state(profile)
+    if account_verification_service.is_email_verified(profile):
+        return EmailVerificationResponse(
+            status="already_verified",
+            emailVerificationStatus=public_state["emailVerificationStatus"],
+            emailVerificationRequired=public_state["emailVerificationRequired"],
+            accountActivationStatus=public_state["accountActivationStatus"],
+            resendAllowed=False,
+        )
+    if not account_verification_service.resend_allowed(profile):
+        return EmailVerificationResponse(
+            status="already_requested",
+            emailVerificationStatus=public_state["emailVerificationStatus"],
+            emailVerificationRequired=public_state["emailVerificationRequired"],
+            accountActivationStatus=public_state["accountActivationStatus"],
+            resendAllowed=False,
+        )
+
+    role = _role_for_password_flow(body.email, body.role) or profile.get("role", "student")
+    cognito = _get_cognito(settings)
+    client_id = _client_id_for_role(role, settings)
+    try:
+        resp = cognito.resend_confirmation_code(ClientId=client_id, Username=body.email)
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code in ("LimitExceededException", "TooManyRequestsException"):
+            updated = user_repo.update_email_verification_state(
+                profile["user_id"],
+                account_verification_service.resend_limited_fields(_utc_now_iso()),
+            )
+            state = account_verification_service.public_state(updated or profile)
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "verification_resend_limited",
+                    "emailVerificationStatus": state["emailVerificationStatus"],
+                },
+            )
+        if code in ("InvalidParameterException", "UserNotFoundException"):
+            return EmailVerificationResponse(
+                status="accepted",
+                emailVerificationStatus=public_state["emailVerificationStatus"],
+                emailVerificationRequired=public_state["emailVerificationRequired"],
+                accountActivationStatus=public_state["accountActivationStatus"],
+                resendAllowed=False,
+            )
+        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+
+    updated = user_repo.update_email_verification_state(
+        profile["user_id"],
+        account_verification_service.resend_record_fields(profile, _utc_now_iso()),
+    )
+    state = account_verification_service.public_state(updated or profile)
+    return EmailVerificationResponse(
+        status="sent",
+        emailVerificationStatus=state["emailVerificationStatus"],
+        emailVerificationRequired=state["emailVerificationRequired"],
+        accountActivationStatus=state["accountActivationStatus"],
+        resendAllowed=state["resendAllowed"],
+        delivery=resp.get("CodeDeliveryDetails"),
+    )
+
+
+@router.post("/email-verification/confirm", response_model=EmailVerificationResponse)
+async def confirm_email_verification(
+    body: EmailVerificationConfirmRequest,
+    settings: Settings = Depends(get_settings),
+):
+    """Confirm Cognito's sign-up code and activate the local account profile."""
+    profile = user_repo.get_user_by_email(body.email)
+    if not profile:
+        raise HTTPException(status_code=400, detail="Invalid verification request")
+    role = _role_for_password_flow(body.email, body.role) or profile.get("role", "student")
+    cognito = _get_cognito(settings)
+    client_id = _client_id_for_role(role, settings)
+    try:
+        cognito.confirm_sign_up(
+            ClientId=client_id,
+            Username=body.email,
+            ConfirmationCode=body.confirmationCode,
+        )
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code == "ExpiredCodeException":
+            user_repo.update_email_verification_state(
+                profile["user_id"],
+                account_verification_service.expired_fields(_utc_now_iso()),
+            )
+            raise HTTPException(status_code=400, detail="Verification code expired")
+        if code in (
+            "CodeMismatchException",
+            "InvalidParameterException",
+            "NotAuthorizedException",
+            "UserNotFoundException",
+        ):
+            raise HTTPException(status_code=400, detail="Invalid verification request")
+        if code in ("LimitExceededException", "TooManyRequestsException"):
+            raise HTTPException(status_code=429, detail="Verification confirmation rate limit exceeded")
+        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+
+    group_name = {
+        "student": "students",
+        "parent": "parents",
+        "teacher": "teachers",
+        "admin": "admins",
+    }.get(role)
+    if group_name:
+        try:
+            cognito.admin_add_user_to_group(
+                UserPoolId=settings.cognito_user_pool_id,
+                Username=body.email,
+                GroupName=group_name,
+            )
+        except ClientError:
+            pass
+    updated = user_repo.update_email_verification_state(
+        profile["user_id"],
+        account_verification_service.verified_fields(_utc_now_iso()),
+    )
+    state = account_verification_service.public_state(updated or profile)
+    return EmailVerificationResponse(
+        status="confirmed",
+        emailVerificationStatus=state["emailVerificationStatus"],
+        emailVerificationRequired=state["emailVerificationRequired"],
+        accountActivationStatus=state["accountActivationStatus"],
+        resendAllowed=False,
+    )
+
+
+@router.post("/login-code/request", response_model=LoginCodePolicyResponse)
+async def request_login_code(body: LoginCodeRequest):
+    """Explicitly gate passwordless login until a Cognito-compatible flow exists."""
+    return LoginCodePolicyResponse(
+        reason="Passwordless login codes are deferred until Cognito custom auth triggers are configured.",
+    )
+
+
+@router.post("/login-code/confirm", response_model=LoginCodePolicyResponse)
+async def confirm_login_code(body: LoginCodeConfirmRequest):
+    """Explicitly reject placeholder login codes; no production token is minted here."""
+    return LoginCodePolicyResponse(
+        reason="Login code confirmation is deferred and cannot produce Cognito tokens in this backend.",
     )
 
 

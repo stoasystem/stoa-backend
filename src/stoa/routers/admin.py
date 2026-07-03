@@ -36,6 +36,7 @@ from stoa.services import (
     teacher_dispatch_service,
     subscription_service,
     teacher_reply_service,
+    account_verification_service,
     usage_ledger_service,
 )
 
@@ -226,6 +227,22 @@ class ParentStudentBindingRepairRequest(BaseModel):
     student_id: str = Field(..., min_length=1, max_length=200)
     relationship: str = Field(default="child", min_length=1, max_length=50)
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+class AccountVerificationSupportResponse(BaseModel):
+    userId: str
+    email: str
+    role: str
+    emailVerificationStatus: str
+    emailVerificationRequired: bool
+    accountActivationStatus: str
+    emailVerificationPolicy: str
+    emailVerifiedAt: str | None = None
+    emailVerificationRequestedAt: str | None = None
+    emailVerificationLastResendAt: str | None = None
+    emailVerificationResendCount: int = 0
+    resendAllowed: bool = False
+    parentBindingStatus: str | None = None
 
 
 class StatsResponse(BaseModel):
@@ -1279,6 +1296,18 @@ async def preview_usage_reconciliation(
         day=day,
         repair=repair,
     )
+
+
+@router.get("/account-verification/{user_id}", response_model=AccountVerificationSupportResponse)
+async def get_account_verification_support(
+    user_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """Return bounded email verification state for account support."""
+    profile = user_repo.get_user(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User not found")
+    return AccountVerificationSupportResponse(**account_verification_service.support_summary(profile))
 
 
 @router.post("/subscriptions/billing/{parent_id}/refunds", response_model=SubscriptionRefundExecutionResponse)

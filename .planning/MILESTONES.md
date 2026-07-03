@@ -1,16 +1,18 @@
 # Milestones
 
-## Active: v5.8 Email Verification And Login Code Policy
+## v5.8 Email Verification And Login Code Policy (Completed: 2026-07-03)
 
-**Status:** Active planning
+**Status:** Completed local backend release gate 2026-07-03
 **Started:** 2026-07-03
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
+**Roadmap:** `.planning/milestones/v5.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.8-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.8-MILESTONE-AUDIT.md`
+**Phase evidence:** `.planning/milestones/v5.8-phases/`
 **Goal:** Replace placeholder email verification behavior and clarify token-compatible login-code/passwordless policy.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 5 active
-**Release target:** `verification-ready` or `policy-deferred`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `policy-deferred`
 
 Function purpose:
 
@@ -26,13 +28,24 @@ Implementation strategy:
 - Keep raw verification codes and provider secrets out of DynamoDB.
 - Close with focused auth lifecycle tests and release evidence before v5.9 operations visibility.
 
-Planned phases:
+Completed phases:
 
 - Phase 212: Email Verification Contract And Account State Policy.
 - Phase 213: Registration Verification Enforcement.
 - Phase 214: Verification Resend And Expiry Operations.
 - Phase 215: Login Code Policy And Auth Lifecycle Tests.
 - Phase 216: v5.8 Verification Release Gate.
+
+Key accomplishments:
+
+- Replaced backend-admin-marked verification for new registrations with Cognito `sign_up` and `confirm_sign_up` lifecycle.
+- Added explicit verification state, activation status, and public response fields.
+- Blocked registration/login token return while email verification is pending.
+- Added Cognito-compatible resend and confirm operations with cooldown/idempotency, expired-state handling, and bounded admin support visibility.
+- Explicitly deferred login-code/passwordless behavior until Cognito custom auth trigger support exists, with no placeholder token minting.
+- Verified with focused auth lifecycle, entitlement, usage, and Ruff checks.
+
+Known deferred items at close: full parent/admin operations visibility, production deploy/live Cognito smoke, native apps, final live Stripe/TWINT activation, and actual passwordless login-code support.
 
 ---
 

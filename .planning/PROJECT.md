@@ -88,6 +88,8 @@ The completed v5.6 milestone makes paid access real for linked students: parent-
 
 The completed v5.7 milestone makes question usage durable and support-visible: successful quota-governed question submissions now write privacy-safe usage ledger events, can be reconciled with daily counters, and can be summarized for parents/admins without exposing private question content or billing internals.
 
+The completed v5.8 milestone replaces placeholder email verification for new registrations with Cognito sign-up confirmation, enforces verified email before token return, adds resend/expiry/support visibility, and explicitly defers login-code/passwordless behavior until a real Cognito custom-auth flow exists.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -95,8 +97,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.7 Usage Ledger And Quota Reconciliation on 2026-07-03 (usage-ledger-ready backend release gate)
-**Active milestone:** v5.8 Email Verification And Login Code Policy, started 2026-07-03
+**Latest completed milestone:** v5.8 Email Verification And Login Code Policy on 2026-07-03 (policy-deferred backend release gate)
+**Next planned milestone:** v5.9 Parent Admin Operations Visibility
 
 Delivered:
 
@@ -431,24 +433,27 @@ Requirements archive: `.planning/milestones/v5.7-REQUIREMENTS.md`
 - v5.8 Email Verification And Login Code Policy.
 - v5.9 Parent Admin Operations Visibility.
 
-## Active Milestone: v5.8 Email Verification And Login Code Policy
+## Completed Milestone: v5.8 Email Verification And Login Code Policy
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
+Roadmap archive: `.planning/milestones/v5.8-ROADMAP.md`
+Requirements archive: `.planning/milestones/v5.8-REQUIREMENTS.md`
+Audit archive: `.planning/milestones/v5.8-MILESTONE-AUDIT.md`
 
-**Status:** Active planning, started 2026-07-03 after v5.7.
+**Status:** Completed local backend release gate 2026-07-03 with rollout state `policy-deferred`.
 
 **Function purpose:** Replace placeholder or ambiguous account verification behavior with an explicit backend contract for registration, email verification states, resend/expiry handling, and login-code/passwordless policy.
 
 **Implementation strategy:** Define the verification state and route policy first, then enforce it through registration and account lifecycle paths without breaking existing role onboarding or parent/student binding. Add safe resend/expiry behavior and bounded support visibility, then either implement a Cognito-compatible login-code flow or gate/defer unsupported behavior so clients cannot mistake placeholders for production authentication.
 
-**Planned phases:**
+**Completed phases:**
 
 - Phase 212: Email Verification Contract And Account State Policy.
 - Phase 213: Registration Verification Enforcement.
 - Phase 214: Verification Resend And Expiry Operations.
 - Phase 215: Login Code Policy And Auth Lifecycle Tests.
 - Phase 216: v5.8 Verification Release Gate.
+
+**Outcome:** v5.8 added Cognito `sign_up`/`confirm_sign_up` email verification for new registrations, blocked token return until verification is complete, added resend/expired-state handling, exposed bounded admin verification support status, and explicitly deferred login-code/passwordless behavior without minting placeholder tokens. Focused auth lifecycle, entitlement, usage, and Ruff checks passed.
 
 **Follow-up milestone:** v5.9 Parent Admin Operations Visibility will use the verified account lifecycle state as part of broader support-grade visibility for entitlement, billing, usage, and verification.
 
@@ -716,15 +721,17 @@ Milestone v5.7 requirements are complete:
 - USAGE-01: usage visibility and support summaries - Phase 210.
 - VERIFY-40: v5.7 usage ledger release gate - Phase 211.
 
-### Active
-
-Milestone v5.8 requirements are active:
+Milestone v5.8 requirements are complete:
 
 - EMAIL-01: email verification contract and state model - Phase 212.
 - EMAIL-02: registration verification enforcement - Phase 213.
 - EMAIL-03: verification resend and expiry operations - Phase 214.
 - LOGIN-01: login code policy and token compatibility - Phase 215.
 - VERIFY-41: v5.8 verification release gate - Phase 216.
+
+### Active
+
+No active milestone requirements. v5.9 requirements should be created when the next milestone starts.
 
 ### Out of Scope
 
@@ -880,7 +887,7 @@ Known current resources:
 | Start v5.4 frontend learning operations and automation dashboards | v5.2/v5.3 completed backend/API readiness, but the learning operations flows still needed usable frontend review, dashboard, and family explanation surfaces | Complete - frontend-ready release gate passed |
 | Start v5.5 automatic teacher dispatch and SLA load balancing | `stoa_docs` still identifies teacher response time, queue/takeover, multiple-teacher rotation, and timeout reassignment as product concerns; v5.4 closed learning operations UI, so the next buildable support gap is dispatch routing for human help requests | Complete - dispatch-ready release gate passed |
 | Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 focused only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Complete - entitlement-ready release gate passed |
-| Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Active planning |
+| Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
 
 ## Evolution
 

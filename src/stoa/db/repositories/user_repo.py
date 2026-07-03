@@ -43,6 +43,30 @@ def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict
     return resp.get("Attributes", {})
 
 
+def update_email_verification_state(user_id: str, fields: dict) -> dict:
+    """Update bounded email verification metadata on a user profile."""
+    if not fields:
+        return get_user(user_id) or {}
+    table = get_table()
+    update_parts = []
+    attr_names: dict[str, str] = {}
+    attr_values: dict[str, object] = {}
+    for idx, (field, value) in enumerate(fields.items()):
+        name_key = f"#f{idx}"
+        value_key = f":v{idx}"
+        attr_names[name_key] = field
+        attr_values[value_key] = value
+        update_parts.append(f"{name_key} = {value_key}")
+    resp = table.update_item(
+        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
+        UpdateExpression="SET " + ", ".join(update_parts),
+        ExpressionAttributeNames=attr_names,
+        ExpressionAttributeValues=attr_values,
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes", {})
+
+
 def put_parent_student_binding(
     *,
     parent_id: str,
