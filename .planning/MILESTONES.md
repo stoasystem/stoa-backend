@@ -1,5 +1,41 @@
 # Milestones
 
+## Active: v5.7 Usage Ledger And Quota Reconciliation
+
+**Status:** Active planning
+**Started:** 2026-07-03
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Goal:** Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile them with quota counters.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 5 active
+**Release target:** `usage-ledger-ready`
+
+Function purpose:
+
+- Persist durable, privacy-safe usage ledger events for quota-governed actions.
+- Reconcile ledger totals with existing daily quota counters.
+- Preserve v5.6 effective entitlement and current atomic counter behavior.
+- Give parents/customers and admins enough usage explanation for support without building the full v5.9 operations console.
+
+Implementation strategy:
+
+- Define ledger event schema and idempotency before code.
+- Start with student question submissions as the first governed action.
+- Keep the counter path as enforcement and add ledger/reconciliation around it.
+- Expose bounded usage summaries after reconciliation behavior exists.
+
+Planned phases:
+
+- Phase 207: Usage Ledger Contract And Idempotency. (active)
+- Phase 208: Question Usage Ledger Recording.
+- Phase 209: Quota Counter Reconciliation.
+- Phase 210: Usage Visibility And Focused Tests.
+- Phase 211: v5.7 Usage Ledger Release Gate.
+
+---
+
 ## v5.6 Effective Entitlements And Paid Access Enforcement (Completed: 2026-07-03)
 
 **Status:** Completed local backend release gate 2026-07-03
@@ -46,15 +82,6 @@ Key accomplishments:
 - Verified with focused entitlement, question, and subscription operation tests plus Ruff.
 
 Known deferred items at close: durable usage ledger and quota reconciliation, email verification and login-code policy, full parent/admin operations visibility, native apps, and final live Stripe/TWINT activation.
-
----
-
-## Planned: v5.7 Usage Ledger And Quota Reconciliation
-
-**Status:** Planned after v5.6
-**Roadmap:** `.planning/milestones/v5.7-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.7-REQUIREMENTS.md`
-**Goal:** Turn plan-governed usage from counter-only behavior into durable, queryable ledger events and reconcile them with quota counters.
 
 ---
 

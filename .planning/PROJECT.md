@@ -94,7 +94,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.6 Effective Entitlements And Paid Access Enforcement on 2026-07-03 (entitlement-ready backend release gate)
-**Next planned milestone:** v5.7 Usage Ledger And Quota Reconciliation
+**Active milestone:** v5.7 Usage Ledger And Quota Reconciliation (active planning)
 
 Delivered:
 
@@ -382,7 +382,7 @@ Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 Milestone roadmap: `.planning/milestones/v5.6-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.6-REQUIREMENTS.md`
-Phase evidence: `.planning/phases/202-entitlement-contract-and-access-policy/` through `.planning/phases/206-v5-6-entitlement-release-gate/`
+Phase evidence: `.planning/milestones/v5.6-phases/`
 
 **Status:** Completed local backend release gate 2026-07-03 with rollout state `entitlement-ready`.
 
@@ -403,6 +403,30 @@ Phase evidence: `.planning/phases/202-entitlement-contract-and-access-policy/` t
 **Follow-up milestones:**
 
 - v5.7 Usage Ledger And Quota Reconciliation.
+- v5.8 Email Verification And Login Code Policy.
+- v5.9 Parent Admin Operations Visibility.
+
+## Active Milestone: v5.7 Usage Ledger And Quota Reconciliation
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+
+**Status:** Active planning started 2026-07-03 after v5.6 made effective entitlement authoritative for question quota.
+
+**Function purpose:** Turn quota usage from counter-only behavior into durable, queryable usage ledger events and reconcile those events with existing daily quota counters.
+
+**Implementation strategy:** Keep the existing atomic daily counter as the enforcement primitive. Add a privacy-safe usage ledger for quota-governed actions, starting with question submissions, then add repeatable reconciliation and enough parent/admin support visibility to explain usage state. Keep email verification, login-code policy, and the full operations console in v5.8 and v5.9.
+
+**Planned phases:**
+
+- Phase 207: Usage Ledger Contract And Idempotency. (active)
+- Phase 208: Question Usage Ledger Recording.
+- Phase 209: Quota Counter Reconciliation.
+- Phase 210: Usage Visibility And Focused Tests.
+- Phase 211: v5.7 Usage Ledger Release Gate.
+
+**Follow-up milestones:**
+
 - v5.8 Email Verification And Login Code Policy.
 - v5.9 Parent Admin Operations Visibility.
 
@@ -661,6 +685,16 @@ Milestone v2.2 requirements are archived in `.planning/milestones/v2.2-REQUIREME
 - FIXTURE-01: named safe artifact fixture protocol and harness - Phase 58/59.
 - UI-09: admin artifact rollback UI - Phase 60.
 - VERIFY-05: v2.2 release gate and safe fixture verification - Phase 61.
+
+### Active
+
+Milestone v5.7 requirements are active:
+
+- LEDGER-01: usage ledger contract and idempotency - Phase 207.
+- LEDGER-02: question usage ledger recording - Phase 208.
+- RECON-01: quota counter reconciliation - Phase 209.
+- USAGE-01: usage visibility and support summaries - Phase 210.
+- VERIFY-40: v5.7 usage ledger release gate - Phase 211.
 
 ### Out of Scope
 

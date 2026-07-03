@@ -1,141 +1,128 @@
-# Roadmap: v5.6 Effective Entitlements And Paid Access Enforcement
+# Roadmap: v5.7 Usage Ledger And Quota Reconciliation
 
-**Status:** Complete
+**Status:** Active planning
 **Created:** 2026-07-03
-**Research:** `.planning/phases/201-core-product-operations-gap-audit-and-contract/201-CURRENT-REALITY-AUDIT.md`
+**Prior milestone:** v5.6 Effective Entitlements And Paid Access Enforcement
 
 ## Goal
 
-Make paid access actually affect student usage limits through a deterministic effective-entitlement layer.
+Make quota-governed usage durable, queryable, and reconcilable against the existing daily counter behavior.
 
 ## Why This Is Its Own Milestone
 
-This is not a small phase. It is the core revenue/access control path:
+v5.6 made effective entitlement the source of truth for plan-governed access, but usage is still mostly represented by atomic counter rows. That is enough to block over-quota actions, but not enough for support-grade explanations, reconciliation, or reliable future operations visibility.
 
-- A parent can pay or receive a manual override.
-- A child/student is linked to that parent.
-- The student's actual quota and access must reflect the effective paid entitlement.
-- Pending, failed, canceled, expired, missing-binding, and manual override states must behave predictably.
-- Customers and admins need enough visibility to understand why access was allowed or blocked.
-
-Without this milestone, later usage ledger, verification, and admin console work would still be built on an unclear entitlement source.
+v5.7 closes that gap by adding usage ledger events and reconciliation while keeping the current counter path stable.
 
 ## Current Reality
 
-Phase 201 found:
-
-- Billing activation can update the parent profile `subscription_tier`.
-- Student question quota reads the student's own `subscription_tier`.
-- Parent-child binding exists, but quota enforcement does not currently resolve through parent billing.
-- Admin can manually update user `subscription_tier`, but this is not yet represented as a clear entitlement source.
+- Question quota enforcement uses effective entitlement from v5.6.
+- Daily question usage is enforced through atomic counter rows.
+- There is no durable per-use event stream for quota-governed actions.
+- Parent/admin usage visibility cannot yet explain ledger-versus-counter health.
 
 ## Implementation Strategy
 
-- Add an effective entitlement resolver before changing usage counters.
-- Keep current billing, checkout, webhook, and manual subscription flows stable.
-- Make question quota use effective entitlement instead of only local student tier.
-- Preserve explicit fallback behavior for free, pending, canceled, expired, missing-binding, and manual override states.
-- Add enough customer/admin visibility to explain entitlement decisions, but leave the full operations console to v5.9.
-
-## Prerequisite Completed
-
-- [x] **Phase 201: Core Product Operations Gap Audit And Contract** - Completed 2026-07-02.
+- Define the ledger contract and idempotency rules before writing implementation code.
+- Start with question submissions as the first quota-governed ledger event.
+- Keep the existing atomic counter as the enforcement primitive.
+- Add reconciliation as a repeatable read-only report first.
+- Expose enough parent/admin support visibility to explain usage state, while leaving the full operations console to v5.9.
 
 ## Phases
 
-- [x] **Phase 202: Entitlement Contract And Access Policy** - Define effective entitlement inputs, outputs, state precedence, fallback behavior, and test matrix.
-- [x] **Phase 203: Entitlement Resolver Service And Parent Child Mapping** - Implement resolver service using student profile, parent binding, parent profile, billing record, and manual override signals.
-- [x] **Phase 204: Student Paid Access Enforcement** - Integrate resolver into question quota and plan-governed access checks.
-- [x] **Phase 205: Entitlement Visibility And Focused Tests** - Expose effective entitlement summaries to customer/admin surfaces and add focused tests.
-- [x] **Phase 206: v5.6 Entitlement Release Gate** - Close v5.6 with evidence, docs, and v5.7 handoff.
+- [ ] **Phase 207: Usage Ledger Contract And Idempotency** - Define durable usage event schema, privacy boundaries, idempotency keys, write ordering, and reconciliation model.
+- [ ] **Phase 208: Question Usage Ledger Recording** - Record durable usage events for successful question quota increments using the v5.6 effective entitlement snapshot.
+- [ ] **Phase 209: Quota Counter Reconciliation** - Compare ledger event totals with daily counter rows and report safe reconciliation status.
+- [ ] **Phase 210: Usage Visibility And Focused Tests** - Expose parent/admin usage summaries with consumed, limit, remaining, effective plan, and reconciliation state.
+- [ ] **Phase 211: v5.7 Usage Ledger Release Gate** - Close v5.7 with verification evidence, docs, audit, and v5.8 handoff.
 
 ## Phase Details
 
-### Phase 202: Entitlement Contract And Access Policy
+### Phase 207: Usage Ledger Contract And Idempotency
 
-**Goal**: Define the entitlement state model and access policy before implementation.
-**Depends on**: Phase 201 reality audit.
-**Requirements**: ENTITLE-01
+**Goal**: Define the usage ledger state model before implementation.
+**Depends on**: v5.6 effective entitlement resolver.
+**Requirements**: LEDGER-01
 **Success Criteria**:
 
-1. Entitlement inputs are defined: student profile, parent binding, parent subscription tier, billing status, manual override, rollout controls, cancellation/expiry, pending payment.
-2. Entitlement output shape is defined: effective plan, source, limits, billing state, period, blocking reason, support explanation.
-3. Precedence rules are explicit for manual override, active provider billing, pending checkout, canceled/expired, failed payment, free tier, and missing binding.
-4. Access policy covers question quota first and leaves future product areas ready for extension.
-5. Test matrix is documented before backend service implementation.
+1. Usage ledger event schema covers action, quantity, actor/student, parent context, entitlement snapshot, effective plan/source, quota period, counter key, correlation IDs, timestamps, and privacy-safe metadata.
+2. Idempotency rules prevent duplicate consumed-usage rows for retries.
+3. Write ordering relative to the atomic quota counter is explicit.
+4. Privacy boundaries exclude raw learning content, private artifacts, provider secrets, and billing internals.
+5. Reconciliation inputs and expected statuses are documented before code.
 
-### Phase 203: Entitlement Resolver Service And Parent Child Mapping
+### Phase 208: Question Usage Ledger Recording
 
-**Goal**: Implement the backend service that resolves effective entitlement for a student or parent context.
-**Depends on**: Phase 202.
-**Requirements**: ENTITLE-02
+**Goal**: Persist durable ledger events for question usage without destabilizing quota enforcement.
+**Depends on**: Phase 207.
+**Requirements**: LEDGER-02
 **Success Criteria**:
 
-1. Resolver reads the minimum required rows using existing repositories and single-table patterns.
-2. Linked student entitlement can derive from active parent billing or manual override.
-3. Missing or inactive parent binding falls back deterministically.
-4. Resolver returns a stable response shape for internal callers and future API exposure.
-5. Focused tests cover parent-paid linked student, free student, missing binding, manual override, and inactive billing.
+1. Successful question quota increments write durable usage ledger events.
+2. Ledger events include the effective entitlement snapshot used at enforcement time.
+3. Retried or repeated submissions do not double-count usage events.
+4. Quota exhaustion does not create consumed-usage events.
+5. Focused tests cover free, paid, manual override, pending/blocked, idempotency, and quota exhaustion paths.
 
-### Phase 204: Student Paid Access Enforcement
+### Phase 209: Quota Counter Reconciliation
 
-**Goal**: Make real student usage limits depend on effective entitlement.
-**Depends on**: Phase 203.
-**Requirements**: ENTITLE-03
+**Goal**: Make counter-versus-ledger health inspectable and repeatable.
+**Depends on**: Phase 208.
+**Requirements**: RECON-01
 **Success Criteria**:
 
-1. Question submission quota uses resolver output instead of only `student_profile.subscription_tier`.
-2. Limit calculation remains compatible with current settings for free/standard/premium limits.
-3. Failure response includes an actionable plan/limit explanation without exposing billing internals.
-4. Existing daily counter behavior remains stable.
-5. Tests cover quota allow/block for free, standard, premium, canceled, pending, and override states.
+1. Reconciliation compares daily counter rows with ledger event totals by student/action/day.
+2. Reports classify matched, ledger-missing, counter-missing, and count-mismatch states.
+3. Reconciliation defaults to read-only preview/report behavior.
+4. Any repair behavior is deterministic, bounded, and separated from preview.
+5. Tests cover matched counts, missing rows, mismatches, and repeated reconciliation runs.
 
-### Phase 205: Entitlement Visibility And Focused Tests
+### Phase 210: Usage Visibility And Focused Tests
 
-**Goal**: Make entitlement decisions explainable to customers/admins and verify behavior.
-**Depends on**: Phase 204.
-**Requirements**: ENTITLE-04
+**Goal**: Make usage and reconciliation state explainable to parents/customers and admins.
+**Depends on**: Phase 209.
+**Requirements**: USAGE-01
 **Success Criteria**:
 
-1. Parent/customer subscription or account response includes effective entitlement summary.
-2. Admin user or subscription response includes effective entitlement source and support explanation.
-3. Existing billing views remain backward compatible.
-4. Focused tests cover customer/admin response shapes.
-5. Docs record remaining visibility work for the broader v5.9 operations milestone.
+1. Parent/customer usage summary exposes consumed, limit, remaining, effective plan, and reconciliation status for linked students.
+2. Admin/support usage summary exposes usage ledger and reconciliation status without raw question content or billing internals.
+3. Existing subscription and entitlement response shapes remain backward compatible.
+4. Visibility clearly marks partial, stale, or unreconciled ledger data.
+5. Docs keep full operations console scope deferred to v5.9.
 
-### Phase 206: v5.6 Entitlement Release Gate
+### Phase 211: v5.7 Usage Ledger Release Gate
 
-**Goal**: Close v5.6 as a complete functional milestone.
-**Depends on**: Phase 205.
-**Requirements**: VERIFY-39
+**Goal**: Close v5.7 as a complete backend milestone.
+**Depends on**: Phase 210.
+**Requirements**: VERIFY-40
 **Success Criteria**:
 
-1. Entitlement contract, resolver, quota enforcement, visibility, and tests are complete.
-2. Requirements, roadmap, state, feature gap docs, and remaining-feature queue reflect v5.6 completion.
-3. Release evidence identifies commit SHAs and deferred items.
-4. Final audit records rollout state: entitlement-ready, blocked, or deferred.
-5. v5.7 usage ledger milestone handoff is updated.
+1. Ledger contract, recording, reconciliation, visibility, and focused tests are complete.
+2. Requirements, roadmap, state, and milestone history reflect v5.7 completion.
+3. Release evidence identifies commit SHAs, focused tests, lint checks, and residual full-suite status.
+4. Final audit records rollout state: `usage-ledger-ready`, `blocked`, or `deferred`.
+5. v5.8 email verification/login-code handoff is updated.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 201 Core Product Operations Gap Audit And Contract | Pre-v5.6 | 1/1 | Complete | 2026-07-02 |
-| 202 Entitlement Contract And Access Policy | v5.6 | 1/1 | Complete | 2026-07-03 |
-| 203 Entitlement Resolver Service And Parent Child Mapping | v5.6 | 1/1 | Complete | 2026-07-03 |
-| 204 Student Paid Access Enforcement | v5.6 | 1/1 | Complete | 2026-07-03 |
-| 205 Entitlement Visibility And Focused Tests | v5.6 | 1/1 | Complete | 2026-07-03 |
-| 206 v5.6 Entitlement Release Gate | v5.6 | 1/1 | Complete | 2026-07-03 |
+| 207 Usage Ledger Contract And Idempotency | v5.7 | 0/1 | Active | - |
+| 208 Question Usage Ledger Recording | v5.7 | 0/1 | Planned | - |
+| 209 Quota Counter Reconciliation | v5.7 | 0/1 | Planned | - |
+| 210 Usage Visibility And Focused Tests | v5.7 | 0/1 | Planned | - |
+| 211 v5.7 Usage Ledger Release Gate | v5.7 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENTITLE-01 | Phase 202 | Complete |
-| ENTITLE-02 | Phase 203 | Complete |
-| ENTITLE-03 | Phase 204 | Complete |
-| ENTITLE-04 | Phase 205 | Complete |
-| VERIFY-39 | Phase 206 | Complete |
+| LEDGER-01 | Phase 207 | Planned |
+| LEDGER-02 | Phase 208 | Planned |
+| RECON-01 | Phase 209 | Planned |
+| USAGE-01 | Phase 210 | Planned |
+| VERIFY-40 | Phase 211 | Planned |
 
 ---
-*Last updated: 2026-07-03 after v5.6 entitlement release gate.*
+*Last updated: 2026-07-03 after v5.7 milestone initialization.*
