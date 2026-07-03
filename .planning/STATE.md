@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.10
 milestone_name: Account Operations Frontend And Production Readiness
 status: Active
-last_updated: "2026-07-03T20:40:11.000Z"
-last_activity: 2026-07-03 — Completed Phase 222 reality refresh and moved v5.10 to Phase 223 frontend implementation planning
+last_updated: "2026-07-03T21:20:00.000Z"
+last_activity: 2026-07-03 — Completed Phase 223 email verification UX integration and moved v5.10 to Phase 224 parent account operations UI
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-03)
 
 ## Current Position
 
-Phase: 223 Email Verification UX Integration
-Plan: 223-01 Email verification frontend integration plan
+Phase: 224 Parent Account Operations UI
+Plan: —
 Status: Planned
-Last activity: 2026-07-03 — Phase 222 completed; next work is frontend auth verification UX.
+Last activity: 2026-07-03 — Phase 223 completed; next work is parent account operations UI.
 
 ## Accumulated Context
 
@@ -36,6 +36,7 @@ Last activity: 2026-07-03 — Phase 222 completed; next work is frontend auth ve
 - v5.6-v5.9 are complete as local backend milestones.
 - v5.10 is frontend-first: email verification UX, parent account operations UI, admin account operations console, and production read-only readiness.
 - Phase 222 completed the current-reality refresh and corrected stale v5.6-v5.9 planning assumptions.
+- Phase 223 completed frontend email verification resend/confirm clients, register/login verification states, shared verification UI, and focused auth e2e coverage.
 - Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
 - Additional usage ledger action coverage remains future scope after question-submission ledger readiness.
 - Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
@@ -43,7 +44,6 @@ Last activity: 2026-07-03 — Phase 222 completed; next work is frontend auth ve
 
 ### Pending Todos
 
-- Implement Phase 223 email verification UX integration.
 - Implement Phase 224 parent account operations UI.
 - Implement Phase 225 admin account operations console.
 - Close v5.10 through Phase 226 frontend and production readiness gate.
