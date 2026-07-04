@@ -48,7 +48,7 @@ Acceptance criteria:
 
 ### SUPPORT-01 Verification Support Visibility And Recovery
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -59,7 +59,7 @@ Acceptance criteria:
 
 ### VERIFY-48 v5.14 Release Gate
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -90,5 +90,5 @@ Acceptance criteria:
 | AUTHREL-01 | Phase 242 | Complete |
 | VERIFY-01 | Phase 243 | Complete |
 | LOGIN-01 | Phase 244 | Complete |
-| SUPPORT-01 | Phase 245 | Active |
-| VERIFY-48 | Phase 246 | Planned |
+| SUPPORT-01 | Phase 245 | Complete |
+| VERIFY-48 | Phase 246 | Active |

@@ -147,6 +147,36 @@ def resend_allowed(profile: dict[str, Any], now: datetime | None = None) -> bool
     return current - last_resend >= timedelta(seconds=RESEND_COOLDOWN_SECONDS)
 
 
+def support_recovery_state(profile: dict[str, Any]) -> str:
+    status = verification_status(profile)
+    if status in VERIFIED_STATUSES:
+        return "verified"
+    if status == STATUS_EXPIRED:
+        return "expired_code"
+    if status == STATUS_RESEND_LIMITED:
+        return "resend_limited"
+    if status == STATUS_BLOCKED:
+        return "blocked"
+    if not email_verification_required(profile):
+        return "verification_not_required"
+    if resend_allowed(profile):
+        return "resend_available"
+    return "resend_cooldown"
+
+
+def support_action(profile: dict[str, Any]) -> str:
+    state = support_recovery_state(profile)
+    return {
+        "verified": "none",
+        "verification_not_required": "none",
+        "expired_code": "resend_verification_code",
+        "resend_limited": "contact_support",
+        "blocked": "contact_support",
+        "resend_available": "resend_verification_code",
+        "resend_cooldown": "wait_for_resend_cooldown",
+    }.get(state, "review_account_verification")
+
+
 def binding_status_for_profiles(
     new_profile: dict[str, Any],
     existing_profile: dict[str, Any] | None,
@@ -160,6 +190,7 @@ def binding_status_for_profiles(
 
 def public_state(profile: dict[str, Any]) -> dict[str, Any]:
     status = verification_status(profile)
+    allowed = resend_allowed(profile) and status not in VERIFIED_STATUSES
     return {
         "emailVerificationStatus": status,
         "emailVerificationRequired": email_verification_required(profile),
@@ -172,7 +203,9 @@ def public_state(profile: dict[str, Any]) -> dict[str, Any]:
         "emailVerificationRequestedAt": profile.get("email_verification_requested_at"),
         "emailVerificationLastResendAt": profile.get("email_verification_last_resend_at"),
         "emailVerificationResendCount": int(profile.get("email_verification_resend_count") or 0),
-        "resendAllowed": resend_allowed(profile) and status not in VERIFIED_STATUSES,
+        "resendAllowed": allowed,
+        "supportRecoveryState": support_recovery_state(profile),
+        "supportAction": support_action(profile),
     }
 
 

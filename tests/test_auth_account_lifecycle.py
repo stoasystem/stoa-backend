@@ -558,6 +558,8 @@ def test_admin_can_inspect_account_verification_status(monkeypatch):
     assert body["accountActivationStatus"] == "pending_email_verification"
     assert body["emailVerificationPolicy"] == "cognito_sign_up_confirm_sign_up"
     assert body["parentBindingStatus"] == "active_pending_verification"
+    assert body["supportRecoveryState"] == "expired_code"
+    assert body["supportAction"] == "resend_verification_code"
 
 
 def test_forgot_password_is_enumeration_safe_for_unknown_email(monkeypatch):

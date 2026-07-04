@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.14
 milestone_name: Verification And Login Reliability
 status: active
-last_updated: "2026-07-05T00:45:00.000Z"
-last_activity: 2026-07-05 — Phase 244 login-code/passwordless policy completed; Phase 245 support visibility active
+last_updated: "2026-07-05T01:10:00.000Z"
+last_activity: 2026-07-05 — Phase 245 verification recovery support visibility completed; Phase 246 release gate active
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 245 Frontend Verification Recovery And Admin Support Visibility
-Plan: Improve bounded verification recovery state in support/admin surfaces.
+Phase: 246 v5.14 Verification Login Reliability Gate
+Plan: Run final backend/frontend evidence checks and close v5.14 with blocked live-smoke notes.
 Status: Active
-Last activity: 2026-07-05 — Phase 244 confirmed frontend has no passwordless/login-code product path and backend login-code endpoints remain deferred/no-token.
+Last activity: 2026-07-05 — Phase 245 added bounded verification recovery state/action to backend support views and frontend account operations visibility.
 
 ## Accumulated Context
 
@@ -52,13 +52,14 @@ Last activity: 2026-07-05 — Phase 244 confirmed frontend has no passwordless/l
 - Phase 242 is complete: backend Cognito sign-up confirmation, local verification state, resend/confirm endpoints, token-return blocking, frontend verification screens, admin/account-operations support views, login-code deferral, demo-only fallback boundaries, and externally blocked live-smoke evidence are documented.
 - Phase 243 is complete: backend auth now handles idempotent confirm, stale Cognito-already-confirmed local repair, disabled account login/resend, and structured verification errors; `.venv/bin/pytest tests/test_auth_account_lifecycle.py` and Ruff passed.
 - Phase 244 is complete: email/password plus verified email is the canonical product login path; passwordless/login-code remains deferred, frontend has no product login-code path, and backend tests assert deferred/no-token responses.
+- Phase 245 is complete: backend verification public state now includes supportRecoveryState/supportAction, admin verification responses expose them, parent/admin account operations render recovery evidence, frontend build passed, and frontend commit `f2e96df` contains the UI change.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 245 Frontend Verification Recovery And Admin Support Visibility.
+- Execute Phase 246 v5.14 Verification Login Reliability Gate.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns

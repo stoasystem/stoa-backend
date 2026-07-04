@@ -345,6 +345,8 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
     assert body["children"][0]["entitlement"]["effectivePlan"] == "premium"
     assert body["children"][0]["usage"]["consumed"] == 2
     assert body["parent"]["verification"]["emailVerificationStatus"] == "verified"
+    assert body["parent"]["verification"]["supportRecoveryState"] == "verified"
+    assert body["parent"]["verification"]["supportAction"] == "none"
     assert body["supportState"]["state"] == "ready"
 
 
@@ -373,7 +375,12 @@ def test_admin_account_operations_surfaces_attention_state(monkeypatch):
     body = response.json()
     assert body["parentId"] == "parent-1"
     assert body["billing"]["events"] == []
+    assert body["parent"]["verification"]["resendAllowed"] is True
+    assert body["parent"]["verification"]["supportRecoveryState"] == "resend_available"
+    assert body["parent"]["verification"]["supportAction"] == "resend_verification_code"
     assert body["children"][0]["binding"]["status"] == "active_pending_verification"
+    assert body["children"][0]["profile"]["verification"]["supportRecoveryState"] == "expired_code"
+    assert body["children"][0]["profile"]["verification"]["supportAction"] == "resend_verification_code"
     assert "parent_email_unverified" in body["supportState"]["blockers"]
     assert "child_email_unverified" in body["supportState"]["warnings"]
     assert "child_binding_active_pending_verification" in body["supportState"]["warnings"]

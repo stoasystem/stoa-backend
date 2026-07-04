@@ -248,6 +248,8 @@ class AccountVerificationSupportResponse(BaseModel):
     emailVerificationLastResendAt: str | None = None
     emailVerificationResendCount: int = 0
     resendAllowed: bool = False
+    supportRecoveryState: str
+    supportAction: str
     parentBindingStatus: str | None = None
 
 
