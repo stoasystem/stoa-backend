@@ -98,6 +98,60 @@ def _install_learning_sources(monkeypatch):
             ]
         },
     )
+
+
+def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
+    _snapshots, assignments = _install_memory_repo(monkeypatch)
+    ledger_calls = []
+    monkeypatch.setattr(
+        adaptive_learning_service,
+        "_assignment_source",
+        lambda source_type, source_id, student_id, user: {
+            "sourceType": source_type,
+            "title": "Linear practice",
+            "subject": "math",
+            "topicIds": ["algebra"],
+            "lessonId": "lesson-1",
+            "exerciseId": source_id,
+            "items": [{"prompt": "private prompt"}],
+            "answerKey": [{"answer": "private answer"}],
+            "rationale": "private rationale",
+        },
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.curriculum_analytics_service,
+        "record_assignment_started",
+        lambda item: None,
+    )
+
+    created = adaptive_learning_service.create_assignment(
+        student_id="student-1",
+        source_type="curriculum_exercise",
+        source_id="exercise-1",
+        user={"sub": "tutor-1", "role": "tutor"},
+        status="assigned",
+    )
+    assignment_id = created["assignmentId"]
+
+    started = adaptive_learning_service.transition_assignment(
+        assignment_id=assignment_id,
+        action="start",
+        user={"sub": "student-1", "role": "student"},
+    )
+
+    assert started["status"] == "started"
+    assert ledger_calls[0]["action"] == "reviewed_assignment_generation"
+    assert ledger_calls[0]["metadata"]["assignment_id"] == assignment_id
+    assert ledger_calls[1]["action"] == "assignment_started"
+    assert ledger_calls[1]["metadata"]["status"] == "started"
+    assert assignment_id in assignments
+    assert "private prompt" not in str(ledger_calls)
+    assert "private answer" not in str(ledger_calls)
     monkeypatch.setattr(
         adaptive_learning_service.practice_repo,
         "get_mistakes",

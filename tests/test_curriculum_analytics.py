@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
 from stoa.routers import admin, practice
-from stoa.services import adaptive_learning_service, curriculum_analytics_service
+from stoa.services import adaptive_learning_service, curriculum_analytics_service, rate_limit
 
 
 def _app_for_user(user: dict, *, include_admin: bool = False) -> FastAPI:
@@ -80,6 +80,107 @@ def test_lesson_completion_records_aggregate_signal(monkeypatch):
     assert state["signals"][0]["signal_type"] == "lesson_completed"
     assert state["signals"][0]["public_id"] == "lesson-1"
     assert state["signals"][0]["content_type"] == "lesson"
+
+
+def test_practice_answer_records_usage_ledger_without_raw_answer(monkeypatch):
+    _install_analytics_repo(monkeypatch)
+    ledger_calls = []
+    challenge = {
+        "challenge_id": "exercise-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "prompt": "Solve x + 1 = 2",
+        "correct_answer": "x = 1",
+    }
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [dict(challenge)])
+    monkeypatch.setattr(practice.practice_repo, "record_attempt", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        practice.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    response = TestClient(_app_for_user({"sub": "student-1", "role": "student"})).post(
+        "/practice/challenges/exercise-1/answer",
+        json={"answer": "x = 3"},
+    )
+
+    assert response.status_code == 200
+    assert ledger_calls[0]["action"] == "practice_answer"
+    assert ledger_calls[0]["metadata"]["attempt_result"] == "incorrect"
+    assert "x = 3" not in str(ledger_calls[0])
+    assert "x = 1" not in str(ledger_calls[0])
+
+
+def test_lesson_completion_records_usage_ledger(monkeypatch):
+    _install_analytics_repo(monkeypatch)
+    ledger_calls = []
+    lesson = {
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "unit_id": "unit-1",
+        "order": 1,
+    }
+    monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda lesson_id: dict(lesson))
+    monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
+    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}])
+    monkeypatch.setattr(
+        practice.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    response = TestClient(_app_for_user({"sub": "student-1", "role": "student"})).post(
+        "/practice/lessons/lesson-1/complete"
+    )
+
+    assert response.status_code == 200
+    assert ledger_calls[0]["action"] == "practice_lesson_completion"
+    assert ledger_calls[0]["metadata"]["lesson_id"] == "lesson-1"
+    assert ledger_calls[0]["metadata"]["status"] == "completed"
+
+
+def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
+    ledger_calls = []
+    challenge = {
+        "challenge_id": "exercise-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "hint": "Try subtracting 1.",
+    }
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
+    monkeypatch.setattr(
+        rate_limit,
+        "check_and_record_hint",
+        lambda student_id, challenge_id: {
+            "quotaPeriod": "2026-07-04",
+            "counterKey": "USAGE#student-1/HINT#2026-07-04",
+            "counterValue": 1,
+            "limit": 10,
+            "expiresAt": 1,
+        },
+    )
+    monkeypatch.setattr(
+        practice.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    response = TestClient(_app_for_user({"sub": "student-1", "role": "student"})).post(
+        "/practice/hints",
+        json={"challengeId": "exercise-1"},
+    )
+
+    assert response.status_code == 200
+    assert ledger_calls[0]["action"] == "hint_request"
+    assert ledger_calls[0]["counter_value"] == 1
+    assert ledger_calls[0]["metadata"]["challenge_id"] == "exercise-1"
+    assert "Try subtracting" not in str(ledger_calls[0])
 
 
 def test_adaptive_assignment_transitions_record_content_quality_signals(monkeypatch):

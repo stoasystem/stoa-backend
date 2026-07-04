@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_current_user, require_role
-from stoa.services import curriculum_analytics_service, curriculum_service
+from stoa.services import curriculum_analytics_service, curriculum_service, usage_ledger_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -484,6 +484,18 @@ async def complete_lesson(
 
     practice_repo.mark_lesson_completed(user["sub"], lesson)
     curriculum_analytics_service.record_lesson_completed(student_id=user["sub"], lesson=lesson)
+    _record_practice_usage(
+        student_id=user["sub"],
+        action=usage_ledger_service.PRACTICE_LESSON_COMPLETION_ACTION,
+        resource_id=lesson_id,
+        metadata={
+            "lesson_id": lesson_id,
+            "subject": lesson.get("subject_id"),
+            "topic_id": lesson.get("topic_id"),
+            "unit_id": lesson.get("unit_id"),
+            "status": "completed",
+        },
+    )
     all_lessons = sorted(
         practice_repo.get_lessons(topic_id=lesson.get("topic_id")),
         key=lambda x: x.get("order", 0),
@@ -546,6 +558,19 @@ async def submit_answer(
         topic_id=challenge.get("topic_id", ""),
         lesson_id=lesson_id,
     )
+    _record_practice_usage(
+        student_id=user_id,
+        action=usage_ledger_service.PRACTICE_ANSWER_ACTION,
+        resource_id=challenge_id,
+        metadata={
+            "challenge_id": challenge_id,
+            "lesson_id": lesson_id,
+            "subject": challenge.get("subject_id"),
+            "topic_id": challenge.get("topic_id"),
+            "attempt_result": "correct" if correct else "incorrect",
+            "status": "submitted",
+        },
+    )
 
     feedback = (
         challenge.get("correct_feedback") if correct
@@ -595,7 +620,7 @@ async def get_hint(body: dict, user: dict = Depends(require_role("student"))):
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
-    check_and_record_hint(user["sub"], challenge_id)
+    usage_counter = check_and_record_hint(user["sub"], challenge_id)
 
     hint = challenge.get("hint", "")
     if not hint:
@@ -612,6 +637,20 @@ async def get_hint(body: dict, user: dict = Depends(require_role("student"))):
         if not hint:
             hint = "Schau dir die Grundregeln für dieses Thema noch einmal an."
 
+    _record_practice_usage(
+        student_id=user["sub"],
+        action=usage_ledger_service.HINT_REQUEST_ACTION,
+        resource_id=challenge_id,
+        usage_counter=usage_counter,
+        metadata={
+            "challenge_id": challenge_id,
+            "lesson_id": challenge.get("lesson_id"),
+            "subject": challenge.get("subject_id"),
+            "topic_id": challenge.get("topic_id"),
+            "status": "returned",
+        },
+    )
+
     return {
         "title": "Hinweis",
         "hint": hint,
@@ -627,3 +666,31 @@ async def request_teacher_help(body: dict, user: dict = Depends(require_role("st
         "status": "ready",
         "message": "Ein Lehrer wird sich deine Aufgabe ansehen.",
     }
+
+
+def _record_practice_usage(
+    *,
+    student_id: str,
+    action: str,
+    resource_id: str,
+    metadata: dict[str, Any],
+    usage_counter: dict | None = None,
+) -> None:
+    try:
+        usage_ledger_service.record_usage_event(
+            student_id=student_id,
+            action=action,
+            quota_period=(usage_counter or {}).get("quotaPeriod") or usage_ledger_service.today_period(),
+            idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+                action=action,
+                resource_id=resource_id,
+                qualifier=student_id,
+            ),
+            counter_key=(usage_counter or {}).get("counterKey"),
+            counter_value=(usage_counter or {}).get("counterValue"),
+            request_correlation_id=resource_id,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            metadata=metadata,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Practice usage ledger write failed", exc_info=True)

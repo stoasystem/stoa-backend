@@ -24,6 +24,7 @@ from stoa.services import (
     curriculum_service,
     learning_profile_service,
     locale_service,
+    usage_ledger_service,
 )
 
 
@@ -110,6 +111,7 @@ def create_assignment(
         note=note,
     )
     adaptive_learning_repo.put_assignment(item)
+    _record_assignment_generation_usage(item)
     return assignment_response(item, user=user)
 
 
@@ -437,6 +439,7 @@ def transition_assignment(
             curriculum_analytics_service.record_assignment_skipped(updated)
         elif side_effect == "archived":
             curriculum_analytics_service.record_assignment_archived(updated)
+        _record_assignment_transition_usage(updated, side_effect=side_effect, transition_token=transition_token)
     return assignment_response(updated, user=user)
 
 
@@ -460,6 +463,83 @@ def parent_progress_signal(student_id: str, user: dict[str, Any]) -> dict[str, A
         "completedAssignments": completed[:5],
         "locale": locale_contract(user),
     }
+
+
+def _record_assignment_generation_usage(item: dict[str, Any]) -> None:
+    try:
+        assignment_id = str(item.get("assignment_id") or "")
+        if not assignment_id:
+            return
+        usage_ledger_service.record_usage_event(
+            student_id=str(item.get("student_id") or ""),
+            action=usage_ledger_service.REVIEWED_ASSIGNMENT_GENERATION_ACTION,
+            quota_period=usage_ledger_service.today_period(),
+            idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+                action=usage_ledger_service.REVIEWED_ASSIGNMENT_GENERATION_ACTION,
+                resource_id=assignment_id,
+            ),
+            request_correlation_id=assignment_id,
+            created_at=str(item.get("created_at") or now_iso()),
+            metadata={
+                "assignment_id": assignment_id,
+                "source_type": item.get("source_type"),
+                "source": item.get("source_type"),
+                "resource_id": item.get("source_id"),
+                "subject": item.get("subject"),
+                "lesson_id": item.get("lesson_id"),
+                "exercise_id": item.get("exercise_id"),
+                "status": item.get("status"),
+                "batch_id": item.get("automation_batch_id"),
+                "candidate_id": item.get("automation_candidate_id"),
+                "policy_id": item.get("automation_policy_id"),
+                "delivery_state": item.get("delivery_state"),
+            },
+        )
+    except Exception:  # noqa: BLE001
+        return
+
+
+def _record_assignment_transition_usage(
+    item: dict[str, Any],
+    *,
+    side_effect: str,
+    transition_token: str,
+) -> None:
+    action_by_effect = {
+        "started": usage_ledger_service.ASSIGNMENT_STARTED_ACTION,
+        "completed": usage_ledger_service.ASSIGNMENT_COMPLETED_ACTION,
+        "skipped": usage_ledger_service.ASSIGNMENT_SKIPPED_ACTION,
+        "archived": usage_ledger_service.ASSIGNMENT_ARCHIVED_ACTION,
+    }
+    action = action_by_effect.get(side_effect)
+    assignment_id = str(item.get("assignment_id") or "")
+    if not action or not assignment_id:
+        return
+    try:
+        usage_ledger_service.record_usage_event(
+            student_id=str(item.get("student_id") or ""),
+            action=action,
+            quota_period=usage_ledger_service.today_period(),
+            idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+                action=action,
+                resource_id=assignment_id,
+                qualifier=transition_token,
+            ),
+            request_correlation_id=assignment_id,
+            created_at=str(item.get(f"{side_effect}_at") or item.get("updated_at") or now_iso()),
+            metadata={
+                "assignment_id": assignment_id,
+                "source_type": item.get("source_type"),
+                "source": item.get("source_type"),
+                "resource_id": item.get("source_id"),
+                "subject": item.get("subject"),
+                "lesson_id": item.get("lesson_id"),
+                "exercise_id": item.get("exercise_id"),
+                "status": item.get("status"),
+            },
+        )
+    except Exception:  # noqa: BLE001
+        return
 
 
 def locale_contract(user: dict[str, Any]) -> dict[str, Any]:
@@ -797,6 +877,7 @@ def _execute_assignment_automation_candidate(
             "assignment": assignment_response(stored, user=user),
         }
 
+    _record_assignment_generation_usage(stored)
     result_status = _automation_delivery_state(candidate["proposedStatus"])
     return {
         **base,

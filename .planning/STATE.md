@@ -7,10 +7,10 @@ last_updated: "2026-07-04T16:10:00.000Z"
 last_activity: 2026-07-04
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-04)
 
 ## Current Position
 
-Phase: 229 Practice And Generation Ledger Instrumentation
+Phase: 230 Multi-Action Reconciliation And Account Operations Summaries
 Plan: —
 Status: Planned
-Last activity: 2026-07-04 — Phase 228 completed
+Last activity: 2026-07-04 — Phase 229 completed
 
 ## Accumulated Context
 
@@ -43,6 +43,7 @@ Last activity: 2026-07-04 — Phase 228 completed
 - v5.11 is planned as five phases: action taxonomy, chat/teacher-help instrumentation, practice/generation instrumentation, multi-action reconciliation/account operations summaries, and privacy release gate.
 - Phase 227 completed centralized usage action taxonomy, idempotency helpers, privacy flags, and safe metadata filtering.
 - Phase 228 completed generic non-question ledger writes and instrumentation for chat messages, question teacher-help, and conversation teacher-help.
+- Phase 229 completed support-visible ledger events for hints, practice answers, lesson completion, reviewed assignment generation, and assignment lifecycle side effects.
 - Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
 - Additional usage ledger action coverage should preserve existing question quota counter behavior and extend durable events only for governed successful actions.
 - Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
@@ -50,8 +51,8 @@ Last activity: 2026-07-04 — Phase 228 completed
 
 ### Pending Todos
 
-- Plan Phase 229 Practice And Generation Ledger Instrumentation.
-- Instrument eligible hint, practice, lesson, assignment, and generation flows.
+- Plan Phase 230 Multi-Action Reconciliation And Account Operations Summaries.
+- Extend usage summaries and account operations payloads across multiple ledger action groups.
 
 ### Blockers/Concerns
 
@@ -61,4 +62,4 @@ Last activity: 2026-07-04 — Phase 228 completed
 
 ## Operator Next Steps
 
-- Recommended next step: run `$gsd-plan-phase 229` for Practice And Generation Ledger Instrumentation.
+- Recommended next step: run `$gsd-plan-phase 230` for Multi-Action Reconciliation And Account Operations Summaries.
