@@ -32,8 +32,8 @@ def _admin_client() -> TestClient:
     return TestClient(app)
 
 
-def _client_error(code: str) -> ClientError:
-    return ClientError({"Error": {"Code": code, "Message": code}}, "Cognito")
+def _client_error(code: str, message: str | None = None) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": message or code}}, "Cognito")
 
 
 class FakeCognito:
@@ -343,8 +343,172 @@ def test_confirm_email_verification_marks_expired_code(monkeypatch):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Verification code expired"
+    assert response.json()["detail"]["code"] == "verification_code_expired"
+    assert response.json()["detail"]["message"] == "Verification code expired"
     assert updates[0][1]["email_verification_status"] == "expired_verification"
+
+
+def test_confirm_email_verification_is_idempotent_for_locally_verified_profile(monkeypatch):
+    fake = FakeCognito()
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "email": "student@example.com",
+        "email_verification_status": "verified",
+        "email_verification_required": False,
+    }
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "123456"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "already_verified"
+    assert response.json()["emailVerificationStatus"] == "verified"
+    assert fake.calls == []
+
+
+def test_confirm_email_verification_repairs_local_state_when_cognito_already_confirmed(monkeypatch):
+    class AlreadyConfirmedCognito(FakeCognito):
+        def confirm_sign_up(self, **kwargs):
+            raise _client_error("NotAuthorizedException", "User cannot be confirmed. Current status is CONFIRMED")
+
+    updates = []
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "email": "student@example.com",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    }
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: AlreadyConfirmedCognito())
+    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda user_id, fields: updates.append((user_id, fields)) or {**profile, **fields},
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "123456"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "already_verified"
+    assert response.json()["emailVerificationStatus"] == "verified"
+    assert updates[0][1]["email_verification_status"] == "verified"
+
+
+def test_confirm_email_verification_normalizes_wrong_code(monkeypatch):
+    class WrongCodeCognito(FakeCognito):
+        def confirm_sign_up(self, **kwargs):
+            raise _client_error("CodeMismatchException")
+
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: WrongCodeCognito())
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "bad"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "verification_code_invalid"
+
+
+def test_confirm_email_verification_normalizes_rate_limit(monkeypatch):
+    class LimitedCognito(FakeCognito):
+        def confirm_sign_up(self, **kwargs):
+            raise _client_error("TooManyRequestsException")
+
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: LimitedCognito())
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/confirm",
+        json={"email": "student@example.com", "confirmationCode": "123456"},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "verification_confirmation_limited"
+
+
+def test_login_disabled_account_returns_support_safe_error(monkeypatch):
+    class DisabledCognito(FakeCognito):
+        def initiate_auth(self, **kwargs):
+            raise _client_error("UserDisabledException")
+
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: DisabledCognito())
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "verified",
+            "email_verification_required": False,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/login",
+        json={"email": "student@example.com", "password": "ValidPass123!"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "account_disabled"
+
+
+def test_resend_disabled_account_returns_support_safe_error(monkeypatch):
+    class DisabledCognito(FakeCognito):
+        def resend_confirmation_code(self, **kwargs):
+            raise _client_error("UserDisabledException")
+
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: DisabledCognito())
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        },
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "student@example.com"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "account_disabled"
 
 
 def test_login_code_policy_is_deferred_without_tokens():

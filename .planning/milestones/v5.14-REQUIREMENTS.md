@@ -26,7 +26,7 @@ Acceptance criteria:
 
 ### VERIFY-01 Email Verification Resend Confirm Reliability
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -37,7 +37,7 @@ Acceptance criteria:
 
 ### LOGIN-01 Canonical Login Code And Passwordless Policy
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -88,7 +88,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | AUTHREL-01 | Phase 242 | Complete |
-| VERIFY-01 | Phase 243 | Active |
-| LOGIN-01 | Phase 244 | Planned |
+| VERIFY-01 | Phase 243 | Complete |
+| LOGIN-01 | Phase 244 | Active |
 | SUPPORT-01 | Phase 245 | Planned |
 | VERIFY-48 | Phase 246 | Planned |

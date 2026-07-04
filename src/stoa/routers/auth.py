@@ -510,6 +510,14 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
                     "message": "Email verification is required before login.",
                 },
             )
+        if code == "UserDisabledException":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "account_disabled",
+                    "message": "This account is disabled. Contact support.",
+                },
+            )
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
@@ -589,6 +597,15 @@ async def resend_email_verification(
                     "emailVerificationStatus": state["emailVerificationStatus"],
                 },
             )
+        if code == "UserDisabledException":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "account_disabled",
+                    "message": "This account is disabled. Contact support.",
+                    "emailVerificationStatus": public_state["emailVerificationStatus"],
+                },
+            )
         if code in ("InvalidParameterException", "UserNotFoundException"):
             return EmailVerificationResponse(
                 status="accepted",
@@ -622,7 +639,22 @@ async def confirm_email_verification(
     """Confirm Cognito's sign-up code and activate the local account profile."""
     profile = user_repo.get_user_by_email(body.email)
     if not profile:
-        raise HTTPException(status_code=400, detail="Invalid verification request")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "verification_request_invalid",
+                "message": "Invalid verification request",
+            },
+        )
+    if account_verification_service.is_email_verified(profile):
+        state = account_verification_service.public_state(profile)
+        return EmailVerificationResponse(
+            status="already_verified",
+            emailVerificationStatus=state["emailVerificationStatus"],
+            emailVerificationRequired=state["emailVerificationRequired"],
+            accountActivationStatus=state["accountActivationStatus"],
+            resendAllowed=False,
+        )
     role = _role_for_password_flow(body.email, body.role) or profile.get("role", "student")
     cognito = _get_cognito(settings)
     client_id = _client_id_for_role(role, settings)
@@ -634,21 +666,61 @@ async def confirm_email_verification(
         )
     except ClientError as e:
         code = e.response["Error"]["Code"]
+        message = str(e.response["Error"].get("Message") or "")
+        if code == "NotAuthorizedException" and "CONFIRMED" in message.upper():
+            updated = user_repo.update_email_verification_state(
+                profile["user_id"],
+                account_verification_service.verified_fields(_utc_now_iso()),
+            )
+            state = account_verification_service.public_state(updated or profile)
+            return EmailVerificationResponse(
+                status="already_verified",
+                emailVerificationStatus=state["emailVerificationStatus"],
+                emailVerificationRequired=state["emailVerificationRequired"],
+                accountActivationStatus=state["accountActivationStatus"],
+                resendAllowed=False,
+            )
         if code == "ExpiredCodeException":
             user_repo.update_email_verification_state(
                 profile["user_id"],
                 account_verification_service.expired_fields(_utc_now_iso()),
             )
-            raise HTTPException(status_code=400, detail="Verification code expired")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "verification_code_expired",
+                    "message": "Verification code expired",
+                },
+            )
         if code in (
             "CodeMismatchException",
             "InvalidParameterException",
             "NotAuthorizedException",
             "UserNotFoundException",
         ):
-            raise HTTPException(status_code=400, detail="Invalid verification request")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "verification_code_invalid",
+                    "message": "Invalid verification request",
+                },
+            )
+        if code == "UserDisabledException":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "account_disabled",
+                    "message": "This account is disabled. Contact support.",
+                },
+            )
         if code in ("LimitExceededException", "TooManyRequestsException"):
-            raise HTTPException(status_code=429, detail="Verification confirmation rate limit exceeded")
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "code": "verification_confirmation_limited",
+                    "message": "Verification confirmation rate limit exceeded",
+                },
+            )
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
     group_name = {

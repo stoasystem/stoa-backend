@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.14
 milestone_name: Verification And Login Reliability
 status: active
-last_updated: "2026-07-05T00:10:00.000Z"
-last_activity: 2026-07-05 — Phase 242 verification/login reality audit completed; Phase 243 backend reliability active
+last_updated: "2026-07-05T00:30:00.000Z"
+last_activity: 2026-07-05 — Phase 243 backend verification reliability completed; Phase 244 login-code policy active
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 243 Backend Verification Resend Confirm Reliability
-Plan: Add backend resend/confirm/login reliability coverage and state consistency fixes.
+Phase: 244 Login Code And Passwordless Policy Resolution
+Plan: Lock login-code/passwordless as deferred or hidden unless real Cognito custom auth exists.
 Status: Active
-Last activity: 2026-07-05 — Phase 242 mapped current Cognito/local/frontend/support verification behavior and defined the canonical v5.14 policy contract.
+Last activity: 2026-07-05 — Phase 243 hardened backend confirm/resend/login reliability and added focused auth lifecycle tests.
 
 ## Accumulated Context
 
@@ -50,13 +50,14 @@ Last activity: 2026-07-05 — Phase 242 mapped current Cognito/local/frontend/su
 - Phase 241 is complete: backend tests/Ruff, frontend build/lint, and focused billing e2e passed; live Stripe/TWINT smoke remains blocked on external credentials, webhook endpoint, finance acceptance, and rollout approval.
 - v5.14 is active: verification/login reliability must audit Cognito/local/frontend behavior first, then harden resend/confirm/login policy, resolve half-enabled login-code behavior, add support visibility, and close with local release evidence.
 - Phase 242 is complete: backend Cognito sign-up confirmation, local verification state, resend/confirm endpoints, token-return blocking, frontend verification screens, admin/account-operations support views, login-code deferral, demo-only fallback boundaries, and externally blocked live-smoke evidence are documented.
+- Phase 243 is complete: backend auth now handles idempotent confirm, stale Cognito-already-confirmed local repair, disabled account login/resend, and structured verification errors; `.venv/bin/pytest tests/test_auth_account_lifecycle.py` and Ruff passed.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 243 Backend Verification Resend Confirm Reliability.
+- Execute Phase 244 Login Code And Passwordless Policy Resolution.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
