@@ -63,7 +63,7 @@ Planning evidence:
 ## Phases
 
 - [x] **Phase 232: Curriculum Buildout Reality Refresh And Contract** - Reconcile v5.1 deferred implementation, current backend/frontend code, `stoa_docs`, and v5.12 scope.
-- [ ] **Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs** - Implement backend special-authorization model, draft patch/update, structured validation preview, content diff, audit-read, and focused tests.
+- [x] **Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs** - Implement backend special-authorization model, draft patch/update, structured validation preview, content diff, audit-read, and focused tests.
 - [ ] **Phase 234: Backend Content Migration Service And APIs** - Implement manifest parsing, dry-run, apply, evidence, conflict reporting, rollback metadata, and tests.
 - [ ] **Phase 235: Frontend Curriculum Editor And Migration Console** - Implement authorized curriculum operator workbench, review/preview/diff UX, migration dry-run/apply console, and focused e2e.
 - [ ] **Phase 236: v5.12 Curriculum Buildout Release Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
@@ -151,8 +151,8 @@ The next milestones after v5.12 should be new buildable feature, safety, or stab
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 232 Curriculum Buildout Reality Refresh And Contract | v5.12 | 1/1 | Complete | 2026-07-05 |
-| 233 Backend Special Authorization Editor Patch Validation Diff And Audit APIs | v5.12 | 0/1 | Active | - |
-| 234 Backend Content Migration Service And APIs | v5.12 | 0/1 | Planned | - |
+| 233 Backend Special Authorization Editor Patch Validation Diff And Audit APIs | v5.12 | 1/1 | Complete | 2026-07-05 |
+| 234 Backend Content Migration Service And APIs | v5.12 | 0/1 | Active | - |
 | 235 Frontend Curriculum Editor And Migration Console | v5.12 | 0/1 | Planned | - |
 | 236 v5.12 Curriculum Buildout Release Gate | v5.12 | 0/1 | Planned | - |
 
@@ -161,7 +161,7 @@ The next milestones after v5.12 should be new buildable feature, safety, or stab
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CURRBUILD-01 | Phase 232 | Complete |
-| CURRBUILD-02 | Phase 233 | Planned |
+| CURRBUILD-02 | Phase 233 | Complete |
 | CURRBUILD-03 | Phase 234 | Planned |
 | CURRBUILD-04 | Phase 235 | Planned |
 | VERIFY-45 | Phase 236 | Planned |
