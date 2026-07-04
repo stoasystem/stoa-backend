@@ -1257,7 +1257,75 @@ def _billing_response(
             }
             for event in _list_billing_events(parent_id)
         ]
+    response["supportEvidence"] = _billing_support_evidence(response)
     return response
+
+
+def _billing_support_evidence(response: dict[str, Any]) -> dict[str, Any]:
+    events = response.get("events") or []
+    duplicate_count = sum(1 for event in events if event.get("processingResult") == "deduplicated")
+    stale_count = sum(1 for event in events if event.get("processingResult") == "stale_ignored")
+    invoice = response.get("latestInvoice") or {}
+    refund = response.get("refund") or {}
+    dunning = response.get("dunning") or {}
+    status = response.get("status") or "none"
+    mode = response.get("mode") or "manual"
+    source = "manual_override" if status == "manual_override" or mode == "manual" else "provider_billing"
+    if status == "none":
+        source = "none"
+    return {
+        "lifecycle": {
+            "status": status,
+            "mode": mode,
+            "subscriptionTier": response.get("subscriptionTier"),
+            "requestedTier": response.get("requestedTier"),
+            "source": source,
+            "cancelAtPeriodEnd": bool(response.get("cancelAtPeriodEnd") or False),
+            "manualOverride": {
+                "active": status == "manual_override",
+                "source": response.get("manualOverrideSource"),
+                "appliedBy": response.get("manualOverrideBy"),
+                "appliedAt": response.get("manualOverrideAt"),
+            },
+        },
+        "invoice": {
+            "providerInvoiceId": invoice.get("providerInvoiceId"),
+            "providerSubscriptionId": response.get("providerSubscriptionId") or invoice.get("providerSubscriptionId"),
+            "providerChargeId": invoice.get("providerChargeId"),
+            "providerPaymentIntentId": invoice.get("providerPaymentIntentId"),
+            "currency": invoice.get("currency"),
+            "amountPaid": invoice.get("amountPaid"),
+            "amountRemaining": invoice.get("amountRemaining"),
+            "amountRefunded": invoice.get("amountRefunded"),
+            "periodStart": invoice.get("periodStart") or response.get("currentPeriodStart"),
+            "periodEnd": invoice.get("periodEnd") or response.get("currentPeriodEnd"),
+            "reconciliationId": invoice.get("reconciliationId") or invoice.get("providerInvoiceId"),
+        },
+        "refund": {
+            "state": refund.get("state"),
+            "providerRefundId": refund.get("providerRefundId"),
+            "eligibleAmount": refund.get("eligibleAmount"),
+            "refundedAmount": refund.get("refundedAmount"),
+            "providerHandoffState": refund.get("providerHandoffState"),
+            "requestedBy": refund.get("requestedBy"),
+            "requestedAt": refund.get("requestedAt"),
+        },
+        "dunning": {
+            "state": dunning.get("state"),
+            "supportAction": dunning.get("supportAction"),
+            "nextPaymentAttempt": dunning.get("nextPaymentAttempt"),
+            "paymentMethodType": dunning.get("paymentMethodType") or response.get("paymentMethodType"),
+        },
+        "reconciliation": {
+            "lastProviderEventId": response.get("lastProviderEventId"),
+            "lastProviderEventType": response.get("lastProviderEventType"),
+            "lastProviderEventAt": response.get("lastProviderEventAt"),
+            "eventCount": len(events),
+            "duplicateEvents": duplicate_count,
+            "staleIgnoredEvents": stale_count,
+            "latestProcessingResult": events[0].get("processingResult") if events else None,
+        },
+    }
 
 
 def _stored_readiness(item: dict[str, Any]) -> dict[str, Any]:

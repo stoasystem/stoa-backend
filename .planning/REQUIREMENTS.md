@@ -49,7 +49,7 @@ Acceptance criteria:
 
 ### PAYPROD-04 Billing Support Evidence
 
-Status: Active.
+Status: Complete 2026-07-05.
 
 Acceptance criteria:
 
@@ -60,7 +60,7 @@ Acceptance criteria:
 
 ### VERIFY-47 Payment Production Completion Gate
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -92,5 +92,5 @@ Acceptance criteria:
 | PAYPROD-01 | Phase 237 | Complete |
 | PAYPROD-02 | Phase 238 | Complete |
 | PAYPROD-03 | Phase 239 | Complete |
-| PAYPROD-04 | Phase 240 | Active |
-| VERIFY-47 | Phase 241 | Planned |
+| PAYPROD-04 | Phase 240 | Complete |
+| VERIFY-47 | Phase 241 | Active |

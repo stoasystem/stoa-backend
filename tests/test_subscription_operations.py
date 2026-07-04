@@ -1385,6 +1385,14 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert stale_status["subscriptionTier"] == "premium"
     assert stale_events[0]["processingResult"] == "stale_ignored"
     assert profiles["parent-1"]["subscription_tier"] == "premium"
+    support_evidence = admin_client.get("/admin/subscriptions/billing/parent-1").json()["supportEvidence"]
+    assert support_evidence["lifecycle"]["status"] == "active"
+    assert support_evidence["lifecycle"]["source"] == "provider_billing"
+    assert support_evidence["invoice"]["providerInvoiceId"] == "in_test_parent"
+    assert support_evidence["refund"]["state"] == "ready_for_provider"
+    assert support_evidence["reconciliation"]["lastProviderEventId"] == "evt_invoice_paid_1"
+    assert support_evidence["reconciliation"]["duplicateEvents"] == 1
+    assert support_evidence["reconciliation"]["staleIgnoredEvents"] == 1
 
     refund_updated = {
         "id": "re_test_parent",

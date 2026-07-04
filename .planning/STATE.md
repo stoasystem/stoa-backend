@@ -4,13 +4,13 @@ milestone: v5.13
 milestone_name: Payment And Entitlement Production Completion
 status: planning
 last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed Phase 239 webhook reconciliation and entitlement activation
+last_activity: 2026-07-05 — Completed Phase 240 billing support evidence and lifecycle edge states
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 240 Billing Support Evidence And Lifecycle Edge States
-Plan: 240 Billing support evidence and lifecycle edge states
+Phase: 241 v5.13 Payment Production Completion Gate
+Plan: 241 v5.13 payment production completion gate
 Status: Active
-Last activity: 2026-07-05 — Phase 239 completed with support-visible duplicate/stale webhook reconciliation evidence and stale event protection for paid access state.
+Last activity: 2026-07-05 — Phase 240 completed with backend supportEvidence and frontend admin support evidence rendering for billing lifecycle/reconciliation state.
 
 ## Accumulated Context
 
@@ -46,13 +46,14 @@ Last activity: 2026-07-05 — Phase 239 completed with support-visible duplicate
 - Phase 237 is complete: canonical paid-state APIs are `/parents/me/subscription*`; legacy frontend `/billing/*` client still uses demo fallback and must not decide paid access after Phase 238.
 - Phase 238 is complete: frontend `/billing` now reads `/parents/me/subscription` for subscription, usage, and feature access; checkout creation targets `/parents/me/subscription/checkout`; paid-state API failures render visibly instead of falling back to mock subscription data.
 - Phase 239 is complete: duplicate Stripe webhooks now create support-visible dedup events, stale older provider events are recorded as ignored, and active paid access cannot be downgraded by an older failed-payment event.
+- Phase 240 is complete: billing responses now include bounded supportEvidence, and frontend admin billing/account-operations surfaces render support action plus duplicate/stale reconciliation counts.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 240 Billing Support Evidence And Lifecycle Edge States.
+- Execute Phase 241 v5.13 Payment Production Completion Gate.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
@@ -65,4 +66,4 @@ Last activity: 2026-07-05 — Phase 239 completed with support-visible duplicate
 
 ## Operator Next Steps
 
-- Expand billing support evidence and lifecycle edge-state visibility for invoice, refund, cancellation, manual override, dunning, and reconciliation metadata.
+- Close v5.13 with final verification evidence, milestone state updates, and explicit live provider smoke blocked/completed status.

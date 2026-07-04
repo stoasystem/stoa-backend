@@ -94,6 +94,7 @@ class SubscriptionBillingResponse(BaseModel):
     refund: dict[str, Any] = Field(default_factory=dict)
     dunning: dict[str, Any] = Field(default_factory=dict)
     accountingHandoff: dict[str, Any] = Field(default_factory=dict)
+    supportEvidence: dict[str, Any] = Field(default_factory=dict)
     currentPeriodStart: str | None = None
     currentPeriodEnd: str | None = None
     cancelAtPeriodEnd: bool = False
