@@ -1,102 +1,96 @@
-# Requirements: v5.12 Curriculum Editor And Content Migration Buildout
+# Requirements: v5.13 Payment And Entitlement Production Completion
 
-**Milestone:** v5.12
-**Status:** Completed local release gate 2026-07-05
+**Milestone:** v5.13
+**Status:** Active
 **Created:** 2026-07-05
-**Prior milestone:** v5.11 Additional Usage Ledger Coverage
+**Prior milestone:** v5.12 Curriculum Editor And Content Migration Buildout
 
 ## Purpose
 
-Implement the buildable curriculum tooling gaps that v5.1 intentionally left as readiness/deferred scope: rich editor backend/frontend functionality for specially authorized curriculum operators, production content migration service/API/UI, validation/diff/audit evidence, and operator release readiness.
+Make paid access work as a real product flow instead of only local/backend readiness. v5.13 must connect checkout, provider events, entitlement activation, usage-limit behavior, parent-facing paid state, and admin/support evidence into one coherent flow.
 
-This is an internal development milestone. Prioritize usable curriculum operations over broad unrelated security/compliance testing. Keep checks focused on authoring correctness, content integrity, migration safety, published-read compatibility, and frontend usability.
+This remains an internal development milestone unless live Stripe/TWINT credentials and rollout approval are available. Local provider fixtures and deterministic reconciliation evidence are acceptable; live smoke must be documented as blocked or completed explicitly.
 
 ## Requirements
 
-### CURRBUILD-01 Curriculum Buildout Reality Refresh And Contract
+### PAYPROD-01 Payment Reality Audit
 
-Status: Complete 2026-07-05.
-
-Acceptance criteria:
-
-- v5.1 deferred items are mapped to current backend and frontend files.
-- Existing backend authoring, analytics, practice, and adaptive routes are documented as preserved foundations.
-- Missing backend APIs are identified: special curriculum authorization, draft patch/update, validation preview, diff, audit-read, migration dry-run/apply, evidence, and rollback metadata.
-- Missing frontend surfaces are identified: authorized editor workbench, validation/diff/review UI, migration console, typed clients, hooks, routes, and e2e.
-- Remaining-feature docs are corrected so v5.10 and v5.11 are no longer listed as remaining work.
-
-### CURRBUILD-02 Backend Special Authorization Editor Patch Validation Diff And Audit APIs
-
-Status: Complete 2026-07-05.
+Status: Planned.
 
 Acceptance criteria:
 
-- Backend exposes safe draft patch/update behavior for structured lesson and exercise content only to users with backend-granted `curriculum_author` capability.
-- Existing ordinary teacher/tutor users cannot create, edit, review, publish, rollback, or archive curriculum unless the backend grants explicit curriculum capability.
-- Validation preview returns field-level issues, blocking/warning severity, publish readiness, and remediation hints.
-- Diff endpoint compares draft/current/published/rollback candidates without leaking unrelated data.
-- Curriculum audit-read endpoint returns bounded version lifecycle and review events only to authorized curriculum reviewers/publishers.
-- Tests cover legal edits, missing authorization, ordinary teacher/tutor refusal, validation failures, draft isolation, diff output, audit output, and published-read compatibility.
+- Current backend checkout, subscription, entitlement, usage-limit, admin billing/support, and frontend paywall behavior is mapped to concrete files and routes.
+- Implemented, stubbed, demo-fallback, locally verified, and externally blocked behavior is separated in an evidence table.
+- Existing payment/entitlement milestones are reconciled so readiness evidence is not mistaken for working end-to-end paid access.
+- The v5.13 implementation contract identifies the smallest complete paid-access loop and the support-safe evidence needed to operate it.
 
-### CURRBUILD-03 Backend Content Migration Service And APIs
+### PAYPROD-02 Checkout And User Paid-State Flow
 
-Status: Complete 2026-07-05.
+Status: Planned.
 
 Acceptance criteria:
 
-- Migration manifest schema covers source metadata, subject/topic mapping, public/version IDs, locale metadata, lessons, exercises, dependencies, and operator notes.
-- Dry-run API validates manifest input and reports create/update/skip/conflict/error rows without mutation.
-- Apply API requires `migration_operator` or equivalent publisher authorization plus explicit confirmation, then writes content versions, optional published pointers, evidence records, and audit references.
-- Conflict and rollback metadata are available for operator review and follow-up.
-- Tests cover dry-run, apply, missing authorization, ordinary teacher/tutor refusal, idempotency, validation failure, conflict handling, evidence, rollback metadata, and no student/parent draft leakage.
+- Parent-facing checkout/paywall state uses real backend API state and does not hide paid-access failures behind demo fallback.
+- Pending, active, failed, canceled, refunded, and manual-override states render clearly for parents/support.
+- Backend returns enough subscription and entitlement status for frontend access decisions, quota explanations, and support handoff.
+- Checkout/session creation and paid-state refresh are compatible with existing linked-student entitlement and usage-limit behavior.
 
-### CURRBUILD-04 Frontend Curriculum Editor And Migration Console
+### PAYPROD-03 Webhook Reconciliation And Entitlement Activation
 
-Status: Complete 2026-07-05.
-
-Acceptance criteria:
-
-- Frontend clients, query keys, hooks, and routes cover editor worklist, draft edit, validation preview, diff, review actions, audit view, migration dry-run, and migration apply only for users with backend-granted curriculum capabilities.
-- Editor supports lesson sections, objectives, examples, formulas, media references, exercise blocks, answer keys, hints, explanations, tags, prerequisites, estimated duration, and locale metadata.
-- Migration console supports manifest input/upload, dry-run summary, row-level validation/conflict output, apply confirmation, evidence references, and rollback hints.
-- Loading, empty, invalid, conflict, partial-success, unauthorized, missing-permission, and API-error states are implemented with no demo fallback.
-- Focused e2e covers editor happy path, validation errors, diff/review, migration dry-run, migration apply confirmation, ordinary teacher/tutor unauthorized states, and API-error states.
-
-### VERIFY-45 v5.12 Curriculum Buildout Release Gate
-
-Status: Complete 2026-07-05.
+Status: Planned.
 
 Acceptance criteria:
 
-- Focused backend tests pass for special curriculum authorization, editor APIs, migration APIs, published-read compatibility, and authoring audit behavior.
-- Frontend lint/build and focused e2e pass for curriculum editor and migration console workflows.
-- Docs, roadmap, state, milestone snapshots, and `stoa_docs` gap audit are updated.
-- Release evidence records completed implementation, deferred external activation, and any remaining editor/migration limitations.
-- Next milestone recommendation is explicit and separates new functional, safety, and stability buildouts from externally blocked activation work.
+- Provider events are stored and reconciled idempotently with stable event identity.
+- Successful payment activates the correct entitlement exactly once.
+- Duplicate, stale, missing, failed, refunded, canceled, or conflicting events produce support-visible reconciliation status.
+- Entitlement state, provider subscription state, and usage-limit checks agree after reconciliation.
+- Tests cover event ordering, duplicate delivery, stale state, missing checkout context, and manual override interaction.
+
+### PAYPROD-04 Billing Support Evidence
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Admin/support views expose bounded payment, entitlement, invoice, refund, cancellation, and reconciliation metadata.
+- Raw provider secrets, full payloads, payment method details, and sensitive customer data are not exposed.
+- Manual override state is visible and distinguishable from provider-backed entitlement.
+- Support evidence includes enough timestamps, provider references, reconciliation status, and request IDs to diagnose paid-access failures.
+
+### VERIFY-47 Payment Production Completion Gate
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Focused backend tests pass for checkout, provider event reconciliation, entitlement activation, usage-limit compatibility, and admin support evidence.
+- Frontend lint/build and focused e2e pass for checkout/paywall state and admin billing evidence.
+- Live smoke is recorded as blocked or completed based on credential and rollout availability.
+- Docs, roadmap, state, milestone snapshots, and release evidence are updated.
+- Remaining externally blocked activation items are promoted to future requirements rather than hidden in completion notes.
 
 ## Out of Scope
 
-- Native iOS/Android app implementation.
-- Live Stripe/TWINT activation or customer charging rollout.
-- Live notification provider activation, APNS/FCM production rollout, or email digest scheduling.
-- Warehouse/BI deployment.
-- Broad collaborative editing, comments, or a full CMS beyond the internal editor/migration workflows.
-- Unreviewed AI publication directly to students.
-- Production content source import from an unapproved or unavailable external source.
+- Switching payment providers.
+- Live customer charging without approved live credentials, registered production webhook endpoint, TWINT approval, finance acceptance, and explicit rollout enablement.
+- Finance/accounting exports beyond support-safe invoice/refund visibility.
+- Full dunning automation beyond clear failed-payment and support state.
+- Native app purchase flows.
+- Broad warehouse/BI billing analytics.
 
 ## Future Milestones
 
-- **v5.13 Payment And Entitlement Production Completion**: make paid access actually work end to end with provider callbacks, entitlement reconciliation, user-visible state, admin support evidence, refunds/invoices where applicable, and release gates.
-- **v5.14 Verification And Login Reliability**: make email verification and login-code behavior dependable, observable, rate-limited, and supportable across registration, resend, confirmation, login, and account activation edge cases.
-- **v5.15 Usage, Quota, And Product Stability**: make usage accounting trustworthy across real student flows, reconcile quota/ledger drift, expose support-safe usage explanations, and add health/smoke/regression gates for core flows.
-- External activation milestones remain separate when live provider credentials and rollout approvals unblock.
+- **v5.14 Verification And Login Reliability**: make email verification and login-code behavior dependable, observable, rate-limited, and supportable.
+- **v5.15 Usage, Quota, And Product Stability**: make usage accounting trustworthy across real student flows, reconcile quota/ledger drift, and add health/smoke/regression gates.
+- External live activation remains separate when provider credentials and rollout approvals unblock.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURRBUILD-01 | Phase 232 | Complete |
-| CURRBUILD-02 | Phase 233 | Complete |
-| CURRBUILD-03 | Phase 234 | Complete |
-| CURRBUILD-04 | Phase 235 | Complete |
-| VERIFY-45 | Phase 236 | Complete |
+| PAYPROD-01 | Phase 237 | Planned |
+| PAYPROD-02 | Phase 238 | Planned |
+| PAYPROD-03 | Phase 239 | Planned |
+| PAYPROD-04 | Phase 240 | Planned |
+| VERIFY-47 | Phase 241 | Planned |

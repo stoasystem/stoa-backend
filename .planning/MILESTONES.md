@@ -50,12 +50,19 @@ Known deferred items: native apps, live Stripe/TWINT activation, external suppor
 
 ---
 
-## Planned Next: v5.13 Payment And Entitlement Production Completion
+## Active: v5.13 Payment And Entitlement Production Completion
 
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v5.13-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.13-REQUIREMENTS.md`
+**Status:** Active
+**Started:** 2026-07-05
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.13-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.13-REQUIREMENTS.md`
 **Goal:** Make paid access work as a real product flow instead of only local/backend readiness.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+**Release target:** `payment-production-ready`
 
 Function purpose:
 
@@ -67,6 +74,14 @@ Implementation strategy:
 - Start from provider-backed payment events and reconcile entitlements idempotently.
 - Keep manual override visible as a support path, not a substitute for paid access.
 - Treat live provider smoke as blocked unless production credentials and rollout approval exist.
+
+Planned phases:
+
+- Phase 237: Payment Reality Audit And Contract Refresh.
+- Phase 238: Checkout Paywall And Paid-State Integration.
+- Phase 239: Webhook Reconciliation And Entitlement Activation.
+- Phase 240: Billing Support Evidence And Lifecycle Edge States.
+- Phase 241: v5.13 Payment Production Completion Gate.
 
 ---
 

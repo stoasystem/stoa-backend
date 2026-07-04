@@ -106,7 +106,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.12 Curriculum Editor And Content Migration Buildout on 2026-07-05 (curriculum-buildout-ready release gate)
-**Next planned milestone:** v5.13 Payment And Entitlement Production Completion
+**Active milestone:** v5.13 Payment And Entitlement Production Completion
 
 Delivered:
 
