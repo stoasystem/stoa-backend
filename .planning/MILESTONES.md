@@ -1,18 +1,19 @@
 # Milestones
 
-## Active: v5.12 Curriculum Editor And Content Migration Buildout
+## Completed: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Started:** 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.12-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.12-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.12-MILESTONE-AUDIT.md`
 **Goal:** Implement the curriculum editor and production content migration tooling that v5.1 left as readiness/deferred scope.
 **Phases:** 5
-**Plans:** 1/5 complete
-**Requirements:** 1/5 complete, 4 active
-**Release target:** `curriculum-buildout-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `curriculum-buildout-ready`
 
 Function purpose:
 
@@ -30,13 +31,20 @@ Implementation strategy:
 - Avoid external activation work and broad CMS/collaboration scope during this milestone.
 - Prioritize usable internal feature flow over broad unrelated security/compliance testing.
 
-Planned phases:
+Completed phases:
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
-- Phase 234: Backend Content Migration Service And APIs.
-- Phase 235: Frontend Curriculum Editor And Migration Console.
-- Phase 236: v5.12 Curriculum Buildout Release Gate.
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (complete)
+- Phase 234: Backend Content Migration Service And APIs. (complete)
+- Phase 235: Frontend Curriculum Editor And Migration Console. (complete)
+- Phase 236: v5.12 Curriculum Buildout Release Gate. (complete)
+
+Key accomplishments:
+
+- Added explicit curriculum capabilities for author, reviewer, publisher, and migration operator workflows.
+- Added backend draft patch, validation preview, diff, audit-read, migration dry-run/apply, evidence, and rollback metadata.
+- Added frontend `/admin/curriculum` worklist, editor, review, migration, and evidence console in `/Users/zhdeng/stoa-frontend`.
+- Verified backend focused tests, frontend build/lint/e2e, and no-demo-fallback API-error behavior.
 
 Known deferred items: native apps, live Stripe/TWINT activation, external support provider activation, live notification provider/native push activation, warehouse/BI deployment, broad collaborative CMS, and unreviewed AI publication.
 

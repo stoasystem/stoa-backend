@@ -1,7 +1,7 @@
 # STOA Docs Feature Gap Audit
 
 **Created:** 2026-06-07
-**Updated:** 2026-07-05 after completing v5.11 and selecting v5.12 curriculum editor/content migration buildout
+**Updated:** 2026-07-05 after completing v5.12 curriculum editor/content migration buildout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, current `stoa-backend` routes, and completed `.planning` milestones.
 
 ## Summary
@@ -58,7 +58,7 @@ v5.4 completed frontend learning operations and automation dashboards. It made v
 
 v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
-The final-polish account and usage work is complete through v5.11. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. v5.10 added frontend email verification UX, parent account operations UI, admin account operations console, focused e2e coverage, backend contract evidence, and a production read-only smoke checklist. v5.11 added governed multi-action usage ledger coverage for chat, hints, teacher-help, practice, lesson, assignment, and generation flows. The next buildable product gap is curriculum editor and production content migration implementation from v5.1's deferred readiness scope, with edit/review/publish/migration permission restricted to backend-authorized curriculum operators rather than all teachers/tutors.
+The final-polish account, usage, and curriculum buildout work is complete through v5.12. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. v5.10 added frontend email verification UX, parent account operations UI, admin account operations console, focused e2e coverage, backend contract evidence, and a production read-only smoke checklist. v5.11 added governed multi-action usage ledger coverage for chat, hints, teacher-help, practice, lesson, assignment, and generation flows. v5.12 implemented curriculum editor and production content migration tooling from v5.1's deferred readiness scope, with edit/review/publish/migration permission restricted to backend-authorized curriculum operators rather than all teachers/tutors.
 
 ## Completed Or Largely Complete
 
@@ -88,6 +88,7 @@ The final-polish account and usage work is complete through v5.11. v5.6 complete
 - Curriculum authoring and analytics foundation: stable public/version IDs, admin/tutor authoring lifecycle, publish/rollback/archive safety, audit evidence, bounded content-quality analytics, and aggregate privacy-preserving operator views.
 - Payment production activation automation: live Stripe/TWINT provider readiness checks, webhook readiness evidence, controlled direct refund execution, finance handoff export updates, and independent checkout/refund rollout controls.
 - Automatic teacher dispatch and SLA load balancing: dispatch planner, teacher/tutor candidate ranking, conditional dispatch claim metadata, timeout reassignment, teacher queue dispatch filters, and admin dispatch/SLA dashboard.
+- Curriculum editor and content migration tooling: explicit curriculum capabilities, backend draft patch/validation/diff/audit APIs, migration dry-run/apply/evidence APIs, frontend `/admin/curriculum` worklist/editor/review/migration/evidence console, and local release-gate evidence.
 
 ## v3.0 Closed MVP Gaps
 
@@ -183,7 +184,7 @@ The final-polish account and usage work is complete through v5.11. v5.6 complete
 
 - Final real payment activation operations: approved live Stripe credentials, registered production webhook endpoint, TWINT production approval, finance acceptance, and explicit checkout/refund rollout enablement.
 - Full production notification rollout beyond v4.2 readiness: CDK/API Gateway deployment, live endpoint smoke, real provider credentials, frontend/native visuals, native push token registration, email templates/scheduling, and broader notification analytics. Status: completed local backend v4.9 scope; final live provider rollout remains deferred pending external deployment/provider/client prerequisites.
-- Rich curriculum editor UI, production content migration, automatic student assignment of generated exercises, and autonomous tutoring decisions. Status: v5.3 completed controlled automation from reviewed sources; full unreviewed autonomy remains future scope.
+- Rich curriculum editor UI and production content migration tooling. Status: v5.12 completed local/internal implementation; actual production source import remains pending approved source material and rollout approval. Automatic student assignment from reviewed sources is complete through v5.3; full unreviewed autonomy remains future scope.
 - Long-term adaptive exercise sequencing beyond curriculum catalog/progress/authoring foundations. Status: v5.2 completed backend/API readiness with recommendation engine, outcome feedback, analytics export, and operator dashboard contracts; v5.3 completed controlled autonomous delivery backend/API readiness; v5.4 now targets frontend usability.
 - Automatic teacher/tutor dispatch for student help requests. Status: v5.5 completed backend dispatch planning, matching, claim/reassignment, queue visibility, and SLA/load dashboards; production scheduling, live staffing calendar, frontend dashboard implementation, and native push remain future scope.
 - Native mobile apps, native push-token registration, and production mobile rollout. Status: v5.0 contract-ready; deferred until after web curriculum/account operations are stable. App-store release and live provider activation remain future scope.
@@ -192,11 +193,12 @@ The final-polish account and usage work is complete through v5.11. v5.6 complete
 
 ## Remaining Feature Build Order
 
-1. Execute v5.12 Curriculum Editor And Content Migration Buildout with explicit backend-granted curriculum authorization.
-2. Consider frontend visual polish for expanded multi-action usage summaries and curriculum content-quality dashboards after v5.12.
-3. Consider live warehouse/BI deployment after migration/content analytics data stabilizes.
-4. Consider native app buildout after web curriculum/account operations are stable.
-5. Execute final live payment/support/notification activation only when external provider prerequisites are approved.
+1. Execute v5.13 Payment And Entitlement Production Completion if paid-access correctness is the highest priority.
+2. Execute v5.14 Verification And Login Reliability if account activation and login policy reliability is the highest priority.
+3. Execute v5.15 Usage, Quota, And Product Stability if usage/quota trust and smoke-monitoring are the highest priority.
+4. Consider live warehouse/BI deployment after migration/content analytics data stabilizes.
+5. Consider native app buildout after web curriculum/account operations are stable.
+6. Execute final live payment/support/notification activation only when external provider prerequisites are approved.
 
 ## v3.0 Scope Recommendation
 

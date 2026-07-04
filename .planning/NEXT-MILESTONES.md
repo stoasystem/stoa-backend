@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-05 after reconciling v5.11 completion and selecting v5.12
+**Updated:** 2026-07-05 after completing v5.12 curriculum editor/content migration buildout
 **Mode:** internal development, product functionality first
 
 ## Current Reality
@@ -9,16 +9,18 @@ Completed local milestones:
 
 - v5.10 made email verification, parent account operations, and admin account operations usable in the web frontend.
 - v5.11 extended usage ledger coverage beyond question submissions with governed, privacy-safe multi-action events and summaries.
+- v5.12 implemented backend and frontend curriculum editor/content migration tooling for backend-authorized curriculum operators.
 
 The remaining queue in older `stoa_docs` planning was stale: v5.10 and additional usage ledger coverage are no longer future work.
 
-## Active: v5.12 Curriculum Editor And Content Migration Buildout
+## Latest Completed: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.12-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.12-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.12-MILESTONE-AUDIT.md`
 
 Purpose:
 
@@ -31,10 +33,10 @@ Purpose:
 Detailed build scope:
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
-- Phase 234: Backend Content Migration Service And APIs.
-- Phase 235: Frontend Curriculum Editor And Migration Console.
-- Phase 236: v5.12 Curriculum Buildout Release Gate.
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (complete)
+- Phase 234: Backend Content Migration Service And APIs. (complete)
+- Phase 235: Frontend Curriculum Editor And Migration Console. (complete)
+- Phase 236: v5.12 Curriculum Buildout Release Gate. (complete)
 
 ## Planned After v5.12
 

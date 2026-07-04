@@ -1,7 +1,7 @@
 # Requirements: v5.12 Curriculum Editor And Content Migration Buildout
 
 **Milestone:** v5.12
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Created:** 2026-07-05
 **Prior milestone:** v5.11 Additional Usage Ledger Coverage
 
@@ -27,6 +27,8 @@ Acceptance criteria:
 
 ### CURRBUILD-02 Backend Special Authorization Editor Patch Validation Diff And Audit APIs
 
+Status: Complete 2026-07-05.
+
 Acceptance criteria:
 
 - Backend exposes safe draft patch/update behavior for structured lesson and exercise content only to users with backend-granted `curriculum_author` capability.
@@ -38,6 +40,8 @@ Acceptance criteria:
 
 ### CURRBUILD-03 Backend Content Migration Service And APIs
 
+Status: Complete 2026-07-05.
+
 Acceptance criteria:
 
 - Migration manifest schema covers source metadata, subject/topic mapping, public/version IDs, locale metadata, lessons, exercises, dependencies, and operator notes.
@@ -48,6 +52,8 @@ Acceptance criteria:
 
 ### CURRBUILD-04 Frontend Curriculum Editor And Migration Console
 
+Status: Complete 2026-07-05.
+
 Acceptance criteria:
 
 - Frontend clients, query keys, hooks, and routes cover editor worklist, draft edit, validation preview, diff, review actions, audit view, migration dry-run, and migration apply only for users with backend-granted curriculum capabilities.
@@ -57,6 +63,8 @@ Acceptance criteria:
 - Focused e2e covers editor happy path, validation errors, diff/review, migration dry-run, migration apply confirmation, ordinary teacher/tutor unauthorized states, and API-error states.
 
 ### VERIFY-45 v5.12 Curriculum Buildout Release Gate
+
+Status: Complete 2026-07-05.
 
 Acceptance criteria:
 
@@ -90,5 +98,5 @@ Acceptance criteria:
 | CURRBUILD-01 | Phase 232 | Complete |
 | CURRBUILD-02 | Phase 233 | Complete |
 | CURRBUILD-03 | Phase 234 | Complete |
-| CURRBUILD-04 | Phase 235 | Planned |
-| VERIFY-45 | Phase 236 | Planned |
+| CURRBUILD-04 | Phase 235 | Complete |
+| VERIFY-45 | Phase 236 | Complete |

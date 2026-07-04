@@ -1,6 +1,6 @@
 # Roadmap: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Created:** 2026-07-05
 **Prior milestone:** v5.11 Additional Usage Ledger Coverage
 **Research:** `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`, `.planning/research/STOA_DOCS_REMAINING_FEATURES.md`
@@ -65,8 +65,8 @@ Planning evidence:
 - [x] **Phase 232: Curriculum Buildout Reality Refresh And Contract** - Reconcile v5.1 deferred implementation, current backend/frontend code, `stoa_docs`, and v5.12 scope.
 - [x] **Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs** - Implement backend special-authorization model, draft patch/update, structured validation preview, content diff, audit-read, and focused tests.
 - [x] **Phase 234: Backend Content Migration Service And APIs** - Implement manifest parsing, dry-run, apply, evidence, conflict reporting, rollback metadata, and tests.
-- [ ] **Phase 235: Frontend Curriculum Editor And Migration Console** - Implement authorized curriculum operator workbench, review/preview/diff UX, migration dry-run/apply console, and focused e2e.
-- [ ] **Phase 236: v5.12 Curriculum Buildout Release Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
+- [x] **Phase 235: Frontend Curriculum Editor And Migration Console** - Implement authorized curriculum operator workbench, review/preview/diff UX, migration dry-run/apply console, and focused e2e.
+- [x] **Phase 236: v5.12 Curriculum Buildout Release Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
 
 ## Phase Details
 
@@ -90,7 +90,7 @@ Planning evidence:
 **Goal**: Make curriculum draft editing and review workflow implementable by a frontend editor.
 **Depends on**: Phase 232.
 **Requirements**: CURRBUILD-02
-**Status**: Active.
+**Status**: Complete 2026-07-05.
 **Success Criteria**:
 
 1. Draft update/patch endpoint requires a backend-granted curriculum author capability and supports structured lesson and exercise edits without changing published projections.
@@ -117,6 +117,8 @@ Planning evidence:
 **Goal**: Give internal operators usable curriculum tooling instead of backend-only readiness.
 **Depends on**: Phase 234.
 **Requirements**: CURRBUILD-04
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/235-frontend-curriculum-editor-and-migration-console/235-SUMMARY.md`, `.planning/phases/235-frontend-curriculum-editor-and-migration-console/235-VERIFICATION.md`.
 **Success Criteria**:
 
 1. Frontend clients, query keys, hooks, and routes cover editor worklist, draft edit, validation preview, diff, review actions, audit view, migration dry-run, and migration apply only for users with backend-granted curriculum capabilities.
@@ -130,6 +132,8 @@ Planning evidence:
 **Goal**: Close v5.12 with evidence that curriculum editor and migration tooling are usable for internal development.
 **Depends on**: Phase 235.
 **Requirements**: VERIFY-45
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/236-v5-12-curriculum-buildout-release-gate/236-SUMMARY.md`, `.planning/phases/236-v5-12-curriculum-buildout-release-gate/236-VERIFICATION.md`, `.planning/phases/236-v5-12-curriculum-buildout-release-gate/236-RELEASE-GATE.md`.
 **Success Criteria**:
 
 1. Focused backend tests pass for editor patch/validation/diff/audit and migration service/API behavior.
@@ -153,8 +157,8 @@ The next milestones after v5.12 should be new buildable feature, safety, or stab
 | 232 Curriculum Buildout Reality Refresh And Contract | v5.12 | 1/1 | Complete | 2026-07-05 |
 | 233 Backend Special Authorization Editor Patch Validation Diff And Audit APIs | v5.12 | 1/1 | Complete | 2026-07-05 |
 | 234 Backend Content Migration Service And APIs | v5.12 | 1/1 | Complete | 2026-07-05 |
-| 235 Frontend Curriculum Editor And Migration Console | v5.12 | 0/1 | Active | - |
-| 236 v5.12 Curriculum Buildout Release Gate | v5.12 | 0/1 | Planned | - |
+| 235 Frontend Curriculum Editor And Migration Console | v5.12 | 1/1 | Complete | 2026-07-05 |
+| 236 v5.12 Curriculum Buildout Release Gate | v5.12 | 1/1 | Complete | 2026-07-05 |
 
 ## Traceability
 
@@ -163,5 +167,5 @@ The next milestones after v5.12 should be new buildable feature, safety, or stab
 | CURRBUILD-01 | Phase 232 | Complete |
 | CURRBUILD-02 | Phase 233 | Complete |
 | CURRBUILD-03 | Phase 234 | Complete |
-| CURRBUILD-04 | Phase 235 | Planned |
-| VERIFY-45 | Phase 236 | Planned |
+| CURRBUILD-04 | Phase 235 | Complete |
+| VERIFY-45 | Phase 236 | Complete |

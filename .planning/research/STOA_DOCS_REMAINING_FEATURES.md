@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-07-05 after completing v5.11 and selecting v5.12 curriculum editor/content migration buildout
+**Updated:** 2026-07-05 after completing v5.12 curriculum editor/content migration buildout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -33,18 +33,16 @@
 - Parent/admin backend account operations visibility for billing, entitlement, usage, verification, child binding, and support state.
 - Frontend email verification UX, parent account operations UI, admin account operations console, and production read-only smoke planning.
 - Additional usage ledger coverage for chat, hints, teacher-help, practice answers, lesson completion, assignment generation, and assignment lifecycle events.
+- Curriculum editor and content migration buildout with explicit curriculum capabilities, backend draft patch/validation/diff/audit APIs, migration dry-run/apply/evidence APIs, and frontend `/admin/curriculum` operations console.
 
 ## Remaining Feature Build Queue
 
-1. **v5.12 Curriculum Editor And Content Migration Buildout**.
-   Implement the rich curriculum editor and migration tooling that v5.1 left as readiness/deferred scope: special backend-granted curriculum authorization, backend draft patch/validation/diff/audit APIs, content migration manifest dry-run/apply, evidence and rollback metadata, authorized curriculum operator editor, and migration operator console.
-
-2. **Final Live Payment Activation Operations**.
+1. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-3. **Later Product Expansion**.
+2. **Later Product Expansion**.
    Native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, broader collaborative CMS functionality, and deeper operations reporting.
-   Status: v5.10/v5.11 are complete; v5.12 now targets curriculum editor and migration implementation because it is the highest-value internally buildable gap.
+   Status: v5.10/v5.11/v5.12 are complete; next internally buildable gaps are payment entitlement production completion, verification/login reliability, and usage/quota/product stability.
 
 ## Current Planning Decision
 
@@ -58,4 +56,4 @@ v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learni
 
 v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
 
-v5.6 through v5.11 are complete as local milestones. v5.12 is active as a curriculum editor and content migration buildout milestone because v5.1 was readiness-complete but left rich editor frontend, special edit authorization, draft patch/diff/validation APIs, migration service/API/UI, evidence persistence, and rollback metadata deferred. Ordinary teachers/tutors must not receive curriculum edit permission by default; backend authorization must grant explicit curriculum capabilities. Native apps, live APNS/FCM, app-store release, final live payment activation, external support activation, and warehouse/BI remain later prerequisites.
+v5.6 through v5.12 are complete as local milestones. v5.12 closed the curriculum editor and content migration implementation gap that v5.1 left deferred, with explicit backend-granted curriculum capabilities, backend editor/migration APIs, and a frontend admin curriculum operations console. Native apps, live APNS/FCM, app-store release, final live payment activation, external support activation, and warehouse/BI remain later prerequisites.

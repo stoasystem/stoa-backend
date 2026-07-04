@@ -96,6 +96,8 @@ The completed v5.10 milestone makes those account operations capabilities usable
 
 The completed v5.11 milestone extends usage ledger coverage beyond question submissions with governed action taxonomy, privacy-safe ledger events for chat/teacher-help/practice/assignment/generation flows, multi-action reconciliation, and parent/admin account operations compatibility.
 
+The completed v5.12 milestone implements the curriculum editor and content migration buildout that v5.1 left deferred: explicit curriculum capabilities, backend draft patch/validation/diff/audit APIs, migration dry-run/apply/evidence APIs, and a frontend admin curriculum operations console.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -103,8 +105,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.11 Additional Usage Ledger Coverage on 2026-07-04 (multi-action-usage-ledger-ready release gate)
-**Active milestone:** v5.12 Curriculum Editor And Content Migration Buildout
+**Latest completed milestone:** v5.12 Curriculum Editor And Content Migration Buildout on 2026-07-05 (curriculum-buildout-ready release gate)
+**Next planned milestone:** v5.13 Payment And Entitlement Production Completion
 
 Delivered:
 
@@ -537,27 +539,27 @@ Audit: `.planning/milestones/v5.11-MILESTONE-AUDIT.md`
 
 **Deferred beyond v5.11:** production deploy/live smoke, frontend visual polish for expanded usage summaries, warehouse/BI export, live Stripe/TWINT activation, and cleanup archive movement after archive target verification.
 
-## Active Milestone: v5.12 Curriculum Editor And Content Migration Buildout
+## Completed Milestone: v5.12 Curriculum Editor And Content Migration Buildout
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 Milestone roadmap: `.planning/milestones/v5.12-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.12-REQUIREMENTS.md`
-Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-contract/`
+Milestone audit: `.planning/milestones/v5.12-MILESTONE-AUDIT.md`
 
-**Status:** Active. Phase 232 completed 2026-07-05; Phase 233 backend authorization/editor APIs are active.
+**Status:** Complete. Phase 236 passed the local release gate on 2026-07-05 with backend/frontend evidence and release state `curriculum-buildout-ready`.
 
 **Function purpose:** Build the internal curriculum tooling that v5.1 left as readiness/deferred scope: special curriculum authorization, rich editor APIs/UI, structured validation, diff/review/audit workflows, production content migration dry-run/apply, evidence, rollback metadata, and operator console.
 
 **Implementation strategy:** Preserve current published curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility. Treat curriculum editing as a backend-granted capability, not a default teacher/tutor permission. Implement backend authorization plus editor/migration APIs first, then frontend operator tooling, then focused release evidence. Keep external activation, warehouse deployment, native apps, broad CMS/collaboration, and unreviewed AI publication outside this milestone.
 
-**Planned phases:**
+**Completed phases:**
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
-- Phase 234: Backend Content Migration Service And APIs.
-- Phase 235: Frontend Curriculum Editor And Migration Console.
-- Phase 236: v5.12 Curriculum Buildout Release Gate.
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (complete)
+- Phase 234: Backend Content Migration Service And APIs. (complete)
+- Phase 235: Frontend Curriculum Editor And Migration Console. (complete)
+- Phase 236: v5.12 Curriculum Buildout Release Gate. (complete)
 
 **Deferred beyond v5.12:** native apps, live Stripe/TWINT activation, external support provider activation, live notification provider/native push activation, warehouse/BI deployment, broad collaborative CMS, and unreviewed AI publication.
 
@@ -1026,7 +1028,7 @@ Known current resources:
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
-| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Active - Phase 233 |
+| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Complete - curriculum-buildout-ready release gate passed |
 | Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Planned |
 | Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Planned |
 | Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Planned |

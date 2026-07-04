@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.12
 milestone_name: Curriculum Editor And Content Migration Buildout
-status: Active
+status: Complete
 last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed Phase 234 backend curriculum migration dry-run/apply APIs and evidence records
+last_activity: 2026-07-05 — Completed Phase 236 release gate and closed v5.12 as curriculum-buildout-ready
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.12 Curriculum Editor And Content Migration Buildout.
+**Current focus:** v5.12 Curriculum Editor And Content Migration Buildout is complete; next candidate is v5.13 Payment And Entitlement Production Completion.
 
 ## Current Position
 
-Phase: 235 Frontend Curriculum Editor And Migration Console
-Plan: 235 Frontend curriculum editor and migration console
-Status: Active
-Last activity: 2026-07-05 — Phase 234 completed with migration manifest dry-run/apply/evidence APIs behind migration capability gates.
+Phase: 236 v5.12 Curriculum Buildout Release Gate
+Plan: 236 v5.12 curriculum buildout release gate
+Status: Complete
+Last activity: 2026-07-05 — Phase 236 completed with backend/frontend verification, release gate, milestone audit, and next-milestone recommendation.
 
 ## Accumulated Context
 
@@ -40,23 +40,24 @@ Last activity: 2026-07-05 — Phase 234 completed with migration manifest dry-ru
 - Curriculum editing is not a default teacher/tutor permission. v5.12 must require backend-granted curriculum capabilities such as `curriculum_author`, `curriculum_reviewer`, and `curriculum_publisher`/`migration_operator`.
 - Phase 233 is complete: backend curriculum editor mutations now require explicit capabilities, and patch, validation preview, diff, and audit-read APIs are available for Phase 235 frontend work.
 - Phase 234 is complete: backend migration dry-run/apply/evidence APIs are available, dry-run is non-mutating, apply requires confirmation, and evidence/audit/rollback metadata are recorded.
+- Phase 235 is complete: frontend `/admin/curriculum` now exposes the curriculum worklist, draft editor, validation/diff/audit review tools, migration dry-run/apply flow, and migration evidence lookup against real backend APIs with no demo fallback for API failures.
+- Phase 236 is complete: v5.12 is closed as `curriculum-buildout-ready` with backend focused tests, frontend build/lint/e2e, release gate, and milestone audit.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Implement Phase 235 frontend curriculum editor and migration console.
-- Close Phase 236 with backend/frontend release evidence and next milestone recommendation.
+- Start v5.13 if continuing the planned next milestone queue.
 - Plan future milestones as independent feature/safety/stability work: paid access completion, verification/login reliability, and usage/quota/product stability.
 
 ### Blockers/Concerns
 
-- Frontend implementation work is in `/Users/zhdeng/stoa-frontend`, outside this backend repo's write root.
+- Frontend implementation work is in `/Users/zhdeng/stoa-frontend`, outside this backend repo's write root; Phase 235 frontend implementation is committed there as `dff7430`.
 - Actual production content import depends on approved source material being available; v5.12 can build the repeatable pipeline without importing unapproved sources.
 - Production deploy/live smoke remains separate from local functional readiness.
 - Payment, verification, and usage features have planning/test evidence in prior milestones, but the next milestone queue must audit real product behavior again before assuming production completeness.
 
 ## Operator Next Steps
 
-- Start Phase 235 frontend curriculum editor and migration console work against real Phase 233/234 backend APIs, but note the frontend repo is outside this backend workspace write root.
+- Recommended next milestone: v5.13 Payment And Entitlement Production Completion. Alternative buildable tracks are v5.14 Verification And Login Reliability and v5.15 Usage, Quota, And Product Stability.
