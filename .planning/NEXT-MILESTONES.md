@@ -1,76 +1,52 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-04 after completing v5.11 additional usage ledger coverage
-**Mode:** final polish, product functionality first
+**Updated:** 2026-07-05 after reconciling v5.11 completion and selecting v5.12
+**Mode:** internal development, product functionality first
 
 ## Current Reality
 
-v5.6-v5.9 are complete local backend milestones:
+Completed local milestones:
 
-- v5.6 made paid entitlement effective for linked-student question quota.
-- v5.7 added privacy-safe question usage ledger events, idempotency, and reconciliation.
-- v5.8 added Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior.
-- v5.9 added parent/admin account operations aggregation APIs.
+- v5.10 made email verification, parent account operations, and admin account operations usable in the web frontend.
+- v5.11 extended usage ledger coverage beyond question submissions with governed, privacy-safe multi-action events and summaries.
 
-v5.10 has now closed the frontend and production-readiness gap for email verification, parent account operations, and admin account operations.
+The remaining queue in older `stoa_docs` planning was stale: v5.10 and additional usage ledger coverage are no longer future work.
 
-## Completed: v5.10 Account Operations Frontend And Production Readiness
+## Active: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Completed local frontend/readiness release gate 2026-07-03
-**Roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
-
-Purpose:
-
-- Make email verification usable in the web frontend.
-- Make parent account operations visible through a parent UI surface.
-- Make admin parent account operations inspectable through a support console.
-- Prepare production read-only smoke for account operations and verification paths.
-
-Completed build scope:
-
-- Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
-- Phase 223: Email Verification UX Integration. (complete)
-- Phase 224: Parent Account Operations UI. (complete)
-- Phase 225: Admin Account Operations Console. (complete)
-- Phase 226: v5.10 Frontend And Production Readiness Gate. (complete)
-
-## Completed: v5.11 Additional Usage Ledger Coverage
-
-**Status:** Completed local backend release gate 2026-07-04
-**Roadmap:** `.planning/milestones/v5.11-ROADMAP.md`
-**Requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
-**Audit:** `.planning/milestones/v5.11-MILESTONE-AUDIT.md`
-**Release state:** `multi-action-usage-ledger-ready`
+**Status:** Active planning
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.12-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.12-REQUIREMENTS.md`
 
 Purpose:
 
-- Extend usage ledger beyond question submissions only.
-- Cover chat, hints, teacher-help requests, and any practice/generation action that affects paid limits or support explanations.
-- Keep existing question quota enforcement stable.
+- Implement the rich curriculum editor tooling that v5.1 left as readiness/deferred scope.
+- Add backend draft patch/update, structured validation preview, diff, audit-read, and frontend editor workflows.
+- Add production content migration manifest parsing, dry-run/apply APIs, evidence, rollback metadata, and operator UI.
+- Preserve published student/parent curriculum reads, adaptive assignment behavior, and usage ledger compatibility.
 
-Completed build scope:
+Detailed build scope:
 
-- Phase 227: Usage action taxonomy, idempotency policy, privacy schema, success/skip rules, and summary groups. (complete)
-- Phase 228: Ledger instrumentation for existing chat/conversation and teacher-help request flows. (complete)
-- Phase 229: Ledger instrumentation for eligible practice, lesson, assignment, and generation flows. (complete)
-- Phase 230: Multi-action reconciliation, usage summaries, and parent/admin account operations compatibility. (complete)
-- Phase 231: Privacy regression, focused backend release gate, docs/state, and next milestone recommendation. (complete)
+- Phase 232: Curriculum Buildout Reality Refresh And Contract.
+- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 234: Backend Content Migration Service And APIs.
+- Phase 235: Frontend Curriculum Editor And Migration Console.
+- Phase 236: v5.12 Curriculum Buildout Release Gate.
 
-## Active: v5.12 Next Product Expansion Selection
-
-**Status:** Planned decision after v5.11 completion
+## Planned After v5.12
 
 Candidate directions:
 
-- Native/mobile account operations client.
-- Rich curriculum editor frontend implementation.
-- Production content import and migration UI/API.
-- Live warehouse/BI deployment.
+- Frontend visual polish for expanded multi-action usage summaries and curriculum content-quality dashboards.
+- Live warehouse/BI deployment after migration/content analytics data stabilizes.
+- Native/mobile app implementation after web curriculum/account operations are stable.
 - Final external payment/support/notification activation when prerequisites unblock.
 
 ## Deferred External Activation
 
 - Final live Stripe/TWINT charging still needs approved live credentials, registered production webhook endpoint, TWINT approval, finance acceptance, and explicit rollout enablement.
 - Real external support provider and CRM/customer messaging still need approved provider selection, credentials, destination policy, templates, and rollout approval.
-- Live notification provider/native push activation remains outside the v5.10 web account operations scope.
+- Live notification provider/native push activation remains gated on provider credentials, client implementation, and rollout approval.
+- Production warehouse/BI deployment should wait until curriculum migration and content analytics data are stable enough to justify the operational surface.

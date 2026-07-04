@@ -1,6 +1,6 @@
 # STOA Docs Remaining Feature Build Queue
 
-**Updated:** 2026-07-03 after reconciling v5.9 backend completion and starting v5.10 frontend account-operations planning
+**Updated:** 2026-07-05 after completing v5.11 and selecting v5.12 curriculum editor/content migration buildout
 **Sources:** `/Users/zhdeng/stoa-docs/PRD.md`, `/Users/zhdeng/stoa-docs/HLD.md`, `/Users/zhdeng/stoa-docs/PLAN.md`, `.planning/research/STOA_DOCS_FEATURE_GAP_AUDIT.md`
 
 ## Completed Product Areas
@@ -31,21 +31,20 @@
 - Privacy-safe question usage ledger, idempotency, and counter reconciliation.
 - Cognito-backed email verification lifecycle with explicit deferred passwordless login-code policy.
 - Parent/admin backend account operations visibility for billing, entitlement, usage, verification, child binding, and support state.
+- Frontend email verification UX, parent account operations UI, admin account operations console, and production read-only smoke planning.
+- Additional usage ledger coverage for chat, hints, teacher-help, practice answers, lesson completion, assignment generation, and assignment lifecycle events.
 
 ## Remaining Feature Build Queue
 
-1. **v5.10 Account Operations Frontend And Production Readiness**.
-   Build the frontend usability layer for completed backend account operations: email verification confirm/resend UX, parent account operations UI, admin parent operations support detail, focused frontend tests, and production read-only smoke checklist.
+1. **v5.12 Curriculum Editor And Content Migration Buildout**.
+   Implement the rich curriculum editor and migration tooling that v5.1 left as readiness/deferred scope: backend draft patch/validation/diff/audit APIs, content migration manifest dry-run/apply, evidence and rollback metadata, frontend admin/tutor editor, and migration operator console.
 
-2. **Additional Usage Ledger Coverage**.
-   Extend usage ledger beyond question submissions to chat, hints, teacher-help requests, and practice/generation actions that affect paid limits or support explanations.
-
-3. **Final Live Payment Activation Operations**.
+2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
 
-4. **Later Product Expansion**.
-   Frontend rich curriculum editor implementation, production source import, migration API/UI, native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, and deeper operations reporting.
-   Status: v5.6-v5.9 backend final-polish milestones are complete; v5.10 now targets frontend usability and production-readiness for those capabilities.
+3. **Later Product Expansion**.
+   Native apps, fully unreviewed autonomous tutoring decisions, live notification delivery, live warehouse/BI deployment, broader collaborative CMS functionality, and deeper operations reporting.
+   Status: v5.10/v5.11 are complete; v5.12 now targets curriculum editor and migration implementation because it is the highest-value internally buildable gap.
 
 ## Current Planning Decision
 
@@ -59,4 +58,4 @@ v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learni
 
 v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
 
-v5.6 through v5.9 are complete as local backend milestones. The current product gap is frontend usability and production-readiness: email verification UX, parent account operations UI, admin account operations console, and read-only production smoke planning. Native apps, live APNS/FCM, app-store release, final live payment activation, and external support activation remain later prerequisites.
+v5.6 through v5.11 are complete as local milestones. v5.12 is active as a curriculum editor and content migration buildout milestone because v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence persistence, and rollback metadata deferred. Native apps, live APNS/FCM, app-store release, final live payment activation, external support activation, and warehouse/BI remain later prerequisites.

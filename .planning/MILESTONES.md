@@ -1,5 +1,46 @@
 # Milestones
 
+## Active: v5.12 Curriculum Editor And Content Migration Buildout
+
+**Status:** Active planning
+**Started:** 2026-07-05
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.12-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.12-REQUIREMENTS.md`
+**Goal:** Implement the curriculum editor and production content migration tooling that v5.1 left as readiness/deferred scope.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 5 active
+**Release target:** `curriculum-buildout-ready`
+
+Function purpose:
+
+- Give internal admins/tutors a real curriculum authoring workbench.
+- Add backend draft patch/update, validation preview, diff, audit-read, migration dry-run/apply, evidence, and rollback metadata support.
+- Add a frontend migration console for manifest validation, conflict review, apply confirmation, and evidence review.
+- Preserve published student/parent curriculum reads and adaptive assignment behavior.
+
+Implementation strategy:
+
+- Start from the v5.1 readiness audit's deferred items.
+- Build backend editor/migration APIs before frontend tooling.
+- Keep migration dry-run non-mutating and apply explicitly confirmed.
+- Avoid external activation work and broad CMS/collaboration scope during this milestone.
+- Prioritize usable internal feature flow over broad unrelated security/compliance testing.
+
+Planned phases:
+
+- Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
+- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 234: Backend Content Migration Service And APIs.
+- Phase 235: Frontend Curriculum Editor And Migration Console.
+- Phase 236: v5.12 Curriculum Buildout Release Gate.
+
+Known deferred items: native apps, live Stripe/TWINT activation, external support provider activation, live notification provider/native push activation, warehouse/BI deployment, broad collaborative CMS, and unreviewed AI publication.
+
+---
+
 ## v5.10 Account Operations Frontend And Production Readiness (Completed: 2026-07-03)
 
 **Status:** Completed local frontend/readiness release gate 2026-07-03
@@ -52,10 +93,9 @@ Known deferred items: additional usage ledger coverage for non-question actions,
 
 **Status:** Completed local backend release gate 2026-07-04
 **Started:** 2026-07-04
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v5.11-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
+**Roadmap:** `.planning/milestones/v5.11-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.11-MILESTONE-AUDIT.md`
 **Goal:** Extend usage ledger coverage beyond question submissions for account operations explanations and paid-limit governance.
 **Phases:** 5
 **Plans:** 5/5 complete
@@ -93,21 +133,6 @@ Key accomplishments:
 - Verified with 72 focused backend tests and Ruff.
 
 Known deferred items: production deploy/live smoke, frontend visual polish for expanded usage summaries, warehouse/BI export, live Stripe/TWINT activation, and cleanup archive movement after archive target verification.
-
----
-
-## Active: v5.12 Next Product Expansion Selection
-
-**Status:** Planned selection
-**Goal:** Choose the next buildable product expansion after v5.11 multi-action usage ledger readiness.
-
-Candidate directions:
-
-- Native/mobile account operations client.
-- Rich curriculum editor frontend implementation.
-- Production content import and migration UI/API.
-- Live warehouse/BI deployment.
-- Final external payment/support/notification activation when prerequisites unblock.
 
 ---
 

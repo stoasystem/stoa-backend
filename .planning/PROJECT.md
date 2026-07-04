@@ -104,7 +104,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.11 Additional Usage Ledger Coverage on 2026-07-04 (multi-action-usage-ledger-ready release gate)
-**Active milestone:** v5.12 Next Product Expansion Selection
+**Active milestone:** v5.12 Curriculum Editor And Content Migration Buildout
 
 Delivered:
 
@@ -512,10 +512,9 @@ Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-acc
 
 ## Completed Milestone: v5.11 Additional Usage Ledger Coverage
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.11-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.11-ROADMAP.md`
+Requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
+Audit: `.planning/milestones/v5.11-MILESTONE-AUDIT.md`
 
 **Goal:** Extend usage ledger coverage beyond question submissions so paid-limit behavior and parent/admin support explanations cover the rest of the learning actions.
 
@@ -537,6 +536,30 @@ Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
 **Status:** Complete. Phase 231 passed 72 focused backend tests, Ruff, release gate evidence, and milestone audit.
 
 **Deferred beyond v5.11:** production deploy/live smoke, frontend visual polish for expanded usage summaries, warehouse/BI export, live Stripe/TWINT activation, and cleanup archive movement after archive target verification.
+
+## Active Milestone: v5.12 Curriculum Editor And Content Migration Buildout
+
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.12-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.12-REQUIREMENTS.md`
+Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-contract/`
+
+**Status:** Active planning started 2026-07-05 after reconciling v5.11 completion, v5.1 deferred implementation gaps, and current backend/frontend reality.
+
+**Function purpose:** Build the internal curriculum tooling that v5.1 left as readiness/deferred scope: rich editor APIs/UI, structured validation, diff/review/audit workflows, production content migration dry-run/apply, evidence, rollback metadata, and operator console.
+
+**Implementation strategy:** Preserve current published curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility. Implement backend editor/migration APIs first, then frontend admin/tutor tooling, then focused release evidence. Keep external activation, warehouse deployment, native apps, broad CMS/collaboration, and unreviewed AI publication outside this milestone.
+
+**Planned phases:**
+
+- Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
+- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 234: Backend Content Migration Service And APIs.
+- Phase 235: Frontend Curriculum Editor And Migration Console.
+- Phase 236: v5.12 Curriculum Buildout Release Gate.
+
+**Deferred beyond v5.12:** native apps, live Stripe/TWINT activation, external support provider activation, live notification provider/native push activation, warehouse/BI deployment, broad collaborative CMS, and unreviewed AI publication.
 
 ## Requirements
 
@@ -826,16 +849,24 @@ Milestone v5.10 requirements are complete:
 - FRONTOPS-04: admin account operations console - Phase 225.
 - VERIFY-43: v5.10 frontend and production readiness gate - Phase 226.
 
+Milestone v5.11 requirements are complete:
+
+- USAGE-01: governed usage action taxonomy - Phase 227.
+- USAGE-02: chat and teacher-help ledger instrumentation - Phase 228.
+- USAGE-03: practice and generation ledger instrumentation - Phase 229.
+- RECON-02: multi-action reconciliation and usage summaries - Phase 230.
+- OPS-01: parent/admin account operations compatibility - Phase 230.
+- VERIFY-44: v5.11 usage coverage release gate - Phase 231.
+
 ### Active
 
-Milestone v5.11 requirements are planned:
+Milestone v5.12 requirements are active:
 
-- USAGE-01: governed usage action taxonomy - Phase 227. (complete)
-- USAGE-02: chat and teacher-help ledger instrumentation - Phase 228. (complete)
-- USAGE-03: practice and generation ledger instrumentation - Phase 229. (complete)
-- RECON-02: multi-action reconciliation and usage summaries - Phase 230. (complete)
-- OPS-01: parent/admin account operations compatibility - Phase 230. (complete)
-- VERIFY-44: v5.11 usage coverage release gate - Phase 231. (complete)
+- CURRBUILD-01: curriculum buildout reality refresh and contract - Phase 232.
+- CURRBUILD-02: backend editor patch validation diff and audit APIs - Phase 233.
+- CURRBUILD-03: backend content migration service and APIs - Phase 234.
+- CURRBUILD-04: frontend curriculum editor and migration console - Phase 235.
+- VERIFY-45: v5.12 curriculum buildout release gate - Phase 236.
 
 ### Out of Scope
 
@@ -995,6 +1026,7 @@ Known current resources:
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
+| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11 | Active planning |
 
 ## Evolution
 
@@ -1014,4 +1046,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-04 after completing v5.11 additional usage ledger coverage*
+*Last updated: 2026-07-05 after selecting v5.12 curriculum editor and content migration buildout*

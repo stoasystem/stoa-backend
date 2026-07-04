@@ -1,67 +1,60 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.11
-milestone_name: Additional Usage Ledger Coverage
-status: complete
-last_updated: "2026-07-04T18:30:00.000Z"
-last_activity: 2026-07-04
+milestone: v5.12
+milestone_name: Curriculum Editor And Content Migration Buildout
+status: Active planning
+last_updated: "2026-07-04T22:09:41.000Z"
+last_activity: 2026-07-05 — Reconciled current feature reality after v5.11 and selected v5.12 curriculum editor/migration buildout
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-04)
+See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.12 Next Product Expansion Selection.
+**Current focus:** v5.12 Curriculum Editor And Content Migration Buildout.
 
 ## Current Position
 
-Phase: 231 v5.11 Privacy Regression And Release Gate
-Plan: Complete
-Status: Complete
-Last activity: 2026-07-04 — v5.11 completed
+Phase: 232 Curriculum Buildout Reality Refresh And Contract
+Plan: 232 Refresh curriculum reality and define v5.12 build contract
+Status: Active planning
+Last activity: 2026-07-05 — Used current docs/code reality and v5.1 deferred audit to select curriculum editor/migration implementation as the next buildable milestone.
 
 ## Accumulated Context
 
 ### Decisions
 
-- v5.6-v5.9 are complete as local backend milestones.
-- v5.10 is frontend-first: email verification UX, parent account operations UI, admin account operations console, and production read-only readiness.
-- Phase 222 completed the current-reality refresh and corrected stale v5.6-v5.9 planning assumptions.
-- Phase 223 completed frontend email verification resend/confirm clients, register/login verification states, shared verification UI, and focused auth e2e coverage.
-- Phase 224 completed the parent account operations API client/query, dashboard card, detail route, support-state UI, and focused parent account operations e2e coverage.
-- Phase 225 completed the admin account operations API client/query, direct lookup route, subscription handoff links, support-state detail UI, billing evidence/events display, and focused admin account operations e2e coverage.
-- Phase 226 completed the v5.10 readiness gate: frontend lint/build, 15 focused frontend e2e tests, 35 backend focused contract tests, release evidence, and production read-only smoke planning.
-- v5.11 completed five phases: action taxonomy, chat/teacher-help instrumentation, practice/generation instrumentation, multi-action reconciliation/account operations summaries, and privacy release gate.
-- Phase 227 completed centralized usage action taxonomy, idempotency helpers, privacy flags, and safe metadata filtering.
-- Phase 228 completed generic non-question ledger writes and instrumentation for chat messages, question teacher-help, and conversation teacher-help.
-- Phase 229 completed support-visible ledger events for hints, practice answers, lesson completion, reviewed assignment generation, and assignment lifecycle side effects.
-- Phase 230 completed multi-action reconciliation, usage summaries, parent/admin response compatibility, and action-filtered admin usage inspection.
-- Phase 231 completed the v5.11 release gate with 72 focused backend tests, Ruff, docs, and milestone audit.
-- Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
-- Additional usage ledger action coverage should preserve existing question quota counter behavior and extend durable events only for governed successful actions.
-- Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
-- Native app buildout remains future work after web frontend account operations are usable.
+- v5.10 is complete: email verification UX, parent account operations UI, admin account operations console, focused frontend e2e, backend contract evidence, and production read-only smoke planning.
+- v5.11 is complete: governed multi-action usage ledger taxonomy, chat/teacher-help/practice/assignment/generation instrumentation, reconciliation, account operations compatibility, 72 focused backend tests, and Ruff.
+- v5.1 was readiness-complete, not implementation-complete. Its audit explicitly deferred rich editor frontend, draft patch/update, validation preview, diff, audit-read, migration service/API/UI, evidence persistence, and rollback metadata.
+- v5.12 should build curriculum editor and content migration tooling because it is internally buildable and not blocked by live provider credentials.
+- External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
+- Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Select and start v5.12 when ready.
+- Complete Phase 232 reality refresh and v5.12 build contract.
+- Implement Phase 233 backend editor patch/validation/diff/audit APIs.
+- Implement Phase 234 backend content migration service and APIs.
+- Implement Phase 235 frontend curriculum editor and migration console.
+- Close Phase 236 with backend/frontend release evidence and next milestone recommendation.
 - Verify cleanup archive target before moving phase directories.
 
 ### Blockers/Concerns
 
-- Frontend workspace is outside this backend repo; implementation work may need `/Users/zhdeng/stoa-frontend`.
+- Frontend implementation work is in `/Users/zhdeng/stoa-frontend`, outside this backend repo's write root.
+- Actual production content import depends on approved source material being available; v5.12 can build the repeatable pipeline without importing unapproved sources.
 - Production deploy/live smoke remains separate from local functional readiness.
-- Final live Stripe/TWINT activation still depends on external provider prerequisites.
 
 ## Operator Next Steps
 
-- Recommended next step: run `$gsd-new-milestone v5.12` after selecting the next product expansion.
+- Finish Phase 232 docs, then start Phase 233 backend editor APIs.
