@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-03 after completing v5.10 frontend account operations readiness
+**Updated:** 2026-07-04 after planning v5.11 additional usage ledger coverage
 **Mode:** final polish, product functionality first
 
 ## Current Reality
@@ -17,10 +17,8 @@ v5.10 has now closed the frontend and production-readiness gap for email verific
 ## Completed: v5.10 Account Operations Frontend And Production Readiness
 
 **Status:** Completed local frontend/readiness release gate 2026-07-03
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
+**Roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
 
 Purpose:
 
@@ -39,7 +37,7 @@ Completed build scope:
 
 ## Active: v5.11 Additional Usage Ledger Coverage
 
-**Status:** Recommended next milestone
+**Status:** Planned
 
 Purpose:
 
@@ -47,12 +45,13 @@ Purpose:
 - Cover chat, hints, teacher-help requests, and any practice/generation action that affects paid limits or support explanations.
 - Keep existing question quota enforcement stable.
 
-Likely build scope:
+Build scope:
 
-- Contract for governed action taxonomy and idempotency.
-- Ledger instrumentation for chat/hints/teacher-help/practice generation.
-- Reconciliation or summary behavior per action.
-- Parent/admin usage UI handoff updates.
+- Phase 227: Usage action taxonomy, idempotency policy, privacy schema, success/skip rules, and summary groups.
+- Phase 228: Ledger instrumentation for existing chat/conversation and teacher-help request flows.
+- Phase 229: Ledger instrumentation for eligible practice, lesson, assignment, and generation flows.
+- Phase 230: Multi-action reconciliation, usage summaries, and parent/admin account operations compatibility.
+- Phase 231: Privacy regression, focused backend release gate, docs/state, and next milestone recommendation.
 
 ## Planned: v5.12 Next Product Expansion Selection
 

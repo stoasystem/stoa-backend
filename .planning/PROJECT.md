@@ -488,10 +488,8 @@ Phase evidence: `.planning/milestones/v5.9-phases/`
 
 ## Completed Milestone: v5.10 Account Operations Frontend And Production Readiness
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.10-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.10-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.10-ROADMAP.md`
+Requirements: `.planning/milestones/v5.10-REQUIREMENTS.md`
 Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/`, `.planning/phases/223-email-verification-ux-integration/`, `.planning/phases/224-parent-account-operations-ui/`, `.planning/phases/225-admin-account-operations-console/`, `.planning/phases/226-v5-10-frontend-and-production-readiness-gate/`
 
 **Status:** Complete. Phase 226 passed frontend lint/build, 15 focused frontend e2e tests, 35 backend focused contract tests, release gate evidence, and production read-only smoke planning.
@@ -512,6 +510,11 @@ Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-acc
 
 ## Current Milestone: v5.11 Additional Usage Ledger Coverage
 
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.11-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
+
 **Goal:** Extend usage ledger coverage beyond question submissions so paid-limit behavior and parent/admin support explanations cover the rest of the learning actions.
 
 **Target features:**
@@ -520,6 +523,14 @@ Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-acc
 - Reconciliation and summaries that explain usage beyond questions.
 - Parent/admin account operations compatibility without raw learning content or provider payload exposure.
 - Focused backend verification and minimal frontend support-state updates if summaries require them.
+
+**Planned phases:**
+
+- Phase 227: Usage Action Taxonomy And Ledger Contract.
+- Phase 228: Chat And Teacher-Help Ledger Instrumentation.
+- Phase 229: Practice And Generation Ledger Instrumentation.
+- Phase 230: Multi-Action Reconciliation And Account Operations Summaries.
+- Phase 231: v5.11 Privacy Regression And Release Gate.
 
 ## Requirements
 
@@ -811,9 +822,14 @@ Milestone v5.10 requirements are complete:
 
 ### Active
 
-Milestone v5.11 requirements are being defined:
+Milestone v5.11 requirements are planned:
 
-- Extend usage ledger coverage beyond question submissions while preserving privacy-safe summaries and account operations compatibility.
+- USAGE-01: governed usage action taxonomy - Phase 227.
+- USAGE-02: chat and teacher-help ledger instrumentation - Phase 228.
+- USAGE-03: practice and generation ledger instrumentation - Phase 229.
+- RECON-02: multi-action reconciliation and usage summaries - Phase 230.
+- OPS-01: parent/admin account operations compatibility - Phase 230.
+- VERIFY-44: v5.11 usage coverage release gate - Phase 231.
 
 ### Out of Scope
 
@@ -972,7 +988,7 @@ Known current resources:
 | Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
-| Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Active - requirements definition started |
+| Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Active - requirements and roadmap planned |
 
 ## Evolution
 
@@ -992,4 +1008,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-04 after starting v5.11 additional usage ledger coverage*
+*Last updated: 2026-07-04 after planning v5.11 additional usage ledger coverage*

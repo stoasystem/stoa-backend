@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v5.11
 milestone_name: Additional Usage Ledger Coverage
-status: planning
-last_updated: "2026-07-04T15:54:43.956Z"
+status: active
+last_updated: "2026-07-04T16:10:00.000Z"
 last_activity: 2026-07-04
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-04)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 227 Usage Action Taxonomy And Ledger Contract
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-04 — Milestone v5.11 started
+Status: Planned
+Last activity: 2026-07-04 — Milestone v5.11 requirements and roadmap created
 
 ## Accumulated Context
 
@@ -40,14 +40,16 @@ Last activity: 2026-07-04 — Milestone v5.11 started
 - Phase 224 completed the parent account operations API client/query, dashboard card, detail route, support-state UI, and focused parent account operations e2e coverage.
 - Phase 225 completed the admin account operations API client/query, direct lookup route, subscription handoff links, support-state detail UI, billing evidence/events display, and focused admin account operations e2e coverage.
 - Phase 226 completed the v5.10 readiness gate: frontend lint/build, 15 focused frontend e2e tests, 35 backend focused contract tests, release evidence, and production read-only smoke planning.
+- v5.11 is planned as five phases: action taxonomy, chat/teacher-help instrumentation, practice/generation instrumentation, multi-action reconciliation/account operations summaries, and privacy release gate.
 - Backend entitlement, usage ledger, email verification, and account operations primitives should not be reopened unless frontend integration exposes a concrete contract bug.
-- Additional usage ledger action coverage remains future scope after question-submission ledger readiness.
+- Additional usage ledger action coverage should preserve existing question quota counter behavior and extend durable events only for governed successful actions.
 - Passwordless/login-code remains deferred until Cognito custom-auth trigger and replay/rate-limit design exists.
 - Native app buildout remains future work after web frontend account operations are usable.
 
 ### Pending Todos
 
-- Start v5.11 Additional Usage Ledger Coverage when ready.
+- Plan Phase 227 Usage Action Taxonomy And Ledger Contract.
+- Execute Phase 227 before adding new usage ledger writes.
 
 ### Blockers/Concerns
 
@@ -57,4 +59,4 @@ Last activity: 2026-07-04 — Milestone v5.11 started
 
 ## Operator Next Steps
 
-- Recommended next step: start v5.11 Additional Usage Ledger Coverage for chat, hints, teacher-help, and practice/generation actions that should appear in paid limits or support explanations.
+- Recommended next step: run `$gsd-plan-phase 227` for Usage Action Taxonomy And Ledger Contract.

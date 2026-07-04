@@ -4,10 +4,8 @@
 
 **Status:** Completed local frontend/readiness release gate 2026-07-03
 **Started:** 2026-07-03
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
+**Roadmap:** `.planning/milestones/v5.10-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.10-REQUIREMENTS.md`
 **Goal:** Turn completed backend account operations, email verification, entitlement, and usage state into frontend-visible workflows with production read-only readiness.
 **Phases:** 5
 **Plans:** 5/5 complete
@@ -53,7 +51,37 @@ Known deferred items: additional usage ledger coverage for non-question actions,
 ## Active: v5.11 Additional Usage Ledger Coverage
 
 **Status:** Planned
+**Started:** 2026-07-04
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.11-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
 **Goal:** Extend usage ledger coverage beyond question submissions for account operations explanations and paid-limit governance.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/6 complete
+
+Function purpose:
+
+- Define governed usage action taxonomy for chat, hints, teacher-help, and practice/generation actions.
+- Record privacy-safe, idempotent ledger events for eligible successful backend flows.
+- Reconcile and summarize multi-action usage without breaking question quota compatibility.
+- Keep parent/admin account operations compatible with additive, content-safe usage explanations.
+
+Implementation strategy:
+
+- Define action names, success/skip rules, idempotency, and privacy schema before implementation.
+- Preserve existing `question_submission` ledger and counter behavior.
+- Instrument existing successful backend flows only; document future-only actions where no route exists.
+- Extend summaries and account operations after new ledger events exist.
+
+Planned phases:
+
+- Phase 227: Usage Action Taxonomy And Ledger Contract.
+- Phase 228: Chat And Teacher-Help Ledger Instrumentation.
+- Phase 229: Practice And Generation Ledger Instrumentation.
+- Phase 230: Multi-Action Reconciliation And Account Operations Summaries.
+- Phase 231: v5.11 Privacy Regression And Release Gate.
 
 ---
 
