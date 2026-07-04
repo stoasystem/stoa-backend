@@ -128,12 +128,85 @@ def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
     assert duplicate["idempotency_status"] == "duplicate"
     assert created["privacy"] == {
         "raw_content_stored": False,
+        "raw_learning_content_stored": False,
         "private_artifact_keys_stored": False,
         "provider_payloads_stored": False,
+        "auth_tokens_stored": False,
+        "verification_codes_stored": False,
     }
     assert "content" not in created
     assert "image_s3_key" not in created
     assert created["entitlement_snapshot"]["effectivePlan"] == "premium"
+
+
+def test_usage_action_taxonomy_covers_v5_11_actions_and_preserves_question_contract():
+    definitions = {
+        item["action"]: item
+        for item in usage_ledger_service.list_usage_action_definitions()
+    }
+
+    assert definitions["question_submission"]["usage_type"] == "daily_question_submission"
+    assert definitions["question_submission"]["quota_enforced"] is True
+    assert definitions["question_submission"]["counter_prefix"] == "QUESTION"
+    assert definitions["chat_message"]["quota_enforced"] is True
+    assert definitions["chat_message"]["summary_group"] == "chat"
+    assert definitions["hint_request"]["counter_prefix"] == "HINT"
+    assert definitions["question_teacher_help_request"]["quota_enforced"] is False
+    assert definitions["conversation_teacher_help_request"]["summary_group"] == "teacher_help"
+    assert definitions["practice_answer"]["summary_group"] == "practice"
+    assert definitions["practice_lesson_completion"]["support_visible"] is True
+    assert definitions["assignment_completed"]["summary_group"] == "assignments"
+    assert definitions["reviewed_assignment_generation"]["summary_group"] == "generation"
+
+
+def test_usage_idempotency_and_metadata_helpers_are_privacy_safe():
+    assert (
+        usage_ledger_service.build_usage_idempotency_key(
+            action="hint_request",
+            resource_id="challenge-1",
+            qualifier="student-1",
+        )
+        == "hint_request:challenge-1:student-1"
+    )
+    assert (
+        usage_ledger_service.build_usage_idempotency_key(
+            action="chat_message",
+            resource_id="message-1",
+            request_key="request-123",
+        )
+        == "request-123"
+    )
+
+    safe = usage_ledger_service.safe_usage_metadata(
+        {
+            "subject": "math",
+            "challenge_id": "challenge-1",
+            "attempt_result": "incorrect",
+            "prompt": "raw prompt must not be stored",
+            "student_answer": "x = 3",
+            "provider_payload": {"tokens": 100},
+            "private_artifact_key": "s3://private/key",
+            "unknown_field": "dropped",
+            "status": "completed",
+        }
+    )
+
+    assert safe == {
+        "subject": "math",
+        "challenge_id": "challenge-1",
+        "attempt_result": "incorrect",
+        "status": "completed",
+    }
+
+    try:
+        usage_ledger_service.build_usage_idempotency_key(
+            action="not_governed",
+            resource_id="x",
+        )
+    except ValueError as exc:
+        assert "Unsupported usage ledger action" in str(exc)
+    else:
+        raise AssertionError("unsupported usage action should fail closed")
 
 
 def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):

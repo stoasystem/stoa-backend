@@ -524,9 +524,9 @@ Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
 - Parent/admin account operations compatibility without raw learning content or provider payload exposure.
 - Focused backend verification and minimal frontend support-state updates if summaries require them.
 
-**Planned phases:**
+**Phase progress:**
 
-- Phase 227: Usage Action Taxonomy And Ledger Contract.
+- Phase 227: Usage Action Taxonomy And Ledger Contract. (complete)
 - Phase 228: Chat And Teacher-Help Ledger Instrumentation.
 - Phase 229: Practice And Generation Ledger Instrumentation.
 - Phase 230: Multi-Action Reconciliation And Account Operations Summaries.
@@ -824,7 +824,7 @@ Milestone v5.10 requirements are complete:
 
 Milestone v5.11 requirements are planned:
 
-- USAGE-01: governed usage action taxonomy - Phase 227.
+- USAGE-01: governed usage action taxonomy - Phase 227. (complete)
 - USAGE-02: chat and teacher-help ledger instrumentation - Phase 228.
 - USAGE-03: practice and generation ledger instrumentation - Phase 229.
 - RECON-02: multi-action reconciliation and usage summaries - Phase 230.

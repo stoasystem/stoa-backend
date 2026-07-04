@@ -51,7 +51,7 @@ Known constraints:
 
 ## Phases
 
-- [ ] **Phase 227: Usage Action Taxonomy And Ledger Contract** - Define governed actions, success/skip rules, idempotency keys, privacy schema, and summary groups.
+- [x] **Phase 227: Usage Action Taxonomy And Ledger Contract** - Define governed actions, success/skip rules, idempotency keys, privacy schema, and summary groups.
 - [ ] **Phase 228: Chat And Teacher-Help Ledger Instrumentation** - Record safe ledger events for existing successful chat/conversation and teacher-help request flows.
 - [ ] **Phase 229: Practice And Generation Ledger Instrumentation** - Record safe ledger events for existing eligible practice, lesson, assignment, and generation flows.
 - [ ] **Phase 230: Multi-Action Reconciliation And Account Operations Summaries** - Extend reconciliation, usage summaries, and parent/admin account operations compatibility across multiple actions.
@@ -128,7 +128,7 @@ Known constraints:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 227 Usage Action Taxonomy And Ledger Contract | v5.11 | 0/1 | Planned | - |
+| 227 Usage Action Taxonomy And Ledger Contract | v5.11 | 1/1 | Complete | 2026-07-04 |
 | 228 Chat And Teacher-Help Ledger Instrumentation | v5.11 | 0/1 | Planned | - |
 | 229 Practice And Generation Ledger Instrumentation | v5.11 | 0/1 | Planned | - |
 | 230 Multi-Action Reconciliation And Account Operations Summaries | v5.11 | 0/1 | Planned | - |
@@ -138,7 +138,7 @@ Known constraints:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| USAGE-01 | Phase 227 | Planned |
+| USAGE-01 | Phase 227 | Complete |
 | USAGE-02 | Phase 228 | Planned |
 | USAGE-03 | Phase 229 | Planned |
 | RECON-02 | Phase 230 | Planned |

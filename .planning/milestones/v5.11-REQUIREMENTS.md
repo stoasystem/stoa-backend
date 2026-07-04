@@ -93,7 +93,7 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| USAGE-01 | Phase 227 | Planned |
+| USAGE-01 | Phase 227 | Complete |
 | USAGE-02 | Phase 228 | Planned |
 | USAGE-03 | Phase 229 | Planned |
 | RECON-02 | Phase 230 | Planned |

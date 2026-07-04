@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -13,6 +14,215 @@ from stoa.services import entitlement_service
 QUESTION_SUBMISSION_ACTION = "question_submission"
 QUESTION_COUNTER_USAGE_TYPE = "daily_question_submission"
 LEDGER_SCHEMA_VERSION = "usage-ledger.v1"
+CHAT_MESSAGE_ACTION = "chat_message"
+HINT_REQUEST_ACTION = "hint_request"
+QUESTION_TEACHER_HELP_ACTION = "question_teacher_help_request"
+CONVERSATION_TEACHER_HELP_ACTION = "conversation_teacher_help_request"
+PRACTICE_ANSWER_ACTION = "practice_answer"
+PRACTICE_LESSON_COMPLETION_ACTION = "practice_lesson_completion"
+ASSIGNMENT_STARTED_ACTION = "assignment_started"
+ASSIGNMENT_COMPLETED_ACTION = "assignment_completed"
+ASSIGNMENT_SKIPPED_ACTION = "assignment_skipped"
+ASSIGNMENT_ARCHIVED_ACTION = "assignment_archived"
+REVIEWED_ASSIGNMENT_GENERATION_ACTION = "reviewed_assignment_generation"
+
+_FORBIDDEN_METADATA_KEYS = {
+    "answer",
+    "assistant_message",
+    "auth_token",
+    "content",
+    "correct_answer",
+    "generated_artifact",
+    "generated_content",
+    "hint",
+    "image_s3_key",
+    "message",
+    "private_artifact_key",
+    "private_artifact_keys",
+    "prompt",
+    "provider_payload",
+    "raw_content",
+    "student_answer",
+    "teacher_message",
+    "teacher_response",
+    "token",
+    "verification_code",
+}
+_ALLOWED_METADATA_KEYS = {
+    "action_family",
+    "attempt_result",
+    "challenge_id",
+    "conversation_id",
+    "counter_key",
+    "counter_value_after",
+    "grade_level",
+    "lesson_id",
+    "question_id",
+    "request_id",
+    "resource_id",
+    "source",
+    "source_type",
+    "status",
+    "subject",
+    "topic_id",
+    "unit_id",
+    "usage_type",
+    "write_order",
+}
+
+
+@dataclass(frozen=True)
+class UsageActionDefinition:
+    """Governed usage ledger action contract.
+
+    The taxonomy is intentionally small and explicit. It tells route-level
+    instrumentation which actions may write ledger rows, how they should be
+    summarized, and whether an existing quota counter participates.
+    """
+
+    action: str
+    usage_type: str
+    summary_group: str
+    description: str
+    quota_enforced: bool
+    support_visible: bool
+    counter_prefix: str | None = None
+    entitlement_limit_key: str | None = None
+    default_quantity: int = 1
+    idempotency_strategy: str = "resource_id"
+    success_condition: str = "successful_route_completion"
+    excluded_when: tuple[str, ...] = ()
+
+
+USAGE_ACTION_DEFINITIONS: dict[str, UsageActionDefinition] = {
+    QUESTION_SUBMISSION_ACTION: UsageActionDefinition(
+        action=QUESTION_SUBMISSION_ACTION,
+        usage_type=QUESTION_COUNTER_USAGE_TYPE,
+        summary_group="questions",
+        description="Successful quota-governed student question submission.",
+        quota_enforced=True,
+        support_visible=True,
+        counter_prefix="QUESTION",
+        entitlement_limit_key="dailyAiQuestionLimit",
+        idempotency_strategy="request_key_or_question_id",
+        success_condition="daily_question_counter_incremented",
+        excluded_when=("counter_rejected", "duplicate_retry_returned_existing_question"),
+    ),
+    CHAT_MESSAGE_ACTION: UsageActionDefinition(
+        action=CHAT_MESSAGE_ACTION,
+        usage_type="daily_chat_message",
+        summary_group="chat",
+        description="Successful student chat message that triggers an assistant response.",
+        quota_enforced=True,
+        support_visible=True,
+        counter_prefix="CHAT",
+        entitlement_limit_key="dailyChatMessageLimit",
+        success_condition="chat_counter_incremented_and_messages_persisted",
+        excluded_when=("conversation_not_found", "counter_rejected", "read_only_history"),
+    ),
+    HINT_REQUEST_ACTION: UsageActionDefinition(
+        action=HINT_REQUEST_ACTION,
+        usage_type="daily_hint_request",
+        summary_group="hints",
+        description="Successful student hint request for a practice challenge.",
+        quota_enforced=True,
+        support_visible=True,
+        counter_prefix="HINT",
+        entitlement_limit_key="dailyHintLimit",
+        success_condition="hint_counter_incremented_and_hint_returned",
+        excluded_when=("challenge_not_found", "counter_rejected", "passive_hint_render"),
+    ),
+    QUESTION_TEACHER_HELP_ACTION: UsageActionDefinition(
+        action=QUESTION_TEACHER_HELP_ACTION,
+        usage_type="support_question_teacher_help_request",
+        summary_group="teacher_help",
+        description="Successful student escalation of a question to human help.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="question_marked_escalated",
+        excluded_when=("question_not_found", "not_owner", "already_teacher_active"),
+    ),
+    CONVERSATION_TEACHER_HELP_ACTION: UsageActionDefinition(
+        action=CONVERSATION_TEACHER_HELP_ACTION,
+        usage_type="support_conversation_teacher_help_request",
+        summary_group="teacher_help",
+        description="Successful student escalation of a conversation to human help.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="conversation_marked_escalated",
+        excluded_when=("conversation_not_found", "not_owner"),
+    ),
+    PRACTICE_ANSWER_ACTION: UsageActionDefinition(
+        action=PRACTICE_ANSWER_ACTION,
+        usage_type="support_practice_answer",
+        summary_group="practice",
+        description="Submitted answer for a practice challenge.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="practice_attempt_recorded",
+        excluded_when=("challenge_not_found", "passive_exercise_read"),
+    ),
+    PRACTICE_LESSON_COMPLETION_ACTION: UsageActionDefinition(
+        action=PRACTICE_LESSON_COMPLETION_ACTION,
+        usage_type="support_practice_lesson_completion",
+        summary_group="practice",
+        description="Student marks a practice lesson complete.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="lesson_completion_recorded",
+        excluded_when=("lesson_not_found", "catalog_read"),
+    ),
+    ASSIGNMENT_STARTED_ACTION: UsageActionDefinition(
+        action=ASSIGNMENT_STARTED_ACTION,
+        usage_type="support_assignment_started",
+        summary_group="assignments",
+        description="Student starts a reviewed assignment.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="assignment_transitioned_to_started",
+        excluded_when=("assignment_not_found", "unauthorized", "duplicate_transition"),
+    ),
+    ASSIGNMENT_COMPLETED_ACTION: UsageActionDefinition(
+        action=ASSIGNMENT_COMPLETED_ACTION,
+        usage_type="support_assignment_completed",
+        summary_group="assignments",
+        description="Student completes a reviewed assignment.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="assignment_transitioned_to_completed",
+        excluded_when=("assignment_not_found", "unauthorized", "duplicate_transition"),
+    ),
+    ASSIGNMENT_SKIPPED_ACTION: UsageActionDefinition(
+        action=ASSIGNMENT_SKIPPED_ACTION,
+        usage_type="support_assignment_skipped",
+        summary_group="assignments",
+        description="Student skips a reviewed assignment.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="assignment_transitioned_to_skipped",
+        excluded_when=("assignment_not_found", "unauthorized", "duplicate_transition"),
+    ),
+    ASSIGNMENT_ARCHIVED_ACTION: UsageActionDefinition(
+        action=ASSIGNMENT_ARCHIVED_ACTION,
+        usage_type="support_assignment_archived",
+        summary_group="assignments",
+        description="Tutor or admin archives a reviewed assignment.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="assignment_transitioned_to_archived",
+        excluded_when=("assignment_not_found", "unauthorized", "duplicate_transition"),
+    ),
+    REVIEWED_ASSIGNMENT_GENERATION_ACTION: UsageActionDefinition(
+        action=REVIEWED_ASSIGNMENT_GENERATION_ACTION,
+        usage_type="support_reviewed_assignment_generation",
+        summary_group="generation",
+        description="Reviewed assignment or exercise generation accepted into a governed workflow.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="reviewed_generation_persisted",
+        excluded_when=("preview_only", "draft_only", "provider_failure", "unreviewed_generation"),
+    ),
+}
 
 
 def today_period() -> str:
@@ -31,6 +241,68 @@ def build_question_idempotency_key(question_id: str, request_key: str | None = N
     if key:
         return key
     return f"question:{question_id}"
+
+
+def list_usage_action_definitions() -> list[dict[str, Any]]:
+    """Return the governed usage actions as API/documentation-safe dictionaries."""
+    return [asdict(definition) for definition in USAGE_ACTION_DEFINITIONS.values()]
+
+
+def get_usage_action_definition(action: str) -> UsageActionDefinition:
+    """Return a governed action definition or raise for unsupported actions."""
+    try:
+        return USAGE_ACTION_DEFINITIONS[action]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported usage ledger action: {action}") from exc
+
+
+def build_usage_idempotency_key(
+    *,
+    action: str,
+    resource_id: str,
+    request_key: str | None = None,
+    qualifier: str | None = None,
+) -> str:
+    """Build a deterministic idempotency key for governed non-question actions."""
+    get_usage_action_definition(action)
+    key = str(request_key or "").strip()
+    if key:
+        return key
+    resource = str(resource_id or "").strip()
+    if not resource:
+        raise ValueError("resource_id is required for usage idempotency")
+    suffix = f":{qualifier.strip()}" if qualifier and qualifier.strip() else ""
+    return f"{action}:{resource}{suffix}"
+
+
+def safe_usage_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Filter usage metadata down to bounded support-safe fields."""
+    if not metadata:
+        return {}
+    safe: dict[str, Any] = {}
+    for key, value in metadata.items():
+        normalized_key = str(key)
+        if normalized_key in _FORBIDDEN_METADATA_KEYS or normalized_key not in _ALLOWED_METADATA_KEYS:
+            continue
+        if value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            safe[normalized_key] = value
+        elif isinstance(value, list):
+            safe[normalized_key] = [item for item in value if isinstance(item, (str, int, float, bool))]
+    return safe
+
+
+def usage_privacy_flags() -> dict[str, bool]:
+    """Return the privacy flags required on every usage ledger event."""
+    return {
+        "raw_content_stored": False,
+        "raw_learning_content_stored": False,
+        "private_artifact_keys_stored": False,
+        "provider_payloads_stored": False,
+        "auth_tokens_stored": False,
+        "verification_codes_stored": False,
+    }
 
 
 def get_question_usage_event(
@@ -90,9 +362,7 @@ def record_question_usage_event(
         "entitlement_source": entitlement.get("source"),
         "entitlement_snapshot": _entitlement_snapshot(entitlement),
         "privacy": {
-            "raw_content_stored": False,
-            "private_artifact_keys_stored": False,
-            "provider_payloads_stored": False,
+            **usage_privacy_flags(),
         },
         "metadata": {
             "usage_type": QUESTION_COUNTER_USAGE_TYPE,
