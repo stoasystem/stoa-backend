@@ -14,6 +14,7 @@ VERSION_ENTITY = "curriculum_version"
 POINTER_ENTITY = "curriculum_pointer"
 MANIFEST_ENTITY = "curriculum_publish_manifest"
 AUDIT_ENTITY = "curriculum_audit_event"
+MIGRATION_ENTITY = "curriculum_migration_evidence"
 
 
 class StalePointerError(RuntimeError):
@@ -124,6 +125,29 @@ def put_manifest(item: dict[str, Any]) -> None:
     )
 
 
+def put_migration_evidence(item: dict[str, Any]) -> None:
+    table = get_table()
+    table.put_item(
+        Item={
+            "PK": f"CURRICULUM_MIGRATION#{item['migration_id']}",
+            "SK": "EVIDENCE",
+            "entity_type": MIGRATION_ENTITY,
+            **item,
+        }
+    )
+
+
+def get_migration_evidence(migration_id: str) -> dict[str, Any] | None:
+    table = get_table()
+    resp = table.get_item(
+        Key={
+            "PK": f"CURRICULUM_MIGRATION#{migration_id}",
+            "SK": "EVIDENCE",
+        }
+    )
+    return resp.get("Item")
+
+
 def put_published_projection(version: dict[str, Any], manifest: dict[str, Any]) -> None:
     """Write the published practice projection consumed by current curriculum reads."""
     table = get_table()
@@ -199,4 +223,3 @@ def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[dict[s
         Limit=limit,
     )
     return resp.get("Items", [])
-

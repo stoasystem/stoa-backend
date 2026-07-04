@@ -30,6 +30,7 @@ from stoa.services import (
     report_recovery_service,
     account_operations_service,
     curriculum_analytics_service,
+    curriculum_migration_service,
     curriculum_ops_service,
     support_destination_service,
     support_handoff_service,
@@ -359,6 +360,33 @@ class CurriculumAuditResponse(BaseModel):
     nextToken: str | None = None
 
 
+class CurriculumMigrationDryRunResponse(BaseModel):
+    migrationId: str
+    confirmationToken: str
+    source: dict[str, Any] = Field(default_factory=dict)
+    operatorNote: str | None = None
+    summary: dict[str, int]
+    rows: list[dict[str, Any]]
+    publishReady: bool
+
+
+class CurriculumMigrationApplyRequest(BaseModel):
+    manifest: dict[str, Any]
+    confirmation_token: str = Field(..., alias="confirmationToken", min_length=1)
+
+
+class CurriculumMigrationEvidenceResponse(BaseModel):
+    migrationId: str
+    status: str
+    source: dict[str, Any] = Field(default_factory=dict)
+    operatorNote: str | None = None
+    summary: dict[str, int] = Field(default_factory=dict)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    appliedBy: str | None = None
+    appliedAt: str | None = None
+    idempotent: bool | None = None
+
+
 class CurriculumVersionResponse(BaseModel):
     publicLessonId: str
     versionId: str
@@ -593,6 +621,48 @@ async def create_curriculum_lesson_draft(
 ):
     """Create an internal lesson-plus-exercises authoring draft."""
     return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), user)
+
+
+@router.post(
+    "/curriculum/migrations/dry-run",
+    response_model=CurriculumMigrationDryRunResponse,
+)
+async def dry_run_curriculum_migration(
+    manifest: dict[str, Any] = Body(...),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Validate a curriculum migration manifest without mutating content state."""
+    return curriculum_migration_service.dry_run(manifest, user)
+
+
+@router.post(
+    "/curriculum/migrations/{migration_id}/apply",
+    response_model=CurriculumMigrationEvidenceResponse,
+)
+async def apply_curriculum_migration(
+    migration_id: str,
+    body: CurriculumMigrationApplyRequest,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Apply a confirmed curriculum migration manifest and persist evidence."""
+    return curriculum_migration_service.apply_migration(
+        migration_id,
+        body.manifest,
+        body.confirmation_token,
+        user,
+    )
+
+
+@router.get(
+    "/curriculum/migrations/{migration_id}",
+    response_model=CurriculumMigrationEvidenceResponse,
+)
+async def read_curriculum_migration(
+    migration_id: str,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Read evidence for an applied curriculum migration."""
+    return curriculum_migration_service.get_migration(migration_id, user)
 
 
 @router.get("/curriculum/lessons/{public_lesson_id}/preview", response_model=CurriculumVersionResponse)
