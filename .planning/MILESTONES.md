@@ -96,12 +96,17 @@ Known deferred items: live Stripe/TWINT customer-charging smoke, production depl
 
 ---
 
-## Planned Next: v5.14 Verification And Login Reliability
+## Active: v5.14 Verification And Login Reliability
 
-**Status:** Planned
+**Status:** Active
+**Started:** 2026-07-05
 **Roadmap:** `.planning/milestones/v5.14-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.14-REQUIREMENTS.md`
 **Goal:** Make email verification, login-code policy, account activation, resend/confirm, and support recovery reliable.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+**Release target:** `verification-login-reliable-local`
 
 Function purpose:
 
@@ -113,6 +118,14 @@ Implementation strategy:
 - Audit Cognito/local profile/frontend behavior before changing policy.
 - Prefer one canonical login path over multiple partially working paths.
 - Add bounded support visibility and focused rate-limit/abuse controls.
+
+Planned phases:
+
+- Phase 242: Verification And Login Reality Audit.
+- Phase 243: Backend Verification Resend Confirm Reliability.
+- Phase 244: Login Code And Passwordless Policy Resolution.
+- Phase 245: Frontend Verification Recovery And Admin Support Visibility.
+- Phase 246: v5.14 Verification Login Reliability Gate.
 
 ---
 

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.13
-milestone_name: Payment And Entitlement Production Completion
-status: complete
-last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed v5.13 payment production completion gate
+milestone: v5.14
+milestone_name: Verification And Login Reliability
+status: planning
+last_updated: "2026-07-04T23:37:34.466Z"
+last_activity: 2026-07-05 — Milestone v5.14 started
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.13 Payment And Entitlement Production Completion.
+**Current focus:** v5.14 Verification And Login Reliability.
 
 ## Current Position
 
-Phase: 241 v5.13 Payment Production Completion Gate
-Plan: 241 v5.13 payment production completion gate
-Status: Complete
-Last activity: 2026-07-05 — v5.13 closed as payment-production-ready-local with live provider smoke explicitly blocked externally.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-05 — Milestone v5.14 started with verification/login reliability requirements and roadmap.
 
 ## Accumulated Context
 
@@ -48,13 +48,14 @@ Last activity: 2026-07-05 — v5.13 closed as payment-production-ready-local wit
 - Phase 239 is complete: duplicate Stripe webhooks now create support-visible dedup events, stale older provider events are recorded as ignored, and active paid access cannot be downgraded by an older failed-payment event.
 - Phase 240 is complete: billing responses now include bounded supportEvidence, and frontend admin billing/account-operations surfaces render support action plus duplicate/stale reconciliation counts.
 - Phase 241 is complete: backend tests/Ruff, frontend build/lint, and focused billing e2e passed; live Stripe/TWINT smoke remains blocked on external credentials, webhook endpoint, finance acceptance, and rollout approval.
+- v5.14 is active: verification/login reliability must audit Cognito/local/frontend behavior first, then harden resend/confirm/login policy, resolve half-enabled login-code behavior, add support visibility, and close with local release evidence.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Start v5.14 Verification And Login Reliability when ready.
+- Execute Phase 242 Verification And Login Reality Audit.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
@@ -67,4 +68,4 @@ Last activity: 2026-07-05 — v5.13 closed as payment-production-ready-local wit
 
 ## Operator Next Steps
 
-- v5.13 is complete. Recommended next milestone: v5.14 Verification And Login Reliability.
+- Audit current verification/login behavior and define the v5.14 implementation contract.

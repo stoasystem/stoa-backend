@@ -108,7 +108,7 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.13 Payment And Entitlement Production Completion on 2026-07-05 (payment-production-ready-local release gate)
-**Active milestone:** None
+**Active milestone:** v5.14 Verification And Login Reliability
 
 Delivered:
 
