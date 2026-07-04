@@ -545,7 +545,7 @@ Milestone roadmap: `.planning/milestones/v5.12-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.12-REQUIREMENTS.md`
 Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-contract/`
 
-**Status:** Active planning started 2026-07-05 after reconciling v5.11 completion, v5.1 deferred implementation gaps, and current backend/frontend reality.
+**Status:** Active. Phase 232 completed 2026-07-05; Phase 233 backend authorization/editor APIs are active.
 
 **Function purpose:** Build the internal curriculum tooling that v5.1 left as readiness/deferred scope: special curriculum authorization, rich editor APIs/UI, structured validation, diff/review/audit workflows, production content migration dry-run/apply, evidence, rollback metadata, and operator console.
 
@@ -553,8 +553,8 @@ Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-cont
 
 **Planned phases:**
 
-- Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs.
+- Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.
@@ -862,7 +862,7 @@ Milestone v5.11 requirements are complete:
 
 Milestone v5.12 requirements are active:
 
-- CURRBUILD-01: curriculum buildout reality refresh and contract - Phase 232.
+- CURRBUILD-01: curriculum buildout reality refresh and contract - Phase 232. (complete)
 - CURRBUILD-02: backend special authorization editor patch validation diff and audit APIs - Phase 233.
 - CURRBUILD-03: backend content migration service and APIs - Phase 234.
 - CURRBUILD-04: frontend curriculum editor and migration console - Phase 235.
@@ -1026,7 +1026,10 @@ Known current resources:
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
-| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Active planning |
+| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Active - Phase 233 |
+| Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Planned |
+| Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Planned |
+| Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Planned |
 
 ## Evolution
 

@@ -1,7 +1,7 @@
 # Requirements: v5.12 Curriculum Editor And Content Migration Buildout
 
 **Milestone:** v5.12
-**Status:** Active planning
+**Status:** Active
 **Created:** 2026-07-05
 **Prior milestone:** v5.11 Additional Usage Ledger Coverage
 
@@ -9,11 +9,13 @@
 
 Implement the buildable curriculum tooling gaps that v5.1 intentionally left as readiness/deferred scope: rich editor backend/frontend functionality for specially authorized curriculum operators, production content migration service/API/UI, validation/diff/audit evidence, and operator release readiness.
 
-This is an internal development milestone. Prioritize usable curriculum operations over broad security/compliance testing. Keep checks focused on authoring correctness, content integrity, migration safety, published-read compatibility, and frontend usability.
+This is an internal development milestone. Prioritize usable curriculum operations over broad unrelated security/compliance testing. Keep checks focused on authoring correctness, content integrity, migration safety, published-read compatibility, and frontend usability.
 
 ## Requirements
 
 ### CURRBUILD-01 Curriculum Buildout Reality Refresh And Contract
+
+Status: Complete 2026-07-05.
 
 Acceptance criteria:
 
@@ -28,6 +30,7 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Backend exposes safe draft patch/update behavior for structured lesson and exercise content only to users with backend-granted `curriculum_author` capability.
+- Existing ordinary teacher/tutor users cannot create, edit, review, publish, rollback, or archive curriculum unless the backend grants explicit curriculum capability.
 - Validation preview returns field-level issues, blocking/warning severity, publish readiness, and remediation hints.
 - Diff endpoint compares draft/current/published/rollback candidates without leaking unrelated data.
 - Curriculum audit-read endpoint returns bounded version lifecycle and review events only to authorized curriculum reviewers/publishers.
@@ -61,7 +64,7 @@ Acceptance criteria:
 - Frontend lint/build and focused e2e pass for curriculum editor and migration console workflows.
 - Docs, roadmap, state, milestone snapshots, and `stoa_docs` gap audit are updated.
 - Release evidence records completed implementation, deferred external activation, and any remaining editor/migration limitations.
-- Next milestone recommendation is explicit.
+- Next milestone recommendation is explicit and separates new functional, safety, and stability buildouts from externally blocked activation work.
 
 ## Out of Scope
 
@@ -75,16 +78,16 @@ Acceptance criteria:
 
 ## Future Milestones
 
-- v5.13 candidate: frontend visual polish for expanded multi-action usage summaries and curriculum content quality dashboards.
-- v5.13 candidate: live warehouse/BI deployment after migration/content analytics data stabilizes.
-- v5.13 candidate: native/mobile client implementation after web curriculum/account operations are stable.
-- External activation milestones for live payment, support provider, and notification provider when prerequisites unblock.
+- **v5.13 Payment And Entitlement Production Completion**: make paid access actually work end to end with provider callbacks, entitlement reconciliation, user-visible state, admin support evidence, refunds/invoices where applicable, and release gates.
+- **v5.14 Verification And Login Reliability**: make email verification and login-code behavior dependable, observable, rate-limited, and supportable across registration, resend, confirmation, login, and account activation edge cases.
+- **v5.15 Usage, Quota, And Product Stability**: make usage accounting trustworthy across real student flows, reconcile quota/ledger drift, expose support-safe usage explanations, and add health/smoke/regression gates for core flows.
+- External activation milestones remain separate when live provider credentials and rollout approvals unblock.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CURRBUILD-01 | Phase 232 | Planned |
+| CURRBUILD-01 | Phase 232 | Complete |
 | CURRBUILD-02 | Phase 233 | Planned |
 | CURRBUILD-03 | Phase 234 | Planned |
 | CURRBUILD-04 | Phase 235 | Planned |

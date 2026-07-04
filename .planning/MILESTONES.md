@@ -2,7 +2,7 @@
 
 ## Active: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Active planning
+**Status:** Active
 **Started:** 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -10,8 +10,8 @@
 **Milestone requirements:** `.planning/milestones/v5.12-REQUIREMENTS.md`
 **Goal:** Implement the curriculum editor and production content migration tooling that v5.1 left as readiness/deferred scope.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 5 active
+**Plans:** 1/5 complete
+**Requirements:** 1/5 complete, 4 active
 **Release target:** `curriculum-buildout-ready`
 
 Function purpose:
@@ -32,13 +32,73 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs.
+- Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.
 
 Known deferred items: native apps, live Stripe/TWINT activation, external support provider activation, live notification provider/native push activation, warehouse/BI deployment, broad collaborative CMS, and unreviewed AI publication.
+
+---
+
+## Planned Next: v5.13 Payment And Entitlement Production Completion
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.13-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.13-REQUIREMENTS.md`
+**Goal:** Make paid access work as a real product flow instead of only local/backend readiness.
+
+Function purpose:
+
+- Complete checkout/paywall state, webhook reconciliation, entitlement activation, usage-limit compatibility, admin billing evidence, and refund/cancellation support state.
+- Audit current reality first so prior payment planning evidence is not mistaken for working user-facing behavior.
+
+Implementation strategy:
+
+- Start from provider-backed payment events and reconcile entitlements idempotently.
+- Keep manual override visible as a support path, not a substitute for paid access.
+- Treat live provider smoke as blocked unless production credentials and rollout approval exist.
+
+---
+
+## Planned Next: v5.14 Verification And Login Reliability
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.14-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.14-REQUIREMENTS.md`
+**Goal:** Make email verification, login-code policy, account activation, resend/confirm, and support recovery reliable.
+
+Function purpose:
+
+- Ensure real users can register, verify, log in, recover from common verification failures, and receive clear frontend/support states.
+- Remove or complete half-enabled login-code/passwordless behavior.
+
+Implementation strategy:
+
+- Audit Cognito/local profile/frontend behavior before changing policy.
+- Prefer one canonical login path over multiple partially working paths.
+- Add bounded support visibility and focused rate-limit/abuse controls.
+
+---
+
+## Planned Next: v5.15 Usage, Quota, And Product Stability
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.15-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.15-REQUIREMENTS.md`
+**Goal:** Make usage accounting, quota reconciliation, support explanations, and core smoke checks trustworthy.
+
+Function purpose:
+
+- Ensure real usage events, entitlement limits, and visible quota state agree across student/parent/admin surfaces.
+- Add internal health/smoke gates for the flows most likely to break product operation.
+
+Implementation strategy:
+
+- Audit actual flow coverage instead of assuming prior ledger planning is complete.
+- Reconcile ledger rows, aggregate counters, entitlement state, and support summaries.
+- Keep observability support-safe and focused on request IDs/metadata rather than raw learning content.
 
 ---
 

@@ -14,7 +14,7 @@ The remaining queue in older `stoa_docs` planning was stale: v5.10 and additiona
 
 ## Active: v5.12 Curriculum Editor And Content Migration Buildout
 
-**Status:** Active planning
+**Status:** Active
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.12-ROADMAP.md`
@@ -30,20 +30,48 @@ Purpose:
 
 Detailed build scope:
 
-- Phase 232: Curriculum Buildout Reality Refresh And Contract.
-- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs.
+- Phase 232: Curriculum Buildout Reality Refresh And Contract. (complete)
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs. (active)
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.
 
 ## Planned After v5.12
 
-Candidate directions:
+These are new functional, safety, and stability milestones. They should not be implemented by renaming v5.12 phases.
 
-- Frontend visual polish for expanded multi-action usage summaries and curriculum content-quality dashboards.
-- Live warehouse/BI deployment after migration/content analytics data stabilizes.
-- Native/mobile app implementation after web curriculum/account operations are stable.
-- Final external payment/support/notification activation when prerequisites unblock.
+### v5.13 Payment And Entitlement Production Completion
+
+Roadmap: `.planning/milestones/v5.13-ROADMAP.md`
+Requirements: `.planning/milestones/v5.13-REQUIREMENTS.md`
+
+Purpose:
+
+- Make paid access work end to end for real users.
+- Complete checkout/paywall state, provider event reconciliation, entitlement activation, quota compatibility, refund/cancellation/invoice support state, and admin billing evidence.
+- Start with a reality audit so existing readiness docs do not mask broken or stubbed behavior.
+
+### v5.14 Verification And Login Reliability
+
+Roadmap: `.planning/milestones/v5.14-ROADMAP.md`
+Requirements: `.planning/milestones/v5.14-REQUIREMENTS.md`
+
+Purpose:
+
+- Make email verification, resend/confirm, login-code/passwordless policy, account activation, and support recovery reliable.
+- Ensure frontend and backend agree on blocked, pending, confirmed, expired, wrong-code, and provider-failure states.
+- Remove or clearly disable any half-enabled login-code behavior.
+
+### v5.15 Usage, Quota, And Product Stability
+
+Roadmap: `.planning/milestones/v5.15-ROADMAP.md`
+Requirements: `.planning/milestones/v5.15-REQUIREMENTS.md`
+
+Purpose:
+
+- Make usage accounting and quota behavior trustworthy across real student flows.
+- Reconcile ledger rows, aggregate counters, entitlement limits, and support summaries.
+- Add core health/smoke gates for login, entitlement, curriculum read, question submit, teacher help, and admin support surfaces.
 
 ## Deferred External Activation
 
