@@ -44,7 +44,7 @@ Last activity: 2026-07-05 — Used current docs/code reality and v5.1 deferred a
 ### Pending Todos
 
 - Complete Phase 232 reality refresh and v5.12 build contract.
-- Implement Phase 233 backend special authorization and editor patch/validation/diff/audit APIs.
+- Implement Phase 233 backend special authorization, editor patch, validation, diff, and audit APIs.
 - Implement Phase 234 backend content migration service and APIs.
 - Implement Phase 235 frontend curriculum editor and migration console.
 - Close Phase 236 with backend/frontend release evidence and next milestone recommendation.

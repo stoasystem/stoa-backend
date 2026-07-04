@@ -554,7 +554,7 @@ Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-cont
 **Planned phases:**
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
-- Phase 233: Backend Special Authorization, Editor Patch, Validation, Diff, And Audit APIs.
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs.
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.
@@ -863,7 +863,7 @@ Milestone v5.11 requirements are complete:
 Milestone v5.12 requirements are active:
 
 - CURRBUILD-01: curriculum buildout reality refresh and contract - Phase 232.
-- CURRBUILD-02: backend editor patch validation diff and audit APIs - Phase 233.
+- CURRBUILD-02: backend special authorization editor patch validation diff and audit APIs - Phase 233.
 - CURRBUILD-03: backend content migration service and APIs - Phase 234.
 - CURRBUILD-04: frontend curriculum editor and migration console - Phase 235.
 - VERIFY-45: v5.12 curriculum buildout release gate - Phase 236.

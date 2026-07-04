@@ -31,7 +31,7 @@ Purpose:
 Detailed build scope:
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract.
-- Phase 233: Backend Special Authorization, Editor Patch, Validation, Diff, And Audit APIs.
+- Phase 233: Backend Special Authorization Editor Patch Validation Diff And Audit APIs.
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.

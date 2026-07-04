@@ -23,7 +23,7 @@ Acceptance criteria:
 - Missing frontend surfaces are identified: authorized editor workbench, validation/diff/review UI, migration console, typed clients, hooks, routes, and e2e.
 - Remaining-feature docs are corrected so v5.10 and v5.11 are no longer listed as remaining work.
 
-### CURRBUILD-02 Backend Editor Patch Validation Diff And Audit APIs
+### CURRBUILD-02 Backend Special Authorization Editor Patch Validation Diff And Audit APIs
 
 Acceptance criteria:
 
