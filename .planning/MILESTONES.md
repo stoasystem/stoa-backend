@@ -48,9 +48,9 @@ Known deferred items: additional usage ledger coverage for non-question actions,
 
 ---
 
-## Active: v5.11 Additional Usage Ledger Coverage
+## v5.11 Additional Usage Ledger Coverage (Completed: 2026-07-04)
 
-**Status:** Planned
+**Status:** Completed local backend release gate 2026-07-04
 **Started:** 2026-07-04
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -58,8 +58,9 @@ Known deferred items: additional usage ledger coverage for non-question actions,
 **Milestone requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
 **Goal:** Extend usage ledger coverage beyond question submissions for account operations explanations and paid-limit governance.
 **Phases:** 5
-**Plans:** 4/5 complete
-**Requirements:** 5/6 complete
+**Plans:** 5/5 complete
+**Requirements:** 6/6 complete
+**Release state:** `multi-action-usage-ledger-ready`
 
 Function purpose:
 
@@ -81,7 +82,32 @@ Phase progress:
 - Phase 228: Chat And Teacher-Help Ledger Instrumentation. (complete)
 - Phase 229: Practice And Generation Ledger Instrumentation. (complete)
 - Phase 230: Multi-Action Reconciliation And Account Operations Summaries. (complete)
-- Phase 231: v5.11 Privacy Regression And Release Gate.
+- Phase 231: v5.11 Privacy Regression And Release Gate. (complete)
+
+Key accomplishments:
+
+- Added governed usage action taxonomy for question, chat, hints, teacher-help, practice, assignments, and reviewed generation.
+- Added privacy-safe, idempotent ledger events for chat, teacher-help, hints, practice answers, lesson completion, assignment generation, and assignment lifecycle side effects.
+- Added multi-action reconciliation and usage summaries while preserving question quota compatibility.
+- Preserved parent/admin account operations compatibility with additive usage details.
+- Verified with 72 focused backend tests and Ruff.
+
+Known deferred items: production deploy/live smoke, frontend visual polish for expanded usage summaries, warehouse/BI export, live Stripe/TWINT activation, and cleanup archive movement after archive target verification.
+
+---
+
+## Active: v5.12 Next Product Expansion Selection
+
+**Status:** Planned selection
+**Goal:** Choose the next buildable product expansion after v5.11 multi-action usage ledger readiness.
+
+Candidate directions:
+
+- Native/mobile account operations client.
+- Rich curriculum editor frontend implementation.
+- Production content import and migration UI/API.
+- Live warehouse/BI deployment.
+- Final external payment/support/notification activation when prerequisites unblock.
 
 ---
 

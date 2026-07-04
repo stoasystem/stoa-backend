@@ -94,6 +94,8 @@ The completed v5.9 milestone composes parent/admin account operations visibility
 
 The completed v5.10 milestone makes those account operations capabilities usable in the web frontend: email verification resend/confirm UX, parent account operations UI, admin account operations console, focused frontend e2e coverage, backend contract evidence, and production read-only smoke planning.
 
+The completed v5.11 milestone extends usage ledger coverage beyond question submissions with governed action taxonomy, privacy-safe ledger events for chat/teacher-help/practice/assignment/generation flows, multi-action reconciliation, and parent/admin account operations compatibility.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -101,8 +103,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.10 Account Operations Frontend And Production Readiness on 2026-07-03 (frontend-account-ops-ready release gate)
-**Active milestone:** v5.11 Additional Usage Ledger Coverage
+**Latest completed milestone:** v5.11 Additional Usage Ledger Coverage on 2026-07-04 (multi-action-usage-ledger-ready release gate)
+**Active milestone:** v5.12 Next Product Expansion Selection
 
 Delivered:
 
@@ -508,7 +510,7 @@ Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-acc
 
 **Deferred beyond v5.10:** additional usage ledger action coverage, Cognito custom-auth passwordless login-code, native/mobile app buildout, live Stripe/TWINT activation, external provider activation, and warehouse/BI.
 
-## Current Milestone: v5.11 Additional Usage Ledger Coverage
+## Completed Milestone: v5.11 Additional Usage Ledger Coverage
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
@@ -530,7 +532,11 @@ Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
 - Phase 228: Chat And Teacher-Help Ledger Instrumentation. (complete)
 - Phase 229: Practice And Generation Ledger Instrumentation. (complete)
 - Phase 230: Multi-Action Reconciliation And Account Operations Summaries. (complete)
-- Phase 231: v5.11 Privacy Regression And Release Gate.
+- Phase 231: v5.11 Privacy Regression And Release Gate. (complete)
+
+**Status:** Complete. Phase 231 passed 72 focused backend tests, Ruff, release gate evidence, and milestone audit.
+
+**Deferred beyond v5.11:** production deploy/live smoke, frontend visual polish for expanded usage summaries, warehouse/BI export, live Stripe/TWINT activation, and cleanup archive movement after archive target verification.
 
 ## Requirements
 
@@ -829,7 +835,7 @@ Milestone v5.11 requirements are planned:
 - USAGE-03: practice and generation ledger instrumentation - Phase 229. (complete)
 - RECON-02: multi-action reconciliation and usage summaries - Phase 230. (complete)
 - OPS-01: parent/admin account operations compatibility - Phase 230. (complete)
-- VERIFY-44: v5.11 usage coverage release gate - Phase 231.
+- VERIFY-44: v5.11 usage coverage release gate - Phase 231. (complete)
 
 ### Out of Scope
 
@@ -988,7 +994,7 @@ Known current resources:
 | Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
-| Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Active - requirements and roadmap planned |
+| Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
 
 ## Evolution
 
@@ -1008,4 +1014,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-04 after planning v5.11 additional usage ledger coverage*
+*Last updated: 2026-07-04 after completing v5.11 additional usage ledger coverage*

@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-04 after planning v5.11 additional usage ledger coverage
+**Updated:** 2026-07-04 after completing v5.11 additional usage ledger coverage
 **Mode:** final polish, product functionality first
 
 ## Current Reality
@@ -35,9 +35,13 @@ Completed build scope:
 - Phase 225: Admin Account Operations Console. (complete)
 - Phase 226: v5.10 Frontend And Production Readiness Gate. (complete)
 
-## Active: v5.11 Additional Usage Ledger Coverage
+## Completed: v5.11 Additional Usage Ledger Coverage
 
-**Status:** Planned
+**Status:** Completed local backend release gate 2026-07-04
+**Roadmap:** `.planning/milestones/v5.11-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.11-MILESTONE-AUDIT.md`
+**Release state:** `multi-action-usage-ledger-ready`
 
 Purpose:
 
@@ -45,17 +49,17 @@ Purpose:
 - Cover chat, hints, teacher-help requests, and any practice/generation action that affects paid limits or support explanations.
 - Keep existing question quota enforcement stable.
 
-Build scope:
+Completed build scope:
 
-- Phase 227: Usage action taxonomy, idempotency policy, privacy schema, success/skip rules, and summary groups.
-- Phase 228: Ledger instrumentation for existing chat/conversation and teacher-help request flows.
-- Phase 229: Ledger instrumentation for eligible practice, lesson, assignment, and generation flows.
-- Phase 230: Multi-action reconciliation, usage summaries, and parent/admin account operations compatibility.
-- Phase 231: Privacy regression, focused backend release gate, docs/state, and next milestone recommendation.
+- Phase 227: Usage action taxonomy, idempotency policy, privacy schema, success/skip rules, and summary groups. (complete)
+- Phase 228: Ledger instrumentation for existing chat/conversation and teacher-help request flows. (complete)
+- Phase 229: Ledger instrumentation for eligible practice, lesson, assignment, and generation flows. (complete)
+- Phase 230: Multi-action reconciliation, usage summaries, and parent/admin account operations compatibility. (complete)
+- Phase 231: Privacy regression, focused backend release gate, docs/state, and next milestone recommendation. (complete)
 
-## Planned: v5.12 Next Product Expansion Selection
+## Active: v5.12 Next Product Expansion Selection
 
-**Status:** Planned decision after v5.10/v5.11 reality
+**Status:** Planned decision after v5.11 completion
 
 Candidate directions:
 

@@ -1,7 +1,7 @@
 # Requirements: v5.11 Additional Usage Ledger Coverage
 
 **Milestone:** v5.11
-**Status:** Planning
+**Status:** Complete
 **Created:** 2026-07-04
 **Prior milestone:** v5.10 Account Operations Frontend And Production Readiness
 
@@ -98,4 +98,4 @@ Acceptance criteria:
 | USAGE-03 | Phase 229 | Complete |
 | RECON-02 | Phase 230 | Complete |
 | OPS-01 | Phase 230 | Complete |
-| VERIFY-44 | Phase 231 | Planned |
+| VERIFY-44 | Phase 231 | Complete |

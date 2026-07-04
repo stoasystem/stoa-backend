@@ -1,6 +1,6 @@
 # Roadmap: v5.11 Additional Usage Ledger Coverage
 
-**Status:** Planned
+**Status:** Complete
 **Created:** 2026-07-04
 **Prior milestone:** v5.10 Account Operations Frontend And Production Readiness
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -55,7 +55,7 @@ Known constraints:
 - [x] **Phase 228: Chat And Teacher-Help Ledger Instrumentation** - Record safe ledger events for existing successful chat/conversation and teacher-help request flows.
 - [x] **Phase 229: Practice And Generation Ledger Instrumentation** - Record safe ledger events for existing eligible practice, lesson, assignment, and generation flows.
 - [x] **Phase 230: Multi-Action Reconciliation And Account Operations Summaries** - Extend reconciliation, usage summaries, and parent/admin account operations compatibility across multiple actions.
-- [ ] **Phase 231: v5.11 Privacy Regression And Release Gate** - Verify focused backend behavior, privacy boundaries, docs/state, and next milestone recommendation.
+- [x] **Phase 231: v5.11 Privacy Regression And Release Gate** - Verify focused backend behavior, privacy boundaries, docs/state, and next milestone recommendation.
 
 ## Phase Details
 
@@ -132,7 +132,7 @@ Known constraints:
 | 228 Chat And Teacher-Help Ledger Instrumentation | v5.11 | 1/1 | Complete | 2026-07-04 |
 | 229 Practice And Generation Ledger Instrumentation | v5.11 | 1/1 | Complete | 2026-07-04 |
 | 230 Multi-Action Reconciliation And Account Operations Summaries | v5.11 | 1/1 | Complete | 2026-07-04 |
-| 231 v5.11 Privacy Regression And Release Gate | v5.11 | 0/1 | Planned | - |
+| 231 v5.11 Privacy Regression And Release Gate | v5.11 | 1/1 | Complete | 2026-07-04 |
 
 ## Traceability
 
@@ -143,4 +143,4 @@ Known constraints:
 | USAGE-03 | Phase 229 | Complete |
 | RECON-02 | Phase 230 | Complete |
 | OPS-01 | Phase 230 | Complete |
-| VERIFY-44 | Phase 231 | Planned |
+| VERIFY-44 | Phase 231 | Complete |
