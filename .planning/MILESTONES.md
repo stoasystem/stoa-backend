@@ -16,7 +16,8 @@
 
 Function purpose:
 
-- Give internal admins/tutors a real curriculum authoring workbench.
+- Give specially authorized internal curriculum operators a real curriculum authoring workbench.
+- Ensure ordinary teachers/tutors cannot edit curriculum unless backend grants them explicit curriculum capabilities.
 - Add backend draft patch/update, validation preview, diff, audit-read, migration dry-run/apply, evidence, and rollback metadata support.
 - Add a frontend migration console for manifest validation, conflict review, apply confirmation, and evidence review.
 - Preserve published student/parent curriculum reads and adaptive assignment behavior.
@@ -32,7 +33,7 @@ Implementation strategy:
 Planned phases:
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
-- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 233: Backend Special Authorization, Editor Patch, Validation, Diff, And Audit APIs.
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.

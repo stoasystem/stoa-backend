@@ -58,7 +58,7 @@ v5.4 completed frontend learning operations and automation dashboards. It made v
 
 v5.5 completed automatic teacher dispatch and SLA load balancing backend readiness. It builds on the existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code to add dispatch planning, teacher/tutor matching, conditional claim metadata, timeout reassignment, queue visibility, and operator SLA/load dashboards. This is human-help routing, not AI auto-answering.
 
-The final-polish account and usage work is complete through v5.11. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. v5.10 added frontend email verification UX, parent account operations UI, admin account operations console, focused e2e coverage, backend contract evidence, and a production read-only smoke checklist. v5.11 added governed multi-action usage ledger coverage for chat, hints, teacher-help, practice, lesson, assignment, and generation flows. The next buildable product gap is curriculum editor and production content migration implementation from v5.1's deferred readiness scope.
+The final-polish account and usage work is complete through v5.11. v5.6 completed effective entitlements and paid access enforcement. v5.7 completed privacy-safe question usage ledger and reconciliation. v5.8 completed Cognito-backed email verification lifecycle and explicitly deferred unsupported passwordless login-code behavior. v5.9 completed parent/admin backend account operations visibility. v5.10 added frontend email verification UX, parent account operations UI, admin account operations console, focused e2e coverage, backend contract evidence, and a production read-only smoke checklist. v5.11 added governed multi-action usage ledger coverage for chat, hints, teacher-help, practice, lesson, assignment, and generation flows. The next buildable product gap is curriculum editor and production content migration implementation from v5.1's deferred readiness scope, with edit/review/publish/migration permission restricted to backend-authorized curriculum operators rather than all teachers/tutors.
 
 ## Completed Or Largely Complete
 
@@ -192,7 +192,7 @@ The final-polish account and usage work is complete through v5.11. v5.6 complete
 
 ## Remaining Feature Build Order
 
-1. Execute v5.12 Curriculum Editor And Content Migration Buildout.
+1. Execute v5.12 Curriculum Editor And Content Migration Buildout with explicit backend-granted curriculum authorization.
 2. Consider frontend visual polish for expanded multi-action usage summaries and curriculum content-quality dashboards after v5.12.
 3. Consider live warehouse/BI deployment after migration/content analytics data stabilizes.
 4. Consider native app buildout after web curriculum/account operations are stable.

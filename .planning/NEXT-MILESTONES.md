@@ -23,6 +23,7 @@ The remaining queue in older `stoa_docs` planning was stale: v5.10 and additiona
 Purpose:
 
 - Implement the rich curriculum editor tooling that v5.1 left as readiness/deferred scope.
+- Ensure editing/review/publish/migration actions require backend-granted curriculum capabilities; ordinary teachers/tutors do not receive edit permission by default.
 - Add backend draft patch/update, structured validation preview, diff, audit-read, and frontend editor workflows.
 - Add production content migration manifest parsing, dry-run/apply APIs, evidence, rollback metadata, and operator UI.
 - Preserve published student/parent curriculum reads, adaptive assignment behavior, and usage ledger compatibility.
@@ -30,7 +31,7 @@ Purpose:
 Detailed build scope:
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract.
-- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 233: Backend Special Authorization, Editor Patch, Validation, Diff, And Audit APIs.
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.

@@ -547,14 +547,14 @@ Active phase: `.planning/phases/232-curriculum-buildout-reality-refresh-and-cont
 
 **Status:** Active planning started 2026-07-05 after reconciling v5.11 completion, v5.1 deferred implementation gaps, and current backend/frontend reality.
 
-**Function purpose:** Build the internal curriculum tooling that v5.1 left as readiness/deferred scope: rich editor APIs/UI, structured validation, diff/review/audit workflows, production content migration dry-run/apply, evidence, rollback metadata, and operator console.
+**Function purpose:** Build the internal curriculum tooling that v5.1 left as readiness/deferred scope: special curriculum authorization, rich editor APIs/UI, structured validation, diff/review/audit workflows, production content migration dry-run/apply, evidence, rollback metadata, and operator console.
 
-**Implementation strategy:** Preserve current published curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility. Implement backend editor/migration APIs first, then frontend admin/tutor tooling, then focused release evidence. Keep external activation, warehouse deployment, native apps, broad CMS/collaboration, and unreviewed AI publication outside this milestone.
+**Implementation strategy:** Preserve current published curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility. Treat curriculum editing as a backend-granted capability, not a default teacher/tutor permission. Implement backend authorization plus editor/migration APIs first, then frontend operator tooling, then focused release evidence. Keep external activation, warehouse deployment, native apps, broad CMS/collaboration, and unreviewed AI publication outside this milestone.
 
 **Planned phases:**
 
 - Phase 232: Curriculum Buildout Reality Refresh And Contract. (active planning)
-- Phase 233: Backend Editor Patch Validation Diff And Audit APIs.
+- Phase 233: Backend Special Authorization, Editor Patch, Validation, Diff, And Audit APIs.
 - Phase 234: Backend Content Migration Service And APIs.
 - Phase 235: Frontend Curriculum Editor And Migration Console.
 - Phase 236: v5.12 Curriculum Buildout Release Gate.
@@ -1026,7 +1026,7 @@ Known current resources:
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
-| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11 | Active planning |
+| Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Active planning |
 
 ## Evolution
 

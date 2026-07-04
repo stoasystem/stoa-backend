@@ -37,7 +37,7 @@
 ## Remaining Feature Build Queue
 
 1. **v5.12 Curriculum Editor And Content Migration Buildout**.
-   Implement the rich curriculum editor and migration tooling that v5.1 left as readiness/deferred scope: backend draft patch/validation/diff/audit APIs, content migration manifest dry-run/apply, evidence and rollback metadata, frontend admin/tutor editor, and migration operator console.
+   Implement the rich curriculum editor and migration tooling that v5.1 left as readiness/deferred scope: special backend-granted curriculum authorization, backend draft patch/validation/diff/audit APIs, content migration manifest dry-run/apply, evidence and rollback metadata, authorized curriculum operator editor, and migration operator console.
 
 2. **Final Live Payment Activation Operations**.
    Execute operational activation once external prerequisites are ready: approved live Stripe credentials, registered production webhook endpoint, TWINT capability approval, finance acceptance, and explicit rollout enablement.
@@ -58,4 +58,4 @@ v5.4 is complete as a frontend-ready milestone. It made v5.2/v5.3 backend learni
 
 v5.5 is complete as a backend dispatch-ready milestone. It added automatic teacher/tutor dispatch for student help requests: route escalated questions to eligible teachers/tutors, prevent double assignment, reassign timed-out work, and expose queue/SLA health. The implementation builds on existing request-teacher, teacher queue, takeover, reply, resolve, notification, and SLA code by adding dispatch planning, conditional claim metadata, timeout/reassignment, and operator visibility. It is not AI auto-answering.
 
-v5.6 through v5.11 are complete as local milestones. v5.12 is active as a curriculum editor and content migration buildout milestone because v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence persistence, and rollback metadata deferred. Native apps, live APNS/FCM, app-store release, final live payment activation, external support activation, and warehouse/BI remain later prerequisites.
+v5.6 through v5.11 are complete as local milestones. v5.12 is active as a curriculum editor and content migration buildout milestone because v5.1 was readiness-complete but left rich editor frontend, special edit authorization, draft patch/diff/validation APIs, migration service/API/UI, evidence persistence, and rollback metadata deferred. Ordinary teachers/tutors must not receive curriculum edit permission by default; backend authorization must grant explicit curriculum capabilities. Native apps, live APNS/FCM, app-store release, final live payment activation, external support activation, and warehouse/BI remain later prerequisites.

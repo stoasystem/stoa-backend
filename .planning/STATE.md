@@ -37,13 +37,14 @@ Last activity: 2026-07-05 — Used current docs/code reality and v5.1 deferred a
 - v5.11 is complete: governed multi-action usage ledger taxonomy, chat/teacher-help/practice/assignment/generation instrumentation, reconciliation, account operations compatibility, 72 focused backend tests, and Ruff.
 - v5.1 was readiness-complete, not implementation-complete. Its audit explicitly deferred rich editor frontend, draft patch/update, validation preview, diff, audit-read, migration service/API/UI, evidence persistence, and rollback metadata.
 - v5.12 should build curriculum editor and content migration tooling because it is internally buildable and not blocked by live provider credentials.
+- Curriculum editing is not a default teacher/tutor permission. v5.12 must require backend-granted curriculum capabilities such as `curriculum_author`, `curriculum_reviewer`, and `curriculum_publisher`/`migration_operator`.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
 - Complete Phase 232 reality refresh and v5.12 build contract.
-- Implement Phase 233 backend editor patch/validation/diff/audit APIs.
+- Implement Phase 233 backend special authorization and editor patch/validation/diff/audit APIs.
 - Implement Phase 234 backend content migration service and APIs.
 - Implement Phase 235 frontend curriculum editor and migration console.
 - Close Phase 236 with backend/frontend release evidence and next milestone recommendation.

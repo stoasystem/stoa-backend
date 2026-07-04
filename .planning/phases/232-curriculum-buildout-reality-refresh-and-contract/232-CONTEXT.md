@@ -23,15 +23,17 @@ The next buildable product gap is now curriculum operations implementation, not 
 - Content-quality analytics foundation exists in `curriculum_analytics_service` and `curriculum_analytics_repo`.
 - Published student/parent curriculum reads exist through practice routes and must remain stable.
 - Adaptive assignment and sequencing routes already consume curriculum and assignment signals.
+- Curriculum edit/review/publish permission must be a special backend-granted capability, not a default teacher/tutor role permission.
 - v5.11 usage ledger instrumentation should remain compatible with practice, lesson, assignment, and generation flows.
 
 ## Frontend Reality To Fix
 
-- Admin/tutor curriculum authoring workbench is not a complete implemented surface.
+- Authorized curriculum operator authoring workbench is not a complete implemented surface.
+- Ordinary teacher/tutor unauthorized states are not yet specified for the editor/migration UX.
 - Rich editor clients/hooks/routes are not complete.
 - Migration dry-run/apply operator UI is missing.
 - Validation, diff, audit, evidence, conflict, partial-success, and API-error states are missing for curriculum operations.
 
 ## Planning Boundary
 
-Phase 232 is planning and contract alignment. Implementation starts in Phase 233 for backend editor APIs, then Phase 234 migration APIs, then Phase 235 frontend tooling.
+Phase 232 is planning and contract alignment. Implementation starts in Phase 233 for backend special authorization and editor APIs, then Phase 234 migration APIs, then Phase 235 frontend tooling.

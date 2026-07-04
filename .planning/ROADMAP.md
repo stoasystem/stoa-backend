@@ -7,7 +7,7 @@
 
 ## Goal
 
-Turn the v5.1 curriculum editor and production content migration readiness work into implemented internal tooling: backend draft patch/validation/diff/migration APIs, frontend admin/tutor authoring UI, migration operator console, and focused release evidence.
+Turn the v5.1 curriculum editor and production content migration readiness work into implemented internal tooling: backend draft patch/validation/diff/migration APIs, frontend authorized-curriculum-operator authoring UI, migration operator console, and focused release evidence.
 
 ## Why This Is The Next Milestone
 
@@ -51,6 +51,8 @@ Planning evidence:
 
 - Start with a reality refresh and contract update so v5.12 is not confused with the older v5.1 readiness milestone.
 - Build backend API gaps before frontend authoring screens.
+- Treat curriculum editing as a special backend-granted capability, not a default teacher/tutor permission.
+- Add explicit authorization checks for `curriculum_author`, `curriculum_reviewer`, and `curriculum_publisher`/`migration_operator` capabilities before draft edit, review, publish, rollback, or migration apply actions.
 - Keep published student/parent curriculum reads stable while draft/migration workflows evolve.
 - Treat migration dry-run as non-mutating and apply as explicitly confirmed.
 - Store migration evidence and audit references, but do not broaden this milestone into warehouse/BI or external production activation.
@@ -60,9 +62,9 @@ Planning evidence:
 ## Phases
 
 - [ ] **Phase 232: Curriculum Buildout Reality Refresh And Contract** - Reconcile v5.1 deferred implementation, current backend/frontend code, `stoa_docs`, and v5.12 scope.
-- [ ] **Phase 233: Backend Editor Patch Validation Diff And Audit APIs** - Implement backend draft patch/update, structured validation preview, content diff, audit-read, and focused tests.
+- [ ] **Phase 233: Backend Editor Patch Validation Diff And Audit APIs** - Implement backend special-authorization model, draft patch/update, structured validation preview, content diff, audit-read, and focused tests.
 - [ ] **Phase 234: Backend Content Migration Service And APIs** - Implement manifest parsing, dry-run, apply, evidence, conflict reporting, rollback metadata, and tests.
-- [ ] **Phase 235: Frontend Curriculum Editor And Migration Console** - Implement admin/tutor authoring workbench, review/preview/diff UX, migration dry-run/apply console, and focused e2e.
+- [ ] **Phase 235: Frontend Curriculum Editor And Migration Console** - Implement authorized curriculum operator workbench, review/preview/diff UX, migration dry-run/apply console, and focused e2e.
 - [ ] **Phase 236: v5.12 Curriculum Buildout Release Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
 
 ## Phase Details
@@ -75,7 +77,7 @@ Planning evidence:
 **Success Criteria**:
 
 1. v5.1 deferred implementation gaps are mapped to current backend/frontend files.
-2. Current backend routes/services are checked for existing authoring lifecycle support and missing API capabilities.
+2. Current backend routes/services are checked for existing authoring lifecycle support, missing API capabilities, and current role/capability boundaries.
 3. Current frontend is checked for missing editor/migration pages, typed clients, hooks, routes, and tests.
 4. `stoa_docs` remaining-feature docs no longer list v5.10/v5.11 as remaining work.
 5. v5.12 scope, phase order, out-of-scope items, and release evidence are documented.
@@ -87,10 +89,10 @@ Planning evidence:
 **Requirements**: CURRBUILD-02
 **Success Criteria**:
 
-1. Draft update/patch endpoint supports structured lesson and exercise edits without changing published projections.
+1. Draft update/patch endpoint requires a backend-granted curriculum author capability and supports structured lesson and exercise edits without changing published projections.
 2. Validation preview returns field-level issues, publish readiness, and blocking versus warning severity.
 3. Diff endpoint compares draft/current/published/rollback candidates in bounded metadata-safe form.
-4. Audit-read endpoint exposes curriculum version events for admin/tutor review without raw private data or unrelated audit streams.
+4. Audit-read endpoint exposes curriculum version events only to authorized curriculum reviewers/publishers without raw private data or unrelated audit streams.
 5. Focused backend tests cover legal edits, invalid content, draft isolation, validation output, diff output, audit output, and published-read compatibility.
 
 ### Phase 234: Backend Content Migration Service And APIs
@@ -102,7 +104,7 @@ Planning evidence:
 
 1. Migration manifest schema supports source metadata, subject/topic mapping, public IDs, version IDs, locale metadata, lessons, exercises, dependencies, and operator notes.
 2. Dry-run endpoint reports create/update/skip/conflict/validation results without mutation.
-3. Apply endpoint requires explicit confirmation and writes versions, published pointers when requested, evidence, and audit references.
+3. Apply endpoint requires migration-operator authorization plus explicit confirmation, then writes versions, published pointers when requested, evidence, and audit references.
 4. Conflict and rollback metadata are persisted enough for operator review and safe follow-up.
 5. Focused backend tests cover dry-run, apply, conflicts, validation failures, idempotency, evidence, and no accidental student/parent draft leakage.
 
@@ -113,11 +115,11 @@ Planning evidence:
 **Requirements**: CURRBUILD-04
 **Success Criteria**:
 
-1. Admin/tutor frontend clients, query keys, hooks, and routes cover editor worklist, draft edit, validation preview, diff, review actions, audit view, migration dry-run, and migration apply.
+1. Frontend clients, query keys, hooks, and routes cover editor worklist, draft edit, validation preview, diff, review actions, audit view, migration dry-run, and migration apply only for users with backend-granted curriculum capabilities.
 2. Editor supports lesson sections, objectives, examples, formulas, media references, exercise blocks, answer keys, hints, explanations, tags, prerequisites, duration, and locale metadata.
 3. Migration console shows manifest validation, conflicts, dry-run summary, apply confirmation, evidence references, and rollback hints.
 4. Loading, empty, invalid, conflict, partial-success, unauthorized, and API-error states are implemented without demo fallback.
-5. Focused frontend e2e covers editor happy path, validation errors, diff/review, migration dry-run, migration apply confirmation, and API-error states.
+5. Focused frontend e2e covers editor happy path, validation errors, diff/review, migration dry-run, migration apply confirmation, unauthorized ordinary teacher/tutor states, and API-error states.
 
 ### Phase 236: v5.12 Curriculum Buildout Release Gate
 
@@ -128,7 +130,7 @@ Planning evidence:
 
 1. Focused backend tests pass for editor patch/validation/diff/audit and migration service/API behavior.
 2. Frontend lint/build and focused e2e pass for editor and migration console workflows.
-3. Published student/parent curriculum reads remain compatible.
+3. Published student/parent curriculum reads remain compatible, and ordinary teacher/tutor accounts cannot edit curriculum without special authorization.
 4. Docs, roadmap, requirements, state, remaining-feature audit, and milestone evidence are updated.
 5. Next milestone recommendation is explicit and separates externally blocked activation from internally buildable scope.
 

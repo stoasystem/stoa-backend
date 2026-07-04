@@ -24,6 +24,7 @@
 | Diff endpoint | v5.1 audit says diff endpoint remains future work | Build in Phase 233. |
 | Audit-read endpoint | v5.1 audit says audit-read remains future work | Build in Phase 233. |
 | Migration service/API/UI | v5.1 audit says manifest parsing, dry-run/apply APIs, evidence persistence, rollback metadata, and operator UI remain future work | Build in Phases 234 and 235. |
+| Special curriculum authorization | User clarified ordinary teachers must not all receive edit permission | Add to Phase 233 backend authorization and Phase 235 unauthorized UI states. |
 | Production content import | v5.1 audit says no production source was imported/published through the pipeline | Enable repeatable pipeline; actual approved source import remains dependent on source availability. |
 
 ## Candidate Milestones Rejected For v5.12
@@ -37,4 +38,4 @@
 
 Start v5.12 as `Curriculum Editor And Content Migration Buildout`.
 
-The milestone should implement the editor and migration tooling that v5.1 intentionally left as readiness/deferred scope, while preserving published curriculum reads, usage ledger compatibility, and adaptive assignment behavior.
+The milestone should implement the editor and migration tooling that v5.1 intentionally left as readiness/deferred scope, while preserving published curriculum reads, usage ledger compatibility, adaptive assignment behavior, and the boundary that curriculum editing requires explicit backend authorization.
