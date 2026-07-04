@@ -26,7 +26,7 @@ Acceptance criteria:
 
 ### PAYPROD-02 Checkout And User Paid-State Flow
 
-Status: Active.
+Status: Complete 2026-07-05.
 
 Acceptance criteria:
 
@@ -37,7 +37,7 @@ Acceptance criteria:
 
 ### PAYPROD-03 Webhook Reconciliation And Entitlement Activation
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -90,7 +90,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAYPROD-01 | Phase 237 | Complete |
-| PAYPROD-02 | Phase 238 | Active |
-| PAYPROD-03 | Phase 239 | Planned |
+| PAYPROD-02 | Phase 238 | Complete |
+| PAYPROD-03 | Phase 239 | Active |
 | PAYPROD-04 | Phase 240 | Planned |
 | VERIFY-47 | Phase 241 | Planned |

@@ -33,7 +33,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 ## Phases
 
 - [x] **Phase 237: Payment Reality Audit And Contract Refresh** - Map current payment, entitlement, quota, support, and frontend paid-state behavior; define the v5.13 implementation contract.
-- [ ] **Phase 238: Checkout Paywall And Paid-State Integration** - Complete parent-facing checkout/paywall state against real backend subscription and entitlement APIs.
+- [x] **Phase 238: Checkout Paywall And Paid-State Integration** - Complete parent-facing checkout/paywall state against real backend subscription and entitlement APIs.
 - [ ] **Phase 239: Webhook Reconciliation And Entitlement Activation** - Harden provider event ingestion/reconciliation and activate entitlements idempotently.
 - [ ] **Phase 240: Billing Support Evidence And Lifecycle Edge States** - Expose support-safe invoice/refund/cancellation/manual-override/reconciliation evidence.
 - [ ] **Phase 241: v5.13 Payment Production Completion Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
@@ -59,7 +59,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Make parent-facing checkout and paid-state surfaces reflect real backend state.
 **Depends on**: Phase 237.
 **Requirements**: PAYPROD-02
-**Status**: Planned.
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/238-checkout-paywall-and-paid-state-integration/238-SUMMARY.md`, `.planning/phases/238-checkout-paywall-and-paid-state-integration/238-VERIFICATION.md`.
 **Success Criteria**:
 
 1. Parent-facing subscription/paywall surfaces load real checkout, subscription, entitlement, and quota state without silent demo fallback for paid access.
@@ -72,7 +73,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Ensure provider events activate and reconcile entitlements exactly once.
 **Depends on**: Phase 238.
 **Requirements**: PAYPROD-03
-**Status**: Planned.
+**Status**: Active.
 **Success Criteria**:
 
 1. Provider event identity, storage, reconciliation status, and entitlement activation are idempotent.
@@ -118,8 +119,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 237 Payment Reality Audit And Contract Refresh | v5.13 | 1/1 | Complete | 2026-07-05 |
-| 238 Checkout Paywall And Paid-State Integration | v5.13 | 0/1 | Active | - |
-| 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 0/1 | Planned | - |
+| 238 Checkout Paywall And Paid-State Integration | v5.13 | 1/1 | Complete | 2026-07-05 |
+| 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 0/1 | Active | - |
 | 240 Billing Support Evidence And Lifecycle Edge States | v5.13 | 0/1 | Planned | - |
 | 241 v5.13 Payment Production Completion Gate | v5.13 | 0/1 | Planned | - |
 
@@ -128,7 +129,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | PAYPROD-01 | Phase 237 | Complete |
-| PAYPROD-02 | Phase 238 | Active |
-| PAYPROD-03 | Phase 239 | Planned |
+| PAYPROD-02 | Phase 238 | Complete |
+| PAYPROD-03 | Phase 239 | Active |
 | PAYPROD-04 | Phase 240 | Planned |
 | VERIFY-47 | Phase 241 | Planned |
