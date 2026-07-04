@@ -92,6 +92,8 @@ The completed v5.8 milestone replaces placeholder email verification for new reg
 
 The completed v5.9 milestone composes parent/admin account operations visibility across billing, entitlement, usage, verification, and child binding state with privacy-safe parent summaries and bounded admin support detail.
 
+The completed v5.10 milestone makes those account operations capabilities usable in the web frontend: email verification resend/confirm UX, parent account operations UI, admin account operations console, focused frontend e2e coverage, backend contract evidence, and production read-only smoke planning.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -99,8 +101,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.9 Parent Admin Operations Visibility on 2026-07-03 (operations-visible backend release gate)
-**Active milestone:** v5.10 Account Operations Frontend And Production Readiness
+**Latest completed milestone:** v5.10 Account Operations Frontend And Production Readiness on 2026-07-03 (frontend-account-ops-ready release gate)
+**Active milestone:** v5.11 Additional Usage Ledger Coverage
 
 Delivered:
 
@@ -484,30 +486,40 @@ Phase evidence: `.planning/milestones/v5.9-phases/`
 
 **Known deferred items:** frontend/native account operations UI, production deploy/live smoke, broad CRM/customer messaging, analytics warehouse/cross-account search, native apps, final live Stripe/TWINT activation, and actual Cognito custom-auth passwordless login-code support.
 
-## Active Milestone: v5.10 Account Operations Frontend And Production Readiness
+## Completed Milestone: v5.10 Account Operations Frontend And Production Readiness
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
 Milestone roadmap: `.planning/milestones/v5.10-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v5.10-REQUIREMENTS.md`
-Completed phase: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/`
-Next phase: Phase 223 Email Verification UX Integration
+Completed phases: `.planning/phases/222-current-reality-refresh-and-frontend-account-ops-contract/`, `.planning/phases/223-email-verification-ux-integration/`, `.planning/phases/224-parent-account-operations-ui/`, `.planning/phases/225-admin-account-operations-console/`, `.planning/phases/226-v5-10-frontend-and-production-readiness-gate/`
 
-**Status:** Active. Phase 222 completed 2026-07-03 after reconciling current backend/frontend reality; Phase 223 is next.
+**Status:** Complete. Phase 226 passed frontend lint/build, 15 focused frontend e2e tests, 35 backend focused contract tests, release gate evidence, and production read-only smoke planning.
 
 **Function purpose:** Make the completed backend account operations stack usable in the frontend: email verification UX, parent account operations UI, admin support detail, and production read-only readiness.
 
 **Implementation strategy:** Keep v5.6-v5.9 backend primitives stable unless frontend integration finds a concrete contract bug. Add typed frontend clients and query keys first, then parent/admin/auth surfaces, then focused frontend evidence and a production read-only smoke checklist.
 
-**Planned phases:**
+**Completed phases:**
 
 - Phase 222: Reality Refresh And Frontend Account Operations Contract. (complete)
-- Phase 223: Email Verification UX Integration. (next)
-- Phase 224: Parent Account Operations UI.
-- Phase 225: Admin Account Operations Console.
-- Phase 226: v5.10 Frontend And Production Readiness Gate.
+- Phase 223: Email Verification UX Integration. (complete)
+- Phase 224: Parent Account Operations UI. (complete)
+- Phase 225: Admin Account Operations Console. (complete)
+- Phase 226: v5.10 Frontend And Production Readiness Gate. (complete)
 
 **Deferred beyond v5.10:** additional usage ledger action coverage, Cognito custom-auth passwordless login-code, native/mobile app buildout, live Stripe/TWINT activation, external provider activation, and warehouse/BI.
+
+## Current Milestone: v5.11 Additional Usage Ledger Coverage
+
+**Goal:** Extend usage ledger coverage beyond question submissions so paid-limit behavior and parent/admin support explanations cover the rest of the learning actions.
+
+**Target features:**
+- Governed usage action taxonomy for chat, hints, teacher-help, and practice/generation actions.
+- Idempotent, privacy-safe ledger events for eligible successful backend flows.
+- Reconciliation and summaries that explain usage beyond questions.
+- Parent/admin account operations compatibility without raw learning content or provider payload exposure.
+- Focused backend verification and minimal frontend support-state updates if summaries require them.
 
 ## Requirements
 
@@ -789,15 +801,19 @@ Milestone v5.9 requirements are complete:
 - OPSVERIFY-01: privacy and regression verification - Phase 220.
 - VERIFY-42: v5.9 operations visibility release gate - Phase 221.
 
-### Active
-
-Milestone v5.10 requirements are active:
+Milestone v5.10 requirements are complete:
 
 - FRONTOPS-01: reality refresh and frontend contract - Phase 222.
 - FRONTOPS-02: email verification UX integration - Phase 223.
 - FRONTOPS-03: parent account operations UI - Phase 224.
 - FRONTOPS-04: admin account operations console - Phase 225.
 - VERIFY-43: v5.10 frontend and production readiness gate - Phase 226.
+
+### Active
+
+Milestone v5.11 requirements are being defined:
+
+- Extend usage ledger coverage beyond question submissions while preserving privacy-safe summaries and account operations compatibility.
 
 ### Out of Scope
 
@@ -955,7 +971,8 @@ Known current resources:
 | Promote final-polish work into complete milestones | Entitlements, usage ledger, account verification, and operations visibility are each complete product capabilities, not small phases; v5.6 focused only on paid entitlement enforcement, with v5.7-v5.9 planned for the remaining capabilities | Complete - entitlement-ready release gate passed |
 | Start v5.8 email verification and login-code policy | v5.7 made quota usage durable and support-visible; the next account lifecycle risk is ambiguous email verification and placeholder login-code behavior before broader parent/admin operations visibility | Complete - policy-deferred release gate passed |
 | Start v5.9 parent admin operations visibility | v5.6-v5.8 delivered entitlement, usage, and verification primitives; support now needs one bounded operations view that composes those states without exposing private content or provider internals | Complete - operations-visible release gate passed |
-| Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend has no account-operations clients/routes and no complete email verification confirm/resend UX | Active; Phase 222 complete |
+| Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
+| Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Active - requirements definition started |
 
 ## Evolution
 
@@ -975,4 +992,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 after reconciling v5.9 backend completion with v5.10 frontend account-operations planning*
+*Last updated: 2026-07-04 after starting v5.11 additional usage ledger coverage*
