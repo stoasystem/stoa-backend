@@ -89,6 +89,6 @@ Acceptance criteria:
 |-------------|-------|--------|
 | CURRBUILD-01 | Phase 232 | Complete |
 | CURRBUILD-02 | Phase 233 | Complete |
-| CURRBUILD-03 | Phase 234 | Planned |
+| CURRBUILD-03 | Phase 234 | Complete |
 | CURRBUILD-04 | Phase 235 | Planned |
 | VERIFY-45 | Phase 236 | Planned |

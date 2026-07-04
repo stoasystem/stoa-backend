@@ -4,13 +4,13 @@ milestone: v5.12
 milestone_name: Curriculum Editor And Content Migration Buildout
 status: Active
 last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed Phase 233 backend curriculum capability authorization and editor APIs
+last_activity: 2026-07-05 — Completed Phase 234 backend curriculum migration dry-run/apply APIs and evidence records
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 234 Backend Content Migration Service And APIs
-Plan: 234 Backend content migration service and APIs
+Phase: 235 Frontend Curriculum Editor And Migration Console
+Plan: 235 Frontend curriculum editor and migration console
 Status: Active
-Last activity: 2026-07-05 — Phase 233 completed with capability-gated author/reviewer/publisher curriculum editor APIs.
+Last activity: 2026-07-05 — Phase 234 completed with migration manifest dry-run/apply/evidence APIs behind migration capability gates.
 
 ## Accumulated Context
 
@@ -39,13 +39,13 @@ Last activity: 2026-07-05 — Phase 233 completed with capability-gated author/r
 - v5.12 remains the active curriculum editor and content migration buildout milestone.
 - Curriculum editing is not a default teacher/tutor permission. v5.12 must require backend-granted curriculum capabilities such as `curriculum_author`, `curriculum_reviewer`, and `curriculum_publisher`/`migration_operator`.
 - Phase 233 is complete: backend curriculum editor mutations now require explicit capabilities, and patch, validation preview, diff, and audit-read APIs are available for Phase 235 frontend work.
+- Phase 234 is complete: backend migration dry-run/apply/evidence APIs are available, dry-run is non-mutating, apply requires confirmation, and evidence/audit/rollback metadata are recorded.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Implement Phase 234 backend content migration service and APIs.
 - Implement Phase 235 frontend curriculum editor and migration console.
 - Close Phase 236 with backend/frontend release evidence and next milestone recommendation.
 - Plan future milestones as independent feature/safety/stability work: paid access completion, verification/login reliability, and usage/quota/product stability.
@@ -59,4 +59,4 @@ Last activity: 2026-07-05 — Phase 233 completed with capability-gated author/r
 
 ## Operator Next Steps
 
-- Start Phase 234 by building migration manifest parsing, dry-run/apply endpoints, evidence records, conflict reporting, and rollback metadata behind `migration_operator`/publisher authorization.
+- Start Phase 235 frontend curriculum editor and migration console work against real Phase 233/234 backend APIs, but note the frontend repo is outside this backend workspace write root.
