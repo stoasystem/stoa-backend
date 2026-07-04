@@ -279,6 +279,9 @@ class ParentChildUsageSummaryResponse(BaseModel):
     entitlementSource: str | None = None
     billingState: str | None = None
     reconciliation: dict[str, Any] = Field(default_factory=dict)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    groups: list[dict[str, Any]] = Field(default_factory=list)
+    totals: dict[str, Any] = Field(default_factory=dict)
     partial: bool = False
     stale: bool = False
     unreconciled: bool = False

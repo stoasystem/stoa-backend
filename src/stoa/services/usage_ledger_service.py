@@ -71,8 +71,11 @@ _ALLOWED_METADATA_KEYS = {
     "source_type",
     "status",
     "subject",
+    "summary_group",
     "topic_id",
     "unit_id",
+    "quota_enforced",
+    "support_visible",
     "usage_type",
     "write_order",
 }
@@ -489,6 +492,50 @@ def reconcile_question_usage(
     }
 
 
+def reconcile_usage_action(
+    *,
+    student_id: str,
+    day: str,
+    action: str,
+    repair: bool = False,
+) -> dict[str, Any]:
+    """Reconcile one governed action for support summaries."""
+    if action == QUESTION_SUBMISSION_ACTION:
+        return reconcile_question_usage(student_id=student_id, day=day, repair=repair)
+    definition = get_usage_action_definition(action)
+    events = usage_ledger_repo.list_usage_events(
+        student_id=student_id,
+        action=action,
+        quota_period=day,
+    )
+    ledger_count = sum(int(event.get("quantity") or 0) for event in events)
+    counter_count = 0
+    counter_key = None
+    status = "ledger-only"
+    if definition.counter_prefix:
+        counter = usage_ledger_repo.get_daily_usage_counter(
+            student_id=student_id,
+            counter_prefix=definition.counter_prefix,
+            day=day,
+        ) or {}
+        counter_count = int(counter.get("count") or 0)
+        counter_key = f"USAGE#{student_id}/{definition.counter_prefix}#{day}"
+        status = _reconciliation_status(counter_count, ledger_count)
+    return {
+        "studentId": student_id,
+        "action": action,
+        "quotaPeriod": day,
+        "counterKey": counter_key,
+        "counterCount": counter_count,
+        "ledgerCount": ledger_count,
+        "eventCount": len(events),
+        "status": status,
+        "repairMode": "preview" if not repair else "unsupported",
+        "repaired": False,
+        "partial": status not in {"matched", "ledger-only"},
+    }
+
+
 def build_student_usage_summary(
     *,
     student_id: str,
@@ -508,6 +555,14 @@ def build_student_usage_summary(
     limit = int((entitlement.get("limits") or {}).get("dailyAiQuestionLimit") or 0)
     consumed = reconciliation["counterCount"]
     remaining = max(limit - consumed, 0)
+    action_summaries = _build_action_summaries(
+        student_id=student_id,
+        day=day,
+        entitlement=entitlement,
+        question_reconciliation=reconciliation,
+    )
+    groups = _usage_groups(action_summaries)
+    unreconciled = any(item["reconciliation"]["status"] not in {"matched", "ledger-only"} for item in action_summaries)
     return {
         "studentId": student_id,
         "parentId": entitlement.get("parentId"),
@@ -520,9 +575,24 @@ def build_student_usage_summary(
         "entitlementSource": entitlement.get("source"),
         "billingState": entitlement.get("billingState"),
         "reconciliation": reconciliation,
-        "partial": reconciliation["status"] != "matched",
+        "actions": action_summaries,
+        "groups": groups,
+        "totals": {
+            "consumed": sum(int(item.get("consumed") or 0) for item in action_summaries),
+            "quotaEnforcedConsumed": sum(
+                int(item.get("consumed") or 0) for item in action_summaries if item.get("quotaEnforced")
+            ),
+            "supportVisibleConsumed": sum(
+                int(item.get("consumed") or 0) for item in action_summaries if item.get("supportVisible")
+            ),
+            "actionCount": len(action_summaries),
+            "unreconciledActionCount": sum(
+                1 for item in action_summaries if item["reconciliation"]["status"] not in {"matched", "ledger-only"}
+            ),
+        },
+        "partial": unreconciled,
         "stale": False,
-        "unreconciled": reconciliation["status"] != "matched",
+        "unreconciled": unreconciled,
     }
 
 
@@ -544,20 +614,44 @@ def list_parent_usage_summaries(
     return summaries
 
 
+def list_usage_events(
+    *,
+    student_id: str,
+    day: str,
+    action: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return redacted usage ledger events for support/admin inspection."""
+    actions = [action] if action else list(USAGE_ACTION_DEFINITIONS)
+    events: list[dict[str, Any]] = []
+    per_action_limit = max(limit, 1)
+    for action_name in actions:
+        get_usage_action_definition(action_name)
+        events.extend(
+            usage_ledger_repo.list_usage_events(
+                student_id=student_id,
+                action=action_name,
+                quota_period=day,
+                limit=per_action_limit,
+            )
+        )
+    events = sorted(events, key=lambda event: str(event.get("created_at") or ""), reverse=True)[:limit]
+    return [_event_response(event) for event in events]
+
+
 def list_question_usage_events(
     *,
     student_id: str,
     day: str,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    """Return redacted usage ledger events for support/admin inspection."""
-    events = usage_ledger_repo.list_usage_events(
+    """Return redacted question usage ledger events for legacy callers."""
+    return list_usage_events(
         student_id=student_id,
+        day=day,
         action=QUESTION_SUBMISSION_ACTION,
-        quota_period=day,
         limit=limit,
     )
-    return [_event_response(event) for event in events]
 
 
 def _entitlement_snapshot(entitlement: dict[str, Any]) -> dict[str, Any]:
@@ -584,6 +678,82 @@ def _reconciliation_status(counter_count: int, ledger_count: int) -> str:
     return "count-mismatch"
 
 
+def _build_action_summaries(
+    *,
+    student_id: str,
+    day: str,
+    entitlement: dict[str, Any],
+    question_reconciliation: dict[str, Any],
+) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for definition in USAGE_ACTION_DEFINITIONS.values():
+        reconciliation = (
+            question_reconciliation
+            if definition.action == QUESTION_SUBMISSION_ACTION
+            else reconcile_usage_action(student_id=student_id, day=day, action=definition.action)
+        )
+        consumed = (
+            int(reconciliation.get("counterCount") or 0)
+            if definition.quota_enforced and reconciliation.get("counterKey")
+            else int(reconciliation.get("ledgerCount") or 0)
+        )
+        limit = _action_limit(definition, entitlement)
+        summaries.append(
+            {
+                "action": definition.action,
+                "usageType": definition.usage_type,
+                "summaryGroup": definition.summary_group,
+                "quotaEnforced": definition.quota_enforced,
+                "supportVisible": definition.support_visible,
+                "consumed": consumed,
+                "limit": limit,
+                "remaining": max(limit - consumed, 0) if limit is not None else None,
+                "reconciliation": reconciliation,
+                "partial": reconciliation["status"] not in {"matched", "ledger-only"},
+                "unreconciled": reconciliation["status"] not in {"matched", "ledger-only"},
+            }
+        )
+    return summaries
+
+
+def _action_limit(definition: UsageActionDefinition, entitlement: dict[str, Any]) -> int | None:
+    if not definition.quota_enforced:
+        return None
+    if definition.entitlement_limit_key:
+        value = (entitlement.get("limits") or {}).get(definition.entitlement_limit_key)
+        if value is not None:
+            return int(value)
+    return None
+
+
+def _usage_groups(action_summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for item in action_summaries:
+        group = str(item.get("summaryGroup") or "other")
+        current = grouped.setdefault(
+            group,
+            {
+                "group": group,
+                "consumed": 0,
+                "quotaEnforcedConsumed": 0,
+                "supportVisibleConsumed": 0,
+                "actions": [],
+                "unreconciled": False,
+                "partial": False,
+            },
+        )
+        consumed = int(item.get("consumed") or 0)
+        current["consumed"] += consumed
+        if item.get("quotaEnforced"):
+            current["quotaEnforcedConsumed"] += consumed
+        if item.get("supportVisible"):
+            current["supportVisibleConsumed"] += consumed
+        current["actions"].append(item["action"])
+        current["unreconciled"] = bool(current["unreconciled"] or item.get("unreconciled"))
+        current["partial"] = bool(current["partial"] or item.get("partial"))
+    return [grouped[key] for key in sorted(grouped)]
+
+
 def _event_response(event: dict[str, Any]) -> dict[str, Any]:
     return {
         "eventId": event.get("event_id"),
@@ -600,5 +770,6 @@ def _event_response(event: dict[str, Any]) -> dict[str, Any]:
         "entitlementSource": event.get("entitlement_source"),
         "entitlementSnapshot": event.get("entitlement_snapshot") or {},
         "privacy": event.get("privacy") or {},
+        "metadata": safe_usage_metadata(event.get("metadata") or {}),
         "createdAt": event.get("created_at"),
     }

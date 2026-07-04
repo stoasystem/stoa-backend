@@ -529,7 +529,7 @@ Milestone requirements: `.planning/milestones/v5.11-REQUIREMENTS.md`
 - Phase 227: Usage Action Taxonomy And Ledger Contract. (complete)
 - Phase 228: Chat And Teacher-Help Ledger Instrumentation. (complete)
 - Phase 229: Practice And Generation Ledger Instrumentation. (complete)
-- Phase 230: Multi-Action Reconciliation And Account Operations Summaries.
+- Phase 230: Multi-Action Reconciliation And Account Operations Summaries. (complete)
 - Phase 231: v5.11 Privacy Regression And Release Gate.
 
 ## Requirements
@@ -827,8 +827,8 @@ Milestone v5.11 requirements are planned:
 - USAGE-01: governed usage action taxonomy - Phase 227. (complete)
 - USAGE-02: chat and teacher-help ledger instrumentation - Phase 228. (complete)
 - USAGE-03: practice and generation ledger instrumentation - Phase 229. (complete)
-- RECON-02: multi-action reconciliation and usage summaries - Phase 230.
-- OPS-01: parent/admin account operations compatibility - Phase 230.
+- RECON-02: multi-action reconciliation and usage summaries - Phase 230. (complete)
+- OPS-01: parent/admin account operations compatibility - Phase 230. (complete)
 - VERIFY-44: v5.11 usage coverage release gate - Phase 231.
 
 ### Out of Scope

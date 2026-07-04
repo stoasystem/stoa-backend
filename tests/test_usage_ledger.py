@@ -334,6 +334,99 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
     assert summaries[0]["reconciliation"]["status"] == "ledger-missing"
 
 
+def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(
+        usage_ledger_service.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "studentId": student_id,
+            "parentId": "parent-1",
+            "effectivePlan": "premium",
+            "source": "provider_billing",
+            "billingState": "active",
+            "limits": {"dailyAiQuestionLimit": 100},
+        },
+    )
+    table.items[("USAGE#student-1", "QUESTION#2026-07-04")] = {
+        "PK": "USAGE#student-1",
+        "SK": "QUESTION#2026-07-04",
+        "count": 1,
+    }
+    table.items[("USAGE#student-1", "CHAT#2026-07-04")] = {
+        "PK": "USAGE#student-1",
+        "SK": "CHAT#2026-07-04",
+        "count": 1,
+    }
+    usage_ledger_service.record_question_usage_event(
+        student_id="student-1",
+        question_id="question-1",
+        quota_period="2026-07-04",
+        idempotency_key="question-1",
+        counter_key="USAGE#student-1/QUESTION#2026-07-04",
+        counter_value=1,
+        quantity=1,
+        entitlement={"effectivePlan": "premium", "limits": {"dailyAiQuestionLimit": 100}, "parentId": "parent-1"},
+        created_at="2026-07-04T10:00:00+00:00",
+    )
+    usage_ledger_service.record_usage_event(
+        student_id="student-1",
+        action="chat_message",
+        quota_period="2026-07-04",
+        idempotency_key="chat-1",
+        counter_key="USAGE#student-1/CHAT#2026-07-04",
+        counter_value=1,
+        created_at="2026-07-04T10:01:00+00:00",
+        metadata={"conversation_id": "conv-1", "content": "drop me"},
+    )
+    usage_ledger_service.record_usage_event(
+        student_id="student-1",
+        action="practice_answer",
+        quota_period="2026-07-04",
+        idempotency_key="practice-1",
+        created_at="2026-07-04T10:02:00+00:00",
+        metadata={"challenge_id": "challenge-1", "student_answer": "drop me"},
+    )
+
+    summary = usage_ledger_service.build_student_usage_summary(
+        student_id="student-1",
+        settings=_settings(),
+        day="2026-07-04",
+    )
+
+    actions = {item["action"]: item for item in summary["actions"]}
+    groups = {item["group"]: item for item in summary["groups"]}
+    assert summary["action"] == "question_submission"
+    assert summary["consumed"] == 1
+    assert summary["remaining"] == 99
+    assert actions["question_submission"]["reconciliation"]["status"] == "matched"
+    assert actions["chat_message"]["reconciliation"]["status"] == "matched"
+    assert actions["practice_answer"]["reconciliation"]["status"] == "ledger-only"
+    assert groups["chat"]["consumed"] == 1
+    assert groups["practice"]["supportVisibleConsumed"] == 1
+    assert summary["totals"]["supportVisibleConsumed"] >= 3
+    assert summary["unreconciled"] is False
+
+
+def test_non_question_reconciliation_is_read_only(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+
+    result = usage_ledger_service.reconcile_usage_action(
+        student_id="student-1",
+        day="2026-07-04",
+        action="practice_answer",
+        repair=True,
+    )
+
+    assert result["action"] == "practice_answer"
+    assert result["counterKey"] is None
+    assert result["status"] == "ledger-only"
+    assert result["repairMode"] == "unsupported"
+
+
 def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
@@ -372,6 +465,9 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
             "entitlementSource": "provider_billing",
             "billingState": "active",
             "reconciliation": {"status": "matched"},
+            "actions": [{"action": "chat_message", "consumed": 1, "summaryGroup": "chat"}],
+            "groups": [{"group": "chat", "consumed": 1, "actions": ["chat_message"]}],
+            "totals": {"consumed": 2, "actionCount": 2},
             "partial": False,
             "stale": False,
             "unreconciled": False,
@@ -384,6 +480,9 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
     body = response.json()
     assert body["studentId"] == "student-1"
     assert body["remaining"] == 29
+    assert body["actions"][0]["action"] == "chat_message"
+    assert body["groups"][0]["group"] == "chat"
+    assert body["totals"]["actionCount"] == 2
     assert "content" not in str(body)
     assert "image_s3_key" not in str(body)
 
@@ -395,7 +494,7 @@ def test_admin_usage_reconciliation_endpoint_previews_without_repair(monkeypatch
     calls = []
     monkeypatch.setattr(
         admin.usage_ledger_service,
-        "reconcile_question_usage",
+        "reconcile_usage_action",
         lambda **kwargs: calls.append(kwargs)
         or {
             "studentId": kwargs["student_id"],
@@ -419,4 +518,4 @@ def test_admin_usage_reconciliation_endpoint_previews_without_repair(monkeypatch
 
     assert response.status_code == 200
     assert response.json()["status"] == "count-mismatch"
-    assert calls == [{"student_id": "student-1", "day": "2026-07-03", "repair": False}]
+    assert calls == [{"student_id": "student-1", "day": "2026-07-03", "action": "question_submission", "repair": False}]

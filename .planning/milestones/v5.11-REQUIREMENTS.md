@@ -96,6 +96,6 @@ Acceptance criteria:
 | USAGE-01 | Phase 227 | Complete |
 | USAGE-02 | Phase 228 | Complete |
 | USAGE-03 | Phase 229 | Complete |
-| RECON-02 | Phase 230 | Planned |
-| OPS-01 | Phase 230 | Planned |
+| RECON-02 | Phase 230 | Complete |
+| OPS-01 | Phase 230 | Complete |
 | VERIFY-44 | Phase 231 | Planned |

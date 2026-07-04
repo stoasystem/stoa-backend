@@ -129,6 +129,9 @@ class UsageSummaryResponse(BaseModel):
     entitlementSource: str | None = None
     billingState: str | None = None
     reconciliation: dict[str, Any] = Field(default_factory=dict)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    groups: list[dict[str, Any]] = Field(default_factory=list)
+    totals: dict[str, Any] = Field(default_factory=dict)
     partial: bool = False
     stale: bool = False
     unreconciled: bool = False
@@ -143,7 +146,7 @@ class UsageReconciliationResponse(BaseModel):
     studentId: str
     action: str
     quotaPeriod: str
-    counterKey: str
+    counterKey: str | None = None
     counterCount: int
     ledgerCount: int
     eventCount: int
@@ -1281,13 +1284,15 @@ async def get_student_usage_summary(
 async def list_student_usage_events(
     student_id: str,
     day: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    action: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     user: dict = Depends(require_role("admin")),
 ):
     """List redacted usage ledger events for support investigation."""
-    items = usage_ledger_service.list_question_usage_events(
+    items = usage_ledger_service.list_usage_events(
         student_id=student_id,
         day=day,
+        action=action,
         limit=limit,
     )
     return UsageEventListResponse(items=items, count=len(items))
@@ -1297,13 +1302,15 @@ async def list_student_usage_events(
 async def preview_usage_reconciliation(
     student_id: str = Query(..., min_length=1),
     day: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    action: str = Query(default=usage_ledger_service.QUESTION_SUBMISSION_ACTION),
     repair: bool = Query(default=False),
     user: dict = Depends(require_role("admin")),
 ):
     """Preview or explicitly repair daily counter versus ledger reconciliation."""
-    return usage_ledger_service.reconcile_question_usage(
+    return usage_ledger_service.reconcile_usage_action(
         student_id=student_id,
         day=day,
+        action=action,
         repair=repair,
     )
 

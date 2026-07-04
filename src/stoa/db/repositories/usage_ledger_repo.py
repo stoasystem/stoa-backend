@@ -70,7 +70,12 @@ def list_usage_events(
 
 def get_daily_question_counter(student_id: str, day: str) -> dict[str, Any] | None:
     """Read the existing atomic daily question counter row."""
-    response = get_table().get_item(Key={"PK": f"USAGE#{student_id}", "SK": f"QUESTION#{day}"})
+    return get_daily_usage_counter(student_id=student_id, counter_prefix="QUESTION", day=day)
+
+
+def get_daily_usage_counter(*, student_id: str, counter_prefix: str, day: str) -> dict[str, Any] | None:
+    """Read an existing daily usage counter row by counter prefix."""
+    response = get_table().get_item(Key={"PK": f"USAGE#{student_id}", "SK": f"{counter_prefix}#{day}"})
     item = response.get("Item")
     return dict(item) if item else None
 
