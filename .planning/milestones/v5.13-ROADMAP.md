@@ -32,7 +32,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 
 ## Phases
 
-- [ ] **Phase 237: Payment Reality Audit And Contract Refresh** - Map current payment, entitlement, quota, support, and frontend paid-state behavior; define the v5.13 implementation contract.
+- [x] **Phase 237: Payment Reality Audit And Contract Refresh** - Map current payment, entitlement, quota, support, and frontend paid-state behavior; define the v5.13 implementation contract.
 - [ ] **Phase 238: Checkout Paywall And Paid-State Integration** - Complete parent-facing checkout/paywall state against real backend subscription and entitlement APIs.
 - [ ] **Phase 239: Webhook Reconciliation And Entitlement Activation** - Harden provider event ingestion/reconciliation and activate entitlements idempotently.
 - [ ] **Phase 240: Billing Support Evidence And Lifecycle Edge States** - Expose support-safe invoice/refund/cancellation/manual-override/reconciliation evidence.
@@ -45,7 +45,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Define the exact paid-access implementation contract from current backend/frontend behavior and prior readiness milestones.
 **Depends on**: v5.12 completion.
 **Requirements**: PAYPROD-01
-**Status**: Planned.
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/237-payment-reality-audit-and-contract-refresh/237-PAYMENT-REALITY-AUDIT.md`, `.planning/phases/237-payment-reality-audit-and-contract-refresh/237-SUMMARY.md`, `.planning/phases/237-payment-reality-audit-and-contract-refresh/237-VERIFICATION.md`.
 **Success Criteria**:
 
 1. Current backend checkout, provider event, subscription, entitlement, usage-limit, and admin support code paths are mapped to files/routes/services.
@@ -116,8 +117,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 237 Payment Reality Audit And Contract Refresh | v5.13 | 0/1 | Planned | - |
-| 238 Checkout Paywall And Paid-State Integration | v5.13 | 0/1 | Planned | - |
+| 237 Payment Reality Audit And Contract Refresh | v5.13 | 1/1 | Complete | 2026-07-05 |
+| 238 Checkout Paywall And Paid-State Integration | v5.13 | 0/1 | Active | - |
 | 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 0/1 | Planned | - |
 | 240 Billing Support Evidence And Lifecycle Edge States | v5.13 | 0/1 | Planned | - |
 | 241 v5.13 Payment Production Completion Gate | v5.13 | 0/1 | Planned | - |
@@ -126,8 +127,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PAYPROD-01 | Phase 237 | Planned |
-| PAYPROD-02 | Phase 238 | Planned |
+| PAYPROD-01 | Phase 237 | Complete |
+| PAYPROD-02 | Phase 238 | Active |
 | PAYPROD-03 | Phase 239 | Planned |
 | PAYPROD-04 | Phase 240 | Planned |
 | VERIFY-47 | Phase 241 | Planned |

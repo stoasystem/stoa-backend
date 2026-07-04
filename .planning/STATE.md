@@ -4,13 +4,13 @@ milestone: v5.13
 milestone_name: Payment And Entitlement Production Completion
 status: planning
 last_updated: "2026-07-04T23:17:00.774Z"
-last_activity: 2026-07-04
+last_activity: 2026-07-05 — Completed Phase 237 payment reality audit and contract refresh
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-05 — Milestone v5.13 started and requirements/roadmap initialized
+Phase: 238 Checkout Paywall And Paid-State Integration
+Plan: 238 Checkout paywall and paid-state integration
+Status: Active
+Last activity: 2026-07-05 — Phase 237 completed with backend/frontend payment reality audit and v5.13 implementation contract.
 
 ## Accumulated Context
 
@@ -43,13 +43,14 @@ Last activity: 2026-07-05 — Milestone v5.13 started and requirements/roadmap i
 - Phase 235 is complete: frontend `/admin/curriculum` now exposes the curriculum worklist, draft editor, validation/diff/audit review tools, migration dry-run/apply flow, and migration evidence lookup against real backend APIs with no demo fallback for API failures.
 - Phase 236 is complete: v5.12 is closed as `curriculum-buildout-ready` with backend focused tests, frontend build/lint/e2e, release gate, and milestone audit.
 - v5.13 is active: paid-access completion must audit real checkout/paywall/entitlement behavior before implementation, then connect provider reconciliation, entitlement activation, usage-limit compatibility, parent-facing state, and admin billing support evidence.
+- Phase 237 is complete: canonical paid-state APIs are `/parents/me/subscription*`; legacy frontend `/billing/*` client still uses demo fallback and must not decide paid access after Phase 238.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 237 Payment Reality Audit And Contract Refresh.
+- Execute Phase 238 Checkout Paywall And Paid-State Integration.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
@@ -62,4 +63,4 @@ Last activity: 2026-07-05 — Milestone v5.13 started and requirements/roadmap i
 
 ## Operator Next Steps
 
-- Start Phase 237 with a reality audit and contract refresh before changing payment behavior.
+- Rewire checkout/paywall paid-state surfaces to the real parent subscription APIs and remove demo fallback from paid-state decisions.
