@@ -1,7 +1,7 @@
 # Requirements: v5.13 Payment And Entitlement Production Completion
 
 **Milestone:** v5.13
-**Status:** Active
+**Status:** Complete 2026-07-05
 **Created:** 2026-07-05
 **Prior milestone:** v5.12 Curriculum Editor And Content Migration Buildout
 
@@ -60,7 +60,7 @@ Acceptance criteria:
 
 ### VERIFY-47 Payment Production Completion Gate
 
-Status: Active.
+Status: Complete 2026-07-05.
 
 Acceptance criteria:
 
@@ -93,4 +93,4 @@ Acceptance criteria:
 | PAYPROD-02 | Phase 238 | Complete |
 | PAYPROD-03 | Phase 239 | Complete |
 | PAYPROD-04 | Phase 240 | Complete |
-| VERIFY-47 | Phase 241 | Active |
+| VERIFY-47 | Phase 241 | Complete |

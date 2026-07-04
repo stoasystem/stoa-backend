@@ -50,19 +50,20 @@ Known deferred items: native apps, live Stripe/TWINT activation, external suppor
 
 ---
 
-## Active: v5.13 Payment And Entitlement Production Completion
+## Completed: v5.13 Payment And Entitlement Production Completion
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Started:** 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.13-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.13-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.13-MILESTONE-AUDIT.md`
 **Goal:** Make paid access work as a real product flow instead of only local/backend readiness.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
-**Release target:** `payment-production-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `payment-production-ready-local`
 
 Function purpose:
 
@@ -75,13 +76,23 @@ Implementation strategy:
 - Keep manual override visible as a support path, not a substitute for paid access.
 - Treat live provider smoke as blocked unless production credentials and rollout approval exist.
 
-Planned phases:
+Completed phases:
 
-- Phase 237: Payment Reality Audit And Contract Refresh.
-- Phase 238: Checkout Paywall And Paid-State Integration.
-- Phase 239: Webhook Reconciliation And Entitlement Activation.
-- Phase 240: Billing Support Evidence And Lifecycle Edge States.
-- Phase 241: v5.13 Payment Production Completion Gate.
+- Phase 237: Payment Reality Audit And Contract Refresh. (complete)
+- Phase 238: Checkout Paywall And Paid-State Integration. (complete)
+- Phase 239: Webhook Reconciliation And Entitlement Activation. (complete)
+- Phase 240: Billing Support Evidence And Lifecycle Edge States. (complete)
+- Phase 241: v5.13 Payment Production Completion Gate. (complete)
+
+Key accomplishments:
+
+- Rewired parent-facing billing paid state and checkout creation to canonical parent subscription APIs without paid-state demo fallback.
+- Hardened Stripe webhook reconciliation with support-visible duplicate evidence and stale event protection.
+- Preserved provider-backed entitlements/profile tiers across duplicate and stale provider deliveries.
+- Added bounded billing `supportEvidence` for lifecycle, invoice, refund, dunning, manual override, and reconciliation metadata.
+- Surfaced support action and duplicate/stale reconciliation counts in frontend admin billing/account operations views.
+
+Known deferred items: live Stripe/TWINT customer-charging smoke, production deploy/live smoke, production webhook endpoint registration, finance acceptance, and explicit rollout approval.
 
 ---
 

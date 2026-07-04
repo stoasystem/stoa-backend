@@ -98,6 +98,8 @@ The completed v5.11 milestone extends usage ledger coverage beyond question subm
 
 The completed v5.12 milestone implements the curriculum editor and content migration buildout that v5.1 left deferred: explicit curriculum capabilities, backend draft patch/validation/diff/audit APIs, migration dry-run/apply/evidence APIs, and a frontend admin curriculum operations console.
 
+The completed v5.13 milestone makes paid access locally production-ready: parent-facing billing uses real subscription APIs without demo fallback, webhook reconciliation is idempotent and support-visible, stale provider events cannot regress active access, and bounded billing support evidence is visible to admins.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -105,8 +107,8 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.12 Curriculum Editor And Content Migration Buildout on 2026-07-05 (curriculum-buildout-ready release gate)
-**Active milestone:** v5.13 Payment And Entitlement Production Completion
+**Latest completed milestone:** v5.13 Payment And Entitlement Production Completion on 2026-07-05 (payment-production-ready-local release gate)
+**Active milestone:** None
 
 Delivered:
 

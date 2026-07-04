@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.13
 milestone_name: Payment And Entitlement Production Completion
-status: planning
+status: complete
 last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed Phase 240 billing support evidence and lifecycle edge states
+last_activity: 2026-07-05 — Completed v5.13 payment production completion gate
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 Phase: 241 v5.13 Payment Production Completion Gate
 Plan: 241 v5.13 payment production completion gate
-Status: Active
-Last activity: 2026-07-05 — Phase 240 completed with backend supportEvidence and frontend admin support evidence rendering for billing lifecycle/reconciliation state.
+Status: Complete
+Last activity: 2026-07-05 — v5.13 closed as payment-production-ready-local with live provider smoke explicitly blocked externally.
 
 ## Accumulated Context
 
@@ -47,13 +47,14 @@ Last activity: 2026-07-05 — Phase 240 completed with backend supportEvidence a
 - Phase 238 is complete: frontend `/billing` now reads `/parents/me/subscription` for subscription, usage, and feature access; checkout creation targets `/parents/me/subscription/checkout`; paid-state API failures render visibly instead of falling back to mock subscription data.
 - Phase 239 is complete: duplicate Stripe webhooks now create support-visible dedup events, stale older provider events are recorded as ignored, and active paid access cannot be downgraded by an older failed-payment event.
 - Phase 240 is complete: billing responses now include bounded supportEvidence, and frontend admin billing/account-operations surfaces render support action plus duplicate/stale reconciliation counts.
+- Phase 241 is complete: backend tests/Ruff, frontend build/lint, and focused billing e2e passed; live Stripe/TWINT smoke remains blocked on external credentials, webhook endpoint, finance acceptance, and rollout approval.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 241 v5.13 Payment Production Completion Gate.
+- Start v5.14 Verification And Login Reliability when ready.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
@@ -66,4 +67,4 @@ Last activity: 2026-07-05 — Phase 240 completed with backend supportEvidence a
 
 ## Operator Next Steps
 
-- Close v5.13 with final verification evidence, milestone state updates, and explicit live provider smoke blocked/completed status.
+- v5.13 is complete. Recommended next milestone: v5.14 Verification And Login Reliability.

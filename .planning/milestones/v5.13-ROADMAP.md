@@ -1,6 +1,6 @@
 # Roadmap: v5.13 Payment And Entitlement Production Completion
 
-**Status:** Active
+**Status:** Complete 2026-07-05
 **Created:** 2026-07-05
 **Prior milestone:** v5.12 Curriculum Editor And Content Migration Buildout
 
@@ -36,7 +36,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 - [x] **Phase 238: Checkout Paywall And Paid-State Integration** - Complete parent-facing checkout/paywall state against real backend subscription and entitlement APIs.
 - [x] **Phase 239: Webhook Reconciliation And Entitlement Activation** - Harden provider event ingestion/reconciliation and activate entitlements idempotently.
 - [x] **Phase 240: Billing Support Evidence And Lifecycle Edge States** - Expose support-safe invoice/refund/cancellation/manual-override/reconciliation evidence.
-- [ ] **Phase 241: v5.13 Payment Production Completion Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
+- [x] **Phase 241: v5.13 Payment Production Completion Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
 
 ## Phase Details
 
@@ -102,7 +102,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Close v5.13 with evidence that paid access is locally complete and externally blocked items are explicit.
 **Depends on**: Phase 240.
 **Requirements**: VERIFY-47
-**Status**: Active.
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/241-v5-13-payment-production-completion-gate/241-RELEASE-GATE.md`, `.planning/phases/241-v5-13-payment-production-completion-gate/241-MILESTONE-AUDIT.md`, `.planning/phases/241-v5-13-payment-production-completion-gate/241-LIVE-VERIFICATION.md`.
 **Success Criteria**:
 
 1. Focused backend tests pass for checkout, reconciliation, entitlement activation, usage-limit compatibility, and support evidence.
@@ -124,7 +125,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 | 238 Checkout Paywall And Paid-State Integration | v5.13 | 1/1 | Complete | 2026-07-05 |
 | 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 1/1 | Complete | 2026-07-05 |
 | 240 Billing Support Evidence And Lifecycle Edge States | v5.13 | 1/1 | Complete | 2026-07-05 |
-| 241 v5.13 Payment Production Completion Gate | v5.13 | 0/1 | Active | - |
+| 241 v5.13 Payment Production Completion Gate | v5.13 | 1/1 | Complete | 2026-07-05 |
 
 ## Traceability
 
@@ -134,4 +135,4 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 | PAYPROD-02 | Phase 238 | Complete |
 | PAYPROD-03 | Phase 239 | Complete |
 | PAYPROD-04 | Phase 240 | Complete |
-| VERIFY-47 | Phase 241 | Active |
+| VERIFY-47 | Phase 241 | Complete |
