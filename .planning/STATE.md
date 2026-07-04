@@ -4,13 +4,13 @@ milestone: v5.13
 milestone_name: Payment And Entitlement Production Completion
 status: planning
 last_updated: "2026-07-05T00:00:00.000Z"
-last_activity: 2026-07-05 — Completed Phase 238 checkout paywall and paid-state integration
+last_activity: 2026-07-05 — Completed Phase 239 webhook reconciliation and entitlement activation
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 239 Webhook Reconciliation And Entitlement Activation
-Plan: 239 Webhook reconciliation and entitlement activation
+Phase: 240 Billing Support Evidence And Lifecycle Edge States
+Plan: 240 Billing support evidence and lifecycle edge states
 Status: Active
-Last activity: 2026-07-05 — Phase 238 completed by rewiring parent-facing billing paid state to canonical parent subscription APIs and removing paid-state demo fallback.
+Last activity: 2026-07-05 — Phase 239 completed with support-visible duplicate/stale webhook reconciliation evidence and stale event protection for paid access state.
 
 ## Accumulated Context
 
@@ -45,13 +45,14 @@ Last activity: 2026-07-05 — Phase 238 completed by rewiring parent-facing bill
 - v5.13 is active: paid-access completion must audit real checkout/paywall/entitlement behavior before implementation, then connect provider reconciliation, entitlement activation, usage-limit compatibility, parent-facing state, and admin billing support evidence.
 - Phase 237 is complete: canonical paid-state APIs are `/parents/me/subscription*`; legacy frontend `/billing/*` client still uses demo fallback and must not decide paid access after Phase 238.
 - Phase 238 is complete: frontend `/billing` now reads `/parents/me/subscription` for subscription, usage, and feature access; checkout creation targets `/parents/me/subscription/checkout`; paid-state API failures render visibly instead of falling back to mock subscription data.
+- Phase 239 is complete: duplicate Stripe webhooks now create support-visible dedup events, stale older provider events are recorded as ignored, and active paid access cannot be downgraded by an older failed-payment event.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 239 Webhook Reconciliation And Entitlement Activation.
+- Execute Phase 240 Billing Support Evidence And Lifecycle Edge States.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
@@ -64,4 +65,4 @@ Last activity: 2026-07-05 — Phase 238 completed by rewiring parent-facing bill
 
 ## Operator Next Steps
 
-- Harden provider webhook reconciliation and entitlement activation so provider events are idempotent, support-visible, and consistent with effective entitlements.
+- Expand billing support evidence and lifecycle edge-state visibility for invoice, refund, cancellation, manual override, dunning, and reconciliation metadata.

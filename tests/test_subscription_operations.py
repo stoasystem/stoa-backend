@@ -1251,10 +1251,11 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert pending_status["paymentMethodType"] == "unknown"
     assert pending_status["dunning"]["state"] == "checkout_pending"
 
+    invoice_created = int(time.time())
     invoice_paid = {
         "id": "evt_invoice_paid_1",
         "type": "invoice.paid",
-        "created": int(time.time()),
+        "created": invoice_created,
         "data": {
             "object": {
                 "id": "in_test_parent",
@@ -1331,6 +1332,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     ]
     assert webhook_events[0]["providerLivemode"] is False
     assert webhook_events[0]["processingResult"] == "processed"
+    assert any(event["processingResult"] == "deduplicated" for event in webhook_events)
     assert profiles["parent-1"]["subscription_tier"] == "premium"
     assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#subscription#sub_test_parent", "SUMMARY")][
         "parent_id"
@@ -1345,6 +1347,44 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert export["count"] == 1
     assert export["items"][0]["providerInvoiceId"] == "in_test_parent"
     assert export["items"][0]["taxStatus"] == "provider_managed"
+
+    stale_failed_invoice = {
+        "id": "evt_invoice_failed_stale_after_paid",
+        "type": "invoice.payment_failed",
+        "created": invoice_created - 60,
+        "data": {
+            "object": {
+                "id": "in_test_parent",
+                "object": "invoice",
+                "status": "open",
+                "customer": "cus_test_parent",
+                "subscription": "sub_test_parent",
+                "currency": "chf",
+                "amount_due": 1500,
+                "amount_paid": 0,
+                "amount_remaining": 1500,
+            }
+        },
+    }
+    stale_payload = json.dumps(stale_failed_invoice, separators=(",", ":")).encode("utf-8")
+    stale_response = webhook_client.post(
+        "/billing/webhooks/stripe",
+        content=stale_payload,
+        headers={"stripe-signature": _stripe_signature(stale_payload, secret)},
+    )
+    stale_status = parent_client.get("/parents/me/subscription/billing").json()
+    stale_events = [
+        event
+        for event in stale_status["events"]
+        if event["providerEventId"] == "evt_invoice_failed_stale_after_paid"
+    ]
+    assert stale_response.status_code == 200
+    assert stale_response.json()["billingStatus"] == "active"
+    assert stale_response.json()["processingResult"] == "stale_ignored"
+    assert stale_status["status"] == "active"
+    assert stale_status["subscriptionTier"] == "premium"
+    assert stale_events[0]["processingResult"] == "stale_ignored"
+    assert profiles["parent-1"]["subscription_tier"] == "premium"
 
     refund_updated = {
         "id": "re_test_parent",

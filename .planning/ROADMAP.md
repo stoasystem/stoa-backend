@@ -34,7 +34,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 
 - [x] **Phase 237: Payment Reality Audit And Contract Refresh** - Map current payment, entitlement, quota, support, and frontend paid-state behavior; define the v5.13 implementation contract.
 - [x] **Phase 238: Checkout Paywall And Paid-State Integration** - Complete parent-facing checkout/paywall state against real backend subscription and entitlement APIs.
-- [ ] **Phase 239: Webhook Reconciliation And Entitlement Activation** - Harden provider event ingestion/reconciliation and activate entitlements idempotently.
+- [x] **Phase 239: Webhook Reconciliation And Entitlement Activation** - Harden provider event ingestion/reconciliation and activate entitlements idempotently.
 - [ ] **Phase 240: Billing Support Evidence And Lifecycle Edge States** - Expose support-safe invoice/refund/cancellation/manual-override/reconciliation evidence.
 - [ ] **Phase 241: v5.13 Payment Production Completion Gate** - Verify backend/frontend behavior, docs, state, release evidence, and next milestone decision.
 
@@ -73,7 +73,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Ensure provider events activate and reconcile entitlements exactly once.
 **Depends on**: Phase 238.
 **Requirements**: PAYPROD-03
-**Status**: Active.
+**Status**: Complete 2026-07-05.
+**Evidence**: `.planning/phases/239-webhook-reconciliation-and-entitlement-activation/239-SUMMARY.md`, `.planning/phases/239-webhook-reconciliation-and-entitlement-activation/239-VERIFICATION.md`.
 **Success Criteria**:
 
 1. Provider event identity, storage, reconciliation status, and entitlement activation are idempotent.
@@ -87,7 +88,7 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 **Goal**: Give support/admin enough bounded evidence to diagnose paid-access failures.
 **Depends on**: Phase 239.
 **Requirements**: PAYPROD-04
-**Status**: Planned.
+**Status**: Active.
 **Success Criteria**:
 
 1. Admin/support APIs expose bounded payment, entitlement, invoice, refund, cancellation, and reconciliation metadata.
@@ -120,8 +121,8 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 |-------|-----------|----------------|--------|-----------|
 | 237 Payment Reality Audit And Contract Refresh | v5.13 | 1/1 | Complete | 2026-07-05 |
 | 238 Checkout Paywall And Paid-State Integration | v5.13 | 1/1 | Complete | 2026-07-05 |
-| 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 0/1 | Active | - |
-| 240 Billing Support Evidence And Lifecycle Edge States | v5.13 | 0/1 | Planned | - |
+| 239 Webhook Reconciliation And Entitlement Activation | v5.13 | 1/1 | Complete | 2026-07-05 |
+| 240 Billing Support Evidence And Lifecycle Edge States | v5.13 | 0/1 | Active | - |
 | 241 v5.13 Payment Production Completion Gate | v5.13 | 0/1 | Planned | - |
 
 ## Traceability
@@ -130,6 +131,6 @@ This is a new business-critical product milestone, not a continuation of v5.12 c
 |-------------|-------|--------|
 | PAYPROD-01 | Phase 237 | Complete |
 | PAYPROD-02 | Phase 238 | Complete |
-| PAYPROD-03 | Phase 239 | Active |
-| PAYPROD-04 | Phase 240 | Planned |
+| PAYPROD-03 | Phase 239 | Complete |
+| PAYPROD-04 | Phase 240 | Active |
 | VERIFY-47 | Phase 241 | Planned |

@@ -451,6 +451,17 @@ def handle_stripe_webhook(
 
     existing = _get_billing_item(parent_id) or {}
     if _provider_event_seen(event_id):
+        _record_provider_processing_event(
+            parent_id=parent_id,
+            event_id=event_id,
+            event_type=event_type,
+            event_created=event.get("created"),
+            event_object=event_object,
+            existing=existing,
+            processing_result="deduplicated",
+            idempotency_status="replayed",
+            now=now_iso(),
+        )
         return {
             "received": True,
             "deduplicated": True,
@@ -462,6 +473,25 @@ def handle_stripe_webhook(
 
     now = now_iso()
     transition = _billing_transition(event_type, event_object, existing)
+    if _provider_event_is_stale(event.get("created"), existing):
+        _record_stale_provider_event(
+            parent_id=parent_id,
+            event_id=event_id,
+            event_type=event_type,
+            event_created=event.get("created"),
+            event_object=event_object,
+            existing=existing,
+            now=now,
+        )
+        return {
+            "received": True,
+            "deduplicated": False,
+            "eventId": event_id,
+            "eventType": event_type,
+            "parentId": parent_id,
+            "billingStatus": existing.get("billing_status") or "none",
+            "processingResult": "stale_ignored",
+        }
     updated = _apply_billing_transition(
         parent_id=parent_id,
         event_id=event_id,
@@ -1221,6 +1251,7 @@ def _billing_response(
                 "correlationId": event.get("correlation_id"),
                 "requestedTier": event.get("requested_tier"),
                 "providerEventId": event.get("provider_event_id"),
+                "providerEventAt": event.get("provider_event_at"),
                 "paymentMethodType": event.get("payment_method_type"),
                 "twintStatus": event.get("twint_status"),
             }
@@ -2534,6 +2565,62 @@ def _timestamp_to_iso(value: Any) -> str | None:
         return None
 
 
+def _provider_event_is_stale(event_created: Any, existing: dict[str, Any]) -> bool:
+    event_at = _parse_iso_datetime(_timestamp_to_iso(event_created))
+    last_event_at = _parse_iso_datetime(existing.get("last_provider_event_at"))
+    return bool(event_at and last_event_at and event_at < last_event_at)
+
+
+def _record_stale_provider_event(
+    *,
+    parent_id: str,
+    event_id: str,
+    event_type: str,
+    event_created: Any,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+    now: str,
+) -> None:
+    event = _provider_processing_event(
+        parent_id=parent_id,
+        event_id=event_id,
+        event_type=event_type,
+        event_created=event_created,
+        event_object=event_object,
+        existing=existing,
+        processing_result="stale_ignored",
+        idempotency_status="ignored",
+        now=now,
+    )
+    event_item = {
+        **event,
+        "PK": _billing_key(parent_id)["PK"],
+        "SK": _billing_event_sk(str(event["event_at"]), str(event["event_id"])),
+        "entity_type": BILLING_EVENT_ENTITY,
+        "parent_id": parent_id,
+    }
+    dedupe = {
+        **_provider_event_key(event_id),
+        "entity_type": BILLING_EVENT_DEDUPE_ENTITY,
+        "provider": "stripe",
+        "provider_event_id": event_id,
+        "event_type": event_type,
+        "parent_id": parent_id,
+        "created_at": now,
+        "processing_result": "stale_ignored",
+    }
+    try:
+        _transact_write(
+            [
+                {"Put": {"Item": dedupe, "ConditionExpression": "attribute_not_exists(PK)"}},
+                {"Put": {"Item": event_item, "ConditionExpression": "attribute_not_exists(PK)"}},
+            ]
+        )
+    except ClientError as exc:
+        if not _is_conditional_failure(exc):
+            raise
+
+
 def _apply_billing_transition(
     *,
     parent_id: str,
@@ -2681,6 +2768,66 @@ def _apply_billing_transition(
             return _get_billing_item(parent_id) or updated
         raise
     return updated
+
+
+def _record_provider_processing_event(
+    *,
+    parent_id: str,
+    event_id: str,
+    event_type: str,
+    event_created: Any,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+    processing_result: str,
+    idempotency_status: str,
+    now: str,
+) -> None:
+    _put_billing_event(
+        parent_id,
+        _provider_processing_event(
+            parent_id=parent_id,
+            event_id=event_id,
+            event_type=event_type,
+            event_created=event_created,
+            event_object=event_object,
+            existing=existing,
+            processing_result=processing_result,
+            idempotency_status=idempotency_status,
+            now=now,
+        ),
+    )
+
+
+def _provider_processing_event(
+    *,
+    parent_id: str,
+    event_id: str,
+    event_type: str,
+    event_created: Any,
+    event_object: dict[str, Any],
+    existing: dict[str, Any],
+    processing_result: str,
+    idempotency_status: str,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "event_id": f"stripe_{processing_result}_{event_id}_{uuid4().hex}",
+        "provider_event_id": event_id,
+        "provider_event_at": _timestamp_to_iso(event_created),
+        "event_type": event_type,
+        "event_at": now,
+        "provider": "stripe",
+        "provider_mode": existing.get("billing_mode") or "test",
+        "provider_livemode": bool(existing.get("provider_livemode") or event_object.get("livemode") or False),
+        "billing_status": existing.get("billing_status") or "none",
+        "processing_result": processing_result,
+        "idempotency_status": idempotency_status,
+        "requested_tier": existing.get("requested_tier"),
+        "payment_method_type": existing.get("payment_method_type"),
+        "twint_status": existing.get("twint_status"),
+        "correlation_id": f"stripe:{event_id}",
+        "parent_id": parent_id,
+    }
 
 
 def _record_manual_override(

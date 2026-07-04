@@ -19,6 +19,7 @@ class StripeWebhookResponse(BaseModel):
     eventType: str
     parentId: str | None = None
     billingStatus: str | None = None
+    processingResult: str | None = None
 
 
 @router.post("/webhooks/stripe", response_model=StripeWebhookResponse)
