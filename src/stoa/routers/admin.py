@@ -2,7 +2,7 @@
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
@@ -271,6 +271,8 @@ class StatsResponse(BaseModel):
 
 
 class CurriculumExerciseDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     exercise_id: str | None = Field(default=None, alias="exerciseId", max_length=200)
     prompt: str = Field(..., min_length=1, max_length=2000)
     type: str = Field(default="text_input", min_length=1, max_length=50)
@@ -282,6 +284,8 @@ class CurriculumExerciseDraftRequest(BaseModel):
 
 
 class CurriculumLessonDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
     public_lesson_id: str = Field(..., alias="publicLessonId", min_length=1, max_length=200)
     title: str = Field(..., min_length=1, max_length=300)
     objective: str = Field(..., min_length=1, max_length=1000)
@@ -308,6 +312,51 @@ class CurriculumPublishRequest(BaseModel):
 
 class CurriculumReviewNoteRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+class CurriculumValidationIssueResponse(BaseModel):
+    severity: str
+    field: str
+    message: str
+    hint: str | None = None
+
+
+class CurriculumValidationPreviewResponse(BaseModel):
+    publicLessonId: str
+    versionId: str
+    status: str
+    publishReady: bool
+    issues: list[CurriculumValidationIssueResponse]
+    issueCount: int
+
+
+class CurriculumDiffResponse(BaseModel):
+    publicLessonId: str
+    fromVersionId: str
+    toVersionId: str
+    changes: list[dict[str, Any]]
+    changeCount: int
+
+
+class CurriculumAuditEventResponse(BaseModel):
+    eventId: str
+    publicLessonId: str
+    versionId: str | None = None
+    operation: str
+    fromState: str | None = None
+    toState: str | None = None
+    reason: str | None = None
+    actorId: str
+    actorRole: str | None = None
+    actorCapabilities: list[str] = Field(default_factory=list)
+    createdAt: str | None = None
+
+
+class CurriculumAuditResponse(BaseModel):
+    publicLessonId: str
+    items: list[CurriculumAuditEventResponse]
+    count: int
+    nextToken: str | None = None
 
 
 class CurriculumVersionResponse(BaseModel):
@@ -556,6 +605,59 @@ async def preview_curriculum_lesson_version(
     return curriculum_ops_service.preview_lesson(public_lesson_id, version_id)
 
 
+@router.get("/curriculum/lessons/{public_lesson_id}/diff", response_model=CurriculumDiffResponse)
+async def diff_curriculum_lesson_versions(
+    public_lesson_id: str,
+    from_version_id: str = Query(..., alias="fromVersionId"),
+    to_version_id: str = Query(..., alias="toVersionId"),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Return a bounded structural diff between two curriculum versions."""
+    return curriculum_ops_service.diff_lesson_versions(
+        public_lesson_id,
+        from_version_id,
+        to_version_id,
+        user,
+    )
+
+
+@router.get("/curriculum/lessons/{public_lesson_id}/audit", response_model=CurriculumAuditResponse)
+async def read_curriculum_lesson_audit(
+    public_lesson_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Read bounded lifecycle audit events for one curriculum lesson."""
+    return curriculum_ops_service.audit_lesson(public_lesson_id, user, limit=limit)
+
+
+@router.patch(
+    "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}",
+    response_model=CurriculumVersionResponse,
+)
+async def patch_curriculum_lesson_draft(
+    public_lesson_id: str,
+    version_id: str,
+    body: dict[str, Any] = Body(default_factory=dict),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Patch a draft curriculum lesson without changing published student reads."""
+    return curriculum_ops_service.patch_lesson_draft(public_lesson_id, version_id, body, user)
+
+
+@router.post(
+    "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/validation-preview",
+    response_model=CurriculumValidationPreviewResponse,
+)
+async def preview_curriculum_lesson_validation(
+    public_lesson_id: str,
+    version_id: str,
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+):
+    """Validate draft publish readiness without mutating the curriculum version."""
+    return curriculum_ops_service.validation_preview(public_lesson_id, version_id, user)
+
+
 @router.post(
     "/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/submit-review",
     response_model=CurriculumVersionResponse,
@@ -600,7 +702,7 @@ async def request_curriculum_lesson_changes(
 async def publish_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin")),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
 ):
     """Publish an approved curriculum version through a conditional manifest update."""
     return curriculum_ops_service.publish(
@@ -616,7 +718,7 @@ async def publish_curriculum_lesson_version(
 async def rollback_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin")),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
 ):
     """Rollback the published curriculum pointer to a previous safe version."""
     return curriculum_ops_service.rollback(
@@ -632,7 +734,7 @@ async def rollback_curriculum_lesson_version(
 async def archive_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin")),
+    user: dict = Depends(require_role("admin", "tutor", "teacher")),
 ):
     """Archive a curriculum version when no active assignments block it."""
     return curriculum_ops_service.archive(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -12,11 +13,70 @@ from stoa.db.repositories import curriculum_ops_repo
 from stoa.services import curriculum_analytics_service
 
 
-AUTHOR_ROLES = {"admin", "tutor", "teacher"}
-PUBLISHER_ROLES = {"admin"}
+AUTHOR_CAPABILITY = "curriculum_author"
+REVIEWER_CAPABILITY = "curriculum_reviewer"
+PUBLISHER_CAPABILITY = "curriculum_publisher"
+MIGRATION_OPERATOR_CAPABILITY = "migration_operator"
+CURRICULUM_CAPABILITIES = {
+    AUTHOR_CAPABILITY,
+    REVIEWER_CAPABILITY,
+    PUBLISHER_CAPABILITY,
+    MIGRATION_OPERATOR_CAPABILITY,
+}
 REVIEWABLE_STATES = {"draft", "changes_requested"}
 PUBLISHABLE_STATES = {"approved"}
 ROLLBACK_STATES = {"approved", "published", "superseded", "archived"}
+
+LESSON_FIELD_ALIASES = {
+    "title": "title",
+    "objective": "objective",
+    "description": "description",
+    "subject_id": "subject_id",
+    "subjectId": "subject_id",
+    "topic_id": "topic_id",
+    "topicId": "topic_id",
+    "unit_id": "unit_id",
+    "unitId": "unit_id",
+    "grade_level": "grade_level",
+    "gradeLevel": "grade_level",
+    "difficulty": "difficulty",
+    "estimated_minutes": "estimated_minutes",
+    "estimatedMinutes": "estimated_minutes",
+    "language": "language",
+    "locale": "language",
+    "sections": "sections",
+    "objectives": "objectives",
+    "examples": "examples",
+    "formulas": "formulas",
+    "media_references": "media_references",
+    "mediaReferences": "media_references",
+    "tags": "tags",
+    "prerequisites": "prerequisites",
+    "locale_metadata": "locale_metadata",
+    "localeMetadata": "locale_metadata",
+}
+
+EXERCISE_FIELD_ALIASES = {
+    "exercise_id": "exercise_id",
+    "exerciseId": "exercise_id",
+    "challenge_id": "exercise_id",
+    "challengeId": "exercise_id",
+    "prompt": "prompt",
+    "type": "type",
+    "difficulty": "difficulty",
+    "order": "order",
+    "answer_key": "answer_key",
+    "answerKey": "answer_key",
+    "correct_answer": "answer_key",
+    "correctAnswer": "answer_key",
+    "hint": "hint",
+    "hints": "hints",
+    "explanation": "explanation",
+    "skills": "skills",
+    "tags": "tags",
+    "media_references": "media_references",
+    "mediaReferences": "media_references",
+}
 
 
 def list_worklist(status: str | None = None, limit: int = 100) -> dict[str, Any]:
@@ -30,7 +90,7 @@ def preview_lesson(public_id: str, version_id: str) -> dict[str, Any]:
 
 
 def create_lesson_draft(payload: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
-    _require_role(user, AUTHOR_ROLES)
+    _require_capability(user, AUTHOR_CAPABILITY)
     public_id = _clean_id(payload.get("public_lesson_id") or payload.get("publicLessonId"))
     lesson = _lesson_payload(public_id, payload)
     exercises = _exercise_payloads(public_id, payload.get("exercises") or [])
@@ -64,8 +124,88 @@ def create_lesson_draft(payload: dict[str, Any], user: dict[str, Any]) -> dict[s
     return _version_response(version, include_content=True)
 
 
+def patch_lesson_draft(
+    public_id: str,
+    version_id: str,
+    payload: dict[str, Any],
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    _require_capability(user, AUTHOR_CAPABILITY)
+    version = _existing_version(public_id, version_id)
+    _require_state(version, REVIEWABLE_STATES, "draft_not_editable")
+
+    updated = deepcopy(version)
+    updated["lesson"] = _patch_lesson(public_id, updated.get("lesson") or {}, payload)
+    updated["exercises"] = _patch_exercises(
+        public_id,
+        updated.get("exercises") or [],
+        payload,
+    )
+    updated["updated_by"] = _actor_id(user)
+    updated["updated_at"] = _now()
+    curriculum_ops_repo.put_version(updated)
+    _audit(public_id, user, "patch_draft", version["state"], updated["state"], version_id, None)
+    return _version_response(updated, include_content=True)
+
+
+def validation_preview(public_id: str, version_id: str, user: dict[str, Any]) -> dict[str, Any]:
+    _require_capability(user, AUTHOR_CAPABILITY, REVIEWER_CAPABILITY, PUBLISHER_CAPABILITY)
+    version = _existing_version(public_id, version_id)
+    issues = _validation_issues(
+        version.get("lesson") or {},
+        version.get("exercises") or [],
+        level="publish",
+    )
+    blocking = [issue for issue in issues if issue["severity"] == "blocking"]
+    return {
+        "publicLessonId": public_id,
+        "versionId": version_id,
+        "status": "valid" if not blocking else "invalid",
+        "publishReady": not blocking,
+        "issues": issues,
+        "issueCount": len(issues),
+    }
+
+
+def diff_lesson_versions(
+    public_id: str,
+    from_version_id: str,
+    to_version_id: str,
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    _require_capability(user, REVIEWER_CAPABILITY, PUBLISHER_CAPABILITY)
+    from_version = _existing_version(public_id, from_version_id)
+    to_version = _existing_version(public_id, to_version_id)
+    changes = _diff_dicts("lesson", from_version.get("lesson") or {}, to_version.get("lesson") or {})
+    changes.extend(
+        _diff_exercises(
+            from_version.get("exercises") or [],
+            to_version.get("exercises") or [],
+        )
+    )
+    return {
+        "publicLessonId": public_id,
+        "fromVersionId": from_version_id,
+        "toVersionId": to_version_id,
+        "changes": changes,
+        "changeCount": len(changes),
+    }
+
+
+def audit_lesson(public_id: str, user: dict[str, Any], limit: int = 50) -> dict[str, Any]:
+    _require_capability(user, REVIEWER_CAPABILITY, PUBLISHER_CAPABILITY)
+    bounded_limit = max(1, min(int(limit), 100))
+    events = curriculum_ops_repo.list_audit_events(public_id, limit=bounded_limit)
+    return {
+        "publicLessonId": public_id,
+        "items": [_audit_response(event) for event in events],
+        "count": len(events),
+        "nextToken": None,
+    }
+
+
 def submit_review(public_id: str, version_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    _require_role(user, AUTHOR_ROLES)
+    _require_capability(user, AUTHOR_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, REVIEWABLE_STATES, "not_reviewable")
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="review")
@@ -76,7 +216,7 @@ def submit_review(public_id: str, version_id: str, user: dict[str, Any]) -> dict
 
 
 def approve(public_id: str, version_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    _require_role(user, AUTHOR_ROLES)
+    _require_capability(user, REVIEWER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, {"in_review"}, "not_in_review")
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="publish")
@@ -92,7 +232,7 @@ def request_changes(
     user: dict[str, Any],
     reason: str,
 ) -> dict[str, Any]:
-    _require_role(user, AUTHOR_ROLES)
+    _require_capability(user, REVIEWER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, {"in_review"}, "not_in_review")
     updated = _with_state(version, "changes_requested", user, review_state="changes_requested")
@@ -110,7 +250,7 @@ def publish(
     expected_published_version_id: str | None,
     reason: str | None = None,
 ) -> dict[str, Any]:
-    _require_role(user, PUBLISHER_ROLES)
+    _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, PUBLISHABLE_STATES, "not_approved")
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="publish")
@@ -162,7 +302,7 @@ def rollback(
     expected_published_version_id: str | None,
     reason: str,
 ) -> dict[str, Any]:
-    _require_role(user, PUBLISHER_ROLES)
+    _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, ROLLBACK_STATES, "rollback_target_not_publishable")
     pointer = curriculum_ops_repo.get_pointer(public_id) or {}
@@ -191,7 +331,7 @@ def rollback(
 
 
 def archive(public_id: str, version_id: str, user: dict[str, Any], *, reason: str) -> dict[str, Any]:
-    _require_role(user, PUBLISHER_ROLES)
+    _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     refs = curriculum_ops_repo.list_active_assignment_refs(public_id)
     if refs:
@@ -247,20 +387,26 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             or f"{public_id}-exercise-{index}"
         )
         answer_key = exercise.get("answer_key") or exercise.get("answerKey") or exercise.get("correct_answer")
-        normalized.append(
-            {
-                "exercise_id": exercise_id,
-                "challenge_id": exercise_id,
-                "lesson_id": public_id,
-                "prompt": str(exercise.get("prompt") or "").strip(),
-                "type": str(exercise.get("type") or "text_input").strip(),
-                "difficulty": str(exercise.get("difficulty") or "practice").strip(),
-                "order": int(exercise.get("order") or index),
-                "answer_key": str(answer_key or "").strip(),
-                "explanation": str(exercise.get("explanation") or "").strip(),
-                "skills": exercise.get("skills") or [],
-            }
-        )
+        item = {
+            "exercise_id": exercise_id,
+            "challenge_id": exercise_id,
+            "lesson_id": public_id,
+            "prompt": str(exercise.get("prompt") or "").strip(),
+            "type": str(exercise.get("type") or "text_input").strip(),
+            "difficulty": str(exercise.get("difficulty") or "practice").strip(),
+            "order": int(exercise.get("order") or index),
+            "answer_key": str(answer_key or "").strip(),
+            "correct_answer": str(answer_key or "").strip(),
+            "explanation": str(exercise.get("explanation") or "").strip(),
+            "skills": exercise.get("skills") or [],
+        }
+        for source, target in EXERCISE_FIELD_ALIASES.items():
+            if source in exercise and exercise[source] is not None and target not in item:
+                item[target] = exercise[source]
+        for rich_field in ["hint", "hints", "tags", "media_references"]:
+            if rich_field in exercise:
+                item[rich_field] = exercise[rich_field]
+        normalized.append(item)
     return normalized
 
 
@@ -270,20 +416,10 @@ def _validate_publish_ready(
     *,
     level: str,
 ) -> None:
-    missing = [
-        key
-        for key in ["lesson_id", "title", "objective", "subject_id", "topic_id", "grade_level"]
-        if not lesson.get(key)
-    ]
-    if level in {"review", "publish"} and not exercises:
-        missing.append("exercises")
-    if level == "publish":
-        for index, exercise in enumerate(exercises, start=1):
-            for key in ["exercise_id", "prompt", "difficulty", "answer_key", "explanation"]:
-                if not exercise.get(key):
-                    missing.append(f"exercise[{index}].{key}")
-    if missing:
-        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": missing})
+    issues = _validation_issues(lesson, exercises, level=level)
+    blocking = [issue["field"] for issue in issues if issue["severity"] == "blocking"]
+    if blocking:
+        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": blocking})
 
 
 def _with_state(
@@ -307,9 +443,201 @@ def _require_state(version: dict[str, Any], allowed: set[str], detail: str) -> N
         raise HTTPException(status_code=409, detail=detail)
 
 
-def _require_role(user: dict[str, Any], allowed: set[str]) -> None:
-    if user.get("role") not in allowed:
-        raise HTTPException(status_code=403, detail="curriculum_authoring_forbidden")
+def _require_capability(user: dict[str, Any], *allowed: str) -> None:
+    granted = curriculum_capabilities(user)
+    if not granted.intersection(allowed):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "curriculum_capability_required",
+                "required": list(allowed),
+            },
+        )
+
+
+def curriculum_capabilities(user: dict[str, Any]) -> set[str]:
+    values: list[Any] = []
+    for key in [
+        "curriculum_capabilities",
+        "curriculumCapabilities",
+        "capabilities",
+        "permissions",
+        "scopes",
+        "custom:curriculum_capabilities",
+    ]:
+        values.append(user.get(key))
+    for container_key in ["profile", "metadata", "claims"]:
+        container = user.get(container_key)
+        if isinstance(container, dict):
+            values.extend(
+                [
+                    container.get("curriculum_capabilities"),
+                    container.get("curriculumCapabilities"),
+                    container.get("capabilities"),
+                    container.get("permissions"),
+                    container.get("scopes"),
+                ]
+            )
+
+    capabilities: set[str] = set()
+    for value in values:
+        capabilities.update(_coerce_capabilities(value))
+    return capabilities & CURRICULUM_CAPABILITIES
+
+
+def _coerce_capabilities(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        return {item.strip() for item in value.replace(",", " ").split() if item.strip()}
+    if isinstance(value, dict):
+        granted = set()
+        for key, state in value.items():
+            if state is True or str(state).lower() in {"active", "enabled", "granted", "allow"}:
+                granted.add(str(key))
+        return granted
+    if isinstance(value, list | tuple | set):
+        granted = set()
+        for item in value:
+            if isinstance(item, dict):
+                granted.update(_coerce_capabilities(item))
+            else:
+                granted.add(str(item))
+        return granted
+    return set()
+
+
+def _patch_lesson(public_id: str, current: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    lesson = dict(current)
+    lesson["lesson_id"] = public_id
+    patch = payload.get("lesson") if isinstance(payload.get("lesson"), dict) else payload
+    for source, target in LESSON_FIELD_ALIASES.items():
+        if source in patch and patch[source] is not None:
+            lesson[target] = patch[source]
+    if "estimated_minutes" in lesson:
+        lesson["estimated_minutes"] = int(lesson["estimated_minutes"])
+    return lesson
+
+
+def _patch_exercises(
+    public_id: str,
+    current: list[dict[str, Any]],
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if "exercises" in payload:
+        return _exercise_payloads(public_id, payload.get("exercises") or [])
+
+    exercises = [dict(item) for item in current]
+    operations = payload.get("exerciseOperations") or payload.get("exercise_operations") or []
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        action = str(operation.get("op") or operation.get("action") or "").lower()
+        exercise_id = operation.get("exerciseId") or operation.get("exercise_id")
+        if action == "add":
+            exercises.extend(_exercise_payloads(public_id, [operation.get("exercise") or operation]))
+        elif action == "remove" and exercise_id:
+            exercises = [item for item in exercises if item.get("exercise_id") != exercise_id]
+        elif action == "update" and exercise_id:
+            exercises = [
+                _merge_exercise(public_id, item, operation.get("exercise") or operation)
+                if item.get("exercise_id") == exercise_id
+                else item
+                for item in exercises
+            ]
+        elif action == "reorder":
+            order = operation.get("exerciseIds") or operation.get("exercise_ids") or []
+            order_index = {str(item): index + 1 for index, item in enumerate(order)}
+            for item in exercises:
+                if item.get("exercise_id") in order_index:
+                    item["order"] = order_index[item["exercise_id"]]
+
+    return _renumber_exercises(public_id, exercises)
+
+
+def _merge_exercise(
+    public_id: str,
+    current: dict[str, Any],
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(current)
+    for source, target in EXERCISE_FIELD_ALIASES.items():
+        if source in patch and patch[source] is not None:
+            merged[target] = patch[source]
+    return _exercise_payloads(public_id, [merged])[0]
+
+
+def _renumber_exercises(public_id: str, exercises: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = sorted(exercises, key=lambda item: int(item.get("order") or 9999))
+    for index, item in enumerate(ordered, start=1):
+        item["order"] = index
+        item["lesson_id"] = public_id
+    return ordered
+
+
+def _validation_issues(
+    lesson: dict[str, Any],
+    exercises: list[dict[str, Any]],
+    *,
+    level: str,
+) -> list[dict[str, Any]]:
+    issues = []
+    for key in ["lesson_id", "title", "objective", "subject_id", "topic_id", "grade_level"]:
+        if not lesson.get(key):
+            issues.append(_validation_issue(key, "Required lesson field is missing."))
+    if level in {"review", "publish"} and not exercises:
+        issues.append(_validation_issue("exercises", "At least one exercise is required."))
+    if level == "publish":
+        for index, exercise in enumerate(exercises, start=1):
+            for key in ["exercise_id", "prompt", "difficulty", "answer_key", "explanation"]:
+                if not exercise.get(key):
+                    issues.append(
+                        _validation_issue(
+                            f"exercises[{index - 1}].{key}",
+                            "Required exercise field is missing.",
+                        )
+                    )
+    return issues
+
+
+def _validation_issue(field: str, message: str) -> dict[str, Any]:
+    return {
+        "severity": "blocking",
+        "field": field,
+        "message": message,
+        "hint": "Provide this field before submitting or publishing the draft.",
+    }
+
+
+def _diff_dicts(prefix: str, before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
+    changes = []
+    for key in sorted(set(before) | set(after)):
+        if key in {"PK", "SK", "entity_type"}:
+            continue
+        if before.get(key) != after.get(key):
+            changes.append(
+                {
+                    "path": f"{prefix}.{key}",
+                    "type": "modified" if key in before and key in after else "added" if key in after else "removed",
+                    "before": before.get(key),
+                    "after": after.get(key),
+                }
+            )
+    return changes
+
+
+def _diff_exercises(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    before_by_id = {item.get("exercise_id"): item for item in before}
+    after_by_id = {item.get("exercise_id"): item for item in after}
+    changes = []
+    for exercise_id in sorted(set(before_by_id) | set(after_by_id)):
+        if exercise_id not in before_by_id:
+            changes.append({"path": f"exercises.{exercise_id}", "type": "added", "after": after_by_id[exercise_id]})
+        elif exercise_id not in after_by_id:
+            changes.append({"path": f"exercises.{exercise_id}", "type": "removed", "before": before_by_id[exercise_id]})
+        else:
+            changes.extend(_diff_dicts(f"exercises.{exercise_id}", before_by_id[exercise_id], after_by_id[exercise_id]))
+    return changes
 
 
 def _manifest(
@@ -363,6 +691,7 @@ def _audit(
             "reason": reason,
             "actor_id": _actor_id(user),
             "actor_role": user.get("role"),
+            "actor_capabilities": sorted(curriculum_capabilities(user)),
             "created_at": _now(),
         },
     )
@@ -398,6 +727,22 @@ def _manifest_response(manifest: dict[str, Any]) -> dict[str, Any]:
         "lessonVersionId": manifest.get("lesson_version_id"),
         "previousPublishedVersionId": manifest.get("previous_published_version_id"),
         "operation": manifest.get("operation"),
+    }
+
+
+def _audit_response(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "eventId": event.get("event_id"),
+        "publicLessonId": event.get("public_id"),
+        "versionId": event.get("version_id"),
+        "operation": event.get("operation"),
+        "fromState": event.get("from_state"),
+        "toState": event.get("to_state"),
+        "reason": event.get("reason"),
+        "actorId": event.get("actor_id"),
+        "actorRole": event.get("actor_role"),
+        "actorCapabilities": event.get("actor_capabilities") or [],
+        "createdAt": event.get("created_at"),
     }
 
 
