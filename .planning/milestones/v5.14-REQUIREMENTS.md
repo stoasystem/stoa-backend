@@ -15,7 +15,7 @@ This is a reliability and production-readiness milestone, not a broad authentica
 
 ### AUTHREL-01 Verification And Login Reality Audit
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -26,7 +26,7 @@ Acceptance criteria:
 
 ### VERIFY-01 Email Verification Resend Confirm Reliability
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -87,8 +87,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTHREL-01 | Phase 242 | Active |
-| VERIFY-01 | Phase 243 | Planned |
+| AUTHREL-01 | Phase 242 | Complete |
+| VERIFY-01 | Phase 243 | Active |
 | LOGIN-01 | Phase 244 | Planned |
 | SUPPORT-01 | Phase 245 | Planned |
 | VERIFY-48 | Phase 246 | Planned |

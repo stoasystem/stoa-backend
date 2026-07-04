@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.14
 milestone_name: Verification And Login Reliability
-status: planning
-last_updated: "2026-07-04T23:37:34.466Z"
-last_activity: 2026-07-05 — Milestone v5.14 started
+status: active
+last_updated: "2026-07-05T00:10:00.000Z"
+last_activity: 2026-07-05 — Phase 242 verification/login reality audit completed; Phase 243 backend reliability active
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-05 — Milestone v5.14 started with verification/login reliability requirements and roadmap.
+Phase: 243 Backend Verification Resend Confirm Reliability
+Plan: Add backend resend/confirm/login reliability coverage and state consistency fixes.
+Status: Active
+Last activity: 2026-07-05 — Phase 242 mapped current Cognito/local/frontend/support verification behavior and defined the canonical v5.14 policy contract.
 
 ## Accumulated Context
 
@@ -49,13 +49,14 @@ Last activity: 2026-07-05 — Milestone v5.14 started with verification/login re
 - Phase 240 is complete: billing responses now include bounded supportEvidence, and frontend admin billing/account-operations surfaces render support action plus duplicate/stale reconciliation counts.
 - Phase 241 is complete: backend tests/Ruff, frontend build/lint, and focused billing e2e passed; live Stripe/TWINT smoke remains blocked on external credentials, webhook endpoint, finance acceptance, and rollout approval.
 - v5.14 is active: verification/login reliability must audit Cognito/local/frontend behavior first, then harden resend/confirm/login policy, resolve half-enabled login-code behavior, add support visibility, and close with local release evidence.
+- Phase 242 is complete: backend Cognito sign-up confirmation, local verification state, resend/confirm endpoints, token-return blocking, frontend verification screens, admin/account-operations support views, login-code deferral, demo-only fallback boundaries, and externally blocked live-smoke evidence are documented.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
 
 ### Pending Todos
 
-- Execute Phase 242 Verification And Login Reality Audit.
+- Execute Phase 243 Backend Verification Resend Confirm Reliability.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
 ### Blockers/Concerns
