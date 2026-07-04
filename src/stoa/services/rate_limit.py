@@ -9,7 +9,7 @@ def _today_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _increment_and_check(pk: str, sk: str, limit: int, label: str) -> None:
+def _increment_and_check(pk: str, sk: str, limit: int, label: str) -> dict:
     """Atomically increment a usage counter and raise 429 if the limit is hit."""
     table = get_table()
     resp = table.update_item(
@@ -24,17 +24,25 @@ def _increment_and_check(pk: str, sk: str, limit: int, label: str) -> None:
         ReturnValues="UPDATED_NEW",
     )
     new_count = int(resp["Attributes"].get("count", 1))
+    expires_at = int(resp["Attributes"].get("expires_at") or 0)
     if new_count > limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily {label} limit ({limit}) reached. Try again tomorrow.",
         )
+    return {
+        "quotaPeriod": sk.split("#", 1)[1] if "#" in sk else _today_utc(),
+        "counterKey": f"{pk}/{sk}",
+        "counterValue": new_count,
+        "limit": limit,
+        "expiresAt": expires_at,
+    }
 
 
-def check_and_record_chat(student_id: str) -> None:
+def check_and_record_chat(student_id: str) -> dict:
     """Increment today's chat counter; raise 429 if limit exceeded."""
     today = _today_utc()
-    _increment_and_check(
+    return _increment_and_check(
         pk=f"USAGE#{student_id}",
         sk=f"CHAT#{today}",
         limit=settings.daily_chat_message_limit,
@@ -42,10 +50,10 @@ def check_and_record_chat(student_id: str) -> None:
     )
 
 
-def check_and_record_hint(student_id: str, challenge_id: str) -> None:
+def check_and_record_hint(student_id: str, challenge_id: str) -> dict:
     """Increment today's hint counter; raise 429 if limit exceeded."""
     today = _today_utc()
-    _increment_and_check(
+    return _increment_and_check(
         pk=f"USAGE#{student_id}",
         sk=f"HINT#{today}",
         limit=settings.daily_hint_limit,

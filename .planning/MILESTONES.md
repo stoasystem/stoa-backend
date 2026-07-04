@@ -58,8 +58,8 @@ Known deferred items: additional usage ledger coverage for non-question actions,
 **Milestone requirements:** `.planning/milestones/v5.11-REQUIREMENTS.md`
 **Goal:** Extend usage ledger coverage beyond question submissions for account operations explanations and paid-limit governance.
 **Phases:** 5
-**Plans:** 1/5 complete
-**Requirements:** 1/6 complete
+**Plans:** 2/5 complete
+**Requirements:** 2/6 complete
 
 Function purpose:
 
@@ -78,7 +78,7 @@ Implementation strategy:
 Phase progress:
 
 - Phase 227: Usage Action Taxonomy And Ledger Contract. (complete)
-- Phase 228: Chat And Teacher-Help Ledger Instrumentation.
+- Phase 228: Chat And Teacher-Help Ledger Instrumentation. (complete)
 - Phase 229: Practice And Generation Ledger Instrumentation.
 - Phase 230: Multi-Action Reconciliation And Account Operations Summaries.
 - Phase 231: v5.11 Privacy Regression And Release Gate.

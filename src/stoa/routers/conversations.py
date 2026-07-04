@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from stoa.deps import require_role
 from stoa.db.dynamodb import get_table
-from stoa.services import ai_service
+from stoa.services import ai_service, usage_ledger_service
 from stoa.services.rate_limit import check_and_record_chat
 
 logger = logging.getLogger(__name__)
@@ -212,6 +212,7 @@ async def create_conversation(
 
     # If an initial message was provided, immediately get an AI reply
     if body.initialMessage:
+        usage_counter = check_and_record_chat(student_id)
         student_msg, assistant_msg = _send_message_impl(
             conv_id=conv_id,
             student_id=student_id,
@@ -219,6 +220,15 @@ async def create_conversation(
             grade=body.grade,
             content=body.initialMessage,
             table=table,
+        )
+        _record_chat_usage(
+            student_id=student_id,
+            conv_id=conv_id,
+            student_message_id=student_msg.id,
+            subject=body.subject,
+            grade=body.grade,
+            usage_counter=usage_counter,
+            created_at=student_msg.createdAt,
         )
         messages = [student_msg, assistant_msg]
 
@@ -276,7 +286,7 @@ async def send_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    check_and_record_chat(student_id)
+    usage_counter = check_and_record_chat(student_id)
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,
@@ -285,6 +295,15 @@ async def send_message(
         grade=conv.get("grade", ""),
         content=body.content,
         table=table,
+    )
+    _record_chat_usage(
+        student_id=student_id,
+        conv_id=conv_id,
+        student_message_id=student_msg.id,
+        subject=conv.get("subject", "math"),
+        grade=conv.get("grade", ""),
+        usage_counter=usage_counter,
+        created_at=student_msg.createdAt,
     )
     return SendMessageResponse(studentMessage=student_msg, assistantMessage=assistant_msg)
 
@@ -306,7 +325,7 @@ async def stream_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    check_and_record_chat(student_id)
+    usage_counter = check_and_record_chat(student_id)
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,
@@ -315,6 +334,15 @@ async def stream_message(
         grade=conv.get("grade", ""),
         content=body.content,
         table=table,
+    )
+    _record_chat_usage(
+        student_id=student_id,
+        conv_id=conv_id,
+        student_message_id=student_msg.id,
+        subject=conv.get("subject", "math"),
+        grade=conv.get("grade", ""),
+        usage_counter=usage_counter,
+        created_at=student_msg.createdAt,
     )
 
     def _sse(event_type: str, data: dict) -> str:
@@ -467,6 +495,38 @@ def _send_message_impl(
     )
 
 
+def _record_chat_usage(
+    *,
+    student_id: str,
+    conv_id: str,
+    student_message_id: str,
+    subject: str,
+    grade: str,
+    usage_counter: dict,
+    created_at: str,
+) -> None:
+    usage_ledger_service.record_usage_event(
+        student_id=student_id,
+        action=usage_ledger_service.CHAT_MESSAGE_ACTION,
+        quota_period=usage_counter["quotaPeriod"],
+        idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+            action=usage_ledger_service.CHAT_MESSAGE_ACTION,
+            resource_id=student_message_id,
+        ),
+        counter_key=usage_counter["counterKey"],
+        counter_value=usage_counter["counterValue"],
+        request_correlation_id=student_message_id,
+        created_at=created_at,
+        metadata={
+            "conversation_id": conv_id,
+            "request_id": student_message_id,
+            "subject": subject,
+            "grade_level": grade,
+            "status": "sent",
+        },
+    )
+
+
 # ── Teacher-help router (separate prefix: /teacher-help) ──────────────────────
 
 teacher_help_router = APIRouter()
@@ -515,6 +575,26 @@ async def request_teacher_help(
         "content": f"Teacher help requested. {body.message or ''}".strip(),
         "created_at": now,
     })
+
+    usage_ledger_service.record_usage_event(
+        student_id=student_id,
+        action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
+        quota_period=usage_ledger_service.today_period(),
+        idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+            action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
+            resource_id=body.conversationId,
+            qualifier=request_id,
+        ),
+        request_correlation_id=request_id,
+        created_at=now,
+        metadata={
+            "conversation_id": body.conversationId,
+            "request_id": request_id,
+            "subject": conv.get("subject"),
+            "grade_level": conv.get("grade"),
+            "status": "pending",
+        },
+    )
 
     return TeacherHelpResponse(
         requestId=request_id,

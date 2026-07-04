@@ -376,6 +376,70 @@ def record_question_usage_event(
     return {**event, "idempotency_status": "created" if created else "duplicate"}
 
 
+def record_usage_event(
+    *,
+    student_id: str,
+    action: str,
+    quota_period: str,
+    idempotency_key: str,
+    quantity: int | None = None,
+    created_at: str,
+    entitlement: dict[str, Any] | None = None,
+    parent_id: str | None = None,
+    actor_role: str = "student",
+    counter_key: str | None = None,
+    counter_value: int | None = None,
+    request_correlation_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist one governed non-question usage event.
+
+    This helper is for v5.11 action coverage beyond question submissions. It is
+    intentionally content-safe and taxonomy-gated. Question submissions keep the
+    existing specialized helper because their counter remains the enforcement
+    source and response compatibility matters.
+    """
+    definition = get_usage_action_definition(action)
+    effective_entitlement = entitlement or {}
+    event_parent_id = parent_id if parent_id is not None else effective_entitlement.get("parentId")
+    event = {
+        "PK": f"USAGE_LEDGER#{student_id}",
+        "SK": f"EVENT#{action}#{quota_period}#{idempotency_key}",
+        "entity_type": "usage_ledger_event",
+        "schema_version": LEDGER_SCHEMA_VERSION,
+        "event_id": f"{student_id}:{action}:{quota_period}:{idempotency_key}",
+        "actor_id": student_id,
+        "actor_role": actor_role,
+        "student_id": student_id,
+        "parent_id": event_parent_id,
+        "action": action,
+        "quantity": int(quantity if quantity is not None else definition.default_quantity),
+        "quota_period": quota_period,
+        "counter_key": counter_key,
+        "counter_value_after": counter_value,
+        "idempotency_key": idempotency_key,
+        "request_correlation_id": request_correlation_id,
+        "effective_plan": effective_entitlement.get("effectivePlan"),
+        "entitlement_source": effective_entitlement.get("source"),
+        "entitlement_snapshot": _entitlement_snapshot(effective_entitlement) if effective_entitlement else {},
+        "privacy": {
+            **usage_privacy_flags(),
+        },
+        "metadata": {
+            "usage_type": definition.usage_type,
+            "summary_group": definition.summary_group,
+            "quota_enforced": definition.quota_enforced,
+            "support_visible": definition.support_visible,
+            **safe_usage_metadata(metadata),
+        },
+        "created_at": created_at,
+        "updated_at": created_at,
+        "expires_at": counter_ttl(),
+    }
+    created = usage_ledger_repo.put_usage_event(event)
+    return {**event, "idempotency_status": "created" if created else "duplicate"}
+
+
 def reconcile_question_usage(
     *,
     student_id: str,

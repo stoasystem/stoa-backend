@@ -330,3 +330,42 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
 
     assert response.status_code == 409
     assert usage_calls == []
+
+
+def test_request_teacher_records_support_visible_usage_event(monkeypatch):
+    ledger_calls = []
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda question_id: {
+            "question_id": question_id,
+            "student_id": "student-1",
+            "subject": "math",
+            "status": "ai_answered",
+        },
+    )
+    monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
+    monkeypatch.setattr(questions.notification_service, "emit_teacher_requested", lambda **kwargs: None)
+    monkeypatch.setattr(
+        questions.teacher_dispatch_service,
+        "dispatch_question",
+        lambda *args, **kwargs: {"status": "deferred"},
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    response = _client().post("/questions/question-1/request-teacher")
+
+    assert response.status_code == 202
+    assert ledger_calls[0]["action"] == "question_teacher_help_request"
+    assert ledger_calls[0]["student_id"] == "student-1"
+    assert ledger_calls[0]["request_correlation_id"] == "question-1"
+    assert ledger_calls[0]["metadata"] == {
+        "question_id": "question-1",
+        "subject": "math",
+        "status": "escalated",
+    }

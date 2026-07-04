@@ -209,6 +209,44 @@ def test_usage_idempotency_and_metadata_helpers_are_privacy_safe():
         raise AssertionError("unsupported usage action should fail closed")
 
 
+def test_record_usage_event_is_taxonomy_gated_and_content_safe(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+
+    created = usage_ledger_service.record_usage_event(
+        student_id="student-1",
+        action="conversation_teacher_help_request",
+        quota_period="2026-07-04",
+        idempotency_key="conversation_teacher_help_request:conv-1:req-1",
+        created_at="2026-07-04T10:00:00+00:00",
+        request_correlation_id="req-1",
+        metadata={
+            "conversation_id": "conv-1",
+            "request_id": "req-1",
+            "subject": "math",
+            "message": "raw teacher help message",
+            "provider_payload": {"secret": True},
+        },
+    )
+    duplicate = usage_ledger_service.record_usage_event(
+        student_id="student-1",
+        action="conversation_teacher_help_request",
+        quota_period="2026-07-04",
+        idempotency_key="conversation_teacher_help_request:conv-1:req-1",
+        created_at="2026-07-04T10:00:00+00:00",
+    )
+
+    assert created["idempotency_status"] == "created"
+    assert duplicate["idempotency_status"] == "duplicate"
+    assert created["metadata"]["usage_type"] == "support_conversation_teacher_help_request"
+    assert created["metadata"]["summary_group"] == "teacher_help"
+    assert created["metadata"]["quota_enforced"] is False
+    assert created["metadata"]["conversation_id"] == "conv-1"
+    assert "message" not in created["metadata"]
+    assert "provider_payload" not in created["metadata"]
+    assert created["privacy"]["raw_content_stored"] is False
+
+
 def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)

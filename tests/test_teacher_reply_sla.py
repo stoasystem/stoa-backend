@@ -42,6 +42,7 @@ def test_request_teacher_records_request_and_queue_timestamps(monkeypatch):
         lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
     )
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
+    monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
 
     client = _app(questions.router, "/questions", {"sub": "student-1", "role": "student"})
     response = client.post("/questions/question-1/request-teacher")

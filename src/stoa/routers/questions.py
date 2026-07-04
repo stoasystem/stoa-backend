@@ -286,6 +286,22 @@ async def request_teacher(
             "status": "deferred",
             "reason": type(exc).__name__,
         }
+    usage_ledger_service.record_usage_event(
+        student_id=user["sub"],
+        action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
+        quota_period=usage_ledger_service.today_period(),
+        idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+            action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
+            resource_id=question_id,
+        ),
+        created_at=now,
+        request_correlation_id=question_id,
+        metadata={
+            "question_id": question_id,
+            "subject": item.get("subject"),
+            "status": QuestionStatus.ESCALATED.value,
+        },
+    )
     return {"question_id": question_id, "status": QuestionStatus.ESCALATED.value, "dispatch": dispatch}
 
 

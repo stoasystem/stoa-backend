@@ -662,6 +662,7 @@ def test_request_teacher_emits_tutor_and_admin_events(monkeypatch):
         lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
     )
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
+    monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
     monkeypatch.setattr(
         questions.notification_service,
         "create_event_safe",
