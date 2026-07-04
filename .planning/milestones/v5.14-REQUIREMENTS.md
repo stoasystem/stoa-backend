@@ -37,7 +37,7 @@ Acceptance criteria:
 
 ### LOGIN-01 Canonical Login Code And Passwordless Policy
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -48,7 +48,7 @@ Acceptance criteria:
 
 ### SUPPORT-01 Verification Support Visibility And Recovery
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -89,6 +89,6 @@ Acceptance criteria:
 |-------------|-------|--------|
 | AUTHREL-01 | Phase 242 | Complete |
 | VERIFY-01 | Phase 243 | Complete |
-| LOGIN-01 | Phase 244 | Active |
-| SUPPORT-01 | Phase 245 | Planned |
+| LOGIN-01 | Phase 244 | Complete |
+| SUPPORT-01 | Phase 245 | Active |
 | VERIFY-48 | Phase 246 | Planned |

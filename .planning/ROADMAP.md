@@ -31,7 +31,7 @@ v5.8 replaced placeholder email verification with Cognito sign-up confirmation a
 
 - [x] **Phase 242: Verification And Login Reality Audit** - Map current Cognito/local/frontend/support verification behavior and define the v5.14 policy contract.
 - [x] **Phase 243: Backend Verification Resend Confirm Reliability** - Harden registration confirmation, resend, confirm, activation, and profile state consistency.
-- [ ] **Phase 244: Login Code And Passwordless Policy Resolution** - Complete or remove half-enabled login-code/passwordless behavior and lock the canonical login policy.
+- [x] **Phase 244: Login Code And Passwordless Policy Resolution** - Complete or remove half-enabled login-code/passwordless behavior and lock the canonical login policy.
 - [ ] **Phase 245: Frontend Verification Recovery And Admin Support Visibility** - Make verification/login recovery states usable in frontend and support/admin surfaces.
 - [ ] **Phase 246: v5.14 Verification Login Reliability Gate** - Verify backend/frontend behavior, docs, live-smoke status, state, and next milestone decision.
 
@@ -68,7 +68,7 @@ v5.8 replaced placeholder email verification with Cognito sign-up confirmation a
 **Goal**: Remove or complete login-code/passwordless behavior so users see one dependable auth policy.
 **Depends on**: Phase 243.
 **Requirements**: LOGIN-01
-**Status**: Active.
+**Status**: Complete.
 **Success Criteria**:
 
 1. Product-visible login-code/passwordless surfaces are either backed by real Cognito custom auth or hidden/deferred.
@@ -81,7 +81,7 @@ v5.8 replaced placeholder email verification with Cognito sign-up confirmation a
 **Goal**: Make verification/login recovery states clear and actionable for users and support/admins.
 **Depends on**: Phase 244.
 **Requirements**: SUPPORT-01
-**Status**: Planned.
+**Status**: Active.
 **Success Criteria**:
 
 1. Frontend verification/login screens render pending, expired, wrong-code, rate-limited, verified, and support-needed states clearly.
@@ -114,8 +114,8 @@ v5.8 replaced placeholder email verification with Cognito sign-up confirmation a
 |-------|-----------|----------------|--------|-----------|
 | 242 Verification And Login Reality Audit | v5.14 | 1/1 | Complete | 2026-07-05 |
 | 243 Backend Verification Resend Confirm Reliability | v5.14 | 1/1 | Complete | 2026-07-05 |
-| 244 Login Code And Passwordless Policy Resolution | v5.14 | 0/1 | Active | - |
-| 245 Frontend Verification Recovery And Admin Support Visibility | v5.14 | 0/1 | Planned | - |
+| 244 Login Code And Passwordless Policy Resolution | v5.14 | 1/1 | Complete | 2026-07-05 |
+| 245 Frontend Verification Recovery And Admin Support Visibility | v5.14 | 0/1 | Active | - |
 | 246 v5.14 Verification Login Reliability Gate | v5.14 | 0/1 | Planned | - |
 
 ## Traceability
@@ -124,6 +124,6 @@ v5.8 replaced placeholder email verification with Cognito sign-up confirmation a
 |-------------|-------|--------|
 | AUTHREL-01 | Phase 242 | Complete |
 | VERIFY-01 | Phase 243 | Complete |
-| LOGIN-01 | Phase 244 | Active |
-| SUPPORT-01 | Phase 245 | Planned |
+| LOGIN-01 | Phase 244 | Complete |
+| SUPPORT-01 | Phase 245 | Active |
 | VERIFY-48 | Phase 246 | Planned |

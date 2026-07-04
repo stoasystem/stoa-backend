@@ -523,9 +523,14 @@ def test_login_code_policy_is_deferred_without_tokens():
 
     assert request.status_code == 200
     assert request.json()["status"] == "deferred"
+    assert request.json()["policy"] == "deferred_cognito_custom_auth_required"
+    assert "custom auth triggers" in request.json()["reason"]
     assert "accessToken" not in request.json()
     assert confirm.status_code == 200
+    assert confirm.json()["status"] == "deferred"
     assert confirm.json()["policy"] == "deferred_cognito_custom_auth_required"
+    assert "cannot produce Cognito tokens" in confirm.json()["reason"]
+    assert "accessToken" not in confirm.json()
 
 
 def test_admin_can_inspect_account_verification_status(monkeypatch):
