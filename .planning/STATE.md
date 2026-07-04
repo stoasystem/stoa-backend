@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v5.14
 milestone_name: Verification And Login Reliability
 status: active
-last_updated: "2026-07-05T01:10:00.000Z"
-last_activity: 2026-07-05 — Phase 245 verification recovery support visibility completed; Phase 246 release gate active
+last_updated: "2026-07-05T01:30:00.000Z"
+last_activity: 2026-07-05 — Phase 246 backend gate passed; frontend focused e2e blocked by platform usage-limit approval
 progress:
   total_phases: 5
   completed_phases: 4
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 Phase: 246 v5.14 Verification Login Reliability Gate
 Plan: Run final backend/frontend evidence checks and close v5.14 with blocked live-smoke notes.
 Status: Active
-Last activity: 2026-07-05 — Phase 245 added bounded verification recovery state/action to backend support views and frontend account operations visibility.
+Last activity: 2026-07-05 — Phase 246 backend tests/Ruff passed and frontend build evidence exists; focused frontend e2e is blocked by local execution approval quota.
 
 ## Accumulated Context
 
@@ -59,6 +59,7 @@ Last activity: 2026-07-05 — Phase 245 added bounded verification recovery stat
 
 ### Pending Todos
 
+- Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
 - Execute Phase 246 v5.14 Verification Login Reliability Gate.
 - Keep future milestones independent: verification/login reliability and usage/quota/product stability.
 
