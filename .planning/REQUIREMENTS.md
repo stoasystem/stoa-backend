@@ -1,7 +1,7 @@
 # Requirements: v5.18 Warehouse BI Observability And Product Analytics Activation
 
 **Milestone:** v5.18
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-05
 **Prior milestone:** v5.17 External Provider Activation Smoke And Release Operations
 
@@ -72,4 +72,4 @@ Acceptance criteria:
 | BI-02 | Phase 263 | Complete |
 | BI-03 | Phase 264 | Complete |
 | BI-04 | Phase 265 | Complete |
-| VERIFY-52 | Phase 266 | Planned |
+| VERIFY-52 | Phase 266 | Complete |

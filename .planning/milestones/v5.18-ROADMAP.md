@@ -1,6 +1,6 @@
 # Roadmap: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-05
 **Prior milestone:** v5.17 External Provider Activation Smoke And Release Operations
 
@@ -32,7 +32,7 @@ v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, an
 - [x] **Phase 263: Warehouse Export Job Activation And Schema Evidence** - Implement or enable repeatable aggregate export/readiness outputs with idempotency, bounded scope, backfill/retry semantics, and privacy validation. (completed 2026-07-05)
 - [x] **Phase 264: Operator Analytics Dashboard APIs** - Add support-safe aggregate dashboard APIs for usage, billing/provider readiness, curriculum, teacher help, notifications, support, and release-smoke outcomes. (completed 2026-07-05)
 - [x] **Phase 265: APM Alert Routing And Observability Runbooks** - Add low-cardinality alert/status contracts and operator runbooks that distinguish product regressions from provider blockers. (completed 2026-07-05)
-- [ ] **Phase 266: v5.18 BI Observability Release Gate** - Close with focused checks, activation evidence, blocked-prerequisite table, runbooks, and next milestone decision.
+- [x] **Phase 266: v5.18 BI Observability Release Gate** - Close with focused checks, activation evidence, blocked-prerequisite table, runbooks, and next milestone decision. (completed 2026-07-05)
 
 ## Phase Details
 
@@ -103,7 +103,7 @@ v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, an
 | 263 Warehouse Export Job Activation And Schema Evidence | v5.18 | 1/1 | Complete | 2026-07-05 |
 | 264 Operator Analytics Dashboard APIs | v5.18 | 1/1 | Complete | 2026-07-05 |
 | 265 APM Alert Routing And Observability Runbooks | v5.18 | 1/1 | Complete | 2026-07-05 |
-| 266 v5.18 BI Observability Release Gate | v5.18 | 0/1 | Planned | - |
+| 266 v5.18 BI Observability Release Gate | v5.18 | 1/1 | Complete | 2026-07-05 |
 
 ## Traceability
 
@@ -113,4 +113,4 @@ v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, an
 | BI-02 | Phase 263 | Complete |
 | BI-03 | Phase 264 | Complete |
 | BI-04 | Phase 265 | Complete |
-| VERIFY-52 | Phase 266 | Planned |
+| VERIFY-52 | Phase 266 | Complete |

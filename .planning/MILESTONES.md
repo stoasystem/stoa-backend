@@ -44,18 +44,38 @@ Key accomplishments:
 
 ---
 
-## Active: v5.18 Warehouse BI Observability And Product Analytics Activation
+## Completed: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Started:** 2026-07-05
 **Roadmap:** `.planning/milestones/v5.18-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.18-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.18-MILESTONE-AUDIT.md`
 **Goal:** Activate aggregate analytics, BI dashboards, APM/alerting, and operator runbooks after product semantics and provider states are explicit.
+**Phases:** 5
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `bi-observability-ready-local`
 
 Function purpose:
 
 - Give operators usage, billing readiness, curriculum, teacher help, notification, support, and release-smoke analytics.
 - Keep analytics support-safe and separate provider blockers from product regressions.
+
+Completed phases:
+
+- Phase 262: Analytics Reality Audit And Taxonomy Contract. (complete)
+- Phase 263: Warehouse Export Job Activation And Schema Evidence. (complete)
+- Phase 264: Operator Analytics Dashboard APIs. (complete)
+- Phase 265: APM Alert Routing And Observability Runbooks. (complete)
+- Phase 266: v5.18 BI Observability Release Gate. (complete)
+
+Key accomplishments:
+
+- Added admin-only BI taxonomy, warehouse readiness/export, dashboard, and alert-routing routes.
+- Composed existing usage, billing/provider readiness, curriculum analytics, notification delivery, support SLA, core smoke, and external activation smoke into aggregate support-safe contracts.
+- Added fail-closed live BI/APM config flags and blocked states.
+- Verified focused BI/source tests, wider BI-composed backend tests, and Ruff.
 
 ---
 
