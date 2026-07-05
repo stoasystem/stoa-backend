@@ -29,6 +29,7 @@ from stoa.services import (
     report_recovery_job_service,
     report_recovery_service,
     account_operations_service,
+    external_activation_service,
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
@@ -169,6 +170,18 @@ class CoreSmokeResponse(BaseModel):
     status: str
     summary: dict[str, Any] = Field(default_factory=dict)
     checks: list[dict[str, Any]] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExternalActivationSmokeResponse(BaseModel):
+    generatedAt: str
+    taxonomy: list[str]
+    overallState: str
+    safeToMutate: bool
+    payment: dict[str, Any] = Field(default_factory=dict)
+    cognitoEmail: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     privacy: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1417,6 +1430,18 @@ async def get_subscription_provider_readiness(
 ):
     """Inspect redacted live provider readiness without creating provider mutations."""
     return subscription_service.get_provider_readiness(settings)
+
+
+@router.get(
+    "/external-activation/payment-auth-smoke",
+    response_model=ExternalActivationSmokeResponse,
+)
+async def get_payment_auth_activation_smoke(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect payment and Cognito/email activation smoke readiness."""
+    return external_activation_service.build_payment_auth_smoke_report(settings)
 
 
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
