@@ -151,6 +151,13 @@ class Settings(BaseSettings):
     ]
     support_crm_opt_out_delivery_ids: List[str] = []
 
+    # BI / observability activation (v5.18)
+    bi_warehouse_live_configured: bool = False
+    bi_warehouse_export_enabled: bool = False
+    apm_provider: str = ""
+    apm_alert_destination_approved: bool = False
+    apm_alerts_enabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

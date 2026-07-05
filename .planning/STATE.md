@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.18
 milestone_name: Warehouse BI Observability And Product Analytics Activation
-status: planning
+status: active
 last_updated: "2026-07-05T21:08:07.547Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 262 Analytics Reality Audit And Taxonomy Contract
-Plan: 262.01
-Status: Planning
-Last activity: 2026-07-05 — Milestone v5.18 roadmap activated
+Phase: 266 v5.18 BI Observability Release Gate
+Plan: 266.01
+Status: In progress
+Last activity: 2026-07-05 — Phases 262-265 implemented and verified
 
 ## Accumulated Context
 
@@ -45,13 +45,13 @@ Last activity: 2026-07-05 — Milestone v5.18 roadmap activated
 - Phase 259 added `GET /admin/external-activation/notification-support-smoke`, combining notification WebSocket/email/push readiness with support internal queue, third-party provider, retry/sync, and CRM readiness.
 - Phase 260 added `GET /admin/external-activation/production-readiness-smoke`, documenting deploy evidence requirements, read-only API/browser smoke paths, request-id policy, and production no-mutation gates.
 - Phase 261 closed v5.17 as `external-provider-release-ops-ready`; live external provider activation remains blocked until approved credentials, rollout flags, safe fixtures, and operator-run production smoke evidence exist.
+- Phase 262 mapped BI source surfaces and established the v5.18 taxonomy/privacy contract.
+- Phase 263 added admin BI warehouse readiness/export contracts with stable idempotency, bounded aggregate rows, and default live warehouse blockers.
+- Phase 264 added the aggregate admin BI dashboard across usage, billing/provider readiness, curriculum, notifications, support, release smoke, and warehouse state.
+- Phase 265 added low-cardinality admin BI alert routing and runbook metadata with live APM alerting blocked by default until configured.
 
 ### Pending Todos
 
-- Execute Phase 262 analytics reality audit and taxonomy contract.
-- Execute Phase 263 warehouse export job activation and schema evidence.
-- Execute Phase 264 operator analytics dashboard APIs.
-- Execute Phase 265 APM alert routing and observability runbooks.
 - Execute Phase 266 v5.18 BI observability release gate.
 
 ### Blockers/Concerns
@@ -63,4 +63,4 @@ Last activity: 2026-07-05 — Milestone v5.18 roadmap activated
 
 ## Operator Next Steps
 
-- Execute v5.18 phases 262-266 autonomously with support-safe aggregate analytics boundaries.
+- Execute Phase 266 release gate, final checks, milestone audit, and remote sync.

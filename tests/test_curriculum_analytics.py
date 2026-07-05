@@ -155,13 +155,18 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
     }
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
     monkeypatch.setattr(
+        practice.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings: {"limits": {"dailyHintLimit": 10}},
+    )
+    monkeypatch.setattr(
         rate_limit,
         "check_and_record_hint",
-        lambda student_id, challenge_id: {
+        lambda student_id, challenge_id, limit=None: {
             "quotaPeriod": "2026-07-04",
             "counterKey": "USAGE#student-1/HINT#2026-07-04",
             "counterValue": 1,
-            "limit": 10,
+            "limit": limit or 10,
             "expiresAt": 1,
         },
     )

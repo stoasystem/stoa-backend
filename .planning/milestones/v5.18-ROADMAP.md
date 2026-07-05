@@ -28,10 +28,10 @@ v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, an
 
 ## Phases
 
-- [ ] **Phase 262: Analytics Reality Audit And Taxonomy Contract** - Map existing analytics/readiness surfaces, privacy boundaries, provider-state dimensions, and missing evidence before implementation.
-- [ ] **Phase 263: Warehouse Export Job Activation And Schema Evidence** - Implement or enable repeatable aggregate export/readiness outputs with idempotency, bounded scope, backfill/retry semantics, and privacy validation.
-- [ ] **Phase 264: Operator Analytics Dashboard APIs** - Add support-safe aggregate dashboard APIs for usage, billing/provider readiness, curriculum, teacher help, notifications, support, and release-smoke outcomes.
-- [ ] **Phase 265: APM Alert Routing And Observability Runbooks** - Add low-cardinality alert/status contracts and operator runbooks that distinguish product regressions from provider blockers.
+- [x] **Phase 262: Analytics Reality Audit And Taxonomy Contract** - Map existing analytics/readiness surfaces, privacy boundaries, provider-state dimensions, and missing evidence before implementation. (completed 2026-07-05)
+- [x] **Phase 263: Warehouse Export Job Activation And Schema Evidence** - Implement or enable repeatable aggregate export/readiness outputs with idempotency, bounded scope, backfill/retry semantics, and privacy validation. (completed 2026-07-05)
+- [x] **Phase 264: Operator Analytics Dashboard APIs** - Add support-safe aggregate dashboard APIs for usage, billing/provider readiness, curriculum, teacher help, notifications, support, and release-smoke outcomes. (completed 2026-07-05)
+- [x] **Phase 265: APM Alert Routing And Observability Runbooks** - Add low-cardinality alert/status contracts and operator runbooks that distinguish product regressions from provider blockers. (completed 2026-07-05)
 - [ ] **Phase 266: v5.18 BI Observability Release Gate** - Close with focused checks, activation evidence, blocked-prerequisite table, runbooks, and next milestone decision.
 
 ## Phase Details
@@ -99,18 +99,18 @@ v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, an
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 262 Analytics Reality Audit And Taxonomy Contract | v5.18 | 0/1 | Planned | - |
-| 263 Warehouse Export Job Activation And Schema Evidence | v5.18 | 0/1 | Planned | - |
-| 264 Operator Analytics Dashboard APIs | v5.18 | 0/1 | Planned | - |
-| 265 APM Alert Routing And Observability Runbooks | v5.18 | 0/1 | Planned | - |
+| 262 Analytics Reality Audit And Taxonomy Contract | v5.18 | 1/1 | Complete | 2026-07-05 |
+| 263 Warehouse Export Job Activation And Schema Evidence | v5.18 | 1/1 | Complete | 2026-07-05 |
+| 264 Operator Analytics Dashboard APIs | v5.18 | 1/1 | Complete | 2026-07-05 |
+| 265 APM Alert Routing And Observability Runbooks | v5.18 | 1/1 | Complete | 2026-07-05 |
 | 266 v5.18 BI Observability Release Gate | v5.18 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BI-01 | Phase 262 | Planned |
-| BI-02 | Phase 263 | Planned |
-| BI-03 | Phase 264 | Planned |
-| BI-04 | Phase 265 | Planned |
+| BI-01 | Phase 262 | Complete |
+| BI-02 | Phase 263 | Complete |
+| BI-03 | Phase 264 | Complete |
+| BI-04 | Phase 265 | Complete |
 | VERIFY-52 | Phase 266 | Planned |

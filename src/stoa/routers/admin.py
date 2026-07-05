@@ -29,6 +29,7 @@ from stoa.services import (
     report_recovery_job_service,
     report_recovery_service,
     account_operations_service,
+    bi_observability_service,
     external_activation_service,
     curriculum_analytics_service,
     curriculum_migration_service,
@@ -213,6 +214,65 @@ class ExternalProductionReadinessSmokeResponse(BaseModel):
     blockers: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     privacy: dict[str, Any] = Field(default_factory=dict)
+
+
+class BiTaxonomyContractResponse(BaseModel):
+    schemaVersion: str
+    taxonomy: list[str]
+    states: dict[str, Any] = Field(default_factory=dict)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+
+
+class BiWarehouseReadinessResponse(BaseModel):
+    generatedAt: str
+    schemaVersion: str
+    taxonomy: list[str]
+    overallState: str
+    exportAllowed: bool
+    liveWarehouseConfigured: bool
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+    operations: dict[str, Any] = Field(default_factory=dict)
+
+
+class BiWarehouseExportResponse(BaseModel):
+    generatedAt: str
+    schemaVersion: str
+    exportId: str
+    idempotencyKey: str
+    period: str
+    count: int
+    bounded: bool
+    limit: int
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+    operations: dict[str, Any] = Field(default_factory=dict)
+
+
+class BiOperatorDashboardResponse(BaseModel):
+    generatedAt: str
+    schemaVersion: str
+    taxonomy: list[str]
+    sections: list[dict[str, Any]] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    emptyState: str | None = None
+    privacy: dict[str, Any] = Field(default_factory=dict)
+
+
+class BiAlertRoutingResponse(BaseModel):
+    generatedAt: str
+    schemaVersion: str
+    taxonomy: list[str]
+    overallState: str
+    liveAlertingConfigured: bool
+    apmProvider: str
+    routes: list[dict[str, Any]] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+    runbook: dict[str, Any] = Field(default_factory=dict)
 
 
 class SubscriptionProviderReadinessResponse(BaseModel):
@@ -1496,6 +1556,57 @@ async def get_production_readiness_activation_smoke(
 ):
     """Inspect production deploy and read-only smoke requirements."""
     return external_activation_service.build_production_readiness_smoke_report(settings)
+
+
+@router.get("/bi/taxonomy", response_model=BiTaxonomyContractResponse)
+async def get_bi_taxonomy_contract(
+    user: dict = Depends(require_role("admin")),
+):
+    """Return BI readiness taxonomy and privacy boundaries."""
+    return bi_observability_service.build_taxonomy_contract()
+
+
+@router.get("/bi/warehouse-readiness", response_model=BiWarehouseReadinessResponse)
+async def get_bi_warehouse_readiness(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return cross-product aggregate warehouse readiness."""
+    return bi_observability_service.build_warehouse_readiness(settings)
+
+
+@router.get("/bi/warehouse-export", response_model=BiWarehouseExportResponse)
+async def get_bi_warehouse_export(
+    period: str = Query(default="latest", min_length=1, max_length=80),
+    limit: int = Query(default=100, ge=1, le=250),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return bounded support-safe aggregate warehouse rows."""
+    return bi_observability_service.build_warehouse_export(
+        settings=settings,
+        period=period,
+        limit=limit,
+    )
+
+
+@router.get("/bi/dashboard", response_model=BiOperatorDashboardResponse)
+async def get_bi_operator_dashboard(
+    limit: int = Query(default=100, ge=1, le=250),
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return aggregate operator analytics sections."""
+    return bi_observability_service.build_operator_dashboard(settings=settings, limit=limit)
+
+
+@router.get("/bi/alert-routing", response_model=BiAlertRoutingResponse)
+async def get_bi_alert_routing(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Return low-cardinality alert routing and runbook metadata."""
+    return bi_observability_service.build_alert_routing(settings)
 
 
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)

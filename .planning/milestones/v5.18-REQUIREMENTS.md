@@ -68,8 +68,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BI-01 | Phase 262 | Planned |
-| BI-02 | Phase 263 | Planned |
-| BI-03 | Phase 264 | Planned |
-| BI-04 | Phase 265 | Planned |
+| BI-01 | Phase 262 | Complete |
+| BI-02 | Phase 263 | Complete |
+| BI-03 | Phase 264 | Complete |
+| BI-04 | Phase 265 | Complete |
 | VERIFY-52 | Phase 266 | Planned |
