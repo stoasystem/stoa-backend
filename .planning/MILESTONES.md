@@ -79,18 +79,201 @@ Key accomplishments:
 
 ---
 
-## Active: v5.19 Native Mobile Push And Offline Client Implementation
+## Completed: v5.19 Native Mobile Push And Offline Client Implementation
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-06
 **Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.19-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.19-REQUIREMENTS.md`
 **Goal:** Move native/mobile work from handoff contracts into implementation: app shell, auth/session, parent/student journeys, push, offline/read-through, localization, and release evidence.
+**Phases:** 5
+**Plans:** 5/5 complete
+**Requirements:** 7/7 complete
+**Release state:** `native-mobile-source-ready-local`
 
 Function purpose:
 
 - Build a real mobile client against stable backend/web product contracts.
 - Implement native push and mobile offline/read-through behavior without demo fallback.
+
+Completed phases:
+
+- Phase 267: Native Mobile Stack And App Shell Contract. (complete)
+- Phase 268: Auth Session And Account State. (complete)
+- Phase 269: Student And Parent Core Mobile Journeys. (complete)
+- Phase 270: Native Push Deep Links And Offline Read-Through. (complete)
+- Phase 271: v5.19 Native Mobile Release Gate. (complete)
+
+Key accomplishments:
+
+- Added Expo SDK 57 / React Native 0.86 source workspace under `mobile/`.
+- Added app shell, route boundaries, environment/no-demo-fallback contract, and mobile docs.
+- Added Amplify/Cognito auth/session wrappers, authenticated API client, support-safe account states, and sign-out cleanup hooks.
+- Added student and parent journey adapters against real backend endpoints.
+- Added Expo push contracts, backend push-token registration/revocation adapters, notification deep-link validation, and read-through cache privacy guards.
+- Verified focused mobile tests with `pytest tests/mobile` passing 26/26 locally.
+- Recorded remaining native dependency install, EAS, physical-device QA, FCM/APNs, and app-store blockers.
+
+---
+
+## Planned: v5.20 Native Build Distribution And Device QA
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.20-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.20-REQUIREMENTS.md`
+**Goal:** Turn the native mobile implementation into internal iOS/Android builds with device QA, push/deep-link smoke, crash/performance telemetry, and store-readiness evidence.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Make the mobile app installable and testable on real devices.
+- Prove auth, parent/student journeys, push/deep links, offline stale states, and sign-out cleanup outside the simulator.
+- Prepare release-channel, rollback, and app-store prerequisites without claiming public launch.
+
+Implementation strategy:
+
+- Add EAS/internal build profiles after v5.19 app contracts are stable.
+- Run a small iOS/Android device QA matrix.
+- Feed mobile release health into support-safe observability.
+- Close with build IDs, device evidence, and explicit credential/store blockers.
+
+Planned phases:
+
+- Phase 272: Native Build And Credential Readiness Audit.
+- Phase 273: Internal Build Distribution Pipeline.
+- Phase 274: Device QA Matrix And Mobile Smoke.
+- Phase 275: Mobile Crash Performance And Release Telemetry.
+- Phase 276: v5.20 Native Distribution Release Gate.
+
+---
+
+## Planned: v5.21 AI Teaching Quality Cost And Safety Operations
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.21-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.21-REQUIREMENTS.md`
+**Goal:** Make AI teacher tools measurable, controllable, support-visible, and safe before expanding autonomy.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Add quality rubrics and regression fixtures for summaries, explanations, exercises, and assignment suggestions.
+- Add provider cost/latency/failure/fallback observability.
+- Preserve teacher oversight and explicit safety escalation.
+
+Implementation strategy:
+
+- Audit every AI workflow before changing behavior.
+- Classify autonomy level for each AI surface.
+- Keep review-before-use as the default unless approval/evidence exists.
+- Close with AI eval, cost, safety, and teacher-review evidence.
+
+Planned phases:
+
+- Phase 277: AI Workflow Reality Audit And Autonomy Boundary.
+- Phase 278: AI Quality Rubrics And Regression Fixtures.
+- Phase 279: AI Cost Latency Provider Observability.
+- Phase 280: AI Safety Escalation And Teacher Oversight.
+- Phase 281: v5.21 AI Operations Release Gate.
+
+---
+
+## Planned: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.22-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.22-REQUIREMENTS.md`
+**Goal:** Connect support handoff, CRM messaging, notifications, account operations, billing, learning progress, and AI/teacher state into governed customer lifecycle workflows.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Make onboarding, verification, payment, quota, support, progress, and re-engagement messages usable for parents and operators.
+- Make support/CRM messaging visible and retryable without exposing private learning content.
+
+Implementation strategy:
+
+- Define lifecycle message taxonomy before adding jobs.
+- Use idempotent jobs, approved templates, preference gates, opt-out handling, and provider approval checks.
+- Add parent/admin message visibility and support-safe provider-state evidence.
+
+Planned phases:
+
+- Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy.
+- Phase 283: Lifecycle Messaging Orchestrator.
+- Phase 284: Parent And Admin Messaging Surfaces.
+- Phase 285: Support CRM Provider Activation Smoke.
+- Phase 286: v5.22 Customer Lifecycle Release Gate.
+
+---
+
+## Planned: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.23-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.23-REQUIREMENTS.md`
+**Goal:** Harden backup/restore, SLOs, incident response, rollback, access/credential operations, audit retention, legal hold, and release controls.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Reduce launch risk after the main product surfaces are connected.
+- Prove restore/readback, incident, rollback, access, credential, and compliance evidence paths.
+
+Implementation strategy:
+
+- Start with an ops risk register across all critical services and providers.
+- Prefer safe restore/readback drills and runbook drills over theoretical policy work.
+- Keep evidence metadata-only and classify blocked/live/read-only/local states honestly.
+
+Planned phases:
+
+- Phase 287: Ops Stability Reality Audit And Risk Register.
+- Phase 288: Backup Restore And Data Lifecycle Drills.
+- Phase 289: Incident Response SLO And Rollback Operations.
+- Phase 290: Access Secret Rotation And Compliance Evidence.
+- Phase 291: v5.23 Enterprise Hardening Release Gate.
+
+---
+
+## Planned: v5.24 Limited Production Pilot And Launch Readiness
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.24-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.24-REQUIREMENTS.md`
+**Goal:** Convert internal readiness into a controlled pilot or launch decision with cohort, onboarding, monitoring, support, rollback, acceptance metrics, and go/no-go evidence.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Decide the narrowest credible production pilot or launch path after mobile, AI operations, lifecycle messaging, and hardening gates are complete.
+- Make rollout scope, cohort, support coverage, monitoring, rollback, success metrics, and feedback loops explicit.
+- Avoid an endless internal-development loop by forcing a concrete go/no-go decision.
+
+Implementation strategy:
+
+- Start with a launch/pilot readiness audit instead of assuming public release is appropriate.
+- Define one narrow cohort, one narrow product scope, and explicit excluded features.
+- Use staged rollout flags, launch-room monitoring, support escalation, and rollback.
+- Close with a pilot runbook, launch checklist, go/no-go evidence, and post-pilot learning plan.
+
+Planned phases:
+
+- Phase 292: Launch Scope And Readiness Audit.
+- Phase 293: Pilot Cohort Onboarding And Consent Operations.
+- Phase 294: Production Launch Controls And Monitoring.
+- Phase 295: Pilot Acceptance Metrics And Feedback Loop.
+- Phase 296: v5.24 Launch Readiness Gate.
 
 ---
 

@@ -1,64 +1,120 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-05 after completing v5.18 BI observability
-**Mode:** external activation, operations, analytics, and native client implementation
+**Updated:** 2026-07-06 after completing v5.19 native mobile source readiness
+**Mode:** plan the next five post-v5.19 product milestones
 
-## Current Reality
+## Planning Assumption
 
-Completed local milestones:
+v5.19 Native Mobile Push And Offline Client Implementation is complete as `native-mobile-source-ready-local` and is not counted in this next-five queue. v5.20 starts from source-ready mobile contracts, not installable device readiness.
 
-- v5.12 implemented curriculum editor/content migration.
+## Current Reality After v5.19 Completion
+
+Completed or assumed-complete baseline:
+
+- v5.12 implemented curriculum editor/content migration with special backend authorization, not broad teacher edit rights.
 - v5.13 completed local payment/entitlement production readiness.
 - v5.15 completed usage/quota/product stability.
-- v5.16 completed end-to-end local product readiness: focused frontend e2e, supplemental journeys, backend product-readiness tests, frontend build/lint, and release evidence.
+- v5.16 completed end-to-end local product readiness and release evidence.
 - v5.17 completed external provider activation smoke and release operations.
 - v5.18 completed local BI observability contracts for aggregate exports, dashboards, and alert routing.
+- v5.19 completed native mobile source implementation, auth/session, student/parent journeys, push/deep links, offline/read-through contracts, and release evidence.
 
-Remaining blockers are primarily external activation and client expansion:
+Remaining product gaps:
 
-- Live Stripe/TWINT charging and webhook activation.
-- Live Cognito/email delivery smoke.
-- Notification provider and push/native activation.
-- External support provider and CRM/customer messaging approval.
-- BI/warehouse/APM activation.
-- Native/mobile app implementation and app-release prerequisites.
+- Native build distribution, device QA, app credentials, crash/performance telemetry, and store-readiness evidence remain unbuilt after v5.19 source implementation.
+- AI teacher tools exist in reviewed/bounded form, but broader quality evaluation, provider cost/latency observability, safety escalation, and autonomy boundaries are not yet complete.
+- Support handoff, CRM messaging gates, notification preferences, billing/account operations, and learning-progress signals exist in pieces, but customer lifecycle messaging is not yet an end-to-end product workflow.
+- DR, restore drills, SLO/incident operations, credential rotation evidence, and enterprise hardening remain the final stability layer before broader launch pressure.
+- A limited production pilot or public launch decision still needs scope, cohort, release control, support staffing, rollback, monitoring, and acceptance criteria.
 
-## Completed: v5.17 External Provider Activation Smoke And Release Operations
+## Planned: v5.20 Native Build Distribution And Device QA
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.17-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.17-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.20-ROADMAP.md`
+Requirements: `.planning/milestones/v5.20-REQUIREMENTS.md`
 
-Purpose:
+Function purpose:
 
-- Convert external blockers into approved readiness, smoke, refusal, rollback, and release-operation evidence.
-- Cover payment, Cognito/email, notifications, support provider handoff, and production deploy/read-only smoke.
-- Close honestly as live-passed, read-only-passed, safe-fixture-passed, locally ready, or blocked with exact prerequisites.
+- Convert the v5.19 mobile implementation into installable internal builds on real iOS/Android devices.
+- Prove physical-device auth, parent/student journeys, push/deep-link behavior, offline stale states, and sign-out cleanup.
+- Prepare store-readiness artifacts without claiming public launch.
 
-## Completed: v5.18 Warehouse BI Observability And Product Analytics Activation
+Implementation strategy:
 
-Roadmap: `.planning/milestones/v5.18-ROADMAP.md`
-Requirements: `.planning/milestones/v5.18-REQUIREMENTS.md`
+- Add EAS/build profiles, versioning, release channels, internal distribution, and build artifact evidence.
+- Run a focused device QA matrix before broader store work.
+- Feed mobile crash/performance/release-health signals into existing observability boundaries.
 
-Purpose:
+## Planned: v5.21 AI Teaching Quality Cost And Safety Operations
 
-- Activate aggregate warehouse/BI exports, operator dashboards, APM/alerts, and analytics runbooks.
-- Use v5.17 provider-state dimensions so dashboards separate live, blocked, read-only, safe-fixture, and local-only behavior.
-- Preserve privacy boundaries and support-safe metadata.
+Roadmap: `.planning/milestones/v5.21-ROADMAP.md`
+Requirements: `.planning/milestones/v5.21-REQUIREMENTS.md`
 
-## Active Next: v5.19 Native Mobile Push And Offline Client Implementation
+Function purpose:
 
-Roadmap: `.planning/milestones/v5.19-ROADMAP.md`
-Requirements: `.planning/milestones/v5.19-REQUIREMENTS.md`
+- Make AI summaries, draft explanations, practice generation, and assignment suggestions measurable and controllable.
+- Preserve teacher oversight while adding quality rubrics, regression fixtures, provider cost/latency observability, and safety escalation.
+- Keep fully autonomous tutoring blocked unless explicit criteria and release evidence exist.
 
-Purpose:
+Implementation strategy:
 
-- Implement a real native/mobile client after web product readiness and provider/analytics boundaries are explicit.
-- Cover auth/session, parent/student journeys, native push, notification deep links, offline/read-through behavior, localization, and app-release evidence.
+- Audit every AI workflow and classify autonomy level.
+- Add golden fixtures and scoring rubrics before expanding behavior.
+- Add support-safe cost/latency/provider/fallback summaries.
+- Integrate safety/refusal states with teacher review and support workflows.
+
+## Planned: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+
+Roadmap: `.planning/milestones/v5.22-ROADMAP.md`
+Requirements: `.planning/milestones/v5.22-REQUIREMENTS.md`
+
+Function purpose:
+
+- Connect support handoff, CRM messaging, notification preferences, account operations, billing, learning progress, and AI/teacher state into governed customer lifecycle workflows.
+- Make onboarding, verification, payment, quota, support, progress, and re-engagement messaging usable for parents and operators.
+
+Implementation strategy:
+
+- Define a message taxonomy with event, audience, template, channel, provider gate, preference gate, idempotency key, and support-safe payload.
+- Add idempotent lifecycle jobs and admin/parent visibility.
+- Keep external writes gated by approved provider credentials, destination policy, templates, and rollout flags.
+
+## Planned: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
+
+Roadmap: `.planning/milestones/v5.23-ROADMAP.md`
+Requirements: `.planning/milestones/v5.23-REQUIREMENTS.md`
+
+Function purpose:
+
+- Harden STOA's operational foundation after the main product surfaces are connected.
+- Prove backup/restore, SLO/incident, rollback, access/credential, audit retention, legal-hold, and compliance evidence workflows.
+
+Implementation strategy:
+
+- Start with an ops risk register across API/Lambda, DynamoDB, S3, Cognito, SES, Bedrock, notifications, support providers, BI/APM, frontend, mobile, queues, and schedules.
+- Prioritize safe restore/readback drills and incident/rollback runbooks over broad theoretical compliance work.
+- Keep evidence metadata-only and classify live-ready/read-only/local-only/blocked honestly.
+
+## Planned: v5.24 Limited Production Pilot And Launch Readiness
+
+Roadmap: `.planning/milestones/v5.24-ROADMAP.md`
+Requirements: `.planning/milestones/v5.24-REQUIREMENTS.md`
+
+Function purpose:
+
+- Decide and prepare the narrowest credible production pilot or launch path after mobile, AI operations, lifecycle messaging, and hardening gates are complete.
+- Convert internal readiness into a controlled cohort plan with onboarding, monitoring, support staffing, rollout/rollback, acceptance criteria, and launch decision evidence.
+
+Implementation strategy:
+
+- Start with a launch/pilot readiness audit rather than assuming public release is appropriate.
+- Define cohort, scope, success metrics, excluded features, staffing, communication, support hours, and incident ownership.
+- Run a final production readiness gate across backend, frontend, mobile, providers, data, support, billing, AI, and observability.
+- Close with a go/no-go decision, pilot runbook, rollout plan, rollback plan, and post-pilot learning loop.
 
 ## Ordering Rationale
 
-1. v5.17 completed first because local product readiness was complete but external activation state was the largest uncertainty.
-2. v5.18 completed second because analytics and alerts needed stable provider/product-state dimensions.
-3. v5.19 is next because native/mobile should inherit stable web contracts, provider state, observability, and notification boundaries.
+1. v5.20 follows assumed-complete v5.19 because source implementation is not the same as installable device readiness; native push and offline behavior must be proven on devices.
+2. v5.21 follows because AI tools already exist, but quality/cost/safety/autonomy controls are the next product-risk bottleneck before broader use.
+3. v5.22 follows because customer lifecycle messaging should use stable mobile, AI, support, billing, and account-state signals rather than fragmented manual operations.
+4. v5.23 follows because once customer-visible surfaces are connected, restore, SLO, incident, access, credential, and compliance hardening becomes the launch-limiting risk.
+5. v5.24 follows because launch/pilot planning should happen only after the core product, mobile delivery, AI controls, lifecycle operations, and hardening gates are credible.
