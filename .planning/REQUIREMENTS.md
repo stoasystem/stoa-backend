@@ -1,75 +1,85 @@
-# Requirements: v5.21 AI Teaching Quality Cost And Safety Operations
+# Requirements: v5.22 Support CRM Customer Messaging And Lifecycle Automation
 
-**Milestone:** v5.21
+**Milestone:** v5.22
 **Status:** Completed
 **Created:** 2026-07-06
-**Prior milestone:** v5.20 Native Build Distribution And Device QA
+**Prior milestone:** v5.21 AI Teaching Quality Cost And Safety Operations
 
 ## Purpose
 
-Make AI teaching operations trustworthy before expanding autonomy. v5.21 should define autonomy boundaries, quality evaluation, provider cost/latency observability, safety escalation, teacher oversight, and release evidence for summaries, explanations, practice generation, and assignment suggestions.
+Turn fragmented support, CRM, notification, account-operations, billing, and learning-progress signals into governed customer lifecycle messaging. v5.22 makes onboarding, verification, payment, quota, support, progress, and re-engagement communication usable for parents and operators.
 
 ## Requirements
 
-### AIOPS-01 AI Workflow Reality Audit And Autonomy Boundary
+### LIFECYCLE-01 Customer Lifecycle Reality Audit And Message Taxonomy
 
 Acceptance criteria:
 
-- All AI-backed summaries, draft explanations, exercise generation, assignment suggestions, fallback content, and student-facing outputs are mapped to code, tests, owners, and UI surfaces.
-- Each workflow is classified as reviewed, auto-visible, auto-assigned, support-only, fallback, blocked, or deprecated.
-- Any path that can affect student work, quota, entitlement, teacher queue, or parent-visible progress has an explicit autonomy level.
-- Deferred fully autonomous tutoring remains blocked unless approved criteria and evidence exist.
+- Existing notification, support handoff, CRM messaging, billing, verification, usage/quota, AI/teacher, and parent-progress surfaces are mapped.
+- Message taxonomy defines lifecycle event, audience, template, channel, preference gate, provider dependency, idempotency key, and support-safe payload.
+- Provider blocked/read-only/local-only states are explicit before implementation.
+- Raw student content, prompts, answers, provider payloads, secrets, private object keys, and high-cardinality private identifiers are excluded.
 
-### AIOPS-02 AI Quality Rubrics And Regression Fixtures
+Status: Complete.
 
-Acceptance criteria:
-
-- Golden fixtures cover at least summary, explanation, exercise generation, assignment suggestion, refusal, fallback, and multilingual behavior.
-- Rubrics score correctness, age-appropriateness, curriculum alignment, language, hallucination risk, and actionable teacher value.
-- Review outcomes are stored or exported in support-safe form.
-- Regression checks fail on missing fixtures, unsafe output, unreviewed publication, or unsupported autonomy claims.
-
-### AIOPS-03 AI Cost Latency Provider Observability
+### LIFECYCLE-02 Lifecycle Messaging Orchestrator
 
 Acceptance criteria:
 
-- AI provider calls expose bounded metadata for provider, model, workflow, latency, token/cost estimate, fallback, retry, refusal, and failure class.
-- Operator summaries show budget status, cost trend, latency/error trend, provider blocker, and fallback rate.
-- Evidence excludes raw prompts, student answers, tutoring transcripts, secrets, provider payloads, and high-cardinality private identifiers.
-- Runbook defines budget threshold, provider incident, fallback, and disable/rollback behavior.
+- Idempotent message jobs cover onboarding, email-verification reminder, payment failure/recovery, quota warning, subscription state, support incident update, learning-progress nudge, and re-engagement states.
+- Jobs respect preferences, opt-out, quiet hours or delivery policy, provider approval, template approval, and account role/ownership.
+- Retry/backoff, duplicate suppression, stale-state checks, and dry-run/preview behavior are documented and tested.
+- Provider failures leave visible support-safe blocker states.
 
-### AIOPS-04 AI Safety Escalation And Teacher Oversight
+Status: Complete.
 
-Acceptance criteria:
-
-- Safety/refusal states are visible to teachers/operators without exposing raw unsafe content.
-- Teacher review queue distinguishes draft-ready, needs-review, refused, provider-blocked, stale, and failed states.
-- Student/parent copy explains AI limits and escalation status without technical leakage.
-- Human takeover/escalation integrates with existing teacher-help and support operations.
-
-### VERIFY-55 AI Operations Release Gate
+### LIFECYCLE-03 Parent And Admin Messaging Surfaces
 
 Acceptance criteria:
 
-- AI quality fixtures, regression checks, cost/latency summaries, safety escalation evidence, and teacher-oversight evidence are recorded.
+- Parent-facing surfaces show relevant message status/history where useful without leaking internal provider details.
+- Admin/operator surfaces show message lifecycle, template, channel, recipient role, provider state, retry, opt-out, and support action.
+- Operators can preview and retry allowed messages without bypassing preferences or approval gates.
+- Copy distinguishes actionable account states from generic failure messages.
+
+Status: Complete.
+
+### LIFECYCLE-04 Support CRM Provider Activation Smoke
+
+Acceptance criteria:
+
+- Approved support/CRM provider paths can run read-only or safe-fixture smoke with request IDs and redacted evidence.
+- Refusal states cover missing provider approval, missing credential, missing template, opt-out, provider failure, and unapproved destination.
+- Retry and provider-sync behavior remains idempotent and support-safe.
+- Customer messaging evidence excludes raw provider payloads and private learning/report content.
+
+Status: Complete.
+
+### VERIFY-56 Customer Lifecycle Release Gate
+
+Acceptance criteria:
+
+- Journey evidence covers onboarding, verification, payment lifecycle, quota warning, support incident, progress nudge, opt-out, and provider-blocked states.
+- Template inventory, preference behavior, provider-state evidence, and rollback/disable controls are documented.
 - Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
-- Remaining autonomy, provider, prompt-quality, language coverage, and production rollout blockers are explicit.
-- No new unreviewed student-facing AI publication is enabled without release approval.
+- Remaining provider activation, template approval, channel coverage, and production rollout blockers are explicit.
+
+Status: Complete.
 
 ## Out of Scope
 
-- Fully autonomous tutoring or auto-assignment without approved autonomy criteria.
-- Raw prompt/answer warehouse exports.
-- Replacing human teacher review for high-impact learning decisions.
-- New AI providers that require unapproved credentials or data-processing agreements.
-- Broad model training/fine-tuning.
+- Unapproved marketing campaigns or broad promotional automation.
+- Raw learning-content or report-artifact messages.
+- External provider writes without approved destination, credentials, and rollout flag.
+- Replacing support staff workflows with unsupervised automation.
+- Native push expansion beyond the mobile/provider contracts already planned in v5.19-v5.20.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AIOPS-01 | Phase 277 | Complete |
-| AIOPS-02 | Phase 278 | Complete |
-| AIOPS-03 | Phase 279 | Complete |
-| AIOPS-04 | Phase 280 | Complete |
-| VERIFY-55 | Phase 281 | Complete |
+| LIFECYCLE-01 | Phase 282 | Complete |
+| LIFECYCLE-02 | Phase 283 | Complete |
+| LIFECYCLE-03 | Phase 284 | Complete |
+| LIFECYCLE-04 | Phase 285 | Complete |
+| VERIFY-56 | Phase 286 | Complete |

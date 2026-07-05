@@ -1,106 +1,124 @@
-# Roadmap: v5.21 AI Teaching Quality Cost And Safety Operations
+# Roadmap: v5.22 Support CRM Customer Messaging And Lifecycle Automation
 
 **Status:** Completed
 **Created:** 2026-07-06
-**Prior milestone:** v5.20 Native Build Distribution And Device QA
+**Prior milestone:** v5.21 AI Teaching Quality Cost And Safety Operations
 
 ## Goal
 
-Move AI teacher tools, automatic summaries, draft explanations, practice generation, and assignment suggestions from reviewed local features into measurable quality, cost, safety, escalation, and teacher-oversight operations.
+Make support handoff, CRM/customer messaging, parent onboarding, lifecycle nudges, account-status messaging, and support-visible customer operations usable end to end without exposing private learning content or relying on manual operator stitching.
 
-## Why This Follows v5.20
+## Why This Follows v5.21
 
-AI teaching flows already exist in reviewed/bounded form, but fully autonomous behavior remains deliberately deferred. After web, backend, observability, and native distribution are stable, the next risk is not adding more AI surfaces blindly; it is making existing AI behavior measurable, controllable, support-visible, and safe enough for broader product use.
+Support provider adapters, support-safe handoff packages, CRM messaging gates, notification foundations, account operations, billing evidence, and AI/teacher state already exist in pieces. v5.22 connects them into usable customer lifecycle operations after AI quality/safety signals are clear enough to include in support and parent communication.
 
 ## Product Purpose
 
-- Teachers can trust AI summaries and generated exercises because quality is measured against rubrics and golden fixtures.
-- Operators can see AI provider cost, latency, failure, refusal, and fallback behavior.
-- Students and parents get AI-supported learning that remains bounded by teacher oversight and clear escalation paths.
+- Parents receive timely, relevant onboarding, billing, verification, usage, progress, and support-status messages.
+- Operators can see support lifecycle and CRM message state without reading raw student work or provider payloads.
+- Customer messaging becomes governed product infrastructure, not ad hoc manual outreach.
 
 ## Implementation Strategy
 
-- Start with a reality audit of every AI generation, summary, assignment, tutoring, and fallback path.
-- Keep review-before-use as the default unless a specific autonomy level is approved and measured.
-- Add evaluation fixtures before expanding generation scope.
-- Add provider cost/latency/failure observability and budget controls.
-- Close with AI release evidence that separates quality failure, provider blocker, safety refusal, and product regression.
+- Audit current support handoff, CRM messaging, notification preference, account operations, billing, AI, and parent progress state before adding workflows.
+- Use approved templates, preference gates, opt-out handling, and support-safe summaries.
+- Prefer lifecycle state machines and idempotent message jobs over one-off sends.
+- Keep external provider writes gated by credentials and destination approval.
+- Close with journey evidence for onboarding, blocked verification, payment lifecycle, support incident, and learning-progress nudges.
 
 ## Phases
 
-- [x] **Phase 277: AI Workflow Reality Audit And Autonomy Boundary** - Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths. (completed 2026-07-06)
-- [x] **Phase 278: AI Quality Rubrics And Regression Fixtures** - Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations. (completed 2026-07-06)
-- [x] **Phase 279: AI Cost Latency Provider Observability** - Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure. (completed 2026-07-06)
-- [x] **Phase 280: AI Safety Escalation And Teacher Oversight** - Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations. (completed 2026-07-06)
-- [x] **Phase 281: v5.21 AI Operations Release Gate** - Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision. (completed 2026-07-06)
+- [x] **Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy** - Map lifecycle events, templates, preferences, provider gates, and missing customer-message evidence. (completed 2026-07-06)
+- [x] **Phase 283: Lifecycle Messaging Orchestrator** - Add idempotent lifecycle jobs for onboarding, verification, billing, quota, progress, support, and re-engagement states. (completed 2026-07-06)
+- [x] **Phase 284: Parent And Admin Messaging Surfaces** - Add visible parent/admin support-safe message history, status, retry, opt-out, and explanation surfaces. (completed 2026-07-06)
+- [x] **Phase 285: Support CRM Provider Activation Smoke** - Verify approved-provider ticket/message flows, refusal states, retry/sync behavior, and provider blockers. (completed 2026-07-06)
+- [x] **Phase 286: v5.22 Customer Lifecycle Release Gate** - Close with journey evidence, template evidence, provider-state evidence, and next milestone decision. (completed 2026-07-06)
 
 ## Phase Details
 
-### Phase 277: AI Workflow Reality Audit And Autonomy Boundary
+### Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy
 
-**Goal**: Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths.
-**Requirements**: AIOPS-01
-**Success Criteria**:
+Goal: Map lifecycle events, templates, preferences, provider gates, and missing customer-message evidence.
 
-1. AI-backed summaries, draft explanations, exercise generation, assignment suggestions, fallback content, and student-facing outputs are mapped to code/tests/owners/UI surfaces.
-2. Each workflow is classified as reviewed, auto-visible, auto-assigned, support-only, fallback, blocked, or deprecated.
-3. Paths that affect student work, quota, entitlement, teacher queue, or parent-visible progress have explicit autonomy levels.
-4. Fully autonomous tutoring remains blocked unless approved criteria and evidence exist.
+Deliverables:
 
-### Phase 278: AI Quality Rubrics And Regression Fixtures
+- Customer lifecycle taxonomy covering onboarding, verification, billing, quota, subscription, support, progress, and re-engagement events.
+- Support-safe payload field contract and privacy denylist.
+- Provider/template/destination gating policy.
 
-**Goal**: Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations.
-**Requirements**: AIOPS-02
-**Success Criteria**:
+Completion evidence:
 
-1. Golden fixtures cover summary, explanation, exercise generation, assignment suggestion, refusal, fallback, and multilingual behavior.
-2. Rubrics score correctness, age-appropriateness, curriculum alignment, language, hallucination risk, and actionable teacher value.
-3. Review outcomes are support-safe.
-4. Regression checks fail on missing fixtures, unsafe output, unreviewed publication, or unsupported autonomy claims.
+- `customer_lifecycle_service.message_taxonomy`
+- `tests/test_customer_lifecycle.py`
 
-### Phase 279: AI Cost Latency Provider Observability
+### Phase 283: Lifecycle Messaging Orchestrator
 
-**Goal**: Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure.
-**Requirements**: AIOPS-03
-**Success Criteria**:
+Goal: Add idempotent lifecycle jobs for onboarding, verification, billing, quota, progress, support, and re-engagement states.
 
-1. AI provider calls expose bounded metadata for provider, model, workflow, latency, token/cost estimate, fallback, retry, refusal, and failure class.
-2. Operator summaries show budget status, cost trend, latency/error trend, provider blocker, and fallback rate.
-3. Evidence excludes raw prompts, student answers, tutoring transcripts, secrets, provider payloads, and high-cardinality private identifiers.
-4. Runbook defines budget threshold, provider incident, fallback, and disable/rollback behavior.
+Deliverables:
 
-### Phase 280: AI Safety Escalation And Teacher Oversight
+- Deterministic idempotency keys.
+- Preference, opt-out, quiet-hour, provider, template, destination, and stale-state gates.
+- Retry/backoff and duplicate suppression contracts.
 
-**Goal**: Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations.
-**Requirements**: AIOPS-04
-**Success Criteria**:
+Completion evidence:
 
-1. Safety/refusal states are visible to teachers/operators without exposing raw unsafe content.
-2. Teacher review queue distinguishes draft-ready, needs-review, refused, provider-blocked, stale, and failed states.
-3. Student/parent copy explains AI limits and escalation status without technical leakage.
-4. Human takeover/escalation integrates with teacher-help and support operations.
+- `customer_lifecycle_service.plan_lifecycle_message`
+- `customer_lifecycle_service.plan_lifecycle_journey`
 
-### Phase 281: v5.21 AI Operations Release Gate
+### Phase 284: Parent And Admin Messaging Surfaces
 
-**Goal**: Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision.
-**Requirements**: VERIFY-55
-**Success Criteria**:
+Goal: Add visible parent/admin support-safe message history, status, retry, opt-out, and explanation surfaces.
 
-1. AI quality fixtures, regression checks, cost/latency summaries, safety escalation evidence, and teacher-oversight evidence are recorded.
-2. Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
-3. Remaining autonomy, provider, prompt-quality, language coverage, and production rollout blockers are explicit.
-4. No new unreviewed student-facing AI publication is enabled without release approval.
+Deliverables:
+
+- Parent-facing message history projection.
+- Admin/operator message lifecycle projection.
+- Support-safe provider state and retry metadata.
+
+Completion evidence:
+
+- `customer_lifecycle_service.parent_message_history`
+- `customer_lifecycle_service.admin_message_history`
+
+### Phase 285: Support CRM Provider Activation Smoke
+
+Goal: Verify approved-provider ticket/message flows, refusal states, retry/sync behavior, and provider blockers.
+
+Deliverables:
+
+- Safe fixture provider activation smoke.
+- Refusal states for missing approval, credential, template, destination, opt-out, and provider failure.
+- Metadata-only provider evidence.
+
+Completion evidence:
+
+- `customer_lifecycle_service.provider_activation_smoke`
+
+### Phase 286: v5.22 Customer Lifecycle Release Gate
+
+Goal: Close with journey evidence, template evidence, provider-state evidence, and next milestone decision.
+
+Deliverables:
+
+- Release gate evidence for journey coverage, template inventory, provider blockers, disable controls, and privacy.
+- Milestone audit and completed snapshots.
+
+Completion evidence:
+
+- `customer_lifecycle_service.release_gate_evidence`
+- `.planning/milestones/v5.22-MILESTONE-AUDIT.md`
 
 ## Future Milestone Directions
 
-- **v5.22 Support CRM Customer Messaging And Lifecycle Automation**: use improved AI/support state to make parent onboarding, support messaging, and customer lifecycle operations usable.
+- **v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening**: after customer operations are connected, harden operational resilience, incident response, restore, access, and rollback.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AIOPS-01 | Phase 277 | Complete |
-| AIOPS-02 | Phase 278 | Complete |
-| AIOPS-03 | Phase 279 | Complete |
-| AIOPS-04 | Phase 280 | Complete |
-| VERIFY-55 | Phase 281 | Complete |
+| LIFECYCLE-01 | Phase 282 | Complete |
+| LIFECYCLE-02 | Phase 283 | Complete |
+| LIFECYCLE-03 | Phase 284 | Complete |
+| LIFECYCLE-04 | Phase 285 | Complete |
+| VERIFY-56 | Phase 286 | Complete |

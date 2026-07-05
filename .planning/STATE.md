@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.21
-milestone_name: AI Teaching Quality Cost And Safety Operations
+milestone: v5.22
+milestone_name: Support CRM Customer Messaging And Lifecycle Automation
 status: complete
 last_updated: "2026-07-06T00:00:00.000Z"
 last_activity: 2026-07-06
@@ -15,41 +15,35 @@ progress:
 
 # Project State
 
-## Project Reference
+## Current Project
+
+STOA backend.
 
 See: .planning/PROJECT.md (updated 2026-07-06)
 
-**Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.21 AI Teaching Quality Cost And Safety Operations.
-
 ## Current Position
 
-Phase: 281 v5.21 AI Operations Release Gate
+Phase: 286 v5.22 Customer Lifecycle Release Gate
 Plan: Complete
-Status: v5.21 complete; release state ai-operations-ready-local-contracts
-Last activity: 2026-07-06 — v5.21 completed with AI workflow, quality, cost, safety, and oversight contracts
+Status: v5.22 complete; release state customer-lifecycle-ready-local-contracts
+Last activity: 2026-07-06 — v5.22 completed with customer lifecycle taxonomy, messaging orchestration, support-safe surfaces, provider smoke states, and release evidence
 
 ## Accumulated Context
 
-### Decisions
-
-- v5.20 completed local native distribution contracts as `native-distribution-ready-local-contracts`.
-- v5.21 should make existing AI teacher tooling measurable and support-visible before expanding autonomy.
-- Review-before-use remains default for high-impact learning outputs.
-- Fully autonomous tutoring and auto-assignment remain blocked without explicit autonomy criteria and release evidence.
-- Raw prompts, answers, transcripts, provider payloads, secrets, and high-cardinality private identifiers remain forbidden in evidence.
+- v5.16-v5.21 completed product readiness, external activation smoke, BI/APM/warehouse/mobile contracts, native distribution, and AI operations.
+- v5.22 adds governed customer lifecycle messaging without enabling unapproved external provider writes.
+- Customer lifecycle evidence remains metadata-only and support-safe.
 
 ### Pending Todos
 
-- Activate v5.22 Support CRM Customer Messaging And Lifecycle Automation.
-- Keep v5.23-v5.24 as the ordered milestone queue unless implementation reality changes during v5.22.
+- Activate v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening.
+- Keep v5.24 as the next milestone unless v5.23 hardening evidence changes launch readiness.
 
 ### Blockers/Concerns
 
-- Live AI provider cost/latency data may be unavailable locally and must close as local contract evidence or blocked provider evidence.
-- New AI providers require approved credentials and data-processing agreements.
-- No new unreviewed student-facing AI publication should be enabled by this milestone.
+- Live support/CRM provider writes remain blocked until credentials, templates, destinations, and rollout approval are configured.
+- Customer messaging templates require operational approval before production sends.
 
 ## Operator Next Steps
 
-- Continue with v5.22 Support CRM Customer Messaging And Lifecycle Automation.
+- Continue with v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening.

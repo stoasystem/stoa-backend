@@ -189,15 +189,18 @@ Planned phases:
 
 ---
 
-## Planned: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+## Completed: v5.22 Support CRM Customer Messaging And Lifecycle Automation
 
-**Status:** Planned
+**Status:** Completed local release gate 2026-07-06
+**Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.22-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.22-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.22-MILESTONE-AUDIT.md`
 **Goal:** Connect support handoff, CRM messaging, notifications, account operations, billing, learning progress, and AI/teacher state into governed customer lifecycle workflows.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `customer-lifecycle-ready-local-contracts`
 
 Function purpose:
 
@@ -212,11 +215,11 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy.
-- Phase 283: Lifecycle Messaging Orchestrator.
-- Phase 284: Parent And Admin Messaging Surfaces.
-- Phase 285: Support CRM Provider Activation Smoke.
-- Phase 286: v5.22 Customer Lifecycle Release Gate.
+- Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy. (complete)
+- Phase 283: Lifecycle Messaging Orchestrator. (complete)
+- Phase 284: Parent And Admin Messaging Surfaces. (complete)
+- Phase 285: Support CRM Provider Activation Smoke. (complete)
+- Phase 286: v5.22 Customer Lifecycle Release Gate. (complete)
 
 ---
 
