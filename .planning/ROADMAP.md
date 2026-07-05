@@ -32,7 +32,7 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 
 - [x] **Phase 267: Native Mobile Stack And App Shell Contract** - Scaffold the native mobile workspace, app shell, navigation boundaries, environment contract, and no-demo-fallback policy. (completed 2026-07-06)
 - [x] **Phase 268: Auth Session And Account State** - Implement Cognito-compatible auth/session wrappers, secure-storage boundaries, account-state mapping, and sign-out cleanup contracts. (completed 2026-07-06)
-- [ ] **Phase 269: Student And Parent Core Mobile Journeys** - Implement mobile data adapters and screen contracts for student and parent core journeys against real backend endpoints.
+- [x] **Phase 269: Student And Parent Core Mobile Journeys** - Implement mobile data adapters and screen contracts for student and parent core journeys against real backend endpoints. (completed 2026-07-06)
 - [ ] **Phase 270: Native Push Deep Links And Offline Read-Through** - Implement notification token registration/revocation, deep-link routing, offline/read-through cache policy, and privacy guards.
 - [ ] **Phase 271: v5.19 Native Mobile Release Gate** - Add tests/evidence, verify release boundaries, update docs/state/snapshots, and record remaining native-provider/app-store blockers.
 
@@ -99,6 +99,7 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 - **v5.21 AI Teaching Quality Cost And Safety Operations**: move AI teacher tools from reviewed local features into measurable quality, cost, safety, escalation, and teacher-oversight operations.
 - **v5.22 Support CRM Customer Messaging And Lifecycle Automation**: make support handoff, CRM messaging, parent onboarding, lifecycle nudges, and customer-visible status operations usable end to end.
 - **v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening**: harden backups, restore drills, SLOs, incident response, credential/access operations, audit retention, and release rollback.
+- **v5.24 Limited Production Pilot And Launch Readiness**: convert internal readiness into a controlled pilot/launch decision with cohort, onboarding, monitoring, support, rollback, and go/no-go evidence.
 
 ## Progress
 
@@ -106,9 +107,9 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 |-------|-----------|----------------|--------|-----------|
 | 267 Native Mobile Stack And App Shell Contract | v5.19 | 1/1 | Complete | 2026-07-06 |
 | 268 Auth Session And Account State | v5.19 | 1/1 | Complete | 2026-07-06 |
-| 269 Student And Parent Core Mobile Journeys | v5.19 | 0/0 | Not Started | — |
-| 270 Native Push Deep Links And Offline Read-Through | v5.19 | 0/0 | Not Started | — |
-| 271 v5.19 Native Mobile Release Gate | v5.19 | 0/0 | Not Started | — |
+| 269 Student And Parent Core Mobile Journeys | v5.19 | 1/1 | Complete | 2026-07-06 |
+| 270 Native Push Deep Links And Offline Read-Through | v5.19 | 0/0 | Not Started | - |
+| 271 v5.19 Native Mobile Release Gate | v5.19 | 0/0 | Not Started | - |
 
 ## Traceability
 
@@ -116,8 +117,8 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 |-------------|-------|--------|
 | MOBILEAPP-01 | Phase 267 | Complete |
 | MOBILEAPP-02 | Phase 268 | Complete |
-| MOBILEAPP-03 | Phase 269 | Planned |
-| MOBILEAPP-04 | Phase 269 | Planned |
+| MOBILEAPP-03 | Phase 269 | Complete |
+| MOBILEAPP-04 | Phase 269 | Complete |
 | MOBILEAPP-05 | Phase 270 | Planned |
 | MOBILEAPP-06 | Phase 270 | Planned |
 | VERIFY-53 | Phase 271 | Planned |
