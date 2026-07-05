@@ -88,7 +88,7 @@ Acceptance criteria:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MOBILEAPP-01 | Phase 267 | Complete |
-| MOBILEAPP-02 | Phase 268 | Planned |
+| MOBILEAPP-02 | Phase 268 | Complete |
 | MOBILEAPP-03 | Phase 269 | Planned |
 | MOBILEAPP-04 | Phase 269 | Planned |
 | MOBILEAPP-05 | Phase 270 | Planned |

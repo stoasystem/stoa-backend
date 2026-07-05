@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.19
 milestone_name: Native Mobile Push And Offline Client Implementation
 status: planning
-last_updated: "2026-07-06T00:00:00.000Z"
+last_updated: "2026-07-06T00:45:00.000Z"
 last_activity: 2026-07-06
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-06)
 
 ## Current Position
 
-Phase: 268 Auth Session And Account State
+Phase: 269 Student And Parent Core Mobile Journeys
 Plan: —
-Status: Roadmap active; autonomous execution starting
-Last activity: 2026-07-06 — Phase 267 completed; mobile app shell scaffolded
+Status: Phase 269 active; next five milestone queue documented
+Last activity: 2026-07-06 — Phase 268 completed; mobile auth/session contracts added
 
 ## Accumulated Context
 
@@ -38,7 +38,7 @@ Last activity: 2026-07-06 — Phase 267 completed; mobile app shell scaffolded
 - v5.14 verification/login reliability was partial locally, but its focused frontend e2e blocker was closed during v5.16 evidence work.
 - v5.15 is complete locally: usage-flow audit, practice teacher-help ledger coverage, idempotency hardening, quota reconciliation explanations, account-operations usage support fields, and admin core smoke closed as local stability readiness.
 - v5.16 is complete locally: focused frontend e2e passed 24/24, supplemental journey e2e passed 11/11, backend product-readiness tests passed 121/121, frontend build/lint passed, and release evidence separates local implementation completeness from external provider blockers.
-- The next three milestones should be v5.17 external provider activation smoke/release operations, v5.18 warehouse BI observability/product analytics activation, and v5.19 native mobile push/offline client implementation.
+- The next completed planning queue is v5.19 native mobile implementation, v5.20 native build/device QA, v5.21 AI teaching operations, v5.22 support CRM/customer lifecycle automation, and v5.23 enterprise stability/compliance/DR hardening.
 - v5.17 should not perform live customer-impacting provider mutation unless approved credentials, approved rollout flags, and approved safe fixture or rollout path exist.
 - Phase 257 classified provider channels as live_ready, read_only_verifiable, safe_fixture_verifiable, locally_ready, or blocked, and documented current payment, Cognito/email, notification, support-provider, and production smoke surfaces in `257-PROVIDER-ACTIVATION-AUDIT.md`.
 - Phase 258 added `GET /admin/external-activation/payment-auth-smoke`, combining Stripe/TWINT readiness with Cognito/email local-versus-live delivery readiness and deterministic blocked states.
@@ -51,10 +51,15 @@ Last activity: 2026-07-06 — Phase 267 completed; mobile app shell scaffolded
 - Phase 265 added low-cardinality admin BI alert routing and runbook metadata with live APM alerting blocked by default until configured.
 - Phase 266 closed v5.18 as `bi-observability-ready-local`; focused BI/source tests passed 31/31, wider BI-composed backend tests passed 83/83, and Ruff passed.
 - Phase 267 scaffolded the native Expo mobile workspace under `mobile/`, added route/config/app-shell contracts, documented stack/environment policy, and passed `pytest tests/mobile/test_mobile_stack_contract.py` 4/4.
+- Phase 268 added Amplify/Cognito auth wrappers, metadata-only SecureStore policy, authenticated API client, support-safe account-state mapper, sign-out cleanup hooks, and passed focused mobile auth/stack tests 10/10.
+- Current v5.19 work is Phase 269 student and parent core mobile journeys.
+- Current provider/support reality includes backend support handoff/CRM gates and notification push-token contracts, but customer lifecycle messaging remains fragmented; this is routed to v5.22.
+- Current AI reality includes reviewed/bounded AI teacher and assignment tooling, but quality/cost/safety/autonomy operations remain a separate milestone; this is routed to v5.21.
 
 ### Pending Todos
 
-- Execute v5.19 phases 267-271.
+- Execute v5.19 phases 269-271.
+- Keep v5.20-v5.23 as the ordered milestone queue unless implementation reality changes during v5.19.
 
 ### Blockers/Concerns
 
@@ -62,7 +67,9 @@ Last activity: 2026-07-06 — Phase 267 completed; mobile app shell scaffolded
 - Live Cognito/email, notification, support-provider, BI/warehouse, APM, and native-provider checks remain external activation work unless credentials and approvals are supplied.
 - Production checks must stay read-only unless an approved safe fixture or explicit external activation path is available.
 - Live BI warehouse/APM activation should close with local/read-only/blocked evidence unless approved credentials and deployment targets are available.
+- Native build, app-store, external support/CRM writes, and broader AI autonomy remain gated by credentials, provider approvals, and release evidence.
 
 ## Operator Next Steps
 
-- Run `$gsd-autonomous` from Phase 267 through Phase 271.
+- Continue v5.19 with Phase 269 student and parent core mobile journeys.
+- Re-check the v5.20-v5.23 queue at the v5.19 release gate.
