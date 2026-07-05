@@ -204,6 +204,10 @@ def _email_verification_status(profile: dict) -> str:
     return account_verification_service.verification_status(profile)
 
 
+def _is_already_confirmed_provider_error(code: str, message: str) -> bool:
+    return code in {"InvalidParameterException", "NotAuthorizedException"} and "CONFIRMED" in message.upper()
+
+
 def _auth_response_for_profile(
     *,
     access_token: str,
@@ -527,6 +531,12 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
     if not profile:
         profile = {"user_id": "", "email": body.email, "role": role}
     if not account_verification_service.can_return_tokens(profile):
+        if profile.get("user_id"):
+            profile = user_repo.update_email_verification_state(
+                profile["user_id"],
+                account_verification_service.verified_fields(_utc_now_iso()),
+            ) or profile
+    if not account_verification_service.can_return_tokens(profile):
         raise HTTPException(
             status_code=403,
             detail={
@@ -584,6 +594,20 @@ async def resend_email_verification(
         resp = cognito.resend_confirmation_code(ClientId=client_id, Username=body.email)
     except ClientError as e:
         code = e.response["Error"]["Code"]
+        message = str(e.response["Error"].get("Message") or "")
+        if _is_already_confirmed_provider_error(code, message):
+            updated = user_repo.update_email_verification_state(
+                profile["user_id"],
+                account_verification_service.verified_fields(_utc_now_iso()),
+            )
+            state = account_verification_service.public_state(updated or profile)
+            return EmailVerificationResponse(
+                status="already_verified",
+                emailVerificationStatus=state["emailVerificationStatus"],
+                emailVerificationRequired=state["emailVerificationRequired"],
+                accountActivationStatus=state["accountActivationStatus"],
+                resendAllowed=False,
+            )
         if code in ("LimitExceededException", "TooManyRequestsException"):
             updated = user_repo.update_email_verification_state(
                 profile["user_id"],
@@ -606,7 +630,7 @@ async def resend_email_verification(
                     "emailVerificationStatus": public_state["emailVerificationStatus"],
                 },
             )
-        if code in ("InvalidParameterException", "UserNotFoundException"):
+        if code in ("InvalidParameterException", "NotAuthorizedException", "UserNotFoundException"):
             return EmailVerificationResponse(
                 status="accepted",
                 emailVerificationStatus=public_state["emailVerificationStatus"],
@@ -667,7 +691,7 @@ async def confirm_email_verification(
     except ClientError as e:
         code = e.response["Error"]["Code"]
         message = str(e.response["Error"].get("Message") or "")
-        if code == "NotAuthorizedException" and "CONFIRMED" in message.upper():
+        if _is_already_confirmed_provider_error(code, message):
             updated = user_repo.update_email_verification_state(
                 profile["user_id"],
                 account_verification_service.verified_fields(_utc_now_iso()),
