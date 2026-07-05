@@ -115,21 +115,21 @@ Parents can trust that parent portal views reflect authorized real student data 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.16 End-To-End Product Readiness And Release Evidence on 2026-07-05 (product-readiness-evidence-local release gate)
 **Residual partial gate:** none for local v5.16 scope; v5.14 focused frontend e2e blocker closed in v5.16
-**Active milestone:** none selected
-**Next recommended milestone:** External Provider Activation Smoke And Release Operations
+**Active milestone:** v5.17 External Provider Activation Smoke And Release Operations
+**Next planned milestones:** v5.18 Warehouse BI Observability And Product Analytics Activation; v5.19 Native Mobile Push And Offline Client Implementation
 
-## Latest Milestone: v5.16 End-To-End Product Readiness And Release Evidence
+## Current Milestone: v5.17 External Provider Activation Smoke And Release Operations
 
-**Goal:** Verify the real product as an end-to-end system and produce release evidence that separates implementation gaps from external provider blockers.
+**Goal:** Convert external activation blockers into approved, bounded release operations for provider readiness, safe smoke, refusal evidence, rollback controls, and production read-only verification.
 
 **Target features:**
-- Product-readiness reality audit across backend routes, frontend e2e specs, and v5.12-v5.15 evidence.
-- Focused frontend e2e closure or precise blocker classification for auth, admin account operations, parent account operations, billing, and curriculum.
-- Backend product smoke and support evidence verification for account operations, billing, usage, curriculum, and core smoke output.
-- Cross-surface parent, student, and admin journey verification with no demo fallback for production-like state.
-- Release evidence gate that separates local implementation completeness from external provider activation blockers.
+- Provider activation reality audit across payment, Cognito/email, notifications, support handoff, and production read-only smoke.
+- Payment plus Cognito/email smoke operations with blocked-state evidence when credentials or approvals are missing.
+- Notification plus support-provider smoke/readiness operations with retry/refusal evidence.
+- Production deploy readiness and read-only browser/API smoke.
+- Release gate with live-passed, read-only-passed, safe-fixture-passed, locally-ready, or blocked outcomes per provider.
 
-Release outcome:
+Prior milestone outcome:
 
 - Local product-readiness evidence is complete.
 - Backend focused tests passed 121/121 and Ruff passed.
@@ -1058,9 +1058,12 @@ Known current resources:
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
 | Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Complete - curriculum-buildout-ready release gate passed |
 | Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Complete - payment-production-ready-local release gate passed |
-| Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Partial local gate - focused frontend e2e blocked by execution approval |
+| Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Historical partial gate - focused frontend e2e blocker closed by v5.16 |
 | Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Complete - usage-stability-ready-local release gate passed |
-| Start v5.16 end-to-end product readiness and release evidence | v5.12-v5.15 local work is mostly complete but fragmented across auth, billing, usage, curriculum, frontend e2e, and smoke evidence; next value is one cross-surface readiness gate that separates regressions from external-provider blockers | Active |
+| Start v5.16 end-to-end product readiness and release evidence | v5.12-v5.15 local work is mostly complete but fragmented across auth, billing, usage, curriculum, frontend e2e, and smoke evidence; next value is one cross-surface readiness gate that separates regressions from external-provider blockers | Complete - product-readiness-evidence-local release gate passed |
+| Start v5.17 external provider activation smoke and release operations | v5.16 closed local product readiness; remaining risk is external provider activation and production release operations for payment, Cognito/email, notifications, support handoff, and read-only smoke | Active |
+| Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 will classify provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Planned |
+| Plan v5.19 native mobile push and offline client implementation | Web product readiness, provider-state clarity, and observability should precede native app implementation so the mobile client inherits stable contracts and clear push/offline boundaries | Planned |
 
 ## Evolution
 

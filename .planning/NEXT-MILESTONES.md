@@ -1,51 +1,62 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-05 after completing v5.15 usage/quota/product stability
-**Mode:** internal development, product functionality and stability first
+**Updated:** 2026-07-05 after completing v5.16 product-readiness evidence
+**Mode:** external activation, operations, analytics, and native client implementation
 
 ## Current Reality
 
 Completed local milestones:
 
-- v5.12 implemented backend and frontend curriculum editor/content migration tooling for backend-authorized curriculum operators.
-- v5.13 completed local payment and entitlement production-readiness work, including canonical parent billing state, checkout integration, webhook reconciliation hardening, and admin billing support evidence.
-- v5.15 completed local usage/quota/product stability, including usage-flow mapping, ledger/idempotency closure, quota reconciliation explanations, and admin core smoke evidence.
+- v5.12 implemented curriculum editor/content migration.
+- v5.13 completed local payment/entitlement production readiness.
+- v5.15 completed usage/quota/product stability.
+- v5.16 completed end-to-end local product readiness: focused frontend e2e, supplemental journeys, backend product-readiness tests, frontend build/lint, and release evidence.
 
-Partial gate:
+Remaining blockers are primarily external activation and client expansion:
 
-- v5.14 verification/login reliability passed backend and frontend build gates, but focused frontend e2e remains blocked by platform usage-limit approval.
+- Live Stripe/TWINT charging and webhook activation.
+- Live Cognito/email delivery smoke.
+- Notification provider and push/native activation.
+- External support provider and CRM/customer messaging approval.
+- BI/warehouse/APM activation.
+- Native/mobile app implementation and app-release prerequisites.
 
-External blockers still explicit:
-
-- Live Stripe/TWINT charging, production webhook registration, finance acceptance, live Cognito/email smoke, notification provider activation, external support provider activation, BI/warehouse, APM, native app provider work, and production deploy/live smoke.
-
-## Active: v5.16 End-To-End Product Readiness And Release Evidence
+## Active: v5.17 External Provider Activation Smoke And Release Operations
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.16-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.16-REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.17-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.17-REQUIREMENTS.md`
 
 Purpose:
 
-- Verify the real product across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and parent/admin support surfaces.
-- Close or precisely classify the residual v5.14 focused frontend e2e blocker.
-- Consolidate backend smoke, frontend e2e, and milestone evidence into one release-readiness matrix.
-- Separate local implementation gaps from external provider blockers.
+- Convert external blockers into approved readiness, smoke, refusal, rollback, and release-operation evidence.
+- Cover payment, Cognito/email, notifications, support provider handoff, and production deploy/read-only smoke.
+- Close honestly as live-passed, read-only-passed, safe-fixture-passed, locally ready, or blocked with exact prerequisites.
 
-Planned build scope:
+## Planned: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-- Phase 252: Product Readiness Reality Audit And Evidence Contract. (active)
-- Phase 253: Focused Frontend E2E Gate Closure.
-- Phase 254: Backend Product Smoke Evidence Expansion.
-- Phase 255: Cross-Surface Product Journey Verification.
-- Phase 256: v5.16 Release Evidence Gate And Next Milestone Decision.
+Roadmap: `.planning/milestones/v5.18-ROADMAP.md`
+Requirements: `.planning/milestones/v5.18-REQUIREMENTS.md`
 
-## Planned After v5.16
+Purpose:
 
-Candidate directions should be selected after the v5.16 evidence matrix:
+- Activate aggregate warehouse/BI exports, operator dashboards, APM/alerts, and analytics runbooks.
+- Use v5.17 provider-state dimensions so dashboards separate live, blocked, read-only, safe-fixture, and local-only behavior.
+- Preserve privacy boundaries and support-safe metadata.
 
-- **External Provider Activation Smoke**: live Stripe/TWINT, Cognito/email, notification, and support provider smoke when credentials and approvals exist.
-- **Warehouse/BI Activation**: deploy aggregate analytics only after product semantics and release evidence are stable.
-- **Native/Mobile Implementation**: revisit after web product readiness and external-provider blockers are explicit.
-- **Frontend Experience Polish**: only if v5.16 journey verification finds product-facing UX gaps that block internal use.
+## Planned: v5.19 Native Mobile Push And Offline Client Implementation
+
+Roadmap: `.planning/milestones/v5.19-ROADMAP.md`
+Requirements: `.planning/milestones/v5.19-REQUIREMENTS.md`
+
+Purpose:
+
+- Implement a real native/mobile client after web product readiness and provider/analytics boundaries are explicit.
+- Cover auth/session, parent/student journeys, native push, notification deep links, offline/read-through behavior, localization, and app-release evidence.
+
+## Ordering Rationale
+
+1. v5.17 first because local product readiness is complete but external activation state is still the largest uncertainty.
+2. v5.18 second because analytics and alerts should consume stable provider/product-state dimensions.
+3. v5.19 third because native/mobile should inherit stable web contracts, provider state, observability, and notification boundaries.

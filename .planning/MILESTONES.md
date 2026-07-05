@@ -1,5 +1,70 @@
 # Milestones
 
+## Active: v5.17 External Provider Activation Smoke And Release Operations
+
+**Status:** Active
+**Started:** 2026-07-05
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.17-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.17-REQUIREMENTS.md`
+**Goal:** Convert external activation blockers into approved, bounded release operations for provider readiness, safe smoke, refusal evidence, rollback controls, and production read-only verification.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+**Release target:** `external-provider-release-ops-ready`
+
+Function purpose:
+
+- Make payment, Cognito/email, notification, support-provider, and production smoke activation state explicit.
+- Provide safe live/readiness/safe-fixture smoke paths without exposing secrets or raw provider payloads.
+- Preserve fail-closed blocked states when credentials or approvals are unavailable.
+
+Implementation strategy:
+
+- Audit provider readiness surfaces before implementation.
+- Use rollout flags and explicit approvals for any live mutation.
+- Prefer read-only readiness and safe-fixture smoke over customer-impacting actions.
+- Close with honest live-passed/read-only-passed/safe-fixture-passed/blocked evidence.
+
+Planned phases:
+
+- Phase 257: Provider Activation Reality Audit And Release Contract. (active)
+- Phase 258: Payment And Cognito Email Smoke Operations.
+- Phase 259: Notification And Support Provider Smoke Operations.
+- Phase 260: Production Deploy Readiness And Read-Only Browser Smoke.
+- Phase 261: v5.17 External Provider Release Gate.
+
+---
+
+## Planned Next: v5.18 Warehouse BI Observability And Product Analytics Activation
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.18-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.18-REQUIREMENTS.md`
+**Goal:** Activate aggregate analytics, BI dashboards, APM/alerting, and operator runbooks after product semantics and provider states are explicit.
+
+Function purpose:
+
+- Give operators usage, billing readiness, curriculum, teacher help, notification, support, and release-smoke analytics.
+- Keep analytics support-safe and separate provider blockers from product regressions.
+
+---
+
+## Planned Next: v5.19 Native Mobile Push And Offline Client Implementation
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.19-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.19-REQUIREMENTS.md`
+**Goal:** Move native/mobile work from handoff contracts into implementation: app shell, auth/session, parent/student journeys, push, offline/read-through, localization, and release evidence.
+
+Function purpose:
+
+- Build a real mobile client against stable backend/web product contracts.
+- Implement native push and mobile offline/read-through behavior without demo fallback.
+
+---
+
 ## Completed: v5.16 End-To-End Product Readiness And Release Evidence
 
 **Status:** Completed local release gate 2026-07-05
@@ -144,9 +209,9 @@ Known deferred items: live Stripe/TWINT customer-charging smoke, production depl
 
 ---
 
-## Partial Gate: v5.14 Verification And Login Reliability
+## Historical Partial Gate: v5.14 Verification And Login Reliability
 
-**Status:** Partial local gate; backend gate and frontend build passed, focused frontend e2e blocked by platform usage-limit approval
+**Status:** Partial local gate at close; residual focused frontend e2e blocker was closed by v5.16 product-readiness evidence
 **Started:** 2026-07-05
 **Roadmap:** `.planning/milestones/v5.14-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.14-REQUIREMENTS.md`
@@ -155,6 +220,7 @@ Known deferred items: live Stripe/TWINT customer-charging smoke, production depl
 **Plans:** 4/5 complete
 **Requirements:** 4/5 complete
 **Release target:** `verification-login-reliable-local`
+**Follow-up closure:** v5.16 closed the focused frontend e2e blocker with 24/24 focused Playwright tests passing.
 
 Function purpose:
 
