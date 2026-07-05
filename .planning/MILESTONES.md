@@ -85,6 +85,7 @@ Key accomplishments:
 **Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.19-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.19-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.19-MILESTONE-AUDIT.md`
 **Goal:** Move native/mobile work from handoff contracts into implementation: app shell, auth/session, parent/student journeys, push, offline/read-through, localization, and release evidence.
 **Phases:** 5
 **Plans:** 5/5 complete
