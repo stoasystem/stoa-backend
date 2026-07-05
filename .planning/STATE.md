@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.16
 milestone_name: End-To-End Product Readiness And Release Evidence
 status: Active
-last_updated: "2026-07-05T13:03:06.000Z"
-last_activity: 2026-07-05 — Completed Phase 252 product-readiness evidence matrix and advanced v5.16 to focused frontend e2e gate closure
+last_updated: "2026-07-05T13:09:12.000Z"
+last_activity: 2026-07-05 — Completed Phase 253 focused frontend e2e gate with 24 Playwright tests passing after test-locator stabilization
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 253 Focused Frontend E2E Gate Closure
-Plan: Run the release-critical frontend e2e specs for auth, account operations, billing/subscription, and curriculum; classify any failures precisely.
+Phase: 254 Backend Product Smoke Evidence Expansion
+Plan: Verify core smoke, account operations, billing support evidence, usage reconciliation, and curriculum readiness outputs with focused backend tests.
 Status: Active
-Last activity: 2026-07-05 — Phase 252 wrote the product-readiness evidence matrix, preserved live-provider blockers, and promoted focused frontend e2e to the active release gate.
+Last activity: 2026-07-05 — Phase 253 closed the v5.14 focused frontend e2e blocker: final focused suite passed 24/24 after locator precision fixes.
 
 ## Accumulated Context
 
@@ -41,11 +41,11 @@ Last activity: 2026-07-05 — Phase 252 wrote the product-readiness evidence mat
 - v5.15 is complete locally: usage-flow audit, practice teacher-help ledger coverage, idempotency hardening, quota reconciliation explanations, account-operations usage support fields, and admin core smoke closed as local stability readiness.
 - The next milestone should be a new stability/release-readiness milestone, not a renamed phase: v5.16 will verify end-to-end product journeys and release evidence across auth, billing, usage, curriculum, teacher help, and support views.
 - Phase 252 is complete: release-critical backend and frontend surfaces are mapped to concrete files/tests; v5.12-v5.15 local evidence is reconciled; v5.14 focused frontend e2e remains a Phase 253 gate; live providers are classified as external blockers.
+- Phase 253 is complete: focused frontend e2e for auth, account operations, subscription operations, billing/pricing, and admin curriculum passed 24/24; frontend commit `7e9e385` stabilized duplicate-text locators.
 - External activation remains deferred until prerequisites unblock: live Stripe/TWINT, Cognito/email delivery, notification providers, external support provider, APNS/FCM, production warehouse/BI, APM, and rollout approvals.
 
 ### Pending Todos
 
-- Phase 253: rerun or precisely classify focused frontend e2e for auth, admin account operations, parent account operations, billing/subscription, and curriculum.
 - Phase 254: verify backend core smoke and release evidence surfaces are sufficient for support-safe triage.
 - Phase 255: verify cross-surface parent, student, and admin journeys without demo fallback.
 - Phase 256: close v5.16 with release evidence, blocker classification, and next milestone recommendation.
@@ -60,6 +60,5 @@ Last activity: 2026-07-05 — Phase 252 wrote the product-readiness evidence mat
 
 ## Operator Next Steps
 
-- Run Phase 253 focused frontend e2e:
-  `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts subscription-operations.spec.ts billing-pricing.spec.ts admin-curriculum.spec.ts`
-- If failures occur, classify them as product regression, frontend/API contract mismatch, e2e fixture/platform problem, external provider blocker, or unrelated dirty-worktree interference before changing code.
+- Run Phase 254 backend focused tests for core smoke, usage ledger, subscription/account operations, auth lifecycle, curriculum, questions, and conversations.
+- Check whether core smoke and support outputs expose enough support-safe status metadata for release triage.

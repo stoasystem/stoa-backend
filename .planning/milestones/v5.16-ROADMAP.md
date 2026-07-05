@@ -39,7 +39,7 @@ The next development task is therefore not another single feature module. It is 
 ## Phases
 
 - [x] **Phase 252: Product Readiness Reality Audit And Evidence Contract** - Reconcile current backend/frontend code, v5.12-v5.15 evidence, v5.14 partial gate, and external blockers into one release matrix.
-- [ ] **Phase 253: Focused Frontend E2E Gate Closure** - Run or unblock auth, admin-account-operations, parent-account-operations, billing, and curriculum e2e specs; fix real regressions discovered by those tests.
+- [x] **Phase 253: Focused Frontend E2E Gate Closure** - Run or unblock auth, admin-account-operations, parent-account-operations, billing, and curriculum e2e specs; fix real regressions discovered by those tests.
 - [ ] **Phase 254: Backend Product Smoke Evidence Expansion** - Verify `GET /admin/core-smoke`, account operations, billing support evidence, usage reconciliation, and curriculum readiness outputs are sufficient for release triage; add small contract fields only if evidence is incomplete.
 - [ ] **Phase 255: Cross-Surface Product Journey Verification** - Validate the main parent/student/admin journeys across auth, paid state, usage/quota, curriculum, teacher help, and support views with no demo fallback.
 - [ ] **Phase 256: v5.16 Release Evidence Gate And Next Milestone Decision** - Close docs, evidence, residual blockers, and choose the next feature/safety/stability milestone.
@@ -120,8 +120,8 @@ The next development task is therefore not another single feature module. It is 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 252 Product Readiness Reality Audit And Evidence Contract | v5.16 | 1/1 | Complete | 2026-07-05 |
-| 253 Focused Frontend E2E Gate Closure | v5.16 | 0/1 | Active | - |
-| 254 Backend Product Smoke Evidence Expansion | v5.16 | 0/1 | Planned | - |
+| 253 Focused Frontend E2E Gate Closure | v5.16 | 1/1 | Complete | 2026-07-05 |
+| 254 Backend Product Smoke Evidence Expansion | v5.16 | 0/1 | Active | - |
 | 255 Cross-Surface Product Journey Verification | v5.16 | 0/1 | Planned | - |
 | 256 v5.16 Release Evidence Gate And Next Milestone Decision | v5.16 | 0/1 | Planned | - |
 
@@ -130,7 +130,7 @@ The next development task is therefore not another single feature module. It is 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | READINESS-01 | Phase 252 | Complete |
-| E2E-01 | Phase 253 | Active |
-| SMOKE-01 | Phase 254 | Planned |
+| E2E-01 | Phase 253 | Complete |
+| SMOKE-01 | Phase 254 | Active |
 | JOURNEY-01 | Phase 255 | Planned |
 | VERIFY-50 | Phase 256 | Planned |
