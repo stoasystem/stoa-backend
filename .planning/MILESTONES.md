@@ -10,8 +10,8 @@
 **Milestone requirements:** `.planning/milestones/v5.17-REQUIREMENTS.md`
 **Goal:** Convert external activation blockers into approved, bounded release operations for provider readiness, safe smoke, refusal evidence, rollback controls, and production read-only verification.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 1/5 complete
+**Requirements:** 1/5 complete
 **Release target:** `external-provider-release-ops-ready`
 
 Function purpose:
@@ -29,7 +29,7 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 257: Provider Activation Reality Audit And Release Contract. (active)
+- Phase 257: Provider Activation Reality Audit And Release Contract. (complete)
 - Phase 258: Payment And Cognito Email Smoke Operations.
 - Phase 259: Notification And Support Provider Smoke Operations.
 - Phase 260: Production Deploy Readiness And Read-Only Browser Smoke.
