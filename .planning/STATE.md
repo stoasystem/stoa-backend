@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.15
-milestone_name: Usage, Quota, And Product Stability
-status: complete
-last_updated: "2026-07-05T11:31:00.000Z"
-last_activity: 2026-07-05
+milestone: v5.16
+milestone_name: End-To-End Product Readiness And Release Evidence
+status: Active
+last_updated: "2026-07-05T12:00:00.000Z"
+last_activity: 2026-07-05 — Reconciled current feature reality after v5.15 completion and selected v5.16 end-to-end product readiness as the next milestone
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.15 Usage, Quota, And Product Stability is complete.
+**Current focus:** v5.16 End-To-End Product Readiness And Release Evidence.
 
 ## Current Position
 
-Phase: 251 v5.15 Usage Stability Release Gate
-Plan: Verify backend/frontend evidence, document residual blockers, and close the milestone.
-Status: Complete
-Last activity: 2026-07-05 — v5.15 closed with backend focused tests, Ruff, frontend build evidence, release gate, and milestone audit.
+Phase: 252 Product Readiness Reality Audit And Evidence Contract
+Plan: Reconcile current backend/frontend implementation, v5.12-v5.15 evidence, v5.14 partial gate, and external blockers into one release matrix.
+Status: Active
+Last activity: 2026-07-05 — v5.15 is complete locally; v5.16 now focuses on cross-surface product readiness, focused frontend e2e closure, backend smoke evidence, and release blocker classification.
 
 ## Accumulated Context
 
@@ -35,49 +35,29 @@ Last activity: 2026-07-05 — v5.15 closed with backend focused tests, Ruff, fro
 
 - v5.10 is complete: email verification UX, parent account operations UI, admin account operations console, focused frontend e2e, backend contract evidence, and production read-only smoke planning.
 - v5.11 is complete: governed multi-action usage ledger taxonomy, chat/teacher-help/practice/assignment/generation instrumentation, reconciliation, account operations compatibility, 72 focused backend tests, and Ruff.
-- v5.1 was readiness-complete, not implementation-complete. Its audit explicitly deferred rich editor frontend, draft patch/update, validation preview, diff, audit-read, migration service/API/UI, evidence persistence, and rollback metadata.
-- v5.12 remains the active curriculum editor and content migration buildout milestone.
-- Curriculum editing is not a default teacher/tutor permission. v5.12 must require backend-granted curriculum capabilities such as `curriculum_author`, `curriculum_reviewer`, and `curriculum_publisher`/`migration_operator`.
-- Phase 233 is complete: backend curriculum editor mutations now require explicit capabilities, and patch, validation preview, diff, and audit-read APIs are available for Phase 235 frontend work.
-- Phase 234 is complete: backend migration dry-run/apply/evidence APIs are available, dry-run is non-mutating, apply requires confirmation, and evidence/audit/rollback metadata are recorded.
-- Phase 235 is complete: frontend `/admin/curriculum` now exposes the curriculum worklist, draft editor, validation/diff/audit review tools, migration dry-run/apply flow, and migration evidence lookup against real backend APIs with no demo fallback for API failures.
-- Phase 236 is complete: v5.12 is closed as `curriculum-buildout-ready` with backend focused tests, frontend build/lint/e2e, release gate, and milestone audit.
-- v5.13 is active: paid-access completion must audit real checkout/paywall/entitlement behavior before implementation, then connect provider reconciliation, entitlement activation, usage-limit compatibility, parent-facing state, and admin billing support evidence.
-- Phase 237 is complete: canonical paid-state APIs are `/parents/me/subscription*`; legacy frontend `/billing/*` client still uses demo fallback and must not decide paid access after Phase 238.
-- Phase 238 is complete: frontend `/billing` now reads `/parents/me/subscription` for subscription, usage, and feature access; checkout creation targets `/parents/me/subscription/checkout`; paid-state API failures render visibly instead of falling back to mock subscription data.
-- Phase 239 is complete: duplicate Stripe webhooks now create support-visible dedup events, stale older provider events are recorded as ignored, and active paid access cannot be downgraded by an older failed-payment event.
-- Phase 240 is complete: billing responses now include bounded supportEvidence, and frontend admin billing/account-operations surfaces render support action plus duplicate/stale reconciliation counts.
-- Phase 241 is complete: backend tests/Ruff, frontend build/lint, and focused billing e2e passed; live Stripe/TWINT smoke remains blocked on external credentials, webhook endpoint, finance acceptance, and rollout approval.
-- v5.14 is active: verification/login reliability must audit Cognito/local/frontend behavior first, then harden resend/confirm/login policy, resolve half-enabled login-code behavior, add support visibility, and close with local release evidence.
-- Phase 242 is complete: backend Cognito sign-up confirmation, local verification state, resend/confirm endpoints, token-return blocking, frontend verification screens, admin/account-operations support views, login-code deferral, demo-only fallback boundaries, and externally blocked live-smoke evidence are documented.
-- Phase 243 is complete: backend auth now handles idempotent confirm, stale Cognito-already-confirmed local repair, disabled account login/resend, and structured verification errors; `.venv/bin/pytest tests/test_auth_account_lifecycle.py` and Ruff passed.
-- Phase 244 is complete: email/password plus verified email is the canonical product login path; passwordless/login-code remains deferred, frontend has no product login-code path, and backend tests assert deferred/no-token responses.
-- Phase 245 is complete: backend verification public state now includes supportRecoveryState/supportAction, admin verification responses expose them, parent/admin account operations render recovery evidence, frontend build passed, and frontend commit `f2e96df` contains the UI change.
-- v5.15 is active: usage/quota/product stability must audit real usage-flow coverage first, then close ledger idempotency, quota reconciliation, support explanations, and local smoke/regression gates.
-- v5.15 research concluded no new runtime stack is required by default; use existing FastAPI/DynamoDB/ledger/account-operations/test tooling, explicit request/action idempotency, low-cardinality support-safe errors, and readiness-style product smoke checks.
-- Phase 247 is complete: question submit, chat, hint, teacher-help, practice, lesson, assignment, read-only, account-operations, and admin usage surfaces are mapped to code/tests; practice teacher-help ledger coverage, partial-failure/idempotency tests, over-limit reconciliation, and v5.14 frontend e2e blocker are carried forward.
-- Phase 248 is complete: `practice_teacher_help_request` is governed and instrumented, mismatched question idempotency retries are rejected before counter increment, question persistence partial failure is test-documented, 39 focused tests passed, and Ruff passed.
-- Phase 249 is complete: reconciliation now explains no-usage, over-limit, stale, drifted, matched, and ledger-only states with support actions; parent/admin account operations render usage support action/explanation; 41 focused backend tests, Ruff, and frontend build passed.
-- Phase 250 is complete: admin `GET /admin/core-smoke` returns a support-safe local smoke matrix covering health, login, entitlement, curriculum read, question submit, teacher help, and admin account operations; 43 focused tests and Ruff passed.
-- Phase 251 is complete: v5.15 release gate passed locally, frontend build evidence is recorded, residual v5.14 focused frontend e2e and live-provider blockers are explicit, and milestone audit is written.
-- Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
-- External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
-- Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
+- v5.12 is complete locally: backend-authorized curriculum editor and content migration tooling closed as `curriculum-buildout-ready`.
+- v5.13 is complete locally: paid access, canonical parent billing APIs, Stripe webhook reconciliation hardening, paid-state frontend integration, and billing support evidence closed as `payment-production-ready-local`.
+- v5.14 is a partial local gate: backend verification/login reliability and frontend build passed, but focused frontend e2e remains blocked by platform usage-limit approval.
+- v5.15 is complete locally: usage-flow audit, practice teacher-help ledger coverage, idempotency hardening, quota reconciliation explanations, account-operations usage support fields, and admin core smoke closed as local stability readiness.
+- The next milestone should be a new stability/release-readiness milestone, not a renamed phase: v5.16 will verify end-to-end product journeys and release evidence across auth, billing, usage, curriculum, teacher help, and support views.
+- External activation remains deferred until prerequisites unblock: live Stripe/TWINT, Cognito/email delivery, notification providers, external support provider, APNS/FCM, production warehouse/BI, APM, and rollout approvals.
 
 ### Pending Todos
 
-- Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
-- Execute Phase 246 v5.14 Verification Login Reliability Gate.
-- Start the next milestone only after selecting the next functional, safety, or stability target.
+- Phase 252: audit current backend/frontend product-readiness reality and write the v5.16 evidence matrix.
+- Phase 253: rerun or precisely classify focused frontend e2e for auth, admin account operations, parent account operations, billing/subscription, and curriculum.
+- Phase 254: verify backend core smoke and release evidence surfaces are sufficient for support-safe triage.
+- Phase 255: verify cross-surface parent, student, and admin journeys without demo fallback.
+- Phase 256: close v5.16 with release evidence, blocker classification, and next milestone recommendation.
 
 ### Blockers/Concerns
 
-- Frontend implementation work is in `/Users/zhdeng/stoa-frontend`, outside this backend repo's write root; Phase 235 frontend implementation is committed there as `dff7430`.
-- Actual production content import depends on approved source material being available; v5.12 can build the repeatable pipeline without importing unapproved sources.
-- Production deploy/live smoke remains separate from local functional readiness.
-- Payment, verification, and usage features have planning/test evidence in prior milestones, but the next milestone queue must audit real product behavior again before assuming production completeness.
+- Frontend implementation work is in `/Users/zhdeng/stoa-frontend`, outside this backend repo's write root; running/fixing frontend e2e may require approval or a separate frontend-capable execution path.
+- v5.14 focused frontend e2e remains blocked until external-write/dev-server execution permission is available for `/Users/zhdeng/stoa-frontend`.
 - Live Stripe/TWINT smoke remains blocked unless approved production credentials, registered webhook endpoint, finance acceptance, and explicit rollout enablement are available.
+- Live Cognito/email, notification, support-provider, BI/warehouse, APM, and native-provider checks remain external activation work unless credentials and approvals are supplied.
+- Production checks must stay read-only unless an approved safe fixture or explicit external activation path is available.
 
 ## Operator Next Steps
 
-- Audit real usage-bearing flows and define the v5.15 usage/quota stability contract.
+- Start Phase 252 by mapping current backend routes, frontend e2e specs, existing smoke/evidence APIs, and v5.12-v5.15 release evidence into one product-readiness matrix.

@@ -1,5 +1,42 @@
 # Milestones
 
+## Active: v5.16 End-To-End Product Readiness And Release Evidence
+
+**Status:** Active
+**Started:** 2026-07-05
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.16-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.16-REQUIREMENTS.md`
+**Goal:** Verify the real product as an end-to-end system and produce release evidence that separates implementation gaps from external provider blockers.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+**Release target:** `product-readiness-evidence-local`
+
+Function purpose:
+
+- Prove parent, student, and admin journeys work across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and support views.
+- Close or precisely classify the residual v5.14 focused frontend e2e blocker.
+- Consolidate backend smoke, frontend e2e, and milestone evidence into one release-readiness matrix.
+
+Implementation strategy:
+
+- Audit current backend/frontend reality before adding code.
+- Run focused frontend e2e when execution permission is available.
+- Add only small contract fixes discovered by end-to-end evidence.
+- Keep external provider activation blocked unless credentials and rollout approval are available.
+
+Planned phases:
+
+- Phase 252: Product Readiness Reality Audit And Evidence Contract. (active)
+- Phase 253: Focused Frontend E2E Gate Closure.
+- Phase 254: Backend Product Smoke Evidence Expansion.
+- Phase 255: Cross-Surface Product Journey Verification.
+- Phase 256: v5.16 Release Evidence Gate And Next Milestone Decision.
+
+---
+
 ## Completed: v5.12 Curriculum Editor And Content Migration Buildout
 
 **Status:** Completed local release gate 2026-07-05
@@ -129,16 +166,17 @@ Phase status:
 
 ---
 
-## Active: v5.15 Usage, Quota, And Product Stability
+## Completed: v5.15 Usage, Quota, And Product Stability
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Roadmap:** `.planning/milestones/v5.15-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.15-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.15-MILESTONE-AUDIT.md`
 **Goal:** Make usage accounting, quota reconciliation, support explanations, and core smoke checks trustworthy.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
-**Release target:** `usage-stability-ready-local`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `usage-stability-ready-local`
 
 Function purpose:
 
@@ -151,13 +189,23 @@ Implementation strategy:
 - Reconcile ledger rows, aggregate counters, entitlement state, and support summaries.
 - Keep observability support-safe and focused on request IDs/metadata rather than raw learning content.
 
-Planned phases:
+Completed phases:
 
-- Phase 247: Usage Flow Reality Audit And Stability Contract.
-- Phase 248: Ledger Coverage And Idempotency Closure.
-- Phase 249: Quota Reconciliation And Support Explanations.
-- Phase 250: Core Health Smoke And Regression Checks.
-- Phase 251: v5.15 Usage Stability Release Gate.
+- Phase 247: Usage Flow Reality Audit And Stability Contract. (complete)
+- Phase 248: Ledger Coverage And Idempotency Closure. (complete)
+- Phase 249: Quota Reconciliation And Support Explanations. (complete)
+- Phase 250: Core Health Smoke And Regression Checks. (complete)
+- Phase 251: v5.15 Usage Stability Release Gate. (complete)
+
+Key accomplishments:
+
+- Mapped real usage-bearing flows across question submit, chat, hints, teacher help, practice, lesson, assignment, read-only, account operations, and admin usage surfaces.
+- Added governed `practice_teacher_help_request` usage ledger coverage and hardened mismatched question idempotency retries.
+- Added support-safe reconciliation states and explanations for no-usage, over-limit, stale, drifted, matched, and ledger-only states.
+- Added parent/admin account operations usage support action and explanation rendering.
+- Added admin `GET /admin/core-smoke` for support-safe local product smoke evidence.
+
+Known deferred items: v5.14 focused frontend e2e blocker, live-provider activation, BI/warehouse, external APM, native apps, and production deploy/live smoke.
 
 ---
 

@@ -102,7 +102,9 @@ The completed v5.13 milestone makes paid access locally production-ready: parent
 
 The partial-gate v5.14 milestone makes verification and login reliability locally stronger: backend verification confirm/resend/login edge cases are hardened, login-code/passwordless remains explicitly deferred with no token minting, and parent/admin account operations show verification recovery evidence. The final focused frontend e2e gate remains blocked by platform usage-limit approval and must stay visible until rerun.
 
-The active v5.15 milestone focuses on usage, quota, and product stability: real usage-flow coverage, ledger idempotency, quota reconciliation, parent/admin support explanations, and local smoke/regression gates.
+The completed v5.15 milestone focuses on usage, quota, and product stability: real usage-flow coverage, ledger idempotency, quota reconciliation, parent/admin support explanations, and local smoke/regression gates.
+
+The active v5.16 milestone verifies the product end to end across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and support views. It exists to close or precisely classify the residual v5.14 focused frontend e2e blocker and produce release evidence that separates local implementation gaps from external provider blockers.
 
 ## Core Value
 
@@ -111,20 +113,20 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.13 Payment And Entitlement Production Completion on 2026-07-05 (payment-production-ready-local release gate)
+**Latest completed milestone:** v5.15 Usage, Quota, And Product Stability on 2026-07-05 (usage-stability-ready-local release gate)
 **Residual partial gate:** v5.14 Verification And Login Reliability frontend focused e2e blocked by platform usage-limit approval
-**Active milestone:** v5.15 Usage, Quota, And Product Stability
+**Active milestone:** v5.16 End-To-End Product Readiness And Release Evidence
 
-## Current Milestone: v5.15 Usage, Quota, And Product Stability
+## Current Milestone: v5.16 End-To-End Product Readiness And Release Evidence
 
-**Goal:** Make usage accounting, quota reconciliation, support explanations, and core product smoke checks trustworthy across real STOA flows.
+**Goal:** Verify the real product as an end-to-end system and produce release evidence that separates implementation gaps from external provider blockers.
 
 **Target features:**
-- Usage-flow reality audit across backend/frontend flows.
-- Ledger coverage and idempotency closure for governed usage actions.
-- Quota reconciliation across ledger rows, aggregate counters, entitlement limits, and account operations summaries.
-- Parent/admin support-safe quota explanations and drift evidence.
-- Core health/smoke checks for login, entitlement, curriculum read, question submit, teacher help, and admin support surfaces.
+- Product-readiness reality audit across backend routes, frontend e2e specs, and v5.12-v5.15 evidence.
+- Focused frontend e2e closure or precise blocker classification for auth, admin account operations, parent account operations, billing, and curriculum.
+- Backend product smoke and support evidence verification for account operations, billing, usage, curriculum, and core smoke output.
+- Cross-surface parent, student, and admin journey verification with no demo fallback for production-like state.
+- Release evidence gate that separates local implementation completeness from external provider activation blockers.
 
 Delivered:
 
@@ -1047,9 +1049,10 @@ Known current resources:
 | Start v5.10 account operations frontend and production readiness | v5.6-v5.9 backend primitives are complete, but current frontend had no account-operations clients/routes and no complete email verification confirm/resend UX | Complete - frontend-account-ops-ready release gate passed |
 | Start v5.11 additional usage ledger coverage | v5.7 made question usage durable; parent/admin account operations now need privacy-safe support explanations for chat, hints, teacher-help, and practice/generation usage actions | Complete - multi-action-usage-ledger-ready release gate passed |
 | Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Complete - curriculum-buildout-ready release gate passed |
-| Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Planned |
-| Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Planned |
-| Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Active |
+| Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Complete - payment-production-ready-local release gate passed |
+| Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Partial local gate - focused frontend e2e blocked by execution approval |
+| Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Complete - usage-stability-ready-local release gate passed |
+| Start v5.16 end-to-end product readiness and release evidence | v5.12-v5.15 local work is mostly complete but fragmented across auth, billing, usage, curriculum, frontend e2e, and smoke evidence; next value is one cross-surface readiness gate that separates regressions from external-provider blockers | Active |
 
 ## Evolution
 
