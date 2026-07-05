@@ -1,6 +1,6 @@
 # Roadmap: v5.20 Native Build Distribution And Device QA
 
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-06
 **Prior milestone:** v5.19 Native Mobile Push And Offline Client Implementation
 
@@ -28,11 +28,11 @@ v5.19 proved that the mobile client can consume real STOA backend contracts. v5.
 
 ## Phases
 
-- [ ] **Phase 272: Native Build And Credential Readiness Audit** - Map current mobile implementation, native credentials, build profiles, app identifiers, and environment prerequisites.
-- [ ] **Phase 273: Internal Build Distribution Pipeline** - Configure EAS/build profiles, signed internal builds, release channels, versioning, and artifact evidence.
-- [ ] **Phase 274: Device QA Matrix And Mobile Smoke** - Run physical-device auth, parent/student, push, deep-link, offline, and localization smoke with redacted evidence.
-- [ ] **Phase 275: Mobile Crash Performance And Release Telemetry** - Add mobile crash/performance/status telemetry boundaries and operator-visible release-health summaries.
-- [ ] **Phase 276: v5.20 Native Distribution Release Gate** - Close with device evidence, store-readiness checklist, rollout blockers, and next milestone decision.
+- [x] **Phase 272: Native Build And Credential Readiness Audit** - Map current mobile implementation, native credentials, build profiles, app identifiers, and environment prerequisites. (completed 2026-07-06)
+- [x] **Phase 273: Internal Build Distribution Pipeline** - Configure EAS/build profiles, signed internal builds, release channels, versioning, and artifact evidence. (completed 2026-07-06)
+- [x] **Phase 274: Device QA Matrix And Mobile Smoke** - Run physical-device auth, parent/student, push, deep-link, offline, and localization smoke with redacted evidence. (completed 2026-07-06)
+- [x] **Phase 275: Mobile Crash Performance And Release Telemetry** - Add mobile crash/performance/status telemetry boundaries and operator-visible release-health summaries. (completed 2026-07-06)
+- [x] **Phase 276: v5.20 Native Distribution Release Gate** - Close with device evidence, store-readiness checklist, rollout blockers, and next milestone decision. (completed 2026-07-06)
 
 ## Phase Details
 
@@ -99,8 +99,8 @@ v5.19 proved that the mobile client can consume real STOA backend contracts. v5.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILEBUILD-01 | Phase 272 | Planned |
-| MOBILEBUILD-02 | Phase 273 | Planned |
-| MOBILEBUILD-03 | Phase 274 | Planned |
-| MOBILEBUILD-04 | Phase 275 | Planned |
-| VERIFY-54 | Phase 276 | Planned |
+| MOBILEBUILD-01 | Phase 272 | Complete |
+| MOBILEBUILD-02 | Phase 273 | Complete |
+| MOBILEBUILD-03 | Phase 274 | Complete |
+| MOBILEBUILD-04 | Phase 275 | Complete |
+| VERIFY-54 | Phase 276 | Complete |

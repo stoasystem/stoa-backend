@@ -117,16 +117,18 @@ Key accomplishments:
 
 ---
 
-## Active: v5.20 Native Build Distribution And Device QA
+## Completed: v5.20 Native Build Distribution And Device QA
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-06
 **Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.20-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.20-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.20-MILESTONE-AUDIT.md`
 **Goal:** Turn the native mobile implementation into internal iOS/Android builds with device QA, push/deep-link smoke, crash/performance telemetry, and store-readiness evidence.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `native-distribution-ready-local-contracts`
 
 Function purpose:
 
@@ -143,11 +145,11 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 272: Native Build And Credential Readiness Audit.
-- Phase 273: Internal Build Distribution Pipeline.
-- Phase 274: Device QA Matrix And Mobile Smoke.
-- Phase 275: Mobile Crash Performance And Release Telemetry.
-- Phase 276: v5.20 Native Distribution Release Gate.
+- Phase 272: Native Build And Credential Readiness Audit. (complete)
+- Phase 273: Internal Build Distribution Pipeline. (complete)
+- Phase 274: Device QA Matrix And Mobile Smoke. (complete)
+- Phase 275: Mobile Crash Performance And Release Telemetry. (complete)
+- Phase 276: v5.20 Native Distribution Release Gate. (complete)
 
 ---
 

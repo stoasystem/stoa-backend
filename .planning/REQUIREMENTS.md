@@ -1,7 +1,7 @@
 # Requirements: v5.20 Native Build Distribution And Device QA
 
 **Milestone:** v5.20
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-06
 **Prior milestone:** v5.19 Native Mobile Push And Offline Client Implementation
 
@@ -68,8 +68,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILEBUILD-01 | Phase 272 | Planned |
-| MOBILEBUILD-02 | Phase 273 | Planned |
-| MOBILEBUILD-03 | Phase 274 | Planned |
-| MOBILEBUILD-04 | Phase 275 | Planned |
-| VERIFY-54 | Phase 276 | Planned |
+| MOBILEBUILD-01 | Phase 272 | Complete |
+| MOBILEBUILD-02 | Phase 273 | Complete |
+| MOBILEBUILD-03 | Phase 274 | Complete |
+| MOBILEBUILD-04 | Phase 275 | Complete |
+| VERIFY-54 | Phase 276 | Complete |
