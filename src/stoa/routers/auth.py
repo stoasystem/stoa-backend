@@ -135,9 +135,22 @@ class LocalePreferenceResponse(BaseModel):
 # Role helpers
 # ---------------------------------------------------------------------------
 
-# Frontend uses "tutor" for what the backend calls "teacher"
-_ROLE_ALIAS = {"tutor": "teacher"}
-_ROLE_DISPLAY = {"teacher": "tutor"}   # reverse for response
+# Frontend uses "tutor" for what the backend calls "teacher". Cognito group
+# names are plural, so normalize those too when a profile fallback uses claims.
+_ROLE_ALIAS = {
+    "tutor": "teacher",
+    "students": "student",
+    "parents": "parent",
+    "teachers": "teacher",
+    "admins": "admin",
+}
+_ROLE_DISPLAY = {
+    "teacher": "tutor",
+    "students": "student",
+    "parents": "parent",
+    "teachers": "tutor",
+    "admins": "admin",
+}
 
 
 def _normalise_role(role: str) -> str:

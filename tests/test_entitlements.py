@@ -17,8 +17,14 @@ class FakeTable:
 def _settings() -> Settings:
     return Settings(
         free_tier_daily_question_limit=2,
+        free_tier_daily_chat_message_limit=8,
+        free_tier_daily_hint_limit=2,
         standard_tier_daily_question_limit=30,
+        standard_tier_daily_chat_message_limit=80,
+        standard_tier_daily_hint_limit=30,
         premium_tier_daily_question_limit=100,
+        premium_tier_daily_chat_message_limit=200,
+        premium_tier_daily_hint_limit=80,
     )
 
 
@@ -83,6 +89,8 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
     assert entitlement["effectivePlan"] == "premium"
     assert entitlement["source"] == "provider_billing"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 100
+    assert entitlement["limits"]["dailyChatMessageLimit"] == 200
+    assert entitlement["limits"]["dailyHintLimit"] == 80
     assert entitlement["blockingReason"] is None
 
 
@@ -105,6 +113,9 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch):
     )
 
     assert entitlement["effectivePlan"] == "free"
+    assert entitlement["limits"]["dailyAiQuestionLimit"] == 2
+    assert entitlement["limits"]["dailyChatMessageLimit"] == 8
+    assert entitlement["limits"]["dailyHintLimit"] == 2
     assert entitlement["blockingReason"] == "checkout_pending"
 
 
@@ -129,3 +140,5 @@ def test_manual_override_takes_precedence(monkeypatch):
     assert entitlement["effectivePlan"] == "standard"
     assert entitlement["source"] == "manual_override"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 30
+    assert entitlement["limits"]["dailyChatMessageLimit"] == 80
+    assert entitlement["limits"]["dailyHintLimit"] == 30

@@ -39,23 +39,23 @@ def _increment_and_check(pk: str, sk: str, limit: int, label: str) -> dict:
     }
 
 
-def check_and_record_chat(student_id: str) -> dict:
+def check_and_record_chat(student_id: str, limit: int | None = None) -> dict:
     """Increment today's chat counter; raise 429 if limit exceeded."""
     today = _today_utc()
     return _increment_and_check(
         pk=f"USAGE#{student_id}",
         sk=f"CHAT#{today}",
-        limit=settings.daily_chat_message_limit,
+        limit=limit if limit is not None else settings.daily_chat_message_limit,
         label="chat message",
     )
 
 
-def check_and_record_hint(student_id: str, challenge_id: str) -> dict:
+def check_and_record_hint(student_id: str, challenge_id: str, limit: int | None = None) -> dict:
     """Increment today's hint counter; raise 429 if limit exceeded."""
     today = _today_utc()
     return _increment_and_check(
         pk=f"USAGE#{student_id}",
         sk=f"HINT#{today}",
-        limit=settings.daily_hint_limit,
+        limit=limit if limit is not None else settings.daily_hint_limit,
         label="hint",
     )

@@ -18,9 +18,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from stoa.config import settings
 from stoa.deps import require_role
 from stoa.db.dynamodb import get_table
-from stoa.services import ai_service, usage_ledger_service
+from stoa.services import ai_service, entitlement_service, usage_ledger_service
 from stoa.services.rate_limit import check_and_record_chat
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,12 @@ def _get_messages(conv_id: str) -> list[dict]:
     items = resp.get("Items", [])
     # Sort by creation time so teacher notes and system messages appear in chronological order
     return sorted(items, key=lambda x: x.get("created_at", ""))
+
+
+def _chat_limit_for_student(student_id: str) -> int:
+    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
+    limits = entitlement.get("limits") or {}
+    return int(limits.get("dailyChatMessageLimit") or settings.daily_chat_message_limit)
 
 
 # ── Request / Response models ──────────────────────────────────────────────────
@@ -212,7 +219,7 @@ async def create_conversation(
 
     # If an initial message was provided, immediately get an AI reply
     if body.initialMessage:
-        usage_counter = check_and_record_chat(student_id)
+        usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
         student_msg, assistant_msg = _send_message_impl(
             conv_id=conv_id,
             student_id=student_id,
@@ -286,7 +293,7 @@ async def send_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    usage_counter = check_and_record_chat(student_id)
+    usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,
@@ -325,7 +332,7 @@ async def stream_message(
     if not conv or conv.get("student_id") != student_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    usage_counter = check_and_record_chat(student_id)
+    usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
         conv_id=conv_id,

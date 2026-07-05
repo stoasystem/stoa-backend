@@ -11,9 +11,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from stoa.config import settings
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_current_user, require_role
-from stoa.services import curriculum_analytics_service, curriculum_service, usage_ledger_service
+from stoa.services import curriculum_analytics_service, curriculum_service, entitlement_service, usage_ledger_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,6 +27,12 @@ def _as_int(val: Any, default: int = 0) -> int:
     if isinstance(val, Decimal):
         return int(val)
     return int(val)
+
+
+def _hint_limit_for_student(student_id: str) -> int:
+    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
+    limits = entitlement.get("limits") or {}
+    return int(limits.get("dailyHintLimit") or settings.daily_hint_limit)
 
 
 # ── Response helpers ────────────────────────────────────────────────────────
@@ -620,7 +627,11 @@ async def get_hint(body: dict, user: dict = Depends(require_role("student"))):
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
 
-    usage_counter = check_and_record_hint(user["sub"], challenge_id)
+    usage_counter = check_and_record_hint(
+        user["sub"],
+        challenge_id,
+        limit=_hint_limit_for_student(user["sub"]),
+    )
 
     hint = challenge.get("hint", "")
     if not hint:

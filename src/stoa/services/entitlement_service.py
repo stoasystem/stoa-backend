@@ -43,7 +43,9 @@ def resolve_student_entitlement(
         has_active_binding=bool(binding),
     )
     effective_plan = _normalize_tier(decision["effective_plan"])
-    limit = _daily_question_limit(effective_plan, settings)
+    question_limit = _daily_question_limit(effective_plan, settings)
+    chat_limit = _daily_chat_message_limit(effective_plan, settings)
+    hint_limit = _daily_hint_limit(effective_plan, settings)
     period = {
         "start": (billing or {}).get("current_period_start"),
         "end": (billing or {}).get("current_period_end"),
@@ -55,7 +57,11 @@ def resolve_student_entitlement(
         "parentId": parent_id or None,
         "effectivePlan": effective_plan,
         "source": decision["source"],
-        "limits": {"dailyAiQuestionLimit": limit},
+        "limits": {
+            "dailyAiQuestionLimit": question_limit,
+            "dailyChatMessageLimit": chat_limit,
+            "dailyHintLimit": hint_limit,
+        },
         "billingState": decision["billing_state"],
         "period": period,
         "blockingReason": decision["blocking_reason"],
@@ -226,6 +232,22 @@ def _daily_question_limit(plan: str, settings: Settings) -> int:
         SubscriptionTier.STANDARD.value: settings.standard_tier_daily_question_limit,
         SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_question_limit,
     }.get(plan, settings.free_tier_daily_question_limit)
+
+
+def _daily_chat_message_limit(plan: str, settings: Settings) -> int:
+    return {
+        SubscriptionTier.FREE.value: settings.free_tier_daily_chat_message_limit,
+        SubscriptionTier.STANDARD.value: settings.standard_tier_daily_chat_message_limit,
+        SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_chat_message_limit,
+    }.get(plan, settings.free_tier_daily_chat_message_limit)
+
+
+def _daily_hint_limit(plan: str, settings: Settings) -> int:
+    return {
+        SubscriptionTier.FREE.value: settings.free_tier_daily_hint_limit,
+        SubscriptionTier.STANDARD.value: settings.standard_tier_daily_hint_limit,
+        SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_hint_limit,
+    }.get(plan, settings.free_tier_daily_hint_limit)
 
 
 def _normalize_tier(value: Any) -> str:

@@ -73,11 +73,21 @@ class Settings(BaseSettings):
     standard_tier_daily_question_limit: int = 30
     premium_tier_daily_question_limit: int = 100
 
-    # Conversation message limits per day (all tiers share one generous limit;
-    # chat is the core UX — don't over-restrict)
+    # Conversation message limits per day. Free users get enough room for a
+    # first simple exchange; paid tiers keep the broader product allowance.
+    free_tier_daily_chat_message_limit: int = 8
+    standard_tier_daily_chat_message_limit: int = 80
+    premium_tier_daily_chat_message_limit: int = 200
+
+    # Legacy fallback for code paths that do not yet resolve plan entitlements.
     daily_chat_message_limit: int = 80
 
     # Practice hint limits per day
+    free_tier_daily_hint_limit: int = 2
+    standard_tier_daily_hint_limit: int = 30
+    premium_tier_daily_hint_limit: int = 80
+
+    # Legacy fallback for code paths that do not yet resolve plan entitlements.
     daily_hint_limit: int = 30
 
     # SQS

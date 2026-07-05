@@ -14,6 +14,7 @@ def _client(router, prefix: str = "/conversations") -> TestClient:
 
 def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
     ledger_calls = []
+    rate_limit_calls = []
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
@@ -27,14 +28,15 @@ def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
     monkeypatch.setattr(
         conversations,
         "check_and_record_chat",
-        lambda student_id: {
+        lambda student_id, limit=None: rate_limit_calls.append({"student_id": student_id, "limit": limit}) or {
             "quotaPeriod": "2026-07-04",
             "counterKey": "USAGE#student-1/CHAT#2026-07-04",
             "counterValue": 2,
-            "limit": 20,
+            "limit": limit,
             "expiresAt": 1,
         },
     )
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda student_id: 8)
     monkeypatch.setattr(
         conversations,
         "_send_message_impl",
@@ -67,6 +69,7 @@ def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert rate_limit_calls == [{"student_id": "student-1", "limit": 8}]
     assert ledger_calls[0]["action"] == "chat_message"
     assert ledger_calls[0]["counter_value"] == 2
     assert ledger_calls[0]["metadata"] == {
