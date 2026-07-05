@@ -39,6 +39,7 @@ from stoa.services import (
     subscription_service,
     teacher_reply_service,
     account_verification_service,
+    core_smoke_service,
     usage_ledger_service,
 )
 
@@ -162,6 +163,13 @@ class UsageReconciliationResponse(BaseModel):
     repairMode: str
     repaired: bool
     partial: bool
+
+
+class CoreSmokeResponse(BaseModel):
+    status: str
+    summary: dict[str, Any] = Field(default_factory=dict)
+    checks: list[dict[str, Any]] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
 
 
 class SubscriptionProviderReadinessResponse(BaseModel):
@@ -1494,6 +1502,14 @@ async def preview_usage_reconciliation(
         action=action,
         repair=repair,
     )
+
+
+@router.get("/core-smoke", response_model=CoreSmokeResponse)
+async def get_core_smoke(
+    user: dict = Depends(require_role("admin")),
+):
+    """Return deterministic local product-flow smoke readiness."""
+    return core_smoke_service.build_core_smoke_report()
 
 
 @router.get("/account-verification/{user_id}", response_model=AccountVerificationSupportResponse)

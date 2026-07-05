@@ -27,7 +27,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 - [x] **Phase 247: Usage Flow Reality Audit And Stability Contract** - Map usage-bearing flows, current metering behavior, skip rules, and priority stability gaps.
 - [x] **Phase 248: Ledger Coverage And Idempotency Closure** - Harden governed usage event coverage, duplicate handling, mismatched intent behavior, and privacy-safe metadata.
 - [x] **Phase 249: Quota Reconciliation And Support Explanations** - Reconcile ledger/counter/entitlement state and expose bounded parent/admin quota explanations.
-- [ ] **Phase 250: Core Health Smoke And Regression Checks** - Add deterministic local smoke checks for the critical product flows and classify failures.
+- [x] **Phase 250: Core Health Smoke And Regression Checks** - Add deterministic local smoke checks for the critical product flows and classify failures.
 - [ ] **Phase 251: v5.15 Usage Stability Release Gate** - Verify backend/frontend evidence, document residual blockers, and close the milestone.
 
 ## Phase Details
@@ -76,7 +76,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 **Goal**: Add deterministic local smoke checks for product flows most likely to break access or support decisions.
 **Depends on**: Phase 249.
 **Requirements**: HEALTH-01
-**Status**: Active.
+**Status**: Complete.
 **Success Criteria**:
 
 1. Smoke checks cover login, entitlement resolution, curriculum read, question submit, teacher help, and admin/account support.
@@ -89,7 +89,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 **Goal**: Close v5.15 with evidence that local usage/quota stability is complete and external blockers are explicit.
 **Depends on**: Phase 250.
 **Requirements**: VERIFY-49
-**Status**: Planned.
+**Status**: Active.
 **Success Criteria**:
 
 1. Focused backend tests pass for usage coverage, idempotency, reconciliation, support summaries, and smoke checks.
@@ -111,8 +111,8 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 | 247 Usage Flow Reality Audit And Stability Contract | v5.15 | 1/1 | Complete | 2026-07-05 |
 | 248 Ledger Coverage And Idempotency Closure | v5.15 | 1/1 | Complete | 2026-07-05 |
 | 249 Quota Reconciliation And Support Explanations | v5.15 | 1/1 | Complete | 2026-07-05 |
-| 250 Core Health Smoke And Regression Checks | v5.15 | 0/1 | Active | - |
-| 251 v5.15 Usage Stability Release Gate | v5.15 | 0/1 | Planned | - |
+| 250 Core Health Smoke And Regression Checks | v5.15 | 1/1 | Complete | 2026-07-05 |
+| 251 v5.15 Usage Stability Release Gate | v5.15 | 0/1 | Active | - |
 
 ## Traceability
 
@@ -121,5 +121,5 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 | STABILITY-01 | Phase 247 | Complete |
 | LEDGER-01 | Phase 248 | Complete |
 | QUOTA-01 | Phase 249 | Complete |
-| HEALTH-01 | Phase 250 | Active |
-| VERIFY-49 | Phase 251 | Planned |
+| HEALTH-01 | Phase 250 | Complete |
+| VERIFY-49 | Phase 251 | Active |

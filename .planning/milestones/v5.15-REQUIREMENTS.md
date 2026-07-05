@@ -48,7 +48,7 @@ Acceptance criteria:
 
 ### HEALTH-01 Core Health And Smoke Gates
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -59,7 +59,7 @@ Acceptance criteria:
 
 ### VERIFY-49 v5.15 Usage Stability Gate
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -102,5 +102,5 @@ Key guidance:
 | STABILITY-01 | Phase 247 | Complete |
 | LEDGER-01 | Phase 248 | Complete |
 | QUOTA-01 | Phase 249 | Complete |
-| HEALTH-01 | Phase 250 | Active |
-| VERIFY-49 | Phase 251 | Planned |
+| HEALTH-01 | Phase 250 | Complete |
+| VERIFY-49 | Phase 251 | Active |
