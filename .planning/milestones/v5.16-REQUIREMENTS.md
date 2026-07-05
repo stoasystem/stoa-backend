@@ -1,7 +1,7 @@
 # Requirements: v5.16 End-To-End Product Readiness And Release Evidence
 
 **Milestone:** v5.16
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-05
 **Prior milestone:** v5.15 Usage, Quota, And Product Stability
 
@@ -86,4 +86,4 @@ Acceptance criteria:
 | E2E-01 | Phase 253 | Complete |
 | SMOKE-01 | Phase 254 | Complete |
 | JOURNEY-01 | Phase 255 | Complete |
-| VERIFY-50 | Phase 256 | Active |
+| VERIFY-50 | Phase 256 | Complete |

@@ -104,7 +104,7 @@ The partial-gate v5.14 milestone makes verification and login reliability locall
 
 The completed v5.15 milestone focuses on usage, quota, and product stability: real usage-flow coverage, ledger idempotency, quota reconciliation, parent/admin support explanations, and local smoke/regression gates.
 
-The active v5.16 milestone verifies the product end to end across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and support views. It exists to close or precisely classify the residual v5.14 focused frontend e2e blocker and produce release evidence that separates local implementation gaps from external provider blockers.
+The completed v5.16 milestone verifies the product end to end across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and support views. It closed the residual v5.14 focused frontend e2e blocker and produced release evidence that separates local implementation completeness from external provider blockers.
 
 ## Core Value
 
@@ -113,11 +113,12 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.15 Usage, Quota, And Product Stability on 2026-07-05 (usage-stability-ready-local release gate)
-**Residual partial gate:** v5.14 Verification And Login Reliability frontend focused e2e blocked by platform usage-limit approval
-**Active milestone:** v5.16 End-To-End Product Readiness And Release Evidence
+**Latest completed milestone:** v5.16 End-To-End Product Readiness And Release Evidence on 2026-07-05 (product-readiness-evidence-local release gate)
+**Residual partial gate:** none for local v5.16 scope; v5.14 focused frontend e2e blocker closed in v5.16
+**Active milestone:** none selected
+**Next recommended milestone:** External Provider Activation Smoke And Release Operations
 
-## Current Milestone: v5.16 End-To-End Product Readiness And Release Evidence
+## Latest Milestone: v5.16 End-To-End Product Readiness And Release Evidence
 
 **Goal:** Verify the real product as an end-to-end system and produce release evidence that separates implementation gaps from external provider blockers.
 
@@ -127,6 +128,13 @@ Parents can trust that parent portal views reflect authorized real student data 
 - Backend product smoke and support evidence verification for account operations, billing, usage, curriculum, and core smoke output.
 - Cross-surface parent, student, and admin journey verification with no demo fallback for production-like state.
 - Release evidence gate that separates local implementation completeness from external provider activation blockers.
+
+Release outcome:
+
+- Local product-readiness evidence is complete.
+- Backend focused tests passed 121/121 and Ruff passed.
+- Frontend focused e2e passed 24/24; supplemental journey e2e passed 11/11; build and lint passed.
+- Remaining gaps are external activation prerequisites: live Stripe/TWINT, Cognito/email delivery, notifications, external support provider, BI/warehouse, APM, native app, and approved production mutation paths.
 
 Delivered:
 

@@ -1,18 +1,19 @@
 # Milestones
 
-## Active: v5.16 End-To-End Product Readiness And Release Evidence
+## Completed: v5.16 End-To-End Product Readiness And Release Evidence
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Started:** 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.16-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.16-REQUIREMENTS.md`
+**Audit:** `.planning/milestones/v5.16-MILESTONE-AUDIT.md`
 **Goal:** Verify the real product as an end-to-end system and produce release evidence that separates implementation gaps from external provider blockers.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
-**Release target:** `product-readiness-evidence-local`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `product-readiness-evidence-local`
 
 Function purpose:
 
@@ -27,13 +28,23 @@ Implementation strategy:
 - Add only small contract fixes discovered by end-to-end evidence.
 - Keep external provider activation blocked unless credentials and rollout approval are available.
 
-Planned phases:
+Completed phases:
 
-- Phase 252: Product Readiness Reality Audit And Evidence Contract. (active)
-- Phase 253: Focused Frontend E2E Gate Closure.
-- Phase 254: Backend Product Smoke Evidence Expansion.
-- Phase 255: Cross-Surface Product Journey Verification.
-- Phase 256: v5.16 Release Evidence Gate And Next Milestone Decision.
+- Phase 252: Product Readiness Reality Audit And Evidence Contract. (complete)
+- Phase 253: Focused Frontend E2E Gate Closure. (complete)
+- Phase 254: Backend Product Smoke Evidence Expansion. (complete)
+- Phase 255: Cross-Surface Product Journey Verification. (complete)
+- Phase 256: v5.16 Release Evidence Gate And Next Milestone Decision. (complete)
+
+Key accomplishments:
+
+- Wrote a product-readiness evidence matrix across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, account operations, and support views.
+- Closed the residual v5.14 focused frontend e2e gate with 24/24 focused Playwright tests passing.
+- Verified backend smoke/support evidence with 121 focused tests and Ruff.
+- Verified supplemental parent/student/admin journey evidence with 11/11 Playwright tests passing.
+- Ran final frontend build and lint successfully.
+
+Known deferred items: live Stripe/TWINT charging and webhook activation, live Cognito/email delivery smoke, notification/support provider activation, BI/warehouse/APM/native activation, and production mutation outside approved safe fixtures.
 
 ---
 
