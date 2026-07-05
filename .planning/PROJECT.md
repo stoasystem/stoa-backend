@@ -106,6 +106,8 @@ The completed v5.15 milestone focuses on usage, quota, and product stability: re
 
 The completed v5.16 milestone verifies the product end to end across auth, verification, billing, entitlement, usage/quota, curriculum, teacher help, and support views. It closed the residual v5.14 focused frontend e2e blocker and produced release evidence that separates local implementation completeness from external provider blockers.
 
+The completed v5.17 milestone converts external provider blockers into release-operation evidence: admin-only activation smoke reports for payment/auth, notification/support, and production readiness, deterministic blocked/read-only states, rollback/disable controls, and a production read-only smoke runbook.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -113,28 +115,27 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.16 End-To-End Product Readiness And Release Evidence on 2026-07-05 (product-readiness-evidence-local release gate)
-**Residual partial gate:** none for local v5.16 scope; v5.14 focused frontend e2e blocker closed in v5.16
-**Active milestone:** v5.17 External Provider Activation Smoke And Release Operations
-**Next planned milestones:** v5.18 Warehouse BI Observability And Product Analytics Activation; v5.19 Native Mobile Push And Offline Client Implementation
+**Latest completed milestone:** v5.17 External Provider Activation Smoke And Release Operations on 2026-07-05 (external-provider-release-ops-ready release gate)
+**Residual partial gate:** none for local v5.17 scope; live external activation remains gated by credentials, approvals, safe fixtures, and operator-run production smoke.
+**Active milestone:** v5.18 Warehouse BI Observability And Product Analytics Activation
+**Next planned milestones:** v5.19 Native Mobile Push And Offline Client Implementation
 
-## Current Milestone: v5.17 External Provider Activation Smoke And Release Operations
+## Current Milestone: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-**Goal:** Convert external activation blockers into approved, bounded release operations for provider readiness, safe smoke, refusal evidence, rollback controls, and production read-only verification.
+**Goal:** Activate aggregate analytics, BI/dashboard readiness, APM/alert routing, and operator runbooks after product semantics and provider activation states are explicit.
 
 **Target features:**
-- Provider activation reality audit across payment, Cognito/email, notifications, support handoff, and production read-only smoke.
-- Payment plus Cognito/email smoke operations with blocked-state evidence when credentials or approvals are missing.
-- Notification plus support-provider smoke/readiness operations with retry/refusal evidence.
-- Production deploy readiness and read-only browser/API smoke.
-- Release gate with live-passed, read-only-passed, safe-fixture-passed, locally-ready, or blocked outcomes per provider.
+- Aggregate product analytics across usage, billing readiness, curriculum, teacher help, notification/support, and release-smoke surfaces.
+- BI/dashboard-ready exports or backend views that are support-safe and avoid private student content.
+- Operator observability through APM, alert routing, readiness evidence, and runbooks that distinguish product regressions from external provider blockers.
+- Analytics activation release evidence without enabling unsafe production mutation.
 
 Prior milestone outcome:
 
-- Local product-readiness evidence is complete.
-- Backend focused tests passed 121/121 and Ruff passed.
-- Frontend focused e2e passed 24/24; supplemental journey e2e passed 11/11; build and lint passed.
-- Remaining gaps are external activation prerequisites: live Stripe/TWINT, Cognito/email delivery, notifications, external support provider, BI/warehouse, APM, native app, and approved production mutation paths.
+- External provider activation release operations are complete locally.
+- Admin-only activation smoke reports exist for payment/auth, notification/support, and production readiness.
+- Provider states are classified as live-ready, read-only-verifiable, safe-fixture-verifiable, locally-ready, or blocked.
+- Analytics can now use explicit provider-state dimensions instead of mixing product regressions with external activation blockers.
 
 Delivered:
 
@@ -1061,8 +1062,8 @@ Known current resources:
 | Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Historical partial gate - focused frontend e2e blocker closed by v5.16 |
 | Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Complete - usage-stability-ready-local release gate passed |
 | Start v5.16 end-to-end product readiness and release evidence | v5.12-v5.15 local work is mostly complete but fragmented across auth, billing, usage, curriculum, frontend e2e, and smoke evidence; next value is one cross-surface readiness gate that separates regressions from external-provider blockers | Complete - product-readiness-evidence-local release gate passed |
-| Start v5.17 external provider activation smoke and release operations | v5.16 closed local product readiness; remaining risk is external provider activation and production release operations for payment, Cognito/email, notifications, support handoff, and read-only smoke | Active |
-| Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 will classify provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Planned |
+| Start v5.17 external provider activation smoke and release operations | v5.16 closed local product readiness; remaining risk is external provider activation and production release operations for payment, Cognito/email, notifications, support handoff, and read-only smoke | Complete - external-provider-release-ops-ready release gate passed |
+| Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 classified provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Active |
 | Plan v5.19 native mobile push and offline client implementation | Web product readiness, provider-state clarity, and observability should precede native app implementation so the mobile client inherits stable contracts and clear push/offline boundaries | Planned |
 
 ## Evolution
@@ -1083,4 +1084,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-05 after starting v5.15 usage, quota, and product stability*
+*Last updated: 2026-07-05 after starting v5.18 warehouse BI observability and product analytics activation*

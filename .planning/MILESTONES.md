@@ -44,9 +44,10 @@ Key accomplishments:
 
 ---
 
-## Planned Next: v5.18 Warehouse BI Observability And Product Analytics Activation
+## Active: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-**Status:** Planned
+**Status:** Active
+**Started:** 2026-07-05
 **Roadmap:** `.planning/milestones/v5.18-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.18-REQUIREMENTS.md`
 **Goal:** Activate aggregate analytics, BI dashboards, APM/alerting, and operator runbooks after product semantics and provider states are explicit.

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.17
-milestone_name: External Provider Activation Smoke And Release Operations
-status: Completed
-last_updated: "2026-07-05T18:20:00.000Z"
-last_activity: 2026-07-05 — Phase 261 completed v5.17 external provider release gate
+milestone: v5.18
+milestone_name: Warehouse BI Observability And Product Analytics Activation
+status: planning
+last_updated: "2026-07-05T21:08:07.547Z"
+last_activity: 2026-07-05
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 261 v5.17 External Provider Release Gate
-Plan: Close with provider activation evidence, blocked-prerequisite table, rollback controls, and next milestone decision.
-Status: Complete
-Last activity: 2026-07-05 — v5.17 closed as external-provider-release-ops-ready with focused tests, provider activation evidence, rollback controls, and next milestone recommendation.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-05 — Milestone v5.18 started
 
 ## Accumulated Context
 
