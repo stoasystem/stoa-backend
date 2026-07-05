@@ -1,116 +1,120 @@
-# Roadmap: v5.18 Warehouse BI Observability And Product Analytics Activation
+# Roadmap: v5.19 Native Mobile Push And Offline Client Implementation
 
-**Status:** Completed
-**Created:** 2026-07-05
-**Prior milestone:** v5.17 External Provider Activation Smoke And Release Operations
+**Status:** Active
+**Created:** 2026-07-06
+**Prior milestone:** v5.18 Warehouse BI Observability And Product Analytics Activation
 
 ## Goal
 
-Activate operational analytics after product semantics and provider readiness are explicit: aggregate warehouse exports, support-safe operator dashboards, APM/alert routing, and analytics runbooks that separate product regressions from external-provider blockers.
+Implement a native mobile client path for STOA that proves authenticated student and parent journeys, Cognito-compatible session handling, native push registration/deep links, bounded offline/read-through behavior, localization QA, and internal release evidence.
 
-## Why This Follows v5.17
+## Why This Follows v5.18
 
-v5.15 stabilized usage/quota semantics, v5.16 proved local product readiness, and v5.17 made provider activation states explicit. v5.18 can now build analytics without mixing real product failures, read-only/local-only readiness, safe-fixture outcomes, and externally blocked provider states.
+v5.16 proved local product readiness, v5.17 separated external-provider readiness from product regressions, and v5.18 added aggregate observability and release evidence. v5.19 can now build a mobile client without hiding account, provider, billing, quota, or notification states behind generic forbidden/unauthorized screens.
 
 ## Product Purpose
 
-- Operators can see usage, billing readiness, curriculum, teacher help, notification, support, and release-smoke health trends.
-- Support and product teams can diagnose issues without raw learning content, provider payloads, private report artifacts, or secrets.
-- Release operations produce repeatable metrics and alerts instead of one-off manual evidence.
+- Students and parents can use the core STOA experience on mobile against real backend APIs.
+- Mobile push and notification deep links are backed by existing notification contracts.
+- Offline behavior is useful but bounded, read-only, and privacy-safe.
+- Internal build/test evidence makes native readiness explicit without claiming app-store launch.
 
 ## Implementation Strategy
 
-- Start with a reality audit to avoid inventing analytics that current code cannot populate.
-- Prefer aggregate backend APIs and export contracts before any live third-party BI integration.
-- Keep provider-state taxonomy aligned with v5.17 external activation smoke.
-- Treat APM/alerts as low-cardinality operational signals, not raw logs.
-- Close with honest local/read-only/blocked evidence if live warehouse or alerting credentials are unavailable.
+- Create the native client inside this repository as `mobile/` so the implementation is versioned with backend release evidence.
+- Use Expo SDK 57, React Native 0.86, React 19.2, TypeScript, Expo Router, Amplify Auth, Expo Notifications, SecureStore, TanStack Query, and bounded local persistence contracts.
+- Keep API access behind a single authenticated client and reuse existing backend route contracts.
+- Preserve support-safe account-state messaging and no-demo-fallback behavior.
+- Keep offline scope read-only and avoid caching sensitive learning, provider, billing, or token material.
+- Close with static tests, evidence docs, and explicit blockers for live native credentials, EAS, and app-store launch.
 
 ## Phases
 
-- [x] **Phase 262: Analytics Reality Audit And Taxonomy Contract** - Map existing analytics/readiness surfaces, privacy boundaries, provider-state dimensions, and missing evidence before implementation. (completed 2026-07-05)
-- [x] **Phase 263: Warehouse Export Job Activation And Schema Evidence** - Implement or enable repeatable aggregate export/readiness outputs with idempotency, bounded scope, backfill/retry semantics, and privacy validation. (completed 2026-07-05)
-- [x] **Phase 264: Operator Analytics Dashboard APIs** - Add support-safe aggregate dashboard APIs for usage, billing/provider readiness, curriculum, teacher help, notifications, support, and release-smoke outcomes. (completed 2026-07-05)
-- [x] **Phase 265: APM Alert Routing And Observability Runbooks** - Add low-cardinality alert/status contracts and operator runbooks that distinguish product regressions from provider blockers. (completed 2026-07-05)
-- [x] **Phase 266: v5.18 BI Observability Release Gate** - Close with focused checks, activation evidence, blocked-prerequisite table, runbooks, and next milestone decision. (completed 2026-07-05)
+- [ ] **Phase 267: Native Mobile Stack And App Shell Contract** - Scaffold the native mobile workspace, app shell, navigation boundaries, environment contract, and no-demo-fallback policy.
+- [ ] **Phase 268: Auth Session And Account State** - Implement Cognito-compatible auth/session wrappers, secure-storage boundaries, account-state mapping, and sign-out cleanup contracts.
+- [ ] **Phase 269: Student And Parent Core Mobile Journeys** - Implement mobile data adapters and screen contracts for student and parent core journeys against real backend endpoints.
+- [ ] **Phase 270: Native Push Deep Links And Offline Read-Through** - Implement notification token registration/revocation, deep-link routing, offline/read-through cache policy, and privacy guards.
+- [ ] **Phase 271: v5.19 Native Mobile Release Gate** - Add tests/evidence, verify release boundaries, update docs/state/snapshots, and record remaining native-provider/app-store blockers.
 
 ## Phase Details
 
-### Phase 262: Analytics Reality Audit And Taxonomy Contract
+### Phase 267: Native Mobile Stack And App Shell Contract
 
-**Goal**: Define exact analytics scope from current code, current data, and v5.17 provider states.
-**Requirements**: BI-01
+**Goal**: Establish the native mobile client workspace, shell, routes, configuration model, and release-safe implementation contract.
+**Requirements**: MOBILEAPP-01
 **Success Criteria**:
 
-1. Usage/quota, billing/provider readiness, curriculum analytics/migration, teacher help, notifications, support handoff, core smoke, and external activation smoke surfaces are mapped to code/docs/tests.
-2. Dashboard/export dimensions classify live-ready, read-only, safe-fixture, local-only, blocked, failed, and unknown states.
-3. Privacy boundaries and forbidden fields are documented before export/dashboard implementation.
-4. Missing evidence is routed to Phases 263-265.
+1. `mobile/` contains an Expo SDK 57 TypeScript project scaffold with package, config, route shell, and app providers.
+2. Mobile navigation defines student, parent, auth, notification, and blocked-state route boundaries.
+3. Environment/config contract names API, Cognito, notification, build profile, and no-demo-fallback settings.
+4. Stack decision and local build limitations are documented as release evidence.
 
-### Phase 263: Warehouse Export Job Activation And Schema Evidence
+### Phase 268: Auth Session And Account State
 
-**Goal**: Make aggregate warehouse exports repeatable, bounded, idempotent, and support-safe.
-**Requirements**: BI-02
+**Goal**: Implement native auth/session and account-state contracts that match STOA backend policy.
+**Requirements**: MOBILEAPP-02
 **Success Criteria**:
 
-1. Export/readiness outputs include product surface, period, aggregate counts, status/blocker dimensions, generated timestamp, and privacy metadata.
-2. Export generation is idempotent and bounded for local/admin execution.
-3. Backfill, retry, partial failure, and stale-data behavior is documented and test-covered.
-4. Privacy checks prove raw student content, provider payloads, tokens, secrets, and private S3 keys are excluded.
+1. Auth service wraps Amplify session restore, token access, refresh-sensitive API calls, sign-in/register/verification/resend/sign-out, and typed auth errors.
+2. Native storage policy avoids web localStorage token persistence and documents SecureStore boundaries.
+3. Account-state mapper distinguishes verification, entitlement, billing, child-binding, quota, provider-blocked, unauthorized, and forbidden states.
+4. Sign-out cleanup covers cached data and push-token revocation hooks.
 
-### Phase 264: Operator Analytics Dashboard APIs
+### Phase 269: Student And Parent Core Mobile Journeys
 
-**Goal**: Give operators support-safe analytics views across product and provider readiness surfaces.
-**Requirements**: BI-03
+**Goal**: Implement mobile adapters and screen contracts for core student and parent journeys.
+**Requirements**: MOBILEAPP-03, MOBILEAPP-04
 **Success Criteria**:
 
-1. Admin dashboard APIs summarize usage/quota, billing/provider readiness, curriculum/editor/migration, teacher-help/support load, notifications, support-provider lifecycle, and release-smoke outcomes.
-2. Responses include blocker categories, support actions, stale/partial flags, and provider-state dimensions.
-3. Empty, blocked, and unavailable data states are explicit.
-4. Tests prove dashboard responses stay aggregate and support-safe.
+1. Student dashboard/practice/question/teacher-help/notification/history adapters use real backend endpoints and typed support-safe errors.
+2. Parent dashboard/child summary/history/report/account-operations/billing adapters use real backend endpoints and typed support-safe errors.
+3. Mobile screens expose loading, empty, blocked, stale, and error states without hidden demo data.
+4. English/Chinese copy fixtures and viewport notes cover common text-fit risks.
 
-### Phase 265: APM Alert Routing And Observability Runbooks
+### Phase 270: Native Push Deep Links And Offline Read-Through
 
-**Goal**: Make product regressions and external-provider blockers alertable without leaking private data.
-**Requirements**: BI-04
+**Goal**: Add push registration/deep-link contracts and bounded offline/read-through caching.
+**Requirements**: MOBILEAPP-05, MOBILEAPP-06
 **Success Criteria**:
 
-1. Core flows expose low-cardinality status/error dimensions suitable for APM/alert routing.
-2. Alert summaries classify product regression, provider blocker, read-only/local-only state, stale data, and privacy violation separately.
-3. Alert payloads avoid high-cardinality private identifiers and raw content.
-4. Operator runbooks define severity, ownership, escalation, suppression, retry/backfill, and known blocked states.
+1. Notification service models permission state, Expo token acquisition, backend push-token registration/revocation, foreground/background response handling, and read/archive actions.
+2. Deep-link route mapping validates route targets after auth/role/account-state checks.
+3. Offline cache contract limits persistence to approved read-only summaries with TTL, stale labels, and sign-out/user-switch clearing.
+4. Privacy guards reject sensitive cache categories and quota/billing/question/teacher-help offline mutation by default.
 
-### Phase 266: v5.18 BI Observability Release Gate
+### Phase 271: v5.19 Native Mobile Release Gate
 
-**Goal**: Close v5.18 with honest analytics activation evidence.
-**Requirements**: VERIFY-52
+**Goal**: Close v5.19 with verifiable native mobile evidence and explicit remaining blockers.
+**Requirements**: VERIFY-53
 **Success Criteria**:
 
-1. Focused backend checks pass for export/dashboard/alert contracts touched by v5.18.
-2. BI activation evidence records live-ready, read-only, local-only, blocked, and failed limitations honestly.
-3. Rollback/disable/backfill controls are documented for export, dashboard, and alert surfaces.
-4. Docs, roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
+1. Focused tests pass for mobile config, route contracts, auth/account-state mapping, push/deep-link contracts, and offline privacy policy.
+2. Release evidence records internal build commands, local limitations, screenshots/placeholders, provider credentials needed, app-store prerequisites, and no-demo-fallback status.
+3. Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
+4. Remaining live-provider, native credential, EAS, app-store, and production rollout blockers are explicit.
 
 ## Future Milestone Directions
 
-- **v5.19 Native Mobile Push And Offline Client Implementation**: implement native/mobile client and push/offline behavior after observability contracts are available.
+- **v5.20 Native Build Distribution And Device QA**: connect EAS credentials, produce device builds, run physical-device push smoke, and prepare store assets if release approval exists.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 262 Analytics Reality Audit And Taxonomy Contract | v5.18 | 1/1 | Complete | 2026-07-05 |
-| 263 Warehouse Export Job Activation And Schema Evidence | v5.18 | 1/1 | Complete | 2026-07-05 |
-| 264 Operator Analytics Dashboard APIs | v5.18 | 1/1 | Complete | 2026-07-05 |
-| 265 APM Alert Routing And Observability Runbooks | v5.18 | 1/1 | Complete | 2026-07-05 |
-| 266 v5.18 BI Observability Release Gate | v5.18 | 1/1 | Complete | 2026-07-05 |
+| 267 Native Mobile Stack And App Shell Contract | v5.19 | 0/0 | Not Started | — |
+| 268 Auth Session And Account State | v5.19 | 0/0 | Not Started | — |
+| 269 Student And Parent Core Mobile Journeys | v5.19 | 0/0 | Not Started | — |
+| 270 Native Push Deep Links And Offline Read-Through | v5.19 | 0/0 | Not Started | — |
+| 271 v5.19 Native Mobile Release Gate | v5.19 | 0/0 | Not Started | — |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BI-01 | Phase 262 | Complete |
-| BI-02 | Phase 263 | Complete |
-| BI-03 | Phase 264 | Complete |
-| BI-04 | Phase 265 | Complete |
-| VERIFY-52 | Phase 266 | Complete |
+| MOBILEAPP-01 | Phase 267 | Planned |
+| MOBILEAPP-02 | Phase 268 | Planned |
+| MOBILEAPP-03 | Phase 269 | Planned |
+| MOBILEAPP-04 | Phase 269 | Planned |
+| MOBILEAPP-05 | Phase 270 | Planned |
+| MOBILEAPP-06 | Phase 270 | Planned |
+| VERIFY-53 | Phase 271 | Planned |
