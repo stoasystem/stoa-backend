@@ -1,118 +1,93 @@
-# Roadmap: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
+# Roadmap: v5.24 Limited Production Pilot And Launch Readiness
 
 **Status:** Completed
 **Created:** 2026-07-06
-**Prior milestone:** v5.22 Support CRM Customer Messaging And Lifecycle Automation
+**Prior milestone:** v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
 
 ## Goal
 
-Harden STOA's operational foundation after the major product surfaces are connected: backups, restore drills, SLOs, incident response, credential/access operations, audit retention, data lifecycle, production rollback, and release freeze controls.
+Prepare the narrowest credible limited production pilot or launch path after mobile, AI operations, lifecycle messaging, and enterprise hardening gates are complete.
 
-## Why This Follows v5.22
+## Why This Follows v5.23
 
-The system has accumulated real product capabilities across billing, verification, usage, curriculum, AI, notifications, mobile, support, CRM, BI, and report operations. Once customer lifecycle operations are connected, the next risk is operational fragility: not knowing whether data can be restored, releases can be rolled back, credentials can be rotated, and incidents can be handled without exposing private content.
+v5.20-v5.23 proved device readiness, AI quality/safety, customer lifecycle operations, and operational hardening contracts. v5.24 converts readiness into a controlled launch decision: who can use the product, what is enabled, how success is measured, how support responds, and how rollback works.
 
 ## Product Purpose
 
-- Operators can recover from incidents with known restore, rollback, and escalation procedures.
-- Product owners can trust SLOs, incident evidence, and release readiness gates.
-- Parents and students get a more stable service as the app moves from internal development toward broader launch.
+- Give the team a concrete go/no-go launch decision instead of an endless internal-development loop.
+- Let a small, controlled cohort use STOA with known scope, support coverage, and rollback paths.
+- Capture pilot evidence that determines whether to expand, hold, or harden further.
 
 ## Implementation Strategy
 
-- Start with an ops reality audit across DynamoDB, S3, Cognito, Lambda/API, queues, schedules, frontend, mobile, BI, support, and external providers.
-- Prioritize restore drills and rollback evidence over broad theoretical compliance work.
-- Keep evidence metadata-only and support-safe.
-- Add runbook drills, access reviews, credential rotation evidence, and SLO dashboards that reuse v5.18 observability.
-- Close with a final hardening gate that records what is live-ready, read-only verified, locally ready, blocked, or deferred.
+- Start with a pilot readiness audit across backend, frontend, mobile, providers, support, billing, AI, observability, and data operations.
+- Define one narrow cohort and one narrow product scope before any public launch work.
+- Keep rollout staged with feature flags, monitoring, support coverage, and rollback.
+- Treat provider blockers and missing support capacity as launch blockers, not polish.
+- Close with pilot runbook, launch checklist, go/no-go decision evidence, and post-pilot learning plan.
 
 ## Phases
 
-- [x] **Phase 287: Ops Stability Reality Audit And Risk Register** - Map services, data stores, owners, failure modes, SLOs, backups, credentials, and known operational gaps. (completed 2026-07-06)
-- [x] **Phase 288: Backup Restore And Data Lifecycle Drills** - Prove restore/readback procedures for critical DynamoDB/S3/config data and document data retention/deletion boundaries. (completed 2026-07-06)
-- [x] **Phase 289: Incident Response SLO And Rollback Operations** - Add incident runbooks, SLO dashboards, rollback/freeze controls, and alert-to-action evidence. (completed 2026-07-06)
-- [x] **Phase 290: Access Secret Rotation And Compliance Evidence** - Add access review, credential rotation, audit retention, legal-hold, and break-glass evidence workflows. (completed 2026-07-06)
-- [x] **Phase 291: v5.23 Enterprise Hardening Release Gate** - Close with DR evidence, incident drill evidence, SLO/rollback evidence, and next roadmap recommendation. (completed 2026-07-06)
+- [x] **Phase 292: Launch Scope And Readiness Audit** - Confirm launch/pilot scope, excluded features, provider states, support capacity, data readiness, and unresolved blockers. (completed 2026-07-06)
+- [x] **Phase 293: Pilot Cohort Onboarding And Consent Operations** - Define cohort, onboarding flow, account setup, consent/comms, support expectations, and rollback communication. (completed 2026-07-06)
+- [x] **Phase 294: Production Launch Controls And Monitoring** - Add rollout flags, dashboards, alerts, support escalation, release freeze/rollback, and launch-room runbook. (completed 2026-07-06)
+- [x] **Phase 295: Pilot Acceptance Metrics And Feedback Loop** - Define success metrics, issue taxonomy, learning collection, parent/student/teacher feedback, and expansion criteria. (completed 2026-07-06)
+- [x] **Phase 296: v5.24 Launch Readiness Gate** - Close with go/no-go evidence, launch checklist, rollback plan, pilot runbook, and next milestone recommendation. (completed 2026-07-06)
 
 ## Phase Details
 
-### Phase 287: Ops Stability Reality Audit And Risk Register
+### Phase 292: Launch Scope And Readiness Audit
 
-Goal: Map services, data stores, owners, failure modes, SLOs, backups, credentials, and known operational gaps.
-
-Deliverables:
-
-- Service risk register across API/Lambda, DynamoDB, S3, Cognito, SES, Bedrock, notification, support, BI/APM, frontend, mobile, queues, and schedules.
-- Risk routes for backup/restore, incident/rollback, and access/rotation.
+Goal: Confirm launch/pilot scope, excluded features, provider states, support capacity, data readiness, and unresolved blockers.
 
 Completion evidence:
 
-- `enterprise_stability_service.ops_risk_register`
+- `production_pilot_service.launch_scope_audit`
 
-### Phase 288: Backup Restore And Data Lifecycle Drills
+### Phase 293: Pilot Cohort Onboarding And Consent Operations
 
-Goal: Prove restore/readback procedures for critical DynamoDB/S3/config data and document data retention/deletion boundaries.
-
-Deliverables:
-
-- Safe fixture restore/readback drill contracts.
-- Data lifecycle, deletion request, audit retention, legal hold, and customer export boundaries.
+Goal: Define cohort, onboarding flow, account setup, consent/comms, support expectations, and rollback communication.
 
 Completion evidence:
 
-- `enterprise_stability_service.backup_restore_drills`
+- `production_pilot_service.cohort_onboarding_plan`
 
-### Phase 289: Incident Response SLO And Rollback Operations
+### Phase 294: Production Launch Controls And Monitoring
 
-Goal: Add incident runbooks, SLO dashboards, rollback/freeze controls, and alert-to-action evidence.
-
-Deliverables:
-
-- Incident runbooks for auth, billing, usage, curriculum, AI, notification, support/CRM, mobile, report operations, and deploy failure.
-- SLO summary dimensions and rollback/freeze controls.
+Goal: Add rollout flags, dashboards, alerts, support escalation, release freeze/rollback, and launch-room runbook.
 
 Completion evidence:
 
-- `enterprise_stability_service.incident_runbooks`
-- `enterprise_stability_service.slo_dashboard_summary`
+- `production_pilot_service.launch_controls_monitoring`
 
-### Phase 290: Access Secret Rotation And Compliance Evidence
+### Phase 295: Pilot Acceptance Metrics And Feedback Loop
 
-Goal: Add access review, credential rotation, audit retention, legal-hold, and break-glass evidence workflows.
-
-Deliverables:
-
-- Access inventory for admin access, Cognito groups, AWS profiles, provider credentials, CI/deploy credentials, and break-glass access.
-- Dry-run rotation and metadata-only compliance evidence.
+Goal: Define success metrics, issue taxonomy, learning collection, parent/student/teacher feedback, and expansion criteria.
 
 Completion evidence:
 
-- `enterprise_stability_service.access_rotation_evidence`
+- `production_pilot_service.pilot_acceptance_metrics`
 
-### Phase 291: v5.23 Enterprise Hardening Release Gate
+### Phase 296: v5.24 Launch Readiness Gate
 
-Goal: Close with DR evidence, incident drill evidence, SLO/rollback evidence, and next roadmap recommendation.
-
-Deliverables:
-
-- Release gate evidence with blockers and v5.24 recommendation.
-- Completed roadmap, requirements, state, snapshots, audit, and verification.
+Goal: Close with go/no-go evidence, launch checklist, rollback plan, pilot runbook, and next milestone recommendation.
 
 Completion evidence:
 
-- `enterprise_stability_service.release_gate_evidence`
-- `.planning/milestones/v5.23-MILESTONE-AUDIT.md`
+- `production_pilot_service.go_no_go_decision`
+- `production_pilot_service.release_gate_evidence`
+- `.planning/milestones/v5.24-MILESTONE-AUDIT.md`
 
 ## Future Milestone Directions
 
-- **v5.24 Limited Production Pilot And Launch Readiness**: choose a narrow launch/pilot scope only after mobile, AI, lifecycle, support, and hardening gates are complete.
+- **v5.25 Pilot Execution And Expansion Decision**: run the approved pilot only after required blockers are cleared or explicitly disabled, measure outcomes, and decide whether to expand, hold, roll back, or harden further.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPSHARD-01 | Phase 287 | Complete |
-| OPSHARD-02 | Phase 288 | Complete |
-| OPSHARD-03 | Phase 289 | Complete |
-| OPSHARD-04 | Phase 290 | Complete |
-| VERIFY-57 | Phase 291 | Complete |
+| PILOT-01 | Phase 292 | Complete |
+| PILOT-02 | Phase 293 | Complete |
+| PILOT-03 | Phase 294 | Complete |
+| PILOT-04 | Phase 295 | Complete |
+| VERIFY-58 | Phase 296 | Complete |

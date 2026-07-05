@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.23
-milestone_name: Enterprise Stability Compliance And Disaster Recovery Hardening
+milestone: v5.24
+milestone_name: Limited Production Pilot And Launch Readiness
 status: complete
 last_updated: "2026-07-06T00:00:00.000Z"
 last_activity: 2026-07-06
@@ -23,27 +23,25 @@ See: .planning/PROJECT.md (updated 2026-07-06)
 
 ## Current Position
 
-Phase: 291 v5.23 Enterprise Hardening Release Gate
+Phase: 296 v5.24 Launch Readiness Gate
 Plan: Complete
-Status: v5.23 complete; release state enterprise-hardening-ready-local-contracts
-Last activity: 2026-07-06 — v5.23 completed with ops risk, restore drill, SLO/incident/rollback, access/rotation, and compliance evidence
+Status: v5.24 complete; release state limited-pilot-ready-local-contracts
+Last activity: 2026-07-06 — v5.24 completed with readiness audit, cohort plan, launch controls, pilot metrics, and conditional go/no-go evidence
 
 ## Accumulated Context
 
-- v5.20-v5.22 completed native distribution, AI operations, and customer lifecycle messaging contracts.
-- v5.23 added metadata-only enterprise hardening evidence and explicit blockers for live production drills.
-- v5.24 recommendation is limited production pilot readiness, not broad public launch.
+- v5.20-v5.23 completed native distribution, AI operations, customer lifecycle, and enterprise hardening contracts.
+- v5.24 recommends conditional go for limited pilot readiness only after required activation blockers are cleared or explicitly disabled.
+- Broad public launch, paid marketing, and unapproved provider writes remain not approved.
 
 ### Pending Todos
 
-- Activate v5.24 Limited Production Pilot And Launch Readiness.
+- v5.25 should execute the approved limited pilot only after clearing required activation blockers; otherwise hold and harden.
 
 ### Blockers/Concerns
 
-- Live PITR/restore smoke requires approved AWS production fixture.
-- Live provider credential rotation requires operations approval.
-- Warehouse/APM/live alert activation remains provider-gated.
+- Payment, notification, support CRM, BI/APM, mobile store/TestFlight, and production restore/tabletop activation still need live approval or explicit disablement before real users.
 
 ## Operator Next Steps
 
-- Continue with v5.24 Limited Production Pilot And Launch Readiness.
+- Decide whether to start v5.25 Pilot Execution And Expansion Decision after clearing activation blockers.
