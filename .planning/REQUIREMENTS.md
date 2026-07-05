@@ -1,85 +1,85 @@
-# Requirements: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+# Requirements: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
 
-**Milestone:** v5.22
+**Milestone:** v5.23
 **Status:** Completed
 **Created:** 2026-07-06
-**Prior milestone:** v5.21 AI Teaching Quality Cost And Safety Operations
+**Prior milestone:** v5.22 Support CRM Customer Messaging And Lifecycle Automation
 
 ## Purpose
 
-Turn fragmented support, CRM, notification, account-operations, billing, and learning-progress signals into governed customer lifecycle messaging. v5.22 makes onboarding, verification, payment, quota, support, progress, and re-engagement communication usable for parents and operators.
+Make the platform operationally reliable enough for broader launch pressure. v5.23 proves critical restore paths, SLO/incident/rollback operations, credential/access review, audit retention, legal-hold continuity, and production-safe release controls.
 
 ## Requirements
 
-### LIFECYCLE-01 Customer Lifecycle Reality Audit And Message Taxonomy
+### OPSHARD-01 Ops Stability Reality Audit And Risk Register
 
 Acceptance criteria:
 
-- Existing notification, support handoff, CRM messaging, billing, verification, usage/quota, AI/teacher, and parent-progress surfaces are mapped.
-- Message taxonomy defines lifecycle event, audience, template, channel, preference gate, provider dependency, idempotency key, and support-safe payload.
-- Provider blocked/read-only/local-only states are explicit before implementation.
-- Raw student content, prompts, answers, provider payloads, secrets, private object keys, and high-cardinality private identifiers are excluded.
+- Critical services and dependencies are mapped across API/Lambda, DynamoDB, S3, Cognito, SES, Bedrock, notification providers, support providers, BI/APM, frontend, mobile, queues, and schedules.
+- Each service has owner, failure mode, recovery action, SLO target or draft target, evidence source, and known blocker.
+- Risk register separates product regression, provider blocker, data-loss risk, access/credential risk, privacy risk, and release-process risk.
+- Highest-risk gaps are routed to phases 288-290.
 
 Status: Complete.
 
-### LIFECYCLE-02 Lifecycle Messaging Orchestrator
+### OPSHARD-02 Backup Restore And Data Lifecycle Drills
 
 Acceptance criteria:
 
-- Idempotent message jobs cover onboarding, email-verification reminder, payment failure/recovery, quota warning, subscription state, support incident update, learning-progress nudge, and re-engagement states.
-- Jobs respect preferences, opt-out, quiet hours or delivery policy, provider approval, template approval, and account role/ownership.
-- Retry/backoff, duplicate suppression, stale-state checks, and dry-run/preview behavior are documented and tested.
-- Provider failures leave visible support-safe blocker states.
+- Critical DynamoDB/S3/config data has documented backup, point-in-time, export, readback, or restore procedure.
+- At least one safe-fixture restore/readback drill is recorded for core account/product data and one for report/evidence object metadata, or exact blockers are documented.
+- Data lifecycle boundaries cover retention, deletion request handling, immutable audit evidence, legal hold, and customer data export.
+- Drills avoid production customer mutation unless an approved safe fixture and cleanup path exist.
 
 Status: Complete.
 
-### LIFECYCLE-03 Parent And Admin Messaging Surfaces
+### OPSHARD-03 Incident Response SLO And Rollback Operations
 
 Acceptance criteria:
 
-- Parent-facing surfaces show relevant message status/history where useful without leaking internal provider details.
-- Admin/operator surfaces show message lifecycle, template, channel, recipient role, provider state, retry, opt-out, and support action.
-- Operators can preview and retry allowed messages without bypassing preferences or approval gates.
-- Copy distinguishes actionable account states from generic failure messages.
+- Incident runbooks cover auth, billing/payment, usage/quota, curriculum, AI provider, notification, support/CRM, mobile, report operations, and production deploy failure.
+- SLO dashboards or summaries expose low-cardinality availability, error, latency, provider-blocker, stale-data, and release-state dimensions.
+- Rollback/freeze procedures cover backend Lambda, CDK, frontend, mobile release channel, provider feature flags, and scheduled jobs.
+- A tabletop or safe-drill evidence package records request IDs, timestamps, owners, and outcomes.
 
 Status: Complete.
 
-### LIFECYCLE-04 Support CRM Provider Activation Smoke
+### OPSHARD-04 Access Secret Rotation And Compliance Evidence
 
 Acceptance criteria:
 
-- Approved support/CRM provider paths can run read-only or safe-fixture smoke with request IDs and redacted evidence.
-- Refusal states cover missing provider approval, missing credential, missing template, opt-out, provider failure, and unapproved destination.
-- Retry and provider-sync behavior remains idempotent and support-safe.
-- Customer messaging evidence excludes raw provider payloads and private learning/report content.
+- Admin access, Cognito groups, AWS profiles, provider credentials, CI/deploy credentials, and break-glass access are inventoried with owners and rotation expectations.
+- Credential rotation or dry-run evidence is recorded for at least one safe credential path, or blocker is explicit.
+- Audit retention, immutable evidence, legal hold, and privacy redaction workflows are checked against current product surfaces.
+- Compliance evidence remains metadata-only and excludes secrets, tokens, raw provider payloads, raw student content, and private object keys.
 
 Status: Complete.
 
-### VERIFY-56 Customer Lifecycle Release Gate
+### VERIFY-57 Enterprise Hardening Release Gate
 
 Acceptance criteria:
 
-- Journey evidence covers onboarding, verification, payment lifecycle, quota warning, support incident, progress nudge, opt-out, and provider-blocked states.
-- Template inventory, preference behavior, provider-state evidence, and rollback/disable controls are documented.
-- Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
-- Remaining provider activation, template approval, channel coverage, and production rollout blockers are explicit.
+- Ops audit, restore drill, SLO/incident, rollback, access/rotation, and compliance evidence is recorded.
+- Roadmap, requirements, state, milestone snapshots, and next roadmap recommendation are updated.
+- Remaining DR, access, compliance, production rollout, and external-provider blockers are explicit.
+- v5.24 recommendation identifies whether STOA should move toward public launch, limited enterprise pilot, or more internal hardening.
 
 Status: Complete.
 
 ## Out of Scope
 
-- Unapproved marketing campaigns or broad promotional automation.
-- Raw learning-content or report-artifact messages.
-- External provider writes without approved destination, credentials, and rollout flag.
-- Replacing support staff workflows with unsupervised automation.
-- Native push expansion beyond the mobile/provider contracts already planned in v5.19-v5.20.
+- Broad certification work such as SOC 2 or ISO without separate formal program scope.
+- Destructive production restore tests.
+- Secret disclosure in docs or evidence.
+- Re-architecting all infrastructure unless a drill proves it is necessary.
+- New major product feature development unrelated to stability and DR.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIFECYCLE-01 | Phase 282 | Complete |
-| LIFECYCLE-02 | Phase 283 | Complete |
-| LIFECYCLE-03 | Phase 284 | Complete |
-| LIFECYCLE-04 | Phase 285 | Complete |
-| VERIFY-56 | Phase 286 | Complete |
+| OPSHARD-01 | Phase 287 | Complete |
+| OPSHARD-02 | Phase 288 | Complete |
+| OPSHARD-03 | Phase 289 | Complete |
+| OPSHARD-04 | Phase 290 | Complete |
+| VERIFY-57 | Phase 291 | Complete |

@@ -1,124 +1,118 @@
-# Roadmap: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+# Roadmap: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
 
 **Status:** Completed
 **Created:** 2026-07-06
-**Prior milestone:** v5.21 AI Teaching Quality Cost And Safety Operations
+**Prior milestone:** v5.22 Support CRM Customer Messaging And Lifecycle Automation
 
 ## Goal
 
-Make support handoff, CRM/customer messaging, parent onboarding, lifecycle nudges, account-status messaging, and support-visible customer operations usable end to end without exposing private learning content or relying on manual operator stitching.
+Harden STOA's operational foundation after the major product surfaces are connected: backups, restore drills, SLOs, incident response, credential/access operations, audit retention, data lifecycle, production rollback, and release freeze controls.
 
-## Why This Follows v5.21
+## Why This Follows v5.22
 
-Support provider adapters, support-safe handoff packages, CRM messaging gates, notification foundations, account operations, billing evidence, and AI/teacher state already exist in pieces. v5.22 connects them into usable customer lifecycle operations after AI quality/safety signals are clear enough to include in support and parent communication.
+The system has accumulated real product capabilities across billing, verification, usage, curriculum, AI, notifications, mobile, support, CRM, BI, and report operations. Once customer lifecycle operations are connected, the next risk is operational fragility: not knowing whether data can be restored, releases can be rolled back, credentials can be rotated, and incidents can be handled without exposing private content.
 
 ## Product Purpose
 
-- Parents receive timely, relevant onboarding, billing, verification, usage, progress, and support-status messages.
-- Operators can see support lifecycle and CRM message state without reading raw student work or provider payloads.
-- Customer messaging becomes governed product infrastructure, not ad hoc manual outreach.
+- Operators can recover from incidents with known restore, rollback, and escalation procedures.
+- Product owners can trust SLOs, incident evidence, and release readiness gates.
+- Parents and students get a more stable service as the app moves from internal development toward broader launch.
 
 ## Implementation Strategy
 
-- Audit current support handoff, CRM messaging, notification preference, account operations, billing, AI, and parent progress state before adding workflows.
-- Use approved templates, preference gates, opt-out handling, and support-safe summaries.
-- Prefer lifecycle state machines and idempotent message jobs over one-off sends.
-- Keep external provider writes gated by credentials and destination approval.
-- Close with journey evidence for onboarding, blocked verification, payment lifecycle, support incident, and learning-progress nudges.
+- Start with an ops reality audit across DynamoDB, S3, Cognito, Lambda/API, queues, schedules, frontend, mobile, BI, support, and external providers.
+- Prioritize restore drills and rollback evidence over broad theoretical compliance work.
+- Keep evidence metadata-only and support-safe.
+- Add runbook drills, access reviews, credential rotation evidence, and SLO dashboards that reuse v5.18 observability.
+- Close with a final hardening gate that records what is live-ready, read-only verified, locally ready, blocked, or deferred.
 
 ## Phases
 
-- [x] **Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy** - Map lifecycle events, templates, preferences, provider gates, and missing customer-message evidence. (completed 2026-07-06)
-- [x] **Phase 283: Lifecycle Messaging Orchestrator** - Add idempotent lifecycle jobs for onboarding, verification, billing, quota, progress, support, and re-engagement states. (completed 2026-07-06)
-- [x] **Phase 284: Parent And Admin Messaging Surfaces** - Add visible parent/admin support-safe message history, status, retry, opt-out, and explanation surfaces. (completed 2026-07-06)
-- [x] **Phase 285: Support CRM Provider Activation Smoke** - Verify approved-provider ticket/message flows, refusal states, retry/sync behavior, and provider blockers. (completed 2026-07-06)
-- [x] **Phase 286: v5.22 Customer Lifecycle Release Gate** - Close with journey evidence, template evidence, provider-state evidence, and next milestone decision. (completed 2026-07-06)
+- [x] **Phase 287: Ops Stability Reality Audit And Risk Register** - Map services, data stores, owners, failure modes, SLOs, backups, credentials, and known operational gaps. (completed 2026-07-06)
+- [x] **Phase 288: Backup Restore And Data Lifecycle Drills** - Prove restore/readback procedures for critical DynamoDB/S3/config data and document data retention/deletion boundaries. (completed 2026-07-06)
+- [x] **Phase 289: Incident Response SLO And Rollback Operations** - Add incident runbooks, SLO dashboards, rollback/freeze controls, and alert-to-action evidence. (completed 2026-07-06)
+- [x] **Phase 290: Access Secret Rotation And Compliance Evidence** - Add access review, credential rotation, audit retention, legal-hold, and break-glass evidence workflows. (completed 2026-07-06)
+- [x] **Phase 291: v5.23 Enterprise Hardening Release Gate** - Close with DR evidence, incident drill evidence, SLO/rollback evidence, and next roadmap recommendation. (completed 2026-07-06)
 
 ## Phase Details
 
-### Phase 282: Customer Lifecycle Reality Audit And Message Taxonomy
+### Phase 287: Ops Stability Reality Audit And Risk Register
 
-Goal: Map lifecycle events, templates, preferences, provider gates, and missing customer-message evidence.
-
-Deliverables:
-
-- Customer lifecycle taxonomy covering onboarding, verification, billing, quota, subscription, support, progress, and re-engagement events.
-- Support-safe payload field contract and privacy denylist.
-- Provider/template/destination gating policy.
-
-Completion evidence:
-
-- `customer_lifecycle_service.message_taxonomy`
-- `tests/test_customer_lifecycle.py`
-
-### Phase 283: Lifecycle Messaging Orchestrator
-
-Goal: Add idempotent lifecycle jobs for onboarding, verification, billing, quota, progress, support, and re-engagement states.
+Goal: Map services, data stores, owners, failure modes, SLOs, backups, credentials, and known operational gaps.
 
 Deliverables:
 
-- Deterministic idempotency keys.
-- Preference, opt-out, quiet-hour, provider, template, destination, and stale-state gates.
-- Retry/backoff and duplicate suppression contracts.
+- Service risk register across API/Lambda, DynamoDB, S3, Cognito, SES, Bedrock, notification, support, BI/APM, frontend, mobile, queues, and schedules.
+- Risk routes for backup/restore, incident/rollback, and access/rotation.
 
 Completion evidence:
 
-- `customer_lifecycle_service.plan_lifecycle_message`
-- `customer_lifecycle_service.plan_lifecycle_journey`
+- `enterprise_stability_service.ops_risk_register`
 
-### Phase 284: Parent And Admin Messaging Surfaces
+### Phase 288: Backup Restore And Data Lifecycle Drills
 
-Goal: Add visible parent/admin support-safe message history, status, retry, opt-out, and explanation surfaces.
+Goal: Prove restore/readback procedures for critical DynamoDB/S3/config data and document data retention/deletion boundaries.
 
 Deliverables:
 
-- Parent-facing message history projection.
-- Admin/operator message lifecycle projection.
-- Support-safe provider state and retry metadata.
+- Safe fixture restore/readback drill contracts.
+- Data lifecycle, deletion request, audit retention, legal hold, and customer export boundaries.
 
 Completion evidence:
 
-- `customer_lifecycle_service.parent_message_history`
-- `customer_lifecycle_service.admin_message_history`
+- `enterprise_stability_service.backup_restore_drills`
 
-### Phase 285: Support CRM Provider Activation Smoke
+### Phase 289: Incident Response SLO And Rollback Operations
 
-Goal: Verify approved-provider ticket/message flows, refusal states, retry/sync behavior, and provider blockers.
+Goal: Add incident runbooks, SLO dashboards, rollback/freeze controls, and alert-to-action evidence.
 
 Deliverables:
 
-- Safe fixture provider activation smoke.
-- Refusal states for missing approval, credential, template, destination, opt-out, and provider failure.
-- Metadata-only provider evidence.
+- Incident runbooks for auth, billing, usage, curriculum, AI, notification, support/CRM, mobile, report operations, and deploy failure.
+- SLO summary dimensions and rollback/freeze controls.
 
 Completion evidence:
 
-- `customer_lifecycle_service.provider_activation_smoke`
+- `enterprise_stability_service.incident_runbooks`
+- `enterprise_stability_service.slo_dashboard_summary`
 
-### Phase 286: v5.22 Customer Lifecycle Release Gate
+### Phase 290: Access Secret Rotation And Compliance Evidence
 
-Goal: Close with journey evidence, template evidence, provider-state evidence, and next milestone decision.
+Goal: Add access review, credential rotation, audit retention, legal-hold, and break-glass evidence workflows.
 
 Deliverables:
 
-- Release gate evidence for journey coverage, template inventory, provider blockers, disable controls, and privacy.
-- Milestone audit and completed snapshots.
+- Access inventory for admin access, Cognito groups, AWS profiles, provider credentials, CI/deploy credentials, and break-glass access.
+- Dry-run rotation and metadata-only compliance evidence.
 
 Completion evidence:
 
-- `customer_lifecycle_service.release_gate_evidence`
-- `.planning/milestones/v5.22-MILESTONE-AUDIT.md`
+- `enterprise_stability_service.access_rotation_evidence`
+
+### Phase 291: v5.23 Enterprise Hardening Release Gate
+
+Goal: Close with DR evidence, incident drill evidence, SLO/rollback evidence, and next roadmap recommendation.
+
+Deliverables:
+
+- Release gate evidence with blockers and v5.24 recommendation.
+- Completed roadmap, requirements, state, snapshots, audit, and verification.
+
+Completion evidence:
+
+- `enterprise_stability_service.release_gate_evidence`
+- `.planning/milestones/v5.23-MILESTONE-AUDIT.md`
 
 ## Future Milestone Directions
 
-- **v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening**: after customer operations are connected, harden operational resilience, incident response, restore, access, and rollback.
+- **v5.24 Limited Production Pilot And Launch Readiness**: choose a narrow launch/pilot scope only after mobile, AI, lifecycle, support, and hardening gates are complete.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIFECYCLE-01 | Phase 282 | Complete |
-| LIFECYCLE-02 | Phase 283 | Complete |
-| LIFECYCLE-03 | Phase 284 | Complete |
-| LIFECYCLE-04 | Phase 285 | Complete |
-| VERIFY-56 | Phase 286 | Complete |
+| OPSHARD-01 | Phase 287 | Complete |
+| OPSHARD-02 | Phase 288 | Complete |
+| OPSHARD-03 | Phase 289 | Complete |
+| OPSHARD-04 | Phase 290 | Complete |
+| VERIFY-57 | Phase 291 | Complete |
