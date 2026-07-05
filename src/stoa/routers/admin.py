@@ -185,6 +185,18 @@ class ExternalActivationSmokeResponse(BaseModel):
     privacy: dict[str, Any] = Field(default_factory=dict)
 
 
+class ExternalNotificationSupportSmokeResponse(BaseModel):
+    generatedAt: str
+    taxonomy: list[str]
+    overallState: str
+    safeToMutate: bool
+    notification: dict[str, Any] = Field(default_factory=dict)
+    support: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+
+
 class SubscriptionProviderReadinessResponse(BaseModel):
     state: str
     checkoutAllowed: bool
@@ -1442,6 +1454,18 @@ async def get_payment_auth_activation_smoke(
 ):
     """Inspect payment and Cognito/email activation smoke readiness."""
     return external_activation_service.build_payment_auth_smoke_report(settings)
+
+
+@router.get(
+    "/external-activation/notification-support-smoke",
+    response_model=ExternalNotificationSupportSmokeResponse,
+)
+async def get_notification_support_activation_smoke(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect notification and support-provider activation smoke readiness."""
+    return external_activation_service.build_notification_support_smoke_report(settings)
 
 
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)

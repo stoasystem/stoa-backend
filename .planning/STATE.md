@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.17
 milestone_name: External Provider Activation Smoke And Release Operations
 status: Active
-last_updated: "2026-07-05T17:10:00.000Z"
-last_activity: 2026-07-05 — Phase 258 completed payment and Cognito/email smoke operations
+last_updated: "2026-07-05T17:35:00.000Z"
+last_activity: 2026-07-05 — Phase 259 completed notification and support provider smoke operations
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 259 Notification And Support Provider Smoke Operations
-Plan: Define and verify provider-gated notification and support handoff smoke/readiness paths, retry/refusal evidence, and operator status visibility.
+Phase: 260 Production Deploy Readiness And Read-Only Browser Smoke
+Plan: Consolidate backend/frontend deploy evidence, release runbook, admin session path, read-only browser smoke, and no-mutation boundaries.
 Status: Active
-Last activity: 2026-07-05 — Phase 258 added admin-only payment/auth activation smoke readiness, fail-closed provider/Cognito blockers, and focused verification.
+Last activity: 2026-07-05 — Phase 259 added admin-only notification/support activation smoke readiness, fail-closed provider blockers, retry/sync/CRM evidence, and focused verification.
 
 ## Accumulated Context
 
@@ -42,10 +42,10 @@ Last activity: 2026-07-05 — Phase 258 added admin-only payment/auth activation
 - v5.17 should not perform live customer-impacting provider mutation unless approved credentials, approved rollout flags, and approved safe fixture or rollout path exist.
 - Phase 257 classified provider channels as live_ready, read_only_verifiable, safe_fixture_verifiable, locally_ready, or blocked, and documented current payment, Cognito/email, notification, support-provider, and production smoke surfaces in `257-PROVIDER-ACTIVATION-AUDIT.md`.
 - Phase 258 added `GET /admin/external-activation/payment-auth-smoke`, combining Stripe/TWINT readiness with Cognito/email local-versus-live delivery readiness and deterministic blocked states.
+- Phase 259 added `GET /admin/external-activation/notification-support-smoke`, combining notification WebSocket/email/push readiness with support internal queue, third-party provider, retry/sync, and CRM readiness.
 
 ### Pending Todos
 
-- Phase 259: define and verify notification plus support provider smoke operations.
 - Phase 260: consolidate production deploy readiness and read-only browser/API smoke.
 - Phase 261: close v5.17 with activation evidence, blocked-prerequisite table, rollback controls, and v5.18 handoff.
 
@@ -58,4 +58,4 @@ Last activity: 2026-07-05 — Phase 258 added admin-only payment/auth activation
 
 ## Operator Next Steps
 
-- Start Phase 259 by converting notification and support provider audit gaps into operational readiness/smoke evidence and deterministic blocked-state behavior.
+- Start Phase 260 by consolidating deploy readiness, production read-only browser/API smoke, admin session boundaries, and no-mutation evidence.

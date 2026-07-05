@@ -140,3 +140,130 @@ def test_payment_auth_smoke_is_admin_only(monkeypatch):
     response = client.get("/admin/external-activation/payment-auth-smoke")
 
     assert response.status_code == 403
+
+
+def test_notification_support_smoke_blocks_missing_provider_configuration():
+    client = TestClient(
+        _app_for_user(
+            {"sub": "admin-1", "role": "admin"},
+            _settings(
+                websocket_api_endpoint="",
+                notification_email_provider="",
+                notification_push_provider="",
+                support_internal_queue_approved=False,
+                support_third_party_provider_approved=False,
+                support_third_party_provider_api_key="",
+                support_third_party_provider_endpoint_url="",
+                support_crm_messaging_approved=False,
+                support_crm_destination_approved=False,
+                support_crm_approved_templates=[],
+            ),
+        )
+    )
+
+    response = client.get("/admin/external-activation/notification-support-smoke")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overallState"] == "blocked"
+    assert body["safeToMutate"] is False
+    assert body["notification"]["classification"] == "blocked"
+    assert body["support"]["classification"] == "blocked"
+    assert "missing_notification_email_provider" in body["blockers"]
+    assert "missing_notification_push_provider" in body["blockers"]
+    assert "support_internal_queue_not_approved" in body["blockers"]
+    assert "support_third_party_provider_not_approved" in body["blockers"]
+    assert "support_crm_messaging_not_approved" in body["blockers"]
+    assert body["privacy"]["rawProviderPayloadsIncluded"] is False
+
+
+def test_notification_support_smoke_reports_configured_read_only_until_send_flags_enabled():
+    client = TestClient(
+        _app_for_user(
+            {"sub": "admin-1", "role": "admin"},
+            _settings(
+                websocket_api_endpoint="wss://ws.example.test/dev",
+                websocket_live_routes_configured=True,
+                websocket_live_deployed=True,
+                websocket_live_smoke_passed=True,
+                notification_email_provider="ses",
+                notification_email_provider_approved=True,
+                notification_email_send_enabled=False,
+                notification_push_provider="native-relay",
+                notification_push_provider_approved=True,
+                notification_push_provider_api_key="push-secret",
+                notification_push_provider_endpoint_url="https://push.example.test/send",
+                notification_push_send_enabled=False,
+                support_internal_queue_approved=True,
+                support_third_party_provider_approved=True,
+                support_third_party_provider_api_key="support-secret",
+                support_third_party_provider_endpoint_url="https://support.example.test/tickets",
+                support_crm_messaging_approved=True,
+                support_crm_destination_approved=True,
+                support_crm_approved_templates=["support_receipt", "status_update"],
+            ),
+        )
+    )
+
+    response = client.get("/admin/external-activation/notification-support-smoke")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overallState"] == "read_only_verifiable"
+    assert body["safeToMutate"] is False
+    assert body["notification"]["classification"] == "read_only_verifiable"
+    assert body["notification"]["emailDigest"]["classification"] == "read_only_verifiable"
+    assert "notification_email_send_disabled" in body["warnings"]
+    assert "notification_push_send_disabled" in body["warnings"]
+    assert body["support"]["classification"] == "live_ready"
+    assert body["support"]["thirdPartyProvider"]["retryMaxAttempts"] == 3
+    assert body["support"]["deliveryLifecycle"]["retrySupported"] is True
+    assert "push-secret" not in response.text
+    assert "support-secret" not in response.text
+
+
+def test_notification_support_smoke_reports_live_ready_when_all_provider_flags_enabled():
+    client = TestClient(
+        _app_for_user(
+            {"sub": "admin-1", "role": "admin"},
+            _settings(
+                websocket_api_endpoint="wss://ws.example.test/dev",
+                websocket_live_routes_configured=True,
+                websocket_live_deployed=True,
+                websocket_live_smoke_passed=True,
+                notification_email_provider="ses",
+                notification_email_provider_approved=True,
+                notification_email_send_enabled=True,
+                notification_push_provider="native-relay",
+                notification_push_provider_approved=True,
+                notification_push_provider_api_key="push-secret",
+                notification_push_provider_endpoint_url="https://push.example.test/send",
+                notification_push_send_enabled=True,
+                support_internal_queue_approved=True,
+                support_third_party_provider_approved=True,
+                support_third_party_provider_api_key="support-secret",
+                support_third_party_provider_endpoint_url="https://support.example.test/tickets",
+                support_crm_messaging_approved=True,
+                support_crm_destination_approved=True,
+                support_crm_approved_templates=["support_receipt", "status_update"],
+            ),
+        )
+    )
+
+    response = client.get("/admin/external-activation/notification-support-smoke")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overallState"] == "live_ready"
+    assert body["safeToMutate"] is True
+    assert body["notification"]["safeToMutate"] is True
+    assert body["support"]["safeToMutate"] is True
+    assert body["blockers"] == []
+
+
+def test_notification_support_smoke_is_admin_only():
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
+
+    response = client.get("/admin/external-activation/notification-support-smoke")
+
+    assert response.status_code == 403
