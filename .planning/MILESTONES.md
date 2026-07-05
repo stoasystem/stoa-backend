@@ -153,9 +153,10 @@ Planned phases:
 
 ---
 
-## Planned: v5.21 AI Teaching Quality Cost And Safety Operations
+## Active: v5.21 AI Teaching Quality Cost And Safety Operations
 
-**Status:** Planned
+**Status:** Active
+**Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.21-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.21-REQUIREMENTS.md`
 **Goal:** Make AI teacher tools measurable, controllable, support-visible, and safe before expanding autonomy.

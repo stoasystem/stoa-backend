@@ -1,106 +1,106 @@
-# Roadmap: v5.20 Native Build Distribution And Device QA
+# Roadmap: v5.21 AI Teaching Quality Cost And Safety Operations
 
-**Status:** Completed
+**Status:** Active
 **Created:** 2026-07-06
-**Prior milestone:** v5.19 Native Mobile Push And Offline Client Implementation
+**Prior milestone:** v5.20 Native Build Distribution And Device QA
 
 ## Goal
 
-Turn the v5.19 native mobile implementation into internal device-ready releases with build distribution, native credential evidence, physical-device QA, push/deep-link smoke, crash/performance telemetry, and app-store readiness artifacts.
+Move AI teacher tools, automatic summaries, draft explanations, practice generation, and assignment suggestions from reviewed local features into measurable quality, cost, safety, escalation, and teacher-oversight operations.
 
-## Why This Follows v5.19
+## Why This Follows v5.20
 
-v5.19 proved that the mobile client can consume real STOA backend contracts. v5.20 should then prove that the client can actually run as a distributed native build on devices, receive native notifications, survive session/offline edge cases, and be prepared for controlled store submission when release approval exists.
+AI teaching flows already exist in reviewed/bounded form, but fully autonomous behavior remains deliberately deferred. After web, backend, observability, and native distribution are stable, the next risk is not adding more AI surfaces blindly; it is making existing AI behavior measurable, controllable, support-visible, and safe enough for broader product use.
 
 ## Product Purpose
 
-- Internal testers can install and use STOA on real iOS and Android devices.
-- Product and support can verify mobile auth, student/parent journeys, push, deep links, and offline stale-state behavior outside the simulator.
-- Release owners can see exactly which native credentials, store assets, privacy declarations, and rollout controls are ready or blocked.
+- Teachers can trust AI summaries and generated exercises because quality is measured against rubrics and golden fixtures.
+- Operators can see AI provider cost, latency, failure, refusal, and fallback behavior.
+- Students and parents get AI-supported learning that remains bounded by teacher oversight and clear escalation paths.
 
 ## Implementation Strategy
 
-- Add EAS/internal-distribution configuration only after native app routes and environment contracts are stable.
-- Keep production rollout gated; internal builds may hit staging or approved production read-only/safe-fixture paths only.
-- Run a small device QA matrix across iOS and Android before adding broader store work.
-- Wire low-cardinality crash/performance/mobile release signals into existing observability contracts instead of creating a parallel analytics model.
-- Close with build IDs, device QA evidence, push/deep-link evidence, store-readiness checklist, and explicit remaining blockers.
+- Start with a reality audit of every AI generation, summary, assignment, tutoring, and fallback path.
+- Keep review-before-use as the default unless a specific autonomy level is approved and measured.
+- Add evaluation fixtures before expanding generation scope.
+- Add provider cost/latency/failure observability and budget controls.
+- Close with AI release evidence that separates quality failure, provider blocker, safety refusal, and product regression.
 
 ## Phases
 
-- [x] **Phase 272: Native Build And Credential Readiness Audit** - Map current mobile implementation, native credentials, build profiles, app identifiers, and environment prerequisites. (completed 2026-07-06)
-- [x] **Phase 273: Internal Build Distribution Pipeline** - Configure EAS/build profiles, signed internal builds, release channels, versioning, and artifact evidence. (completed 2026-07-06)
-- [x] **Phase 274: Device QA Matrix And Mobile Smoke** - Run physical-device auth, parent/student, push, deep-link, offline, and localization smoke with redacted evidence. (completed 2026-07-06)
-- [x] **Phase 275: Mobile Crash Performance And Release Telemetry** - Add mobile crash/performance/status telemetry boundaries and operator-visible release-health summaries. (completed 2026-07-06)
-- [x] **Phase 276: v5.20 Native Distribution Release Gate** - Close with device evidence, store-readiness checklist, rollout blockers, and next milestone decision. (completed 2026-07-06)
+- [ ] **Phase 277: AI Workflow Reality Audit And Autonomy Boundary** - Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths.
+- [ ] **Phase 278: AI Quality Rubrics And Regression Fixtures** - Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations.
+- [ ] **Phase 279: AI Cost Latency Provider Observability** - Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure.
+- [ ] **Phase 280: AI Safety Escalation And Teacher Oversight** - Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations.
+- [ ] **Phase 281: v5.21 AI Operations Release Gate** - Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision.
 
 ## Phase Details
 
-### Phase 272: Native Build And Credential Readiness Audit
+### Phase 277: AI Workflow Reality Audit And Autonomy Boundary
 
-**Goal**: Map current mobile implementation, native credentials, build profiles, app identifiers, and environment prerequisites.
-**Requirements**: MOBILEBUILD-01
+**Goal**: Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths.
+**Requirements**: AIOPS-01
 **Success Criteria**:
 
-1. App identifiers, bundle IDs, package names, EAS project state, signing credentials, notification credentials, and release channels are documented.
-2. Missing or unapproved credentials close as blocked with exact owner/action, not as silent skips.
-3. Environment profiles separate local, staging, production read-only, and approved safe-fixture behavior.
-4. No production customer mutation is required for internal device smoke.
+1. AI-backed summaries, draft explanations, exercise generation, assignment suggestions, fallback content, and student-facing outputs are mapped to code/tests/owners/UI surfaces.
+2. Each workflow is classified as reviewed, auto-visible, auto-assigned, support-only, fallback, blocked, or deprecated.
+3. Paths that affect student work, quota, entitlement, teacher queue, or parent-visible progress have explicit autonomy levels.
+4. Fully autonomous tutoring remains blocked unless approved criteria and evidence exist.
 
-### Phase 273: Internal Build Distribution Pipeline
+### Phase 278: AI Quality Rubrics And Regression Fixtures
 
-**Goal**: Configure EAS/build profiles, signed internal builds, release channels, versioning, and artifact evidence.
-**Requirements**: MOBILEBUILD-02
+**Goal**: Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations.
+**Requirements**: AIOPS-02
 **Success Criteria**:
 
-1. Internal iOS and Android build commands/profiles are documented and repeatable.
-2. Build artifacts include version, commit SHA, profile, API environment, created timestamp, and distribution audience.
-3. Release channel and rollback instructions are documented.
-4. Build output never embeds secrets, private S3 keys, Cognito token material, or provider payloads in evidence.
+1. Golden fixtures cover summary, explanation, exercise generation, assignment suggestion, refusal, fallback, and multilingual behavior.
+2. Rubrics score correctness, age-appropriateness, curriculum alignment, language, hallucination risk, and actionable teacher value.
+3. Review outcomes are support-safe.
+4. Regression checks fail on missing fixtures, unsafe output, unreviewed publication, or unsupported autonomy claims.
 
-### Phase 274: Device QA Matrix And Mobile Smoke
+### Phase 279: AI Cost Latency Provider Observability
 
-**Goal**: Run physical-device auth, parent/student, push, deep-link, offline, and localization smoke with redacted evidence.
-**Requirements**: MOBILEBUILD-03
+**Goal**: Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure.
+**Requirements**: AIOPS-03
 **Success Criteria**:
 
-1. Device QA covers at least one iOS phone and one Android phone, or records exact blocker if hardware/accounts are unavailable.
-2. Smoke covers sign-in/session restore, student dashboard/practice, parent child summary/report, push permission/token registration, notification deep link, offline read-through, and sign-out cleanup.
-3. Redacted screenshots or logs prove support-safe state without private learning content, provider payloads, or secrets.
-4. Known device-specific issues are classified as blocking, non-blocking, or deferred with owner and next action.
+1. AI provider calls expose bounded metadata for provider, model, workflow, latency, token/cost estimate, fallback, retry, refusal, and failure class.
+2. Operator summaries show budget status, cost trend, latency/error trend, provider blocker, and fallback rate.
+3. Evidence excludes raw prompts, student answers, tutoring transcripts, secrets, provider payloads, and high-cardinality private identifiers.
+4. Runbook defines budget threshold, provider incident, fallback, and disable/rollback behavior.
 
-### Phase 275: Mobile Crash Performance And Release Telemetry
+### Phase 280: AI Safety Escalation And Teacher Oversight
 
-**Goal**: Add mobile crash/performance/status telemetry boundaries and operator-visible release-health summaries.
-**Requirements**: MOBILEBUILD-04
+**Goal**: Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations.
+**Requirements**: AIOPS-04
 **Success Criteria**:
 
-1. Mobile release health exposes low-cardinality build, version, route, account-state, push-state, and offline-state signals.
-2. Crash/performance telemetry avoids raw content, tokens, provider payloads, private IDs, and high-cardinality free text.
-3. Operator summary distinguishes product regression, provider blocker, stale/offline state, user-denied notification permission, and credential/config blocker.
-4. Runbook defines triage, suppression, rollback, and escalation behavior.
+1. Safety/refusal states are visible to teachers/operators without exposing raw unsafe content.
+2. Teacher review queue distinguishes draft-ready, needs-review, refused, provider-blocked, stale, and failed states.
+3. Student/parent copy explains AI limits and escalation status without technical leakage.
+4. Human takeover/escalation integrates with teacher-help and support operations.
 
-### Phase 276: v5.20 Native Distribution Release Gate
+### Phase 281: v5.21 AI Operations Release Gate
 
-**Goal**: Close with device evidence, store-readiness checklist, rollout blockers, and next milestone decision.
-**Requirements**: VERIFY-54
+**Goal**: Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision.
+**Requirements**: VERIFY-55
 **Success Criteria**:
 
-1. Build, device QA, telemetry, push/deep-link, offline, and release-channel evidence is recorded.
-2. Store-readiness checklist covers account ownership, privacy declarations, notification use, screenshots, review notes, rollback, and rollout approval.
-3. Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
-4. Remaining native credential, app-store, production rollout, and device-coverage blockers are explicit.
+1. AI quality fixtures, regression checks, cost/latency summaries, safety escalation evidence, and teacher-oversight evidence are recorded.
+2. Roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
+3. Remaining autonomy, provider, prompt-quality, language coverage, and production rollout blockers are explicit.
+4. No new unreviewed student-facing AI publication is enabled without release approval.
 
 ## Future Milestone Directions
 
-- **v5.21 AI Teaching Quality Cost And Safety Operations**: after mobile distribution exists, make AI teaching behavior measurable, controllable, and support-visible across web and mobile clients.
+- **v5.22 Support CRM Customer Messaging And Lifecycle Automation**: use improved AI/support state to make parent onboarding, support messaging, and customer lifecycle operations usable.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOBILEBUILD-01 | Phase 272 | Complete |
-| MOBILEBUILD-02 | Phase 273 | Complete |
-| MOBILEBUILD-03 | Phase 274 | Complete |
-| MOBILEBUILD-04 | Phase 275 | Complete |
-| VERIFY-54 | Phase 276 | Complete |
+| AIOPS-01 | Phase 277 | Planned |
+| AIOPS-02 | Phase 278 | Planned |
+| AIOPS-03 | Phase 279 | Planned |
+| AIOPS-04 | Phase 280 | Planned |
+| VERIFY-55 | Phase 281 | Planned |
