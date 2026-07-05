@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.16
 milestone_name: End-To-End Product Readiness And Release Evidence
 status: Active
-last_updated: "2026-07-05T13:11:04.000Z"
-last_activity: 2026-07-05 — Completed Phase 254 backend product smoke evidence verification with 121 focused tests and Ruff passing
+last_updated: "2026-07-05T13:12:55.000Z"
+last_activity: 2026-07-05 — Completed Phase 255 cross-surface journey verification with supplemental frontend e2e passing 11/11
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 3
-  percent: 60
+  completed_plans: 4
+  percent: 80
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 255 Cross-Surface Product Journey Verification
-Plan: Validate parent, student, and admin journeys across auth, paid state, usage/quota, curriculum, teacher help, and support views with no production-like demo fallback dependency.
+Phase: 256 v5.16 Release Evidence Gate And Next Milestone Decision
+Plan: Close v5.16 with final release evidence, residual blocker classification, and next milestone recommendation.
 Status: Active
-Last activity: 2026-07-05 — Phase 254 verified backend smoke/support evidence and confirmed no backend contract changes are required for local release triage.
+Last activity: 2026-07-05 — Phase 255 consolidated parent, student, and admin journey evidence and recorded local demo/mock boundaries versus external provider activation.
 
 ## Accumulated Context
 
@@ -43,11 +43,11 @@ Last activity: 2026-07-05 — Phase 254 verified backend smoke/support evidence 
 - Phase 252 is complete: release-critical backend and frontend surfaces are mapped to concrete files/tests; v5.12-v5.15 local evidence is reconciled; v5.14 focused frontend e2e remains a Phase 253 gate; live providers are classified as external blockers.
 - Phase 253 is complete: focused frontend e2e for auth, account operations, subscription operations, billing/pricing, and admin curriculum passed 24/24; frontend commit `7e9e385` stabilized duplicate-text locators.
 - Phase 254 is complete: focused backend product-readiness tests passed 121/121; Ruff passed; core smoke and support evidence are support-safe and classify expected external/auth/provider blocks separately from regressions.
+- Phase 255 is complete: supplemental frontend e2e for student chat, learning profile, parent dashboard, and tutor workflow passed 11/11; parent/student/admin journey evidence is consolidated with demo/mock boundaries documented.
 - External activation remains deferred until prerequisites unblock: live Stripe/TWINT, Cognito/email delivery, notification providers, external support provider, APNS/FCM, production warehouse/BI, APM, and rollout approvals.
 
 ### Pending Todos
 
-- Phase 255: verify cross-surface parent, student, and admin journeys without demo fallback.
 - Phase 256: close v5.16 with release evidence, blocker classification, and next milestone recommendation.
 
 ### Blockers/Concerns
@@ -60,5 +60,5 @@ Last activity: 2026-07-05 — Phase 254 verified backend smoke/support evidence 
 
 ## Operator Next Steps
 
-- Write Phase 255 cross-surface journey evidence for parent, student, and admin paths using Phase 253 frontend e2e and Phase 254 backend smoke/support evidence.
-- Classify any residual live-provider gaps as external-blocked with exact prerequisites.
+- Run final Phase 256 backend/frontend evidence commands as needed.
+- Write the v5.16 release gate, milestone audit, and next milestone recommendation.

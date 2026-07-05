@@ -85,5 +85,5 @@ Acceptance criteria:
 | READINESS-01 | Phase 252 | Complete |
 | E2E-01 | Phase 253 | Complete |
 | SMOKE-01 | Phase 254 | Complete |
-| JOURNEY-01 | Phase 255 | Active |
-| VERIFY-50 | Phase 256 | Planned |
+| JOURNEY-01 | Phase 255 | Complete |
+| VERIFY-50 | Phase 256 | Active |
