@@ -1062,8 +1062,8 @@ Known current resources:
 | Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Complete - usage-stability-ready-local release gate passed |
 | Start v5.16 end-to-end product readiness and release evidence | v5.12-v5.15 local work is mostly complete but fragmented across auth, billing, usage, curriculum, frontend e2e, and smoke evidence; next value is one cross-surface readiness gate that separates regressions from external-provider blockers | Complete - product-readiness-evidence-local release gate passed |
 | Start v5.17 external provider activation smoke and release operations | v5.16 closed local product readiness; remaining risk is external provider activation and production release operations for payment, Cognito/email, notifications, support handoff, and read-only smoke | Complete - external-provider-release-ops-ready release gate passed |
-| Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 classified provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Active |
-| Plan v5.19 native mobile push and offline client implementation | Web product readiness, provider-state clarity, and observability should precede native app implementation so the mobile client inherits stable contracts and clear push/offline boundaries | Planned |
+| Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 classified provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Complete - bi-observability-ready-local release gate passed |
+| Plan v5.19 native mobile push and offline client implementation | Web product readiness, provider-state clarity, and observability should precede native app implementation so the mobile client inherits stable contracts and clear push/offline boundaries | Active |
 
 ## Evolution
 
@@ -1083,4 +1083,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-05 after completing v5.18 warehouse BI observability and product analytics activation*
+*Last updated: 2026-07-06 after starting v5.19 native mobile push and offline client implementation*

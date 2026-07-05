@@ -79,9 +79,10 @@ Key accomplishments:
 
 ---
 
-## Planned Next: v5.19 Native Mobile Push And Offline Client Implementation
+## Active: v5.19 Native Mobile Push And Offline Client Implementation
 
-**Status:** Planned
+**Status:** Active
+**Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.19-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.19-REQUIREMENTS.md`
 **Goal:** Move native/mobile work from handoff contracts into implementation: app shell, auth/session, parent/student journeys, push, offline/read-through, localization, and release evidence.
