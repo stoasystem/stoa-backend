@@ -1,6 +1,6 @@
 # Roadmap: v5.21 AI Teaching Quality Cost And Safety Operations
 
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-06
 **Prior milestone:** v5.20 Native Build Distribution And Device QA
 
@@ -28,11 +28,11 @@ AI teaching flows already exist in reviewed/bounded form, but fully autonomous b
 
 ## Phases
 
-- [ ] **Phase 277: AI Workflow Reality Audit And Autonomy Boundary** - Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths.
-- [ ] **Phase 278: AI Quality Rubrics And Regression Fixtures** - Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations.
-- [ ] **Phase 279: AI Cost Latency Provider Observability** - Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure.
-- [ ] **Phase 280: AI Safety Escalation And Teacher Oversight** - Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations.
-- [ ] **Phase 281: v5.21 AI Operations Release Gate** - Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision.
+- [x] **Phase 277: AI Workflow Reality Audit And Autonomy Boundary** - Map all AI teacher, summary, exercise, assignment, fallback, and manual-review paths. (completed 2026-07-06)
+- [x] **Phase 278: AI Quality Rubrics And Regression Fixtures** - Add golden fixtures, rubric scoring, review outcomes, and regression checks for summaries/exercises/explanations. (completed 2026-07-06)
+- [x] **Phase 279: AI Cost Latency Provider Observability** - Add provider cost, latency, fallback, refusal, and budget-status summaries without raw prompt exposure. (completed 2026-07-06)
+- [x] **Phase 280: AI Safety Escalation And Teacher Oversight** - Tighten safety boundaries, escalation states, teacher review queues, and student/parent explanations. (completed 2026-07-06)
+- [x] **Phase 281: v5.21 AI Operations Release Gate** - Close with eval evidence, cost/safety evidence, known limitations, and next milestone decision. (completed 2026-07-06)
 
 ## Phase Details
 
@@ -99,8 +99,8 @@ AI teaching flows already exist in reviewed/bounded form, but fully autonomous b
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AIOPS-01 | Phase 277 | Planned |
-| AIOPS-02 | Phase 278 | Planned |
-| AIOPS-03 | Phase 279 | Planned |
-| AIOPS-04 | Phase 280 | Planned |
-| VERIFY-55 | Phase 281 | Planned |
+| AIOPS-01 | Phase 277 | Complete |
+| AIOPS-02 | Phase 278 | Complete |
+| AIOPS-03 | Phase 279 | Complete |
+| AIOPS-04 | Phase 280 | Complete |
+| VERIFY-55 | Phase 281 | Complete |
