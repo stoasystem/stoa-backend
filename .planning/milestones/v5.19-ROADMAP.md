@@ -33,7 +33,7 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 - [x] **Phase 267: Native Mobile Stack And App Shell Contract** - Scaffold the native mobile workspace, app shell, navigation boundaries, environment contract, and no-demo-fallback policy. (completed 2026-07-06)
 - [x] **Phase 268: Auth Session And Account State** - Implement Cognito-compatible auth/session wrappers, secure-storage boundaries, account-state mapping, and sign-out cleanup contracts. (completed 2026-07-06)
 - [x] **Phase 269: Student And Parent Core Mobile Journeys** - Implement mobile data adapters and screen contracts for student and parent core journeys against real backend endpoints. (completed 2026-07-06)
-- [ ] **Phase 270: Native Push Deep Links And Offline Read-Through** - Implement notification token registration/revocation, deep-link routing, offline/read-through cache policy, and privacy guards.
+- [x] **Phase 270: Native Push Deep Links And Offline Read-Through** - Implement notification token registration/revocation, deep-link routing, offline/read-through cache policy, and privacy guards. (completed 2026-07-06)
 - [ ] **Phase 271: v5.19 Native Mobile Release Gate** - Add tests/evidence, verify release boundaries, update docs/state/snapshots, and record remaining native-provider/app-store blockers.
 
 ## Phase Details
@@ -108,7 +108,7 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 | 267 Native Mobile Stack And App Shell Contract | v5.19 | 1/1 | Complete | 2026-07-06 |
 | 268 Auth Session And Account State | v5.19 | 1/1 | Complete | 2026-07-06 |
 | 269 Student And Parent Core Mobile Journeys | v5.19 | 1/1 | Complete | 2026-07-06 |
-| 270 Native Push Deep Links And Offline Read-Through | v5.19 | 0/0 | Not Started | - |
+| 270 Native Push Deep Links And Offline Read-Through | v5.19 | 1/1 | Complete | 2026-07-06 |
 | 271 v5.19 Native Mobile Release Gate | v5.19 | 0/0 | Not Started | - |
 
 ## Traceability
@@ -119,6 +119,6 @@ v5.16 proved local product readiness, v5.17 separated external-provider readines
 | MOBILEAPP-02 | Phase 268 | Complete |
 | MOBILEAPP-03 | Phase 269 | Complete |
 | MOBILEAPP-04 | Phase 269 | Complete |
-| MOBILEAPP-05 | Phase 270 | Planned |
-| MOBILEAPP-06 | Phase 270 | Planned |
+| MOBILEAPP-05 | Phase 270 | Complete |
+| MOBILEAPP-06 | Phase 270 | Complete |
 | VERIFY-53 | Phase 271 | Planned |

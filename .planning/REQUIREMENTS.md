@@ -91,6 +91,6 @@ Acceptance criteria:
 | MOBILEAPP-02 | Phase 268 | Complete |
 | MOBILEAPP-03 | Phase 269 | Complete |
 | MOBILEAPP-04 | Phase 269 | Complete |
-| MOBILEAPP-05 | Phase 270 | Planned |
-| MOBILEAPP-06 | Phase 270 | Planned |
+| MOBILEAPP-05 | Phase 270 | Complete |
+| MOBILEAPP-06 | Phase 270 | Complete |
 | VERIFY-53 | Phase 271 | Planned |
