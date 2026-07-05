@@ -6,9 +6,9 @@ status: planning
 last_updated: "2026-07-05T21:08:07.547Z"
 last_activity: 2026-07-05
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.17 External Provider Activation Smoke And Release Operations is complete; next planned focus is v5.18 Warehouse BI Observability And Product Analytics Activation.
+**Current focus:** v5.18 Warehouse BI Observability And Product Analytics Activation.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-05 — Milestone v5.18 started
+Phase: 262 Analytics Reality Audit And Taxonomy Contract
+Plan: 262.01
+Status: Planning
+Last activity: 2026-07-05 — Milestone v5.18 roadmap activated
 
 ## Accumulated Context
 
@@ -48,15 +48,19 @@ Last activity: 2026-07-05 — Milestone v5.18 started
 
 ### Pending Todos
 
-- Start v5.18 Warehouse BI Observability And Product Analytics Activation.
+- Execute Phase 262 analytics reality audit and taxonomy contract.
+- Execute Phase 263 warehouse export job activation and schema evidence.
+- Execute Phase 264 operator analytics dashboard APIs.
+- Execute Phase 265 APM alert routing and observability runbooks.
+- Execute Phase 266 v5.18 BI observability release gate.
 
 ### Blockers/Concerns
 
 - Live Stripe/TWINT smoke remains blocked unless approved production credentials, registered webhook endpoint, finance acceptance, and explicit rollout enablement are available.
 - Live Cognito/email, notification, support-provider, BI/warehouse, APM, and native-provider checks remain external activation work unless credentials and approvals are supplied.
 - Production checks must stay read-only unless an approved safe fixture or explicit external activation path is available.
-- If provider credentials remain unavailable, v5.17 should close with refusal/readiness evidence and release runbooks rather than claiming live activation.
+- Live BI warehouse/APM activation should close with local/read-only/blocked evidence unless approved credentials and deployment targets are available.
 
 ## Operator Next Steps
 
-- v5.17 is complete. Next operator action is to start v5.18.
+- Execute v5.18 phases 262-266 autonomously with support-safe aggregate analytics boundaries.

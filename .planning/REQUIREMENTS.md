@@ -1,75 +1,75 @@
-# Requirements: v5.17 External Provider Activation Smoke And Release Operations
+# Requirements: v5.18 Warehouse BI Observability And Product Analytics Activation
 
-**Milestone:** v5.17
-**Status:** Completed
+**Milestone:** v5.18
+**Status:** Active
 **Created:** 2026-07-05
-**Prior milestone:** v5.16 End-To-End Product Readiness And Release Evidence
+**Prior milestone:** v5.17 External Provider Activation Smoke And Release Operations
 
 ## Purpose
 
-Turn v5.16's external blockers into operational release paths. v5.17 should not invent new product features; it should make provider activation, refusal, rollback, and production-safe smoke evidence explicit for payment, Cognito/email, notifications, support provider handoff, and deploy/read-only verification.
+Activate support-safe product analytics and observability after usage semantics, provider states, and release-smoke readiness are explicit. v5.18 should give operators aggregate dashboards, repeatable export contracts, and alert routing without exposing raw student content, provider payloads, secrets, or high-cardinality private identifiers.
 
 ## Requirements
 
-### PROVIDER-01 Provider Activation Reality Audit
+### BI-01 Analytics Reality Audit And Taxonomy
 
 Acceptance criteria:
 
-- Current payment, Cognito/email, notification, support provider, and deploy/read-only smoke surfaces are mapped to concrete settings, routes, services, tests, and docs.
-- Required credentials, rollout flags, production endpoints, safe fixtures, and approval gates are listed per provider.
-- Every provider channel is classified as live-ready, read-only-verifiable, safe-fixture-verifiable, locally ready, or blocked.
-- Missing readiness/refusal evidence is promoted into Phase 258-260 tasks.
+- Existing analytics/readiness surfaces are mapped across usage/quota, billing/provider readiness, curriculum analytics/migration, teacher help, notifications, support handoff, core smoke, and external activation smoke.
+- A shared taxonomy distinguishes `live_ready`, `read_only_verifiable`, `safe_fixture_verifiable`, `locally_ready`, `blocked`, `failed`, and `unknown` states.
+- Privacy boundaries are documented before any export/dashboard activation.
+- Missing evidence needed for dashboards, exports, or alerts is routed to later v5.18 phases.
 
-### PROVIDER-02 Payment And Cognito Email Smoke Operations
-
-Acceptance criteria:
-
-- Stripe/TWINT readiness reports credential, webhook, TWINT capability, finance acceptance, rollout flag, refund control, and smoke status without exposing secrets.
-- Payment smoke is read-only or safe-fixture bounded unless explicit live rollout approval is available.
-- Cognito/email readiness distinguishes local verification behavior, live email delivery, disabled/blocked account state, and provider delivery blockers.
-- Failure/refusal states are deterministic and support-safe.
-
-### PROVIDER-03 Notification And Support Provider Smoke Operations
+### BI-02 Warehouse Export Job Activation
 
 Acceptance criteria:
 
-- Notification readiness covers WebSocket delivery, email digest, push provider, token registration, preference gating, send enablement, and delivery-status evidence.
-- Support provider readiness covers internal queue, third-party delivery, provider sync, retry, CRM messaging, approved templates, and destination approval.
-- Smoke paths produce success/refusal/failure lifecycle records without raw provider payloads.
-- Customer-impacting sends are blocked unless approved credentials, approved destination, and safe fixture/rollout mode exist.
+- Aggregate warehouse export/readiness outputs are repeatable, idempotent, bounded, and support-safe.
+- Export schemas include product surface, period, aggregate counts, blocker/status dimensions, generated timestamp, and privacy metadata.
+- Backfill, retry, partial-failure, and stale-data behavior is documented and test-covered.
+- Exports exclude raw prompts, answers, provider payloads, secrets, Cognito token material, report artifact content, and private S3 keys.
 
-### RELEASEOPS-01 Production Deploy And Read-Only Smoke Operations
-
-Acceptance criteria:
-
-- Backend/frontend deploy evidence requirements are documented.
-- Read-only production browser/API smoke covers auth, account operations, billing readiness, curriculum/admin readiness, notification/support readiness, and core smoke output.
-- Smoke evidence includes timestamps, request IDs, route names, redacted user/session identity, and no-mutation confirmation.
-- Production mutation requires explicit approved safe fixture and mutation mode.
-
-### VERIFY-51 v5.17 External Provider Release Gate
+### BI-03 Operator Analytics Dashboards
 
 Acceptance criteria:
 
-- Focused backend/frontend checks pass for readiness/refusal surfaces touched by v5.17.
-- Provider activation outcomes are documented as live-passed, read-only-passed, safe-fixture-passed, locally ready, or blocked with exact prerequisite.
-- Rollback/disable controls are documented for payment, auth/email, notifications, support handoff, and deploy smoke.
-- Docs, roadmap, requirements, state, milestone snapshots, and next milestone recommendation are updated.
+- Admin/operator dashboard APIs summarize usage/quota, billing/provider readiness, curriculum/migration/editor health, teacher-help/support load, notification delivery, support-provider lifecycle, and release-smoke outcomes.
+- Dashboards expose blocker categories, support actions, stale/partial data flags, and provider-state dimensions.
+- Dashboard responses are aggregate/support-safe and avoid raw student content or raw provider payloads.
+- Focused tests prove empty states, blocked states, and support-safe redaction behavior.
+
+### BI-04 APM And Alert Routing
+
+Acceptance criteria:
+
+- Core flows emit or expose low-cardinality status/error dimensions suitable for APM and alerts.
+- Alert routing separates product regressions from external-provider blockers and read-only/local-only states.
+- Alert payloads avoid high-cardinality private identifiers and raw content.
+- Operator runbooks define severity, ownership, escalation, suppression, retry/backfill, and known provider-blocked states.
+
+### VERIFY-52 BI Observability Release Gate
+
+Acceptance criteria:
+
+- Focused backend checks pass for export/dashboard/alert contracts touched by v5.18.
+- BI activation evidence records live-ready, read-only, local-only, blocked, and failed limitations honestly.
+- Roadmap, requirements, state, milestone snapshots, runbooks, and next milestone recommendation are updated.
+- Remaining BI/provider/APM/native limitations are explicit.
 
 ## Out of Scope
 
-- Broad new product features.
-- Live customer-impacting provider mutation without explicit credentials, approvals, and rollout enablement.
-- Raw provider payload, Cognito token material, private learning content, or private report artifact exposure.
-- Warehouse/BI/APM deployment; planned for v5.18.
-- Native/mobile app implementation; planned for v5.19.
+- Raw learning analytics warehouse containing prompts, answers, chat messages, report artifacts, or provider payloads.
+- Live third-party BI SaaS integration requiring new credentials unless explicitly approved.
+- Customer-facing analytics features.
+- Native/mobile implementation; planned for v5.19.
+- Production mutation outside approved fixture/mode gates.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROVIDER-01 | Phase 257 | Complete |
-| PROVIDER-02 | Phase 258 | Complete |
-| PROVIDER-03 | Phase 259 | Complete |
-| RELEASEOPS-01 | Phase 260 | Complete |
-| VERIFY-51 | Phase 261 | Complete |
+| BI-01 | Phase 262 | Planned |
+| BI-02 | Phase 263 | Planned |
+| BI-03 | Phase 264 | Planned |
+| BI-04 | Phase 265 | Planned |
+| VERIFY-52 | Phase 266 | Planned |
