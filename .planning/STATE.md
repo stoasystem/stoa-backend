@@ -7,10 +7,10 @@ last_updated: "2026-07-06T00:00:00.000Z"
 last_activity: 2026-07-06
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-06)
 
 ## Current Position
 
-Phase: 267 Native Mobile Stack And App Shell Contract
+Phase: 268 Auth Session And Account State
 Plan: —
 Status: Roadmap active; autonomous execution starting
-Last activity: 2026-07-06 — v5.19 requirements approved and roadmap generated
+Last activity: 2026-07-06 — Phase 267 completed; mobile app shell scaffolded
 
 ## Accumulated Context
 
@@ -50,6 +50,7 @@ Last activity: 2026-07-06 — v5.19 requirements approved and roadmap generated
 - Phase 264 added the aggregate admin BI dashboard across usage, billing/provider readiness, curriculum, notifications, support, release smoke, and warehouse state.
 - Phase 265 added low-cardinality admin BI alert routing and runbook metadata with live APM alerting blocked by default until configured.
 - Phase 266 closed v5.18 as `bi-observability-ready-local`; focused BI/source tests passed 31/31, wider BI-composed backend tests passed 83/83, and Ruff passed.
+- Phase 267 scaffolded the native Expo mobile workspace under `mobile/`, added route/config/app-shell contracts, documented stack/environment policy, and passed `pytest tests/mobile/test_mobile_stack_contract.py` 4/4.
 
 ### Pending Todos
 
