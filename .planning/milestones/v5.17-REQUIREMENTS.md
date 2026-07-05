@@ -1,7 +1,7 @@
 # Requirements: v5.17 External Provider Activation Smoke And Release Operations
 
 **Milestone:** v5.17
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-05
 **Prior milestone:** v5.16 End-To-End Product Readiness And Release Evidence
 
@@ -72,4 +72,4 @@ Acceptance criteria:
 | PROVIDER-02 | Phase 258 | Complete |
 | PROVIDER-03 | Phase 259 | Complete |
 | RELEASEOPS-01 | Phase 260 | Complete |
-| VERIFY-51 | Phase 261 | Planned |
+| VERIFY-51 | Phase 261 | Complete |

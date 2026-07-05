@@ -1,6 +1,6 @@
 # Roadmap: v5.17 External Provider Activation Smoke And Release Operations
 
-**Status:** Active
+**Status:** Completed
 **Created:** 2026-07-05
 **Prior milestone:** v5.16 End-To-End Product Readiness And Release Evidence
 
@@ -42,7 +42,7 @@ The next milestone should therefore focus on release operations and provider act
 - [x] **Phase 258: Payment And Cognito Email Smoke Operations** - Define and verify approved live/readiness smoke paths for Stripe/TWINT and Cognito/email delivery, with blocked states when credentials are unavailable. (completed 2026-07-05)
 - [x] **Phase 259: Notification And Support Provider Smoke Operations** - Define and verify provider-gated notification and support handoff smoke/readiness paths, retry/refusal evidence, and operator status visibility. (completed 2026-07-05)
 - [x] **Phase 260: Production Deploy Readiness And Read-Only Browser Smoke** - Consolidate backend/frontend deploy evidence, release runbook, admin session path, read-only browser smoke, and no-mutation boundaries. (completed 2026-07-05)
-- [ ] **Phase 261: v5.17 External Provider Release Gate** - Close with provider activation evidence, blocked-prerequisite table, rollback controls, and next milestone decision.
+- [x] **Phase 261: v5.17 External Provider Release Gate** - Close with provider activation evidence, blocked-prerequisite table, rollback controls, and next milestone decision. (completed 2026-07-05)
 
 ## Phase Details
 
@@ -114,7 +114,7 @@ The next milestone should therefore focus on release operations and provider act
 | 258 Payment And Cognito Email Smoke Operations | v5.17 | 1/1 | Complete | 2026-07-05 |
 | 259 Notification And Support Provider Smoke Operations | v5.17 | 1/1 | Complete | 2026-07-05 |
 | 260 Production Deploy Readiness And Read-Only Browser Smoke | v5.17 | 1/1 | Complete | 2026-07-05 |
-| 261 v5.17 External Provider Release Gate | v5.17 | 0/1 | Planned | - |
+| 261 v5.17 External Provider Release Gate | v5.17 | 1/1 | Complete | 2026-07-05 |
 
 ## Traceability
 
@@ -124,4 +124,4 @@ The next milestone should therefore focus on release operations and provider act
 | PROVIDER-02 | Phase 258 | Complete |
 | PROVIDER-03 | Phase 259 | Complete |
 | RELEASEOPS-01 | Phase 260 | Complete |
-| VERIFY-51 | Phase 261 | Planned |
+| VERIFY-51 | Phase 261 | Complete |

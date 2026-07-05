@@ -1,8 +1,8 @@
 # Milestones
 
-## Active: v5.17 External Provider Activation Smoke And Release Operations
+## Completed: v5.17 External Provider Activation Smoke And Release Operations
 
-**Status:** Active
+**Status:** Completed local release gate 2026-07-05
 **Started:** 2026-07-05
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -10,9 +10,9 @@
 **Milestone requirements:** `.planning/milestones/v5.17-REQUIREMENTS.md`
 **Goal:** Convert external activation blockers into approved, bounded release operations for provider readiness, safe smoke, refusal evidence, rollback controls, and production read-only verification.
 **Phases:** 5
-**Plans:** 4/5 complete
-**Requirements:** 4/5 complete
-**Release target:** `external-provider-release-ops-ready`
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
+**Release state:** `external-provider-release-ops-ready`
 
 Function purpose:
 
@@ -33,7 +33,14 @@ Planned phases:
 - Phase 258: Payment And Cognito Email Smoke Operations. (complete)
 - Phase 259: Notification And Support Provider Smoke Operations. (complete)
 - Phase 260: Production Deploy Readiness And Read-Only Browser Smoke. (complete)
-- Phase 261: v5.17 External Provider Release Gate.
+- Phase 261: v5.17 External Provider Release Gate. (complete)
+
+Key accomplishments:
+
+- Added admin-only external activation smoke reports for payment/auth, notification/support, and production readiness.
+- Preserved no-mutation defaults and deterministic blocked/read-only states for missing credentials, approvals, safe fixtures, and production smoke evidence.
+- Documented provider activation blockers, rollback/disable controls, and production read-only smoke runbook.
+- Verified focused backend release-gate tests and lint.
 
 ---
 

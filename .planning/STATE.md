@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.17
 milestone_name: External Provider Activation Smoke And Release Operations
-status: Active
-last_updated: "2026-07-05T18:00:00.000Z"
-last_activity: 2026-07-05 — Phase 260 completed production deploy readiness and read-only browser/API smoke operations
+status: Completed
+last_updated: "2026-07-05T18:20:00.000Z"
+last_activity: 2026-07-05 — Phase 261 completed v5.17 external provider release gate
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.17 External Provider Activation Smoke And Release Operations.
+**Current focus:** v5.17 External Provider Activation Smoke And Release Operations is complete; next planned focus is v5.18 Warehouse BI Observability And Product Analytics Activation.
 
 ## Current Position
 
 Phase: 261 v5.17 External Provider Release Gate
 Plan: Close with provider activation evidence, blocked-prerequisite table, rollback controls, and next milestone decision.
-Status: Active
-Last activity: 2026-07-05 — Phase 260 added admin-only production readiness smoke, read-only API/browser smoke inventory, request-id policy, and no-mutation release contract.
+Status: Complete
+Last activity: 2026-07-05 — v5.17 closed as external-provider-release-ops-ready with focused tests, provider activation evidence, rollback controls, and next milestone recommendation.
 
 ## Accumulated Context
 
@@ -44,10 +44,11 @@ Last activity: 2026-07-05 — Phase 260 added admin-only production readiness sm
 - Phase 258 added `GET /admin/external-activation/payment-auth-smoke`, combining Stripe/TWINT readiness with Cognito/email local-versus-live delivery readiness and deterministic blocked states.
 - Phase 259 added `GET /admin/external-activation/notification-support-smoke`, combining notification WebSocket/email/push readiness with support internal queue, third-party provider, retry/sync, and CRM readiness.
 - Phase 260 added `GET /admin/external-activation/production-readiness-smoke`, documenting deploy evidence requirements, read-only API/browser smoke paths, request-id policy, and production no-mutation gates.
+- Phase 261 closed v5.17 as `external-provider-release-ops-ready`; live external provider activation remains blocked until approved credentials, rollout flags, safe fixtures, and operator-run production smoke evidence exist.
 
 ### Pending Todos
 
-- Phase 261: close v5.17 with activation evidence, blocked-prerequisite table, rollback controls, and v5.18 handoff.
+- Start v5.18 Warehouse BI Observability And Product Analytics Activation.
 
 ### Blockers/Concerns
 
@@ -58,4 +59,4 @@ Last activity: 2026-07-05 — Phase 260 added admin-only production readiness sm
 
 ## Operator Next Steps
 
-- Start Phase 261 by running focused release-gate verification and consolidating provider activation evidence, blockers, rollback controls, and next milestone recommendation.
+- v5.17 is complete. Next operator action is to start v5.18.
