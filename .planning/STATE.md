@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.16
 milestone_name: End-To-End Product Readiness And Release Evidence
 status: Active
-last_updated: "2026-07-05T12:00:00.000Z"
-last_activity: 2026-07-05 — Reconciled current feature reality after v5.15 completion and selected v5.16 end-to-end product readiness as the next milestone
+last_updated: "2026-07-05T13:03:06.000Z"
+last_activity: 2026-07-05 — Completed Phase 252 product-readiness evidence matrix and advanced v5.16 to focused frontend e2e gate closure
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 252 Product Readiness Reality Audit And Evidence Contract
-Plan: Reconcile current backend/frontend implementation, v5.12-v5.15 evidence, v5.14 partial gate, and external blockers into one release matrix.
+Phase: 253 Focused Frontend E2E Gate Closure
+Plan: Run the release-critical frontend e2e specs for auth, account operations, billing/subscription, and curriculum; classify any failures precisely.
 Status: Active
-Last activity: 2026-07-05 — v5.15 is complete locally; v5.16 now focuses on cross-surface product readiness, focused frontend e2e closure, backend smoke evidence, and release blocker classification.
+Last activity: 2026-07-05 — Phase 252 wrote the product-readiness evidence matrix, preserved live-provider blockers, and promoted focused frontend e2e to the active release gate.
 
 ## Accumulated Context
 
@@ -40,11 +40,11 @@ Last activity: 2026-07-05 — v5.15 is complete locally; v5.16 now focuses on cr
 - v5.14 is a partial local gate: backend verification/login reliability and frontend build passed, but focused frontend e2e remains blocked by platform usage-limit approval.
 - v5.15 is complete locally: usage-flow audit, practice teacher-help ledger coverage, idempotency hardening, quota reconciliation explanations, account-operations usage support fields, and admin core smoke closed as local stability readiness.
 - The next milestone should be a new stability/release-readiness milestone, not a renamed phase: v5.16 will verify end-to-end product journeys and release evidence across auth, billing, usage, curriculum, teacher help, and support views.
+- Phase 252 is complete: release-critical backend and frontend surfaces are mapped to concrete files/tests; v5.12-v5.15 local evidence is reconciled; v5.14 focused frontend e2e remains a Phase 253 gate; live providers are classified as external blockers.
 - External activation remains deferred until prerequisites unblock: live Stripe/TWINT, Cognito/email delivery, notification providers, external support provider, APNS/FCM, production warehouse/BI, APM, and rollout approvals.
 
 ### Pending Todos
 
-- Phase 252: audit current backend/frontend product-readiness reality and write the v5.16 evidence matrix.
 - Phase 253: rerun or precisely classify focused frontend e2e for auth, admin account operations, parent account operations, billing/subscription, and curriculum.
 - Phase 254: verify backend core smoke and release evidence surfaces are sufficient for support-safe triage.
 - Phase 255: verify cross-surface parent, student, and admin journeys without demo fallback.
@@ -60,4 +60,6 @@ Last activity: 2026-07-05 — v5.15 is complete locally; v5.16 now focuses on cr
 
 ## Operator Next Steps
 
-- Start Phase 252 by mapping current backend routes, frontend e2e specs, existing smoke/evidence APIs, and v5.12-v5.15 release evidence into one product-readiness matrix.
+- Run Phase 253 focused frontend e2e:
+  `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts subscription-operations.spec.ts billing-pricing.spec.ts admin-curriculum.spec.ts`
+- If failures occur, classify them as product regression, frontend/API contract mismatch, e2e fixture/platform problem, external provider blocker, or unrelated dirty-worktree interference before changing code.

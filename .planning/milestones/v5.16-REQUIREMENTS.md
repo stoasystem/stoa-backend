@@ -82,8 +82,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| READINESS-01 | Phase 252 | Planned |
-| E2E-01 | Phase 253 | Planned |
+| READINESS-01 | Phase 252 | Complete |
+| E2E-01 | Phase 253 | Active |
 | SMOKE-01 | Phase 254 | Planned |
 | JOURNEY-01 | Phase 255 | Planned |
 | VERIFY-50 | Phase 256 | Planned |
