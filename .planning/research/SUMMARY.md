@@ -1,27 +1,43 @@
-# v5.15 Research Summary: Usage, Quota, And Product Stability
+# v5.19 Research Summary: Native Mobile Push And Offline Client Implementation
 
-## Stack Additions
+## Recommendation
 
-No new runtime stack is required by default. Use existing FastAPI services, DynamoDB repositories, usage ledger service, account operations summaries, scripts, pytest, Ruff, and frontend build/e2e tooling.
+Use Expo SDK 57, React Native 0.86, React 19.2, TypeScript, Expo Router, AWS Amplify Auth, Expo Notifications, Expo SecureStore, TanStack Query, and bounded SQLite/query persistence. Treat EAS internal builds as the v5.19 release evidence target.
 
 ## Feature Table Stakes
 
-- Audit real usage-flow coverage before implementation.
-- Lock idempotency and skip semantics for every governed usage action.
-- Reconcile ledger, counters, entitlements, and support summaries.
-- Provide support-safe quota explanations.
-- Add core health/smoke checks for the flows most likely to break product operation.
+- Native app shell, environment contract, and role-aware navigation.
+- Cognito-compatible auth/session restore, email verification, account-state mapping, secure storage policy, and sign-out clearing.
+- Student core journeys for dashboard, curriculum/practice, question submission, quota state, teacher help, notifications, and history summary.
+- Parent core journeys for dashboard, child summary/history/report, account operations, billing state, and support-safe explanations.
+- Push token registration/revocation, notification list/read/archive, foreground/background handling, and authenticated deep links.
+- Offline/read-through cache for selected read-only summaries with explicit TTL, stale-state UI, privacy limits, and cache clearing.
+- Localization, text-fit/accessibility checks, internal build evidence, screenshots, tests, and provider/app-store blockers.
 
-## Watch Out For
+## Suggested Roadmap Shape
 
-- Duplicate/idempotent behavior must represent same intent, not just same payload.
-- Support evidence must remain metadata-only.
-- Health checks should separate service availability from product-flow readiness.
-- v5.14 frontend e2e and external live-provider smoke remain separate blockers, not hidden v5.15 scope.
+- Phase 267: Native Mobile Stack And App Shell Contract.
+- Phase 268: Auth Session And Account State.
+- Phase 269: Student And Parent Core Mobile Journeys.
+- Phase 270: Native Push Deep Links And Offline Read-Through.
+- Phase 271: Native Mobile Release Gate.
+
+## Key Decisions
+
+- Native storage must not repeat the web localStorage token pattern.
+- Push should reuse backend notification contracts.
+- Offline behavior should be read-through only by default.
+- v5.19 should prove internal native readiness, not promise public app-store launch.
 
 ## Sources
 
-- Stripe idempotent requests: https://docs.stripe.com/api/idempotent_requests
-- AWS Builders' Library, retries and idempotent APIs: https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/
-- OpenTelemetry HTTP semantic conventions: https://opentelemetry.io/docs/specs/semconv/http/http-spans/
-- Kubernetes liveness/readiness probes: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+- React Native versions: https://reactnative.dev/versions
+- Expo SDK 57 reference: https://docs.expo.dev/versions/latest/
+- Expo Router introduction: https://docs.expo.dev/router/introduction/
+- EAS Build introduction: https://docs.expo.dev/build/introduction/
+- Expo push notification setup: https://docs.expo.dev/push-notifications/push-notifications-setup/
+- Expo SecureStore: https://docs.expo.dev/versions/latest/sdk/securestore/
+- Expo SQLite: https://docs.expo.dev/versions/latest/sdk/sqlite/
+- AWS Amplify React Native Auth: https://docs.amplify.aws/react-native/frontend/auth/
+- TanStack Query network mode: https://tanstack.com/query/latest/docs/framework/react/guides/network-mode
+- TanStack Query persistQueryClient: https://tanstack.com/query/latest/docs/framework/react/plugins/persistQueryClient
