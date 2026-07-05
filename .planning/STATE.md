@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.15
 milestone_name: Usage, Quota, And Product Stability
 status: active
-last_updated: "2026-07-05T10:04:00.000Z"
+last_updated: "2026-07-05T10:39:00.000Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 60
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 249 Quota Reconciliation And Support Explanations
-Plan: Reconcile ledger/counter/entitlement state and expose bounded parent/admin quota explanations.
+Phase: 250 Core Health Smoke And Regression Checks
+Plan: Add deterministic local smoke checks for the critical product flows and classify failures.
 Status: Active
-Last activity: 2026-07-05 — Phase 248 added practice teacher-help ledger coverage, question mismatched idempotency conflict handling, and focused ledger/privacy tests.
+Last activity: 2026-07-05 — Phase 249 added support-safe quota reconciliation explanations and parent/admin usage support action visibility.
 
 ## Accumulated Context
 
@@ -57,6 +57,7 @@ Last activity: 2026-07-05 — Phase 248 added practice teacher-help ledger cover
 - v5.15 research concluded no new runtime stack is required by default; use existing FastAPI/DynamoDB/ledger/account-operations/test tooling, explicit request/action idempotency, low-cardinality support-safe errors, and readiness-style product smoke checks.
 - Phase 247 is complete: question submit, chat, hint, teacher-help, practice, lesson, assignment, read-only, account-operations, and admin usage surfaces are mapped to code/tests; practice teacher-help ledger coverage, partial-failure/idempotency tests, over-limit reconciliation, and v5.14 frontend e2e blocker are carried forward.
 - Phase 248 is complete: `practice_teacher_help_request` is governed and instrumented, mismatched question idempotency retries are rejected before counter increment, question persistence partial failure is test-documented, 39 focused tests passed, and Ruff passed.
+- Phase 249 is complete: reconciliation now explains no-usage, over-limit, stale, drifted, matched, and ledger-only states with support actions; parent/admin account operations render usage support action/explanation; 41 focused backend tests, Ruff, and frontend build passed.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
@@ -65,7 +66,7 @@ Last activity: 2026-07-05 — Phase 248 added practice teacher-help ledger cover
 
 - Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
 - Execute Phase 246 v5.14 Verification Login Reliability Gate.
-- Execute Phase 249 Quota Reconciliation And Support Explanations.
+- Execute Phase 250 Core Health Smoke And Regression Checks.
 
 ### Blockers/Concerns
 

@@ -282,6 +282,84 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
     assert repaired["repairMode"] == "applied"
 
 
+def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(
+        usage_ledger_service.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "studentId": student_id,
+            "parentId": "parent-1",
+            "effectivePlan": "free",
+            "source": "local",
+            "billingState": "trial",
+            "limits": {"dailyAiQuestionLimit": 2},
+        },
+    )
+
+    summary = usage_ledger_service.build_student_usage_summary(
+        student_id="student-1",
+        settings=_settings(),
+        day="2026-07-05",
+    )
+
+    assert summary["reconciliation"]["status"] == "no-usage"
+    assert summary["reconciliation"]["supportAction"] == "none"
+    assert summary["supportAction"] == "none"
+    assert summary["unreconciled"] is False
+    assert summary["remaining"] == 2
+
+
+def test_reconciliation_explains_over_limit_counter(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(
+        usage_ledger_service.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "studentId": student_id,
+            "parentId": "parent-1",
+            "effectivePlan": "free",
+            "source": "local",
+            "billingState": "trial",
+            "limits": {"dailyAiQuestionLimit": 2},
+        },
+    )
+    table.items[("USAGE#student-1", "QUESTION#2026-07-05")] = {
+        "PK": "USAGE#student-1",
+        "SK": "QUESTION#2026-07-05",
+        "count": 3,
+    }
+    for index in range(3):
+        usage_ledger_service.record_question_usage_event(
+            student_id="student-1",
+            question_id=f"question-{index}",
+            quota_period="2026-07-05",
+            idempotency_key=f"request-{index}",
+            counter_key="USAGE#student-1/QUESTION#2026-07-05",
+            counter_value=index + 1,
+            quantity=1,
+            entitlement={"effectivePlan": "free", "limits": {"dailyAiQuestionLimit": 2}, "parentId": "parent-1"},
+            created_at="2026-07-05T10:00:00+00:00",
+        )
+
+    summary = usage_ledger_service.build_student_usage_summary(
+        student_id="student-1",
+        settings=_settings(),
+        day="2026-07-05",
+    )
+
+    assert summary["reconciliation"]["status"] == "over-limit"
+    assert summary["reconciliation"]["drift"] == 0
+    assert summary["reconciliation"]["supportAction"] == "review_counter_and_entitlement"
+    assert "above the entitlement limit 2" in summary["reconciliation"]["explanation"]
+    assert summary["remaining"] == 0
+    assert summary["unreconciled"] is True
+
+
 def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
     table = FakeTable()
     profiles = {
@@ -333,6 +411,7 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
     assert summaries[0]["limit"] == 30
     assert summaries[0]["remaining"] == 27
     assert summaries[0]["reconciliation"]["status"] == "ledger-missing"
+    assert summaries[0]["supportAction"] == "review_counter_without_ledger"
 
 
 def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
@@ -405,6 +484,8 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
     assert actions["question_submission"]["reconciliation"]["status"] == "matched"
     assert actions["chat_message"]["reconciliation"]["status"] == "matched"
     assert actions["practice_answer"]["reconciliation"]["status"] == "ledger-only"
+    assert actions["practice_teacher_help_request"]["reconciliation"]["status"] == "ledger-only"
+    assert actions["practice_teacher_help_request"]["supportAction"] == "review_if_disputed"
     assert groups["chat"]["consumed"] == 1
     assert groups["practice"]["supportVisibleConsumed"] == 1
     assert summary["totals"]["supportVisibleConsumed"] >= 3

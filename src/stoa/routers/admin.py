@@ -131,6 +131,8 @@ class UsageSummaryResponse(BaseModel):
     entitlementSource: str | None = None
     billingState: str | None = None
     reconciliation: dict[str, Any] = Field(default_factory=dict)
+    supportAction: str | None = None
+    explanation: str | None = None
     actions: list[dict[str, Any]] = Field(default_factory=list)
     groups: list[dict[str, Any]] = Field(default_factory=list)
     totals: dict[str, Any] = Field(default_factory=dict)
@@ -153,6 +155,10 @@ class UsageReconciliationResponse(BaseModel):
     ledgerCount: int
     eventCount: int
     status: str
+    drift: int = 0
+    stale: bool = False
+    supportAction: str | None = None
+    explanation: str | None = None
     repairMode: str
     repaired: bool
     partial: bool

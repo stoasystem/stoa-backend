@@ -466,6 +466,7 @@ def reconcile_question_usage(
     student_id: str,
     day: str,
     repair: bool = False,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     """Compare one daily question counter row with ledger event totals."""
     counter = usage_ledger_repo.get_daily_question_counter(student_id, day) or {}
@@ -476,7 +477,8 @@ def reconcile_question_usage(
     )
     counter_count = int(counter.get("count") or 0)
     ledger_count = sum(int(event.get("quantity") or 0) for event in events)
-    status = _reconciliation_status(counter_count, ledger_count)
+    stale = _counter_is_stale(counter)
+    status = _reconciliation_status(counter_count, ledger_count, limit=limit, stale=stale)
     repaired = False
     if repair and status in {"counter-missing", "count-mismatch"}:
         usage_ledger_repo.set_daily_question_counter(
@@ -486,8 +488,16 @@ def reconcile_question_usage(
             expires_at=int(counter.get("expires_at") or counter_ttl()),
         )
         counter_count = ledger_count
-        status = _reconciliation_status(counter_count, ledger_count)
+        stale = False
+        status = _reconciliation_status(counter_count, ledger_count, limit=limit)
         repaired = True
+    support = _reconciliation_support_state(
+        status=status,
+        counter_count=counter_count,
+        ledger_count=ledger_count,
+        limit=limit,
+        stale=stale,
+    )
     return {
         "studentId": student_id,
         "action": QUESTION_SUBMISSION_ACTION,
@@ -497,9 +507,13 @@ def reconcile_question_usage(
         "ledgerCount": ledger_count,
         "eventCount": len(events),
         "status": status,
+        "drift": counter_count - ledger_count,
+        "stale": stale,
+        "supportAction": support["supportAction"],
+        "explanation": support["explanation"],
         "repairMode": "applied" if repaired else ("preview" if not repair else "noop"),
         "repaired": repaired,
-        "partial": status != "matched",
+        "partial": not _reconciliation_is_ok(status),
     }
 
 
@@ -509,10 +523,11 @@ def reconcile_usage_action(
     day: str,
     action: str,
     repair: bool = False,
+    limit: int | None = None,
 ) -> dict[str, Any]:
     """Reconcile one governed action for support summaries."""
     if action == QUESTION_SUBMISSION_ACTION:
-        return reconcile_question_usage(student_id=student_id, day=day, repair=repair)
+        return reconcile_question_usage(student_id=student_id, day=day, repair=repair, limit=limit)
     definition = get_usage_action_definition(action)
     events = usage_ledger_repo.list_usage_events(
         student_id=student_id,
@@ -523,6 +538,7 @@ def reconcile_usage_action(
     counter_count = 0
     counter_key = None
     status = "ledger-only"
+    stale = False
     if definition.counter_prefix:
         counter = usage_ledger_repo.get_daily_usage_counter(
             student_id=student_id,
@@ -531,7 +547,15 @@ def reconcile_usage_action(
         ) or {}
         counter_count = int(counter.get("count") or 0)
         counter_key = f"USAGE#{student_id}/{definition.counter_prefix}#{day}"
-        status = _reconciliation_status(counter_count, ledger_count)
+        stale = _counter_is_stale(counter)
+        status = _reconciliation_status(counter_count, ledger_count, limit=limit, stale=stale)
+    support = _reconciliation_support_state(
+        status=status,
+        counter_count=counter_count,
+        ledger_count=ledger_count,
+        limit=limit,
+        stale=stale,
+    )
     return {
         "studentId": student_id,
         "action": action,
@@ -541,9 +565,13 @@ def reconcile_usage_action(
         "ledgerCount": ledger_count,
         "eventCount": len(events),
         "status": status,
+        "drift": counter_count - ledger_count,
+        "stale": stale,
+        "supportAction": support["supportAction"],
+        "explanation": support["explanation"],
         "repairMode": "preview" if not repair else "unsupported",
         "repaired": False,
-        "partial": status not in {"matched", "ledger-only"},
+        "partial": not _reconciliation_is_ok(status),
     }
 
 
@@ -562,8 +590,8 @@ def build_student_usage_summary(
         settings=settings,
         student_profile=profile,
     )
-    reconciliation = reconcile_question_usage(student_id=student_id, day=day)
     limit = int((entitlement.get("limits") or {}).get("dailyAiQuestionLimit") or 0)
+    reconciliation = reconcile_question_usage(student_id=student_id, day=day, limit=limit)
     consumed = reconciliation["counterCount"]
     remaining = max(limit - consumed, 0)
     action_summaries = _build_action_summaries(
@@ -573,7 +601,7 @@ def build_student_usage_summary(
         question_reconciliation=reconciliation,
     )
     groups = _usage_groups(action_summaries)
-    unreconciled = any(item["reconciliation"]["status"] not in {"matched", "ledger-only"} for item in action_summaries)
+    unreconciled = any(not _reconciliation_is_ok(item["reconciliation"]["status"]) for item in action_summaries)
     return {
         "studentId": student_id,
         "parentId": entitlement.get("parentId"),
@@ -586,6 +614,8 @@ def build_student_usage_summary(
         "entitlementSource": entitlement.get("source"),
         "billingState": entitlement.get("billingState"),
         "reconciliation": reconciliation,
+        "supportAction": reconciliation["supportAction"],
+        "explanation": reconciliation["explanation"],
         "actions": action_summaries,
         "groups": groups,
         "totals": {
@@ -598,11 +628,11 @@ def build_student_usage_summary(
             ),
             "actionCount": len(action_summaries),
             "unreconciledActionCount": sum(
-                1 for item in action_summaries if item["reconciliation"]["status"] not in {"matched", "ledger-only"}
+                1 for item in action_summaries if not _reconciliation_is_ok(item["reconciliation"]["status"])
             ),
         },
         "partial": unreconciled,
-        "stale": False,
+        "stale": any(bool(item["reconciliation"].get("stale")) for item in action_summaries),
         "unreconciled": unreconciled,
     }
 
@@ -679,7 +709,19 @@ def _entitlement_snapshot(entitlement: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _reconciliation_status(counter_count: int, ledger_count: int) -> str:
+def _reconciliation_status(
+    counter_count: int,
+    ledger_count: int,
+    *,
+    limit: int | None = None,
+    stale: bool = False,
+) -> str:
+    if counter_count == 0 and ledger_count == 0:
+        return "no-usage"
+    if limit is not None and limit >= 0 and counter_count > limit:
+        return "over-limit"
+    if stale and counter_count > 0:
+        return "stale"
     if counter_count == ledger_count:
         return "matched"
     if counter_count > 0 and ledger_count == 0:
@@ -687,6 +729,73 @@ def _reconciliation_status(counter_count: int, ledger_count: int) -> str:
     if counter_count == 0 and ledger_count > 0:
         return "counter-missing"
     return "count-mismatch"
+
+
+def _counter_is_stale(counter: dict[str, Any]) -> bool:
+    expires_at = counter.get("expires_at")
+    if expires_at is None:
+        return False
+    try:
+        return int(expires_at) < int(datetime.now(timezone.utc).timestamp())
+    except (TypeError, ValueError):
+        return False
+
+
+def _reconciliation_is_ok(status: str) -> bool:
+    return status in {"matched", "ledger-only", "no-usage"}
+
+
+def _reconciliation_support_state(
+    *,
+    status: str,
+    counter_count: int,
+    ledger_count: int,
+    limit: int | None,
+    stale: bool,
+) -> dict[str, str]:
+    limit_text = "unknown" if limit is None else str(limit)
+    if status == "matched":
+        return {
+            "supportAction": "none",
+            "explanation": "Counter and usage ledger match for this quota period.",
+        }
+    if status == "no-usage":
+        return {
+            "supportAction": "none",
+            "explanation": "No usage was recorded for this action and quota period.",
+        }
+    if status == "ledger-only":
+        return {
+            "supportAction": "review_if_disputed",
+            "explanation": "This support-visible action is tracked only in the ledger and has no quota counter.",
+        }
+    if status == "over-limit":
+        return {
+            "supportAction": "review_counter_and_entitlement",
+            "explanation": (
+                f"Counter value {counter_count} is above the entitlement limit {limit_text}; "
+                "review quota enforcement and recent retries before changing access."
+            ),
+        }
+    if status == "stale" or stale:
+        return {
+            "supportAction": "review_stale_counter",
+            "explanation": "The counter row appears stale for this quota period; verify TTL behavior before using it for support decisions.",
+        }
+    if status == "ledger-missing":
+        return {
+            "supportAction": "review_counter_without_ledger",
+            "explanation": f"Counter shows {counter_count} consumed but no matching ledger events were found.",
+        }
+    if status == "counter-missing":
+        return {
+            "supportAction": "review_ledger_without_counter",
+            "explanation": f"Ledger shows {ledger_count} consumed but no matching counter row was found.",
+        }
+    return {
+        "supportAction": "review_count_mismatch",
+        "explanation": f"Counter value {counter_count} and ledger total {ledger_count} do not match.",
+    }
 
 
 def _build_action_summaries(
@@ -698,17 +807,17 @@ def _build_action_summaries(
 ) -> list[dict[str, Any]]:
     summaries: list[dict[str, Any]] = []
     for definition in USAGE_ACTION_DEFINITIONS.values():
+        limit = _action_limit(definition, entitlement)
         reconciliation = (
             question_reconciliation
             if definition.action == QUESTION_SUBMISSION_ACTION
-            else reconcile_usage_action(student_id=student_id, day=day, action=definition.action)
+            else reconcile_usage_action(student_id=student_id, day=day, action=definition.action, limit=limit)
         )
         consumed = (
             int(reconciliation.get("counterCount") or 0)
             if definition.quota_enforced and reconciliation.get("counterKey")
             else int(reconciliation.get("ledgerCount") or 0)
         )
-        limit = _action_limit(definition, entitlement)
         summaries.append(
             {
                 "action": definition.action,
@@ -720,8 +829,10 @@ def _build_action_summaries(
                 "limit": limit,
                 "remaining": max(limit - consumed, 0) if limit is not None else None,
                 "reconciliation": reconciliation,
-                "partial": reconciliation["status"] not in {"matched", "ledger-only"},
-                "unreconciled": reconciliation["status"] not in {"matched", "ledger-only"},
+                "supportAction": reconciliation["supportAction"],
+                "explanation": reconciliation["explanation"],
+                "partial": not _reconciliation_is_ok(reconciliation["status"]),
+                "unreconciled": not _reconciliation_is_ok(reconciliation["status"]),
             }
         )
     return summaries

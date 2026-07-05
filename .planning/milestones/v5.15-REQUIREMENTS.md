@@ -37,7 +37,7 @@ Acceptance criteria:
 
 ### QUOTA-01 Quota Reconciliation And Support Explanations
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -48,7 +48,7 @@ Acceptance criteria:
 
 ### HEALTH-01 Core Health And Smoke Gates
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -101,6 +101,6 @@ Key guidance:
 |-------------|-------|--------|
 | STABILITY-01 | Phase 247 | Complete |
 | LEDGER-01 | Phase 248 | Complete |
-| QUOTA-01 | Phase 249 | Active |
-| HEALTH-01 | Phase 250 | Planned |
+| QUOTA-01 | Phase 249 | Complete |
+| HEALTH-01 | Phase 250 | Active |
 | VERIFY-49 | Phase 251 | Planned |
