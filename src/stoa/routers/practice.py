@@ -661,8 +661,27 @@ async def get_hint(body: dict, user: dict = Depends(require_role("student"))):
 @router.post("/teacher-help")
 async def request_teacher_help(body: dict, user: dict = Depends(require_role("student"))):
     import uuid
+    challenge_id = str(body.get("challengeId") or "").strip()
+    challenge = practice_repo.get_challenge(challenge_id) if challenge_id else None
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    request_id = str(uuid.uuid4())
+    _record_practice_usage(
+        student_id=user["sub"],
+        action=usage_ledger_service.PRACTICE_TEACHER_HELP_ACTION,
+        resource_id=challenge_id,
+        metadata={
+            "challenge_id": challenge_id,
+            "request_id": request_id,
+            "lesson_id": body.get("lessonId") or challenge.get("lesson_id"),
+            "subject": body.get("subjectId") or challenge.get("subject_id"),
+            "topic_id": body.get("topicId") or challenge.get("topic_id"),
+            "status": "ready",
+        },
+    )
     return {
-        "requestId": str(uuid.uuid4()),
+        "requestId": request_id,
         "status": "ready",
         "message": "Ein Lehrer wird sich deine Aufgabe ansehen.",
     }

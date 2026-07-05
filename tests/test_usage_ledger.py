@@ -153,6 +153,7 @@ def test_usage_action_taxonomy_covers_v5_11_actions_and_preserves_question_contr
     assert definitions["hint_request"]["counter_prefix"] == "HINT"
     assert definitions["question_teacher_help_request"]["quota_enforced"] is False
     assert definitions["conversation_teacher_help_request"]["summary_group"] == "teacher_help"
+    assert definitions["practice_teacher_help_request"]["summary_group"] == "teacher_help"
     assert definitions["practice_answer"]["summary_group"] == "practice"
     assert definitions["practice_lesson_completion"]["support_visible"] is True
     assert definitions["assignment_completed"]["summary_group"] == "assignments"

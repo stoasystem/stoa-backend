@@ -18,6 +18,7 @@ CHAT_MESSAGE_ACTION = "chat_message"
 HINT_REQUEST_ACTION = "hint_request"
 QUESTION_TEACHER_HELP_ACTION = "question_teacher_help_request"
 CONVERSATION_TEACHER_HELP_ACTION = "conversation_teacher_help_request"
+PRACTICE_TEACHER_HELP_ACTION = "practice_teacher_help_request"
 PRACTICE_ANSWER_ACTION = "practice_answer"
 PRACTICE_LESSON_COMPLETION_ACTION = "practice_lesson_completion"
 ASSIGNMENT_STARTED_ACTION = "assignment_started"
@@ -161,6 +162,16 @@ USAGE_ACTION_DEFINITIONS: dict[str, UsageActionDefinition] = {
         support_visible=True,
         success_condition="conversation_marked_escalated",
         excluded_when=("conversation_not_found", "not_owner"),
+    ),
+    PRACTICE_TEACHER_HELP_ACTION: UsageActionDefinition(
+        action=PRACTICE_TEACHER_HELP_ACTION,
+        usage_type="support_practice_teacher_help_request",
+        summary_group="teacher_help",
+        description="Successful student escalation of a practice challenge to human help.",
+        quota_enforced=False,
+        support_visible=True,
+        success_condition="practice_teacher_help_request_accepted",
+        excluded_when=("challenge_not_found", "not_owner"),
     ),
     PRACTICE_ANSWER_ACTION: UsageActionDefinition(
         action=PRACTICE_ANSWER_ACTION,

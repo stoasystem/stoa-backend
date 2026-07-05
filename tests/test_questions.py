@@ -16,12 +16,12 @@ def _settings() -> Settings:
     )
 
 
-def _client() -> TestClient:
+def _client(*, raise_server_exceptions: bool = True) -> TestClient:
     app = FastAPI()
     app.include_router(questions.router, prefix="/questions")
     app.dependency_overrides[get_settings] = _settings
     app.dependency_overrides[get_current_user] = lambda: {"sub": "student-1", "role": "student"}
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def _client_error(code: str) -> ClientError:
@@ -332,6 +332,70 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
     assert usage_calls == []
 
 
+def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(monkeypatch):
+    usage_calls = []
+
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "get_question_usage_event",
+        lambda **kwargs: {"question_id": "question-existing"},
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda question_id: {
+            "question_id": question_id,
+            "student_id": "student-1",
+            "subject": "math",
+            "content": "Please solve 2x + 4 = 10",
+            "original_content": "Please solve 2x + 4 = 10",
+            "corrected_text": None,
+            "image_s3_key": None,
+            "has_image": False,
+            "status": "pending",
+            "ai_response": None,
+            "teacher_id": None,
+            "teacher_response": None,
+            "knowledge_points": [],
+            "student_feedback": None,
+            "created_at": "2026-06-07T12:00:00+00:00",
+            "resolved_at": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *args: usage_calls.append(args) or 1,
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve a different problem",
+            "subject": "math",
+            "idempotencyKey": "question-submit-1",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "different question submission" in response.json()["detail"]
+    assert usage_calls == []
+
+
 def test_request_teacher_records_support_visible_usage_event(monkeypatch):
     ledger_calls = []
     monkeypatch.setattr(
@@ -369,3 +433,58 @@ def test_request_teacher_records_support_visible_usage_event(monkeypatch):
         "subject": "math",
         "status": "escalated",
     }
+
+
+def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_reconciliation(monkeypatch):
+    ledger_calls = []
+    counter_calls = []
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "source": "local",
+            "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *args: counter_calls.append(args) or 1,
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "get_question_usage_event",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "record_question_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+    )
+
+    def fail_put_question(item):
+        raise RuntimeError("dynamodb write failed")
+
+    monkeypatch.setattr(questions.question_repo, "put_question", fail_put_question)
+    client = _client(raise_server_exceptions=False)
+
+    response = client.post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": "question-submit-1",
+        },
+    )
+
+    assert response.status_code == 500
+    assert len(counter_calls) == 1
+    assert len(ledger_calls) == 1
+    assert ledger_calls[0]["idempotency_key"] == "question-submit-1"

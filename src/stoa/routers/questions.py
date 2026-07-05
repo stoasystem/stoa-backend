@@ -110,6 +110,16 @@ def _build_question_content(body: SubmitQuestionRequest, settings: Settings) -> 
     return content, metadata, ocr_text
 
 
+def _question_retry_matches(existing_question: dict[str, Any], body: SubmitQuestionRequest, subject: str) -> bool:
+    """Return whether an idempotent retry matches the original question intent."""
+    return (
+        existing_question.get("subject") == subject
+        and (existing_question.get("original_content") or existing_question.get("content")) == body.content
+        and (existing_question.get("corrected_text") or None) == (body.corrected_text or None)
+        and (existing_question.get("image_s3_key") or None) == (body.image_s3_key or None)
+    )
+
+
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_question(
     body: SubmitQuestionRequest,
@@ -144,6 +154,11 @@ async def submit_question(
         if existing_usage and existing_usage.get("question_id"):
             existing_question = question_repo.get_question(str(existing_usage["question_id"]))
             if existing_question:
+                if not _question_retry_matches(existing_question, body, subject):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Idempotency key was already used for a different question submission",
+                    )
                 return _question_response(existing_question)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

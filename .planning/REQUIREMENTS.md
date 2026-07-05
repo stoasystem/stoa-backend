@@ -26,7 +26,7 @@ Acceptance criteria:
 
 ### LEDGER-01 Ledger Coverage And Idempotency Closure
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -37,7 +37,7 @@ Acceptance criteria:
 
 ### QUOTA-01 Quota Reconciliation And Support Explanations
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -100,7 +100,7 @@ Key guidance:
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | STABILITY-01 | Phase 247 | Complete |
-| LEDGER-01 | Phase 248 | Active |
-| QUOTA-01 | Phase 249 | Planned |
+| LEDGER-01 | Phase 248 | Complete |
+| QUOTA-01 | Phase 249 | Active |
 | HEALTH-01 | Phase 250 | Planned |
 | VERIFY-49 | Phase 251 | Planned |
