@@ -1,94 +1,106 @@
-# Requirements: v5.14 Verification And Login Reliability
+# Requirements: v5.15 Usage, Quota, And Product Stability
 
-**Milestone:** v5.14
+**Milestone:** v5.15
 **Status:** Active
 **Created:** 2026-07-05
-**Prior milestone:** v5.13 Payment And Entitlement Production Completion
+**Prior milestone:** v5.14 Verification And Login Reliability
 
 ## Purpose
 
-Make email verification, login policy, account activation, resend/confirm behavior, and support recovery reliable for real users. v5.14 must resolve half-enabled login-code/passwordless behavior, tighten verification state consistency across Cognito/local profiles/frontend views, and provide bounded support evidence without exposing sensitive authentication data.
+Make usage accounting, quota reconciliation, support explanations, and core product smoke checks trustworthy across real STOA flows. v5.15 should verify actual behavior before adding code, then close the highest-risk gaps in usage recording, idempotency, drift detection, and local stability gates.
 
-This is a reliability and production-readiness milestone, not a broad authentication redesign. The milestone should audit current reality first, then complete the smallest dependable verification/login loop.
+This is a product stability milestone, not a BI/analytics expansion. It should preserve privacy boundaries and use support-safe metadata instead of raw learning content.
 
 ## Requirements
 
-### AUTHREL-01 Verification And Login Reality Audit
-
-Status: Complete.
-
-Acceptance criteria:
-
-- Current Cognito sign-up confirmation, local profile verification fields, token-return behavior, resend/confirm endpoints, frontend verification screens, and admin/account-operations support views are mapped to concrete files/routes/services.
-- Implemented, partially implemented, demo-only, stale, and externally blocked behavior is separated in an evidence table.
-- Login-code/passwordless references are located and classified as supported, hidden, or deferred.
-- v5.14 implementation contract identifies the canonical login/verification policy and release-gate evidence expectations.
-
-### VERIFY-01 Email Verification Resend Confirm Reliability
-
-Status: Complete.
-
-Acceptance criteria:
-
-- User can register, receive verification-required state, resend verification, confirm email, and then log in without inconsistent local/Cognito state.
-- Expired, already-confirmed, wrong-code, rate-limited, disabled-user, and missing-profile cases return clear support-safe errors.
-- Local profile verification fields remain consistent with Cognito confirmation and frontend account operations state.
-- Focused tests cover success, retries, expiry/rate-limit, already-confirmed, and failed confirmation paths.
-
-### LOGIN-01 Canonical Login Code And Passwordless Policy
-
-Status: Complete.
-
-Acceptance criteria:
-
-- Half-enabled login-code/passwordless behavior is either completed with a real Cognito custom-auth contract or removed/hidden from product surfaces.
-- Email/password login remains a dependable canonical path unless a complete custom-auth path is implemented.
-- Token return is blocked for unverified accounts according to the canonical policy, with clear frontend messaging.
-- Tests cover unsupported login-code attempts, canonical login success, unverified login refusal, and policy documentation.
-
-### SUPPORT-01 Verification Support Visibility And Recovery
-
-Status: Complete.
-
-Acceptance criteria:
-
-- Parent/admin account operations expose bounded verification/login recovery state, including verification status, resend eligibility, last request/confirm metadata, and support action.
-- Support/admin recovery actions are explicit, audited, and do not expose raw Cognito secrets, codes, or sensitive token material.
-- Frontend admin/support surfaces render verification blockers, warnings, next actions, and recovery evidence clearly.
-- Focused tests cover support visibility for pending, expired, verified, locked/rate-limited, and support-recovered accounts.
-
-### VERIFY-48 v5.14 Release Gate
+### STABILITY-01 Usage Reality Audit
 
 Status: Active.
 
 Acceptance criteria:
 
-- Focused backend tests pass for registration confirmation, resend/confirm, login refusal/success, policy enforcement, support visibility, and recovery audit.
-- Frontend lint/build and focused e2e pass for verification/login recovery workflows.
-- Live Cognito/email delivery smoke is recorded as blocked or completed based on credential/environment availability.
-- Docs, roadmap, state, milestone snapshots, and release evidence are updated.
-- Remaining externally blocked delivery/custom-auth items are explicit future work, not hidden in completion notes.
+- All current usage-bearing flows are mapped to concrete backend/frontend files and classified as ledger event, aggregate counter, both, intentionally skipped, missing, future-only, or externally blocked.
+- Question submit, chat, hints, teacher help, practice, lesson completion, assignment generation, assignment lifecycle, curriculum read, billing entitlement, and account operations paths are included.
+- Each skip rule is explicit for previews, failed operations, admin-triggered retries, dry-runs, duplicate submissions, provider-blocked paths, and read-only flows.
+- Priority fixes are identified for paid access, student quota behavior, parent explanations, and admin support decisions.
+
+### LEDGER-01 Ledger Coverage And Idempotency Closure
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Major successful usage flows emit privacy-safe, governed, idempotent ledger events or have an explicit non-consuming skip decision.
+- Duplicate request/action identifiers are handled consistently and semantically equivalent retries do not double-charge quota.
+- Mismatched duplicate intents are rejected, flagged, or surfaced as support-safe conflicts.
+- Focused tests cover duplicate request IDs, repeated submissions, failed operations, partial failures, and action metadata privacy.
+
+### QUOTA-01 Quota Reconciliation And Support Explanations
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Ledger rows, aggregate counters, entitlement limits, and user/admin summaries can be reconciled for a student/action/day.
+- Drift is detected and surfaced with support-safe status, counts, request IDs, quota period, action, and recommended support action.
+- Parent/admin account operations explain remaining quota and unreconciled usage without raw learning content or provider payloads.
+- Focused tests cover matched, drifted, stale, partial, over-limit, and no-usage states.
+
+### HEALTH-01 Core Health And Smoke Gates
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Local smoke or health checks cover login, entitlement resolution, curriculum read, question submit, teacher help, and admin/account support surfaces.
+- Checks separate service availability from product-flow readiness and return actionable route/status/request metadata.
+- Smoke outputs are deterministic enough for local release gates and support-safe enough to share internally.
+- Tests cover smoke success, expected auth/provider blocks, and failure classification.
+
+### VERIFY-49 v5.15 Usage Stability Gate
+
+Status: Planned.
+
+Acceptance criteria:
+
+- Focused backend tests pass for usage coverage, idempotency, reconciliation, support summaries, and smoke checks.
+- Frontend build and focused account-operations/usage visibility checks pass when execution permission is available.
+- v5.14 residual focused frontend e2e blocker is recorded separately and not hidden in v5.15 completion.
+- Docs, roadmap, state, milestone snapshots, research summary, and release evidence are updated.
+- Remaining BI/APM/live-provider dependencies are explicit future work.
 
 ## Out of Scope
 
-- Switching identity providers.
-- Broad OAuth/social login.
-- Native app auth flows.
-- Full passwordless rollout unless the real Cognito custom-auth flow is implemented end to end in this milestone.
-- Exposing raw verification codes, Cognito secrets, refresh tokens, or sensitive auth payloads in support/admin views.
-- Production email-provider deliverability certification beyond explicit smoke/blocker documentation.
+- Full BI warehouse deployment.
+- Long-term analytics modeling beyond operational usage reliability.
+- External APM/vendor rollout unless explicitly approved.
+- New payment, Cognito, notification, or support-provider activation.
+- Raw learning content, prompt bodies, Cognito token material, provider payloads, or private report artifacts in support evidence.
+- Broad frontend redesign beyond focused usage/quota visibility needed by this milestone.
 
-## Future Milestones
+## Research Summary
 
-- **v5.15 Usage, Quota, And Product Stability**: usage accounting, quota reconciliation, user-visible usage explanations, support views, health checks, and regression gates.
-- External live delivery/custom-auth activation remains separate when provider credentials, Cognito trigger deployment, and rollout approvals unblock.
+Research files:
+
+- `.planning/research/STACK.md`
+- `.planning/research/FEATURES.md`
+- `.planning/research/ARCHITECTURE.md`
+- `.planning/research/PITFALLS.md`
+- `.planning/research/SUMMARY.md`
+
+Key guidance:
+
+- Use existing STOA stack and support-safe metadata.
+- Prefer explicit request/action idempotency keys over payload equality.
+- Keep error/status codes low-cardinality and documented.
+- Separate product-flow smoke checks from generic service liveness.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTHREL-01 | Phase 242 | Complete |
-| VERIFY-01 | Phase 243 | Complete |
-| LOGIN-01 | Phase 244 | Complete |
-| SUPPORT-01 | Phase 245 | Complete |
-| VERIFY-48 | Phase 246 | Active |
+| STABILITY-01 | Phase 247 | Active |
+| LEDGER-01 | Phase 248 | Planned |
+| QUOTA-01 | Phase 249 | Planned |
+| HEALTH-01 | Phase 250 | Planned |
+| VERIFY-49 | Phase 251 | Planned |

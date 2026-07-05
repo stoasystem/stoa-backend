@@ -96,16 +96,16 @@ Known deferred items: live Stripe/TWINT customer-charging smoke, production depl
 
 ---
 
-## Active: v5.14 Verification And Login Reliability
+## Partial Gate: v5.14 Verification And Login Reliability
 
-**Status:** Active
+**Status:** Partial local gate; backend gate and frontend build passed, focused frontend e2e blocked by platform usage-limit approval
 **Started:** 2026-07-05
 **Roadmap:** `.planning/milestones/v5.14-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.14-REQUIREMENTS.md`
 **Goal:** Make email verification, login-code policy, account activation, resend/confirm, and support recovery reliable.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 4/5 complete
+**Requirements:** 4/5 complete
 **Release target:** `verification-login-reliable-local`
 
 Function purpose:
@@ -119,22 +119,26 @@ Implementation strategy:
 - Prefer one canonical login path over multiple partially working paths.
 - Add bounded support visibility and focused rate-limit/abuse controls.
 
-Planned phases:
+Phase status:
 
-- Phase 242: Verification And Login Reality Audit.
-- Phase 243: Backend Verification Resend Confirm Reliability.
-- Phase 244: Login Code And Passwordless Policy Resolution.
-- Phase 245: Frontend Verification Recovery And Admin Support Visibility.
-- Phase 246: v5.14 Verification Login Reliability Gate.
+- Phase 242: Verification And Login Reality Audit. (complete)
+- Phase 243: Backend Verification Resend Confirm Reliability. (complete)
+- Phase 244: Login Code And Passwordless Policy Resolution. (complete)
+- Phase 245: Frontend Verification Recovery And Admin Support Visibility. (complete)
+- Phase 246: v5.14 Verification Login Reliability Gate. (partial)
 
 ---
 
-## Planned Next: v5.15 Usage, Quota, And Product Stability
+## Active: v5.15 Usage, Quota, And Product Stability
 
-**Status:** Planned
+**Status:** Active
 **Roadmap:** `.planning/milestones/v5.15-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.15-REQUIREMENTS.md`
 **Goal:** Make usage accounting, quota reconciliation, support explanations, and core smoke checks trustworthy.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+**Release target:** `usage-stability-ready-local`
 
 Function purpose:
 
@@ -146,6 +150,14 @@ Implementation strategy:
 - Audit actual flow coverage instead of assuming prior ledger planning is complete.
 - Reconcile ledger rows, aggregate counters, entitlement state, and support summaries.
 - Keep observability support-safe and focused on request IDs/metadata rather than raw learning content.
+
+Planned phases:
+
+- Phase 247: Usage Flow Reality Audit And Stability Contract.
+- Phase 248: Ledger Coverage And Idempotency Closure.
+- Phase 249: Quota Reconciliation And Support Explanations.
+- Phase 250: Core Health Smoke And Regression Checks.
+- Phase 251: v5.15 Usage Stability Release Gate.
 
 ---
 

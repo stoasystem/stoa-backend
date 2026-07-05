@@ -100,6 +100,10 @@ The completed v5.12 milestone implements the curriculum editor and content migra
 
 The completed v5.13 milestone makes paid access locally production-ready: parent-facing billing uses real subscription APIs without demo fallback, webhook reconciliation is idempotent and support-visible, stale provider events cannot regress active access, and bounded billing support evidence is visible to admins.
 
+The partial-gate v5.14 milestone makes verification and login reliability locally stronger: backend verification confirm/resend/login edge cases are hardened, login-code/passwordless remains explicitly deferred with no token minting, and parent/admin account operations show verification recovery evidence. The final focused frontend e2e gate remains blocked by platform usage-limit approval and must stay visible until rerun.
+
+The active v5.15 milestone focuses on usage, quota, and product stability: real usage-flow coverage, ledger idempotency, quota reconciliation, parent/admin support explanations, and local smoke/regression gates.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -108,7 +112,19 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v5.13 Payment And Entitlement Production Completion on 2026-07-05 (payment-production-ready-local release gate)
-**Active milestone:** v5.14 Verification And Login Reliability
+**Residual partial gate:** v5.14 Verification And Login Reliability frontend focused e2e blocked by platform usage-limit approval
+**Active milestone:** v5.15 Usage, Quota, And Product Stability
+
+## Current Milestone: v5.15 Usage, Quota, And Product Stability
+
+**Goal:** Make usage accounting, quota reconciliation, support explanations, and core product smoke checks trustworthy across real STOA flows.
+
+**Target features:**
+- Usage-flow reality audit across backend/frontend flows.
+- Ledger coverage and idempotency closure for governed usage actions.
+- Quota reconciliation across ledger rows, aggregate counters, entitlement limits, and account operations summaries.
+- Parent/admin support-safe quota explanations and drift evidence.
+- Core health/smoke checks for login, entitlement, curriculum read, question submit, teacher help, and admin support surfaces.
 
 Delivered:
 
@@ -1033,7 +1049,7 @@ Known current resources:
 | Start v5.12 curriculum editor and content migration buildout | v5.1 was readiness-complete but left rich editor frontend, draft patch/diff/validation APIs, migration service/API/UI, evidence, and rollback metadata deferred; this is the highest-value internally buildable gap after v5.11, with curriculum editing restricted to backend-authorized operators rather than all teachers/tutors | Complete - curriculum-buildout-ready release gate passed |
 | Plan v5.13 payment and entitlement production completion | User testing indicates paid access and business-critical account behavior still need real product completion; after v5.12, run a fresh reality audit and close checkout/paywall, webhook reconciliation, entitlement activation, quota compatibility, and admin billing evidence | Planned |
 | Plan v5.14 verification and login reliability | User testing indicates login code, email verification, resend/confirm, and activation edge cases need a dedicated reliability milestone rather than being treated as small polish | Planned |
-| Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Planned |
+| Plan v5.15 usage, quota, and product stability | User testing indicates backend usage recording and visible quota behavior need real-flow verification, reconciliation, support explanations, smoke checks, and stability gates | Active |
 
 ## Evolution
 
@@ -1053,4 +1069,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-05 after selecting v5.12 curriculum editor and content migration buildout*
+*Last updated: 2026-07-05 after starting v5.15 usage, quota, and product stability*

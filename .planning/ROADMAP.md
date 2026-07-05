@@ -1,129 +1,125 @@
-# Roadmap: v5.14 Verification And Login Reliability
+# Roadmap: v5.15 Usage, Quota, And Product Stability
 
 **Status:** Active
 **Created:** 2026-07-05
-**Prior milestone:** v5.13 Payment And Entitlement Production Completion
+**Prior milestone:** v5.14 Verification And Login Reliability
 
 ## Goal
 
-Make email verification, login-code policy, account activation, resend/confirm, and support recovery reliable across backend, frontend, and admin support surfaces.
+Make usage accounting and core product stability trustworthy: real usage events, quota reconciliation, user/admin explanations, health checks, smoke tests, and regression gates for the flows that matter most.
 
 ## Why This Is The Current Milestone
 
-v5.8 replaced placeholder email verification with Cognito sign-up confirmation and explicitly deferred login-code/passwordless behavior. v5.10 added frontend verification UX and account operations visibility. Those capabilities need a product-level reliability closeout so real users can register, verify, log in, recover from common failures, and receive clear support-safe status.
+Usage and quota behavior affect access, billing explanations, parent trust, and support decisions. Prior milestones expanded the usage ledger and account operations contract, but v5.15 must verify real app behavior against the code and close gaps in observability, reconciliation, and smoke coverage.
 
-## Current Reality To Verify
-
-- Backend has Cognito sign-up confirmation, verification state fields, resend/confirm behavior, and account operations visibility from prior milestones.
-- Frontend has verification UX, but v5.14 must verify no stale/demo/half-enabled auth paths remain visible.
-- Login-code/passwordless behavior was explicitly deferred and must not remain half-present without a real Cognito custom-auth implementation.
-- Live email/Cognito smoke may be externally gated depending on environment credentials and deployment status.
+v5.14 is not treated as fully closed: backend gate and frontend build passed, but focused frontend e2e was blocked by platform usage-limit approval. v5.15 keeps that as explicit residual evidence instead of hiding it.
 
 ## Implementation Strategy
 
-- Start with a reality audit and canonical policy contract before changing auth behavior.
-- Prefer one dependable login path over multiple incomplete login paths.
-- Keep support evidence bounded: statuses, timestamps, request IDs, and support actions, not secrets/codes/tokens.
-- Add backend contract tests before frontend recovery polish.
-- Verify locally with deterministic Cognito/service fixtures; document live smoke as blocked or completed.
+- Audit real flow coverage instead of assuming all usage actions are correctly metered.
+- Define canonical consume/skip/idempotency rules before adding instrumentation.
+- Reconcile ledger rows, counters, entitlement limits, and account operations summaries.
+- Add local health/smoke checks for auth, entitlement, curriculum, question, teacher-help, and admin-support surfaces.
+- Keep observability support-safe: request IDs, status codes, action names, counters, and timestamps, not raw learning content.
 
 ## Phases
 
-- [x] **Phase 242: Verification And Login Reality Audit** - Map current Cognito/local/frontend/support verification behavior and define the v5.14 policy contract.
-- [x] **Phase 243: Backend Verification Resend Confirm Reliability** - Harden registration confirmation, resend, confirm, activation, and profile state consistency.
-- [x] **Phase 244: Login Code And Passwordless Policy Resolution** - Complete or remove half-enabled login-code/passwordless behavior and lock the canonical login policy.
-- [x] **Phase 245: Frontend Verification Recovery And Admin Support Visibility** - Make verification/login recovery states usable in frontend and support/admin surfaces.
-- [ ] **Phase 246: v5.14 Verification Login Reliability Gate** - Verify backend/frontend behavior, docs, live-smoke status, state, and next milestone decision.
+- [ ] **Phase 247: Usage Flow Reality Audit And Stability Contract** - Map usage-bearing flows, current metering behavior, skip rules, and priority stability gaps.
+- [ ] **Phase 248: Ledger Coverage And Idempotency Closure** - Harden governed usage event coverage, duplicate handling, mismatched intent behavior, and privacy-safe metadata.
+- [ ] **Phase 249: Quota Reconciliation And Support Explanations** - Reconcile ledger/counter/entitlement state and expose bounded parent/admin quota explanations.
+- [ ] **Phase 250: Core Health Smoke And Regression Checks** - Add deterministic local smoke checks for the critical product flows and classify failures.
+- [ ] **Phase 251: v5.15 Usage Stability Release Gate** - Verify backend/frontend evidence, document residual blockers, and close the milestone.
 
 ## Phase Details
 
-### Phase 242: Verification And Login Reality Audit
+### Phase 247: Usage Flow Reality Audit And Stability Contract
 
-**Goal**: Define the exact verification/login reliability implementation contract from current backend/frontend behavior and prior milestones.
-**Depends on**: v5.13 completion.
-**Requirements**: AUTHREL-01
-**Status**: Complete.
-**Success Criteria**:
-
-1. Current Cognito sign-up confirmation, local profile verification fields, resend/confirm endpoints, token-return behavior, frontend screens, and admin/account-operations views are mapped to files/routes/services.
-2. Implemented, partially implemented, demo-only, stale, locally verified, and externally blocked behavior is separated in an evidence table.
-3. Login-code/passwordless references are classified as supported, hidden, or deferred.
-4. v5.14 canonical verification/login policy, out-of-scope behavior, and release evidence expectations are documented.
-
-### Phase 243: Backend Verification Resend Confirm Reliability
-
-**Goal**: Make backend registration verification, resend, confirm, activation, and local profile state consistent.
-**Depends on**: Phase 242.
-**Requirements**: VERIFY-01
-**Status**: Complete.
-**Success Criteria**:
-
-1. Register/resend/confirm/login paths produce consistent Cognito/local verification state.
-2. Expired, wrong-code, already-confirmed, missing-profile, disabled-user, and rate-limited cases return clear support-safe errors.
-3. Account operations verification state reflects resend eligibility, confirmation status, and support action.
-4. Focused backend tests cover successful and failed verification lifecycle behavior.
-
-### Phase 244: Login Code And Passwordless Policy Resolution
-
-**Goal**: Remove or complete login-code/passwordless behavior so users see one dependable auth policy.
-**Depends on**: Phase 243.
-**Requirements**: LOGIN-01
-**Status**: Complete.
-**Success Criteria**:
-
-1. Product-visible login-code/passwordless surfaces are either backed by real Cognito custom auth or hidden/deferred.
-2. Email/password login remains the canonical verified-account login path unless custom auth is fully implemented.
-3. Unverified accounts are refused token return with clear frontend/support-safe messaging.
-4. Focused tests cover canonical login success, unverified login refusal, unsupported login-code attempts, and policy documentation.
-
-### Phase 245: Frontend Verification Recovery And Admin Support Visibility
-
-**Goal**: Make verification/login recovery states clear and actionable for users and support/admins.
-**Depends on**: Phase 244.
-**Requirements**: SUPPORT-01
-**Status**: Complete.
-**Success Criteria**:
-
-1. Frontend verification/login screens render pending, expired, wrong-code, rate-limited, verified, and support-needed states clearly.
-2. Admin/support account operations surfaces show bounded verification evidence, resend eligibility, recovery state, and support action.
-3. Support/admin recovery actions are explicit, audited, and exclude raw codes/secrets/tokens.
-4. Focused frontend/backend tests cover verification recovery and admin support visibility.
-
-### Phase 246: v5.14 Verification Login Reliability Gate
-
-**Goal**: Close v5.14 with evidence that verification/login reliability is locally complete and externally blocked items are explicit.
-**Depends on**: Phase 245.
-**Requirements**: VERIFY-48
+**Goal**: Define the exact usage/quota stability contract from current backend/frontend behavior.
+**Depends on**: v5.14 Phase 246 partial gate evidence.
+**Requirements**: STABILITY-01
 **Status**: Active.
 **Success Criteria**:
 
-1. Focused backend tests pass for verification lifecycle, login policy, support visibility, and recovery audit.
-2. Frontend lint/build and focused e2e pass for verification/login recovery workflows.
-3. Live Cognito/email smoke is recorded as blocked or completed based on environment availability.
-4. Docs, roadmap, requirements, state, milestone snapshots, and release evidence are updated.
-5. Next milestone recommendation is explicit and separates usage/quota stability from external auth-provider activation.
+1. Usage-bearing backend/frontend flows are mapped to concrete files, routes, services, and tests.
+2. Each flow is classified as ledger event, aggregate counter, both, intentionally skipped, missing, future-only, or externally blocked.
+3. Consume/skip rules for failed, preview, dry-run, admin, duplicate, and provider-blocked flows are documented.
+4. Phase 248-250 priority fixes are derived from the audit and separated from BI/APM/live-provider work.
+
+### Phase 248: Ledger Coverage And Idempotency Closure
+
+**Goal**: Ensure major successful usage flows emit governed, privacy-safe, idempotent usage events or explicit skip decisions.
+**Depends on**: Phase 247.
+**Requirements**: LEDGER-01
+**Status**: Planned.
+**Success Criteria**:
+
+1. Missing high-priority ledger coverage discovered in Phase 247 is implemented or explicitly deferred with evidence.
+2. Duplicate request/action identifiers do not double-charge quota.
+3. Mismatched duplicate intent is rejected, flagged, or surfaced support-safely.
+4. Focused tests cover duplicate IDs, repeated submissions, failed operations, partial failures, and metadata privacy.
+
+### Phase 249: Quota Reconciliation And Support Explanations
+
+**Goal**: Make quota state reconcilable and explainable across ledger rows, counters, entitlements, and support summaries.
+**Depends on**: Phase 248.
+**Requirements**: QUOTA-01
+**Status**: Planned.
+**Success Criteria**:
+
+1. Reconciliation compares ledger rows, aggregate counters, entitlement limits, and account operations usage summaries for a student/action/day.
+2. Drift, stale, partial, over-limit, no-usage, and matched states are support-safe and test-covered.
+3. Parent/admin account operations expose remaining quota, reconciliation status, and support action without raw content.
+4. Repair recommendations are explicit and non-mutating unless a future phase adds a guarded repair action.
+
+### Phase 250: Core Health Smoke And Regression Checks
+
+**Goal**: Add deterministic local smoke checks for product flows most likely to break access or support decisions.
+**Depends on**: Phase 249.
+**Requirements**: HEALTH-01
+**Status**: Planned.
+**Success Criteria**:
+
+1. Smoke checks cover login, entitlement resolution, curriculum read, question submit, teacher help, and admin/account support.
+2. Checks separate service availability from product-flow readiness and return route/status/request metadata.
+3. Expected auth/provider/external blocks are classified separately from regressions.
+4. Smoke behavior has focused tests and release-gate documentation.
+
+### Phase 251: v5.15 Usage Stability Release Gate
+
+**Goal**: Close v5.15 with evidence that local usage/quota stability is complete and external blockers are explicit.
+**Depends on**: Phase 250.
+**Requirements**: VERIFY-49
+**Status**: Planned.
+**Success Criteria**:
+
+1. Focused backend tests pass for usage coverage, idempotency, reconciliation, support summaries, and smoke checks.
+2. Frontend build and focused usage/account-operations visibility checks pass when execution permission is available.
+3. v5.14 residual focused frontend e2e blocker is recorded separately.
+4. Docs, roadmap, requirements, state, milestone snapshots, research summary, and release evidence are updated.
+5. Remaining BI/APM/live-provider dependencies are explicit future work.
 
 ## Future Milestone Directions
 
-- **v5.15 Usage, Quota, And Product Stability**: usage metering gaps, quota reconciliation, user-visible usage explanations, support views, health checks, and regression gates.
-- **External Auth Delivery Activation**: production Cognito/email delivery smoke, custom-auth rollout, native auth handoff, and deliverability evidence if credentials/rollout approvals unblock.
+- **Warehouse/BI Activation**: deploy aggregate analytics warehouse/BI only after usage semantics are stable.
+- **External Provider Smoke Completion**: live Stripe/TWINT, Cognito/email, notification, and support provider activation when credentials and rollout approval unblock.
+- **Frontend Usage Polish**: broader usage/quota visual design if Phase 249 identifies product-facing gaps beyond account operations.
 
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 242 Verification And Login Reality Audit | v5.14 | 1/1 | Complete | 2026-07-05 |
-| 243 Backend Verification Resend Confirm Reliability | v5.14 | 1/1 | Complete | 2026-07-05 |
-| 244 Login Code And Passwordless Policy Resolution | v5.14 | 1/1 | Complete | 2026-07-05 |
-| 245 Frontend Verification Recovery And Admin Support Visibility | v5.14 | 1/1 | Complete | 2026-07-05 |
-| 246 v5.14 Verification Login Reliability Gate | v5.14 | 0/1 | Active | - |
+| 247 Usage Flow Reality Audit And Stability Contract | v5.15 | 0/1 | Active | - |
+| 248 Ledger Coverage And Idempotency Closure | v5.15 | 0/1 | Planned | - |
+| 249 Quota Reconciliation And Support Explanations | v5.15 | 0/1 | Planned | - |
+| 250 Core Health Smoke And Regression Checks | v5.15 | 0/1 | Planned | - |
+| 251 v5.15 Usage Stability Release Gate | v5.15 | 0/1 | Planned | - |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTHREL-01 | Phase 242 | Complete |
-| VERIFY-01 | Phase 243 | Complete |
-| LOGIN-01 | Phase 244 | Complete |
-| SUPPORT-01 | Phase 245 | Complete |
-| VERIFY-48 | Phase 246 | Active |
+| STABILITY-01 | Phase 247 | Active |
+| LEDGER-01 | Phase 248 | Planned |
+| QUOTA-01 | Phase 249 | Planned |
+| HEALTH-01 | Phase 250 | Planned |
+| VERIFY-49 | Phase 251 | Planned |

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.14
-milestone_name: Verification And Login Reliability
+milestone: v5.15
+milestone_name: Usage, Quota, And Product Stability
 status: active
-last_updated: "2026-07-05T01:30:00.000Z"
-last_activity: 2026-07-05 — Phase 246 backend gate passed; frontend focused e2e blocked by platform usage-limit approval
+last_updated: "2026-07-05T08:51:45.865Z"
+last_activity: 2026-07-05
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.14 Verification And Login Reliability.
+**Current focus:** v5.15 Usage, Quota, And Product Stability.
 
 ## Current Position
 
-Phase: 246 v5.14 Verification Login Reliability Gate
-Plan: Run final backend/frontend evidence checks and close v5.14 with blocked live-smoke notes.
+Phase: 247 Usage Flow Reality Audit And Stability Contract
+Plan: Map real usage-bearing flows, metering behavior, skip rules, and priority fixes.
 Status: Active
-Last activity: 2026-07-05 — Phase 246 backend tests/Ruff passed and frontend build evidence exists; focused frontend e2e is blocked by local execution approval quota.
+Last activity: 2026-07-05 — Milestone v5.15 started with research, requirements, and roadmap.
 
 ## Accumulated Context
 
@@ -53,6 +53,8 @@ Last activity: 2026-07-05 — Phase 246 backend tests/Ruff passed and frontend b
 - Phase 243 is complete: backend auth now handles idempotent confirm, stale Cognito-already-confirmed local repair, disabled account login/resend, and structured verification errors; `.venv/bin/pytest tests/test_auth_account_lifecycle.py` and Ruff passed.
 - Phase 244 is complete: email/password plus verified email is the canonical product login path; passwordless/login-code remains deferred, frontend has no product login-code path, and backend tests assert deferred/no-token responses.
 - Phase 245 is complete: backend verification public state now includes supportRecoveryState/supportAction, admin verification responses expose them, parent/admin account operations render recovery evidence, frontend build passed, and frontend commit `f2e96df` contains the UI change.
+- v5.15 is active: usage/quota/product stability must audit real usage-flow coverage first, then close ledger idempotency, quota reconciliation, support explanations, and local smoke/regression gates.
+- v5.15 research concluded no new runtime stack is required by default; use existing FastAPI/DynamoDB/ledger/account-operations/test tooling, explicit request/action idempotency, low-cardinality support-safe errors, and readiness-style product smoke checks.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
@@ -61,7 +63,7 @@ Last activity: 2026-07-05 — Phase 246 backend tests/Ruff passed and frontend b
 
 - Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
 - Execute Phase 246 v5.14 Verification Login Reliability Gate.
-- Keep future milestones independent: verification/login reliability and usage/quota/product stability.
+- Execute Phase 247 Usage Flow Reality Audit And Stability Contract.
 
 ### Blockers/Concerns
 
@@ -73,4 +75,4 @@ Last activity: 2026-07-05 — Phase 246 backend tests/Ruff passed and frontend b
 
 ## Operator Next Steps
 
-- Audit current verification/login behavior and define the v5.14 implementation contract.
+- Audit real usage-bearing flows and define the v5.15 usage/quota stability contract.
