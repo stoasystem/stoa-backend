@@ -1,7 +1,7 @@
 # Requirements: v5.15 Usage, Quota, And Product Stability
 
 **Milestone:** v5.15
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-05
 **Prior milestone:** v5.14 Verification And Login Reliability
 
@@ -59,7 +59,7 @@ Acceptance criteria:
 
 ### VERIFY-49 v5.15 Usage Stability Gate
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -103,4 +103,4 @@ Key guidance:
 | LEDGER-01 | Phase 248 | Complete |
 | QUOTA-01 | Phase 249 | Complete |
 | HEALTH-01 | Phase 250 | Complete |
-| VERIFY-49 | Phase 251 | Active |
+| VERIFY-49 | Phase 251 | Complete |

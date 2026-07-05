@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.15
 milestone_name: Usage, Quota, And Product Stability
-status: active
-last_updated: "2026-07-05T11:08:00.000Z"
+status: complete
+last_updated: "2026-07-05T11:31:00.000Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-05)
 
 **Core value:** Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
-**Current focus:** v5.15 Usage, Quota, And Product Stability.
+**Current focus:** v5.15 Usage, Quota, And Product Stability is complete.
 
 ## Current Position
 
 Phase: 251 v5.15 Usage Stability Release Gate
 Plan: Verify backend/frontend evidence, document residual blockers, and close the milestone.
-Status: Active
-Last activity: 2026-07-05 — Phase 250 added deterministic core product smoke readiness matrix and admin smoke route.
+Status: Complete
+Last activity: 2026-07-05 — v5.15 closed with backend focused tests, Ruff, frontend build evidence, release gate, and milestone audit.
 
 ## Accumulated Context
 
@@ -59,6 +59,7 @@ Last activity: 2026-07-05 — Phase 250 added deterministic core product smoke r
 - Phase 248 is complete: `practice_teacher_help_request` is governed and instrumented, mismatched question idempotency retries are rejected before counter increment, question persistence partial failure is test-documented, 39 focused tests passed, and Ruff passed.
 - Phase 249 is complete: reconciliation now explains no-usage, over-limit, stale, drifted, matched, and ledger-only states with support actions; parent/admin account operations render usage support action/explanation; 41 focused backend tests, Ruff, and frontend build passed.
 - Phase 250 is complete: admin `GET /admin/core-smoke` returns a support-safe local smoke matrix covering health, login, entitlement, curriculum read, question submit, teacher help, and admin account operations; 43 focused tests and Ruff passed.
+- Phase 251 is complete: v5.15 release gate passed locally, frontend build evidence is recorded, residual v5.14 focused frontend e2e and live-provider blockers are explicit, and milestone audit is written.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
@@ -67,7 +68,7 @@ Last activity: 2026-07-05 — Phase 250 added deterministic core product smoke r
 
 - Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
 - Execute Phase 246 v5.14 Verification Login Reliability Gate.
-- Execute Phase 251 v5.15 Usage Stability Release Gate.
+- Start the next milestone only after selecting the next functional, safety, or stability target.
 
 ### Blockers/Concerns
 
