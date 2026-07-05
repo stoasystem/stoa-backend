@@ -15,7 +15,7 @@ This is a product stability milestone, not a BI/analytics expansion. It should p
 
 ### STABILITY-01 Usage Reality Audit
 
-Status: Active.
+Status: Complete.
 
 Acceptance criteria:
 
@@ -26,7 +26,7 @@ Acceptance criteria:
 
 ### LEDGER-01 Ledger Coverage And Idempotency Closure
 
-Status: Planned.
+Status: Active.
 
 Acceptance criteria:
 
@@ -99,8 +99,8 @@ Key guidance:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STABILITY-01 | Phase 247 | Active |
-| LEDGER-01 | Phase 248 | Planned |
+| STABILITY-01 | Phase 247 | Complete |
+| LEDGER-01 | Phase 248 | Active |
 | QUOTA-01 | Phase 249 | Planned |
 | HEALTH-01 | Phase 250 | Planned |
 | VERIFY-49 | Phase 251 | Planned |

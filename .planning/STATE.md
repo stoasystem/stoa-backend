@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.15
 milestone_name: Usage, Quota, And Product Stability
 status: active
-last_updated: "2026-07-05T08:51:45.865Z"
+last_updated: "2026-07-05T09:32:00.000Z"
 last_activity: 2026-07-05
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-05)
 
 ## Current Position
 
-Phase: 247 Usage Flow Reality Audit And Stability Contract
-Plan: Map real usage-bearing flows, metering behavior, skip rules, and priority fixes.
+Phase: 248 Ledger Coverage And Idempotency Closure
+Plan: Harden governed usage event coverage, duplicate handling, mismatched intent behavior, and privacy-safe metadata.
 Status: Active
-Last activity: 2026-07-05 — Milestone v5.15 started with research, requirements, and roadmap.
+Last activity: 2026-07-05 — Phase 247 completed the usage flow reality audit and moved v5.15 to ledger coverage/idempotency closure.
 
 ## Accumulated Context
 
@@ -55,6 +55,7 @@ Last activity: 2026-07-05 — Milestone v5.15 started with research, requirement
 - Phase 245 is complete: backend verification public state now includes supportRecoveryState/supportAction, admin verification responses expose them, parent/admin account operations render recovery evidence, frontend build passed, and frontend commit `f2e96df` contains the UI change.
 - v5.15 is active: usage/quota/product stability must audit real usage-flow coverage first, then close ledger idempotency, quota reconciliation, support explanations, and local smoke/regression gates.
 - v5.15 research concluded no new runtime stack is required by default; use existing FastAPI/DynamoDB/ledger/account-operations/test tooling, explicit request/action idempotency, low-cardinality support-safe errors, and readiness-style product smoke checks.
+- Phase 247 is complete: question submit, chat, hint, teacher-help, practice, lesson, assignment, read-only, account-operations, and admin usage surfaces are mapped to code/tests; practice teacher-help ledger coverage, partial-failure/idempotency tests, over-limit reconciliation, and v5.14 frontend e2e blocker are carried forward.
 - Future milestones should be new functional, safety, or stability buildouts, not renamed v5.12 phases.
 - External activation work remains deferred until prerequisites unblock: live Stripe/TWINT, external support provider, live notification providers, APNS/FCM, production warehouse/BI.
 - Published student/parent curriculum reads, adaptive assignment behavior, and v5.11 usage ledger compatibility must remain stable while authoring/migration tools are added.
@@ -63,7 +64,7 @@ Last activity: 2026-07-05 — Milestone v5.15 started with research, requirement
 
 - Re-run focused frontend e2e when external-write/dev-server execution permission is available: `npm run test:e2e -- auth.spec.ts admin-account-operations.spec.ts parent-account-operations.spec.ts` in `/Users/zhdeng/stoa-frontend`.
 - Execute Phase 246 v5.14 Verification Login Reliability Gate.
-- Execute Phase 247 Usage Flow Reality Audit And Stability Contract.
+- Execute Phase 248 Ledger Coverage And Idempotency Closure.
 
 ### Blockers/Concerns
 

@@ -24,7 +24,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 
 ## Phases
 
-- [ ] **Phase 247: Usage Flow Reality Audit And Stability Contract** - Map usage-bearing flows, current metering behavior, skip rules, and priority stability gaps.
+- [x] **Phase 247: Usage Flow Reality Audit And Stability Contract** - Map usage-bearing flows, current metering behavior, skip rules, and priority stability gaps.
 - [ ] **Phase 248: Ledger Coverage And Idempotency Closure** - Harden governed usage event coverage, duplicate handling, mismatched intent behavior, and privacy-safe metadata.
 - [ ] **Phase 249: Quota Reconciliation And Support Explanations** - Reconcile ledger/counter/entitlement state and expose bounded parent/admin quota explanations.
 - [ ] **Phase 250: Core Health Smoke And Regression Checks** - Add deterministic local smoke checks for the critical product flows and classify failures.
@@ -37,7 +37,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 **Goal**: Define the exact usage/quota stability contract from current backend/frontend behavior.
 **Depends on**: v5.14 Phase 246 partial gate evidence.
 **Requirements**: STABILITY-01
-**Status**: Active.
+**Status**: Complete.
 **Success Criteria**:
 
 1. Usage-bearing backend/frontend flows are mapped to concrete files, routes, services, and tests.
@@ -50,7 +50,7 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 **Goal**: Ensure major successful usage flows emit governed, privacy-safe, idempotent usage events or explicit skip decisions.
 **Depends on**: Phase 247.
 **Requirements**: LEDGER-01
-**Status**: Planned.
+**Status**: Active.
 **Success Criteria**:
 
 1. Missing high-priority ledger coverage discovered in Phase 247 is implemented or explicitly deferred with evidence.
@@ -108,8 +108,8 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 247 Usage Flow Reality Audit And Stability Contract | v5.15 | 0/1 | Active | - |
-| 248 Ledger Coverage And Idempotency Closure | v5.15 | 0/1 | Planned | - |
+| 247 Usage Flow Reality Audit And Stability Contract | v5.15 | 1/1 | Complete | 2026-07-05 |
+| 248 Ledger Coverage And Idempotency Closure | v5.15 | 0/1 | Active | - |
 | 249 Quota Reconciliation And Support Explanations | v5.15 | 0/1 | Planned | - |
 | 250 Core Health Smoke And Regression Checks | v5.15 | 0/1 | Planned | - |
 | 251 v5.15 Usage Stability Release Gate | v5.15 | 0/1 | Planned | - |
@@ -118,8 +118,8 @@ v5.14 is not treated as fully closed: backend gate and frontend build passed, bu
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STABILITY-01 | Phase 247 | Active |
-| LEDGER-01 | Phase 248 | Planned |
+| STABILITY-01 | Phase 247 | Complete |
+| LEDGER-01 | Phase 248 | Active |
 | QUOTA-01 | Phase 249 | Planned |
 | HEALTH-01 | Phase 250 | Planned |
 | VERIFY-49 | Phase 251 | Planned |
