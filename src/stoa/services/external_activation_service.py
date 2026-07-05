@@ -100,6 +100,99 @@ def build_notification_support_smoke_report(settings: Settings) -> dict[str, Any
     }
 
 
+def build_production_readiness_smoke_report(settings: Settings) -> dict[str, Any]:
+    """Build a metadata-only production deploy/read-only smoke contract."""
+    production = bool(settings.is_production)
+    classification = "read_only_verifiable" if production else "locally_ready"
+    blockers = [] if production else ["production_environment_not_selected"]
+    warnings = []
+    if not settings.aws_account_id.strip():
+        warnings.append("aws_account_id_not_configured")
+
+    return {
+        "generatedAt": _now_iso(),
+        "taxonomy": list(TAXONOMY),
+        "overallState": classification,
+        "safeToMutate": False,
+        "environment": {
+            "name": settings.environment,
+            "isProduction": production,
+            "awsRegion": settings.aws_region,
+            "awsAccountConfigured": bool(settings.aws_account_id.strip()),
+        },
+        "deployEvidenceRequired": {
+            "backend": [
+                "commit_sha",
+                "deploy_run_id",
+                "lambda_update_status",
+                "lambda_configuration_waiter_status",
+                "health_endpoint_status",
+            ],
+            "frontend": [
+                "commit_sha",
+                "deploy_run_id",
+                "asset_build_status",
+                "cdn_or_hosting_deploy_status",
+                "production_url",
+            ],
+            "infra": [
+                "cdk_or_iac_diff_summary",
+                "expected_resource_changes",
+                "iam_permission_preflight",
+                "rollback_plan",
+            ],
+        },
+        "adminSession": {
+            "required": True,
+            "role": "admin",
+            "identityRedaction": "hash_or_initials_only",
+            "loginPath": "/login",
+            "mfaOrVerificationPolicy": "cognito_email_verification_required_before_sign_in",
+            "sessionCapture": "request_ids_and_route_names_only",
+        },
+        "readOnlyApiSmoke": _read_only_api_smoke_routes(),
+        "readOnlyBrowserSmoke": _read_only_browser_smoke_paths(),
+        "requestIdPolicy": {
+            "required": True,
+            "header": "X-Request-Id",
+            "format": "release-v5.17-<surface>-<timestamp-or-run-id>",
+            "recordForEveryApiCheck": True,
+        },
+        "noMutationPolicy": {
+            "defaultMutationAllowed": False,
+            "requiresApprovedFixture": True,
+            "requiresExplicitMutationMode": True,
+            "approvedFixtureNames": ["stoa-safe-fixture-v2-2-rollback-2026-06-06"],
+            "refusalHelper": "release_evidence_service.mutation_refusal_reasons",
+        },
+        "releaseBundle": {
+            "validatorRoute": "POST /admin/reports/release-evidence/validate",
+            "requiredFields": [
+                "schema_version",
+                "milestone",
+                "phase",
+                "generated_at",
+                "environment",
+                "backend",
+                "frontend",
+                "infra",
+                "api_checks",
+                "browser_smoke",
+                "privacy",
+                "quality_gates",
+            ],
+        },
+        "blockers": blockers,
+        "warnings": warnings,
+        "privacy": {
+            "secretsRedacted": True,
+            "rawProviderPayloadsIncluded": False,
+            "privateStudentContentIncluded": False,
+            "browserScreenshotsRequired": "redacted_or_operator_local_only",
+        },
+    }
+
+
 def _payment_smoke(readiness: dict[str, Any], settings: Settings) -> dict[str, Any]:
     blockers = list(readiness.get("blockers") or [])
     warnings = list(readiness.get("warnings") or [])
@@ -492,6 +585,109 @@ def _provider_classification(
     if send_enabled:
         return "live_ready"
     return "read_only_verifiable"
+
+
+def _read_only_api_smoke_routes() -> list[dict[str, Any]]:
+    return [
+        {
+            "surface": "core_smoke",
+            "method": "GET",
+            "route": "/admin/core-smoke",
+            "mutation": False,
+            "captures": ["status", "summary", "check statuses"],
+        },
+        {
+            "surface": "payment_auth_activation",
+            "method": "GET",
+            "route": "/admin/external-activation/payment-auth-smoke",
+            "mutation": False,
+            "captures": ["overallState", "payment.classification", "cognitoEmail.classification"],
+        },
+        {
+            "surface": "notification_support_activation",
+            "method": "GET",
+            "route": "/admin/external-activation/notification-support-smoke",
+            "mutation": False,
+            "captures": ["overallState", "notification.classification", "support.classification"],
+        },
+        {
+            "surface": "billing_provider_readiness",
+            "method": "GET",
+            "route": "/admin/subscriptions/billing/provider-readiness",
+            "mutation": False,
+            "captures": ["state", "checkoutAllowed", "blockers"],
+        },
+        {
+            "surface": "account_operations",
+            "method": "GET",
+            "route": "/admin/account-operations/parents/{parent_id}",
+            "mutation": False,
+            "requiresSafeFixtureIdentity": True,
+            "captures": ["verification", "billing", "children", "usage"],
+        },
+        {
+            "surface": "curriculum_admin",
+            "method": "GET",
+            "route": "/admin/curriculum/analytics/dashboard",
+            "mutation": False,
+            "captures": ["summary", "sequencingCoverage", "privacy"],
+        },
+        {
+            "surface": "notification_delivery_status",
+            "method": "GET",
+            "route": "/admin/notifications/delivery-status",
+            "mutation": False,
+            "captures": ["websocketReadiness", "emailProvider", "pushProvider"],
+        },
+        {
+            "surface": "support_handoff_sla",
+            "method": "GET",
+            "route": "/admin/reports/support-handoff-sla",
+            "mutation": False,
+            "captures": ["summary", "provider", "retry", "crm"],
+        },
+    ]
+
+
+def _read_only_browser_smoke_paths() -> list[dict[str, Any]]:
+    return [
+        {
+            "surface": "admin_login",
+            "path": "/login",
+            "mutation": False,
+            "captures": ["login page renders", "verification policy visible when applicable"],
+        },
+        {
+            "surface": "admin_home",
+            "path": "/admin",
+            "mutation": False,
+            "captures": ["admin shell renders", "navigation present"],
+        },
+        {
+            "surface": "account_operations",
+            "path": "/admin/account-operations",
+            "mutation": False,
+            "captures": ["read-only parent lookup", "support state visible"],
+        },
+        {
+            "surface": "billing_operations",
+            "path": "/admin/billing",
+            "mutation": False,
+            "captures": ["provider readiness", "rollout state", "no refund execution"],
+        },
+        {
+            "surface": "curriculum_operations",
+            "path": "/admin/curriculum",
+            "mutation": False,
+            "captures": ["worklist/dashboard visible", "no publish/apply action"],
+        },
+        {
+            "surface": "notifications_support",
+            "path": "/admin/notifications",
+            "mutation": False,
+            "captures": ["delivery status visible", "no send action"],
+        },
+    ]
 
 
 def _configured(value: str | None) -> bool:

@@ -71,5 +71,5 @@ Acceptance criteria:
 | PROVIDER-01 | Phase 257 | Complete |
 | PROVIDER-02 | Phase 258 | Complete |
 | PROVIDER-03 | Phase 259 | Complete |
-| RELEASEOPS-01 | Phase 260 | Planned |
+| RELEASEOPS-01 | Phase 260 | Complete |
 | VERIFY-51 | Phase 261 | Planned |

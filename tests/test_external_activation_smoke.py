@@ -267,3 +267,62 @@ def test_notification_support_smoke_is_admin_only():
     response = client.get("/admin/external-activation/notification-support-smoke")
 
     assert response.status_code == 403
+
+
+def test_production_readiness_smoke_reports_local_environment_as_not_production():
+    client = TestClient(
+        _app_for_user(
+            {"sub": "admin-1", "role": "admin"},
+            _settings(environment="development"),
+        )
+    )
+
+    response = client.get("/admin/external-activation/production-readiness-smoke")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overallState"] == "locally_ready"
+    assert body["safeToMutate"] is False
+    assert body["environment"]["isProduction"] is False
+    assert "production_environment_not_selected" in body["blockers"]
+    assert body["noMutationPolicy"]["requiresApprovedFixture"] is True
+    assert body["noMutationPolicy"]["requiresExplicitMutationMode"] is True
+
+
+def test_production_readiness_smoke_lists_read_only_release_checks():
+    client = TestClient(
+        _app_for_user(
+            {"sub": "admin-1", "role": "admin"},
+            _settings(
+                environment="production",
+                aws_account_id="123456789012",
+                aws_region="eu-central-2",
+            ),
+        )
+    )
+
+    response = client.get("/admin/external-activation/production-readiness-smoke")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overallState"] == "read_only_verifiable"
+    assert body["safeToMutate"] is False
+    assert body["environment"]["isProduction"] is True
+    assert body["blockers"] == []
+    api_routes = {check["route"] for check in body["readOnlyApiSmoke"]}
+    assert "/admin/core-smoke" in api_routes
+    assert "/admin/external-activation/payment-auth-smoke" in api_routes
+    assert "/admin/external-activation/notification-support-smoke" in api_routes
+    assert all(check["mutation"] is False for check in body["readOnlyApiSmoke"])
+    assert all(check["mutation"] is False for check in body["readOnlyBrowserSmoke"])
+    assert body["requestIdPolicy"]["header"] == "X-Request-Id"
+    assert body["releaseBundle"]["validatorRoute"] == "POST /admin/reports/release-evidence/validate"
+    assert body["privacy"]["rawProviderPayloadsIncluded"] is False
+
+
+def test_production_readiness_smoke_is_admin_only():
+    client = TestClient(_app_for_user({"sub": "student-1", "role": "student"}))
+
+    response = client.get("/admin/external-activation/production-readiness-smoke")
+
+    assert response.status_code == 403

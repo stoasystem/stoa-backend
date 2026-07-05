@@ -197,6 +197,24 @@ class ExternalNotificationSupportSmokeResponse(BaseModel):
     privacy: dict[str, Any] = Field(default_factory=dict)
 
 
+class ExternalProductionReadinessSmokeResponse(BaseModel):
+    generatedAt: str
+    taxonomy: list[str]
+    overallState: str
+    safeToMutate: bool
+    environment: dict[str, Any] = Field(default_factory=dict)
+    deployEvidenceRequired: dict[str, Any] = Field(default_factory=dict)
+    adminSession: dict[str, Any] = Field(default_factory=dict)
+    readOnlyApiSmoke: list[dict[str, Any]] = Field(default_factory=list)
+    readOnlyBrowserSmoke: list[dict[str, Any]] = Field(default_factory=list)
+    requestIdPolicy: dict[str, Any] = Field(default_factory=dict)
+    noMutationPolicy: dict[str, Any] = Field(default_factory=dict)
+    releaseBundle: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    privacy: dict[str, Any] = Field(default_factory=dict)
+
+
 class SubscriptionProviderReadinessResponse(BaseModel):
     state: str
     checkoutAllowed: bool
@@ -1466,6 +1484,18 @@ async def get_notification_support_activation_smoke(
 ):
     """Inspect notification and support-provider activation smoke readiness."""
     return external_activation_service.build_notification_support_smoke_report(settings)
+
+
+@router.get(
+    "/external-activation/production-readiness-smoke",
+    response_model=ExternalProductionReadinessSmokeResponse,
+)
+async def get_production_readiness_activation_smoke(
+    settings: Settings = Depends(get_settings),
+    user: dict = Depends(require_role("admin")),
+):
+    """Inspect production deploy and read-only smoke requirements."""
+    return external_activation_service.build_production_readiness_smoke_report(settings)
 
 
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
