@@ -117,9 +117,10 @@ Key accomplishments:
 
 ---
 
-## Planned: v5.20 Native Build Distribution And Device QA
+## Active: v5.20 Native Build Distribution And Device QA
 
-**Status:** Planned
+**Status:** Active
+**Started:** 2026-07-06
 **Roadmap:** `.planning/milestones/v5.20-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.20-REQUIREMENTS.md`
 **Goal:** Turn the native mobile implementation into internal iOS/Android builds with device QA, push/deep-link smoke, crash/performance telemetry, and store-readiness evidence.
