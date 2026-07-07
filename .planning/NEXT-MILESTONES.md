@@ -1,112 +1,106 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-07 after reconciling v5.25-v5.29 local contract completion with real-user execution gates
-**Mode:** live approval, real pilot execution, live remediation, controlled expansion, and public launch operations
+**Updated:** 2026-07-07 after reconciling v5.30-v5.34 live execution contracts with current real-world hold state
+**Mode:** feature completion, real pilot execution, revenue conversion, learning quality, and operational scale
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v5.24 produced conditional limited-pilot readiness.
-- v5.25 added safe-start blocker burn-down contracts and defaults to `hold`.
-- v5.26-v5.29 added local metadata-only contracts for pilot execution controls, outcome decisions, remediation gates, expansion gates, and public-launch readiness gates.
+- v5.30 added live approval, provider/mobile evidence, restore/tabletop, safe-start, and activation gate contracts.
+- v5.31-v5.34 added metadata-only contracts for real pilot operations, live remediation, controlled expansion, public launch, and post-launch operations.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed for the contract surfaces.
 
 Important reality check:
 
-- No real pilot users are approved by the local contracts.
-- No provider writes, controlled expansion, paid marketing, or public launch are approved.
-- Real-user execution remains gated by explicit operational approval and live provider/readiness evidence.
-- The default current state is hold until `pilot_safe_start_gate` returns `start_limited_pilot`.
+- v5.30-v5.34 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
+- The default operational state is still hold unless the live gate returns `start_limited_pilot`.
+- The next roadmap must prioritize real blocker burn-down and product completion over more launch abstractions.
 
-## Active: v5.30 Live Pilot Approval And Provider Activation Execution
+## Active: v5.35 Real Pilot Blocker Burn-Down And Launch Execution
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.30-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.30-REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.35-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.35-REQUIREMENTS.md`
 
 Function purpose:
 
-- Convert local pilot contracts into an approved live start or a precise hold decision.
-- Capture live/read-only evidence or explicit disablement for payment, notifications, support CRM, BI/APM, mobile/TestFlight, restore, and tabletop dependencies.
-- Execute the safe-start gate with live evidence.
+- Clear or explicitly disable the real blockers that keep the pilot gate in `hold`.
+- Validate pilot account, support, provider, restore/tabletop, launch-room, monitoring, and rollback readiness.
+- Execute the live safe-start gate and start only if the decision is `start_limited_pilot`.
 
 Implementation strategy:
 
-- Use `production_pilot_service` gates as the control surface.
-- Collect redacted live evidence with owners, timestamps, request/build IDs, blocker states, and rollback controls.
-- Keep real users blocked unless the live gate says `start_limited_pilot`.
+- Use existing v5.30-v5.34 evidence contracts as source of truth.
+- Prefer real provider activation where approved; otherwise record explicit pilot disablement with owner, copy, fallback, and support path.
+- Keep pilot scope narrow and reversible.
 
-## Planned: v5.31 Real Limited Pilot Execution Operations
+## Planned: v5.36 Live Pilot Operations Feedback And Product Fixes
 
-Roadmap: `.planning/milestones/v5.31-ROADMAP.md`
-Requirements: `.planning/milestones/v5.31-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.36-ROADMAP.md`
+Requirements: `.planning/milestones/v5.36-REQUIREMENTS.md`
 
 Function purpose:
 
-- Enable and operate the approved limited pilot cohort.
-- Measure real activation, first learning action, support load, AI quality, mobile stability, billing/account friction, and satisfaction.
-- Produce live outcome evidence before any expansion.
+- Operate the first approved real cohort.
+- Turn activation, learning, support, billing, mobile, notification, AI, and teacher evidence into fixes.
+- Decide whether to expand, hold, roll back, or continue remediation.
 
 Implementation strategy:
 
-- Start only if v5.30 returns `start_limited_pilot`.
-- Keep cohort narrow, flags staged, and rollback immediate.
-- Run daily launch-room review and support triage.
+- Start only if v5.35 returns `start_limited_pilot`.
+- Run daily review and ship high-impact fixes with focused tests and support-visible release notes.
 
-## Planned: v5.32 Live Pilot Remediation And Reliability Fixes
+## Planned: v5.37 Revenue Conversion And Self-Serve Growth Completion
 
-Roadmap: `.planning/milestones/v5.32-ROADMAP.md`
-Requirements: `.planning/milestones/v5.32-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.37-ROADMAP.md`
+Requirements: `.planning/milestones/v5.37-REQUIREMENTS.md`
 
 Function purpose:
 
-- Fix the highest-impact issues from live pilot evidence.
-- Improve activation, learning quality, support resolution, mobile stability, billing/account trust, and reliability.
-- Remove expansion blockers before cohort growth.
+- Finish parent-facing paid conversion, checkout, entitlement activation, quota/usage explanations, billing support, and lifecycle growth loops.
+- Make controlled growth possible without billing confusion or support overload.
 
 Implementation strategy:
 
-- Prioritize live severity, frequency, and learning/support impact.
-- Add regression coverage and release evidence for every high-severity issue.
-- Keep fixes focused on pilot evidence.
+- Prioritize from real pilot conversion friction and support tickets.
+- Reconcile provider state, entitlement state, usage ledger, quota display, invoices/refunds, and admin support views.
 
-## Planned: v5.33 Controlled Expansion Execution And Revenue Validation
+## Planned: v5.38 Learning Outcomes Curriculum And AI Quality Scale
 
-Roadmap: `.planning/milestones/v5.33-ROADMAP.md`
-Requirements: `.planning/milestones/v5.33-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.38-ROADMAP.md`
+Requirements: `.planning/milestones/v5.38-REQUIREMENTS.md`
 
 Function purpose:
 
-- Expand to a larger controlled cohort only after live remediation evidence supports it.
-- Validate revenue, support staffing, teacher operations, mobile/provider capacity, and operational scale under real use.
+- Improve the core learning product: curriculum coverage, exercise quality, adaptive recommendations, AI summaries/exercises, teacher review, and learning outcome reporting.
+- Ensure growth is supported by visible learning value, not only operational readiness.
 
 Implementation strategy:
 
-- Expand gradually with rollback thresholds.
-- Treat billing, support staffing, teacher queue load, mobile stability, provider capacity, and BI/APM as scale gates.
-- Decide public-launch-prep, hold, remediate, or rollback.
+- Use pilot evidence, teacher review, curriculum analytics, and support tickets.
+- Keep special authorization for curriculum editing and reviewed/policy-bound AI automation.
 
-## Planned: v5.34 Public Launch Execution And Post-Launch Operations
+## Planned: v5.39 Platform Reliability And Internal Operations Scale
 
-Roadmap: `.planning/milestones/v5.34-ROADMAP.md`
-Requirements: `.planning/milestones/v5.34-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.39-ROADMAP.md`
+Requirements: `.planning/milestones/v5.39-REQUIREMENTS.md`
 
 Function purpose:
 
-- Execute public launch only if final approval exists, or continue controlled expansion/hold.
-- Operate post-launch support, incident response, revenue reconciliation, AI/curriculum quality, mobile stability, and growth feedback.
+- Harden reliability, observability, data quality, admin operations, teacher/support workflows, incident handling, release discipline, and rollback readiness.
+- Prepare the product for larger controlled cohorts without founder-operated manual work.
 
 Implementation strategy:
 
-- Start only if v5.33 supports public-launch preparation and final approval is granted.
-- Use staged rollout with freeze, rollback, support staffing, provider readiness, and dashboard ownership.
-- Close with launch outcome report and v5.35 recommendation.
+- Use operational evidence from v5.35-v5.38.
+- Prioritize real bottlenecks in support/admin/teacher/release workflows.
 
 ## Ordering Rationale
 
-1. v5.30 comes first because local contracts are not live approval; real users remain blocked until live evidence clears the gate.
-2. v5.31 follows only after `start_limited_pilot` because outcome evidence must come from real controlled use.
-3. v5.32 follows because live pilot issues must be fixed before growth.
-4. v5.33 follows because expansion must validate revenue, support, mobile, provider, and operational scale before public launch.
-5. v5.34 follows because public launch execution should be the result of live expansion evidence and final approval, not readiness optimism.
+1. v5.35 comes first because the product is still held by real activation blockers.
+2. v5.36 follows because real cohort evidence must drive the first product fixes.
+3. v5.37 follows because paid conversion and growth should be built from observed customer friction.
+4. v5.38 follows because learning quality is the core product value that must scale.
+5. v5.39 follows because larger cohorts require repeatable internal operations, reliability, observability, and release discipline.

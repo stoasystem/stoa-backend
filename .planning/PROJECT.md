@@ -1092,6 +1092,11 @@ Known current resources:
 | Plan v5.32 live pilot remediation and reliability fixes | Live pilot findings should drive fixes before expansion | Contract complete locally; real fixes gated on live pilot findings |
 | Plan v5.33 controlled expansion execution and revenue validation | Expansion must validate revenue, support, teacher, mobile, provider, and operational scale under real use | Contract complete locally; real expansion gated |
 | Plan v5.34 public launch execution and post-launch operations | Public launch execution requires controlled expansion evidence and final approval | Contract complete locally; public launch gated |
+| Plan v5.35 real pilot blocker burn-down and launch execution | v5.30-v5.34 are metadata-only execution contracts; the real work now is clearing or disabling start blockers so the pilot gate can honestly move from hold to start | Planned - active next milestone |
+| Plan v5.36 live pilot operations feedback and product fixes | After v5.35 starts a cohort, real usage must drive activation, support, billing, mobile, AI, teacher, and learning fixes before expansion | Planned |
+| Plan v5.37 revenue conversion and self-serve growth completion | Paid conversion and growth should be completed from real parent friction, entitlement reconciliation, lifecycle messaging, and support load, not readiness assumptions | Planned |
+| Plan v5.38 learning outcomes curriculum and AI quality scale | Learning quality is the core product value; curriculum, exercises, recommendations, AI tools, and progress reporting need real-evidence improvement before broader growth | Planned |
+| Plan v5.39 platform reliability and internal operations scale | Larger cohorts require repeatable reliability, observability, admin, teacher, support, release, and rollback operations instead of founder-operated manual work | Planned |
 
 ## Evolution
 
@@ -1111,4 +1116,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-07 after completing v5.30-v5.34 live execution contracts from v5.25-v5.29 contract-complete evidence*
+*Last updated: 2026-07-07 after planning v5.35-v5.39 from current v5.30-v5.34 contract-complete but real-world-gated evidence*
