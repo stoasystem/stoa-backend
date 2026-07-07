@@ -293,7 +293,7 @@ Planned phases:
 
 ---
 
-## Complete: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+## Completed: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
 
 **Status:** Complete
 **Started:** 2026-07-07
@@ -305,6 +305,7 @@ Planned phases:
 **Phases:** 5
 **Plans:** 5/5 complete
 **Requirements:** 5/5 complete
+**Release state:** `pilot-safe-start-contracts`
 
 Function purpose:
 
@@ -441,6 +442,156 @@ Planned phases:
 - Phase 319: Public Support Knowledge Base And Launch Communications. (contract complete)
 - Phase 320: App Store Public Release And Production Launch Controls. (contract complete)
 - Phase 321: Public Launch Readiness Gate. (contract complete)
+
+---
+
+## Active: v5.30 Live Pilot Approval And Provider Activation Execution
+
+**Status:** Active
+**Started:** 2026-07-07
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.30-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.30-REQUIREMENTS.md`
+**Goal:** Obtain explicit operational approval, clear or disable live activation blockers, and produce live evidence required for `pilot_safe_start_gate` to return `start_limited_pilot`.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Make the first real pilot decision operationally real, not only locally modeled.
+- Keep real-user activation blocked unless the live gate says start.
+
+Implementation strategy:
+
+- Use `production_pilot_service` gates as the control surface.
+- Collect redacted live/read-only evidence for each required provider and operational dependency.
+- Record user/support impact for intentionally disabled pilot dependencies.
+
+Planned phases:
+
+- Phase 322: Live Approval And Ownership Audit.
+- Phase 323: Live Provider And Mobile Activation Evidence.
+- Phase 324: Production Restore Tabletop And Launch-Room Evidence.
+- Phase 325: Live Pilot Safe-Start Gate Execution.
+- Phase 326: v5.30 Live Activation Gate.
+
+---
+
+## Planned: v5.31 Real Limited Pilot Execution Operations
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.31-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.31-REQUIREMENTS.md`
+**Goal:** Execute the approved limited pilot cohort with live operational monitoring, support coverage, feedback capture, and daily go/hold/rollback decisions.
+**Phases:** 5
+
+Function purpose:
+
+- Validate STOA with real parent/student users under controlled scope.
+- Produce real outcome evidence before expansion.
+
+Implementation strategy:
+
+- Start only if v5.30 returns `start_limited_pilot`.
+- Keep cohort narrow, flags staged, and rollback immediate.
+- Operate daily launch-room review.
+
+Planned phases:
+
+- Phase 327: Live Cohort Enablement And Onboarding Operations.
+- Phase 328: Daily Pilot Operations And Incident Review.
+- Phase 329: Live Learning Feedback And Support Quality Capture.
+- Phase 330: Live Pilot Outcome Analysis.
+- Phase 331: v5.31 Live Pilot Decision Gate.
+
+---
+
+## Planned: v5.32 Live Pilot Remediation And Reliability Fixes
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.32-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.32-REQUIREMENTS.md`
+**Goal:** Fix the highest-impact issues from the real limited pilot across activation, mobile, billing, learning quality, AI, support, and reliability before expansion.
+**Phases:** 5
+
+Function purpose:
+
+- Turn live user evidence into targeted product improvements.
+- Remove expansion blockers discovered during pilot.
+
+Implementation strategy:
+
+- Prioritize live severity, frequency, and learning/support impact.
+- Add regression coverage and release evidence for high-severity issues.
+- Keep fixes focused on pilot evidence.
+
+Planned phases:
+
+- Phase 332: Live Pilot Issue Triage And Fix Plan.
+- Phase 333: Account Mobile Billing Notification Fixes.
+- Phase 334: Learning AI Curriculum Teacher-Help Fixes.
+- Phase 335: Regression Release And Support Evidence.
+- Phase 336: v5.32 Remediation Gate.
+
+---
+
+## Planned: v5.33 Controlled Expansion Execution And Revenue Validation
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.33-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.33-REQUIREMENTS.md`
+**Goal:** Execute controlled cohort expansion and validate revenue, support staffing, teacher operations, mobile/provider capacity, and operational scale under real usage.
+**Phases:** 5
+
+Function purpose:
+
+- Test whether STOA can support more users without degrading support quality or learning outcomes.
+- Validate billing/revenue and support operations under controlled real load.
+
+Implementation strategy:
+
+- Expand only if v5.32 remediation gate says expansion-ready.
+- Increase cohort size gradually with rollback thresholds.
+- Treat billing, support, mobile, provider, and BI/APM as scale gates.
+
+Planned phases:
+
+- Phase 337: Live Expansion Cohort And Capacity Enablement.
+- Phase 338: Live Revenue Billing And Subscription Validation.
+- Phase 339: Live Teacher Support And Customer Operations Scale.
+- Phase 340: Live Mobile Provider And Infrastructure Scale Evidence.
+- Phase 341: v5.33 Controlled Expansion Decision Gate.
+
+---
+
+## Planned: v5.34 Public Launch Execution And Post-Launch Operations
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.34-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.34-REQUIREMENTS.md`
+**Goal:** Execute a public launch or continue controlled expansion based on final approval, then operate post-launch monitoring, support, revenue, incident response, and learning loops.
+**Phases:** 5
+
+Function purpose:
+
+- Move from launch readiness into launch execution only if final approval exists.
+- Establish post-launch operating cadence and expansion/hold criteria.
+
+Implementation strategy:
+
+- Start only if v5.33 supports public-launch preparation and final approval is granted.
+- Use staged rollout with freeze, rollback, support staffing, and dashboard ownership.
+- Close with launch outcome report and v5.35 recommendation.
+
+Planned phases:
+
+- Phase 342: Final Launch Approval And Public Rollout Plan.
+- Phase 343: Self-Serve Onboarding Growth And Support Launch.
+- Phase 344: App Store Production Release And Launch Monitoring.
+- Phase 345: Post-Launch Incident Revenue And Learning Operations.
+- Phase 346: v5.34 Launch Outcome And Next Strategy Gate.
 
 ---
 

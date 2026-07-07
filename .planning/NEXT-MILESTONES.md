@@ -1,115 +1,112 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-07 after reconciling v5.24 conditional pilot readiness with current activation blockers
-**Mode:** post-v5.24 pilot activation, execution, remediation, expansion, and public-launch readiness
+**Updated:** 2026-07-07 after reconciling v5.25-v5.29 local contract completion with real-user execution gates
+**Mode:** live approval, real pilot execution, live remediation, controlled expansion, and public launch operations
 
 ## Current Reality
 
-Completed baseline:
+Completed local contract baseline:
 
-- v5.19 completed native mobile source readiness.
-- v5.20-v5.23 completed local contracts for native distribution, AI operations, customer lifecycle, and enterprise hardening.
-- v5.24 completed limited production pilot and launch readiness as `limited-pilot-ready-local-contracts`.
+- v5.24 produced conditional limited-pilot readiness.
+- v5.25 added safe-start blocker burn-down contracts and defaults to `hold`.
+- v5.26-v5.29 added local metadata-only contracts for pilot execution controls, outcome decisions, remediation gates, expansion gates, and public-launch readiness gates.
 
 Important reality check:
 
-- v5.24 did not approve broad public launch.
-- v5.24 recommends conditional limited pilot only after activation blockers are cleared or explicitly disabled.
-- Remaining real-user blockers include payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop activation.
+- No real pilot users are approved by the local contracts.
+- No provider writes, controlled expansion, paid marketing, or public launch are approved.
+- Real-user execution remains gated by explicit operational approval and live provider/readiness evidence.
+- The default current state is hold until `pilot_safe_start_gate` returns `start_limited_pilot`.
 
-## Active: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+## Active: v5.30 Live Pilot Approval And Provider Activation Execution
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v5.25-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v5.25-REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.30-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.30-REQUIREMENTS.md`
 
 Function purpose:
 
-- Clear, explicitly disable, or launch-block every dependency required for the first real pilot.
-- Convert v5.24's conditional go/no-go into a concrete start/hold/harden decision.
-- Prepare dry-run accounts, launch-room rehearsal, and safe-start package.
+- Convert local pilot contracts into an approved live start or a precise hold decision.
+- Capture live/read-only evidence or explicit disablement for payment, notifications, support CRM, BI/APM, mobile/TestFlight, restore, and tabletop dependencies.
+- Execute the safe-start gate with live evidence.
 
 Implementation strategy:
 
-- Start with blocker reality audit across payment, notifications, support CRM, BI/APM, mobile release, restore/tabletop, staffing, cohort, and rollback.
-- Use approved live/read-only evidence where possible.
-- Explicitly disable non-required dependencies with clear user/support impact.
-- Do not enable real users until required blockers are resolved.
+- Use `production_pilot_service` gates as the control surface.
+- Collect redacted live evidence with owners, timestamps, request/build IDs, blocker states, and rollback controls.
+- Keep real users blocked unless the live gate says `start_limited_pilot`.
 
-## Planned: v5.26 Limited Pilot Execution And Outcome Evidence
+## Planned: v5.31 Real Limited Pilot Execution Operations
 
-Roadmap: `.planning/milestones/v5.26-ROADMAP.md`
-Requirements: `.planning/milestones/v5.26-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.31-ROADMAP.md`
+Requirements: `.planning/milestones/v5.31-REQUIREMENTS.md`
 
 Function purpose:
 
-- Run the approved pilot cohort under controlled rollout.
-- Measure activation, first learning action, usage, support, AI quality, mobile stability, billing/account friction, and satisfaction.
-- Decide continue, pause, rollback, remediate, or expansion candidate.
+- Enable and operate the approved limited pilot cohort.
+- Measure real activation, first learning action, support load, AI quality, mobile stability, billing/account friction, and satisfaction.
+- Produce live outcome evidence before any expansion.
 
 Implementation strategy:
 
-- Start only if v5.25 safe-start gate says `start`.
-- Operate daily launch-room monitoring and support triage.
-- Collect feedback and metrics as product evidence.
-- Block expansion until high-severity pilot issues are handled.
+- Start only if v5.30 returns `start_limited_pilot`.
+- Keep cohort narrow, flags staged, and rollback immediate.
+- Run daily launch-room review and support triage.
 
-## Planned: v5.27 Pilot Remediation Product Fit And Reliability Hardening
+## Planned: v5.32 Live Pilot Remediation And Reliability Fixes
 
-Roadmap: `.planning/milestones/v5.27-ROADMAP.md`
-Requirements: `.planning/milestones/v5.27-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.32-ROADMAP.md`
+Requirements: `.planning/milestones/v5.32-REQUIREMENTS.md`
 
 Function purpose:
 
-- Convert v5.26 pilot evidence into focused fixes.
-- Improve activation, learning quality, support resolution, mobile stability, AI/curriculum relevance, and reliability.
-- Prove expansion blockers are resolved or explicitly accepted.
+- Fix the highest-impact issues from live pilot evidence.
+- Improve activation, learning quality, support resolution, mobile stability, billing/account trust, and reliability.
+- Remove expansion blockers before cohort growth.
 
 Implementation strategy:
 
-- Prioritize by severity, frequency, and impact on learning/retention.
-- Add regression coverage for every high-severity pilot issue.
-- Keep changes tied to real pilot evidence rather than speculative polish.
-- Do not expand if must-fix blockers remain.
+- Prioritize live severity, frequency, and learning/support impact.
+- Add regression coverage and release evidence for every high-severity issue.
+- Keep fixes focused on pilot evidence.
 
-## Planned: v5.28 Controlled Expansion Revenue And Operations Scale
+## Planned: v5.33 Controlled Expansion Execution And Revenue Validation
 
-Roadmap: `.planning/milestones/v5.28-ROADMAP.md`
-Requirements: `.planning/milestones/v5.28-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.33-ROADMAP.md`
+Requirements: `.planning/milestones/v5.33-REQUIREMENTS.md`
 
 Function purpose:
 
-- Expand from narrow pilot to larger controlled cohort.
-- Validate revenue operations, support/teacher capacity, mobile/provider readiness, and operational scale.
-- Decide whether STOA can prepare for public-launch readiness.
+- Expand to a larger controlled cohort only after live remediation evidence supports it.
+- Validate revenue, support staffing, teacher operations, mobile/provider capacity, and operational scale under real use.
 
 Implementation strategy:
 
-- Expand only if v5.27 clears expansion blockers.
-- Increase cohort size gradually with rollback thresholds.
+- Expand gradually with rollback thresholds.
 - Treat billing, support staffing, teacher queue load, mobile stability, provider capacity, and BI/APM as scale gates.
+- Decide public-launch-prep, hold, remediate, or rollback.
 
-## Planned: v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
+## Planned: v5.34 Public Launch Execution And Post-Launch Operations
 
-Roadmap: `.planning/milestones/v5.29-ROADMAP.md`
-Requirements: `.planning/milestones/v5.29-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.34-ROADMAP.md`
+Requirements: `.planning/milestones/v5.34-REQUIREMENTS.md`
 
 Function purpose:
 
-- Prepare self-serve onboarding, pricing/package readiness, growth/lifecycle loops, public support operations, app-store readiness, and final public launch controls.
-- Decide public launch, continued controlled expansion, hold, or harden further.
+- Execute public launch only if final approval exists, or continue controlled expansion/hold.
+- Operate post-launch support, incident response, revenue reconciliation, AI/curriculum quality, mobile stability, and growth feedback.
 
 Implementation strategy:
 
-- Start only if v5.28 expansion evidence supports broader launch preparation.
-- Build self-serve signup/subscription/onboarding with support fallback.
-- Keep public launch behind final go/no-go, provider capacity, rollback, and support gates.
+- Start only if v5.33 supports public-launch preparation and final approval is granted.
+- Use staged rollout with freeze, rollback, support staffing, provider readiness, and dashboard ownership.
+- Close with launch outcome report and v5.35 recommendation.
 
 ## Ordering Rationale
 
-1. v5.25 comes first because v5.24 is conditional; unresolved activation blockers make direct pilot execution unsafe.
-2. v5.26 follows only after safe-start approval because real pilot evidence is needed before any expansion.
-3. v5.27 follows because pilot evidence should drive remediation before cohort growth.
-4. v5.28 follows because operational and revenue scale should be tested in controlled expansion before public launch prep.
-5. v5.29 follows because self-serve/growth/public launch readiness should come only after controlled expansion shows the product can sustain broader usage.
+1. v5.30 comes first because local contracts are not live approval; real users remain blocked until live evidence clears the gate.
+2. v5.31 follows only after `start_limited_pilot` because outcome evidence must come from real controlled use.
+3. v5.32 follows because live pilot issues must be fixed before growth.
+4. v5.33 follows because expansion must validate revenue, support, mobile, provider, and operational scale before public launch.
+5. v5.34 follows because public launch execution should be the result of live expansion evidence and final approval, not readiness optimism.

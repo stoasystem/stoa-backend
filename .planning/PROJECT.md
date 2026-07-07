@@ -114,9 +114,11 @@ The completed v5.19 milestone establishes native mobile source readiness: Expo/R
 
 The completed v5.20-v5.24 sequence adds local contracts for native build/device readiness, AI teaching operations, customer lifecycle messaging, enterprise hardening, and limited pilot launch readiness. v5.24 ends with a conditional pilot recommendation, not a real-user activation approval.
 
-The completed v5.25 milestone burns down the remaining activation blockers before any real pilot users are enabled: payment, notifications, support CRM, BI/APM, mobile release/TestFlight, production restore, live tabletop, staffing, cohort, and rollback. It adds a safe-start gate that defaults to `hold` until required blockers are cleared or explicitly disabled.
+The completed v5.25 milestone burns down the remaining activation blockers in local contract form before any real pilot users are enabled: payment, notifications, support CRM, BI/APM, mobile release/TestFlight, production restore, live tabletop, staffing, cohort, and rollback. It adds a safe-start gate that defaults to `hold` until required blockers are cleared or explicitly disabled.
 
 The v5.26-v5.29 pilot execution, remediation, controlled expansion, and public launch readiness milestones are now contract-complete locally: STOA has metadata-only evidence contracts and tests for pilot execution controls, outcome decisions, remediation gates, expansion gates, and public-launch readiness gates. Real-user pilot execution, expansion, paid marketing, provider writes, and public launch remain externally gated by explicit operational approval and live evidence.
+
+The active v5.30 milestone moves from local contracts to live approval and provider/readiness evidence. It must produce a live safe-start decision before any real pilot cohort can be enabled.
 
 ## Core Value
 
@@ -125,25 +127,25 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.24 Limited Production Pilot And Launch Readiness on 2026-07-06 (limited-pilot-ready-local-contracts release gate)
-**Residual partial gate:** real-user activation still requires clearing or explicitly disabling payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop blockers.
-**Active milestone:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
-**Next planned milestones:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision; v5.26 Limited Pilot Execution And Outcome Evidence; v5.27 Pilot Remediation Product Fit And Reliability Hardening; v5.28 Controlled Expansion Revenue And Operations Scale; v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
+**Latest completed milestone:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision on 2026-07-07 (pilot-safe-start-contracts release gate; default hold)
+**Residual partial gate:** real-user activation still requires explicit operational approval and live/read-only evidence for payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop readiness.
+**Active milestone:** v5.30 Live Pilot Approval And Provider Activation Execution
+**Next planned milestones:** v5.30 Live Pilot Approval And Provider Activation Execution; v5.31 Real Limited Pilot Execution Operations; v5.32 Live Pilot Remediation And Reliability Fixes; v5.33 Controlled Expansion Execution And Revenue Validation; v5.34 Public Launch Execution And Post-Launch Operations
 
-## Current Milestone: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+## Current Milestone: v5.30 Live Pilot Approval And Provider Activation Execution
 
-**Goal:** Convert v5.24's conditional limited-pilot recommendation into an executable safe-start decision by clearing, explicitly disabling, or routing every real-user activation blocker before any pilot cohort is enabled.
+**Goal:** Move beyond local pilot/launch contracts by obtaining explicit operational approval, clearing or disabling live activation blockers, and producing the live evidence required for `pilot_safe_start_gate` to return `start_limited_pilot`.
 
 **Target features:**
-- Blocker audit across payment, Cognito/email, notifications, support CRM, BI/APM, mobile release/TestFlight, restore/tabletop, staffing, cohort, data lifecycle, and rollback.
-- Provider activation or explicit disablement for dependencies required by the limited pilot.
-- Pilot dry-run accounts, launch-room rehearsal, safe-start package, and start/hold/harden decision evidence.
+- Live approval/ownership audit across product, support, incident, finance, mobile, and provider owners.
+- Redacted live/read-only evidence or explicit disablement for payment, notifications, support CRM, BI/APM, mobile/TestFlight, restore, and tabletop dependencies.
+- Live safe-start gate execution that decides start, hold, or harden further.
 
 Prior milestone outcome:
 
-- v5.24 completed launch scope audit, cohort onboarding, launch controls, monitoring, acceptance metrics, feedback loop, and conditional go/no-go evidence.
-- v5.24 did not approve broad public launch.
-- Real-user activation remains conditional on clearing or explicitly disabling required provider, mobile release, restore, and live tabletop blockers.
+- v5.25 safe-start contracts default to `hold`.
+- v5.26-v5.29 are locally contract-complete for pilot execution, remediation, expansion, and public launch readiness, but they do not approve real users.
+- Real-user activation remains conditional on explicit approval and live evidence.
 
 Delivered:
 
@@ -1078,11 +1080,16 @@ Known current resources:
 | Plan v5.22 support CRM customer messaging and lifecycle automation | Support handoff, CRM gates, notifications, account operations, billing, and learning-progress signals exist in pieces; customer lifecycle messaging needs an end-to-end governed workflow | Complete - customer-lifecycle-ready-local-contracts release gate passed |
 | Plan v5.23 enterprise stability compliance and disaster recovery hardening | After mobile, AI, and customer lifecycle surfaces are connected, restore drills, SLOs, incident response, rollback, access/credential, audit, and compliance evidence become the launch-limiting risk | Complete - enterprise-hardening-ready-local-contracts release gate passed |
 | Plan v5.24 limited production pilot and launch readiness | After mobile/device, AI operations, lifecycle messaging, and enterprise hardening gates are credible, the next useful milestone is a narrow go/no-go pilot or launch plan with cohort, monitoring, support, rollback, and acceptance evidence | Complete - limited-pilot-ready-local-contracts release gate passed |
-| Plan v5.25 pilot activation blocker burn-down and safe start decision | v5.24 is conditional; unresolved payment, notification, support CRM, BI/APM, mobile release, restore, and tabletop blockers make direct pilot execution unsafe | Active |
-| Plan v5.26 limited pilot execution and outcome evidence | After v5.25 safe-start approval, the product needs real cohort evidence before expansion | Planned |
-| Plan v5.27 pilot remediation product fit and reliability hardening | Pilot findings should drive focused fixes before cohort growth | Planned |
-| Plan v5.28 controlled expansion revenue and operations scale | Expansion should validate revenue, teacher/support capacity, mobile/provider readiness, and operational scale before public launch prep | Planned |
-| Plan v5.29 public launch readiness growth and self-serve onboarding | Self-serve and public launch readiness should follow controlled expansion evidence, not precede it | Planned |
+| Plan v5.25 pilot activation blocker burn-down and safe start decision | v5.24 is conditional; unresolved payment, notification, support CRM, BI/APM, mobile release, restore, and tabletop blockers make direct pilot execution unsafe | Complete - pilot-safe-start-contracts release gate passed; default hold |
+| Plan v5.26 limited pilot execution and outcome evidence | After v5.25 safe-start approval, the product needs real cohort evidence before expansion | Contract complete locally; real execution gated |
+| Plan v5.27 pilot remediation product fit and reliability hardening | Pilot findings should drive focused fixes before cohort growth | Contract complete locally; real remediation gated on live pilot findings |
+| Plan v5.28 controlled expansion revenue and operations scale | Expansion should validate revenue, teacher/support capacity, mobile/provider readiness, and operational scale before public launch prep | Contract complete locally; real expansion gated |
+| Plan v5.29 public launch readiness growth and self-serve onboarding | Self-serve and public launch readiness should follow controlled expansion evidence, not precede it | Contract complete locally; public launch gated |
+| Plan v5.30 live pilot approval and provider activation execution | Local contracts do not approve real users; live approval and provider/readiness evidence must clear the safe-start gate first | Active |
+| Plan v5.31 real limited pilot execution operations | Real pilot execution should only start after v5.30 returns `start_limited_pilot` | Planned |
+| Plan v5.32 live pilot remediation and reliability fixes | Live pilot findings should drive fixes before expansion | Planned |
+| Plan v5.33 controlled expansion execution and revenue validation | Expansion must validate revenue, support, teacher, mobile, provider, and operational scale under real use | Planned |
+| Plan v5.34 public launch execution and post-launch operations | Public launch execution requires controlled expansion evidence and final approval | Planned |
 
 ## Evolution
 
@@ -1102,4 +1109,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-07 after planning v5.25-v5.29 from v5.24 conditional pilot readiness*
+*Last updated: 2026-07-07 after planning v5.30-v5.34 from v5.25-v5.29 contract-complete evidence*
