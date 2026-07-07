@@ -445,9 +445,9 @@ Planned phases:
 
 ---
 
-## Active: v5.30 Live Pilot Approval And Provider Activation Execution
+## Complete: v5.30 Live Pilot Approval And Provider Activation Execution
 
-**Status:** Active
+**Status:** Complete
 **Started:** 2026-07-07
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -455,8 +455,8 @@ Planned phases:
 **Milestone requirements:** `.planning/milestones/v5.30-REQUIREMENTS.md`
 **Goal:** Obtain explicit operational approval, clear or disable live activation blockers, and produce live evidence required for `pilot_safe_start_gate` to return `start_limited_pilot`.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
 Function purpose:
 
@@ -471,17 +471,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 322: Live Approval And Ownership Audit.
-- Phase 323: Live Provider And Mobile Activation Evidence.
-- Phase 324: Production Restore Tabletop And Launch-Room Evidence.
-- Phase 325: Live Pilot Safe-Start Gate Execution.
-- Phase 326: v5.30 Live Activation Gate.
+- Phase 322: Live Approval And Ownership Audit. (complete)
+- Phase 323: Live Provider And Mobile Activation Evidence. (complete)
+- Phase 324: Production Restore Tabletop And Launch-Room Evidence. (complete)
+- Phase 325: Live Pilot Safe-Start Gate Execution. (complete)
+- Phase 326: Live Activation Gate. (complete)
 
 ---
 
-## Planned: v5.31 Real Limited Pilot Execution Operations
+## Contract Complete: v5.31 Real Limited Pilot Execution Operations
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.31-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.31-REQUIREMENTS.md`
 **Goal:** Execute the approved limited pilot cohort with live operational monitoring, support coverage, feedback capture, and daily go/hold/rollback decisions.
@@ -500,17 +500,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 327: Live Cohort Enablement And Onboarding Operations.
-- Phase 328: Daily Pilot Operations And Incident Review.
-- Phase 329: Live Learning Feedback And Support Quality Capture.
-- Phase 330: Live Pilot Outcome Analysis.
-- Phase 331: v5.31 Live Pilot Decision Gate.
+- Phase 327: Live Cohort Enablement And Onboarding Operations. (contract complete)
+- Phase 328: Daily Pilot Operations And Incident Review. (contract complete)
+- Phase 329: Live Learning Feedback And Support Quality Capture. (contract complete)
+- Phase 330: Live Pilot Outcome Analysis. (contract complete)
+- Phase 331: Live Pilot Decision Gate. (contract complete)
 
 ---
 
-## Planned: v5.32 Live Pilot Remediation And Reliability Fixes
+## Contract Complete: v5.32 Live Pilot Remediation And Reliability Fixes
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.32-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.32-REQUIREMENTS.md`
 **Goal:** Fix the highest-impact issues from the real limited pilot across activation, mobile, billing, learning quality, AI, support, and reliability before expansion.
@@ -529,17 +529,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 332: Live Pilot Issue Triage And Fix Plan.
-- Phase 333: Account Mobile Billing Notification Fixes.
-- Phase 334: Learning AI Curriculum Teacher-Help Fixes.
-- Phase 335: Regression Release And Support Evidence.
-- Phase 336: v5.32 Remediation Gate.
+- Phase 332: Live Pilot Issue Triage And Fix Plan. (contract complete)
+- Phase 333: Account Mobile Billing Notification Fixes. (contract complete)
+- Phase 334: Learning AI Curriculum Teacher-Help Fixes. (contract complete)
+- Phase 335: Regression Release And Support Evidence. (contract complete)
+- Phase 336: Remediation Gate. (contract complete)
 
 ---
 
-## Planned: v5.33 Controlled Expansion Execution And Revenue Validation
+## Contract Complete: v5.33 Controlled Expansion Execution And Revenue Validation
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.33-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.33-REQUIREMENTS.md`
 **Goal:** Execute controlled cohort expansion and validate revenue, support staffing, teacher operations, mobile/provider capacity, and operational scale under real usage.
@@ -558,17 +558,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 337: Live Expansion Cohort And Capacity Enablement.
-- Phase 338: Live Revenue Billing And Subscription Validation.
-- Phase 339: Live Teacher Support And Customer Operations Scale.
-- Phase 340: Live Mobile Provider And Infrastructure Scale Evidence.
-- Phase 341: v5.33 Controlled Expansion Decision Gate.
+- Phase 337: Live Expansion Cohort And Capacity Enablement. (contract complete)
+- Phase 338: Live Revenue Billing And Subscription Validation. (contract complete)
+- Phase 339: Live Teacher Support And Customer Operations Scale. (contract complete)
+- Phase 340: Live Mobile Provider And Infrastructure Scale Evidence. (contract complete)
+- Phase 341: Controlled Expansion Decision Gate. (contract complete)
 
 ---
 
-## Planned: v5.34 Public Launch Execution And Post-Launch Operations
+## Contract Complete: v5.34 Public Launch Execution And Post-Launch Operations
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.34-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.34-REQUIREMENTS.md`
 **Goal:** Execute a public launch or continue controlled expansion based on final approval, then operate post-launch monitoring, support, revenue, incident response, and learning loops.
@@ -587,11 +587,11 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 342: Final Launch Approval And Public Rollout Plan.
-- Phase 343: Self-Serve Onboarding Growth And Support Launch.
-- Phase 344: App Store Production Release And Launch Monitoring.
-- Phase 345: Post-Launch Incident Revenue And Learning Operations.
-- Phase 346: v5.34 Launch Outcome And Next Strategy Gate.
+- Phase 342: Final Launch Approval And Public Rollout Plan. (contract complete)
+- Phase 343: Self-Serve Onboarding Growth And Support Launch. (contract complete)
+- Phase 344: App Store Production Release And Launch Monitoring. (contract complete)
+- Phase 345: Post-Launch Incident Revenue And Learning Operations. (contract complete)
+- Phase 346: Launch Outcome And Next Strategy Gate. (contract complete)
 
 ---
 

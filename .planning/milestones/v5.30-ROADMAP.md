@@ -1,6 +1,6 @@
 # Roadmap: v5.30 Live Pilot Approval And Provider Activation Execution
 
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-07
 **Prior milestone:** v5.25-v5.29 Pilot Launch Sequence Contract Completion
 
@@ -8,7 +8,7 @@
 
 Move beyond local pilot/launch contracts by obtaining explicit operational approval, clearing or disabling live activation blockers, and producing the live evidence required for `pilot_safe_start_gate` to return `start_limited_pilot`.
 
-## Why This Follows v5.25-v5.29
+## Why This Follows The Prior Contract Sequence
 
 v5.25-v5.29 are locally contract-complete but explicitly do not approve real pilot users, provider writes, controlled expansion, paid marketing, or public launch. The next milestone must convert approved live provider/readiness evidence into a real pilot start decision, or keep the system held with exact blockers.
 
@@ -27,11 +27,53 @@ v5.25-v5.29 are locally contract-complete but explicitly do not approve real pil
 
 ## Phases
 
-- [ ] **Phase 322: Live Approval And Ownership Audit** - Confirm owners, approvals, credentials, environment, cohort scope, disabled features, and decision authority.
-- [ ] **Phase 323: Live Provider And Mobile Activation Evidence** - Capture payment, notification, support CRM, BI/APM, mobile/TestFlight, and provider-readiness evidence or disablement.
-- [ ] **Phase 324: Production Restore Tabletop And Launch-Room Evidence** - Run or record restore/tabletop/launch-room evidence needed before real users.
-- [ ] **Phase 325: Live Pilot Safe-Start Gate Execution** - Execute the safe-start gate with live evidence and record start/hold/harden output.
-- [ ] **Phase 326: v5.30 Live Activation Gate** - Update docs/state and decide whether v5.31 is real pilot execution or continued blocker remediation.
+- [x] **Phase 322: Live Approval And Ownership Audit** - Confirm owners, approvals, credentials, environment, cohort scope, disabled features, and decision authority. (completed 2026-07-07)
+- [x] **Phase 323: Live Provider And Mobile Activation Evidence** - Capture payment, notification, support CRM, BI/APM, mobile/TestFlight, and provider-readiness evidence or disablement. (completed 2026-07-07)
+- [x] **Phase 324: Production Restore Tabletop And Launch-Room Evidence** - Run or record restore/tabletop/launch-room evidence needed before real users. (completed 2026-07-07)
+- [x] **Phase 325: Live Pilot Safe-Start Gate Execution** - Execute the safe-start gate with live evidence and record start/hold/harden output. (completed 2026-07-07)
+- [x] **Phase 326: Live Activation Gate** - Update docs/state and decide whether v5.31 is real pilot execution or continued blocker remediation. (completed 2026-07-07)
+
+## Phase Details
+
+### Phase 322: Live Approval And Ownership Audit
+
+Goal: Confirm owners, approvals, environment, cohort scope, disabled features, and decision authority.
+
+Completion evidence:
+
+- `production_pilot_service.live_approval_ownership_audit`
+
+### Phase 323: Live Provider And Mobile Activation Evidence
+
+Goal: Capture payment, notification, support CRM, BI/APM, mobile/TestFlight, and provider-readiness evidence or disablement.
+
+Completion evidence:
+
+- `production_pilot_service.live_provider_mobile_activation_evidence`
+
+### Phase 324: Production Restore Tabletop And Launch-Room Evidence
+
+Goal: Record restore/tabletop/launch-room evidence needed before real users.
+
+Completion evidence:
+
+- `production_pilot_service.production_restore_tabletop_launch_room_evidence`
+
+### Phase 325: Live Pilot Safe-Start Gate Execution
+
+Goal: Execute the safe-start gate with live evidence and record start/hold/harden output.
+
+Completion evidence:
+
+- `production_pilot_service.live_pilot_safe_start_gate_execution`
+
+### Phase 326: Live Activation Gate
+
+Goal: Update docs/state and decide whether v5.31 is real pilot execution or continued blocker remediation.
+
+Completion evidence:
+
+- `production_pilot_service.live_activation_gate`
 
 ## Future Milestone Directions
 
@@ -44,8 +86,8 @@ v5.25-v5.29 are locally contract-complete but explicitly do not approve real pil
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIVEPILOT-01 | Phase 322 | Planned |
-| LIVEPILOT-02 | Phase 323 | Planned |
-| LIVEPILOT-03 | Phase 324 | Planned |
-| LIVEPILOT-04 | Phase 325 | Planned |
-| VERIFY-64 | Phase 326 | Planned |
+| LIVEPILOT-01 | Phase 322 | Complete |
+| LIVEPILOT-02 | Phase 323 | Complete |
+| LIVEPILOT-03 | Phase 324 | Complete |
+| LIVEPILOT-04 | Phase 325 | Complete |
+| VERIFY-64 | Phase 326 | Complete |

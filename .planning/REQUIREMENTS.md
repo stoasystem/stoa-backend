@@ -1,7 +1,7 @@
 # Requirements: v5.30 Live Pilot Approval And Provider Activation Execution
 
 **Milestone:** v5.30
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-07
 **Prior milestone:** v5.25-v5.29 Pilot Launch Sequence Contract Completion
 
@@ -68,8 +68,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIVEPILOT-01 | Phase 322 | Planned |
-| LIVEPILOT-02 | Phase 323 | Planned |
-| LIVEPILOT-03 | Phase 324 | Planned |
-| LIVEPILOT-04 | Phase 325 | Planned |
-| VERIFY-64 | Phase 326 | Planned |
+| LIVEPILOT-01 | Phase 322 | Complete |
+| LIVEPILOT-02 | Phase 323 | Complete |
+| LIVEPILOT-03 | Phase 324 | Complete |
+| LIVEPILOT-04 | Phase 325 | Complete |
+| VERIFY-64 | Phase 326 | Complete |

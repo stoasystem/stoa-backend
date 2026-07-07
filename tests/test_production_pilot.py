@@ -147,3 +147,108 @@ def test_launch_readiness_contracts_cover_self_serve_growth_support_and_app_stor
 
     controls = production_pilot_service.app_store_public_release_production_launch_controls()
     assert "revenue" in controls["dashboard"]
+
+
+def test_live_approval_and_provider_evidence_block_without_owner_signoff():
+    approval = production_pilot_service.live_approval_ownership_audit()
+    assert approval["approvalState"] == "blocked"
+    assert approval["realUserActionAllowed"] is False
+    assert any(item.startswith("approval_missing:") for item in approval["blockers"])
+
+    provider = production_pilot_service.live_provider_mobile_activation_evidence()
+    assert provider["activationState"] == "blocked"
+    assert "payment" in provider["blockers"]
+
+
+def test_live_safe_start_gate_can_start_only_with_complete_live_evidence():
+    default_gate = production_pilot_service.live_pilot_safe_start_gate_execution()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v5_31Allowed"] is False
+
+    approvals = {role: True for role in production_pilot_service.LIVE_APPROVAL_ROLES}
+    dependency_states = {
+        dependency: "approved" for dependency in production_pilot_service.LIVE_ACTIVATION_DEPENDENCIES
+    }
+    approval = production_pilot_service.live_approval_ownership_audit(
+        approvals=approvals,
+        dependency_states=dependency_states,
+    )
+    provider = production_pilot_service.live_provider_mobile_activation_evidence(
+        evidence_states={
+            "payment": "live_verified",
+            "notifications": "live_verified",
+            "support_crm": "read_only_verified",
+            "bi_apm": "read_only_verified",
+            "mobile_testflight": "live_verified",
+        }
+    )
+    operations = production_pilot_service.production_restore_tabletop_launch_room_evidence(
+        restore_state="approved",
+        tabletop_state="approved",
+        launch_room_state="recorded",
+    )
+    start_gate = production_pilot_service.live_pilot_safe_start_gate_execution(
+        approval=approval,
+        provider_evidence=provider,
+        operations_evidence=operations,
+    )
+    assert start_gate["decision"] == "start_limited_pilot"
+    assert start_gate["safeToStart"] is True
+
+
+def test_real_pilot_execution_stays_blocked_until_live_gate_and_users_exist():
+    blocked = production_pilot_service.live_cohort_enablement_onboarding_operations()
+    assert blocked["executionState"] == "blocked_by_live_gate"
+    assert blocked["customerMutationAllowed"] is False
+
+    ready = production_pilot_service.live_cohort_enablement_onboarding_operations(
+        live_gate={"safeToStart": True},
+        approved_user_count=5,
+    )
+    assert ready["executionState"] == "ready"
+    assert ready["customerMutationAllowed"] is True
+
+
+def test_live_pilot_decision_and_remediation_gates_preserve_expansion_controls():
+    decision = production_pilot_service.live_pilot_decision_gate()
+    assert decision["decision"] == "pause"
+    assert decision["expansionBlocked"] is True
+
+    remediation = production_pilot_service.live_remediation_gate()
+    assert remediation["decision"] == "another_remediation_cycle"
+    assert remediation["v5_33Allowed"] is False
+
+    resolved = production_pilot_service.live_remediation_gate(blockers_resolved=True)
+    assert resolved["decision"] == "expansion_ready"
+    assert resolved["v5_33Allowed"] is True
+
+
+def test_live_expansion_and_public_launch_execution_require_final_approval():
+    expansion = production_pilot_service.controlled_expansion_decision_gate(
+        metrics_met=True,
+        support_capacity_met=True,
+    )
+    assert expansion["decision"] == "public_launch_prep"
+    assert expansion["publicLaunchBlocked"] is False
+
+    launch_plan = production_pilot_service.final_launch_approval_public_rollout_plan(
+        expansion_gate=expansion
+    )
+    assert launch_plan["decision"] == "continued_controlled_expansion_or_hold"
+
+    approved_launch = production_pilot_service.final_launch_approval_public_rollout_plan(
+        final_approval=True,
+        expansion_gate=expansion,
+    )
+    assert approved_launch["decision"] == "public_launch"
+
+    monitoring = production_pilot_service.app_store_production_release_launch_monitoring(
+        launch_plan=approved_launch
+    )
+    assert monitoring["monitoringState"] == "active"
+
+    outcome = production_pilot_service.launch_outcome_next_strategy_gate(
+        launch_plan=approved_launch,
+        outcome_healthy=True,
+    )
+    assert outcome["decision"] == "scale"

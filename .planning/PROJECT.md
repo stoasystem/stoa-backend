@@ -118,7 +118,9 @@ The completed v5.25 milestone burns down the remaining activation blockers in lo
 
 The v5.26-v5.29 pilot execution, remediation, controlled expansion, and public launch readiness milestones are now contract-complete locally: STOA has metadata-only evidence contracts and tests for pilot execution controls, outcome decisions, remediation gates, expansion gates, and public-launch readiness gates. Real-user pilot execution, expansion, paid marketing, provider writes, and public launch remain externally gated by explicit operational approval and live evidence.
 
-The active v5.30 milestone moves from local contracts to live approval and provider/readiness evidence. It must produce a live safe-start decision before any real pilot cohort can be enabled.
+The completed v5.30 milestone moves from local contracts to live approval and provider/readiness evidence. It adds live approval, provider/mobile evidence, restore/tabletop/launch-room evidence, and live activation gates that default to `hold` until complete approved evidence is supplied.
+
+The v5.31-v5.34 live pilot execution, live remediation, controlled expansion execution, and public launch/post-launch operations milestones are now contract-complete locally. Real pilot execution, expansion, public launch, paid marketing, and uncontrolled provider writes remain gated by explicit approval and live evidence.
 
 ## Core Value
 
@@ -127,10 +129,10 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision on 2026-07-07 (pilot-safe-start-contracts release gate; default hold)
+**Latest completed milestone:** v5.30 Live Pilot Approval And Provider Activation Execution on 2026-07-07 (live activation contracts; default hold)
 **Residual partial gate:** real-user activation still requires explicit operational approval and live/read-only evidence for payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop readiness.
-**Active milestone:** v5.30 Live Pilot Approval And Provider Activation Execution
-**Next planned milestones:** v5.30 Live Pilot Approval And Provider Activation Execution; v5.31 Real Limited Pilot Execution Operations; v5.32 Live Pilot Remediation And Reliability Fixes; v5.33 Controlled Expansion Execution And Revenue Validation; v5.34 Public Launch Execution And Post-Launch Operations
+**Active milestone:** none
+**Next planned milestones:** v5.31 Real Limited Pilot Execution Operations; v5.32 Live Pilot Remediation And Reliability Fixes; v5.33 Controlled Expansion Execution And Revenue Validation; v5.34 Public Launch Execution And Post-Launch Operations are contract-complete locally and blocked on live approval/evidence for actual execution.
 
 ## Current Milestone: v5.30 Live Pilot Approval And Provider Activation Execution
 
@@ -1085,11 +1087,11 @@ Known current resources:
 | Plan v5.27 pilot remediation product fit and reliability hardening | Pilot findings should drive focused fixes before cohort growth | Contract complete locally; real remediation gated on live pilot findings |
 | Plan v5.28 controlled expansion revenue and operations scale | Expansion should validate revenue, teacher/support capacity, mobile/provider readiness, and operational scale before public launch prep | Contract complete locally; real expansion gated |
 | Plan v5.29 public launch readiness growth and self-serve onboarding | Self-serve and public launch readiness should follow controlled expansion evidence, not precede it | Contract complete locally; public launch gated |
-| Plan v5.30 live pilot approval and provider activation execution | Local contracts do not approve real users; live approval and provider/readiness evidence must clear the safe-start gate first | Active |
-| Plan v5.31 real limited pilot execution operations | Real pilot execution should only start after v5.30 returns `start_limited_pilot` | Planned |
-| Plan v5.32 live pilot remediation and reliability fixes | Live pilot findings should drive fixes before expansion | Planned |
-| Plan v5.33 controlled expansion execution and revenue validation | Expansion must validate revenue, support, teacher, mobile, provider, and operational scale under real use | Planned |
-| Plan v5.34 public launch execution and post-launch operations | Public launch execution requires controlled expansion evidence and final approval | Planned |
+| Plan v5.30 live pilot approval and provider activation execution | Local contracts do not approve real users; live approval and provider/readiness evidence must clear the safe-start gate first | Complete - live activation contracts added; default hold |
+| Plan v5.31 real limited pilot execution operations | Real pilot execution should only start after v5.30 returns `start_limited_pilot` | Contract complete locally; real execution gated |
+| Plan v5.32 live pilot remediation and reliability fixes | Live pilot findings should drive fixes before expansion | Contract complete locally; real fixes gated on live pilot findings |
+| Plan v5.33 controlled expansion execution and revenue validation | Expansion must validate revenue, support, teacher, mobile, provider, and operational scale under real use | Contract complete locally; real expansion gated |
+| Plan v5.34 public launch execution and post-launch operations | Public launch execution requires controlled expansion evidence and final approval | Contract complete locally; public launch gated |
 
 ## Evolution
 
@@ -1109,4 +1111,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-07 after planning v5.30-v5.34 from v5.25-v5.29 contract-complete evidence*
+*Last updated: 2026-07-07 after completing v5.30-v5.34 live execution contracts from v5.25-v5.29 contract-complete evidence*

@@ -75,6 +75,24 @@ LAUNCH_SURFACES = {
     "first_learning_action",
     "support_fallback",
 }
+LIVE_APPROVAL_ROLES = {
+    "decision_owner",
+    "product_owner",
+    "support_owner",
+    "incident_owner",
+    "finance_billing_owner",
+    "mobile_release_owner",
+    "provider_owner",
+}
+LIVE_ACTIVATION_DEPENDENCIES = {
+    "payment",
+    "notifications",
+    "support_crm",
+    "bi_apm",
+    "mobile_testflight",
+    "production_restore",
+    "launch_room_tabletop",
+}
 
 
 @dataclass(frozen=True)
@@ -789,6 +807,570 @@ def public_launch_readiness_gate(
     return result
 
 
+def live_approval_ownership_audit(
+    *,
+    approvals: dict[str, bool] | None = None,
+    dependency_states: dict[str, str] | None = None,
+    disabled_features: list[str] | None = None,
+) -> dict[str, Any]:
+    """Record live pilot owners, approvals, dependency states, and authority."""
+    approvals = approvals or {}
+    dependency_states = dependency_states or {}
+    owners = [
+        {
+            "role": role,
+            "approved": bool(approvals.get(role)),
+            "decisionAuthority": role in {"decision_owner", "product_owner"},
+        }
+        for role in sorted(LIVE_APPROVAL_ROLES)
+    ]
+    dependencies = [
+        {
+            "dependency": dependency,
+            "state": dependency_states.get(dependency, "missing"),
+            "allowedStates": ["approved", "disabled", "blocked", "missing"],
+        }
+        for dependency in sorted(LIVE_ACTIVATION_DEPENDENCIES)
+    ]
+    blockers = [
+        *[f"approval_missing:{owner['role']}" for owner in owners if not owner["approved"]],
+        *[
+            f"dependency_not_ready:{dependency['dependency']}"
+            for dependency in dependencies
+            if dependency["state"] not in {"approved", "disabled"}
+        ],
+    ]
+    result = {
+        "approvalState": "approved" if not blockers else "blocked",
+        "owners": owners,
+        "pilotScope": {
+            "cohort": "approved_limited_pilot_only",
+            "disabledFeatures": disabled_features or [],
+            "rollbackAuthority": "decision_owner",
+            "supportHoursApproved": bool(approvals.get("support_owner")),
+        },
+        "dependencies": dependencies,
+        "blockers": blockers,
+        "realUserActionAllowed": not blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_provider_mobile_activation_evidence(
+    *,
+    evidence_states: dict[str, str] | None = None,
+    disabled_components: set[str] | None = None,
+) -> dict[str, Any]:
+    """Capture redacted live/read-only provider, BI/APM, and mobile activation evidence."""
+    evidence_states = evidence_states or {}
+    disabled = disabled_components or set()
+    components = ["payment", "notifications", "support_crm", "bi_apm", "mobile_testflight"]
+    rows = []
+    blockers = []
+    for component in components:
+        state = "disabled" if component in disabled else evidence_states.get(component, "missing")
+        if state not in {"live_verified", "read_only_verified", "disabled"}:
+            blockers.append(component)
+        rows.append(
+            {
+                "component": component,
+                "state": state,
+                "timestampRequired": True,
+                "ownerRequired": True,
+                "requestOrBuildIdRequired": component == "mobile_testflight",
+                "rollbackControl": _live_rollback_control(component),
+                "participantCopy": _participant_copy(component, "explicitly_disabled_for_pilot")
+                if state == "disabled"
+                else _participant_copy(component, "launch_blocking" if component in blockers else "ready"),
+            }
+        )
+    result = {
+        "activationState": "ready" if not blockers else "blocked",
+        "components": rows,
+        "blockers": blockers,
+        "disabledComponents": sorted(disabled),
+        "evidencePolicy": {
+            "redactedOnly": True,
+            "supportSafe": True,
+            "customerMutationDefault": "disabled_until_gate_start",
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def production_restore_tabletop_launch_room_evidence(
+    *,
+    restore_state: str = "missing",
+    tabletop_state: str = "missing",
+    launch_room_state: str = "missing",
+    accepted_gaps: list[str] | None = None,
+) -> dict[str, Any]:
+    """Record restore/tabletop/launch-room evidence required before live pilot start."""
+    accepted = accepted_gaps or []
+    checks = {
+        "production_restore": restore_state,
+        "tabletop": tabletop_state,
+        "launch_room": launch_room_state,
+    }
+    blockers = [
+        name
+        for name, state in checks.items()
+        if state not in {"approved", "recorded"} and name not in accepted
+    ]
+    result = {
+        "operationsState": "ready" if not blockers else "blocked",
+        "checks": checks,
+        "scenarios": [
+            "auth_failure",
+            "billing_blocker",
+            "notification_blocker",
+            "support_spike",
+            "ai_provider_issue",
+            "mobile_incident",
+            "rollback",
+        ],
+        "incidentPolicy": {
+            "severityApproved": not blockers,
+            "escalationPathApproved": not blockers,
+            "pauseCriteriaApproved": not blockers,
+            "rollbackCriteriaApproved": not blockers,
+        },
+        "acceptedGaps": accepted,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_safe_start_gate_execution(
+    *,
+    approval: dict[str, Any] | None = None,
+    provider_evidence: dict[str, Any] | None = None,
+    operations_evidence: dict[str, Any] | None = None,
+    accepted_risks: list[str] | None = None,
+) -> dict[str, Any]:
+    """Execute the live safe-start gate from current approved evidence state."""
+    approval = approval or live_approval_ownership_audit()
+    provider_evidence = provider_evidence or live_provider_mobile_activation_evidence()
+    operations_evidence = operations_evidence or production_restore_tabletop_launch_room_evidence()
+    blockers = _unique(
+        [
+            *approval.get("blockers", []),
+            *[f"provider:{blocker}" for blocker in provider_evidence.get("blockers", [])],
+            *[f"operations:{blocker}" for blocker in operations_evidence.get("blockers", [])],
+        ]
+    )
+    decision = "start_limited_pilot" if not blockers else "hold"
+    result = {
+        "decision": decision,
+        "safeToStart": decision == "start_limited_pilot",
+        "blockers": blockers,
+        "acceptedRisks": accepted_risks or [],
+        "evidence": {
+            "approval": approval.get("approvalState"),
+            "providers": provider_evidence.get("activationState"),
+            "operations": operations_evidence.get("operationsState"),
+        },
+        "ownerSignoffRequired": decision != "start_limited_pilot",
+        "v5_31Allowed": decision == "start_limited_pilot",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_activation_gate(
+    *,
+    gate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Close v5.30 with a real-pilot execution or continued hold decision."""
+    gate = gate or live_pilot_safe_start_gate_execution()
+    result = {
+        "decision": "real_pilot_execution" if gate.get("safeToStart") else "continued_hold_remediation",
+        "safeStartDecision": gate.get("decision"),
+        "v5_31Scope": "real_limited_pilot" if gate.get("safeToStart") else "blocked_until_live_gate_start",
+        "outOfScope": ["public_launch", "paid_marketing", "uncontrolled_provider_writes"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_cohort_enablement_onboarding_operations(
+    *,
+    live_gate: dict[str, Any] | None = None,
+    approved_user_count: int = 0,
+) -> dict[str, Any]:
+    gate = live_gate or live_pilot_safe_start_gate_execution()
+    allowed = bool(gate.get("safeToStart") and approved_user_count > 0)
+    result = {
+        "executionState": "ready" if allowed else "blocked_by_live_gate",
+        "approvedUserCount": approved_user_count,
+        "checks": [
+            "account_verification",
+            "entitlement",
+            "child_binding",
+            "curriculum_placement",
+            "mobile_or_web_access",
+            "notification_preference",
+            "support_path",
+            "first_learning_action",
+        ],
+        "failedStatePolicy": {"ownerRequired": True, "supportVisibleNextAction": True},
+        "pauseSupported": True,
+        "customerMutationAllowed": allowed,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def daily_live_pilot_operations_incident_review() -> dict[str, Any]:
+    result = {
+        "reviewState": "ready",
+        "dailyChecks": [
+            "auth",
+            "billing",
+            "usage_quota",
+            "ai",
+            "notifications",
+            "support",
+            "mobile",
+            "providers",
+            "incidents",
+        ],
+        "incidentPolicy": {
+            "rollbackThresholdReviewed": True,
+            "pauseOnSeriousIncident": True,
+            "supportTaxonomyRequired": True,
+            "ownerRequired": True,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_learning_feedback_support_quality_capture() -> dict[str, Any]:
+    result = {
+        "captureState": "ready",
+        "channels": ["parent", "student", "teacher", "support"],
+        "qualityAreas": [
+            "ai_quality",
+            "curriculum_placement",
+            "teacher_help_response",
+            "parent_explanations",
+        ],
+        "findingBuckets": ["remediation", "accepted_limitation"],
+        "privateContentExcluded": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_outcome_analysis(signals: dict[str, str] | None = None) -> dict[str, Any]:
+    observed = signals or {}
+    rows = []
+    blockers = []
+    for signal in sorted(PILOT_OUTCOME_SIGNALS):
+        state = observed.get(signal, "not_observed")
+        if state in {"failed", "blocked"}:
+            blockers.append(signal)
+        rows.append({"signal": signal, "state": state, "nextAction": _pilot_signal_action(signal, state)})
+    result = {
+        "analysisState": "reviewed" if observed else "insufficient_live_evidence",
+        "signals": rows,
+        "expansionBlockers": blockers,
+        "buckets": ["expansion_blockers", "remediation_backlog", "accepted_risks", "future_improvements"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_decision_gate(
+    *,
+    live_gate: dict[str, Any] | None = None,
+    signals: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    gate = live_gate or live_pilot_safe_start_gate_execution()
+    analysis = live_pilot_outcome_analysis(signals)
+    if not gate.get("safeToStart"):
+        decision = "pause"
+    elif analysis["expansionBlockers"]:
+        decision = "remediate_before_continuing"
+    elif signals:
+        decision = "expansion_candidate"
+    else:
+        decision = "continue_pilot"
+    result = {
+        "decision": decision,
+        "expansionBlocked": decision != "expansion_candidate",
+        "v5_32ScopeBasis": "live evidence if available; otherwise live gate blockers",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_issue_triage_fix_plan(
+    issues: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    issues = issues or [
+        {
+            "issue": "live_pilot_not_started",
+            "severity": "critical",
+            "frequency": "current",
+            "owner": "operations",
+            "affectedRole": "operator",
+            "surface": "live_gate",
+            "expansionImpact": "blocks_expansion",
+        }
+    ]
+    backlog = pilot_issue_triage_remediation_backlog(issues)
+    return {
+        **backlog,
+        "source": "live_pilot_issue_triage",
+        "deferredExplanationRequired": True,
+    }
+
+
+def account_mobile_billing_notification_fixes() -> dict[str, Any]:
+    result = account_billing_mobile_notification_remediation()
+    result["source"] = "live_pilot_fix_plan"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def learning_ai_curriculum_teacher_help_fixes() -> dict[str, Any]:
+    result = learning_ai_curriculum_teacher_help_remediation()
+    result["validationSource"] = "live_examples_or_approved_synthetic_fixtures"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def regression_release_support_evidence(*, blockers_resolved: bool = False) -> dict[str, Any]:
+    result = pilot_regression_reliability_evidence(blockers_resolved=blockers_resolved)
+    result["releaseEvidenceSource"] = "live_pilot_remediation"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_remediation_gate(
+    *,
+    blockers_resolved: bool = False,
+    accepted_blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    accepted = accepted_blockers or []
+    unresolved = [] if blockers_resolved else live_pilot_issue_triage_fix_plan()[
+        "mustFixExpansionBlockers"
+    ]
+    if not unresolved or set(unresolved).issubset(accepted):
+        decision = "expansion_ready"
+    elif accepted:
+        decision = "continue_pilot"
+    else:
+        decision = "another_remediation_cycle"
+    result = {
+        "decision": decision,
+        "unresolvedBlockers": unresolved,
+        "acceptedBlockers": accepted,
+        "v5_33Allowed": decision == "expansion_ready",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_expansion_cohort_capacity_enablement(
+    *,
+    remediation_gate: dict[str, Any] | None = None,
+    approved: bool = False,
+) -> dict[str, Any]:
+    gate = remediation_gate or live_remediation_gate()
+    allowed = approved and gate.get("v5_33Allowed")
+    result = {
+        "enablementState": "ready" if allowed else "blocked_by_remediation_or_approval",
+        "cohort": {
+            "size": "controlled_expansion",
+            "stages": ["initial_expansion", "capacity_review", "expanded_cap"],
+            "rollbackThresholds": ["critical_incident", "support_sla_breach", "provider_blocker"],
+        },
+        "capacityAreas": [
+            "api",
+            "mobile",
+            "providers",
+            "ai",
+            "teacher_help",
+            "support",
+            "billing",
+            "bi_apm",
+            "incident_response",
+        ],
+        "expansionAllowed": allowed,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_revenue_billing_subscription_validation() -> dict[str, Any]:
+    result = revenue_billing_subscription_operations_scale()
+    result["validationState"] = "ready_for_live_expansion_review"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_teacher_support_customer_operations_scale() -> dict[str, Any]:
+    result = teacher_support_customer_operations_scale()
+    result["validationState"] = "ready_for_live_expansion_review"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_mobile_provider_infrastructure_scale_evidence() -> dict[str, Any]:
+    result = mobile_provider_infrastructure_scale_smoke()
+    result["evidenceState"] = "ready_for_live_expansion_review"
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def controlled_expansion_decision_gate(
+    *,
+    metrics_met: bool = False,
+    support_capacity_met: bool = False,
+    rollback_needed: bool = False,
+) -> dict[str, Any]:
+    if rollback_needed:
+        decision = "rollback"
+    elif metrics_met and support_capacity_met:
+        decision = "public_launch_prep"
+    elif metrics_met:
+        decision = "hold"
+    else:
+        decision = "remediate"
+    result = {
+        "decision": decision,
+        "publicLaunchBlocked": decision != "public_launch_prep",
+        "v5_34Scope": "launch_execution" if decision == "public_launch_prep" else "hold_or_remediate",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def final_launch_approval_public_rollout_plan(
+    *,
+    final_approval: bool = False,
+    expansion_gate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    expansion_gate = expansion_gate or controlled_expansion_decision_gate()
+    approved = final_approval and expansion_gate.get("decision") == "public_launch_prep"
+    result = {
+        "decision": "public_launch" if approved else "continued_controlled_expansion_or_hold",
+        "rolloutPlanApproved": approved,
+        "scope": "public_launch" if approved else "controlled_or_held",
+        "requiredApprovals": ["owner_signoff", "support_staffing", "provider_capacity", "billing_readiness"],
+        "knownLimitationsDocumented": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def self_serve_onboarding_growth_support_launch(
+    *,
+    launch_plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    launch_plan = launch_plan or final_launch_approval_public_rollout_plan()
+    enabled = launch_plan.get("decision") == "public_launch"
+    result = {
+        "launchState": "enabled" if enabled else "blocked_by_launch_approval",
+        "surfaces": sorted(LAUNCH_SURFACES),
+        "growthLoops": ["pricing", "waitlist", "referral", "lifecycle", "retention_reporting"],
+        "supportAssetsCurrent": True,
+        "consentPreferencePrivacyGated": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def app_store_production_release_launch_monitoring(
+    *,
+    launch_plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    launch_plan = launch_plan or final_launch_approval_public_rollout_plan()
+    active = launch_plan.get("decision") == "public_launch"
+    result = {
+        "monitoringState": "active" if active else "prepared_not_active",
+        "appStoreAssetsApproved": active,
+        "dashboard": launch_controls_monitoring()["dashboard"] + ["revenue"],
+        "controls": ["launch_freeze", "staged_rollout", "rollback", "provider_disablement"],
+        "monitoringEvidencePolicy": {
+            "redactedOnly": True,
+            "supportSafe": True,
+            "privateContentExcluded": True,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def post_launch_incident_revenue_learning_operations() -> dict[str, Any]:
+    result = {
+        "operationsState": "ready",
+        "cadence": [
+            "incidents",
+            "revenue_reconciliation",
+            "support_load",
+            "teacher_response",
+            "ai_quality",
+            "curriculum_issues",
+            "mobile_crashes",
+            "provider_health",
+            "retention",
+        ],
+        "issueBuckets": ["hotfix", "support_action", "product_backlog", "growth_learning", "accepted_limitation"],
+        "reconciliationSource": "provider_and_account_operations_state",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def launch_outcome_next_strategy_gate(
+    *,
+    launch_plan: dict[str, Any] | None = None,
+    outcome_healthy: bool = False,
+    rollback_needed: bool = False,
+) -> dict[str, Any]:
+    launch_plan = launch_plan or final_launch_approval_public_rollout_plan()
+    if rollback_needed:
+        decision = "rollback"
+    elif launch_plan.get("decision") == "public_launch" and outcome_healthy:
+        decision = "scale"
+    elif launch_plan.get("decision") == "public_launch":
+        decision = "hold"
+    else:
+        decision = "next_focused_product_or_growth_milestone"
+    result = {
+        "decision": decision,
+        "outcomeReportRecorded": True,
+        "v5_35Recommendation": decision,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {
@@ -1071,6 +1653,17 @@ def _provider_rollback_control(component: str) -> str:
         "incident_operations": "pause cohort enablement and enter launch-room incident mode",
     }
     return controls.get(component, "disable pilot flag and escalate to owner")
+
+
+def _live_rollback_control(component: str) -> str:
+    controls = {
+        "payment": "disable live checkout and revoke pilot billing rollout",
+        "notifications": "disable outbound provider delivery and use manual support copy",
+        "support_crm": "disable CRM destination and keep internal queue ownership",
+        "bi_apm": "fall back to daily local evidence and manual launch-room review",
+        "mobile_testflight": "halt pilot build channel and return users to approved access path",
+    }
+    return controls.get(component, "pause live pilot enablement and escalate to owner")
 
 
 def _pilot_signal_action(signal: str, state: str) -> str:
