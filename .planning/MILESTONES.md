@@ -293,9 +293,9 @@ Planned phases:
 
 ---
 
-## Active: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+## Complete: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
 
-**Status:** Active
+**Status:** Complete
 **Started:** 2026-07-07
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
@@ -303,8 +303,8 @@ Planned phases:
 **Milestone requirements:** `.planning/milestones/v5.25-REQUIREMENTS.md`
 **Goal:** Clear, explicitly disable, or launch-block every dependency required for the first real pilot.
 **Phases:** 5
-**Plans:** 0/5 complete
-**Requirements:** 0/5 complete
+**Plans:** 5/5 complete
+**Requirements:** 5/5 complete
 
 Function purpose:
 
@@ -320,17 +320,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 297: Pilot Activation Blocker Reality Audit.
-- Phase 298: Provider Activation Or Explicit Disablement.
-- Phase 299: Pilot Environment Cohort And Account Dry Run.
-- Phase 300: Launch Room Rehearsal And Safe Start Package.
-- Phase 301: v5.25 Pilot Safe Start Gate.
+- Phase 297: Pilot Activation Blocker Reality Audit. (complete)
+- Phase 298: Provider Activation Or Explicit Disablement. (complete)
+- Phase 299: Pilot Environment Cohort And Account Dry Run. (complete)
+- Phase 300: Launch Room Rehearsal And Safe Start Package. (complete)
+- Phase 301: Pilot Safe Start Gate. (complete)
 
 ---
 
-## Planned: v5.26 Limited Pilot Execution And Outcome Evidence
+## Contract Complete: v5.26 Limited Pilot Execution And Outcome Evidence
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.26-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.26-REQUIREMENTS.md`
 **Goal:** Run the approved pilot cohort under controlled rollout, daily monitoring, support coverage, feedback capture, and outcome evidence.
@@ -349,17 +349,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 302: Pilot Cohort Enablement And First-Use Tracking.
-- Phase 303: Daily Pilot Monitoring And Incident Operations.
-- Phase 304: Pilot Support Feedback And Learning Quality Evidence.
-- Phase 305: Pilot Metrics Outcome Analysis.
-- Phase 306: v5.26 Pilot Outcome Decision Gate.
+- Phase 302: Pilot Cohort Enablement And First-Use Tracking. (contract complete)
+- Phase 303: Daily Pilot Monitoring And Incident Operations. (contract complete)
+- Phase 304: Pilot Support Feedback And Learning Quality Evidence. (contract complete)
+- Phase 305: Pilot Metrics Outcome Analysis. (contract complete)
+- Phase 306: Pilot Outcome Decision Gate. (contract complete)
 
 ---
 
-## Planned: v5.27 Pilot Remediation Product Fit And Reliability Hardening
+## Contract Complete: v5.27 Pilot Remediation Product Fit And Reliability Hardening
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.27-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.27-REQUIREMENTS.md`
 **Goal:** Turn v5.26 pilot evidence into focused product, reliability, support, AI, curriculum, and mobile fixes before any expansion.
@@ -378,17 +378,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 307: Pilot Issue Triage And Remediation Backlog.
-- Phase 308: Account Billing Mobile And Notification Remediation.
-- Phase 309: Learning AI Curriculum And Teacher-Help Remediation.
-- Phase 310: Pilot Regression And Reliability Evidence.
-- Phase 311: v5.27 Remediation Release Gate.
+- Phase 307: Pilot Issue Triage And Remediation Backlog. (contract complete)
+- Phase 308: Account Billing Mobile And Notification Remediation. (contract complete)
+- Phase 309: Learning AI Curriculum And Teacher-Help Remediation. (contract complete)
+- Phase 310: Pilot Regression And Reliability Evidence. (contract complete)
+- Phase 311: Remediation Release Gate. (contract complete)
 
 ---
 
-## Planned: v5.28 Controlled Expansion Revenue And Operations Scale
+## Contract Complete: v5.28 Controlled Expansion Revenue And Operations Scale
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.28-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.28-REQUIREMENTS.md`
 **Goal:** Expand from a narrow pilot to a larger controlled cohort with revenue, support staffing, teacher operations, mobile release, provider capacity, and operational scale controls.
@@ -407,17 +407,17 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 312: Expansion Cohort And Capacity Plan.
-- Phase 313: Revenue Billing And Subscription Operations Scale.
-- Phase 314: Teacher Support And Customer Operations Scale.
-- Phase 315: Mobile Provider And Infrastructure Scale Smoke.
-- Phase 316: v5.28 Controlled Expansion Gate.
+- Phase 312: Expansion Cohort And Capacity Plan. (contract complete)
+- Phase 313: Revenue Billing And Subscription Operations Scale. (contract complete)
+- Phase 314: Teacher Support And Customer Operations Scale. (contract complete)
+- Phase 315: Mobile Provider And Infrastructure Scale Smoke. (contract complete)
+- Phase 316: Controlled Expansion Gate. (contract complete)
 
 ---
 
-## Planned: v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
+## Contract Complete: v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
 
-**Status:** Planned
+**Status:** Contract Complete
 **Roadmap:** `.planning/milestones/v5.29-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.29-REQUIREMENTS.md`
 **Goal:** Prepare STOA for public launch or a larger market-facing release through self-serve onboarding, growth loops, pricing/package readiness, public support operations, app-store readiness, and final launch controls.
@@ -436,11 +436,11 @@ Implementation strategy:
 
 Planned phases:
 
-- Phase 317: Self-Serve Onboarding And Account Conversion.
-- Phase 318: Pricing Packaging Growth And Lifecycle Readiness.
-- Phase 319: Public Support Knowledge Base And Launch Communications.
-- Phase 320: App Store Public Release And Production Launch Controls.
-- Phase 321: v5.29 Public Launch Readiness Gate.
+- Phase 317: Self-Serve Onboarding And Account Conversion. (contract complete)
+- Phase 318: Pricing Packaging Growth And Lifecycle Readiness. (contract complete)
+- Phase 319: Public Support Knowledge Base And Launch Communications. (contract complete)
+- Phase 320: App Store Public Release And Production Launch Controls. (contract complete)
+- Phase 321: Public Launch Readiness Gate. (contract complete)
 
 ---
 

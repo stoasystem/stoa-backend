@@ -114,7 +114,9 @@ The completed v5.19 milestone establishes native mobile source readiness: Expo/R
 
 The completed v5.20-v5.24 sequence adds local contracts for native build/device readiness, AI teaching operations, customer lifecycle messaging, enterprise hardening, and limited pilot launch readiness. v5.24 ends with a conditional pilot recommendation, not a real-user activation approval.
 
-The active v5.25 milestone burns down the remaining activation blockers before any real pilot users are enabled: payment, notifications, support CRM, BI/APM, mobile release/TestFlight, production restore, live tabletop, staffing, cohort, and rollback.
+The completed v5.25 milestone burns down the remaining activation blockers before any real pilot users are enabled: payment, notifications, support CRM, BI/APM, mobile release/TestFlight, production restore, live tabletop, staffing, cohort, and rollback. It adds a safe-start gate that defaults to `hold` until required blockers are cleared or explicitly disabled.
+
+The v5.26-v5.29 pilot execution, remediation, controlled expansion, and public launch readiness milestones are now contract-complete locally: STOA has metadata-only evidence contracts and tests for pilot execution controls, outcome decisions, remediation gates, expansion gates, and public-launch readiness gates. Real-user pilot execution, expansion, paid marketing, provider writes, and public launch remain externally gated by explicit operational approval and live evidence.
 
 ## Core Value
 

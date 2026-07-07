@@ -1,7 +1,7 @@
 # Requirements: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
 
 **Milestone:** v5.25
-**Status:** Active
+**Status:** Complete
 **Created:** 2026-07-07
 **Prior milestone:** v5.24 Limited Production Pilot And Launch Readiness
 
@@ -68,8 +68,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PILOTSTART-01 | Phase 297 | Planned |
-| PILOTSTART-02 | Phase 298 | Planned |
-| PILOTSTART-03 | Phase 299 | Planned |
-| PILOTSTART-04 | Phase 300 | Planned |
-| VERIFY-59 | Phase 301 | Planned |
+| PILOTSTART-01 | Phase 297 | Complete |
+| PILOTSTART-02 | Phase 298 | Complete |
+| PILOTSTART-03 | Phase 299 | Complete |
+| PILOTSTART-04 | Phase 300 | Complete |
+| VERIFY-59 | Phase 301 | Complete |

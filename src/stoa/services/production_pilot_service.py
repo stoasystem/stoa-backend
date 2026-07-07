@@ -39,6 +39,42 @@ PILOT_COMPONENTS = {
     "data_lifecycle",
     "incident_operations",
 }
+PILOT_REQUIRED_COMPONENTS = {
+    "backend",
+    "frontend",
+    "mobile",
+    "cognito_email",
+    "payment",
+    "notifications",
+    "support_crm",
+    "ai",
+    "bi_apm",
+    "data_lifecycle",
+    "incident_operations",
+}
+PROVIDER_COMPONENTS = {"payment", "notifications", "support_crm", "bi_apm", "mobile", "data_lifecycle", "incident_operations"}
+PILOT_OUTCOME_SIGNALS = {
+    "activation",
+    "retention",
+    "usage",
+    "teacher_help",
+    "ai_quality",
+    "notifications",
+    "support_load",
+    "mobile_stability",
+    "account_billing",
+    "satisfaction",
+}
+LAUNCH_SURFACES = {
+    "self_serve_signup",
+    "email_verification",
+    "parent_student_setup",
+    "entitlement",
+    "payment_subscription",
+    "mobile_install",
+    "first_learning_action",
+    "support_fallback",
+}
 
 
 @dataclass(frozen=True)
@@ -72,6 +108,685 @@ DEFAULT_READINESS = [
     ReadinessItem("data_lifecycle", "local_only", "operations", "production restore fixture pending", "enterprise hardening contracts"),
     ReadinessItem("incident_operations", "local_only", "operations", "live tabletop approval pending", "enterprise hardening contracts"),
 ]
+
+
+def activation_blocker_reality_audit(
+    *,
+    readiness_items: list[dict[str, Any]] | None = None,
+    disabled_components: set[str] | None = None,
+) -> dict[str, Any]:
+    """Classify every limited-pilot dependency before any real-user activation."""
+    disabled = disabled_components or set()
+    audit = launch_scope_audit(readiness_items)
+    blockers = []
+    rows = []
+    for item in audit["readiness"]:
+        classification = _pilot_dependency_classification(item, disabled)
+        action = _pilot_dependency_action(item, classification)
+        row = {
+            "component": item["component"],
+            "owner": item["owner"],
+            "currentState": item["state"],
+            "pilotClassification": classification,
+            "requiredForPilot": item["component"] in PILOT_REQUIRED_COMPONENTS,
+            "blocker": item["blocker"],
+            "requiredAction": action,
+            "pilotImpact": _pilot_dependency_impact(item["component"], classification),
+            "fallbackOrDisableOption": _fallback_or_disable_option(item["component"]),
+            "evidenceSource": item["evidence"],
+            "decisionDeadline": "before_real_user_enablement",
+        }
+        rows.append(row)
+        if classification == "blocked":
+            blockers.append(row)
+
+    result = {
+        "auditState": "blocked" if blockers else "ready",
+        "scope": "limited_parent_student_pilot",
+        "dependencies": rows,
+        "blockers": blockers,
+        "stateCounts": _count_by(rows, "pilotClassification"),
+        "realUserStartRecommended": not blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def provider_activation_or_disablement(
+    *,
+    disabled_components: set[str] | None = None,
+    approved_evidence: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Document which pilot dependencies are activated, read-only, disabled, or blocking."""
+    disabled = disabled_components or set()
+    evidence = approved_evidence or {}
+    audit = activation_blocker_reality_audit(disabled_components=disabled)
+    rows = []
+    unresolved = []
+    for dependency in audit["dependencies"]:
+        component = dependency["component"]
+        if component not in PROVIDER_COMPONENTS:
+            continue
+        if component in disabled:
+            state = "explicitly_disabled_for_pilot"
+        elif component in evidence:
+            state = "approved_evidence_recorded"
+        elif dependency["pilotClassification"] == "cleared":
+            state = "read_only_or_live_evidence_available"
+        else:
+            state = "launch_blocking"
+            unresolved.append(component)
+        rows.append(
+            {
+                "component": component,
+                "pilotState": state,
+                "evidence": evidence.get(component) or dependency["evidenceSource"],
+                "operatorImpact": _operator_impact(component, state),
+                "participantCopy": _participant_copy(component, state),
+                "rollbackControl": _provider_rollback_control(component),
+            }
+        )
+
+    result = {
+        "activationState": "blocked" if unresolved else "ready",
+        "components": rows,
+        "unresolvedComponents": unresolved,
+        "disabledComponents": sorted(disabled),
+        "evidencePolicy": {
+            "recordsRequestIds": True,
+            "recordsTimestamps": True,
+            "recordsOwners": True,
+            "sensitiveMaterialExcluded": True,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_environment_cohort_dry_run() -> dict[str, Any]:
+    """Return safe-fixture pilot setup checks for account, support, and rollback readiness."""
+    plan = cohort_onboarding_plan()
+    result = {
+        "dryRunState": "safe_fixture_ready",
+        "fixtureAccounts": {
+            "parent": "pilot-parent-fixture",
+            "student": "pilot-student-fixture",
+            "admin": "pilot-admin-fixture",
+            "support": "pilot-support-fixture",
+            "customerMutationAllowed": False,
+        },
+        "checks": [
+            "parent_email_verification",
+            "student_child_binding",
+            "entitlement_visibility",
+            "curriculum_placement",
+            "mobile_install_path",
+            "notification_preference_review",
+            "support_contact_path",
+            "account_recovery_path",
+            "rollback_communication",
+            "exit_path",
+        ],
+        "onboardingChecklist": plan["onboardingChecklist"],
+        "unsupportedPilotFeatures": launch_scope_audit()["excludedFeatures"],
+        "fixtureRetention": "metadata-only dry-run evidence retained with milestone artifacts",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def launch_room_rehearsal_safe_start_package() -> dict[str, Any]:
+    """Assemble launch-room rehearsal and safe-start package evidence."""
+    controls = launch_controls_monitoring()
+    result = {
+        "rehearsalState": "local_ready",
+        "launchRoom": {
+            "owner": "operations",
+            "schedule": "daily during limited pilot",
+            "dashboard": controls["dashboard"],
+            "alertRouting": controls["alertRouting"],
+            "supportStaffing": "business-hours support with escalation owner",
+            "dailyReporting": "activation, incidents, support, blockers, and next action",
+        },
+        "scenarios": [
+            "auth_failure",
+            "payment_blocker",
+            "notification_blocker",
+            "ai_provider_issue",
+            "support_spike",
+            "mobile_crash",
+            "rollback",
+        ],
+        "safeStartPackage": {
+            "cohortList": "approved cohort identifiers only, stored outside public evidence",
+            "enablementChecklist": cohort_onboarding_plan()["onboardingChecklist"],
+            "disabledFeatureList": launch_scope_audit()["excludedFeatures"],
+            "supportPlan": "support contact, escalation, and rollback copy ready before enablement",
+            "monitoringPlan": controls["dashboard"],
+            "rollbackPlan": controls["freezeAndRollback"],
+            "communicationsPlan": "start, blocker, rollback, and hold messages prepared",
+        },
+        "findings": ["live provider blockers must be cleared or explicitly disabled before start"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_safe_start_gate(
+    *,
+    disabled_components: set[str] | None = None,
+    accepted_risks: list[str] | None = None,
+) -> dict[str, Any]:
+    """Decide whether the limited pilot can start from activation evidence."""
+    blocker_audit = activation_blocker_reality_audit(disabled_components=disabled_components)
+    provider_state = provider_activation_or_disablement(disabled_components=disabled_components)
+    dry_run = pilot_environment_cohort_dry_run()
+    rehearsal = launch_room_rehearsal_safe_start_package()
+    blockers = _unique([row["component"] for row in blocker_audit["blockers"]] + provider_state["unresolvedComponents"])
+    decision = "start_limited_pilot" if not blockers else "hold"
+    result = {
+        "decision": decision,
+        "safeToStart": decision == "start_limited_pilot",
+        "blockers": blockers,
+        "acceptedRisks": accepted_risks or [],
+        "evidence": {
+            "blockerAudit": blocker_audit["auditState"],
+            "providerActivation": provider_state["activationState"],
+            "dryRun": dry_run["dryRunState"],
+            "launchRoomRehearsal": rehearsal["rehearsalState"],
+        },
+        "nextMilestoneRecommendation": "v5.26 may execute only if decision is start_limited_pilot",
+        "notApproved": ["public_launch", "paid_marketing", "unapproved_provider_writes"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_cohort_enablement_first_use_tracking(
+    *,
+    safe_start_gate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    gate = safe_start_gate or pilot_safe_start_gate()
+    blocked = not gate.get("safeToStart")
+    result = {
+        "executionState": "blocked_by_safe_start_gate" if blocked else "ready_for_controlled_enablement",
+        "gateDecision": gate.get("decision"),
+        "cohortEnablement": {
+            "rolloutFlags": ["pilot_enabled", "provider_writes_enabled"],
+            "stageOrder": ["admin_fixture", "staff_family", "approved_pilot_family"],
+            "customerMutationAllowed": not blocked,
+        },
+        "tracking": [
+            "onboarding_started",
+            "email_verified",
+            "entitlement_visible",
+            "child_bound",
+            "curriculum_placed",
+            "mobile_or_web_accessed",
+            "first_learning_action",
+            "support_path_confirmed",
+        ],
+        "failedStateSupportActions": ["show_blocker_reason", "assign_owner", "retry_after_clearance"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def daily_pilot_monitoring_incident_operations() -> dict[str, Any]:
+    result = {
+        "monitoringState": "ready",
+        "dailyChecklist": [
+            "auth",
+            "billing_entitlement",
+            "usage_quota",
+            "ai",
+            "notifications",
+            "support",
+            "mobile",
+            "providers",
+            "incidents",
+        ],
+        "incidentActions": {
+            "pauseCohortEnablement": True,
+            "rollbackSupported": True,
+            "providerDisablementSupported": True,
+            "supportEscalationRequired": True,
+        },
+        "reviewOutputs": ["blocker_state", "incident_state", "rollback_readiness", "daily_owner_action"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_support_feedback_learning_quality_evidence() -> dict[str, Any]:
+    result = {
+        "feedbackState": "ready",
+        "channels": ["parent", "student", "teacher_tutor", "admin", "support_operator"],
+        "qualityEvidence": [
+            "ai_summary_quality",
+            "exercise_generation_quality",
+            "assignment_relevance",
+            "teacher_help_response_quality",
+            "curriculum_placement",
+            "progress_explanation",
+        ],
+        "rubricSource": "v5.21 AI operations rubrics and approved synthetic fixtures",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_metrics_outcome_analysis(signals: dict[str, str] | None = None) -> dict[str, Any]:
+    observed = signals or {}
+    rows = []
+    blockers = []
+    for signal in sorted(PILOT_OUTCOME_SIGNALS):
+        state = observed.get(signal, "not_observed")
+        if state in {"failed", "blocked"}:
+            blockers.append(signal)
+        rows.append({"signal": signal, "state": state, "supportAction": _pilot_signal_action(signal, state)})
+    result = {
+        "analysisState": "blocked" if blockers else "insufficient_evidence" if not observed else "reviewed",
+        "signals": rows,
+        "expansionBlockers": blockers,
+        "decisionBuckets": ["expansion_blockers", "remediation_backlog", "accepted_risks", "future_improvements"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_outcome_decision_gate(
+    *,
+    safe_start_gate: dict[str, Any] | None = None,
+    signals: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    gate = safe_start_gate or pilot_safe_start_gate()
+    analysis = pilot_metrics_outcome_analysis(signals)
+    if not gate.get("safeToStart"):
+        decision = "pause"
+    elif analysis["expansionBlockers"]:
+        decision = "remediate_before_continuing"
+    elif signals:
+        decision = "continue_pilot"
+    else:
+        decision = "remediate_before_continuing"
+    result = {
+        "decision": decision,
+        "gateDecision": gate.get("decision"),
+        "outcomeAnalysis": analysis["analysisState"],
+        "expansionBlocked": decision != "continue_pilot",
+        "v5_27ScopeBasis": "real pilot signals if observed; otherwise safe-start blockers",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_issue_triage_remediation_backlog(
+    issues: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Convert pilot issues into an expansion-oriented remediation backlog."""
+    source_issues = issues or [
+        {
+            "issue": "safe_start_gate_blocked",
+            "severity": "critical",
+            "frequency": "current",
+            "owner": "operations",
+            "surface": "provider_activation",
+            "affectedRole": "operator",
+            "expansionImpact": "blocks_expansion",
+        }
+    ]
+    rows = []
+    must_fix = []
+    for issue in source_issues:
+        severity = str(issue.get("severity") or "medium")
+        impact = str(issue.get("expansionImpact") or "unknown")
+        must_fix_item = severity in {"critical", "high"} or impact == "blocks_expansion"
+        row = {
+            "issue": str(issue.get("issue") or "unknown_issue"),
+            "severity": severity,
+            "frequency": str(issue.get("frequency") or "unknown"),
+            "owner": str(issue.get("owner") or "unassigned"),
+            "affectedRole": str(issue.get("affectedRole") or "unknown"),
+            "surface": str(issue.get("surface") or "unknown"),
+            "expansionImpact": impact,
+            "bucket": "must_fix_expansion_blocker" if must_fix_item else "known_limitation",
+            "verificationPlan": "focused regression, smoke check, or support-safe evidence snapshot",
+            "participantCopy": "Known pilot limitation under remediation.",
+        }
+        rows.append(row)
+        if must_fix_item:
+            must_fix.append(row["issue"])
+    result = {
+        "backlogState": "blocked" if must_fix else "ready",
+        "items": rows,
+        "mustFixExpansionBlockers": must_fix,
+        "futureEnhancements": [row["issue"] for row in rows if row["bucket"] == "known_limitation"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def account_billing_mobile_notification_remediation() -> dict[str, Any]:
+    result = {
+        "remediationState": "scoped",
+        "surfaces": [
+            "account_verification",
+            "entitlement_visibility",
+            "billing_state",
+            "mobile_install_session",
+            "offline_cache",
+            "notification_delivery",
+        ],
+        "fixPolicy": {
+            "noDemoFallback": True,
+            "explicitDisablementAllowed": True,
+            "supportSafeStateExplanations": True,
+            "regressionCoverageRequired": True,
+        },
+        "supportVisibility": ["parent_account_operations", "admin_account_operations", "provider_blocker_state"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def learning_ai_curriculum_teacher_help_remediation() -> dict[str, Any]:
+    result = {
+        "remediationState": "scoped",
+        "surfaces": [
+            "ai_quality",
+            "exercise_generation",
+            "assignment_relevance",
+            "curriculum_placement",
+            "teacher_help_routing",
+            "parent_student_explanations",
+        ],
+        "safety": {
+            "teacherOversightRetained": True,
+            "safetyEscalationRetained": True,
+            "rawStudentWorkExcluded": True,
+        },
+        "validation": ["v5.21_rubric_fixtures", "approved_synthetic_pilot_examples", "support_safe_snapshots"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_regression_reliability_evidence(
+    *,
+    blockers_resolved: bool = False,
+) -> dict[str, Any]:
+    result = {
+        "evidenceState": "ready" if blockers_resolved else "blocked",
+        "coverage": [
+            "fixed_pilot_issue_regressions",
+            "impacted_api_smoke",
+            "mobile_flow_smoke",
+            "provider_state_review",
+            "support_operations_review",
+            "reopen_rate_dashboard",
+        ],
+        "releaseNotes": {
+            "parentStudentLanguage": True,
+            "operatorLanguage": True,
+            "knownLimitationsIncluded": True,
+        },
+        "remainingBlockers": [] if blockers_resolved else ["safe_start_gate_blocked"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def remediation_release_gate(
+    *,
+    blockers_resolved: bool = False,
+    accepted_blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    backlog = pilot_issue_triage_remediation_backlog()
+    reliability = pilot_regression_reliability_evidence(blockers_resolved=blockers_resolved)
+    unresolved = [] if blockers_resolved else backlog["mustFixExpansionBlockers"]
+    accepted = accepted_blockers or []
+    decision = "ready_for_controlled_expansion" if not unresolved or set(unresolved).issubset(accepted) else "another_remediation_cycle"
+    result = {
+        "decision": decision,
+        "mustFixResolved": decision == "ready_for_controlled_expansion",
+        "acceptedBlockers": accepted,
+        "unresolvedBlockers": unresolved,
+        "evidenceState": reliability["evidenceState"],
+        "v5_28ScopeBasis": "resolved or explicitly accepted pilot remediation evidence",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def expansion_cohort_capacity_plan(
+    *,
+    remediation_gate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    gate = remediation_gate or remediation_release_gate()
+    blocked = gate["decision"] != "ready_for_controlled_expansion"
+    result = {
+        "planState": "blocked_by_remediation_gate" if blocked else "ready",
+        "cohort": {
+            "size": "25-50 families",
+            "stages": ["10_family_cap", "25_family_cap", "50_family_cap"],
+            "rollbackThresholds": ["critical_incident", "support_sla_breach", "provider_blocker", "mobile_crash_spike"],
+        },
+        "capacityAssumptions": [
+            "api",
+            "mobile",
+            "providers",
+            "ai",
+            "teacher_help",
+            "support",
+            "billing",
+            "bi_apm",
+            "incident_response",
+        ],
+        "communicationAndConsentPrepared": True,
+        "expansionAllowed": not blocked,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def revenue_billing_subscription_operations_scale() -> dict[str, Any]:
+    result = {
+        "scaleState": "ready_for_controlled_review",
+        "flows": ["payment", "entitlement", "refunds", "failed_payments", "dunning", "accounting_handoff", "billing_support"],
+        "supportViews": {
+            "providerStateVisible": True,
+            "providerPayloadsExcluded": True,
+            "financeOwnershipDocumented": True,
+            "reconciliationCadence": "daily during expansion",
+        },
+        "metrics": ["mrr", "conversion", "failed_payment_rate", "refund_count", "entitlement_mismatch_count"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def teacher_support_customer_operations_scale() -> dict[str, Any]:
+    result = {
+        "scaleState": "ready_for_controlled_review",
+        "operations": [
+            "teacher_help_queue",
+            "sla_dispatch",
+            "escalation",
+            "support_crm",
+            "lifecycle_messaging",
+            "feedback_workflows",
+        ],
+        "staffingPlan": {
+            "normalHoursCovered": True,
+            "spikeHandlingOwner": "operations",
+            "escalationOwner": "support",
+        },
+        "measurements": ["support_load", "teacher_response_time", "resolution_time", "satisfaction"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def mobile_provider_infrastructure_scale_smoke() -> dict[str, Any]:
+    result = {
+        "smokeState": "ready_for_controlled_review",
+        "checks": [
+            "mobile_release_channel",
+            "push_delivery",
+            "offline_cache",
+            "auth_session",
+            "crash_performance",
+            "provider_capacity",
+            "bi_apm_dashboards",
+            "infrastructure_runbooks",
+        ],
+        "runbooks": ["scale_up", "rollback", "provider_degradation"],
+        "redactedEvidenceOnly": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def controlled_expansion_gate(
+    *,
+    expansion_metrics_met: bool = False,
+    support_capacity_met: bool = False,
+) -> dict[str, Any]:
+    if expansion_metrics_met and support_capacity_met:
+        decision = "prepare_public_launch_readiness"
+    elif expansion_metrics_met:
+        decision = "hold"
+    else:
+        decision = "remediate"
+    result = {
+        "decision": decision,
+        "publicLaunchBlocked": decision != "prepare_public_launch_readiness",
+        "metricsMet": expansion_metrics_met,
+        "supportCapacityMet": support_capacity_met,
+        "v5_29ScopeBasis": "controlled expansion outcomes and remaining capacity blockers",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def self_serve_onboarding_account_conversion() -> dict[str, Any]:
+    result = {
+        "onboardingState": "contract_ready",
+        "surfaces": sorted(LAUNCH_SURFACES),
+        "conversionEvents": [
+            "signup_started",
+            "email_verified",
+            "parent_student_created",
+            "subscription_selected",
+            "mobile_install_started",
+            "first_learning_action",
+        ],
+        "supportFallback": ["verification_recovery", "billing_support", "entitlement_blocker", "mobile_install_help"],
+        "noDemoFallback": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pricing_packaging_growth_lifecycle_readiness() -> dict[str, Any]:
+    result = {
+        "growthState": "contract_ready",
+        "pricing": ["plan_comparison", "subscription_state", "upgrade", "downgrade", "cancel", "billing_support_copy"],
+        "growthLoops": ["waitlist", "referral", "lifecycle_nudges", "trial_conversion"],
+        "controls": {
+            "optOutRequired": True,
+            "preferenceControlsRequired": True,
+            "privacyGateRequired": True,
+            "supportCapacityGateRequired": True,
+        },
+        "retentionReporting": ["onboarding", "learning_activity", "notifications", "support", "billing_state"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def public_support_knowledge_base_launch_communications() -> dict[str, Any]:
+    result = {
+        "supportContentState": "contract_ready",
+        "topics": [
+            "onboarding",
+            "billing",
+            "verification",
+            "mobile_install",
+            "notifications",
+            "ai_limits",
+            "teacher_help",
+            "privacy",
+            "incident_status",
+        ],
+        "communications": ["release_notes", "known_limitations", "escalation_paths", "rollback_or_hold_message"],
+        "supportTeamAssets": ["macros", "templates", "escalation_ownership"],
+        "disabledFeaturesDisclosed": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def app_store_public_release_production_launch_controls() -> dict[str, Any]:
+    result = {
+        "launchControlState": "contract_ready",
+        "appStore": ["release_assets", "review_notes", "privacy_declarations", "notification_usage", "screenshots", "version_metadata"],
+        "dashboard": launch_controls_monitoring()["dashboard"] + ["revenue"],
+        "controls": ["launch_freeze", "staged_rollout", "rollback", "provider_disablement", "support_staffing"],
+        "currentChecks": ["provider_capacity", "data_lifecycle", "incident_response"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def public_launch_readiness_gate(
+    *,
+    expansion_gate: dict[str, Any] | None = None,
+    final_approval: bool = False,
+) -> dict[str, Any]:
+    gate = expansion_gate or controlled_expansion_gate()
+    if final_approval and gate["decision"] == "prepare_public_launch_readiness":
+        decision = "public_launch"
+    elif gate["decision"] == "prepare_public_launch_readiness":
+        decision = "continue_controlled_expansion"
+    elif gate["decision"] == "hold":
+        decision = "hold"
+    else:
+        decision = "harden_further"
+    result = {
+        "decision": decision,
+        "acceptedRisks": [],
+        "launchBlockers": [] if decision == "public_launch" else ["final_public_launch_approval_missing"],
+        "v5_30Recommendation": "launch execution and post-launch operations" if decision == "public_launch" else "address blocking category before public launch",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
 
 
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -276,6 +991,104 @@ def _count_by(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
         value = str(row.get(key) or "unknown")
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _pilot_dependency_classification(item: dict[str, str], disabled_components: set[str]) -> str:
+    component = item["component"]
+    if component in disabled_components:
+        return "explicitly_disabled_for_pilot"
+    if component not in PILOT_REQUIRED_COMPONENTS:
+        return "optional"
+    if item["state"] in {"live_ready", "read_only_verified"}:
+        return "cleared"
+    return "blocked"
+
+
+def _pilot_dependency_action(item: dict[str, str], classification: str) -> str:
+    if classification == "cleared":
+        return "record owner, timestamp, request id, and rollback control"
+    if classification == "explicitly_disabled_for_pilot":
+        return "confirm disabled-feature copy and operator support path"
+    if classification == "optional":
+        return "monitor only"
+    return f"clear or explicitly disable {item['component']} before pilot start"
+
+
+def _pilot_dependency_impact(component: str, classification: str) -> str:
+    if classification == "cleared":
+        return "pilot may proceed for this dependency"
+    if classification == "explicitly_disabled_for_pilot":
+        return "pilot may proceed only with the feature visibly disabled"
+    impacts = {
+        "payment": "paid subscription and entitlement activation cannot be trusted",
+        "notifications": "push or email messages cannot be relied on for pilot operations",
+        "support_crm": "external support handoff cannot be relied on",
+        "bi_apm": "operator dashboards and alerting are incomplete",
+        "mobile": "native distribution path is not approved for pilot users",
+        "data_lifecycle": "restore evidence is insufficient for real-user exposure",
+        "incident_operations": "launch-room escalation has not been rehearsed live",
+    }
+    return impacts.get(component, "required pilot evidence is incomplete")
+
+
+def _fallback_or_disable_option(component: str) -> str:
+    options = {
+        "payment": "disable paid checkout and use approved manual entitlement for pilot only",
+        "notifications": "disable outbound provider sends and use in-app/manual communication",
+        "support_crm": "disable external CRM write and use internal support queue",
+        "bi_apm": "use local release evidence and daily manual dashboard until live BI/APM is approved",
+        "mobile": "limit pilot to approved internal build or web access",
+        "data_lifecycle": "hold real-user pilot until production restore/tabletop evidence is recorded",
+        "incident_operations": "hold real-user pilot until launch-room rehearsal is complete",
+    }
+    return options.get(component, "hold or narrow pilot scope until evidence is ready")
+
+
+def _operator_impact(component: str, state: str) -> str:
+    if state == "launch_blocking":
+        return f"{component} owner must clear blocker before enablement"
+    if state == "explicitly_disabled_for_pilot":
+        return f"{component} remains visible as disabled with support fallback"
+    return f"{component} evidence must be reviewed during launch-room checks"
+
+
+def _participant_copy(component: str, state: str) -> str:
+    if state == "explicitly_disabled_for_pilot":
+        return f"{component} is not available during the limited pilot; support will provide a fallback."
+    if state == "launch_blocking":
+        return f"{component} is not ready; pilot access is held until this is resolved."
+    return f"{component} is available for the limited pilot."
+
+
+def _provider_rollback_control(component: str) -> str:
+    controls = {
+        "payment": "disable payment_live_enabled and stop checkout entry points",
+        "notifications": "disable provider_writes_enabled and keep in-app state",
+        "support_crm": "disable CRM destination and keep internal queue",
+        "bi_apm": "fall back to local release evidence",
+        "mobile": "halt rollout channel or retain previous internal build",
+        "data_lifecycle": "freeze pilot and run restore owner escalation",
+        "incident_operations": "pause cohort enablement and enter launch-room incident mode",
+    }
+    return controls.get(component, "disable pilot flag and escalate to owner")
+
+
+def _pilot_signal_action(signal: str, state: str) -> str:
+    if state in {"passed", "healthy", "met"}:
+        return "continue monitoring"
+    if state in {"failed", "blocked"}:
+        return f"open remediation for {signal}"
+    return f"collect {signal} evidence before expansion"
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _privacy_contract() -> dict[str, Any]:

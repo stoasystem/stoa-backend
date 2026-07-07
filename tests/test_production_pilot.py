@@ -55,3 +55,95 @@ def test_pilot_evidence_rejects_private_fields():
         production_pilot_service.assert_pilot_evidence_safe({"prompt": "not allowed"})
     with pytest.raises(ValueError):
         production_pilot_service.assert_pilot_evidence_safe({"nested": {"s3_key": "private"}})
+
+
+def test_activation_blocker_audit_classifies_required_blockers_and_disablements():
+    audit = production_pilot_service.activation_blocker_reality_audit(
+        disabled_components={"payment", "notifications"}
+    )
+
+    states = {item["component"]: item["pilotClassification"] for item in audit["dependencies"]}
+    assert states["payment"] == "explicitly_disabled_for_pilot"
+    assert states["notifications"] == "explicitly_disabled_for_pilot"
+    assert states["support_crm"] == "blocked"
+    assert audit["realUserStartRecommended"] is False
+
+
+def test_safe_start_gate_holds_by_default_and_can_start_when_blockers_disabled():
+    default_gate = production_pilot_service.pilot_safe_start_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["safeToStart"] is False
+    assert "payment" in default_gate["blockers"]
+
+    disabled = {
+        "mobile",
+        "payment",
+        "notifications",
+        "support_crm",
+        "bi_apm",
+        "data_lifecycle",
+        "incident_operations",
+    }
+    start_gate = production_pilot_service.pilot_safe_start_gate(disabled_components=disabled)
+    assert start_gate["decision"] == "start_limited_pilot"
+    assert start_gate["safeToStart"] is True
+
+
+def test_pilot_execution_is_blocked_until_safe_start_gate_allows_it():
+    enablement = production_pilot_service.pilot_cohort_enablement_first_use_tracking()
+    assert enablement["executionState"] == "blocked_by_safe_start_gate"
+    assert enablement["cohortEnablement"]["customerMutationAllowed"] is False
+
+    allowed = production_pilot_service.pilot_cohort_enablement_first_use_tracking(
+        safe_start_gate={"decision": "start_limited_pilot", "safeToStart": True}
+    )
+    assert allowed["executionState"] == "ready_for_controlled_enablement"
+    assert allowed["cohortEnablement"]["customerMutationAllowed"] is True
+
+
+def test_pilot_outcome_and_remediation_gates_preserve_expansion_controls():
+    outcome = production_pilot_service.pilot_outcome_decision_gate()
+    assert outcome["decision"] == "pause"
+    assert outcome["expansionBlocked"] is True
+
+    remediation = production_pilot_service.remediation_release_gate()
+    assert remediation["decision"] == "another_remediation_cycle"
+
+    accepted = production_pilot_service.remediation_release_gate(
+        accepted_blockers=["safe_start_gate_blocked"]
+    )
+    assert accepted["decision"] == "ready_for_controlled_expansion"
+
+
+def test_controlled_expansion_and_public_launch_gates_require_evidence_and_approval():
+    expansion = production_pilot_service.controlled_expansion_gate(
+        expansion_metrics_met=True,
+        support_capacity_met=True,
+    )
+    assert expansion["decision"] == "prepare_public_launch_readiness"
+    assert expansion["publicLaunchBlocked"] is False
+
+    launch_gate = production_pilot_service.public_launch_readiness_gate(expansion_gate=expansion)
+    assert launch_gate["decision"] == "continue_controlled_expansion"
+
+    approved = production_pilot_service.public_launch_readiness_gate(
+        expansion_gate=expansion,
+        final_approval=True,
+    )
+    assert approved["decision"] == "public_launch"
+
+
+def test_launch_readiness_contracts_cover_self_serve_growth_support_and_app_store():
+    onboarding = production_pilot_service.self_serve_onboarding_account_conversion()
+    assert production_pilot_service.LAUNCH_SURFACES.issubset(set(onboarding["surfaces"]))
+    assert onboarding["noDemoFallback"] is True
+
+    growth = production_pilot_service.pricing_packaging_growth_lifecycle_readiness()
+    assert "trial_conversion" in growth["growthLoops"]
+    assert growth["controls"]["supportCapacityGateRequired"] is True
+
+    support = production_pilot_service.public_support_knowledge_base_launch_communications()
+    assert "known_limitations" in support["communications"]
+
+    controls = production_pilot_service.app_store_public_release_production_launch_controls()
+    assert "revenue" in controls["dashboard"]
