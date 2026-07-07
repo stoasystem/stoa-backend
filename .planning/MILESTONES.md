@@ -293,6 +293,157 @@ Planned phases:
 
 ---
 
+## Active: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+
+**Status:** Active
+**Started:** 2026-07-07
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v5.25-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v5.25-REQUIREMENTS.md`
+**Goal:** Clear, explicitly disable, or launch-block every dependency required for the first real pilot.
+**Phases:** 5
+**Plans:** 0/5 complete
+**Requirements:** 0/5 complete
+
+Function purpose:
+
+- Convert v5.24's conditional go/no-go into a concrete start/hold/harden decision.
+- Prepare dry-run accounts, launch-room rehearsal, and a safe-start package.
+
+Implementation strategy:
+
+- Audit payment, notifications, support CRM, BI/APM, mobile release, restore/tabletop, staffing, cohort, and rollback.
+- Use approved live/read-only evidence where possible.
+- Explicitly disable non-required dependencies with clear user/support impact.
+- Do not enable real users until required blockers are resolved.
+
+Planned phases:
+
+- Phase 297: Pilot Activation Blocker Reality Audit.
+- Phase 298: Provider Activation Or Explicit Disablement.
+- Phase 299: Pilot Environment Cohort And Account Dry Run.
+- Phase 300: Launch Room Rehearsal And Safe Start Package.
+- Phase 301: v5.25 Pilot Safe Start Gate.
+
+---
+
+## Planned: v5.26 Limited Pilot Execution And Outcome Evidence
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.26-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.26-REQUIREMENTS.md`
+**Goal:** Run the approved pilot cohort under controlled rollout, daily monitoring, support coverage, feedback capture, and outcome evidence.
+**Phases:** 5
+
+Function purpose:
+
+- Move from launch readiness contracts into real pilot operation.
+- Measure whether parents/students can activate, use, get help, and keep using STOA under controlled conditions.
+
+Implementation strategy:
+
+- Start only if v5.25 safe-start gate says `start`.
+- Keep cohort narrow and feature flags staged.
+- Use daily operational review and support triage.
+
+Planned phases:
+
+- Phase 302: Pilot Cohort Enablement And First-Use Tracking.
+- Phase 303: Daily Pilot Monitoring And Incident Operations.
+- Phase 304: Pilot Support Feedback And Learning Quality Evidence.
+- Phase 305: Pilot Metrics Outcome Analysis.
+- Phase 306: v5.26 Pilot Outcome Decision Gate.
+
+---
+
+## Planned: v5.27 Pilot Remediation Product Fit And Reliability Hardening
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.27-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.27-REQUIREMENTS.md`
+**Goal:** Turn v5.26 pilot evidence into focused product, reliability, support, AI, curriculum, and mobile fixes before any expansion.
+**Phases:** 5
+
+Function purpose:
+
+- Fix the issues actual pilot users hit.
+- Improve activation, learning usefulness, support resolution, mobile stability, and trust signals.
+
+Implementation strategy:
+
+- Prioritize by pilot severity, frequency, and impact on learning/retention.
+- Add regression coverage for high-severity pilot issues.
+- Keep remediation tied to pilot evidence.
+
+Planned phases:
+
+- Phase 307: Pilot Issue Triage And Remediation Backlog.
+- Phase 308: Account Billing Mobile And Notification Remediation.
+- Phase 309: Learning AI Curriculum And Teacher-Help Remediation.
+- Phase 310: Pilot Regression And Reliability Evidence.
+- Phase 311: v5.27 Remediation Release Gate.
+
+---
+
+## Planned: v5.28 Controlled Expansion Revenue And Operations Scale
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.28-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.28-REQUIREMENTS.md`
+**Goal:** Expand from a narrow pilot to a larger controlled cohort with revenue, support staffing, teacher operations, mobile release, provider capacity, and operational scale controls.
+**Phases:** 5
+
+Function purpose:
+
+- Test whether STOA can support more users without losing reliability or support quality.
+- Validate billing/revenue operations under controlled real usage.
+
+Implementation strategy:
+
+- Expand only if v5.27 clears expansion blockers.
+- Increase cohort size gradually with rollback thresholds.
+- Treat billing, support staffing, teacher queue load, mobile stability, provider capacity, and BI/APM as scale gates.
+
+Planned phases:
+
+- Phase 312: Expansion Cohort And Capacity Plan.
+- Phase 313: Revenue Billing And Subscription Operations Scale.
+- Phase 314: Teacher Support And Customer Operations Scale.
+- Phase 315: Mobile Provider And Infrastructure Scale Smoke.
+- Phase 316: v5.28 Controlled Expansion Gate.
+
+---
+
+## Planned: v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v5.29-ROADMAP.md`
+**Requirements:** `.planning/milestones/v5.29-REQUIREMENTS.md`
+**Goal:** Prepare STOA for public launch or a larger market-facing release through self-serve onboarding, growth loops, pricing/package readiness, public support operations, app-store readiness, and final launch controls.
+**Phases:** 5
+
+Function purpose:
+
+- Make the product usable beyond manually managed cohorts.
+- Prepare acquisition, onboarding, payment, support, and retention operations for broader traffic.
+
+Implementation strategy:
+
+- Start only if v5.28 expansion evidence supports broader launch preparation.
+- Build self-serve account/subscription/onboarding controls with clear support fallback.
+- Keep public launch behind final go/no-go, rollback, support, and provider-readiness gates.
+
+Planned phases:
+
+- Phase 317: Self-Serve Onboarding And Account Conversion.
+- Phase 318: Pricing Packaging Growth And Lifecycle Readiness.
+- Phase 319: Public Support Knowledge Base And Launch Communications.
+- Phase 320: App Store Public Release And Production Launch Controls.
+- Phase 321: v5.29 Public Launch Readiness Gate.
+
+---
+
 ## Completed: v5.16 End-To-End Product Readiness And Release Evidence
 
 **Status:** Completed local release gate 2026-07-05

@@ -1,120 +1,115 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-06 after completing v5.19 native mobile source readiness
-**Mode:** plan the next five post-v5.19 product milestones
+**Updated:** 2026-07-07 after reconciling v5.24 conditional pilot readiness with current activation blockers
+**Mode:** post-v5.24 pilot activation, execution, remediation, expansion, and public-launch readiness
 
-## Planning Assumption
+## Current Reality
 
-v5.19 Native Mobile Push And Offline Client Implementation is complete as `native-mobile-source-ready-local` and is not counted in this next-five queue. v5.20 starts from source-ready mobile contracts, not installable device readiness.
+Completed baseline:
 
-## Current Reality After v5.19 Completion
+- v5.19 completed native mobile source readiness.
+- v5.20-v5.23 completed local contracts for native distribution, AI operations, customer lifecycle, and enterprise hardening.
+- v5.24 completed limited production pilot and launch readiness as `limited-pilot-ready-local-contracts`.
 
-Completed or assumed-complete baseline:
+Important reality check:
 
-- v5.12 implemented curriculum editor/content migration with special backend authorization, not broad teacher edit rights.
-- v5.13 completed local payment/entitlement production readiness.
-- v5.15 completed usage/quota/product stability.
-- v5.16 completed end-to-end local product readiness and release evidence.
-- v5.17 completed external provider activation smoke and release operations.
-- v5.18 completed local BI observability contracts for aggregate exports, dashboards, and alert routing.
-- v5.19 completed native mobile source implementation, auth/session, student/parent journeys, push/deep links, offline/read-through contracts, and release evidence.
+- v5.24 did not approve broad public launch.
+- v5.24 recommends conditional limited pilot only after activation blockers are cleared or explicitly disabled.
+- Remaining real-user blockers include payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop activation.
 
-Remaining product gaps:
+## Active: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
 
-- Native build distribution, device QA, app credentials, crash/performance telemetry, and store-readiness evidence remain unbuilt after v5.19 source implementation.
-- AI teacher tools exist in reviewed/bounded form, but broader quality evaluation, provider cost/latency observability, safety escalation, and autonomy boundaries are not yet complete.
-- Support handoff, CRM messaging gates, notification preferences, billing/account operations, and learning-progress signals exist in pieces, but customer lifecycle messaging is not yet an end-to-end product workflow.
-- DR, restore drills, SLO/incident operations, credential rotation evidence, and enterprise hardening remain the final stability layer before broader launch pressure.
-- A limited production pilot or public launch decision still needs scope, cohort, release control, support staffing, rollback, monitoring, and acceptance criteria.
-
-## Planned: v5.20 Native Build Distribution And Device QA
-
-Roadmap: `.planning/milestones/v5.20-ROADMAP.md`
-Requirements: `.planning/milestones/v5.20-REQUIREMENTS.md`
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v5.25-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v5.25-REQUIREMENTS.md`
 
 Function purpose:
 
-- Convert the v5.19 mobile implementation into installable internal builds on real iOS/Android devices.
-- Prove physical-device auth, parent/student journeys, push/deep-link behavior, offline stale states, and sign-out cleanup.
-- Prepare store-readiness artifacts without claiming public launch.
+- Clear, explicitly disable, or launch-block every dependency required for the first real pilot.
+- Convert v5.24's conditional go/no-go into a concrete start/hold/harden decision.
+- Prepare dry-run accounts, launch-room rehearsal, and safe-start package.
 
 Implementation strategy:
 
-- Add EAS/build profiles, versioning, release channels, internal distribution, and build artifact evidence.
-- Run a focused device QA matrix before broader store work.
-- Feed mobile crash/performance/release-health signals into existing observability boundaries.
+- Start with blocker reality audit across payment, notifications, support CRM, BI/APM, mobile release, restore/tabletop, staffing, cohort, and rollback.
+- Use approved live/read-only evidence where possible.
+- Explicitly disable non-required dependencies with clear user/support impact.
+- Do not enable real users until required blockers are resolved.
 
-## Planned: v5.21 AI Teaching Quality Cost And Safety Operations
+## Planned: v5.26 Limited Pilot Execution And Outcome Evidence
 
-Roadmap: `.planning/milestones/v5.21-ROADMAP.md`
-Requirements: `.planning/milestones/v5.21-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.26-ROADMAP.md`
+Requirements: `.planning/milestones/v5.26-REQUIREMENTS.md`
 
 Function purpose:
 
-- Make AI summaries, draft explanations, practice generation, and assignment suggestions measurable and controllable.
-- Preserve teacher oversight while adding quality rubrics, regression fixtures, provider cost/latency observability, and safety escalation.
-- Keep fully autonomous tutoring blocked unless explicit criteria and release evidence exist.
+- Run the approved pilot cohort under controlled rollout.
+- Measure activation, first learning action, usage, support, AI quality, mobile stability, billing/account friction, and satisfaction.
+- Decide continue, pause, rollback, remediate, or expansion candidate.
 
 Implementation strategy:
 
-- Audit every AI workflow and classify autonomy level.
-- Add golden fixtures and scoring rubrics before expanding behavior.
-- Add support-safe cost/latency/provider/fallback summaries.
-- Integrate safety/refusal states with teacher review and support workflows.
+- Start only if v5.25 safe-start gate says `start`.
+- Operate daily launch-room monitoring and support triage.
+- Collect feedback and metrics as product evidence.
+- Block expansion until high-severity pilot issues are handled.
 
-## Planned: v5.22 Support CRM Customer Messaging And Lifecycle Automation
+## Planned: v5.27 Pilot Remediation Product Fit And Reliability Hardening
 
-Roadmap: `.planning/milestones/v5.22-ROADMAP.md`
-Requirements: `.planning/milestones/v5.22-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.27-ROADMAP.md`
+Requirements: `.planning/milestones/v5.27-REQUIREMENTS.md`
 
 Function purpose:
 
-- Connect support handoff, CRM messaging, notification preferences, account operations, billing, learning progress, and AI/teacher state into governed customer lifecycle workflows.
-- Make onboarding, verification, payment, quota, support, progress, and re-engagement messaging usable for parents and operators.
+- Convert v5.26 pilot evidence into focused fixes.
+- Improve activation, learning quality, support resolution, mobile stability, AI/curriculum relevance, and reliability.
+- Prove expansion blockers are resolved or explicitly accepted.
 
 Implementation strategy:
 
-- Define a message taxonomy with event, audience, template, channel, provider gate, preference gate, idempotency key, and support-safe payload.
-- Add idempotent lifecycle jobs and admin/parent visibility.
-- Keep external writes gated by approved provider credentials, destination policy, templates, and rollout flags.
+- Prioritize by severity, frequency, and impact on learning/retention.
+- Add regression coverage for every high-severity pilot issue.
+- Keep changes tied to real pilot evidence rather than speculative polish.
+- Do not expand if must-fix blockers remain.
 
-## Planned: v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening
+## Planned: v5.28 Controlled Expansion Revenue And Operations Scale
 
-Roadmap: `.planning/milestones/v5.23-ROADMAP.md`
-Requirements: `.planning/milestones/v5.23-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.28-ROADMAP.md`
+Requirements: `.planning/milestones/v5.28-REQUIREMENTS.md`
 
 Function purpose:
 
-- Harden STOA's operational foundation after the main product surfaces are connected.
-- Prove backup/restore, SLO/incident, rollback, access/credential, audit retention, legal-hold, and compliance evidence workflows.
+- Expand from narrow pilot to larger controlled cohort.
+- Validate revenue operations, support/teacher capacity, mobile/provider readiness, and operational scale.
+- Decide whether STOA can prepare for public-launch readiness.
 
 Implementation strategy:
 
-- Start with an ops risk register across API/Lambda, DynamoDB, S3, Cognito, SES, Bedrock, notifications, support providers, BI/APM, frontend, mobile, queues, and schedules.
-- Prioritize safe restore/readback drills and incident/rollback runbooks over broad theoretical compliance work.
-- Keep evidence metadata-only and classify live-ready/read-only/local-only/blocked honestly.
+- Expand only if v5.27 clears expansion blockers.
+- Increase cohort size gradually with rollback thresholds.
+- Treat billing, support staffing, teacher queue load, mobile stability, provider capacity, and BI/APM as scale gates.
 
-## Planned: v5.24 Limited Production Pilot And Launch Readiness
+## Planned: v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
 
-Roadmap: `.planning/milestones/v5.24-ROADMAP.md`
-Requirements: `.planning/milestones/v5.24-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v5.29-ROADMAP.md`
+Requirements: `.planning/milestones/v5.29-REQUIREMENTS.md`
 
 Function purpose:
 
-- Decide and prepare the narrowest credible production pilot or launch path after mobile, AI operations, lifecycle messaging, and hardening gates are complete.
-- Convert internal readiness into a controlled cohort plan with onboarding, monitoring, support staffing, rollout/rollback, acceptance criteria, and launch decision evidence.
+- Prepare self-serve onboarding, pricing/package readiness, growth/lifecycle loops, public support operations, app-store readiness, and final public launch controls.
+- Decide public launch, continued controlled expansion, hold, or harden further.
 
 Implementation strategy:
 
-- Start with a launch/pilot readiness audit rather than assuming public release is appropriate.
-- Define cohort, scope, success metrics, excluded features, staffing, communication, support hours, and incident ownership.
-- Run a final production readiness gate across backend, frontend, mobile, providers, data, support, billing, AI, and observability.
-- Close with a go/no-go decision, pilot runbook, rollout plan, rollback plan, and post-pilot learning loop.
+- Start only if v5.28 expansion evidence supports broader launch preparation.
+- Build self-serve signup/subscription/onboarding with support fallback.
+- Keep public launch behind final go/no-go, provider capacity, rollback, and support gates.
 
 ## Ordering Rationale
 
-1. v5.20 follows assumed-complete v5.19 because source implementation is not the same as installable device readiness; native push and offline behavior must be proven on devices.
-2. v5.21 follows because AI tools already exist, but quality/cost/safety/autonomy controls are the next product-risk bottleneck before broader use.
-3. v5.22 follows because customer lifecycle messaging should use stable mobile, AI, support, billing, and account-state signals rather than fragmented manual operations.
-4. v5.23 follows because once customer-visible surfaces are connected, restore, SLO, incident, access, credential, and compliance hardening becomes the launch-limiting risk.
-5. v5.24 follows because launch/pilot planning should happen only after the core product, mobile delivery, AI controls, lifecycle operations, and hardening gates are credible.
+1. v5.25 comes first because v5.24 is conditional; unresolved activation blockers make direct pilot execution unsafe.
+2. v5.26 follows only after safe-start approval because real pilot evidence is needed before any expansion.
+3. v5.27 follows because pilot evidence should drive remediation before cohort growth.
+4. v5.28 follows because operational and revenue scale should be tested in controlled expansion before public launch prep.
+5. v5.29 follows because self-serve/growth/public launch readiness should come only after controlled expansion shows the product can sustain broader usage.

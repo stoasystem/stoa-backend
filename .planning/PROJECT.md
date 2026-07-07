@@ -112,6 +112,10 @@ The completed v5.18 milestone activates local, support-safe BI observability con
 
 The completed v5.19 milestone establishes native mobile source readiness: Expo/React Native app shell, Cognito-compatible auth/session contracts, student/parent journey adapters, native push/deep-link contracts, bounded offline/read-through policy, localization fixtures, and release evidence.
 
+The completed v5.20-v5.24 sequence adds local contracts for native build/device readiness, AI teaching operations, customer lifecycle messaging, enterprise hardening, and limited pilot launch readiness. v5.24 ends with a conditional pilot recommendation, not a real-user activation approval.
+
+The active v5.25 milestone burns down the remaining activation blockers before any real pilot users are enabled: payment, notifications, support CRM, BI/APM, mobile release/TestFlight, production restore, live tabletop, staffing, cohort, and rollback.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -119,26 +123,25 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.19 Native Mobile Push And Offline Client Implementation on 2026-07-06 (native-mobile-source-ready-local release gate)
-**Residual partial gate:** none for local v5.19 source-readiness scope; mobile dependency install, EAS builds, physical-device QA, live push delivery, and app-store launch remain gated by credentials, rollout approval, and v5.20+ release evidence.
-**Active milestone:** none
-**Next planned milestones:** v5.20 Native Build Distribution And Device QA; v5.21 AI Teaching Quality Cost And Safety Operations; v5.22 Support CRM Customer Messaging And Lifecycle Automation; v5.23 Enterprise Stability Compliance And Disaster Recovery Hardening; v5.24 Limited Production Pilot And Launch Readiness
+**Latest completed milestone:** v5.24 Limited Production Pilot And Launch Readiness on 2026-07-06 (limited-pilot-ready-local-contracts release gate)
+**Residual partial gate:** real-user activation still requires clearing or explicitly disabling payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop blockers.
+**Active milestone:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
+**Next planned milestones:** v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision; v5.26 Limited Pilot Execution And Outcome Evidence; v5.27 Pilot Remediation Product Fit And Reliability Hardening; v5.28 Controlled Expansion Revenue And Operations Scale; v5.29 Public Launch Readiness Growth And Self-Serve Onboarding
 
-## Last Completed Milestone: v5.19 Native Mobile Push And Offline Client Implementation
+## Current Milestone: v5.25 Pilot Activation Blocker Burn-Down And Safe Start Decision
 
-**Goal:** Implement native/mobile client foundations after backend/web contracts, provider states, and observability boundaries are explicit.
+**Goal:** Convert v5.24's conditional limited-pilot recommendation into an executable safe-start decision by clearing, explicitly disabling, or routing every real-user activation blocker before any pilot cohort is enabled.
 
 **Target features:**
-- Native/mobile app shell, auth/session, parent/student journeys, push, offline/read-through behavior, localization, and app-release evidence.
-- Mobile contracts should consume existing backend/web product contracts without demo fallback.
-- Native push/offline behavior should inherit v5.18 observability and v5.17 provider-state boundaries.
+- Blocker audit across payment, Cognito/email, notifications, support CRM, BI/APM, mobile release/TestFlight, restore/tabletop, staffing, cohort, data lifecycle, and rollback.
+- Provider activation or explicit disablement for dependencies required by the limited pilot.
+- Pilot dry-run accounts, launch-room rehearsal, safe-start package, and start/hold/harden decision evidence.
 
 Prior milestone outcome:
 
-- v5.18 BI observability is complete locally.
-- Admin-only BI taxonomy, warehouse readiness/export, dashboard, and alert routing APIs exist.
-- Live BI warehouse/APM delivery remains blocked until approved credentials and destinations are configured.
-- Native/mobile source contracts now consume stable product, provider-state, and observability contracts.
+- v5.24 completed launch scope audit, cohort onboarding, launch controls, monitoring, acceptance metrics, feedback loop, and conditional go/no-go evidence.
+- v5.24 did not approve broad public launch.
+- Real-user activation remains conditional on clearing or explicitly disabling required provider, mobile release, restore, and live tabletop blockers.
 
 Delivered:
 
@@ -1068,11 +1071,16 @@ Known current resources:
 | Start v5.17 external provider activation smoke and release operations | v5.16 closed local product readiness; remaining risk is external provider activation and production release operations for payment, Cognito/email, notifications, support handoff, and read-only smoke | Complete - external-provider-release-ops-ready release gate passed |
 | Plan v5.18 warehouse BI observability and product analytics activation | v5.15 stabilized usage semantics and v5.17 classified provider states; analytics should activate after those dimensions are clean enough for dashboards and alerts | Complete - bi-observability-ready-local release gate passed |
 | Plan v5.19 native mobile push and offline client implementation | Web product readiness, provider-state clarity, and observability should precede native app implementation so the mobile client inherits stable contracts and clear push/offline boundaries | Complete - native-mobile-source-ready-local release gate passed |
-| Plan v5.20 native build distribution and device QA | v5.19 source implementation must be turned into installable internal device builds before app-store or production mobile rollout claims are credible | Planned |
-| Plan v5.21 AI teaching quality cost and safety operations | AI teacher tools exist in reviewed/bounded form, but quality evaluation, cost/latency observability, safety escalation, and autonomy boundaries need a dedicated operational milestone | Planned |
-| Plan v5.22 support CRM customer messaging and lifecycle automation | Support handoff, CRM gates, notifications, account operations, billing, and learning-progress signals exist in pieces; customer lifecycle messaging needs an end-to-end governed workflow | Planned |
-| Plan v5.23 enterprise stability compliance and disaster recovery hardening | After mobile, AI, and customer lifecycle surfaces are connected, restore drills, SLOs, incident response, rollback, access/credential, audit, and compliance evidence become the launch-limiting risk | Planned |
-| Plan v5.24 limited production pilot and launch readiness | After mobile/device, AI operations, lifecycle messaging, and enterprise hardening gates are credible, the next useful milestone is a narrow go/no-go pilot or launch plan with cohort, monitoring, support, rollback, and acceptance evidence | Planned |
+| Plan v5.20 native build distribution and device QA | v5.19 source implementation must be turned into installable internal device builds before app-store or production mobile rollout claims are credible | Complete - native-distribution-ready-local-contracts release gate passed |
+| Plan v5.21 AI teaching quality cost and safety operations | AI teacher tools exist in reviewed/bounded form, but quality evaluation, cost/latency observability, safety escalation, and autonomy boundaries need a dedicated operational milestone | Complete - ai-operations-ready-local-contracts release gate passed |
+| Plan v5.22 support CRM customer messaging and lifecycle automation | Support handoff, CRM gates, notifications, account operations, billing, and learning-progress signals exist in pieces; customer lifecycle messaging needs an end-to-end governed workflow | Complete - customer-lifecycle-ready-local-contracts release gate passed |
+| Plan v5.23 enterprise stability compliance and disaster recovery hardening | After mobile, AI, and customer lifecycle surfaces are connected, restore drills, SLOs, incident response, rollback, access/credential, audit, and compliance evidence become the launch-limiting risk | Complete - enterprise-hardening-ready-local-contracts release gate passed |
+| Plan v5.24 limited production pilot and launch readiness | After mobile/device, AI operations, lifecycle messaging, and enterprise hardening gates are credible, the next useful milestone is a narrow go/no-go pilot or launch plan with cohort, monitoring, support, rollback, and acceptance evidence | Complete - limited-pilot-ready-local-contracts release gate passed |
+| Plan v5.25 pilot activation blocker burn-down and safe start decision | v5.24 is conditional; unresolved payment, notification, support CRM, BI/APM, mobile release, restore, and tabletop blockers make direct pilot execution unsafe | Active |
+| Plan v5.26 limited pilot execution and outcome evidence | After v5.25 safe-start approval, the product needs real cohort evidence before expansion | Planned |
+| Plan v5.27 pilot remediation product fit and reliability hardening | Pilot findings should drive focused fixes before cohort growth | Planned |
+| Plan v5.28 controlled expansion revenue and operations scale | Expansion should validate revenue, teacher/support capacity, mobile/provider readiness, and operational scale before public launch prep | Planned |
+| Plan v5.29 public launch readiness growth and self-serve onboarding | Self-serve and public launch readiness should follow controlled expansion evidence, not precede it | Planned |
 
 ## Evolution
 
@@ -1092,4 +1100,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-06 after completing v5.19 native mobile source readiness*
+*Last updated: 2026-07-07 after planning v5.25-v5.29 from v5.24 conditional pilot readiness*
