@@ -595,15 +595,17 @@ Planned phases:
 
 ---
 
-## Planned: v5.35 Real Pilot Blocker Burn-Down And Launch Execution
+## Completed: v5.35 Real Pilot Blocker Burn-Down And Launch Execution
 
-**Status:** Planned
+**Status:** Complete locally 2026-07-07; real pilot start remains gated by current evidence
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Milestone roadmap:** `.planning/milestones/v5.35-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v5.35-REQUIREMENTS.md`
 **Goal:** Clear or explicitly disable the real blockers that keep the pilot gate in hold, then execute the live safe-start gate for the first narrow cohort.
 **Phases:** 5
+**Audit:** `.planning/v5.35-MILESTONE-AUDIT.md`
+**Evidence:** `.planning/milestones/v5.35-v5.39-REAL-PILOT-SCALE-SEQUENCE-EVIDENCE.md`
 
 Function purpose:
 
@@ -616,19 +618,19 @@ Implementation strategy:
 - Activate providers where approved, otherwise document pilot disablement, fallback, copy, and support path.
 - Run the live safe-start gate before enabling any real cohort.
 
-Planned phases:
+Completed phases:
 
-- Phase 347: Live Blocker Inventory And Owner Assignment. (planned)
-- Phase 348: Provider Or Disablement Activation Closeout. (planned)
-- Phase 349: Pilot Cohort Account And Support Dry Run. (planned)
-- Phase 350: Launch Room Restore And Incident Readiness Closeout. (planned)
-- Phase 351: Real Pilot Start Decision Gate. (planned)
+- Phase 347: Live Blocker Inventory And Owner Assignment. (complete)
+- Phase 348: Provider Or Disablement Activation Closeout. (complete)
+- Phase 349: Pilot Cohort Account And Support Dry Run. (complete)
+- Phase 350: Launch Room Restore And Incident Readiness Closeout. (complete)
+- Phase 351: Real Pilot Start Decision Gate. (complete)
 
 ---
 
-## Planned: v5.36 Live Pilot Operations Feedback And Product Fixes
+## Contract Complete: v5.36 Live Pilot Operations Feedback And Product Fixes
 
-**Status:** Planned
+**Status:** Contract complete locally 2026-07-07; real operations gated by v5.35 start
 **Roadmap:** `.planning/milestones/v5.36-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.36-REQUIREMENTS.md`
 **Goal:** Operate the first approved cohort, collect real product/support/learning evidence, and ship the highest-impact fixes before expansion.
@@ -644,19 +646,19 @@ Implementation strategy:
 - Start only if v5.35 returns `start_limited_pilot`.
 - Run daily pilot review and ship high-impact fixes with focused tests and support-visible release notes.
 
-Planned phases:
+Contract-complete phases:
 
-- Phase 352: First Cohort Live Operations. (planned)
-- Phase 353: Daily Feedback Incident And Metrics Review. (planned)
-- Phase 354: High-Impact Pilot Fix Implementation. (planned)
-- Phase 355: Pilot Learning Outcome And Support Quality Review. (planned)
-- Phase 356: Pilot Outcome Decision Gate. (planned)
+- Phase 352: First Cohort Live Operations. (contract complete)
+- Phase 353: Daily Feedback Incident And Metrics Review. (contract complete)
+- Phase 354: High-Impact Pilot Fix Implementation. (contract complete)
+- Phase 355: Pilot Learning Outcome And Support Quality Review. (contract complete)
+- Phase 356: Pilot Outcome Decision Gate. (contract complete)
 
 ---
 
-## Planned: v5.37 Revenue Conversion And Self-Serve Growth Completion
+## Contract Complete: v5.37 Revenue Conversion And Self-Serve Growth Completion
 
-**Status:** Planned
+**Status:** Contract complete locally 2026-07-07; controlled growth gated by revenue and support evidence
 **Roadmap:** `.planning/milestones/v5.37-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.37-REQUIREMENTS.md`
 **Goal:** Complete parent-facing paid conversion, entitlement reconciliation, lifecycle messaging, and controlled growth loops from real pilot evidence.
@@ -672,19 +674,19 @@ Implementation strategy:
 - Prioritize from pilot conversion friction and support tickets.
 - Reconcile provider, entitlement, usage ledger, invoice/refund, and admin support states.
 
-Planned phases:
+Contract-complete phases:
 
-- Phase 357: Pricing Package And Checkout Reality Closeout. (planned)
-- Phase 358: Entitlement Revenue And Usage Reconciliation. (planned)
-- Phase 359: Lifecycle Messaging And Retention Loop Completion. (planned)
-- Phase 360: Referral Waitlist And Controlled Growth Surface. (planned)
-- Phase 361: Revenue Growth Readiness Gate. (planned)
+- Phase 357: Pricing Package And Checkout Reality Closeout. (contract complete)
+- Phase 358: Entitlement Revenue And Usage Reconciliation. (contract complete)
+- Phase 359: Lifecycle Messaging And Retention Loop Completion. (contract complete)
+- Phase 360: Referral Waitlist And Controlled Growth Surface. (contract complete)
+- Phase 361: Revenue Growth Readiness Gate. (contract complete)
 
 ---
 
-## Planned: v5.38 Learning Outcomes Curriculum And AI Quality Scale
+## Contract Complete: v5.38 Learning Outcomes Curriculum And AI Quality Scale
 
-**Status:** Planned
+**Status:** Contract complete locally 2026-07-07; learning scale gated by outcome and AI quality evidence
 **Roadmap:** `.planning/milestones/v5.38-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.38-REQUIREMENTS.md`
 **Goal:** Improve curriculum, exercise quality, adaptive recommendations, AI teacher tools, summaries, practice generation, and learning outcome reporting.
@@ -700,19 +702,19 @@ Implementation strategy:
 - Use pilot evidence, teacher review, curriculum analytics, and support tickets.
 - Keep curriculum editing restricted to specially authorized operators and AI automation reviewed or policy-bound.
 
-Planned phases:
+Contract-complete phases:
 
-- Phase 362: Learning Outcome Evidence And Gap Analysis. (planned)
-- Phase 363: Curriculum Coverage And Exercise Bank Completion. (planned)
-- Phase 364: AI Summary Exercise And Teacher Tool Quality Improvements. (planned)
-- Phase 365: Adaptive Recommendation And Assignment Quality Loop. (planned)
-- Phase 366: Learning Quality Scale Gate. (planned)
+- Phase 362: Learning Outcome Evidence And Gap Analysis. (contract complete)
+- Phase 363: Curriculum Coverage And Exercise Bank Completion. (contract complete)
+- Phase 364: AI Summary Exercise And Teacher Tool Quality Improvements. (contract complete)
+- Phase 365: Adaptive Recommendation And Assignment Quality Loop. (contract complete)
+- Phase 366: Learning Quality Scale Gate. (contract complete)
 
 ---
 
-## Planned: v5.39 Platform Reliability And Internal Operations Scale
+## Contract Complete: v5.39 Platform Reliability And Internal Operations Scale
 
-**Status:** Planned
+**Status:** Contract complete locally 2026-07-07; larger expansion gated by operations evidence
 **Roadmap:** `.planning/milestones/v5.39-ROADMAP.md`
 **Requirements:** `.planning/milestones/v5.39-REQUIREMENTS.md`
 **Goal:** Harden reliability, observability, data quality, admin operations, teacher/support workflows, incident handling, release discipline, and rollback readiness for larger cohorts.
@@ -728,13 +730,157 @@ Implementation strategy:
 - Use v5.35-v5.38 operational evidence.
 - Prioritize high-frequency admin/support/teacher tasks and measured reliability risks.
 
+Contract-complete phases:
+
+- Phase 367: Reliability Incident And Data Quality Audit. (contract complete)
+- Phase 368: Admin Teacher And Support Workflow Scale-Up. (contract complete)
+- Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
+- Phase 370: Release Rollback And Migration Discipline. (contract complete)
+- Phase 371: Operations Scale Readiness Gate. (contract complete)
+
+---
+
+## Planned: v6.0 Real Evidence Capture And Pilot Start Execution
+
+**Status:** Planned
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v6.0-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v6.0-REQUIREMENTS.md`
+**Goal:** Gather current approved real evidence, verify pilot-critical account/payment/usage/verification/notification/support/mobile paths, and run the pilot start gate.
+**Phases:** 5
+
+Function purpose:
+
+- Start v6 as a real evidence execution track, not as a public-launch label.
+- Convert v5 contract outputs into start/hold evidence for a narrow internal pilot.
+
+Implementation strategy:
+
+- Use real existing sessions/accounts or approved secret-backed credential paths.
+- Record redacted metadata only.
+- Keep public launch, paid marketing, broad expansion, and uncontrolled provider writes out of scope.
+
 Planned phases:
 
-- Phase 367: Reliability Incident And Data Quality Audit. (planned)
-- Phase 368: Admin Teacher And Support Workflow Scale-Up. (planned)
-- Phase 369: Observability Dashboard And Alert Tuning. (planned)
-- Phase 370: Release Rollback And Migration Discipline. (planned)
-- Phase 371: Operations Scale Readiness Gate. (planned)
+- Phase 372: Real Evidence Inventory And Access Readiness. (planned)
+- Phase 373: Account Payment Usage Verification Smoke. (planned)
+- Phase 374: Notification Support Mobile And Provider Evidence. (planned)
+- Phase 375: Pilot Cohort Launch Packet And Dry Run. (planned)
+- Phase 376: v6.0 Pilot Start Or Blocker Decision Gate. (planned)
+
+---
+
+## Planned: v6.1 First Cohort Product Remediation Sprint
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.1-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.1-REQUIREMENTS.md`
+**Goal:** Operate the first approved cohort or execute the v6.0 blocker package, then ship high-impact product fixes.
+**Phases:** 5
+
+Function purpose:
+
+- Turn real evidence into shipped fixes.
+- Improve account/login, entitlement, usage, notification, support, mobile, and first-learning-action behavior.
+
+Implementation strategy:
+
+- If v6.0 starts the cohort, run daily cohort review.
+- If v6.0 holds, execute blockers until the gate can be rerun.
+- Add focused tests and support-visible release evidence for every high-impact fix.
+
+Planned phases:
+
+- Phase 377: Cohort Day-One Operations Or Blocker Fix Kickoff. (planned)
+- Phase 378: Account Login Verification And Role Fixes. (planned)
+- Phase 379: Entitlement Usage Notification Support Fixes. (planned)
+- Phase 380: First Learning Action And Mobile Friction Fixes. (planned)
+- Phase 381: v6.1 Remediation Release Gate. (planned)
+
+---
+
+## Planned: v6.2 Paid Conversion Usage And Account Reliability Completion
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.2-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.2-REQUIREMENTS.md`
+**Goal:** Complete checkout/paywall, entitlement, usage ledger, quota, verification, lifecycle, billing support, and account reliability for real parents.
+**Phases:** 5
+
+Function purpose:
+
+- Make paid STOA access understandable and reliable.
+- Remove ambiguity around who has access, what was used, what is blocked, and what support can fix.
+
+Implementation strategy:
+
+- Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
+- Keep revenue-impacting changes auditable and reversible.
+
+Planned phases:
+
+- Phase 382: Paid Conversion Flow Completion. (planned)
+- Phase 383: Usage Ledger And Quota Reliability Completion. (planned)
+- Phase 384: Verification Lifecycle And Account Recovery Completion. (planned)
+- Phase 385: Billing Support And Lifecycle Messaging Completion. (planned)
+- Phase 386: v6.2 Revenue Reliability Gate. (planned)
+
+---
+
+## Planned: v6.3 Learning Outcome And AI Curriculum Quality Sprint
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.3-REQUIREMENTS.md`
+**Goal:** Improve curriculum, exercises, AI teacher tools, adaptive recommendations, parent progress reporting, and learning outcomes from real evidence.
+**Phases:** 5
+
+Function purpose:
+
+- Make STOA valuable because students learn, not because operations are merely ready.
+- Convert weak-topic, support, teacher, and parent feedback into curriculum and AI quality fixes.
+
+Implementation strategy:
+
+- Prioritize high-frequency learning friction from pilot data.
+- Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
+
+Planned phases:
+
+- Phase 387: Learning Outcome Evidence Review. (planned)
+- Phase 388: Curriculum Exercise And Explanation Quality Fixes. (planned)
+- Phase 389: AI Teacher Summary And Practice Generation Quality Fixes. (planned)
+- Phase 390: Adaptive Recommendation And Parent Progress Clarity. (planned)
+- Phase 391: v6.3 Learning Quality Gate. (planned)
+
+---
+
+## Planned: v6.4 Operations Scale Release And Observability Hardening
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.4-REQUIREMENTS.md`
+**Goal:** Harden observability, support/admin/teacher workflows, release discipline, rollback, migration safety, incident handling, and ownership for larger controlled cohorts.
+**Phases:** 5
+
+Function purpose:
+
+- Make the system operable by a small team without founder-only manual coordination.
+- Catch reliability, billing, notification, support, teacher dispatch, AI/provider, mobile, and release issues before users report them.
+
+Implementation strategy:
+
+- Use v6.0-v6.3 evidence as the risk register.
+- Tie dashboards and alerts to owners and runbooks.
+
+Planned phases:
+
+- Phase 392: Operations Risk And Incident Review. (planned)
+- Phase 393: Admin Support Teacher Workflow Scale Fixes. (planned)
+- Phase 394: Observability Alert And Dashboard Hardening. (planned)
+- Phase 395: Release Migration Rollback And Smoke Discipline. (planned)
+- Phase 396: v6.4 Controlled Expansion Readiness Gate. (planned)
 
 ---
 

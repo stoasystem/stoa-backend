@@ -122,6 +122,10 @@ The completed v5.30 milestone moves from local contracts to live approval and pr
 
 The v5.31-v5.34 live pilot execution, live remediation, controlled expansion execution, and public launch/post-launch operations milestones are now contract-complete locally. Real pilot execution, expansion, public launch, paid marketing, and uncontrolled provider writes remain gated by explicit approval and live evidence.
 
+The v5.35-v5.39 real pilot start, live operations feedback, revenue conversion, learning quality, and platform/internal operations scale milestones are now contract-complete locally. Each gate defaults to hold or remediation until current approved evidence is supplied.
+
+The v6.0-v6.4 execution track is now planned. v6 is not a public-launch claim; it starts because v5 has reached diminishing returns on local contract planning. The next development work must gather current real evidence, run the pilot start gate, fix product gaps found by real accounts, complete paid/account/usage reliability, improve learning quality, and harden operations before larger cohorts.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -129,19 +133,20 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v5.30 Live Pilot Approval And Provider Activation Execution on 2026-07-07 (live activation contracts; default hold)
-**Residual partial gate:** real-user activation still requires explicit operational approval and live/read-only evidence for payment, notification, support CRM, BI/APM, mobile store/TestFlight, production restore, and live tabletop readiness.
-**Active milestone:** none
-**Next planned milestones:** v5.31 Real Limited Pilot Execution Operations; v5.32 Live Pilot Remediation And Reliability Fixes; v5.33 Controlled Expansion Execution And Revenue Validation; v5.34 Public Launch Execution And Post-Launch Operations are contract-complete locally and blocked on live approval/evidence for actual execution.
+**Latest completed milestone:** v5.35 Real Pilot Blocker Burn-Down And Launch Execution on 2026-07-07 (real pilot start contracts; default hold)
+**Residual partial gate:** real-user activation still requires explicit operational approval, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, and launch-room readiness.
+**Active milestone:** v6.0 Real Evidence Capture And Pilot Start Execution
+**Next planned milestones:** v6.1 First Cohort Product Remediation Sprint; v6.2 Paid Conversion Usage And Account Reliability Completion; v6.3 Learning Outcome And AI Curriculum Quality Sprint; v6.4 Operations Scale Release And Observability Hardening.
 
-## Current Milestone: v5.30 Live Pilot Approval And Provider Activation Execution
+## Current Milestone: v6.0 Real Evidence Capture And Pilot Start Execution
 
-**Goal:** Move beyond local pilot/launch contracts by obtaining explicit operational approval, clearing or disabling live activation blockers, and producing the live evidence required for `pilot_safe_start_gate` to return `start_limited_pilot`.
+**Goal:** Move beyond local pilot/launch contracts by gathering current approved real evidence, checking account/payment/usage/verification/notification/support/mobile paths, and running the pilot start gate with honest start/hold output.
 
 **Target features:**
-- Live approval/ownership audit across product, support, incident, finance, mobile, and provider owners.
-- Redacted live/read-only evidence or explicit disablement for payment, notifications, support CRM, BI/APM, mobile/TestFlight, restore, and tabletop dependencies.
-- Live safe-start gate execution that decides start, hold, or harden further.
+- Real evidence inventory across production/admin/provider/mobile/support access and approvals.
+- Account, payment, usage ledger, quota, login/email verification, notification, support, and mobile smoke with approved accounts.
+- Pilot cohort launch packet with communications, support staffing, dashboards, rollback, pause criteria, and dry-run evidence.
+- Pilot start decision gate that starts a narrow cohort only on `start_limited_pilot`; otherwise it produces an executable blocker package.
 
 Prior milestone outcome:
 
@@ -1092,11 +1097,16 @@ Known current resources:
 | Plan v5.32 live pilot remediation and reliability fixes | Live pilot findings should drive fixes before expansion | Contract complete locally; real fixes gated on live pilot findings |
 | Plan v5.33 controlled expansion execution and revenue validation | Expansion must validate revenue, support, teacher, mobile, provider, and operational scale under real use | Contract complete locally; real expansion gated |
 | Plan v5.34 public launch execution and post-launch operations | Public launch execution requires controlled expansion evidence and final approval | Contract complete locally; public launch gated |
-| Plan v5.35 real pilot blocker burn-down and launch execution | v5.30-v5.34 are metadata-only execution contracts; the real work now is clearing or disabling start blockers so the pilot gate can honestly move from hold to start | Planned - active next milestone |
-| Plan v5.36 live pilot operations feedback and product fixes | After v5.35 starts a cohort, real usage must drive activation, support, billing, mobile, AI, teacher, and learning fixes before expansion | Planned |
-| Plan v5.37 revenue conversion and self-serve growth completion | Paid conversion and growth should be completed from real parent friction, entitlement reconciliation, lifecycle messaging, and support load, not readiness assumptions | Planned |
-| Plan v5.38 learning outcomes curriculum and AI quality scale | Learning quality is the core product value; curriculum, exercises, recommendations, AI tools, and progress reporting need real-evidence improvement before broader growth | Planned |
-| Plan v5.39 platform reliability and internal operations scale | Larger cohorts require repeatable reliability, observability, admin, teacher, support, release, and rollback operations instead of founder-operated manual work | Planned |
+| Plan v5.35 real pilot blocker burn-down and launch execution | v5.30-v5.34 are metadata-only execution contracts; the real work now is clearing or disabling start blockers so the pilot gate can honestly move from hold to start | Complete locally; real pilot start gated by current evidence |
+| Plan v5.36 live pilot operations feedback and product fixes | After v5.35 starts a cohort, real usage must drive activation, support, billing, mobile, AI, teacher, and learning fixes before expansion | Contract complete locally; real operations gated by v5.35 start |
+| Plan v5.37 revenue conversion and self-serve growth completion | Paid conversion and growth should be completed from real parent friction, entitlement reconciliation, lifecycle messaging, and support load, not readiness assumptions | Contract complete locally; growth gated by revenue and support evidence |
+| Plan v5.38 learning outcomes curriculum and AI quality scale | Learning quality is the core product value; curriculum, exercises, recommendations, AI tools, and progress reporting need real-evidence improvement before broader growth | Contract complete locally; scale gated by learning and AI quality evidence |
+| Plan v5.39 platform reliability and internal operations scale | Larger cohorts require repeatable reliability, observability, admin, teacher, support, release, and rollback operations instead of founder-operated manual work | Contract complete locally; larger expansion gated by operations evidence |
+| Start v6.0 real evidence capture and pilot start execution | v5.30-v5.39 created the local gate chain; the next useful work is current approved real evidence and an honest start/hold decision | Planned - active next milestone |
+| Plan v6.1 first cohort product remediation sprint | Real account/payment/usage/login/notification/support/mobile/learning evidence should drive shipped fixes before expansion | Planned |
+| Plan v6.2 paid conversion usage and account reliability completion | Paid access, usage ledger, quota, verification, lifecycle, and billing support must be reliable before controlled growth | Planned |
+| Plan v6.3 learning outcome and AI curriculum quality sprint | Learning outcome is the core product value; curriculum, exercises, AI tools, recommendations, and progress reporting need real-evidence quality work | Planned |
+| Plan v6.4 operations scale release and observability hardening | Larger cohorts require repeatable observability, support/admin/teacher workflows, release discipline, rollback, and incident ownership | Planned |
 
 ## Evolution
 
@@ -1116,4 +1126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-07 after planning v5.35-v5.39 from current v5.30-v5.34 contract-complete but real-world-gated evidence*
+*Last updated: 2026-07-07 after planning v6.0-v6.4 as the real evidence execution track following v5.35-v5.39 local contract completion*
