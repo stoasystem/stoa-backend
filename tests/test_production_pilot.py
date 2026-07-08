@@ -252,3 +252,251 @@ def test_live_expansion_and_public_launch_execution_require_final_approval():
         outcome_healthy=True,
     )
     assert outcome["decision"] == "scale"
+
+
+def test_real_pilot_start_gate_requires_closed_blockers_and_dry_run():
+    default_gate = production_pilot_service.real_pilot_start_decision_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v5_36Allowed"] is False
+
+    inventory = {"inventoryState": "ready", "gateDecision": "start_limited_pilot", "blockers": []}
+    provider = {"closeoutState": "ready", "blockers": []}
+    dry_run = {"dryRunState": "ready", "blockers": []}
+    launch_room = {"readinessState": "ready", "blockers": []}
+    start_gate = production_pilot_service.real_pilot_start_decision_gate(
+        inventory=inventory,
+        provider_closeout=provider,
+        dry_run=dry_run,
+        launch_room=launch_room,
+    )
+    assert start_gate["decision"] == "start_limited_pilot"
+    assert start_gate["safeToStart"] is True
+
+
+def test_v35_closeout_contracts_keep_real_writes_gated():
+    inventory = production_pilot_service.real_pilot_blocker_inventory_owner_assignment()
+    assert inventory["inventoryState"] == "blocked"
+    assert inventory["ownerActionTable"]
+
+    closeout = production_pilot_service.provider_or_disablement_activation_closeout(
+        disabled_components={"payment", "notifications", "support_crm", "bi_apm", "mobile_testflight"}
+    )
+    assert closeout["closeoutState"] == "ready"
+    assert closeout["disabledComponents"]
+
+    dry_run = production_pilot_service.pilot_cohort_account_support_dry_run(
+        live_gate={"safeToStart": True},
+        approved_account_count=5,
+        support_staffed=True,
+    )
+    assert dry_run["dryRunState"] == "ready"
+    assert dry_run["customerMutationAllowed"] is False
+
+    launch_room = production_pilot_service.launch_room_restore_incident_readiness_closeout(
+        operations_evidence={
+            "operationsState": "ready",
+            "checks": {},
+            "blockers": [],
+            "incidentPolicy": {},
+        }
+    )
+    assert launch_room["readinessState"] == "ready"
+    assert launch_room["launchRoom"]["rollbackSupported"] is True
+
+
+def test_live_pilot_operations_feedback_gate_controls_v37_progression():
+    blocked = production_pilot_service.live_pilot_operations_feedback_capture()
+    assert blocked["operationsState"] == "blocked_by_start_gate"
+    assert blocked["customerMutationAllowed"] is False
+
+    active = production_pilot_service.live_pilot_operations_feedback_capture(
+        start_gate={"safeToStart": True},
+        approved_user_count=5,
+    )
+    assert active["operationsState"] == "active"
+    assert active["customerMutationAllowed"] is True
+
+    decision = production_pilot_service.live_pilot_feedback_decision_gate()
+    assert decision["decision"] == "hold"
+    assert decision["v5_37Allowed"] is False
+
+    healthy_signals = {signal: "passed" for signal in production_pilot_service.PILOT_OUTCOME_SIGNALS}
+    ready = production_pilot_service.live_pilot_feedback_decision_gate(
+        start_gate={"safeToStart": True},
+        signals=healthy_signals,
+        fixes_released=True,
+    )
+    assert ready["decision"] == "revenue_growth_candidate"
+    assert ready["v5_37Allowed"] is True
+
+
+def test_revenue_growth_gate_requires_reconciliation_and_capacity():
+    default_gate = production_pilot_service.revenue_growth_decision_gate()
+    assert default_gate["decision"] == "remediate"
+    assert default_gate["v5_38Allowed"] is False
+
+    revenue_states = {
+        surface: "passed" for surface in production_pilot_service.REVENUE_GROWTH_SURFACES
+    }
+    revenue = production_pilot_service.revenue_conversion_checkout_completion(revenue_states)
+    growth = production_pilot_service.self_serve_growth_lifecycle_completion(
+        {
+            "self_serve_onboarding": "passed",
+            "lifecycle_messages": "passed",
+            "referral_waitlist": "passed",
+        },
+        support_capacity_ready=True,
+    )
+    ready = production_pilot_service.revenue_growth_decision_gate(
+        revenue=revenue,
+        growth=growth,
+        reconciliation_approved=True,
+    )
+    assert ready["decision"] == "controlled_growth_ready"
+    assert ready["paidMarketingApproved"] is False
+
+
+def test_learning_quality_gate_requires_outcome_and_ai_evidence():
+    default_gate = production_pilot_service.learning_quality_decision_gate()
+    assert default_gate["decision"] == "remediate"
+    assert default_gate["v5_39Allowed"] is False
+
+    states = {area: "passed" for area in production_pilot_service.LEARNING_QUALITY_AREAS}
+    outcomes = production_pilot_service.learning_outcomes_curriculum_quality_scale(states)
+    ai_quality = production_pilot_service.ai_quality_teacher_help_scale(
+        evaluations_passed=True,
+        teacher_capacity_ready=True,
+    )
+    ready = production_pilot_service.learning_quality_decision_gate(
+        outcomes=outcomes,
+        ai_quality=ai_quality,
+    )
+    assert ready["decision"] == "learning_quality_scale_ready"
+    assert ready["v5_39Allowed"] is True
+
+
+def test_platform_scale_gate_requires_reliability_internal_ops_and_release_discipline():
+    default_gate = production_pilot_service.platform_scale_decision_gate()
+    assert default_gate["decision"] == "operations_hardening_cycle"
+    assert default_gate["expansionAllowed"] is False
+
+    reliability_states = {
+        area: "passed" for area in production_pilot_service.OPERATIONS_SCALE_AREAS
+    }
+    reliability = production_pilot_service.platform_reliability_operations_scale(
+        reliability_states
+    )
+    internal_ops = production_pilot_service.internal_operations_admin_teacher_scale(
+        {
+            "account_operations": "passed",
+            "teacher_dispatch": "passed",
+            "support_handoff": "passed",
+            "billing_fixes": "passed",
+            "content_operations": "passed",
+        },
+        staffing_ready=True,
+    )
+    ready = production_pilot_service.platform_scale_decision_gate(
+        reliability=reliability,
+        internal_ops=internal_ops,
+        release_discipline_ready=True,
+    )
+    assert ready["decision"] == "larger_expansion_ready"
+    assert ready["expansionAllowed"] is True
+
+
+def test_v6_real_evidence_inventory_blocks_until_access_and_credentials_are_ready():
+    default_inventory = production_pilot_service.real_evidence_inventory_access_readiness()
+    assert default_inventory["inventoryState"] == "blocked"
+    assert "approved_credential_path" in default_inventory["blockers"]
+
+    states = {
+        path: "available"
+        for path in production_pilot_service.V6_REAL_EVIDENCE_ACCESS_PATHS
+    }
+    ready = production_pilot_service.real_evidence_inventory_access_readiness(
+        states,
+        approved_credential_path=True,
+    )
+    assert ready["inventoryState"] == "ready"
+    assert ready["blockers"] == []
+    assert ready["evidencePolicy"]["productionMutationAllowed"] is False
+
+
+def test_v6_account_payment_usage_smoke_is_metadata_only_and_fail_closed():
+    default_smoke = production_pilot_service.account_payment_usage_verification_smoke()
+    assert default_smoke["smokeState"] == "blocked"
+    assert "usage_ledger" in default_smoke["blockers"]
+    assert default_smoke["mutationPolicy"]["allowed"] is False
+
+    states = {
+        surface: "passed"
+        for surface in production_pilot_service.V6_ACCOUNT_PAYMENT_USAGE_SURFACES
+    }
+    ready = production_pilot_service.account_payment_usage_verification_smoke(
+        states,
+        production_mutation_approved=True,
+    )
+    assert ready["smokeState"] == "ready"
+    assert ready["mutationPolicy"]["scope"] == "pilot_safe_account_only"
+
+
+def test_v6_notification_support_mobile_provider_evidence_allows_disablement():
+    disabled = {
+        "email_notifications",
+        "push_notifications",
+        "support_crm_handoff",
+        "mobile_testflight_install",
+        "payment_provider",
+        "bi_apm",
+        "ai_provider",
+    }
+    states = {
+        "realtime_notifications": "passed",
+        "support_queue": "passed",
+        "teacher_dispatch_sla": "read_only_verified",
+    }
+    evidence = production_pilot_service.notification_support_mobile_provider_evidence(
+        states,
+        disabled_surfaces=disabled,
+    )
+    assert evidence["evidenceState"] == "ready"
+    assert set(evidence["disabledSurfaces"]) == disabled
+    assert all(row["fallback"] for row in evidence["surfaces"])
+
+
+def test_v6_launch_packet_requires_packet_and_dry_run():
+    default_packet = production_pilot_service.pilot_cohort_launch_packet_dry_run()
+    assert default_packet["packetState"] == "blocked"
+    assert "dry_run" in default_packet["blockers"]
+
+    states = {
+        area: "ready"
+        for area in production_pilot_service.V6_PILOT_LAUNCH_PACKET_AREAS
+    }
+    ready = production_pilot_service.pilot_cohort_launch_packet_dry_run(
+        states,
+        dry_run_passed=True,
+    )
+    assert ready["packetState"] == "ready"
+    assert "first_learning_action" in ready["dryRunCoverage"]
+
+
+def test_v6_pilot_start_gate_holds_by_default_and_can_start_with_complete_evidence():
+    default_gate = production_pilot_service.v6_pilot_start_or_blocker_decision_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v6_1Allowed"] is False
+
+    inventory = {"inventoryState": "ready", "blockers": []}
+    account_smoke = {"smokeState": "ready", "blockers": []}
+    provider_evidence = {"evidenceState": "ready", "blockers": []}
+    launch_packet = {"packetState": "ready", "blockers": []}
+    start = production_pilot_service.v6_pilot_start_or_blocker_decision_gate(
+        inventory=inventory,
+        account_smoke=account_smoke,
+        provider_evidence=provider_evidence,
+        launch_packet=launch_packet,
+    )
+    assert start["decision"] == "start_limited_pilot"
+    assert start["safeToStart"] is True
+    assert "public_launch" in start["outOfScope"]

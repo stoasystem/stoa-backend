@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-07 after v5.35-v5.39 local contract completion and v6 execution-track planning
+**Updated:** 2026-07-08 after v6.0 local real-evidence contract completion
 **Mode:** real evidence execution, pilot start, product remediation, revenue reliability, learning quality, and operational scale
 
 ## Current Reality
@@ -9,18 +9,17 @@ Completed local contract baseline:
 
 - v5.30-v5.34 added metadata-only contracts for live pilot approval, real pilot operations, remediation, controlled expansion, public launch, and post-launch operations.
 - v5.35-v5.39 added metadata-only contracts for real pilot start, live operations feedback, revenue conversion, learning quality, and platform/internal operations scale.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff are recorded as passing in the v5.35-v5.39 evidence.
+- v6.0 added local real-evidence contracts for inventory, account/payment/usage smoke, notification/support/mobile/provider evidence, launch packet dry-run, and the pilot start decision gate.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff are recorded as passing in the v6.0 evidence.
 
 Important reality check:
 
-- v5.30-v5.39 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
+- v5.30-v6.0 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
 - Current gates still default to hold or remediation without current approved real evidence.
-- v6 should start now, but v6 is not a public-launch label. It is the real evidence execution track.
+- v6 is not a public-launch label. It is the real evidence execution track.
 
-## Active: v6.0 Real Evidence Capture And Pilot Start Execution
+## Completed: v6.0 Real Evidence Capture And Pilot Start Execution
 
-Roadmap: `.planning/ROADMAP.md`
-Requirements: `.planning/REQUIREMENTS.md`
 Milestone roadmap: `.planning/milestones/v6.0-ROADMAP.md`
 Milestone requirements: `.planning/milestones/v6.0-REQUIREMENTS.md`
 
@@ -36,7 +35,7 @@ Implementation strategy:
 - Use real existing sessions/accounts or approved secret-backed credential paths.
 - Record redacted metadata only and keep public launch, paid marketing, broad expansion, and uncontrolled provider writes out of scope.
 
-## Planned: v6.1 First Cohort Product Remediation Sprint
+## Next: v6.1 First Cohort Product Remediation Sprint
 
 Roadmap: `.planning/milestones/v6.1-ROADMAP.md`
 Requirements: `.planning/milestones/v6.1-REQUIREMENTS.md`

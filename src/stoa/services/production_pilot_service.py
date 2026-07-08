@@ -93,6 +93,97 @@ LIVE_ACTIVATION_DEPENDENCIES = {
     "production_restore",
     "launch_room_tabletop",
 }
+LIVE_OPERATIONS_SIGNALS = {
+    "onboarding",
+    "login",
+    "entitlement",
+    "first_learning_action",
+    "support_intake",
+    "teacher_sla",
+    "billing",
+    "notifications",
+    "ai_quality",
+    "mobile_stability",
+}
+REVENUE_GROWTH_SURFACES = {
+    "package_copy",
+    "checkout",
+    "payment_methods",
+    "failed_payment_states",
+    "entitlement_activation",
+    "usage_display",
+    "invoice_refund_support",
+    "lifecycle_messages",
+    "referral_waitlist",
+}
+LEARNING_QUALITY_AREAS = {
+    "learning_progress",
+    "weak_topics",
+    "curriculum_coverage",
+    "exercise_bank",
+    "ai_summaries",
+    "teacher_tools",
+    "adaptive_recommendations",
+    "parent_progress_reporting",
+}
+OPERATIONS_SCALE_AREAS = {
+    "incident_review",
+    "data_quality",
+    "queue_health",
+    "admin_workflows",
+    "teacher_dispatch",
+    "support_handoff",
+    "observability",
+    "release_rollback",
+}
+V6_REAL_EVIDENCE_ACCESS_PATHS = {
+    "admin",
+    "parent",
+    "student",
+    "teacher_support",
+    "provider",
+    "mobile",
+    "monitoring",
+    "deployment",
+}
+V6_ACCOUNT_PAYMENT_USAGE_SURFACES = {
+    "login",
+    "email_verification",
+    "login_code_passwordless",
+    "account_recovery",
+    "role_visibility",
+    "paid_access",
+    "checkout_paywall",
+    "entitlement_activation",
+    "subscription_state",
+    "usage_ledger",
+    "quota_display",
+    "admin_support_explanations",
+}
+V6_NOTIFICATION_SUPPORT_PROVIDER_SURFACES = {
+    "email_notifications",
+    "push_notifications",
+    "realtime_notifications",
+    "support_crm_handoff",
+    "support_queue",
+    "teacher_dispatch_sla",
+    "mobile_testflight_install",
+    "payment_provider",
+    "bi_apm",
+    "ai_provider",
+}
+V6_PILOT_LAUNCH_PACKET_AREAS = {
+    "cohort_scope",
+    "account_aliases",
+    "communication_plan",
+    "consent_state",
+    "support_staffing",
+    "teacher_owner",
+    "launch_room",
+    "dashboards",
+    "rollback_authority",
+    "pause_criteria",
+}
 
 
 @dataclass(frozen=True)
@@ -1371,6 +1462,739 @@ def launch_outcome_next_strategy_gate(
     return result
 
 
+def real_pilot_blocker_inventory_owner_assignment(
+    *,
+    approval: dict[str, Any] | None = None,
+    provider_evidence: dict[str, Any] | None = None,
+    operations_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Convert current live-gate blockers into owner/action rows for v5.35."""
+    gate = live_pilot_safe_start_gate_execution(
+        approval=approval,
+        provider_evidence=provider_evidence,
+        operations_evidence=operations_evidence,
+    )
+    rows = [
+        {
+            "blocker": blocker,
+            "owner": _blocker_owner(blocker),
+            "requiredAction": _blocker_action(blocker),
+            "deadline": "before_real_pilot_start",
+            "decisionImpact": "blocks_start",
+        }
+        for blocker in gate["blockers"]
+    ]
+    result = {
+        "inventoryState": "ready" if not rows else "blocked",
+        "gateDecision": gate["decision"],
+        "ownerActionTable": rows,
+        "blockers": gate["blockers"],
+        "dailyReviewRequired": bool(rows),
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def provider_or_disablement_activation_closeout(
+    *,
+    evidence_states: dict[str, str] | None = None,
+    disabled_components: set[str] | None = None,
+) -> dict[str, Any]:
+    """Close each provider/mobile dependency as verified, disabled, or still blocking."""
+    provider = live_provider_mobile_activation_evidence(
+        evidence_states=evidence_states,
+        disabled_components=disabled_components,
+    )
+    rows = []
+    for row in provider["components"]:
+        component = row["component"]
+        state = row["state"]
+        rows.append(
+            {
+                "component": component,
+                "closeoutState": "closed" if state in {"live_verified", "read_only_verified", "disabled"} else "open",
+                "pilotUse": "enabled" if state == "live_verified" else "disabled_or_read_only",
+                "supportCopyReady": state in {"read_only_verified", "disabled"},
+                "fallback": _fallback_or_disable_option(component),
+                "rollbackControl": row["rollbackControl"],
+            }
+        )
+    result = {
+        "closeoutState": "ready" if not provider["blockers"] else "blocked",
+        "components": rows,
+        "blockers": provider["blockers"],
+        "disabledComponents": provider["disabledComponents"],
+        "evidencePolicy": provider["evidencePolicy"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_cohort_account_support_dry_run(
+    *,
+    live_gate: dict[str, Any] | None = None,
+    approved_account_count: int = 0,
+    support_staffed: bool = False,
+) -> dict[str, Any]:
+    """Run account and support readiness checks without enabling real-user writes."""
+    gate = live_gate or live_pilot_safe_start_gate_execution()
+    ready = bool(gate.get("safeToStart") and approved_account_count > 0 and support_staffed)
+    result = {
+        "dryRunState": "ready" if ready else "blocked",
+        "approvedAccountCount": approved_account_count,
+        "checks": [
+            "account_verification",
+            "child_binding",
+            "entitlement_visibility",
+            "support_contact_path",
+            "billing_or_disabled_payment_copy",
+            "mobile_or_web_access_path",
+            "rollback_message",
+        ],
+        "supportStaffed": support_staffed,
+        "customerMutationAllowed": False,
+        "realEnablementRequiresStartGate": True,
+        "blockers": []
+        if ready
+        else ["live_gate", "approved_accounts", "support_staffing"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def launch_room_restore_incident_readiness_closeout(
+    *,
+    operations_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Close restore, tabletop, monitoring, rollback, and incident-room evidence."""
+    operations = operations_evidence or production_restore_tabletop_launch_room_evidence()
+    controls = launch_controls_monitoring()
+    result = {
+        "readinessState": "ready" if operations["operationsState"] == "ready" else "blocked",
+        "operationsState": operations["operationsState"],
+        "checks": operations["checks"],
+        "blockers": operations["blockers"],
+        "launchRoom": {
+            "dashboard": controls["dashboard"],
+            "alertRouting": controls["alertRouting"],
+            "pauseSupported": True,
+            "rollbackSupported": True,
+            "providerDisablementSupported": True,
+        },
+        "incidentPolicy": operations["incidentPolicy"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def real_pilot_start_decision_gate(
+    *,
+    inventory: dict[str, Any] | None = None,
+    provider_closeout: dict[str, Any] | None = None,
+    dry_run: dict[str, Any] | None = None,
+    launch_room: dict[str, Any] | None = None,
+    accepted_risks: list[str] | None = None,
+) -> dict[str, Any]:
+    """Close v5.35 with the only decision that may unlock v5.36 operations."""
+    inventory = inventory or real_pilot_blocker_inventory_owner_assignment()
+    provider_closeout = provider_closeout or provider_or_disablement_activation_closeout()
+    dry_run = dry_run or pilot_cohort_account_support_dry_run()
+    launch_room = launch_room or launch_room_restore_incident_readiness_closeout()
+    blockers = _unique(
+        [
+            *(["inventory_state"] if inventory.get("inventoryState") != "ready" else []),
+            *(["provider_closeout_state"] if provider_closeout.get("closeoutState") != "ready" else []),
+            *(["dry_run_state"] if dry_run.get("dryRunState") != "ready" else []),
+            *(["launch_room_state"] if launch_room.get("readinessState") != "ready" else []),
+            *inventory.get("blockers", []),
+            *[f"provider:{blocker}" for blocker in provider_closeout.get("blockers", [])],
+            *[f"dry_run:{blocker}" for blocker in dry_run.get("blockers", [])],
+            *[f"launch_room:{blocker}" for blocker in launch_room.get("blockers", [])],
+        ]
+    )
+    decision = "start_limited_pilot" if not blockers else "hold"
+    result = {
+        "decision": decision,
+        "safeToStart": decision == "start_limited_pilot",
+        "blockers": blockers,
+        "acceptedRisks": accepted_risks or [],
+        "v5_36Allowed": decision == "start_limited_pilot",
+        "outOfScope": ["public_launch", "paid_marketing", "unapproved_provider_writes"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_operations_feedback_capture(
+    *,
+    start_gate: dict[str, Any] | None = None,
+    approved_user_count: int = 0,
+) -> dict[str, Any]:
+    """Capture v5.36 live operations signals only after the v5.35 start gate."""
+    gate = start_gate or real_pilot_start_decision_gate()
+    active = bool(gate.get("safeToStart") and approved_user_count > 0)
+    result = {
+        "operationsState": "active" if active else "blocked_by_start_gate",
+        "approvedUserCount": approved_user_count,
+        "signals": sorted(LIVE_OPERATIONS_SIGNALS),
+        "dailyReview": daily_live_pilot_operations_incident_review()["dailyChecks"],
+        "feedbackChannels": live_learning_feedback_support_quality_capture()["channels"],
+        "customerMutationAllowed": active,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_product_fix_plan(
+    findings: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Prioritize pilot findings into hotfix, product, support, copy, or accepted buckets."""
+    source_findings = findings or [
+        {
+            "finding": "real_pilot_not_started",
+            "severity": "critical",
+            "surface": "start_gate",
+            "owner": "operations",
+            "frequency": "current",
+        }
+    ]
+    rows = []
+    must_fix = []
+    for finding in source_findings:
+        severity = str(finding.get("severity") or "medium")
+        surface = str(finding.get("surface") or "unknown")
+        bucket = "hotfix" if severity in {"critical", "high"} else "product_backlog"
+        row = {
+            "finding": str(finding.get("finding") or "unknown_finding"),
+            "severity": severity,
+            "surface": surface,
+            "owner": str(finding.get("owner") or "unassigned"),
+            "frequency": str(finding.get("frequency") or "unknown"),
+            "bucket": bucket,
+            "verificationPlan": "focused regression plus support-visible release note",
+        }
+        rows.append(row)
+        if bucket == "hotfix":
+            must_fix.append(row["finding"])
+    result = {
+        "planState": "blocked" if must_fix else "ready",
+        "items": rows,
+        "mustFixBeforeExpansion": must_fix,
+        "releaseNotesRequired": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_product_fix_release_evidence(
+    *,
+    fixes_closed: bool = False,
+    regressions_passed: bool = False,
+) -> dict[str, Any]:
+    """Record release evidence for the v5.36 high-impact pilot fixes."""
+    ready = fixes_closed and regressions_passed
+    result = {
+        "releaseState": "ready" if ready else "blocked",
+        "fixesClosed": fixes_closed,
+        "regressionsPassed": regressions_passed,
+        "coverage": [
+            "activation_flow",
+            "support_path",
+            "billing_entitlement",
+            "mobile_access",
+            "notification_delivery",
+            "ai_quality",
+        ],
+        "supportVisibleReleaseNotes": ready,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_feedback_decision_gate(
+    *,
+    start_gate: dict[str, Any] | None = None,
+    signals: dict[str, str] | None = None,
+    fixes_released: bool = False,
+) -> dict[str, Any]:
+    """Decide whether live pilot evidence supports revenue and growth completion."""
+    gate = start_gate or real_pilot_start_decision_gate()
+    analysis = live_pilot_outcome_analysis(signals)
+    if not gate.get("safeToStart"):
+        decision = "hold"
+    elif analysis["expansionBlockers"]:
+        decision = "remediate"
+    elif signals and fixes_released:
+        decision = "revenue_growth_candidate"
+    else:
+        decision = "continue_pilot"
+    result = {
+        "decision": decision,
+        "outcomeAnalysis": analysis["analysisState"],
+        "v5_37Allowed": decision == "revenue_growth_candidate",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def revenue_conversion_checkout_completion(
+    evidence_states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Validate v5.37 paid conversion, entitlement, and billing support surfaces."""
+    evidence_states = evidence_states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(REVENUE_GROWTH_SURFACES):
+        state = evidence_states.get(surface, "missing")
+        if state not in {"passed", "disabled", "support_ready"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "supportVisible": surface in {"failed_payment_states", "invoice_refund_support"},
+                "reconciliationRequired": surface
+                in {"entitlement_activation", "checkout", "payment_methods"},
+            }
+        )
+    result = {
+        "completionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def self_serve_growth_lifecycle_completion(
+    evidence_states: dict[str, str] | None = None,
+    *,
+    support_capacity_ready: bool = False,
+) -> dict[str, Any]:
+    """Complete self-serve onboarding, lifecycle, referral, and capacity gates."""
+    evidence_states = evidence_states or {}
+    required = ["self_serve_onboarding", "lifecycle_messages", "referral_waitlist", "support_capacity"]
+    rows = []
+    blockers = []
+    for surface in required:
+        state = "passed" if surface == "support_capacity" and support_capacity_ready else evidence_states.get(surface, "missing")
+        if state not in {"passed", "disabled"}:
+            blockers.append(surface)
+        rows.append({"surface": surface, "state": state, "preferenceAware": surface == "lifecycle_messages"})
+    result = {
+        "completionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "capacityGateReady": support_capacity_ready,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def revenue_growth_decision_gate(
+    *,
+    revenue: dict[str, Any] | None = None,
+    growth: dict[str, Any] | None = None,
+    reconciliation_approved: bool = False,
+) -> dict[str, Any]:
+    """Close v5.37 with controlled growth, paid marketing prep, or remediation."""
+    revenue = revenue or revenue_conversion_checkout_completion()
+    growth = growth or self_serve_growth_lifecycle_completion()
+    blockers = _unique(
+        [
+            *[f"revenue:{blocker}" for blocker in revenue.get("blockers", [])],
+            *[f"growth:{blocker}" for blocker in growth.get("blockers", [])],
+            *(["reconciliation"] if not reconciliation_approved else []),
+        ]
+    )
+    decision = "controlled_growth_ready" if not blockers else "remediate"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "reconciliationApproved": reconciliation_approved,
+        "v5_38Allowed": decision == "controlled_growth_ready",
+        "paidMarketingApproved": False,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def learning_outcomes_curriculum_quality_scale(
+    evidence_states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Turn pilot learning evidence into curriculum and outcome quality rows."""
+    evidence_states = evidence_states or {}
+    rows = []
+    blockers = []
+    for area in sorted(LEARNING_QUALITY_AREAS):
+        state = evidence_states.get(area, "missing")
+        if state not in {"passed", "accepted_gap"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "teacherReviewed": area in {"ai_summaries", "teacher_tools", "adaptive_recommendations"},
+                "familyVisible": area in {"learning_progress", "parent_progress_reporting"},
+            }
+        )
+    result = {
+        "qualityState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "privateContentExcluded": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def ai_quality_teacher_help_scale(
+    *,
+    evaluations_passed: bool = False,
+    teacher_capacity_ready: bool = False,
+) -> dict[str, Any]:
+    """Record AI, teacher-help, and automation quality evidence for v5.38."""
+    ready = evaluations_passed and teacher_capacity_ready
+    result = {
+        "qualityState": "ready" if ready else "blocked",
+        "evaluationsPassed": evaluations_passed,
+        "teacherCapacityReady": teacher_capacity_ready,
+        "controls": {
+            "teacherReviewRetained": True,
+            "safetyEscalationRetained": True,
+            "automationLimitationsDisclosed": True,
+        },
+        "coverage": ["summaries", "explanations", "exercise_drafts", "teacher_review_tools"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def learning_quality_decision_gate(
+    *,
+    outcomes: dict[str, Any] | None = None,
+    ai_quality: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Close v5.38 with expansion support, remediation, or content/AI hold."""
+    outcomes = outcomes or learning_outcomes_curriculum_quality_scale()
+    ai_quality = ai_quality or ai_quality_teacher_help_scale()
+    blockers = _unique(
+        [
+            *[f"learning:{blocker}" for blocker in outcomes.get("blockers", [])],
+            *(["ai_teacher_quality"] if ai_quality.get("qualityState") != "ready" else []),
+        ]
+    )
+    decision = "learning_quality_scale_ready" if not blockers else "remediate"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v5_39Allowed": decision == "learning_quality_scale_ready",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def platform_reliability_operations_scale(
+    evidence_states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Audit reliability, observability, data quality, and release operations for scale."""
+    evidence_states = evidence_states or {}
+    rows = []
+    blockers = []
+    for area in sorted(OPERATIONS_SCALE_AREAS):
+        state = evidence_states.get(area, "missing")
+        if state not in {"passed", "accepted_gap"}:
+            blockers.append(area)
+        rows.append({"area": area, "state": state, "owner": _operations_area_owner(area)})
+    result = {
+        "scaleState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "incidentPolicyReviewed": not blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def internal_operations_admin_teacher_scale(
+    evidence_states: dict[str, str] | None = None,
+    *,
+    staffing_ready: bool = False,
+) -> dict[str, Any]:
+    """Scale admin, teacher, support, billing, and content workflows."""
+    evidence_states = evidence_states or {}
+    workflows = ["account_operations", "teacher_dispatch", "support_handoff", "billing_fixes", "content_operations"]
+    rows = []
+    blockers = []
+    for workflow in workflows:
+        state = evidence_states.get(workflow, "missing")
+        if state not in {"passed", "accepted_gap"}:
+            blockers.append(workflow)
+        rows.append({"workflow": workflow, "state": state, "repeatable": state == "passed"})
+    if not staffing_ready:
+        blockers.append("staffing")
+    result = {
+        "scaleState": "ready" if not blockers else "blocked",
+        "workflows": rows,
+        "blockers": blockers,
+        "staffingReady": staffing_ready,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def platform_scale_decision_gate(
+    *,
+    reliability: dict[str, Any] | None = None,
+    internal_ops: dict[str, Any] | None = None,
+    release_discipline_ready: bool = False,
+) -> dict[str, Any]:
+    """Close v5.39 with larger expansion readiness or another hardening cycle."""
+    reliability = reliability or platform_reliability_operations_scale()
+    internal_ops = internal_ops or internal_operations_admin_teacher_scale()
+    blockers = _unique(
+        [
+            *[f"reliability:{blocker}" for blocker in reliability.get("blockers", [])],
+            *[f"operations:{blocker}" for blocker in internal_ops.get("blockers", [])],
+            *(["release_discipline"] if not release_discipline_ready else []),
+        ]
+    )
+    decision = "larger_expansion_ready" if not blockers else "operations_hardening_cycle"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "releaseDisciplineReady": release_discipline_ready,
+        "expansionAllowed": decision == "larger_expansion_ready",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def real_evidence_inventory_access_readiness(
+    evidence_states: dict[str, str] | None = None,
+    *,
+    approved_credential_path: bool = False,
+) -> dict[str, Any]:
+    """Inventory current real evidence sources before v6 pilot execution."""
+    evidence_states = evidence_states or {}
+    rows = []
+    blockers = []
+    for path in sorted(V6_REAL_EVIDENCE_ACCESS_PATHS):
+        state = evidence_states.get(path, "missing")
+        if state not in {"available", "disabled_for_pilot", "not_required"}:
+            blockers.append(path)
+        rows.append(
+            {
+                "accessPath": path,
+                "state": state,
+                "owner": _v6_access_owner(path),
+                "approvalRequired": state not in {"not_required"},
+                "nextAction": _v6_access_next_action(path, state),
+            }
+        )
+    if not approved_credential_path:
+        blockers.append("approved_credential_path")
+    result = {
+        "inventoryState": "ready" if not blockers else "blocked",
+        "accessPaths": rows,
+        "approvedCredentialPath": approved_credential_path,
+        "blockers": blockers,
+        "evidencePolicy": {
+            "metadataOnly": True,
+            "recordOwners": True,
+            "recordRequestIds": True,
+            "recordAccountAliasesOnly": True,
+            "productionMutationAllowed": False,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def account_payment_usage_verification_smoke(
+    evidence_states: dict[str, str] | None = None,
+    *,
+    production_mutation_approved: bool = False,
+) -> dict[str, Any]:
+    """Verify account, billing, entitlement, usage, quota, and support surfaces."""
+    evidence_states = evidence_states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_ACCOUNT_PAYMENT_USAGE_SURFACES):
+        state = evidence_states.get(surface, "missing")
+        if state not in {"passed", "disabled_for_pilot", "read_only_verified"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_account_surface_owner(surface),
+                "requestIdRequired": True,
+                "accountAliasRequired": True,
+                "nextAction": _v6_surface_next_action(surface, state),
+            }
+        )
+    result = {
+        "smokeState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "productionMutationApproved": production_mutation_approved,
+        "mutationPolicy": {
+            "allowed": production_mutation_approved,
+            "scope": "pilot_safe_account_only" if production_mutation_approved else "read_only_or_disabled",
+            "reversible": True,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def notification_support_mobile_provider_evidence(
+    evidence_states: dict[str, str] | None = None,
+    *,
+    disabled_surfaces: set[str] | None = None,
+) -> dict[str, Any]:
+    """Verify or explicitly disable notification, support, mobile, and provider surfaces."""
+    evidence_states = evidence_states or {}
+    disabled = disabled_surfaces or set()
+    rows = []
+    blockers = []
+    for surface in sorted(V6_NOTIFICATION_SUPPORT_PROVIDER_SURFACES):
+        state = "disabled_for_pilot" if surface in disabled else evidence_states.get(surface, "missing")
+        if state not in {"passed", "disabled_for_pilot", "read_only_verified"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_provider_surface_owner(surface),
+                "fallback": _v6_provider_fallback(surface),
+                "rollbackControl": _v6_provider_rollback(surface),
+                "supportCopyReady": state == "disabled_for_pilot",
+            }
+        )
+    result = {
+        "evidenceState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "disabledSurfaces": sorted(disabled),
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def pilot_cohort_launch_packet_dry_run(
+    packet_states: dict[str, str] | None = None,
+    *,
+    dry_run_passed: bool = False,
+) -> dict[str, Any]:
+    """Assemble the v6.0 launch packet and dry-run evidence before cohort start."""
+    packet_states = packet_states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V6_PILOT_LAUNCH_PACKET_AREAS):
+        state = packet_states.get(area, "missing")
+        if state not in {"ready", "accepted_gap", "disabled_for_pilot"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "owner": _v6_launch_packet_owner(area),
+                "startBlocking": state == "missing",
+            }
+        )
+    if not dry_run_passed:
+        blockers.append("dry_run")
+    result = {
+        "packetState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "dryRunPassed": dry_run_passed,
+        "dryRunCoverage": [
+            "login",
+            "onboarding",
+            "entitlement",
+            "usage",
+            "first_learning_action",
+            "notification_support_touchpoints",
+            "mobile_path",
+            "admin_visibility",
+        ],
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v6_pilot_start_or_blocker_decision_gate(
+    *,
+    inventory: dict[str, Any] | None = None,
+    account_smoke: dict[str, Any] | None = None,
+    provider_evidence: dict[str, Any] | None = None,
+    launch_packet: dict[str, Any] | None = None,
+    accepted_blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    """Close v6.0 with a start, hold, or harden decision from current evidence."""
+    inventory = inventory or real_evidence_inventory_access_readiness()
+    account_smoke = account_smoke or account_payment_usage_verification_smoke()
+    provider_evidence = provider_evidence or notification_support_mobile_provider_evidence()
+    launch_packet = launch_packet or pilot_cohort_launch_packet_dry_run()
+    accepted = accepted_blockers or []
+    blockers = _unique(
+        [
+            *(["inventory"] if inventory.get("inventoryState") != "ready" else []),
+            *(["account_smoke"] if account_smoke.get("smokeState") != "ready" else []),
+            *(["provider_evidence"] if provider_evidence.get("evidenceState") != "ready" else []),
+            *(["launch_packet"] if launch_packet.get("packetState") != "ready" else []),
+            *[f"inventory:{blocker}" for blocker in inventory.get("blockers", [])],
+            *[f"account:{blocker}" for blocker in account_smoke.get("blockers", [])],
+            *[f"provider:{blocker}" for blocker in provider_evidence.get("blockers", [])],
+            *[f"launch:{blocker}" for blocker in launch_packet.get("blockers", [])],
+        ]
+    )
+    unresolved = [blocker for blocker in blockers if blocker not in accepted]
+    if not unresolved:
+        decision = "start_limited_pilot"
+    elif accepted:
+        decision = "harden_further"
+    else:
+        decision = "hold"
+    result = {
+        "decision": decision,
+        "safeToStart": decision == "start_limited_pilot",
+        "blockers": unresolved,
+        "acceptedBlockers": accepted,
+        "v6_1Allowed": decision == "start_limited_pilot",
+        "nextAction": "handoff_to_v6_1" if decision == "start_limited_pilot" else "execute_blocker_package",
+        "outOfScope": ["public_launch", "paid_marketing", "broad_expansion", "uncontrolled_provider_writes"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {
@@ -1672,6 +2496,141 @@ def _pilot_signal_action(signal: str, state: str) -> str:
     if state in {"failed", "blocked"}:
         return f"open remediation for {signal}"
     return f"collect {signal} evidence before expansion"
+
+
+def _blocker_owner(blocker: str) -> str:
+    if blocker.startswith("approval_missing:"):
+        return blocker.removeprefix("approval_missing:")
+    if blocker.startswith("dependency_not_ready:"):
+        return "operations"
+    if blocker.startswith("provider:"):
+        return "provider_owner"
+    if blocker.startswith("operations:"):
+        return "incident_owner"
+    return "operations"
+
+
+def _blocker_action(blocker: str) -> str:
+    if blocker.startswith("approval_missing:"):
+        return "record owner approval or hold pilot scope"
+    if blocker.startswith("dependency_not_ready:"):
+        dependency = blocker.removeprefix("dependency_not_ready:")
+        return f"clear, disable, or explicitly hold {dependency}"
+    if blocker.startswith("provider:"):
+        dependency = blocker.removeprefix("provider:")
+        return f"verify or disable {dependency} before start"
+    if blocker.startswith("operations:"):
+        dependency = blocker.removeprefix("operations:")
+        return f"record operations evidence for {dependency}"
+    return "assign owner and close blocker before start"
+
+
+def _operations_area_owner(area: str) -> str:
+    owners = {
+        "incident_review": "incident_owner",
+        "data_quality": "backend",
+        "queue_health": "backend",
+        "admin_workflows": "operations",
+        "teacher_dispatch": "teacher_operations",
+        "support_handoff": "support",
+        "observability": "backend",
+        "release_rollback": "release_manager",
+    }
+    return owners.get(area, "operations")
+
+
+def _v6_access_owner(path: str) -> str:
+    owners = {
+        "admin": "operations",
+        "parent": "support",
+        "student": "support",
+        "teacher_support": "teacher_operations",
+        "provider": "provider_owner",
+        "mobile": "mobile_release_owner",
+        "monitoring": "backend",
+        "deployment": "release_manager",
+    }
+    return owners.get(path, "operations")
+
+
+def _v6_access_next_action(path: str, state: str) -> str:
+    if state in {"available", "not_required"}:
+        return "record owner, timestamp, and request/build id where applicable"
+    if state == "disabled_for_pilot":
+        return "record disabled-pilot copy, fallback, and owner approval"
+    return f"collect approved {path} evidence or mark explicitly disabled for pilot"
+
+
+def _v6_account_surface_owner(surface: str) -> str:
+    if surface in {"checkout_paywall", "paid_access", "subscription_state"}:
+        return "finance_billing_owner"
+    if surface in {"usage_ledger", "quota_display", "entitlement_activation"}:
+        return "backend"
+    if surface == "admin_support_explanations":
+        return "support"
+    return "account_owner"
+
+
+def _v6_surface_next_action(surface: str, state: str) -> str:
+    if state in {"passed", "read_only_verified"}:
+        return "retain request id, account alias, timestamp, and observed state"
+    if state == "disabled_for_pilot":
+        return "publish support-safe disabled-state explanation"
+    return f"run approved smoke or document blocker for {surface}"
+
+
+def _v6_provider_surface_owner(surface: str) -> str:
+    if surface.startswith("support"):
+        return "support"
+    if surface.startswith("teacher"):
+        return "teacher_operations"
+    if "mobile" in surface:
+        return "mobile_release_owner"
+    if surface in {"bi_apm", "ai_provider"}:
+        return "backend"
+    return "provider_owner"
+
+
+def _v6_provider_fallback(surface: str) -> str:
+    fallbacks = {
+        "email_notifications": "manual email or in-app-only communication",
+        "push_notifications": "disable push and use in-app/manual support communication",
+        "realtime_notifications": "fall back to refreshable notification center",
+        "support_crm_handoff": "use internal support queue",
+        "support_queue": "manual support owner assignment",
+        "teacher_dispatch_sla": "manual teacher owner assignment",
+        "mobile_testflight_install": "use approved web path or internal build only",
+        "payment_provider": "manual pilot entitlement without live checkout",
+        "bi_apm": "daily manual dashboard review",
+        "ai_provider": "reviewed deterministic fallback or teacher-supervised flow",
+    }
+    return fallbacks.get(surface, "hold pilot dependency until evidence is current")
+
+
+def _v6_provider_rollback(surface: str) -> str:
+    if "notification" in surface:
+        return "disable outbound delivery and keep support-visible state"
+    if surface == "payment_provider":
+        return "disable live checkout and revert to manual entitlement"
+    if surface == "mobile_testflight_install":
+        return "halt pilot build channel"
+    return "disable pilot dependency and escalate to owner"
+
+
+def _v6_launch_packet_owner(area: str) -> str:
+    owners = {
+        "cohort_scope": "product_owner",
+        "account_aliases": "support",
+        "communication_plan": "support",
+        "consent_state": "operations",
+        "support_staffing": "support",
+        "teacher_owner": "teacher_operations",
+        "launch_room": "incident_owner",
+        "dashboards": "backend",
+        "rollback_authority": "decision_owner",
+        "pause_criteria": "incident_owner",
+    }
+    return owners.get(area, "operations")
 
 
 def _unique(values: list[str]) -> list[str]:

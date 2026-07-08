@@ -1,7 +1,7 @@
 # Requirements: v6.0 Real Evidence Capture And Pilot Start Execution
 
 **Milestone:** v6.0
-**Status:** Planned
+**Status:** Complete
 **Created:** 2026-07-07
 **Prior milestone:** v5.35-v5.39 Local Contract Completion
 
@@ -69,8 +69,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6EVID-01 | Phase 372 | Planned |
-| V6EVID-02 | Phase 373 | Planned |
-| V6EVID-03 | Phase 374 | Planned |
-| V6EVID-04 | Phase 375 | Planned |
-| VERIFY-74 | Phase 376 | Planned |
+| V6EVID-01 | Phase 372 | Complete |
+| V6EVID-02 | Phase 373 | Complete |
+| V6EVID-03 | Phase 374 | Complete |
+| V6EVID-04 | Phase 375 | Complete |
+| VERIFY-74 | Phase 376 | Complete |

@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.0 Real Evidence Capture And Pilot Start Execution (Shipped: 2026-07-08)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added v6 real evidence inventory contracts for admin, parent, student, teacher/support, provider, mobile, monitoring, and deployment access paths.
+- Added account/payment/usage verification smoke contracts covering login, verification, entitlement, checkout/paywall, usage ledger, quota, and admin support explanations.
+- Added notification/support/mobile/provider evidence contracts with explicit pilot disablement, fallback, rollback, and support-copy handling.
+- Added first-cohort launch packet and dry-run readiness contracts.
+- Added `v6_pilot_start_or_blocker_decision_gate`, which defaults to `hold` and allows v6.1 only on `start_limited_pilot`.
+
+---
+
 ## Completed: v5.17 External Provider Activation Smoke And Release Operations
 
 **Status:** Completed local release gate 2026-07-05
@@ -737,37 +751,6 @@ Contract-complete phases:
 - Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
 - Phase 370: Release Rollback And Migration Discipline. (contract complete)
 - Phase 371: Operations Scale Readiness Gate. (contract complete)
-
----
-
-## Planned: v6.0 Real Evidence Capture And Pilot Start Execution
-
-**Status:** Planned
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v6.0-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v6.0-REQUIREMENTS.md`
-**Goal:** Gather current approved real evidence, verify pilot-critical account/payment/usage/verification/notification/support/mobile paths, and run the pilot start gate.
-**Phases:** 5
-
-Function purpose:
-
-- Start v6 as a real evidence execution track, not as a public-launch label.
-- Convert v5 contract outputs into start/hold evidence for a narrow internal pilot.
-
-Implementation strategy:
-
-- Use real existing sessions/accounts or approved secret-backed credential paths.
-- Record redacted metadata only.
-- Keep public launch, paid marketing, broad expansion, and uncontrolled provider writes out of scope.
-
-Planned phases:
-
-- Phase 372: Real Evidence Inventory And Access Readiness. (planned)
-- Phase 373: Account Payment Usage Verification Smoke. (planned)
-- Phase 374: Notification Support Mobile And Provider Evidence. (planned)
-- Phase 375: Pilot Cohort Launch Packet And Dry Run. (planned)
-- Phase 376: v6.0 Pilot Start Or Blocker Decision Gate. (planned)
 
 ---
 
