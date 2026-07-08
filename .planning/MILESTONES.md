@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.3 Learning Outcome And AI Curriculum Quality Sprint (Shipped: 2026-07-08)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added learning outcome evidence review contracts across completion, retry, mastery/progress, weak topics, teacher help, AI review, parent engagement, and support contacts.
+- Added authorized curriculum, exercise, explanation, validation, preview, rollback, analytics, sequencing, and progress-reporting quality contracts.
+- Added AI teacher quality contracts for summaries, explanations, exercise drafts, teacher tools, refusal/fallback, safety review, and provider observability.
+- Added adaptive recommendation and parent progress clarity contracts without exposing internal scoring.
+- Added `v6_3_learning_quality_gate`, which allows v6.4 only when learning quality risks are controlled.
+
+---
+
 ## v6.2 Paid Conversion Usage And Account Reliability Completion (Shipped: 2026-07-08)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -779,34 +793,6 @@ Contract-complete phases:
 - Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
 - Phase 370: Release Rollback And Migration Discipline. (contract complete)
 - Phase 371: Operations Scale Readiness Gate. (contract complete)
-
----
-
-## Planned: v6.3 Learning Outcome And AI Curriculum Quality Sprint
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.3-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.3-REQUIREMENTS.md`
-**Goal:** Improve curriculum, exercises, AI teacher tools, adaptive recommendations, parent progress reporting, and learning outcomes from real evidence.
-**Phases:** 5
-
-Function purpose:
-
-- Make STOA valuable because students learn, not because operations are merely ready.
-- Convert weak-topic, support, teacher, and parent feedback into curriculum and AI quality fixes.
-
-Implementation strategy:
-
-- Prioritize high-frequency learning friction from pilot data.
-- Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
-
-Planned phases:
-
-- Phase 387: Learning Outcome Evidence Review. (planned)
-- Phase 388: Curriculum Exercise And Explanation Quality Fixes. (planned)
-- Phase 389: AI Teacher Summary And Practice Generation Quality Fixes. (planned)
-- Phase 390: Adaptive Recommendation And Parent Progress Clarity. (planned)
-- Phase 391: v6.3 Learning Quality Gate. (planned)
 
 ---
 

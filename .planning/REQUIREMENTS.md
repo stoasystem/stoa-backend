@@ -1,74 +1,74 @@
-# Requirements: v6.2 Paid Conversion Usage And Account Reliability Completion
+# Requirements: v6.3 Learning Outcome And AI Curriculum Quality Sprint
 
-**Milestone:** v6.2
+**Milestone:** v6.3
 **Status:** Completed
 **Created:** 2026-07-07
-**Prior milestone:** v6.1 First Cohort Product Remediation Sprint
+**Prior milestone:** v6.2 Paid Conversion Usage And Account Reliability Completion
 
 ## Purpose
 
-Complete the paid access and account reliability loop for real parents. v6.2 focuses on revenue correctness, usage visibility, verification reliability, and billing support.
+Improve the learning product from real evidence. v6.3 focuses on curriculum, exercises, AI teacher tools, adaptive recommendations, parent progress reporting, and measurable learning outcomes.
 
 ## Requirements
 
-### V6REV-01 Paid Conversion Flow Completion
+### V6LEARN-01 Learning Outcome Evidence Review
 
 Acceptance criteria:
 
-- Package, checkout, payment method, paywall, entitlement activation, renewal, cancellation, failed payment, invoice, and refund states work for approved pilot scope.
-- Parent-facing copy explains access, limits, failures, and next action.
-- Provider events are reconciled without storing secrets or raw provider payloads.
-- Admin/support can explain paid state without private student content.
+- Evidence covers completion, retry, mastery/progress, weak topics, teacher help, AI draft review, parent report engagement, and support contacts.
+- Learning problems are separated from account, payment, notification, and onboarding problems.
+- Top issues are ranked by student impact, frequency, severity, and effort.
+- Evidence remains support-safe and does not expose raw private student content.
 
-### V6REV-02 Usage Ledger And Quota Reliability Completion
-
-Acceptance criteria:
-
-- Usage ledger covers pilot-critical learning actions with idempotent writes.
-- Quota display and blocking behavior match entitlement state.
-- Parent/admin explanations show usage and remaining access clearly.
-- Reconciliation catches missing, duplicate, stale, and manually adjusted records.
-
-### V6REV-03 Verification Lifecycle And Account Recovery Completion
+### V6LEARN-02 Curriculum Exercise And Explanation Quality Fixes
 
 Acceptance criteria:
 
-- Email verification, login-code/passwordless policy, resend/confirm, expiry, recovery, and support override behavior are explicit and tested.
-- Edge states have clear user copy and admin/support status.
-- Verification codes, tokens, and secrets are never exposed in logs or evidence.
-- Role and account state transitions are auditable.
+- Priority lessons, exercises, explanations, and metadata are improved through authorized content workflow.
+- Curriculum edit permissions remain limited to specially authorized operators.
+- Changed content has validation, preview, rollback metadata, and analytics tags.
+- Student/parent flows do not break sequencing or progress reporting.
 
-### V6REV-04 Billing Support And Lifecycle Messaging Completion
-
-Acceptance criteria:
-
-- Billing support workflows cover failed payment, refund, invoice, subscription change, entitlement mismatch, usage dispute, and account recovery.
-- Lifecycle messages cover onboarding, activation, renewal, failed payment, reminder, cancellation, and win-back states where approved.
-- Preferences, locale, delivery failure, and support visibility are handled.
-- Support capacity gates remain explicit before growth expansion.
-
-### VERIFY-76 v6.2 Revenue Reliability Gate
+### V6LEARN-03 AI Teacher Summary And Practice Generation Quality Fixes
 
 Acceptance criteria:
 
-- Decision is controlled growth, hold, or further account/revenue remediation.
-- Decision uses billing drift, entitlement mismatch, usage accuracy, verification success, support load, and parent comprehension evidence.
+- AI summaries, explanations, exercise drafts, and teacher tools have updated evaluation fixtures.
+- Low-quality, unsafe, off-topic, or overconfident outputs are caught by review, refusal, or fallback behavior.
+- Teacher review supports accept, edit, reject, explain, and follow-up workflows efficiently.
+- Cost, latency, fallback, and provider errors remain observable.
+
+### V6LEARN-04 Adaptive Recommendation And Parent Progress Clarity
+
+Acceptance criteria:
+
+- Recommendations account for recent learning, weak topics, completed assignments, content availability, freshness, and duplicate suppression.
+- Parent/student explanations are understandable without exposing internal scoring or prompts.
+- Teachers/admins can correct recommendations and see why they were generated.
+- Parent progress reporting connects activity, outcome, next step, and support recommendation.
+
+### VERIFY-77 v6.3 Learning Quality Gate
+
+Acceptance criteria:
+
+- Decision is scale learning scope, hold automation, continue remediation, or prepare larger cohort.
+- Decision uses learning outcome, parent comprehension, teacher review, AI quality, and support evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v6.3 receives learning/product-quality risks separately from billing/account risks.
+- v6.4 receives remaining reliability and operations risks.
 
 ## Out of Scope
 
-- Paid marketing launch.
-- Multi-market finance/tax expansion beyond approved scope.
-- Enterprise billing automation.
-- Hiding quota or billing limitations from parents.
+- Fully autonomous unreviewed AI tutoring.
+- Giving all teachers curriculum-edit permissions.
+- Unsupported subjects/languages beyond approved rollout.
+- Raw prompt or student-content evidence exposure.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6REV-01 | Phase 382 | Completed |
-| V6REV-02 | Phase 383 | Completed |
-| V6REV-03 | Phase 384 | Completed |
-| V6REV-04 | Phase 385 | Completed |
-| VERIFY-76 | Phase 386 | Completed |
+| V6LEARN-01 | Phase 387 | Completed |
+| V6LEARN-02 | Phase 388 | Completed |
+| V6LEARN-03 | Phase 389 | Completed |
+| V6LEARN-04 | Phase 390 | Completed |
+| VERIFY-77 | Phase 391 | Completed |

@@ -1,102 +1,102 @@
-# Roadmap: v6.2 Paid Conversion Usage And Account Reliability Completion
+# Roadmap: v6.3 Learning Outcome And AI Curriculum Quality Sprint
 
 **Status:** Completed
 **Created:** 2026-07-07
-**Prior milestone:** v6.1 First Cohort Product Remediation Sprint
+**Prior milestone:** v6.2 Paid Conversion Usage And Account Reliability Completion
 
 ## Goal
 
-Complete the business-critical parent account and paid access loop: checkout/paywall, entitlement activation, usage ledger, quota reconciliation, verification, lifecycle messaging, billing support, and self-serve account reliability.
+Improve the core learning outcome from real pilot evidence: curriculum coverage, exercise quality, adaptive recommendations, AI summaries/exercises, teacher review, parent progress reporting, and first-week learning retention.
 
 ## Function Purpose
 
-- Make paid STOA access understandable and reliable for real parents.
-- Remove ambiguity around who has access, what was used, what is blocked, and what support can fix.
-- Prepare controlled growth without billing/account confusion.
+- Make STOA valuable because students learn, not because operations are merely ready.
+- Turn real weak-topic, support, teacher, and parent feedback into curriculum and AI quality fixes.
+- Keep curriculum editing and AI autonomy under explicit authorization/review.
 
 ## Implementation Strategy
 
-- Use v6.0/v6.1 evidence and support tickets as priority input.
-- Reconcile billing provider state, entitlement state, usage ledger state, quota display, and admin/support state.
-- Keep customer-visible copy simple and support-visible.
-- Treat revenue-impacting changes as auditable and reversible.
+- Prioritize high-frequency learning friction from pilot data.
+- Use teacher review and evaluation fixtures for AI-generated summaries, explanations, and exercises.
+- Improve family-visible explanations for recommendations and progress.
+- Add regression tests and analytics tags for changed learning behavior.
 
 ## Phases
 
-- [x] **Phase 382: Paid Conversion Flow Completion** - Finish package, checkout, paywall, entitlement activation, failure, cancellation, renewal, invoice, and refund states for pilot scope.
-- [x] **Phase 383: Usage Ledger And Quota Reliability Completion** - Close usage recording, idempotency, quota display, reconciliation, and parent/admin explanations across learning actions.
-- [x] **Phase 384: Verification Lifecycle And Account Recovery Completion** - Complete email verification, login-code policy, resend/confirm, recovery, and support-visible account status.
-- [x] **Phase 385: Billing Support And Lifecycle Messaging Completion** - Complete support macros, billing operations, lifecycle messages, preferences, failed delivery, and retention reporting.
-- [x] **Phase 386: v6.2 Revenue Reliability Gate** - Decide controlled growth, hold, or further account/revenue remediation.
+- [x] **Phase 387: Learning Outcome Evidence Review** - Analyze completion, retry, weak-topic, help, AI review, parent report, and support evidence.
+- [x] **Phase 388: Curriculum Exercise And Explanation Quality Fixes** - Fill priority curriculum/exercise/explanation gaps with authorized review and rollback metadata.
+- [x] **Phase 389: AI Teacher Summary And Practice Generation Quality Fixes** - Improve AI summaries, explanations, exercise drafts, refusal/fallback, and teacher review efficiency.
+- [x] **Phase 390: Adaptive Recommendation And Parent Progress Clarity** - Improve recommendation freshness, dedupe, assignment explanations, and parent progress reporting.
+- [x] **Phase 391: v6.3 Learning Quality Gate** - Decide scale, hold, or continue learning-quality remediation.
 
 ## Phase Details
 
-### Phase 382: Paid Conversion Flow Completion
+### Phase 387: Learning Outcome Evidence Review
 
-**Goal**: Complete package, checkout, paywall, entitlement activation, renewal, cancellation, failed payment, invoice, and refund states for pilot scope.
-**Depends on**: v6.1 remediation release gate.
-**Requirements**: V6REV-01
+**Goal**: Analyze completion, retry, weak-topic, help, AI review, parent report, and support evidence.
+**Depends on**: v6.2 revenue reliability gate.
+**Requirements**: V6LEARN-01
 **Success Criteria**:
 
-1. Package, checkout, payment method, paywall, entitlement activation, renewal, cancellation, failed payment, invoice, and refund states work for approved pilot scope.
-2. Parent-facing copy explains access, limits, failures, and next action.
-3. Provider events are reconciled without storing secrets or raw provider payloads.
-4. Admin/support can explain paid state without private student content.
+1. Evidence covers completion, retry, mastery/progress, weak topics, teacher help, AI draft review, parent report engagement, and support contacts.
+2. Learning problems are separated from account, payment, notification, and onboarding problems.
+3. Top issues are ranked by student impact, frequency, severity, and effort.
+4. Evidence remains support-safe and does not expose raw private student content.
 
-### Phase 383: Usage Ledger And Quota Reliability Completion
+### Phase 388: Curriculum Exercise And Explanation Quality Fixes
 
-**Goal**: Close usage recording, idempotency, quota display, reconciliation, and parent/admin explanations across learning actions.
-**Depends on**: Phase 382.
-**Requirements**: V6REV-02
+**Goal**: Fill priority curriculum, exercise, explanation, and metadata gaps through authorized content workflow.
+**Depends on**: Phase 387.
+**Requirements**: V6LEARN-02
 **Success Criteria**:
 
-1. Usage ledger covers pilot-critical learning actions with idempotent writes.
-2. Quota display and blocking behavior match entitlement state.
-3. Parent/admin explanations show usage and remaining access clearly.
-4. Reconciliation catches missing, duplicate, stale, and manually adjusted records.
+1. Priority lessons, exercises, explanations, and metadata are improved through authorized content workflow.
+2. Curriculum edit permissions remain limited to specially authorized operators.
+3. Changed content has validation, preview, rollback metadata, and analytics tags.
+4. Student/parent flows do not break sequencing or progress reporting.
 
-### Phase 384: Verification Lifecycle And Account Recovery Completion
+### Phase 389: AI Teacher Summary And Practice Generation Quality Fixes
 
-**Goal**: Complete email verification, login-code/passwordless policy, resend/confirm, recovery, support override, and account-state transitions.
-**Depends on**: Phase 383.
-**Requirements**: V6REV-03
+**Goal**: Improve AI summaries, explanations, exercise drafts, refusal/fallback, and teacher review efficiency.
+**Depends on**: Phase 388.
+**Requirements**: V6LEARN-03
 **Success Criteria**:
 
-1. Email verification, login-code/passwordless policy, resend/confirm, expiry, recovery, and support override behavior are explicit and tested.
-2. Edge states have clear user copy and admin/support status.
-3. Verification codes, tokens, and secrets are never exposed in logs or evidence.
-4. Role and account state transitions are auditable.
+1. AI summaries, explanations, exercise drafts, and teacher tools have updated evaluation fixtures.
+2. Low-quality, unsafe, off-topic, or overconfident outputs are caught by review, refusal, or fallback behavior.
+3. Teacher review supports accept, edit, reject, explain, and follow-up workflows efficiently.
+4. Cost, latency, fallback, and provider errors remain observable.
 
-### Phase 385: Billing Support And Lifecycle Messaging Completion
+### Phase 390: Adaptive Recommendation And Parent Progress Clarity
 
-**Goal**: Complete billing support workflows and approved lifecycle messaging needed before controlled growth.
-**Depends on**: Phase 384.
-**Requirements**: V6REV-04
+**Goal**: Improve recommendation freshness, dedupe, assignment explanations, and parent progress reporting.
+**Depends on**: Phase 389.
+**Requirements**: V6LEARN-04
 **Success Criteria**:
 
-1. Billing support workflows cover failed payment, refund, invoice, subscription change, entitlement mismatch, usage dispute, and account recovery.
-2. Lifecycle messages cover onboarding, activation, renewal, failed payment, reminder, cancellation, and win-back states where approved.
-3. Preferences, locale, delivery failure, and support visibility are handled.
-4. Support capacity gates remain explicit before growth expansion.
+1. Recommendations account for recent learning, weak topics, completed assignments, content availability, freshness, and duplicate suppression.
+2. Parent/student explanations are understandable without exposing internal scoring or prompts.
+3. Teachers/admins can correct recommendations and see why they were generated.
+4. Parent progress reporting connects activity, outcome, next step, and support recommendation.
 
-### Phase 386: v6.2 Revenue Reliability Gate
+### Phase 391: v6.3 Learning Quality Gate
 
-**Goal**: Decide controlled growth, hold, or further account/revenue remediation from current reliability evidence.
-**Depends on**: Phase 385.
-**Requirements**: VERIFY-76
+**Goal**: Decide scale learning scope, hold automation, continue remediation, or prepare larger cohort from learning quality evidence.
+**Depends on**: Phase 390.
+**Requirements**: VERIFY-77
 **Success Criteria**:
 
-1. Decision is controlled growth, hold, or further account/revenue remediation.
-2. Decision uses billing drift, entitlement mismatch, usage accuracy, verification success, support load, and parent comprehension evidence.
+1. Decision is scale learning scope, hold automation, continue remediation, or prepare larger cohort.
+2. Decision uses learning outcome, parent comprehension, teacher review, AI quality, and support evidence.
 3. Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-4. v6.3 receives learning/product-quality risks separately from billing/account risks.
+4. v6.4 receives remaining reliability and operations risks.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6REV-01 | Phase 382 | Completed |
-| V6REV-02 | Phase 383 | Completed |
-| V6REV-03 | Phase 384 | Completed |
-| V6REV-04 | Phase 385 | Completed |
-| VERIFY-76 | Phase 386 | Completed |
+| V6LEARN-01 | Phase 387 | Completed |
+| V6LEARN-02 | Phase 388 | Completed |
+| V6LEARN-03 | Phase 389 | Completed |
+| V6LEARN-04 | Phase 390 | Completed |
+| VERIFY-77 | Phase 391 | Completed |

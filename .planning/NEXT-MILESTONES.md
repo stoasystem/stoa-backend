@@ -1,6 +1,6 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-08 after v6.2 local revenue/account reliability completion
+**Updated:** 2026-07-08 after v6.3 local learning quality completion
 **Mode:** real evidence execution, pilot start, product remediation, revenue reliability, learning quality, and operational scale
 
 ## Current Reality
@@ -9,12 +9,12 @@ Completed local contract baseline:
 
 - v5.30-v5.34 added metadata-only contracts for live pilot approval, real pilot operations, remediation, controlled expansion, public launch, and post-launch operations.
 - v5.35-v5.39 added metadata-only contracts for real pilot start, live operations feedback, revenue conversion, learning quality, and platform/internal operations scale.
-- v6.0-v6.2 added local real-evidence, first-cohort remediation, paid conversion, usage/quota, verification/recovery, billing lifecycle, and revenue reliability gates.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff are recorded as passing in the v6.2 evidence.
+- v6.0-v6.3 added local real-evidence, first-cohort remediation, revenue/account reliability, learning outcome, curriculum quality, AI teacher quality, recommendation clarity, and learning quality gates.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff are recorded as passing in the v6.3 evidence.
 
 Important reality check:
 
-- v5.30-v6.2 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
+- v5.30-v6.3 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
 - Current gates still default to hold or remediation without current approved real evidence.
 - v6 is not a public-launch label. It is the real evidence execution track.
 
@@ -66,7 +66,7 @@ Implementation strategy:
 - Use v6.0/v6.1 evidence and support tickets.
 - Reconcile billing provider state, entitlement state, usage state, quota display, and admin/support state.
 
-## Next: v6.3 Learning Outcome And AI Curriculum Quality Sprint
+## Completed: v6.3 Learning Outcome And AI Curriculum Quality Sprint
 
 Roadmap: `.planning/milestones/v6.3-ROADMAP.md`
 Requirements: `.planning/milestones/v6.3-REQUIREMENTS.md`
@@ -81,7 +81,7 @@ Implementation strategy:
 - Prioritize real weak-topic, support, teacher, and parent feedback.
 - Keep curriculum editing restricted to specially authorized operators and AI automation reviewed or policy-bound.
 
-## Planned: v6.4 Operations Scale Release And Observability Hardening
+## Next: v6.4 Operations Scale Release And Observability Hardening
 
 Roadmap: `.planning/milestones/v6.4-ROADMAP.md`
 Requirements: `.planning/milestones/v6.4-REQUIREMENTS.md`

@@ -269,6 +269,49 @@ V6_BILLING_LIFECYCLE_SURFACES = {
     "cancellation",
     "win_back",
 }
+V6_LEARNING_EVIDENCE_SIGNALS = {
+    "completion",
+    "retry",
+    "mastery_progress",
+    "weak_topics",
+    "teacher_help",
+    "ai_draft_review",
+    "parent_report_engagement",
+    "support_contacts",
+}
+V6_CURRICULUM_QUALITY_SURFACES = {
+    "priority_lessons",
+    "exercise_bank",
+    "explanations",
+    "metadata",
+    "validation",
+    "preview",
+    "rollback",
+    "analytics_tags",
+    "sequencing",
+    "progress_reporting",
+}
+V6_AI_TEACHER_QUALITY_SURFACES = {
+    "summaries",
+    "explanations",
+    "exercise_drafts",
+    "teacher_tools",
+    "refusal_fallback",
+    "safety_review",
+    "cost_latency_observability",
+    "provider_error_observability",
+}
+V6_ADAPTIVE_PROGRESS_SURFACES = {
+    "recent_learning",
+    "weak_topics",
+    "completed_assignments",
+    "content_availability",
+    "freshness",
+    "duplicate_suppression",
+    "explanation_copy",
+    "teacher_admin_correction",
+    "parent_progress_report",
+}
 
 
 @dataclass(frozen=True)
@@ -2619,6 +2662,198 @@ def v6_2_revenue_reliability_gate(
             "verification_success",
             "support_load",
             "parent_comprehension",
+        ],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def learning_outcome_evidence_review(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Review learning outcome evidence without mixing account or billing risks."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for signal in sorted(V6_LEARNING_EVIDENCE_SIGNALS):
+        state = states.get(signal, "missing")
+        if state not in {"reviewed", "accepted_gap"}:
+            blockers.append(signal)
+        rows.append(
+            {
+                "signal": signal,
+                "state": state,
+                "learningRiskOnly": True,
+                "supportSafe": True,
+                "rankingInputs": ["student_impact", "frequency", "severity", "effort"],
+            }
+        )
+    result = {
+        "reviewState": "ready" if not blockers else "blocked",
+        "signals": rows,
+        "blockers": blockers,
+        "accountPaymentNotificationOnboardingSeparated": True,
+        "rawPrivateLearningArtifactsIncluded": False,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def curriculum_exercise_explanation_quality_fixes(
+    states: dict[str, str] | None = None,
+    *,
+    authorized_content_workflow: bool = False,
+) -> dict[str, Any]:
+    """Track authorized curriculum, exercise, explanation, and metadata fixes."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_CURRICULUM_QUALITY_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"improved", "accepted_gap", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "specialOperatorOnly": True,
+                "validationReady": state == "improved",
+                "rollbackMetadataReady": state == "improved",
+                "analyticsTagged": state == "improved",
+            }
+        )
+    if not authorized_content_workflow:
+        blockers.append("authorized_content_workflow")
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "authorizedContentWorkflow": authorized_content_workflow,
+        "curriculumEditPermissionsBroadened": False,
+        "sequencingProtected": "sequencing" not in blockers,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def ai_teacher_summary_practice_quality_fixes(
+    states: dict[str, str] | None = None,
+    *,
+    evaluation_fixtures_updated: bool = False,
+    teacher_review_ready: bool = False,
+) -> dict[str, Any]:
+    """Track AI summary, explanation, exercise draft, and teacher review quality."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_AI_TEACHER_QUALITY_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"covered", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "reviewOrFallbackReady": state == "covered",
+                "providerObservable": surface
+                in {"cost_latency_observability", "provider_error_observability"},
+            }
+        )
+    if not evaluation_fixtures_updated:
+        blockers.append("evaluation_fixtures")
+    if not teacher_review_ready:
+        blockers.append("teacher_review")
+    result = {
+        "qualityState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "evaluationFixturesUpdated": evaluation_fixtures_updated,
+        "teacherReviewReady": teacher_review_ready,
+        "teacherReviewModes": ["accept", "edit", "reject", "explain", "follow_up"],
+        "unreviewedAutonomyExpanded": False,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def adaptive_recommendation_parent_progress_clarity(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track recommendation freshness, dedupe, correction, and progress clarity."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_ADAPTIVE_PROGRESS_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"improved", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "internalScoringExposed": False,
+                "teacherAdminCorrectionReady": surface == "teacher_admin_correction"
+                and state == "improved",
+                "familyExplanationReady": surface
+                in {"explanation_copy", "parent_progress_report"}
+                and state == "improved",
+            }
+        )
+    result = {
+        "clarityState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "parentProgressConnects": ["activity", "outcome", "next_step", "support_recommendation"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v6_3_learning_quality_gate(
+    *,
+    outcome_review: dict[str, Any] | None = None,
+    curriculum_fixes: dict[str, Any] | None = None,
+    ai_quality: dict[str, Any] | None = None,
+    adaptive_progress: dict[str, Any] | None = None,
+    automation_hold: bool = False,
+) -> dict[str, Any]:
+    """Close v6.3 with learning scale, automation hold, or remediation."""
+    outcome_review = outcome_review or learning_outcome_evidence_review()
+    curriculum_fixes = curriculum_fixes or curriculum_exercise_explanation_quality_fixes()
+    ai_quality = ai_quality or ai_teacher_summary_practice_quality_fixes()
+    adaptive_progress = adaptive_progress or adaptive_recommendation_parent_progress_clarity()
+    blockers = _unique(
+        [
+            *[f"outcome:{blocker}" for blocker in outcome_review.get("blockers", [])],
+            *[f"curriculum:{blocker}" for blocker in curriculum_fixes.get("blockers", [])],
+            *[f"ai:{blocker}" for blocker in ai_quality.get("blockers", [])],
+            *[f"adaptive:{blocker}" for blocker in adaptive_progress.get("blockers", [])],
+        ]
+    )
+    if automation_hold:
+        decision = "hold_automation"
+    elif not blockers:
+        decision = "prepare_larger_cohort"
+    else:
+        decision = "continue_learning_quality_remediation"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v6_4Allowed": decision == "prepare_larger_cohort",
+        "automationHold": automation_hold,
+        "largerCohortApproved": False,
+        "remainingRisksForV6_4": ["observability", "release_discipline", "incident_operations"],
+        "evidenceInputs": [
+            "learning_outcome",
+            "parent_comprehension",
+            "teacher_review",
+            "ai_quality",
+            "support_evidence",
         ],
         "privacy": _privacy_contract(),
     }

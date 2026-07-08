@@ -660,3 +660,103 @@ def test_v62_revenue_reliability_gate_allows_v63_after_account_risks_close():
     assert ready["decision"] == "controlled_growth"
     assert ready["v6_3Allowed"] is True
     assert ready["learningRisksSeparated"] is True
+
+
+def test_v63_learning_outcome_review_separates_learning_from_account_risks():
+    default_review = production_pilot_service.learning_outcome_evidence_review()
+    assert default_review["reviewState"] == "blocked"
+    assert "completion" in default_review["blockers"]
+
+    states = {
+        signal: "reviewed"
+        for signal in production_pilot_service.V6_LEARNING_EVIDENCE_SIGNALS
+    }
+    ready = production_pilot_service.learning_outcome_evidence_review(states)
+    assert ready["reviewState"] == "ready"
+    assert ready["accountPaymentNotificationOnboardingSeparated"] is True
+    assert ready["rawPrivateLearningArtifactsIncluded"] is False
+    assert all(row["supportSafe"] for row in ready["signals"])
+
+
+def test_v63_curriculum_quality_fixes_require_authorized_workflow():
+    default_fixes = production_pilot_service.curriculum_exercise_explanation_quality_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "authorized_content_workflow" in default_fixes["blockers"]
+
+    states = {
+        surface: "improved"
+        for surface in production_pilot_service.V6_CURRICULUM_QUALITY_SURFACES
+    }
+    ready = production_pilot_service.curriculum_exercise_explanation_quality_fixes(
+        states,
+        authorized_content_workflow=True,
+    )
+    assert ready["fixState"] == "ready"
+    assert ready["curriculumEditPermissionsBroadened"] is False
+    assert all(row["specialOperatorOnly"] for row in ready["surfaces"])
+
+
+def test_v63_ai_teacher_quality_fixes_require_evals_and_review():
+    default_quality = production_pilot_service.ai_teacher_summary_practice_quality_fixes()
+    assert default_quality["qualityState"] == "blocked"
+    assert "evaluation_fixtures" in default_quality["blockers"]
+    assert "teacher_review" in default_quality["blockers"]
+
+    states = {
+        surface: "covered"
+        for surface in production_pilot_service.V6_AI_TEACHER_QUALITY_SURFACES
+    }
+    ready = production_pilot_service.ai_teacher_summary_practice_quality_fixes(
+        states,
+        evaluation_fixtures_updated=True,
+        teacher_review_ready=True,
+    )
+    assert ready["qualityState"] == "ready"
+    assert {"accept", "edit", "reject", "explain", "follow_up"}.issubset(
+        ready["teacherReviewModes"]
+    )
+    assert ready["unreviewedAutonomyExpanded"] is False
+
+
+def test_v63_adaptive_recommendation_parent_progress_clarity_is_explainable():
+    default_clarity = production_pilot_service.adaptive_recommendation_parent_progress_clarity()
+    assert default_clarity["clarityState"] == "blocked"
+    assert "duplicate_suppression" in default_clarity["blockers"]
+
+    states = {
+        surface: "improved"
+        for surface in production_pilot_service.V6_ADAPTIVE_PROGRESS_SURFACES
+    }
+    ready = production_pilot_service.adaptive_recommendation_parent_progress_clarity(states)
+    assert ready["clarityState"] == "ready"
+    assert {"activity", "outcome", "next_step", "support_recommendation"}.issubset(
+        ready["parentProgressConnects"]
+    )
+    assert all(row["internalScoringExposed"] is False for row in ready["surfaces"])
+
+
+def test_v63_learning_quality_gate_allows_v64_after_learning_risks_close():
+    default_gate = production_pilot_service.v6_3_learning_quality_gate()
+    assert default_gate["decision"] == "continue_learning_quality_remediation"
+    assert default_gate["v6_4Allowed"] is False
+    assert any(blocker.startswith("outcome:") for blocker in default_gate["blockers"])
+
+    hold = production_pilot_service.v6_3_learning_quality_gate(
+        outcome_review={"blockers": []},
+        curriculum_fixes={"blockers": []},
+        ai_quality={"blockers": []},
+        adaptive_progress={"blockers": []},
+        automation_hold=True,
+    )
+    assert hold["decision"] == "hold_automation"
+    assert hold["v6_4Allowed"] is False
+
+    ready = production_pilot_service.v6_3_learning_quality_gate(
+        outcome_review={"blockers": []},
+        curriculum_fixes={"blockers": []},
+        ai_quality={"blockers": []},
+        adaptive_progress={"blockers": []},
+    )
+    assert ready["decision"] == "prepare_larger_cohort"
+    assert ready["v6_4Allowed"] is True
+    assert ready["largerCohortApproved"] is False
