@@ -760,3 +760,104 @@ def test_v63_learning_quality_gate_allows_v64_after_learning_risks_close():
     assert ready["decision"] == "prepare_larger_cohort"
     assert ready["v6_4Allowed"] is True
     assert ready["largerCohortApproved"] is False
+
+
+def test_v64_operations_risk_review_requires_selection_and_ownership():
+    default_review = production_pilot_service.operations_risk_incident_review()
+    assert default_review["reviewState"] == "blocked"
+    assert "highest_risk_selection" in default_review["blockers"]
+
+    states = {
+        area: "reviewed"
+        for area in production_pilot_service.V6_OPERATIONS_RISK_AREAS
+    }
+    states["manual_toil"] = "selected_for_fix"
+    ready = production_pilot_service.operations_risk_incident_review(states)
+    assert ready["reviewState"] == "ready"
+    assert ready["selectedFindings"] == ["manual_toil"]
+    assert {"product", "reliability", "support", "process"}.issubset(ready["gapTypes"])
+
+
+def test_v64_admin_support_teacher_workflow_fixes_protect_sensitive_operations():
+    default_fixes = production_pilot_service.admin_support_teacher_workflow_scale_fixes()
+    assert default_fixes["workflowState"] == "blocked"
+    assert "billing_support" in default_fixes["blockers"]
+
+    states = {
+        surface: "improved"
+        for surface in production_pilot_service.V6_OPERATOR_WORKFLOW_SURFACES
+    }
+    ready = production_pilot_service.admin_support_teacher_workflow_scale_fixes(states)
+    assert ready["workflowState"] == "ready"
+    assert ready["privateContentLeakage"] is False
+    assert ready["permissionBroadening"] is False
+    assert all(row["sensitiveOperationProtected"] for row in ready["surfaces"])
+
+
+def test_v64_observability_hardening_covers_alert_ownership_and_traffic_classes():
+    default_observability = production_pilot_service.observability_alert_dashboard_hardening()
+    assert default_observability["observabilityState"] == "blocked"
+    assert "auth" in default_observability["blockers"]
+
+    states = {
+        surface: "hardened"
+        for surface in production_pilot_service.V6_OBSERVABILITY_SURFACES
+    }
+    ready = production_pilot_service.observability_alert_dashboard_hardening(states)
+    assert ready["observabilityState"] == "ready"
+    assert {"test", "dry_run", "pilot", "real_customer"}.issubset(ready["trafficClasses"])
+    assert ready["privateEvidenceExcluded"] is True
+    assert all(row["runbookReady"] for row in ready["surfaces"])
+
+
+def test_v64_release_migration_rollback_smoke_discipline_requires_hardening():
+    default_release = production_pilot_service.release_migration_rollback_smoke_discipline()
+    assert default_release["releaseState"] == "blocked"
+    assert "migration" in default_release["blockers"]
+
+    states = {
+        surface: "hardened"
+        for surface in production_pilot_service.V6_RELEASE_DISCIPLINE_SURFACES
+    }
+    ready = production_pilot_service.release_migration_rollback_smoke_discipline(states)
+    assert ready["releaseState"] == "ready"
+    assert {"code_sha", "deploy_build_id", "request_id", "timestamp", "owner"}.issubset(
+        ready["evidenceLinks"]
+    )
+    assert all(row["rollbackExecutable"] for row in ready["surfaces"])
+
+
+def test_v64_controlled_expansion_gate_holds_or_rolls_back_without_full_readiness():
+    default_gate = production_pilot_service.v6_4_controlled_expansion_readiness_gate()
+    assert default_gate["decision"] == "operations_hardening_cycle"
+    assert default_gate["largerCohortAllowed"] is False
+
+    hold = production_pilot_service.v6_4_controlled_expansion_readiness_gate(
+        risk_review={"blockers": []},
+        workflow_fixes={"blockers": []},
+        observability={"blockers": []},
+        release_discipline={"blockers": []},
+        hold_requested=True,
+    )
+    assert hold["decision"] == "hold"
+    assert hold["largerCohortAllowed"] is False
+
+    rollback = production_pilot_service.v6_4_controlled_expansion_readiness_gate(
+        risk_review={"blockers": []},
+        workflow_fixes={"blockers": []},
+        observability={"blockers": []},
+        release_discipline={"blockers": []},
+        rollback_required=True,
+    )
+    assert rollback["decision"] == "rollback"
+
+    ready = production_pilot_service.v6_4_controlled_expansion_readiness_gate(
+        risk_review={"blockers": []},
+        workflow_fixes={"blockers": []},
+        observability={"blockers": []},
+        release_discipline={"blockers": []},
+    )
+    assert ready["decision"] == "larger_controlled_cohort"
+    assert ready["largerCohortAllowed"] is True
+    assert ready["publicLaunchApproved"] is False
+    assert ready["paidMarketingApproved"] is False

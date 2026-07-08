@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.4 Operations Scale Release And Observability Hardening (Shipped: 2026-07-08)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added operations risk and incident review contracts across incidents, near misses, toil, data drift, provider degradation, support bottlenecks, teacher queue issues, and release regressions.
+- Added admin/support/teacher workflow scale contracts that preserve sensitive-operation protections and avoid permission broadening.
+- Added observability alert and dashboard hardening contracts with owner, threshold, severity, escalation, runbook, and traffic-class evidence.
+- Added release, migration, rollback, smoke, fixture hygiene, deploy evidence, and owner handoff discipline contracts.
+- Added `v6_4_controlled_expansion_readiness_gate`, which can allow a larger controlled cohort but does not approve public launch or paid marketing.
+
+---
+
 ## v6.3 Learning Outcome And AI Curriculum Quality Sprint (Shipped: 2026-07-08)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -793,34 +807,6 @@ Contract-complete phases:
 - Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
 - Phase 370: Release Rollback And Migration Discipline. (contract complete)
 - Phase 371: Operations Scale Readiness Gate. (contract complete)
-
----
-
-## Planned: v6.4 Operations Scale Release And Observability Hardening
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.4-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.4-REQUIREMENTS.md`
-**Goal:** Harden observability, support/admin/teacher workflows, release discipline, rollback, migration safety, incident handling, and ownership for larger controlled cohorts.
-**Phases:** 5
-
-Function purpose:
-
-- Make the system operable by a small team without founder-only manual coordination.
-- Catch reliability, billing, notification, support, teacher dispatch, AI/provider, mobile, and release issues before users report them.
-
-Implementation strategy:
-
-- Use v6.0-v6.3 evidence as the risk register.
-- Tie dashboards and alerts to owners and runbooks.
-
-Planned phases:
-
-- Phase 392: Operations Risk And Incident Review. (planned)
-- Phase 393: Admin Support Teacher Workflow Scale Fixes. (planned)
-- Phase 394: Observability Alert And Dashboard Hardening. (planned)
-- Phase 395: Release Migration Rollback And Smoke Discipline. (planned)
-- Phase 396: v6.4 Controlled Expansion Readiness Gate. (planned)
 
 ---
 

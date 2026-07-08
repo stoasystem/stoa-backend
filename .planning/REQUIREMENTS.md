@@ -1,74 +1,74 @@
-# Requirements: v6.3 Learning Outcome And AI Curriculum Quality Sprint
+# Requirements: v6.4 Operations Scale Release And Observability Hardening
 
-**Milestone:** v6.3
+**Milestone:** v6.4
 **Status:** Completed
 **Created:** 2026-07-07
-**Prior milestone:** v6.2 Paid Conversion Usage And Account Reliability Completion
+**Prior milestone:** v6.3 Learning Outcome And AI Curriculum Quality Sprint
 
 ## Purpose
 
-Improve the learning product from real evidence. v6.3 focuses on curriculum, exercises, AI teacher tools, adaptive recommendations, parent progress reporting, and measurable learning outcomes.
+Harden STOA for a larger controlled cohort. v6.4 focuses on observability, release discipline, support/admin/teacher workflows, incident handling, rollback, migration safety, and operational ownership.
 
 ## Requirements
 
-### V6LEARN-01 Learning Outcome Evidence Review
+### V6OPS-01 Operations Risk And Incident Review
 
 Acceptance criteria:
 
-- Evidence covers completion, retry, mastery/progress, weak topics, teacher help, AI draft review, parent report engagement, and support contacts.
-- Learning problems are separated from account, payment, notification, and onboarding problems.
-- Top issues are ranked by student impact, frequency, severity, and effort.
-- Evidence remains support-safe and does not expose raw private student content.
+- Recent incidents, near misses, manual toil, data drift, provider degradation, support bottlenecks, teacher queue issues, and release regressions are reviewed.
+- Each issue has severity, owner, user impact, recurrence risk, detection path, and remediation status.
+- Product, reliability, support, and process gaps are separated.
+- Highest-risk findings are selected for implementation.
 
-### V6LEARN-02 Curriculum Exercise And Explanation Quality Fixes
-
-Acceptance criteria:
-
-- Priority lessons, exercises, explanations, and metadata are improved through authorized content workflow.
-- Curriculum edit permissions remain limited to specially authorized operators.
-- Changed content has validation, preview, rollback metadata, and analytics tags.
-- Student/parent flows do not break sequencing or progress reporting.
-
-### V6LEARN-03 AI Teacher Summary And Practice Generation Quality Fixes
+### V6OPS-02 Admin Support Teacher Workflow Scale Fixes
 
 Acceptance criteria:
 
-- AI summaries, explanations, exercise drafts, and teacher tools have updated evaluation fixtures.
-- Low-quality, unsafe, off-topic, or overconfident outputs are caught by review, refusal, or fallback behavior.
-- Teacher review supports accept, edit, reject, explain, and follow-up workflows efficiently.
-- Cost, latency, fallback, and provider errors remain observable.
+- Account operations, billing support, teacher dispatch, support handoff, content operations, curriculum QA, and escalation workflows are improved based on real bottlenecks.
+- Sensitive operations remain admin-only or specially authorized.
+- Operators can see state, owner, next action, and escalation path without private content leakage.
+- Manual work is reduced where it causes delays or errors.
 
-### V6LEARN-04 Adaptive Recommendation And Parent Progress Clarity
-
-Acceptance criteria:
-
-- Recommendations account for recent learning, weak topics, completed assignments, content availability, freshness, and duplicate suppression.
-- Parent/student explanations are understandable without exposing internal scoring or prompts.
-- Teachers/admins can correct recommendations and see why they were generated.
-- Parent progress reporting connects activity, outcome, next step, and support recommendation.
-
-### VERIFY-77 v6.3 Learning Quality Gate
+### V6OPS-03 Observability Alert And Dashboard Hardening
 
 Acceptance criteria:
 
-- Decision is scale learning scope, hold automation, continue remediation, or prepare larger cohort.
-- Decision uses learning outcome, parent comprehension, teacher review, AI quality, and support evidence.
+- Dashboards cover auth, entitlement, usage, billing, notification, support SLA, teacher dispatch, AI/provider health, mobile, curriculum/content, incidents, and revenue.
+- Alerts have owner, threshold, severity, escalation path, false-positive review, and runbook link.
+- Evidence distinguishes test, dry-run, pilot, and real customer traffic.
+- Dashboards and alert evidence exclude secrets, raw prompts, raw student content, private object keys, and raw provider payloads.
+
+### V6OPS-04 Release Migration Rollback And Smoke Discipline
+
+Acceptance criteria:
+
+- Backend, frontend, mobile, provider, migration, and configuration changes have a current release checklist.
+- High-risk changes have staged rollout, feature flag, rollback, and smoke coverage.
+- Release evidence links code SHA, deploy/build IDs, request IDs where applicable, timestamp, and owner.
+- Rollback and recovery instructions are executable by the assigned operator.
+
+### VERIFY-78 v6.4 Controlled Expansion Readiness Gate
+
+Acceptance criteria:
+
+- Decision is larger controlled cohort, hold, rollback, or another hardening cycle.
+- Decision uses incident, support, teacher, billing, data quality, mobile, provider, learning, and release evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v6.4 receives remaining reliability and operations risks.
+- Next version recommendation is based on real bottlenecks and customer outcomes.
 
 ## Out of Scope
 
-- Fully autonomous unreviewed AI tutoring.
-- Giving all teachers curriculum-edit permissions.
-- Unsupported subjects/languages beyond approved rollout.
-- Raw prompt or student-content evidence exposure.
+- Broad public launch claims.
+- Paid marketing campaign launch.
+- Broad enterprise compliance programs not needed for the next controlled cohort.
+- Permission broadening for sensitive admin/content operations.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6LEARN-01 | Phase 387 | Completed |
-| V6LEARN-02 | Phase 388 | Completed |
-| V6LEARN-03 | Phase 389 | Completed |
-| V6LEARN-04 | Phase 390 | Completed |
-| VERIFY-77 | Phase 391 | Completed |
+| V6OPS-01 | Phase 392 | Completed |
+| V6OPS-02 | Phase 393 | Completed |
+| V6OPS-03 | Phase 394 | Completed |
+| V6OPS-04 | Phase 395 | Completed |
+| VERIFY-78 | Phase 396 | Completed |

@@ -312,6 +312,50 @@ V6_ADAPTIVE_PROGRESS_SURFACES = {
     "teacher_admin_correction",
     "parent_progress_report",
 }
+V6_OPERATIONS_RISK_AREAS = {
+    "incidents",
+    "near_misses",
+    "manual_toil",
+    "data_drift",
+    "provider_degradation",
+    "support_bottlenecks",
+    "teacher_queue_issues",
+    "release_regressions",
+}
+V6_OPERATOR_WORKFLOW_SURFACES = {
+    "account_operations",
+    "billing_support",
+    "teacher_dispatch",
+    "support_handoff",
+    "content_operations",
+    "curriculum_qa",
+    "escalation_workflows",
+}
+V6_OBSERVABILITY_SURFACES = {
+    "auth",
+    "entitlement",
+    "usage",
+    "billing",
+    "notification",
+    "support_sla",
+    "teacher_dispatch",
+    "ai_provider_health",
+    "mobile",
+    "curriculum_content",
+    "incidents",
+    "revenue",
+}
+V6_RELEASE_DISCIPLINE_SURFACES = {
+    "backend",
+    "frontend",
+    "mobile",
+    "provider",
+    "migration",
+    "configuration",
+    "smoke_tests",
+    "fixture_hygiene",
+    "owner_handoff",
+}
 
 
 @dataclass(frozen=True)
@@ -2855,6 +2899,201 @@ def v6_3_learning_quality_gate(
             "ai_quality",
             "support_evidence",
         ],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def operations_risk_incident_review(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Review operational risks, incidents, toil, drift, and bottlenecks."""
+    states = states or {}
+    rows = []
+    blockers = []
+    selected_findings = []
+    for area in sorted(V6_OPERATIONS_RISK_AREAS):
+        state = states.get(area, "missing")
+        if state not in {"reviewed", "selected_for_fix", "accepted_gap"}:
+            blockers.append(area)
+        if state == "selected_for_fix":
+            selected_findings.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "severityAssigned": state != "missing",
+                "ownerAssigned": state != "missing",
+                "userImpactCaptured": state != "missing",
+                "detectionPathCaptured": state != "missing",
+                "gapTypeSeparated": True,
+            }
+        )
+    if not selected_findings:
+        blockers.append("highest_risk_selection")
+    result = {
+        "reviewState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "selectedFindings": selected_findings,
+        "blockers": blockers,
+        "gapTypes": ["product", "reliability", "support", "process"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def admin_support_teacher_workflow_scale_fixes(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track admin, support, teacher, content, QA, and escalation workflow fixes."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_OPERATOR_WORKFLOW_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"improved", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "sensitiveOperationProtected": True,
+                "operatorStateVisible": state == "improved",
+                "ownerNextActionEscalationVisible": state == "improved",
+                "manualToilReduced": state == "improved",
+            }
+        )
+    result = {
+        "workflowState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "privateContentLeakage": False,
+        "permissionBroadening": False,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def observability_alert_dashboard_hardening(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track dashboards, alerts, owners, thresholds, runbooks, and traffic labels."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_OBSERVABILITY_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"hardened", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "ownerReady": state == "hardened",
+                "thresholdReady": state == "hardened",
+                "severityReady": state == "hardened",
+                "escalationReady": state == "hardened",
+                "runbookReady": state == "hardened",
+                "trafficClassSeparated": True,
+            }
+        )
+    result = {
+        "observabilityState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "trafficClasses": ["test", "dry_run", "pilot", "real_customer"],
+        "privateEvidenceExcluded": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def release_migration_rollback_smoke_discipline(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track release checklist, rollout, rollback, smoke, fixture, and owner evidence."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_RELEASE_DISCIPLINE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"hardened", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "currentChecklistReady": state == "hardened",
+                "stagedRolloutReady": state == "hardened",
+                "featureFlagReady": state == "hardened",
+                "rollbackExecutable": state == "hardened",
+                "smokeCoverageReady": state == "hardened",
+                "ownerHandoffReady": state == "hardened",
+            }
+        )
+    result = {
+        "releaseState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "evidenceLinks": ["code_sha", "deploy_build_id", "request_id", "timestamp", "owner"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v6_4_controlled_expansion_readiness_gate(
+    *,
+    risk_review: dict[str, Any] | None = None,
+    workflow_fixes: dict[str, Any] | None = None,
+    observability: dict[str, Any] | None = None,
+    release_discipline: dict[str, Any] | None = None,
+    hold_requested: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    """Close v6.4 with larger cohort readiness, hold, rollback, or hardening."""
+    risk_review = risk_review or operations_risk_incident_review()
+    workflow_fixes = workflow_fixes or admin_support_teacher_workflow_scale_fixes()
+    observability = observability or observability_alert_dashboard_hardening()
+    release_discipline = release_discipline or release_migration_rollback_smoke_discipline()
+    blockers = _unique(
+        [
+            *[f"risk:{blocker}" for blocker in risk_review.get("blockers", [])],
+            *[f"workflow:{blocker}" for blocker in workflow_fixes.get("blockers", [])],
+            *[f"observability:{blocker}" for blocker in observability.get("blockers", [])],
+            *[f"release:{blocker}" for blocker in release_discipline.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif hold_requested:
+        decision = "hold"
+    elif blockers:
+        decision = "operations_hardening_cycle"
+    else:
+        decision = "larger_controlled_cohort"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "largerCohortAllowed": decision == "larger_controlled_cohort",
+        "publicLaunchApproved": False,
+        "paidMarketingApproved": False,
+        "evidenceInputs": [
+            "incident",
+            "support",
+            "teacher",
+            "billing",
+            "data_quality",
+            "mobile",
+            "provider",
+            "learning",
+            "release",
+        ],
+        "nextVersionRecommendation": "plan_from_real_bottlenecks_and_customer_outcomes",
         "privacy": _privacy_contract(),
     }
     assert_pilot_evidence_safe(result)

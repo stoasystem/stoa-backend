@@ -132,6 +132,8 @@ The v6.2 milestone is complete locally. It adds paid conversion, usage/quota rel
 
 The v6.3 milestone is complete locally. It adds learning outcome evidence review, authorized curriculum/exercise/explanation fixes, AI teacher quality fixes, adaptive recommendation and parent progress clarity, and a learning quality gate. v6.4 receives remaining observability, release discipline, and incident operations risks.
 
+The v6.4 milestone is complete locally. It adds operations risk review, admin/support/teacher workflow scale fixes, observability and alert hardening, release/migration/rollback/smoke discipline, and a controlled expansion readiness gate. Larger controlled cohort readiness remains local-contract readiness only; public launch and paid marketing remain unapproved.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -139,10 +141,10 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v6.3 Learning Outcome And AI Curriculum Quality Sprint on 2026-07-08 (local learning quality contracts; default remediation/hold)
+**Latest completed milestone:** v6.4 Operations Scale Release And Observability Hardening on 2026-07-08 (local operations scale contracts; public launch and paid marketing unapproved)
 **Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
-**Active milestone:** none — awaiting v6.4 start
-**Next planned milestones:** v6.4 Operations Scale Release And Observability Hardening.
+**Active milestone:** none — v6.0-v6.4 sequence complete locally
+**Next planned milestones:** define from current real bottlenecks and customer outcomes.
 
 ## Completed Milestone: v6.0 Real Evidence Capture And Pilot Start Execution
 
@@ -1112,7 +1114,7 @@ Known current resources:
 | Plan v6.1 first cohort product remediation sprint | Real account/payment/usage/login/notification/support/mobile/learning evidence should drive shipped fixes before expansion | Complete locally; real cohort/remediation gated by approved evidence |
 | Plan v6.2 paid conversion usage and account reliability completion | Paid access, usage ledger, quota, verification, lifecycle, and billing support must be reliable before controlled growth | Complete locally; controlled growth gated by current evidence and support capacity |
 | Plan v6.3 learning outcome and AI curriculum quality sprint | Learning outcome is the core product value; curriculum, exercises, AI tools, recommendations, and progress reporting need real-evidence quality work | Complete locally; larger cohort prep gated by current learning quality evidence |
-| Plan v6.4 operations scale release and observability hardening | Larger cohorts require repeatable observability, support/admin/teacher workflows, release discipline, rollback, and incident ownership | Planned |
+| Plan v6.4 operations scale release and observability hardening | Larger cohorts require repeatable observability, support/admin/teacher workflows, release discipline, rollback, and incident ownership | Complete locally; public launch and paid marketing remain unapproved |
 
 ## Evolution
 
