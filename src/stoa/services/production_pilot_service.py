@@ -223,6 +223,52 @@ V6_LEARNING_MOBILE_FIX_SURFACES = {
     "parent_progress_view",
     "mobile_install_access",
 }
+V6_PAID_CONVERSION_SURFACES = {
+    "package",
+    "checkout",
+    "payment_method",
+    "paywall",
+    "entitlement_activation",
+    "renewal",
+    "cancellation",
+    "failed_payment",
+    "invoice",
+    "refund",
+}
+V6_USAGE_QUOTA_SURFACES = {
+    "question_submission",
+    "chat_message",
+    "teacher_help",
+    "practice_action",
+    "assignment_action",
+    "generation_action",
+    "quota_display",
+    "quota_block",
+    "reconciliation",
+}
+V6_VERIFICATION_RECOVERY_SURFACES = {
+    "email_verification",
+    "login_code_policy",
+    "resend_confirm",
+    "expiry",
+    "account_recovery",
+    "support_override",
+    "role_transition",
+}
+V6_BILLING_LIFECYCLE_SURFACES = {
+    "failed_payment",
+    "refund",
+    "invoice",
+    "subscription_change",
+    "entitlement_mismatch",
+    "usage_dispute",
+    "onboarding",
+    "activation",
+    "renewal",
+    "reminder",
+    "cancellation",
+    "win_back",
+}
 
 
 @dataclass(frozen=True)
@@ -2409,6 +2455,171 @@ def v6_1_remediation_release_gate(
         "v6_2Allowed": decision == "continue_pilot",
         "releaseEvidence": ["focused_tests", "operator_notes", "user_support_copy"],
         "nextAction": "start_v6_2" if decision == "continue_pilot" else "execute_remaining_blockers",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def paid_conversion_flow_completion(states: dict[str, str] | None = None) -> dict[str, Any]:
+    """Complete parent paid conversion and entitlement-facing states for pilot scope."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_PAID_CONVERSION_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"working", "support_ready", "disabled_for_pilot"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "parentCopyReady": state in {"working", "disabled_for_pilot"},
+                "providerPayloadStored": False,
+                "supportExplainable": state != "missing",
+            }
+        )
+    result = {
+        "completionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "revenueImpactAuditable": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def usage_ledger_quota_reliability_completion(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Close usage recording, idempotency, quota display, and reconciliation."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_USAGE_QUOTA_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"covered", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "idempotent": surface not in {"quota_display", "quota_block"} and state == "covered",
+                "parentAdminExplanation": state == "covered",
+            }
+        )
+    result = {
+        "reliabilityState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "reconciliationCovers": ["missing", "duplicate", "stale", "manual_adjusted"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def verification_lifecycle_account_recovery_completion(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Complete verification, recovery, support override, and role transition states."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_VERIFICATION_RECOVERY_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"tested", "explicitly_deferred"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "userCopyReady": state == "tested",
+                "supportStatusReady": state in {"tested", "explicitly_deferred"},
+                "privateMaterialExposed": False,
+                "auditable": state == "tested",
+            }
+        )
+    result = {
+        "completionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def billing_support_lifecycle_messaging_completion(
+    states: dict[str, str] | None = None,
+    *,
+    support_capacity_ready: bool = False,
+) -> dict[str, Any]:
+    """Complete billing support workflows and approved lifecycle messaging."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_BILLING_LIFECYCLE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"ready", "not_approved", "disabled_for_pilot"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "preferencesRespected": surface
+                in {"onboarding", "activation", "renewal", "reminder", "win_back"},
+                "supportVisible": True,
+            }
+        )
+    if not support_capacity_ready:
+        blockers.append("support_capacity")
+    result = {
+        "completionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "supportCapacityReady": support_capacity_ready,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v6_2_revenue_reliability_gate(
+    *,
+    paid_conversion: dict[str, Any] | None = None,
+    usage_quota: dict[str, Any] | None = None,
+    verification: dict[str, Any] | None = None,
+    billing_lifecycle: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Decide controlled growth, hold, or further account/revenue remediation."""
+    paid_conversion = paid_conversion or paid_conversion_flow_completion()
+    usage_quota = usage_quota or usage_ledger_quota_reliability_completion()
+    verification = verification or verification_lifecycle_account_recovery_completion()
+    billing_lifecycle = billing_lifecycle or billing_support_lifecycle_messaging_completion()
+    blockers = _unique(
+        [
+            *[f"paid:{blocker}" for blocker in paid_conversion.get("blockers", [])],
+            *[f"usage:{blocker}" for blocker in usage_quota.get("blockers", [])],
+            *[f"verification:{blocker}" for blocker in verification.get("blockers", [])],
+            *[f"billing:{blocker}" for blocker in billing_lifecycle.get("blockers", [])],
+        ]
+    )
+    decision = "controlled_growth" if not blockers else "hold"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v6_3Allowed": decision == "controlled_growth",
+        "learningRisksSeparated": True,
+        "evidenceInputs": [
+            "billing_drift",
+            "entitlement_mismatch",
+            "usage_accuracy",
+            "verification_success",
+            "support_load",
+            "parent_comprehension",
+        ],
         "privacy": _privacy_contract(),
     }
     assert_pilot_evidence_safe(result)

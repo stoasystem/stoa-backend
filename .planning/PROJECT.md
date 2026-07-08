@@ -126,6 +126,10 @@ The v5.35-v5.39 real pilot start, live operations feedback, revenue conversion, 
 
 The v6.0 milestone is complete locally. It adds current real evidence inventory, account/payment/usage smoke, notification/support/mobile/provider evidence, launch packet dry-run, and a pilot start decision gate. The local default remains `hold`; real pilot start still requires current approved external evidence.
 
+The v6.1 milestone is complete locally. It adds first-cohort/blocker remediation contracts for account/login/verification/role fixes, entitlement/usage/notification/support fixes, first-learning-action/mobile friction fixes, and a remediation release gate.
+
+The v6.2 milestone is complete locally. It adds paid conversion, usage/quota reliability, verification/recovery, billing lifecycle support, and revenue reliability gate contracts. v6.3 receives learning/product-quality risks separately from closed billing/account risks.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -133,10 +137,10 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v6.0 Real Evidence Capture And Pilot Start Execution on 2026-07-08 (local real-evidence contracts; default hold)
-**Residual partial gate:** real-user activation still requires current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, and launch-room readiness.
-**Active milestone:** none — awaiting v6.1 start
-**Next planned milestones:** v6.1 First Cohort Product Remediation Sprint; v6.2 Paid Conversion Usage And Account Reliability Completion; v6.3 Learning Outcome And AI Curriculum Quality Sprint; v6.4 Operations Scale Release And Observability Hardening.
+**Latest completed milestone:** v6.2 Paid Conversion Usage And Account Reliability Completion on 2026-07-08 (local revenue/account reliability contracts; default hold)
+**Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
+**Active milestone:** none — awaiting v6.3 start
+**Next planned milestones:** v6.3 Learning Outcome And AI Curriculum Quality Sprint; v6.4 Operations Scale Release And Observability Hardening.
 
 ## Completed Milestone: v6.0 Real Evidence Capture And Pilot Start Execution
 
@@ -1103,8 +1107,8 @@ Known current resources:
 | Plan v5.38 learning outcomes curriculum and AI quality scale | Learning quality is the core product value; curriculum, exercises, recommendations, AI tools, and progress reporting need real-evidence improvement before broader growth | Contract complete locally; scale gated by learning and AI quality evidence |
 | Plan v5.39 platform reliability and internal operations scale | Larger cohorts require repeatable reliability, observability, admin, teacher, support, release, and rollback operations instead of founder-operated manual work | Contract complete locally; larger expansion gated by operations evidence |
 | Start v6.0 real evidence capture and pilot start execution | v5.30-v5.39 created the local gate chain; the next useful work is current approved real evidence and an honest start/hold decision | Complete locally; real start still gated by approved evidence |
-| Plan v6.1 first cohort product remediation sprint | Real account/payment/usage/login/notification/support/mobile/learning evidence should drive shipped fixes before expansion | Planned |
-| Plan v6.2 paid conversion usage and account reliability completion | Paid access, usage ledger, quota, verification, lifecycle, and billing support must be reliable before controlled growth | Planned |
+| Plan v6.1 first cohort product remediation sprint | Real account/payment/usage/login/notification/support/mobile/learning evidence should drive shipped fixes before expansion | Complete locally; real cohort/remediation gated by approved evidence |
+| Plan v6.2 paid conversion usage and account reliability completion | Paid access, usage ledger, quota, verification, lifecycle, and billing support must be reliable before controlled growth | Complete locally; controlled growth gated by current evidence and support capacity |
 | Plan v6.3 learning outcome and AI curriculum quality sprint | Learning outcome is the core product value; curriculum, exercises, AI tools, recommendations, and progress reporting need real-evidence quality work | Planned |
 | Plan v6.4 operations scale release and observability hardening | Larger cohorts require repeatable observability, support/admin/teacher workflows, release discipline, rollback, and incident ownership | Planned |
 

@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v6.1
-milestone_name: First Cohort Product Remediation Sprint
+milestone: v6.2
+milestone_name: Paid Conversion Usage And Account Reliability Completion
 status: Awaiting next milestone
-last_updated: "2026-07-08T10:41:16.083Z"
-last_activity: 2026-07-08 — Milestone v6.1 completed and archived
+last_updated: "2026-07-08T10:47:56.111Z"
+last_activity: 2026-07-08 — Milestone v6.2 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: Milestone v6.1 complete
+Phase: Milestone v6.2 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-08 — Milestone v6.1 completed and archived
+Last activity: 2026-07-08 — Milestone v6.2 completed and archived
 
 ## Accumulated Context
 

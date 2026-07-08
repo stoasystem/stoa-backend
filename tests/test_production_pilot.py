@@ -572,3 +572,91 @@ def test_v61_release_gate_allows_v62_only_when_all_risks_are_controlled():
     )
     assert ready["decision"] == "continue_pilot"
     assert ready["v6_2Allowed"] is True
+
+
+def test_v62_paid_conversion_flow_blocks_until_parent_states_are_complete():
+    default_completion = production_pilot_service.paid_conversion_flow_completion()
+    assert default_completion["completionState"] == "blocked"
+    assert "checkout" in default_completion["blockers"]
+
+    states = {
+        surface: "working"
+        for surface in production_pilot_service.V6_PAID_CONVERSION_SURFACES
+    }
+    states["refund"] = "support_ready"
+    ready = production_pilot_service.paid_conversion_flow_completion(states)
+    assert ready["completionState"] == "ready"
+    assert ready["revenueImpactAuditable"] is True
+    assert all(row["providerPayloadStored"] is False for row in ready["surfaces"])
+
+
+def test_v62_usage_ledger_quota_reliability_covers_actions_and_reconciliation():
+    default_reliability = production_pilot_service.usage_ledger_quota_reliability_completion()
+    assert default_reliability["reliabilityState"] == "blocked"
+    assert "quota_display" in default_reliability["blockers"]
+
+    states = {
+        surface: "covered"
+        for surface in production_pilot_service.V6_USAGE_QUOTA_SURFACES
+    }
+    ready = production_pilot_service.usage_ledger_quota_reliability_completion(states)
+    assert ready["reliabilityState"] == "ready"
+    assert {"missing", "duplicate", "stale", "manual_adjusted"}.issubset(
+        ready["reconciliationCovers"]
+    )
+    assert all(row["parentAdminExplanation"] for row in ready["surfaces"])
+
+
+def test_v62_verification_recovery_completion_keeps_secrets_out_of_evidence():
+    default_completion = (
+        production_pilot_service.verification_lifecycle_account_recovery_completion()
+    )
+    assert default_completion["completionState"] == "blocked"
+    assert "email_verification" in default_completion["blockers"]
+
+    states = {
+        surface: "tested"
+        for surface in production_pilot_service.V6_VERIFICATION_RECOVERY_SURFACES
+    }
+    ready = production_pilot_service.verification_lifecycle_account_recovery_completion(states)
+    assert ready["completionState"] == "ready"
+    assert ready["blockers"] == []
+    assert all(row["privateMaterialExposed"] is False for row in ready["surfaces"])
+    assert all(row["auditable"] for row in ready["surfaces"])
+
+
+def test_v62_billing_support_lifecycle_messages_require_support_capacity():
+    default_completion = production_pilot_service.billing_support_lifecycle_messaging_completion()
+    assert default_completion["completionState"] == "blocked"
+    assert "support_capacity" in default_completion["blockers"]
+
+    states = {
+        surface: "ready"
+        for surface in production_pilot_service.V6_BILLING_LIFECYCLE_SURFACES
+    }
+    states["win_back"] = "not_approved"
+    states["failed_payment"] = "disabled_for_pilot"
+    ready = production_pilot_service.billing_support_lifecycle_messaging_completion(
+        states,
+        support_capacity_ready=True,
+    )
+    assert ready["completionState"] == "ready"
+    assert ready["supportCapacityReady"] is True
+    assert ready["blockers"] == []
+
+
+def test_v62_revenue_reliability_gate_allows_v63_after_account_risks_close():
+    default_gate = production_pilot_service.v6_2_revenue_reliability_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v6_3Allowed"] is False
+    assert any(blocker.startswith("paid:") for blocker in default_gate["blockers"])
+
+    ready = production_pilot_service.v6_2_revenue_reliability_gate(
+        paid_conversion={"blockers": []},
+        usage_quota={"blockers": []},
+        verification={"blockers": []},
+        billing_lifecycle={"blockers": []},
+    )
+    assert ready["decision"] == "controlled_growth"
+    assert ready["v6_3Allowed"] is True
+    assert ready["learningRisksSeparated"] is True

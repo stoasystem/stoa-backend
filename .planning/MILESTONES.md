@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.2 Paid Conversion Usage And Account Reliability Completion (Shipped: 2026-07-08)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added paid conversion completion contracts for package, checkout, payment method, paywall, entitlement activation, renewal, cancellation, failed payment, invoice, and refund.
+- Added usage ledger and quota reliability contracts covering pilot-critical learning actions, quota display/blocking, and reconciliation categories.
+- Added verification lifecycle and account recovery contracts with support-visible status and private-material-safe evidence keys.
+- Added billing support and lifecycle messaging contracts with explicit support capacity gating.
+- Added `v6_2_revenue_reliability_gate`, which allows v6.3 only when account and revenue risks are controlled.
+
+---
+
 ## v6.1 First Cohort Product Remediation Sprint (Shipped: 2026-07-08)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -765,34 +779,6 @@ Contract-complete phases:
 - Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
 - Phase 370: Release Rollback And Migration Discipline. (contract complete)
 - Phase 371: Operations Scale Readiness Gate. (contract complete)
-
----
-
-## Planned: v6.2 Paid Conversion Usage And Account Reliability Completion
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.2-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.2-REQUIREMENTS.md`
-**Goal:** Complete checkout/paywall, entitlement, usage ledger, quota, verification, lifecycle, billing support, and account reliability for real parents.
-**Phases:** 5
-
-Function purpose:
-
-- Make paid STOA access understandable and reliable.
-- Remove ambiguity around who has access, what was used, what is blocked, and what support can fix.
-
-Implementation strategy:
-
-- Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
-- Keep revenue-impacting changes auditable and reversible.
-
-Planned phases:
-
-- Phase 382: Paid Conversion Flow Completion. (planned)
-- Phase 383: Usage Ledger And Quota Reliability Completion. (planned)
-- Phase 384: Verification Lifecycle And Account Recovery Completion. (planned)
-- Phase 385: Billing Support And Lifecycle Messaging Completion. (planned)
-- Phase 386: v6.2 Revenue Reliability Gate. (planned)
 
 ---
 

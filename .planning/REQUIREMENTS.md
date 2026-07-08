@@ -1,74 +1,74 @@
-# Requirements: v6.1 First Cohort Product Remediation Sprint
+# Requirements: v6.2 Paid Conversion Usage And Account Reliability Completion
 
-**Milestone:** v6.1
-**Status:** Complete
+**Milestone:** v6.2
+**Status:** Completed
 **Created:** 2026-07-07
-**Prior milestone:** v6.0 Real Evidence Capture And Pilot Start Execution
+**Prior milestone:** v6.1 First Cohort Product Remediation Sprint
 
 ## Purpose
 
-Use real v6.0 evidence to fix the product gaps that block or degrade the first cohort. v6.1 should produce shipped product improvements, not new abstract contracts.
+Complete the paid access and account reliability loop for real parents. v6.2 focuses on revenue correctness, usage visibility, verification reliability, and billing support.
 
 ## Requirements
 
-### V6FIX-01 Cohort Day-One Operations Or Blocker Fix Kickoff
+### V6REV-01 Paid Conversion Flow Completion
 
 Acceptance criteria:
 
-- If v6.0 starts the cohort, day-one activation, support, teacher, notification, usage, entitlement, mobile, and learning signals are reviewed.
-- If v6.0 holds, start-blocking issues are converted into owner/action/fix/test/release rows.
-- Every selected fix has user impact, severity, expected outcome, and verification path.
-- Scope is limited to pilot-critical product behavior.
+- Package, checkout, payment method, paywall, entitlement activation, renewal, cancellation, failed payment, invoice, and refund states work for approved pilot scope.
+- Parent-facing copy explains access, limits, failures, and next action.
+- Provider events are reconciled without storing secrets or raw provider payloads.
+- Admin/support can explain paid state without private student content.
 
-### V6FIX-02 Account Login Verification And Role Fixes
-
-Acceptance criteria:
-
-- Login, email verification, resend/confirm, login-code/passwordless policy, account recovery, session expiry, and role visibility are fixed or explicitly deferred.
-- Parent, student, teacher/support, and admin paths have focused tests.
-- Admin/support views explain account state without exposing verification codes or tokens.
-- User copy is clear for blocked, pending, expired, failed, and recovered states.
-
-### V6FIX-03 Entitlement Usage Notification Support Fixes
+### V6REV-02 Usage Ledger And Quota Reliability Completion
 
 Acceptance criteria:
 
-- Paid entitlement, checkout/paywall display, subscription state, usage ledger writes, quota reconciliation, and parent/admin explanations are reliable for pilot accounts.
-- Notification delivery and support handoff gaps have fixes, fallbacks, or explicit pilot disablement.
-- Teacher dispatch/SLA visibility is sufficient for pilot support.
-- Evidence links code SHA, request IDs where applicable, and focused test coverage.
+- Usage ledger covers pilot-critical learning actions with idempotent writes.
+- Quota display and blocking behavior match entitlement state.
+- Parent/admin explanations show usage and remaining access clearly.
+- Reconciliation catches missing, duplicate, stale, and manually adjusted records.
 
-### V6FIX-04 First Learning Action And Mobile Friction Fixes
-
-Acceptance criteria:
-
-- Onboarding, first assignment/practice action, curriculum access, AI/help flow, parent progress view, and mobile install/access friction are fixed or explicitly deferred.
-- Student and parent can understand what to do next without internal operator explanation.
-- Mobile-specific states are tested where local tooling allows.
-- Learning path fixes do not broaden AI autonomy or curriculum-edit permissions.
-
-### VERIFY-75 v6.1 Remediation Release Gate
+### V6REV-03 Verification Lifecycle And Account Recovery Completion
 
 Acceptance criteria:
 
-- Decision is continue pilot, hold, roll back, or run another blocker sprint.
-- Release evidence includes focused tests, operator notes, user/support copy, and remaining blockers.
+- Email verification, login-code/passwordless policy, resend/confirm, expiry, recovery, and support override behavior are explicit and tested.
+- Edge states have clear user copy and admin/support status.
+- Verification codes, tokens, and secrets are never exposed in logs or evidence.
+- Role and account state transitions are auditable.
+
+### V6REV-04 Billing Support And Lifecycle Messaging Completion
+
+Acceptance criteria:
+
+- Billing support workflows cover failed payment, refund, invoice, subscription change, entitlement mismatch, usage dispute, and account recovery.
+- Lifecycle messages cover onboarding, activation, renewal, failed payment, reminder, cancellation, and win-back states where approved.
+- Preferences, locale, delivery failure, and support visibility are handled.
+- Support capacity gates remain explicit before growth expansion.
+
+### VERIFY-76 v6.2 Revenue Reliability Gate
+
+Acceptance criteria:
+
+- Decision is controlled growth, hold, or further account/revenue remediation.
+- Decision uses billing drift, entitlement mismatch, usage accuracy, verification success, support load, and parent comprehension evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v6.2 is allowed only if account, entitlement, usage, and support risks are controlled enough for paid conversion work.
+- v6.3 receives learning/product-quality risks separately from billing/account risks.
 
 ## Out of Scope
 
-- Public launch.
-- Paid marketing.
-- Broad feature expansion not tied to v6.0 evidence.
-- Unreviewed AI autonomy.
+- Paid marketing launch.
+- Multi-market finance/tax expansion beyond approved scope.
+- Enterprise billing automation.
+- Hiding quota or billing limitations from parents.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6FIX-01 | Phase 377 | Complete |
-| V6FIX-02 | Phase 378 | Complete |
-| V6FIX-03 | Phase 379 | Complete |
-| V6FIX-04 | Phase 380 | Complete |
-| VERIFY-75 | Phase 381 | Complete |
+| V6REV-01 | Phase 382 | Completed |
+| V6REV-02 | Phase 383 | Completed |
+| V6REV-03 | Phase 384 | Completed |
+| V6REV-04 | Phase 385 | Completed |
+| VERIFY-76 | Phase 386 | Completed |
