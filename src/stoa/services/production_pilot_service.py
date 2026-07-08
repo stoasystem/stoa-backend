@@ -184,6 +184,45 @@ V6_PILOT_LAUNCH_PACKET_AREAS = {
     "rollback_authority",
     "pause_criteria",
 }
+V6_REMEDIATION_SURFACES = {
+    "activation",
+    "support",
+    "teacher",
+    "notification",
+    "usage",
+    "entitlement",
+    "mobile",
+    "learning",
+}
+V6_ACCOUNT_FIX_SURFACES = {
+    "login",
+    "email_verification",
+    "resend_confirm",
+    "login_code_passwordless_policy",
+    "account_recovery",
+    "session_expiry",
+    "role_visibility",
+    "admin_support_state",
+}
+V6_ENTITLEMENT_SUPPORT_FIX_SURFACES = {
+    "paid_entitlement",
+    "checkout_paywall",
+    "subscription_state",
+    "usage_ledger",
+    "quota_reconciliation",
+    "notification_delivery",
+    "support_handoff",
+    "teacher_dispatch_sla",
+}
+V6_LEARNING_MOBILE_FIX_SURFACES = {
+    "onboarding",
+    "first_assignment",
+    "first_practice_action",
+    "curriculum_access",
+    "ai_help_flow",
+    "parent_progress_view",
+    "mobile_install_access",
+}
 
 
 @dataclass(frozen=True)
@@ -2195,6 +2234,187 @@ def v6_pilot_start_or_blocker_decision_gate(
     return result
 
 
+def cohort_day_one_operations_or_blocker_fix_kickoff(
+    *,
+    v6_start_gate: dict[str, Any] | None = None,
+    observed_signals: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Start day-one review or convert v6.0 blockers into fix rows."""
+    gate = v6_start_gate or v6_pilot_start_or_blocker_decision_gate()
+    observed_signals = observed_signals or {}
+    start_allowed = bool(gate.get("safeToStart"))
+    rows = []
+    blockers = []
+    for surface in sorted(V6_REMEDIATION_SURFACES):
+        state = observed_signals.get(surface, "not_observed" if start_allowed else "blocked")
+        if state in {"blocked", "failed"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_remediation_owner(surface),
+                "severity": "critical" if state in {"blocked", "failed"} else "monitor",
+                "expectedOutcome": _v6_remediation_outcome(surface),
+                "verificationPath": "focused regression plus support-visible evidence",
+            }
+        )
+    result = {
+        "kickoffState": "cohort_review" if start_allowed else "blocker_fix_board",
+        "startDecision": gate.get("decision"),
+        "items": rows,
+        "blockers": blockers or gate.get("blockers", []),
+        "scope": "pilot_critical_product_behavior",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def account_login_verification_role_fixes(
+    fix_states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track account/login/verification fixes and explicit deferrals."""
+    fix_states = fix_states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_ACCOUNT_FIX_SURFACES):
+        state = fix_states.get(surface, "missing")
+        if state not in {"fixed", "explicitly_deferred", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_account_surface_owner(surface),
+                "testsRequired": surface
+                in {"login", "email_verification", "role_visibility", "admin_support_state"},
+                "privateCodesExposed": False,
+                "userCopy": _v6_account_copy(surface, state),
+            }
+        )
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "rolesCovered": ["parent", "student", "teacher_support", "admin"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def entitlement_usage_notification_support_fixes(
+    fix_states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track entitlement, usage, notification, support, and dispatch fixes."""
+    fix_states = fix_states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_ENTITLEMENT_SUPPORT_FIX_SURFACES):
+        state = fix_states.get(surface, "missing")
+        if state not in {"fixed", "fallback_ready", "disabled_for_pilot", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_entitlement_support_owner(surface),
+                "supportVisible": surface
+                in {"support_handoff", "teacher_dispatch_sla", "quota_reconciliation"},
+                "evidenceRequired": ["code_sha", "focused_test", "operator_note"],
+            }
+        )
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def first_learning_action_mobile_friction_fixes(
+    fix_states: dict[str, str] | None = None,
+    *,
+    mobile_local_tests_available: bool = True,
+) -> dict[str, Any]:
+    """Track first-learning-action and mobile friction fixes."""
+    fix_states = fix_states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V6_LEARNING_MOBILE_FIX_SURFACES):
+        state = fix_states.get(surface, "missing")
+        if state not in {"fixed", "explicitly_deferred", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v6_learning_mobile_owner(surface),
+                "userNextStepClear": state == "fixed",
+                "mobileTested": mobile_local_tests_available if "mobile" in surface else None,
+            }
+        )
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "aiAutonomyBroadened": False,
+        "curriculumEditPermissionBroadened": False,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v6_1_remediation_release_gate(
+    *,
+    kickoff: dict[str, Any] | None = None,
+    account_fixes: dict[str, Any] | None = None,
+    entitlement_support_fixes: dict[str, Any] | None = None,
+    learning_mobile_fixes: dict[str, Any] | None = None,
+    rollback_needed: bool = False,
+) -> dict[str, Any]:
+    """Close v6.1 with continue, hold, rollback, or another blocker sprint."""
+    kickoff = kickoff or cohort_day_one_operations_or_blocker_fix_kickoff()
+    account_fixes = account_fixes or account_login_verification_role_fixes()
+    entitlement_support_fixes = (
+        entitlement_support_fixes or entitlement_usage_notification_support_fixes()
+    )
+    learning_mobile_fixes = learning_mobile_fixes or first_learning_action_mobile_friction_fixes()
+    blockers = _unique(
+        [
+            *[f"kickoff:{blocker}" for blocker in kickoff.get("blockers", [])],
+            *[f"account:{blocker}" for blocker in account_fixes.get("blockers", [])],
+            *[
+                f"entitlement_support:{blocker}"
+                for blocker in entitlement_support_fixes.get("blockers", [])
+            ],
+            *[f"learning_mobile:{blocker}" for blocker in learning_mobile_fixes.get("blockers", [])],
+        ]
+    )
+    if rollback_needed:
+        decision = "roll_back"
+    elif not blockers:
+        decision = "continue_pilot"
+    elif any(blocker.startswith(("account:", "entitlement_support:")) for blocker in blockers):
+        decision = "hold"
+    else:
+        decision = "another_blocker_sprint"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v6_2Allowed": decision == "continue_pilot",
+        "releaseEvidence": ["focused_tests", "operator_notes", "user_support_copy"],
+        "nextAction": "start_v6_2" if decision == "continue_pilot" else "execute_remaining_blockers",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {
@@ -2631,6 +2851,60 @@ def _v6_launch_packet_owner(area: str) -> str:
         "pause_criteria": "incident_owner",
     }
     return owners.get(area, "operations")
+
+
+def _v6_remediation_owner(surface: str) -> str:
+    if surface in {"activation", "usage", "entitlement", "learning"}:
+        return "backend"
+    if surface in {"support", "notification"}:
+        return "support"
+    if surface == "teacher":
+        return "teacher_operations"
+    if surface == "mobile":
+        return "mobile_release_owner"
+    return "operations"
+
+
+def _v6_remediation_outcome(surface: str) -> str:
+    outcomes = {
+        "activation": "pilot user can reach an activated account state",
+        "support": "support can see blocker and next action",
+        "teacher": "teacher/support owner can respond inside SLA",
+        "notification": "message path is delivered or visibly disabled",
+        "usage": "usage event is recorded and visible",
+        "entitlement": "paid/manual entitlement is understandable",
+        "mobile": "approved mobile or web access path is clear",
+        "learning": "student can complete first useful learning action",
+    }
+    return outcomes.get(surface, "pilot-critical behavior is remediated")
+
+
+def _v6_account_copy(surface: str, state: str) -> str:
+    if state == "fixed":
+        return f"{surface} is available."
+    if state == "explicitly_deferred":
+        return f"{surface} is unavailable during pilot; support has the fallback."
+    return f"{surface} is blocked pending remediation."
+
+
+def _v6_entitlement_support_owner(surface: str) -> str:
+    if surface in {"paid_entitlement", "checkout_paywall", "subscription_state"}:
+        return "finance_billing_owner"
+    if surface in {"usage_ledger", "quota_reconciliation"}:
+        return "backend"
+    if surface in {"notification_delivery", "support_handoff"}:
+        return "support"
+    if surface == "teacher_dispatch_sla":
+        return "teacher_operations"
+    return "operations"
+
+
+def _v6_learning_mobile_owner(surface: str) -> str:
+    if surface == "mobile_install_access":
+        return "mobile_release_owner"
+    if surface in {"ai_help_flow", "curriculum_access"}:
+        return "learning_quality_owner"
+    return "product_owner"
 
 
 def _unique(values: list[str]) -> list[str]:

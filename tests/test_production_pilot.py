@@ -500,3 +500,75 @@ def test_v6_pilot_start_gate_holds_by_default_and_can_start_with_complete_eviden
     assert start["decision"] == "start_limited_pilot"
     assert start["safeToStart"] is True
     assert "public_launch" in start["outOfScope"]
+
+
+def test_v61_kickoff_converts_hold_into_blocker_board():
+    kickoff = production_pilot_service.cohort_day_one_operations_or_blocker_fix_kickoff()
+    assert kickoff["kickoffState"] == "blocker_fix_board"
+    assert kickoff["scope"] == "pilot_critical_product_behavior"
+    assert kickoff["blockers"]
+
+    observed = {surface: "healthy" for surface in production_pilot_service.V6_REMEDIATION_SURFACES}
+    cohort = production_pilot_service.cohort_day_one_operations_or_blocker_fix_kickoff(
+        v6_start_gate={"decision": "start_limited_pilot", "safeToStart": True, "blockers": []},
+        observed_signals=observed,
+    )
+    assert cohort["kickoffState"] == "cohort_review"
+    assert cohort["blockers"] == []
+
+
+def test_v61_account_login_verification_role_fixes_require_resolution_or_deferral():
+    default_fixes = production_pilot_service.account_login_verification_role_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "login" in default_fixes["blockers"]
+
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V6_ACCOUNT_FIX_SURFACES
+    }
+    ready = production_pilot_service.account_login_verification_role_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["rolesCovered"] == ["parent", "student", "teacher_support", "admin"]
+    assert all(row["privateCodesExposed"] is False for row in ready["surfaces"])
+
+
+def test_v61_entitlement_usage_notification_support_fixes_allow_fallbacks():
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V6_ENTITLEMENT_SUPPORT_FIX_SURFACES
+    }
+    states["notification_delivery"] = "disabled_for_pilot"
+    states["support_handoff"] = "fallback_ready"
+    ready = production_pilot_service.entitlement_usage_notification_support_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["blockers"] == []
+
+
+def test_v61_learning_mobile_fixes_preserve_ai_and_curriculum_boundaries():
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V6_LEARNING_MOBILE_FIX_SURFACES
+    }
+    ready = production_pilot_service.first_learning_action_mobile_friction_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["aiAutonomyBroadened"] is False
+    assert ready["curriculumEditPermissionBroadened"] is False
+
+
+def test_v61_release_gate_allows_v62_only_when_all_risks_are_controlled():
+    default_gate = production_pilot_service.v6_1_remediation_release_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v6_2Allowed"] is False
+
+    kickoff = {"blockers": []}
+    account = {"blockers": []}
+    entitlement = {"blockers": []}
+    learning = {"blockers": []}
+    ready = production_pilot_service.v6_1_remediation_release_gate(
+        kickoff=kickoff,
+        account_fixes=account,
+        entitlement_support_fixes=entitlement,
+        learning_mobile_fixes=learning,
+    )
+    assert ready["decision"] == "continue_pilot"
+    assert ready["v6_2Allowed"] is True

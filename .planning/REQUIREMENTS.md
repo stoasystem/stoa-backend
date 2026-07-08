@@ -1,76 +1,74 @@
-# Requirements: v6.0 Real Evidence Capture And Pilot Start Execution
+# Requirements: v6.1 First Cohort Product Remediation Sprint
 
-**Milestone:** v6.0
+**Milestone:** v6.1
 **Status:** Complete
 **Created:** 2026-07-07
-**Prior milestone:** v5.35-v5.39 Local Contract Completion
+**Prior milestone:** v6.0 Real Evidence Capture And Pilot Start Execution
 
 ## Purpose
 
-v6.0 starts the real execution track. It must gather current approved evidence, verify the user-visible product details that remain risky, and run the pilot start gate without claiming public launch or uncontrolled production mutation.
+Use real v6.0 evidence to fix the product gaps that block or degrade the first cohort. v6.1 should produce shipped product improvements, not new abstract contracts.
 
 ## Requirements
 
-### V6EVID-01 Real Evidence Inventory And Access Readiness
+### V6FIX-01 Cohort Day-One Operations Or Blocker Fix Kickoff
 
 Acceptance criteria:
 
-- Current admin, parent, student, teacher/support, provider, mobile, monitoring, and deployment access paths are listed with owner and approval state.
-- Required evidence sources are classified as available, missing, disabled for pilot, blocked, or not required.
-- Production checks use real existing sessions/accounts or an approved secret-backed credential path.
-- Evidence excludes secrets, raw provider payloads, raw student content, private object keys, presigned URLs, auth tokens, and verification codes.
+- If v6.0 starts the cohort, day-one activation, support, teacher, notification, usage, entitlement, mobile, and learning signals are reviewed.
+- If v6.0 holds, start-blocking issues are converted into owner/action/fix/test/release rows.
+- Every selected fix has user impact, severity, expected outcome, and verification path.
+- Scope is limited to pilot-critical product behavior.
 
-### V6EVID-02 Account Payment Usage Verification Smoke
-
-Acceptance criteria:
-
-- Login, email verification, login-code/passwordless behavior, account recovery edge states, and role visibility are checked with approved accounts.
-- Paid access, checkout/paywall state, entitlement activation, subscription state, usage ledger writes, quota display, and admin support explanations are checked.
-- Request IDs, account aliases, timestamps, and blocker states are recorded.
-- Any production mutation is explicitly approved, scoped, reversible, and tied to a pilot-safe account.
-
-### V6EVID-03 Notification Support Mobile And Provider Evidence
+### V6FIX-02 Account Login Verification And Role Fixes
 
 Acceptance criteria:
 
-- Email/push/realtime notification delivery state is verified or explicitly disabled for pilot scope with support copy.
-- Support CRM/handoff, support queue, teacher dispatch/SLA visibility, and escalation paths are checked.
-- Mobile/TestFlight/install path and version/build evidence are captured or marked blocked.
-- Payment, notification, support, BI/APM, AI/provider, and mobile blockers have owner, fallback, rollback, and next action.
+- Login, email verification, resend/confirm, login-code/passwordless policy, account recovery, session expiry, and role visibility are fixed or explicitly deferred.
+- Parent, student, teacher/support, and admin paths have focused tests.
+- Admin/support views explain account state without exposing verification codes or tokens.
+- User copy is clear for blocked, pending, expired, failed, and recovered states.
 
-### V6EVID-04 Pilot Cohort Launch Packet And Dry Run
-
-Acceptance criteria:
-
-- Cohort size, account aliases, communication plan, consent state, support staffing, teacher owner, launch room, dashboards, and rollback authority are documented.
-- Dry run covers login, onboarding, entitlement, usage, first learning action, notification/support touchpoints, mobile path, and admin visibility.
-- Launch packet includes pause criteria, rollback criteria, support macros, known disabled features, and day-one operating plan.
-- Any unresolved gap is marked accepted, disabled for pilot, or start-blocking.
-
-### VERIFY-74 v6.0 Pilot Start Or Blocker Decision Gate
+### V6FIX-03 Entitlement Usage Notification Support Fixes
 
 Acceptance criteria:
 
-- `production_pilot_service.real_pilot_start_decision_gate` or the current equivalent is run against current evidence.
-- Decision is `start_limited_pilot`, `hold`, or `harden_further`.
-- If started, v6.1 receives cohort scope, dashboards, owners, support coverage, rollback controls, and daily review cadence.
-- If held, v6.1 is not allowed to operate real users and the blocker package becomes the next execution target.
+- Paid entitlement, checkout/paywall display, subscription state, usage ledger writes, quota reconciliation, and parent/admin explanations are reliable for pilot accounts.
+- Notification delivery and support handoff gaps have fixes, fallbacks, or explicit pilot disablement.
+- Teacher dispatch/SLA visibility is sufficient for pilot support.
+- Evidence links code SHA, request IDs where applicable, and focused test coverage.
+
+### V6FIX-04 First Learning Action And Mobile Friction Fixes
+
+Acceptance criteria:
+
+- Onboarding, first assignment/practice action, curriculum access, AI/help flow, parent progress view, and mobile install/access friction are fixed or explicitly deferred.
+- Student and parent can understand what to do next without internal operator explanation.
+- Mobile-specific states are tested where local tooling allows.
+- Learning path fixes do not broaden AI autonomy or curriculum-edit permissions.
+
+### VERIFY-75 v6.1 Remediation Release Gate
+
+Acceptance criteria:
+
+- Decision is continue pilot, hold, roll back, or run another blocker sprint.
+- Release evidence includes focused tests, operator notes, user/support copy, and remaining blockers.
+- Roadmap, requirements, state, milestone snapshots, and project summary are updated.
+- v6.2 is allowed only if account, entitlement, usage, and support risks are controlled enough for paid conversion work.
 
 ## Out of Scope
 
 - Public launch.
 - Paid marketing.
-- Broad expansion beyond the approved cohort.
-- Uncontrolled provider writes.
+- Broad feature expansion not tied to v6.0 evidence.
 - Unreviewed AI autonomy.
-- Treating local metadata contracts as live evidence.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6EVID-01 | Phase 372 | Complete |
-| V6EVID-02 | Phase 373 | Complete |
-| V6EVID-03 | Phase 374 | Complete |
-| V6EVID-04 | Phase 375 | Complete |
-| VERIFY-74 | Phase 376 | Complete |
+| V6FIX-01 | Phase 377 | Complete |
+| V6FIX-02 | Phase 378 | Complete |
+| V6FIX-03 | Phase 379 | Complete |
+| V6FIX-04 | Phase 380 | Complete |
+| VERIFY-75 | Phase 381 | Complete |

@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.1 First Cohort Product Remediation Sprint (Shipped: 2026-07-08)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added blocker-board/day-one cohort review contracts for v6.0 hold or start outcomes.
+- Added account/login/verification/role remediation contracts with safe support-visible copy.
+- Added entitlement, usage, notification, support, and teacher-dispatch remediation contracts.
+- Added first-learning-action and mobile friction contracts while preserving AI autonomy and curriculum permission boundaries.
+- Added `v6_1_remediation_release_gate`, which allows v6.2 only when remediation risks are controlled.
+
+---
+
 ## v6.0 Real Evidence Capture And Pilot Start Execution (Shipped: 2026-07-08)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -751,35 +765,6 @@ Contract-complete phases:
 - Phase 369: Observability Dashboard And Alert Tuning. (contract complete)
 - Phase 370: Release Rollback And Migration Discipline. (contract complete)
 - Phase 371: Operations Scale Readiness Gate. (contract complete)
-
----
-
-## Planned: v6.1 First Cohort Product Remediation Sprint
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.1-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.1-REQUIREMENTS.md`
-**Goal:** Operate the first approved cohort or execute the v6.0 blocker package, then ship high-impact product fixes.
-**Phases:** 5
-
-Function purpose:
-
-- Turn real evidence into shipped fixes.
-- Improve account/login, entitlement, usage, notification, support, mobile, and first-learning-action behavior.
-
-Implementation strategy:
-
-- If v6.0 starts the cohort, run daily cohort review.
-- If v6.0 holds, execute blockers until the gate can be rerun.
-- Add focused tests and support-visible release evidence for every high-impact fix.
-
-Planned phases:
-
-- Phase 377: Cohort Day-One Operations Or Blocker Fix Kickoff. (planned)
-- Phase 378: Account Login Verification And Role Fixes. (planned)
-- Phase 379: Entitlement Usage Notification Support Fixes. (planned)
-- Phase 380: First Learning Action And Mobile Friction Fixes. (planned)
-- Phase 381: v6.1 Remediation Release Gate. (planned)
 
 ---
 
