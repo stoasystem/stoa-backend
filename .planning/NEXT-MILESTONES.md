@@ -36,7 +36,7 @@ Implementation strategy:
 - Scoped pilot-safe mutations require explicit approval and rollback.
 - Record redacted request IDs, timestamps, account aliases, build IDs, owner signoffs, blocker states, and rollback controls.
 
-## Active: v6.6 First Cohort Live Operations And Fix Sprint
+## Completed: v6.6 First Cohort Live Operations And Fix Sprint
 
 Roadmap: `.planning/milestones/v6.6-ROADMAP.md`
 Requirements: `.planning/milestones/v6.6-REQUIREMENTS.md`
@@ -52,7 +52,7 @@ Implementation strategy:
 - Use the blocker package as the sprint backlog if v6.5 holds.
 - Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
 
-## Planned: v6.7 Revenue Retention And Controlled Growth Execution
+## Active: v6.7 Revenue Retention And Controlled Growth Execution
 
 Roadmap: `.planning/milestones/v6.7-ROADMAP.md`
 Requirements: `.planning/milestones/v6.7-REQUIREMENTS.md`

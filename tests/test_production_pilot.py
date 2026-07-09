@@ -975,3 +975,96 @@ def test_v65_live_pilot_start_decision_handoff_blocks_v66_without_real_evidence(
     )
     assert harden["decision"] == "harden_further"
     assert harden["v6_6Allowed"] is False
+
+
+def test_v66_day_one_operations_converts_v65_hold_to_fix_board():
+    default_start = production_pilot_service.cohort_day_one_operations_or_blocker_sprint_start()
+    assert default_start["mode"] == "blocker_sprint"
+    assert default_start["operationsState"] == "blocked"
+    assert default_start["rows"]
+    assert default_start["trafficClassesSeparated"] is True
+
+    signals = {
+        signal: "healthy"
+        for signal in production_pilot_service.V66_COHORT_OPERATION_SIGNALS
+    }
+    ready = production_pilot_service.cohort_day_one_operations_or_blocker_sprint_start(
+        v65_start_gate={"decision": "start_limited_pilot", "blockers": []},
+        observed_signals=signals,
+    )
+    assert ready["mode"] == "cohort_operations"
+    assert ready["operationsState"] == "ready"
+    assert ready["blockers"] == []
+
+
+def test_v66_activation_account_entitlement_fixes_require_fixed_or_deferred():
+    default_fixes = production_pilot_service.activation_account_verification_entitlement_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "login" in default_fixes["blockers"]
+
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V66_ACCOUNT_ENTITLEMENT_FIX_SURFACES
+    }
+    states["recovery"] = "explicitly_deferred"
+    ready = production_pilot_service.activation_account_verification_entitlement_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["rolesCovered"] == ["parent", "student", "admin_support"]
+    assert all(row["reversible"] for row in ready["surfaces"])
+
+
+def test_v66_support_teacher_notification_mobile_fixes_allow_pilot_disablement():
+    default_fixes = production_pilot_service.support_teacher_notification_mobile_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "support_queue" in default_fixes["blockers"]
+
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V66_SUPPORT_TEACHER_MOBILE_FIX_SURFACES
+    }
+    states["notification_delivery"] = "disabled_for_pilot"
+    ready = production_pilot_service.support_teacher_notification_mobile_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["escalationVisible"] is True
+    assert any(row["fallbackCopyReady"] for row in ready["surfaces"])
+
+
+def test_v66_learning_parent_clarity_fixes_preserve_boundaries_and_rank_gaps():
+    default_fixes = production_pilot_service.first_learning_action_parent_clarity_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "onboarding" in default_fixes["blockers"]
+
+    states = {
+        surface: "fixed"
+        for surface in production_pilot_service.V66_LEARNING_PARENT_FIX_SURFACES
+    }
+    states["recommendations"] = "accepted_gap"
+    ready = production_pilot_service.first_learning_action_parent_clarity_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["curriculumAuthorizationPreserved"] is True
+    assert ready["aiBoundariesPreserved"] is True
+    assert ready["knownLearningGapsForV6_8"] == ["recommendations"]
+
+
+def test_v66_live_cohort_outcome_gate_allows_v67_only_after_fixes_close():
+    default_gate = production_pilot_service.v66_live_cohort_outcome_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v6_7Allowed"] is False
+
+    rollback = production_pilot_service.v66_live_cohort_outcome_gate(
+        operations={"blockers": []},
+        account_fixes={"blockers": []},
+        support_fixes={"blockers": []},
+        learning_fixes={"blockers": []},
+        rollback_required=True,
+    )
+    assert rollback["decision"] == "rollback"
+
+    ready = production_pilot_service.v66_live_cohort_outcome_gate(
+        operations={"blockers": []},
+        account_fixes={"blockers": []},
+        support_fixes={"blockers": []},
+        learning_fixes={"blockers": []},
+    )
+    assert ready["decision"] == "proceed_to_revenue_retention"
+    assert ready["v6_7Allowed"] is True

@@ -1,116 +1,102 @@
-# Roadmap: v6.5 Live Pilot Evidence Execution And Cohort Start
+# Roadmap: v6.6 First Cohort Live Operations And Fix Sprint
 
 **Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.4 Operations Scale Release And Observability Hardening
+**Prior milestone:** v6.5 Live Pilot Evidence Execution And Cohort Start
 
 ## Goal
 
-Execute the first real limited pilot or produce a current blocker package from real production evidence. v6.5 must stop adding local-only gates and instead use approved real accounts, provider evidence, mobile/support evidence, and production read-only smoke results to decide whether the first cohort can start.
-
-## Reality Check
-
-v6.0-v6.4 are locally complete and tested. They provide real-evidence inventory, pilot start, remediation, revenue/account reliability, learning quality, observability, release discipline, and controlled expansion gates.
-
-They still do not prove that real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened. The next useful work is therefore not more contract surface. It is live evidence execution against the existing gates.
+Operate the first approved cohort if v6.5 starts it, or execute the v6.5 blocker package until a cohort can start. v6.6 must convert real user evidence into shipped fixes across activation, account state, billing, usage, support, mobile, notification, teacher help, and first learning action.
 
 ## Function Purpose
 
-- Use real existing admin/parent/student/teacher/support accounts or an approved secret-backed credential path.
-- Verify production API, account, payment/entitlement, usage, verification, notification, support, mobile, and learning paths with redacted evidence.
-- Execute the first cohort start decision from current evidence.
-- Keep public launch, paid marketing, broad expansion, and uncontrolled provider writes out of scope.
+- Make the first real cohort usable enough to continue.
+- Fix concrete user-facing failures instead of adding more readiness surfaces.
+- Preserve a daily operating cadence with rollback and pause authority.
 
 ## Implementation Strategy
 
-- Run production checks read-only by default; use scoped pilot-safe mutations only when explicitly approved.
-- Capture redacted request IDs, timestamps, account aliases, build IDs, owner signoffs, blocker states, and rollback controls.
-- If a provider or feature is unavailable, mark it disabled for pilot with user copy, support fallback, and owner approval.
-- Close with `start_limited_pilot`, `hold`, or `harden_further`.
+- If v6.5 returns `start_limited_pilot`, run daily pilot operations.
+- If v6.5 returns `hold`, treat the blocker package as the sprint backlog.
+- Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
+- Ship focused tests, rollback notes, and support-visible release evidence.
 
 ## Phases
 
-- [x] **Phase 397: Production Evidence Access And Approval Refresh** - Refresh real account/session/provider/mobile/support/deploy access, approvals, and owner signoff.
-- [x] **Phase 398: Production Account Payment Usage Smoke** - Verify login, verification, entitlement, checkout/paywall, usage ledger, quota, and admin support state with approved accounts.
-- [x] **Phase 399: Production Notification Support Mobile Learning Smoke** - Verify notification/support/mobile/provider/learning paths, or explicitly disable them for pilot with fallback.
-- [x] **Phase 400: First Cohort Launch Packet Execution** - Finalize cohort account aliases, communications, support staffing, dashboard, rollback, pause criteria, and dry-run evidence.
-- [x] **Phase 401: Live Pilot Start Decision And Handoff** - Run the current gate and hand off either cohort start operations or blocker burn-down.
+- [x] **Phase 402: Cohort Day-One Operations Or Blocker Sprint Start** - Start cohort operations or convert v6.5 blockers into a fix board.
+- [x] **Phase 403: Activation Account Verification And Entitlement Fixes** - Fix login, verification, role, entitlement, subscription, usage, quota, and admin support gaps.
+- [x] **Phase 404: Support Teacher Notification Mobile Fixes** - Fix support handoff, teacher dispatch/SLA, notification delivery, mobile install/access, and incident escalation gaps.
+- [x] **Phase 405: First Learning Action And Parent Clarity Fixes** - Fix onboarding, curriculum/practice access, AI/help flow, recommendations, and parent progress clarity.
+- [x] **Phase 406: v6.6 Live Cohort Outcome Gate** - Decide continue pilot, hold, rollback, or proceed to revenue/retention execution.
 
 ## Phase Details
 
-### Phase 397: Production Evidence Access And Approval Refresh
+### Phase 402: Cohort Day-One Operations Or Blocker Sprint Start
 
-**Goal**: Refresh real account/session/provider/mobile/support/deploy access, approvals, and owner signoff.
-**Depends on**: v6.4 controlled expansion readiness gate.
-**Requirements**: V6LIVE-01
+**Goal**: Start cohort operations or convert v6.5 blockers into a fix board.
+**Depends on**: v6.5 live pilot start decision.
+**Requirements**: V6COHORT-01
 **Success Criteria**:
 
-1. Real admin, parent, student, teacher/support, provider, mobile, monitoring, deploy, and support access paths are refreshed with owner and approval state.
-2. Production checks use real existing sessions/accounts or approved secret-backed credentials.
-3. Evidence sources are classified as available, missing, disabled for pilot, blocked, or not required.
-4. Evidence excludes secrets, auth tokens, verification codes, raw provider payloads, raw student content, private object keys, and presigned URLs.
+1. If v6.5 started the cohort, day-one operations cover activation, support, teacher, billing, notification, mobile, usage, and learning signals.
+2. If v6.5 held, blocker rows include owner, severity, fix path, test path, release path, and target outcome.
+3. Daily review cadence, pause criteria, rollback authority, and support coverage are active.
+4. Evidence distinguishes real cohort usage from test, dry-run, and fixture traffic.
 
-### Phase 398: Production Account Payment Usage Smoke
+### Phase 403: Activation Account Verification And Entitlement Fixes
 
-**Goal**: Verify login, verification, entitlement, checkout/paywall, usage ledger, quota, and admin support state with approved accounts.
-**Depends on**: Phase 397.
-**Requirements**: V6LIVE-02
+**Goal**: Fix login, verification, role, entitlement, subscription, usage, quota, and admin support gaps.
+**Depends on**: Phase 402.
+**Requirements**: V6COHORT-02
 **Success Criteria**:
 
-1. Login, email verification, login-code/passwordless policy, recovery states, role visibility, and admin support visibility are checked.
-2. Paid access, checkout/paywall, entitlement activation, subscription state, usage ledger, quota display, and support explanations are checked.
-3. Any production mutation is explicitly approved, scoped to pilot-safe accounts, reversible, and recorded.
-4. Blockers have owner, severity, user impact, fallback, and next action.
+1. Login, verification, recovery, role visibility, entitlement activation, subscription state, usage writes, quota display, and admin support explanations are fixed or explicitly deferred.
+2. Parent/student/admin support paths are covered by focused tests.
+3. User copy is clear for pending, failed, expired, blocked, disabled, and recovered states.
+4. Revenue-impacting fixes are auditable and reversible.
 
-### Phase 399: Production Notification Support Mobile Learning Smoke
+### Phase 404: Support Teacher Notification Mobile Fixes
 
-**Goal**: Verify notification/support/mobile/provider/learning paths, or explicitly disable them for pilot with fallback.
-**Depends on**: Phase 398.
-**Requirements**: V6LIVE-03
+**Goal**: Fix support handoff, teacher dispatch/SLA, notification delivery, mobile install/access, and incident escalation gaps.
+**Depends on**: Phase 403.
+**Requirements**: V6COHORT-03
 **Success Criteria**:
 
-1. Notification delivery, support handoff, teacher dispatch/SLA visibility, mobile/TestFlight/install path, AI/provider health, and first learning action are checked.
-2. Unavailable features are explicitly disabled for pilot with user copy, support fallback, and owner approval.
-3. Evidence includes request/build IDs where applicable and remains support-safe.
-4. Smoke results distinguish real production evidence from dry-run or local fixture evidence.
+1. Support handoff, support queue, teacher dispatch/SLA, escalation, notification delivery, mobile access/install, and incident handling gaps are fixed or explicitly disabled for pilot.
+2. Operators can see owner, status, next action, and escalation path.
+3. Notification/mobile/support fallback copy is ready where needed.
+4. Fix evidence includes request/build IDs where applicable.
 
-### Phase 400: First Cohort Launch Packet Execution
+### Phase 405: First Learning Action And Parent Clarity Fixes
 
-**Goal**: Finalize cohort account aliases, communications, support staffing, dashboard, rollback, pause criteria, and dry-run evidence.
-**Depends on**: Phase 399.
-**Requirements**: V6LIVE-04
+**Goal**: Fix onboarding, curriculum/practice access, AI/help flow, recommendations, and parent progress clarity.
+**Depends on**: Phase 404.
+**Requirements**: V6COHORT-04
 **Success Criteria**:
 
-1. Cohort account aliases, communication plan, consent state, support staffing, teacher owner, launch room, dashboards, and rollback authority are finalized.
-2. Dry run covers login, onboarding, entitlement, usage, first learning action, notification/support touchpoints, mobile path, and admin visibility.
-3. Launch packet includes pause criteria, rollback criteria, support macros, known disabled features, and day-one operating plan.
-4. Any unresolved gap is accepted, disabled for pilot, or start-blocking.
+1. Onboarding, first practice/assignment, curriculum access, AI/help flow, recommendations, and parent progress reporting are usable for the cohort.
+2. Parent/student flows explain what to do next without operator intervention.
+3. Learning fixes preserve curriculum authorization and reviewed/policy-bound AI boundaries.
+4. Known learning gaps are ranked for v6.8.
 
-### Phase 401: Live Pilot Start Decision And Handoff
+### Phase 406: v6.6 Live Cohort Outcome Gate
 
-**Goal**: Run the current gate and hand off either cohort start operations or blocker burn-down.
-**Depends on**: Phase 400.
-**Requirements**: VERIFY-79
+**Goal**: Decide continue pilot, hold, rollback, or proceed to revenue/retention execution.
+**Depends on**: Phase 405.
+**Requirements**: VERIFY-80
 **Success Criteria**:
 
-1. Current pilot start gate is run against the latest real evidence.
-2. Decision is `start_limited_pilot`, `hold`, or `harden_further`.
-3. If started, v6.6 receives cohort scope, daily operating cadence, owners, dashboards, support coverage, and rollback controls.
-4. If held, v6.6 is not allowed to operate real users and the blocker package becomes the next execution target.
-
-## Future Milestone Directions
-
-- **v6.6 First Cohort Live Operations And Fix Sprint**: operate the started cohort and ship real user fixes.
-- **v6.7 Revenue Retention And Controlled Growth Execution**: complete paid conversion, lifecycle, retention, and controlled intake from real usage.
-- **v6.8 Learning Outcome And Curriculum Quality Expansion**: improve learning quality and curriculum/AI output using real student evidence.
-- **v6.9 Public Launch Decision And Market Readiness**: decide controlled expansion, public launch prep, or hold from actual customer and operations evidence.
+1. Decision is continue pilot, hold, rollback, or proceed to revenue/retention execution.
+2. Decision uses activation, support, teacher, billing, usage, mobile, notification, learning, parent clarity, and incident evidence.
+3. Roadmap, requirements, state, milestone snapshots, and project summary are updated.
+4. v6.7 receives only the cohort and revenue risks that remain after v6.6 fixes.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6LIVE-01 | Phase 397 | Completed |
-| V6LIVE-02 | Phase 398 | Completed |
-| V6LIVE-03 | Phase 399 | Completed |
-| V6LIVE-04 | Phase 400 | Completed |
-| VERIFY-79 | Phase 401 | Completed |
+| V6COHORT-01 | Phase 402 | Completed |
+| V6COHORT-02 | Phase 403 | Completed |
+| V6COHORT-03 | Phase 404 | Completed |
+| V6COHORT-04 | Phase 405 | Completed |
+| VERIFY-80 | Phase 406 | Completed |

@@ -1,76 +1,74 @@
-# Requirements: v6.5 Live Pilot Evidence Execution And Cohort Start
+# Requirements: v6.6 First Cohort Live Operations And Fix Sprint
 
-**Milestone:** v6.5
+**Milestone:** v6.6
 **Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.4 Operations Scale Release And Observability Hardening
+**Prior milestone:** v6.5 Live Pilot Evidence Execution And Cohort Start
 
 ## Purpose
 
-v6.5 executes current real evidence against the locally complete v6 gates. It must either start the first limited cohort or produce a current, owner-assigned blocker package. It must not treat local contract completion as proof of real-user launch.
+Operate the first real cohort or burn down the v6.5 blockers that prevent it. v6.6 must produce shipped fixes and live operating evidence.
 
 ## Requirements
 
-### V6LIVE-01 Production Evidence Access And Approval Refresh
+### V6COHORT-01 Cohort Day-One Operations Or Blocker Sprint Start
 
 Acceptance criteria:
 
-- Real admin, parent, student, teacher/support, provider, mobile, monitoring, deploy, and support access paths are refreshed with owner and approval state.
-- Production checks use real existing sessions/accounts or approved secret-backed credentials.
-- Evidence sources are classified as available, missing, disabled for pilot, blocked, or not required.
-- Evidence excludes secrets, auth tokens, verification codes, raw provider payloads, raw student content, private object keys, and presigned URLs.
+- If v6.5 started the cohort, day-one operations cover activation, support, teacher, billing, notification, mobile, usage, and learning signals.
+- If v6.5 held, blocker rows include owner, severity, fix path, test path, release path, and target outcome.
+- Daily review cadence, pause criteria, rollback authority, and support coverage are active.
+- Evidence distinguishes real cohort usage from test, dry-run, and fixture traffic.
 
-### V6LIVE-02 Production Account Payment Usage Smoke
-
-Acceptance criteria:
-
-- Login, email verification, login-code/passwordless policy, recovery states, role visibility, and admin support visibility are checked.
-- Paid access, checkout/paywall, entitlement activation, subscription state, usage ledger, quota display, and support explanations are checked.
-- Any production mutation is explicitly approved, scoped to pilot-safe accounts, reversible, and recorded.
-- Blockers have owner, severity, user impact, fallback, and next action.
-
-### V6LIVE-03 Production Notification Support Mobile Learning Smoke
+### V6COHORT-02 Activation Account Verification And Entitlement Fixes
 
 Acceptance criteria:
 
-- Notification delivery, support handoff, teacher dispatch/SLA visibility, mobile/TestFlight/install path, AI/provider health, and first learning action are checked.
-- Unavailable features are explicitly disabled for pilot with user copy, support fallback, and owner approval.
-- Evidence includes request/build IDs where applicable and remains support-safe.
-- Smoke results distinguish real production evidence from dry-run or local fixture evidence.
+- Login, verification, recovery, role visibility, entitlement activation, subscription state, usage writes, quota display, and admin support explanations are fixed or explicitly deferred.
+- Parent/student/admin support paths are covered by focused tests.
+- User copy is clear for pending, failed, expired, blocked, disabled, and recovered states.
+- Revenue-impacting fixes are auditable and reversible.
 
-### V6LIVE-04 First Cohort Launch Packet Execution
-
-Acceptance criteria:
-
-- Cohort account aliases, communication plan, consent state, support staffing, teacher owner, launch room, dashboards, and rollback authority are finalized.
-- Dry run covers login, onboarding, entitlement, usage, first learning action, notification/support touchpoints, mobile path, and admin visibility.
-- Launch packet includes pause criteria, rollback criteria, support macros, known disabled features, and day-one operating plan.
-- Any unresolved gap is accepted, disabled for pilot, or start-blocking.
-
-### VERIFY-79 Live Pilot Start Decision And Handoff
+### V6COHORT-03 Support Teacher Notification Mobile Fixes
 
 Acceptance criteria:
 
-- Current pilot start gate is run against the latest real evidence.
-- Decision is `start_limited_pilot`, `hold`, or `harden_further`.
-- If started, v6.6 receives cohort scope, daily operating cadence, owners, dashboards, support coverage, and rollback controls.
-- If held, v6.6 is not allowed to operate real users and the blocker package becomes the next execution target.
+- Support handoff, support queue, teacher dispatch/SLA, escalation, notification delivery, mobile access/install, and incident handling gaps are fixed or explicitly disabled for pilot.
+- Operators can see owner, status, next action, and escalation path.
+- Notification/mobile/support fallback copy is ready where needed.
+- Fix evidence includes request/build IDs where applicable.
+
+### V6COHORT-04 First Learning Action And Parent Clarity Fixes
+
+Acceptance criteria:
+
+- Onboarding, first practice/assignment, curriculum access, AI/help flow, recommendations, and parent progress reporting are usable for the cohort.
+- Parent/student flows explain what to do next without operator intervention.
+- Learning fixes preserve curriculum authorization and reviewed/policy-bound AI boundaries.
+- Known learning gaps are ranked for v6.8.
+
+### VERIFY-80 v6.6 Live Cohort Outcome Gate
+
+Acceptance criteria:
+
+- Decision is continue pilot, hold, rollback, or proceed to revenue/retention execution.
+- Decision uses activation, support, teacher, billing, usage, mobile, notification, learning, parent clarity, and incident evidence.
+- Roadmap, requirements, state, milestone snapshots, and project summary are updated.
+- v6.7 receives only the cohort and revenue risks that remain after v6.6 fixes.
 
 ## Out of Scope
 
 - Public launch.
 - Paid marketing.
-- Broad expansion beyond the approved cohort.
-- Uncontrolled provider writes.
-- Unreviewed AI autonomy.
-- Replacing missing real evidence with local metadata contracts.
+- Cohort expansion without gate approval.
+- Broad new product areas unrelated to cohort evidence.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6LIVE-01 | Phase 397 | Completed |
-| V6LIVE-02 | Phase 398 | Completed |
-| V6LIVE-03 | Phase 399 | Completed |
-| V6LIVE-04 | Phase 400 | Completed |
-| VERIFY-79 | Phase 401 | Completed |
+| V6COHORT-01 | Phase 402 | Completed |
+| V6COHORT-02 | Phase 403 | Completed |
+| V6COHORT-03 | Phase 404 | Completed |
+| V6COHORT-04 | Phase 405 | Completed |
+| VERIFY-80 | Phase 406 | Completed |

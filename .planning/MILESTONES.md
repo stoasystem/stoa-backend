@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.6 First Cohort Live Operations And Fix Sprint (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added cohort day-one operations or blocker sprint start contracts that gate real cohort operations on v6.5 `start_limited_pilot`.
+- Added activation/account/verification/entitlement fix contracts with focused test coverage, clear user copy states, and reversible revenue-impacting fixes.
+- Added support/teacher/notification/mobile fix contracts with operator visibility, fallback copy, and request/build ID requirements.
+- Added first-learning-action and parent clarity fix contracts that preserve curriculum authorization and AI boundaries.
+- Added `v66_live_cohort_outcome_gate`, which allows v6.7 only after cohort operations and fix blockers are closed.
+
+---
+
 ## v6.5 Live Pilot Evidence Execution And Cohort Start (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -11,24 +25,6 @@
 - Added production notification/support/mobile/learning smoke contracts that distinguish production evidence from dry-run or local fixture evidence.
 - Added first-cohort launch packet execution contracts with dry-run coverage and start-blocking gap handling.
 - Added `live_pilot_start_decision_handoff`, which allows v6.6 real-user operations only on `start_limited_pilot`.
-
----
-
-## Planned: v6.6 First Cohort Live Operations And Fix Sprint
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.6-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.6-REQUIREMENTS.md`
-**Goal:** Operate the first approved cohort if v6.5 starts it, or execute the v6.5 blocker package until a cohort can start.
-**Phases:** 5
-
-Planned phases:
-
-- Phase 402: Cohort Day-One Operations Or Blocker Sprint Start. (planned)
-- Phase 403: Activation Account Verification And Entitlement Fixes. (planned)
-- Phase 404: Support Teacher Notification Mobile Fixes. (planned)
-- Phase 405: First Learning Action And Parent Clarity Fixes. (planned)
-- Phase 406: v6.6 Live Cohort Outcome Gate. (planned)
 
 ---
 

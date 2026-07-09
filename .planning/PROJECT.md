@@ -145,10 +145,21 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v6.5 Live Pilot Evidence Execution And Cohort Start on 2026-07-09 (production-evidence input contracts; real start still depends on current evidence)
+**Latest completed milestone:** v6.6 First Cohort Live Operations And Fix Sprint on 2026-07-09 (live cohort/fix sprint contracts; revenue execution still gated)
 **Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
-**Active milestone:** none — awaiting v6.6 start
-**Next planned milestones:** v6.6 First Cohort Live Operations And Fix Sprint; v6.7 Revenue Retention And Controlled Growth Execution; v6.8 Learning Outcome And Curriculum Quality Expansion; v6.9 Public Launch Decision And Market Readiness.
+**Active milestone:** none — awaiting v6.7 start
+**Next planned milestones:** v6.7 Revenue Retention And Controlled Growth Execution; v6.8 Learning Outcome And Curriculum Quality Expansion; v6.9 Public Launch Decision And Market Readiness.
+
+## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
+
+**Goal:** Operate the first approved cohort if v6.5 starts it, or execute the v6.5 blocker package until a cohort can start.
+
+**Target features:**
+- Cohort day-one operations or blocker sprint start.
+- Activation, account, verification, entitlement, usage, quota, and support explanation fixes.
+- Support, teacher, notification, mobile, and incident escalation fixes.
+- First learning action and parent clarity fixes.
+- Live cohort outcome gate for v6.7 handoff.
 
 ## Completed Milestone: v6.5 Live Pilot Evidence Execution And Cohort Start
 
@@ -1131,7 +1142,7 @@ Known current resources:
 | Plan v6.3 learning outcome and AI curriculum quality sprint | Learning outcome is the core product value; curriculum, exercises, AI tools, recommendations, and progress reporting need real-evidence quality work | Complete locally; larger cohort prep gated by current learning quality evidence |
 | Plan v6.4 operations scale release and observability hardening | Larger cohorts require repeatable observability, support/admin/teacher workflows, release discipline, rollback, and incident ownership | Complete locally; public launch and paid marketing remain unapproved |
 | Start v6.5 live pilot evidence execution and cohort start | v6.0-v6.4 completed local contract gates, but real users and provider execution remain unproven; the next work must use current production evidence | Complete locally; real start still gated by current approved production evidence |
-| Plan v6.6 first cohort live operations and fix sprint | The first started cohort or blocker package should drive shipped fixes across activation, account, support, mobile, usage, and learning | Planned |
+| Plan v6.6 first cohort live operations and fix sprint | The first started cohort or blocker package should drive shipped fixes across activation, account, support, mobile, usage, and learning | Complete locally; v6.7 allowed only after cohort/fix blockers close |
 | Plan v6.7 revenue retention and controlled growth execution | Growth needs reliable paid conversion, entitlement, usage/quota, retention, support capacity, and revenue reconciliation under real conditions | Planned |
 | Plan v6.8 learning outcome and curriculum quality expansion | Expansion should depend on real learning value, not only operational readiness | Planned |
 | Plan v6.9 public launch decision and market readiness | Public launch prep must be a decision from real customer, revenue, learning, support, mobile, provider, and release evidence | Planned |

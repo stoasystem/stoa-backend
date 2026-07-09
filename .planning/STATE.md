@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v6.5
-milestone_name: Live Pilot Evidence Execution And Cohort Start
+milestone: v6.6
+milestone_name: First Cohort Live Operations And Fix Sprint
 status: Awaiting next milestone
-last_updated: "2026-07-09T09:47:13.339Z"
-last_activity: 2026-07-09 — Milestone v6.5 completed and archived
+last_updated: "2026-07-09T09:53:32.583Z"
+last_activity: 2026-07-09 — Milestone v6.6 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: Milestone v6.5 complete
+Phase: Milestone v6.6 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-09 — Milestone v6.5 completed and archived
+Last activity: 2026-07-09 — Milestone v6.6 completed and archived
 
 ## Accumulated Context
 
