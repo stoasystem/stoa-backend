@@ -1405,3 +1405,230 @@ def test_v69_market_readiness_gate_decides_hold_controlled_launch_rollback_or_ne
     assert launch["decision"] == "launch_prep"
     assert launch["publicLaunchApproved"] is True
     assert launch["paidMarketingApproved"] is False
+
+
+def test_v70_controlled_expansion_start_gate_requires_final_approval_and_day_zero_evidence():
+    default_gate = production_pilot_service.v70_controlled_expansion_start_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v7_1Allowed"] is False
+    assert default_gate["publicLaunchApproved"] is False
+
+    approval_states = {
+        area: "approved"
+        for area in production_pilot_service.V70_APPROVAL_SCOPE_AREAS
+    }
+    provider_states = {
+        area: "verified"
+        for area in production_pilot_service.V70_PROVIDER_EVIDENCE_AREAS
+    }
+    setup_states = {
+        area: "ready"
+        for area in production_pilot_service.V70_COHORT_SETUP_AREAS
+    }
+    smoke_states = {
+        area: "verified"
+        for area in production_pilot_service.V70_SMOKE_AREAS
+    }
+    gate = production_pilot_service.v70_controlled_expansion_start_gate(
+        approval=production_pilot_service.v70_final_owner_approval_scope_refresh(
+            approval_states,
+            controlled_expansion_approved=True,
+        ),
+        provider_evidence=production_pilot_service.v70_production_provider_mobile_support_evidence_refresh(
+            provider_states
+        ),
+        cohort_setup=production_pilot_service.v70_controlled_expansion_cohort_rollout_setup(
+            setup_states
+        ),
+        smoke=production_pilot_service.v70_expansion_start_smoke_day_zero_verification(
+            smoke_states,
+            mutation_approved=True,
+        ),
+    )
+    assert gate["decision"] == "start_controlled_expansion"
+    assert gate["v7_1Allowed"] is True
+    assert gate["paidMarketingApproved"] is False
+
+
+def test_v71_expansion_outcome_gate_controls_public_launch_prep_access():
+    default_gate = production_pilot_service.v71_expansion_outcome_gate()
+    assert default_gate["decision"] == "remediation"
+    assert default_gate["v7_2Allowed"] is False
+
+    day_one = {
+        area: "active"
+        for area in production_pilot_service.V71_DAY_ONE_AREAS
+    }
+    account = {
+        area: "fixed"
+        for area in production_pilot_service.V71_ACCOUNT_REVENUE_SUPPORT_AREAS
+    }
+    learning = {
+        area: "fixed"
+        for area in production_pilot_service.V71_LEARNING_MOBILE_PROVIDER_AREAS
+    }
+    release = {
+        area: "verified"
+        for area in production_pilot_service.V71_RELEASE_EVIDENCE_AREAS
+    }
+    gate = production_pilot_service.v71_expansion_outcome_gate(
+        day_one=production_pilot_service.v71_controlled_expansion_day_one_operations(day_one),
+        account_fixes=production_pilot_service.v71_expansion_account_revenue_support_fixes(account),
+        learning_fixes=production_pilot_service.v71_expansion_learning_mobile_teacher_provider_fixes(
+            learning
+        ),
+        release_evidence=production_pilot_service.v71_expansion_reliability_release_evidence(release),
+        launch_prep_candidate=True,
+    )
+    assert gate["decision"] == "public_launch_prep"
+    assert gate["v7_2Allowed"] is True
+    assert gate["publicLaunchApproved"] is False
+
+
+def test_v72_launch_preparation_gate_requires_final_launch_approval():
+    ready_scope = {
+        area: "ready"
+        for area in production_pilot_service.V72_LAUNCH_SCOPE_AREAS
+    }
+    ready_provider = {
+        area: "verified"
+        for area in production_pilot_service.V72_PROVIDER_READINESS_AREAS
+    }
+    ready_capacity = {
+        area: "ready"
+        for area in production_pilot_service.V72_SUPPORT_ACQUISITION_AREAS
+    }
+    ready_package = {
+        area: "ready"
+        for area in production_pilot_service.V72_EVIDENCE_PACKAGE_AREAS
+    }
+    gate_without_approval = production_pilot_service.v72_launch_preparation_gate(
+        scope=production_pilot_service.v72_launch_scope_pricing_package_copy_readiness(ready_scope),
+        provider_readiness=production_pilot_service.v72_web_mobile_app_store_provider_launch_readiness(
+            ready_provider
+        ),
+        capacity=production_pilot_service.v72_support_lifecycle_acquisition_capacity_readiness(
+            ready_capacity
+        ),
+        evidence_package=production_pilot_service.v72_launch_freeze_rollback_dashboard_evidence_package(
+            ready_package
+        ),
+    )
+    assert gate_without_approval["decision"] == "controlled_expansion_only"
+    assert gate_without_approval["v7_3Allowed"] is False
+
+    approved = production_pilot_service.v72_launch_preparation_gate(
+        scope=production_pilot_service.v72_launch_scope_pricing_package_copy_readiness(ready_scope),
+        provider_readiness=production_pilot_service.v72_web_mobile_app_store_provider_launch_readiness(
+            ready_provider
+        ),
+        capacity=production_pilot_service.v72_support_lifecycle_acquisition_capacity_readiness(
+            ready_capacity
+        ),
+        evidence_package=production_pilot_service.v72_launch_freeze_rollback_dashboard_evidence_package(
+            ready_package
+        ),
+        final_launch_approval=True,
+    )
+    assert approved["decision"] == "launch_ready"
+    assert approved["v7_3Allowed"] is True
+
+
+def test_v73_public_launch_execution_gate_holds_without_launch_approval():
+    states = {
+        area: "approved"
+        for area in production_pilot_service.V73_APPROVAL_FREEZE_AREAS
+    }
+    smoke = {
+        area: "verified"
+        for area in production_pilot_service.V73_PRODUCTION_SMOKE_AREAS
+    }
+    monitoring = {
+        area: "healthy"
+        for area in production_pilot_service.V73_MONITORING_AREAS
+    }
+    remediation = {
+        area: "ready"
+        for area in production_pilot_service.V73_REMEDIATION_AREAS
+    }
+    blocked = production_pilot_service.v73_launch_outcome_gate(
+        approval=production_pilot_service.v73_final_launch_approval_freeze_execution(states),
+        smoke=production_pilot_service.v73_staged_launch_enablement_production_smoke(smoke),
+        monitoring=production_pilot_service.v73_launch_room_support_revenue_learning_monitoring(
+            monitoring
+        ),
+        remediation=production_pilot_service.v73_launch_incident_remediation_user_communication(
+            remediation
+        ),
+        outcome_healthy=True,
+    )
+    assert blocked["decision"] == "hold"
+
+    launched = production_pilot_service.v73_launch_outcome_gate(
+        approval=production_pilot_service.v73_final_launch_approval_freeze_execution(
+            states,
+            public_launch_approved=True,
+        ),
+        smoke=production_pilot_service.v73_staged_launch_enablement_production_smoke(smoke),
+        monitoring=production_pilot_service.v73_launch_room_support_revenue_learning_monitoring(
+            monitoring
+        ),
+        remediation=production_pilot_service.v73_launch_incident_remediation_user_communication(
+            remediation
+        ),
+        outcome_healthy=True,
+    )
+    assert launched["decision"] == "launched"
+    assert launched["paidMarketingApproved"] is False
+
+
+def test_v74_scale_gate_keeps_growth_and_paid_marketing_governed():
+    customer = {
+        area: "healthy"
+        for area in production_pilot_service.V74_CUSTOMER_SUCCESS_AREAS
+    }
+    revenue = {
+        area: "healthy"
+        for area in production_pilot_service.V74_REVENUE_GROWTH_AREAS
+    }
+    quality = {
+        area: "reviewed"
+        for area in production_pilot_service.V74_QUALITY_RELIABILITY_AREAS
+    }
+    feedback = {
+        area: "reviewed"
+        for area in production_pilot_service.V74_INCIDENT_FEEDBACK_AREAS
+    }
+    hold = production_pilot_service.v74_scale_next_strategy_gate(
+        customer_success=production_pilot_service.v74_post_launch_customer_success_support_operations(
+            customer
+        ),
+        revenue_growth=production_pilot_service.v74_revenue_retention_growth_governance(revenue),
+        quality_reliability=production_pilot_service.v74_learning_quality_mobile_provider_reliability_review(
+            quality
+        ),
+        incident_feedback=production_pilot_service.v74_scale_incident_release_roadmap_feedback_loop(
+            feedback
+        ),
+    )
+    assert hold["decision"] == "hold"
+    assert hold["paidMarketingApproved"] is False
+
+    scale = production_pilot_service.v74_scale_next_strategy_gate(
+        customer_success=production_pilot_service.v74_post_launch_customer_success_support_operations(
+            customer
+        ),
+        revenue_growth=production_pilot_service.v74_revenue_retention_growth_governance(
+            revenue,
+            paid_marketing_approved=True,
+        ),
+        quality_reliability=production_pilot_service.v74_learning_quality_mobile_provider_reliability_review(
+            quality
+        ),
+        incident_feedback=production_pilot_service.v74_scale_incident_release_roadmap_feedback_loop(
+            feedback
+        ),
+        scale_approved=True,
+    )
+    assert scale["decision"] == "scale_growth"
+    assert scale["paidMarketingApproved"] is True

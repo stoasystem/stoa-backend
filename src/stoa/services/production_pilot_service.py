@@ -4412,6 +4412,690 @@ def v69_market_readiness_decision_gate(
     return result
 
 
+V70_APPROVAL_SCOPE_AREAS = {
+    "decision_owner",
+    "product_owner",
+    "support_owner",
+    "teacher_owner",
+    "finance_billing_owner",
+    "mobile_release_owner",
+    "provider_owner",
+    "incident_owner",
+    "rollout_scope",
+    "cohort_cap",
+    "disabled_features",
+    "pricing_posture",
+    "support_hours",
+    "risk_acceptance",
+    "rollback_authority",
+}
+V70_PROVIDER_EVIDENCE_AREAS = {
+    "payment",
+    "notifications",
+    "support_crm",
+    "bi_apm",
+    "ai_provider",
+    "mobile_app_store",
+    "monitoring",
+    "restore_tabletop",
+    "incident_readiness",
+}
+V70_COHORT_SETUP_AREAS = {
+    "cohort_aliases",
+    "eligibility",
+    "consent_state",
+    "communications",
+    "feature_flags",
+    "dashboards",
+    "support_staffing",
+    "teacher_coverage",
+    "pause_criteria",
+    "rollback_plan",
+    "traffic_separation",
+}
+V70_SMOKE_AREAS = {
+    "login",
+    "verification",
+    "onboarding",
+    "entitlement",
+    "usage_ledger",
+    "quota",
+    "notification",
+    "support",
+    "mobile",
+    "learning",
+    "ai_help",
+    "revenue",
+}
+V71_DAY_ONE_AREAS = {
+    "cohort_enablement",
+    "support_coverage",
+    "teacher_coverage",
+    "dashboards",
+    "incident_checks",
+    "pause_criteria",
+    "rollback_controls",
+    "real_user_separation",
+}
+V71_ACCOUNT_REVENUE_SUPPORT_AREAS = {
+    "account",
+    "verification",
+    "entitlement",
+    "subscription",
+    "usage_quota",
+    "billing",
+    "lifecycle",
+    "support",
+    "parent_clarity",
+}
+V71_LEARNING_MOBILE_PROVIDER_AREAS = {
+    "learning",
+    "ai_provider",
+    "teacher_dispatch",
+    "mobile",
+    "notification",
+    "curriculum",
+    "recommendation",
+    "parent_progress",
+}
+V71_RELEASE_EVIDENCE_AREAS = {
+    "regression_tests",
+    "smoke_evidence",
+    "release_notes",
+    "rollback_notes",
+    "operator_runbook",
+    "traffic_dashboards",
+    "residual_risks",
+}
+V72_LAUNCH_SCOPE_AREAS = {
+    "audience",
+    "rollout_scope",
+    "pricing_package",
+    "plan_limits",
+    "disabled_features",
+    "known_limitations",
+    "eligibility",
+    "support_policy",
+    "billing_copy",
+}
+V72_PROVIDER_READINESS_AREAS = {
+    "frontend_web",
+    "mobile_app_store",
+    "backend",
+    "payment",
+    "notification",
+    "support",
+    "bi_apm",
+    "ai_provider",
+    "monitoring",
+}
+V72_SUPPORT_ACQUISITION_AREAS = {
+    "support_staffing",
+    "incident_coverage",
+    "lifecycle_messages",
+    "referral_waitlist",
+    "acquisition_limits",
+    "retention_reporting",
+    "escalation_paths",
+    "support_macros",
+}
+V72_EVIDENCE_PACKAGE_AREAS = {
+    "launch_freeze",
+    "staged_rollout",
+    "rollback",
+    "dashboards",
+    "alerts",
+    "incident_runbooks",
+    "owner_approvals",
+    "evidence_package",
+    "residual_risks",
+}
+V73_APPROVAL_FREEZE_AREAS = {
+    "final_launch_approval",
+    "rollout_scope",
+    "release_freeze",
+    "release_artifacts",
+    "support_staffing",
+    "teacher_capacity",
+    "provider_readiness",
+    "mobile_readiness",
+    "rollback_authority",
+}
+V73_PRODUCTION_SMOKE_AREAS = {
+    "login",
+    "verification",
+    "onboarding",
+    "entitlement",
+    "usage",
+    "notification",
+    "support",
+    "mobile",
+    "learning",
+    "ai_help",
+    "revenue",
+    "rollback",
+}
+V73_MONITORING_AREAS = {
+    "auth",
+    "billing",
+    "usage",
+    "notifications",
+    "support_sla",
+    "teacher_operations",
+    "learning_quality",
+    "ai_provider",
+    "mobile",
+    "incidents",
+    "revenue",
+    "retention",
+    "acquisition_intake",
+}
+V73_REMEDIATION_AREAS = {
+    "hotfixes",
+    "support_actions",
+    "incident_communications",
+    "rollback",
+    "disablement",
+    "user_copy",
+    "release_evidence",
+    "support_macros",
+    "residual_risks",
+}
+V74_CUSTOMER_SUCCESS_AREAS = {
+    "customer_success",
+    "support",
+    "onboarding",
+    "lifecycle",
+    "incident_communications",
+    "feedback_loops",
+    "teacher_workload",
+    "parent_satisfaction",
+    "student_friction",
+}
+V74_REVENUE_GROWTH_AREAS = {
+    "revenue",
+    "retention",
+    "churn",
+    "refunds",
+    "failed_payments",
+    "usage_quota",
+    "pricing",
+    "lifecycle",
+    "referral_waitlist",
+    "acquisition_quality",
+    "paid_marketing_gate",
+}
+V74_QUALITY_RELIABILITY_AREAS = {
+    "learning_outcomes",
+    "curriculum_quality",
+    "ai_teacher_quality",
+    "recommendations",
+    "parent_progress",
+    "teacher_workload",
+    "mobile_reliability",
+    "provider_health",
+    "support_burden",
+}
+V74_INCIDENT_FEEDBACK_AREAS = {
+    "incidents",
+    "releases",
+    "dashboards",
+    "alerts",
+    "rollback",
+    "migrations",
+    "data_quality",
+    "support_load",
+    "roadmap_feedback",
+}
+V7_READY_STATES = {"approved", "ready", "verified", "active", "fixed", "healthy", "accepted_gap", "disabled_for_scope", "not_required"}
+
+
+def _v7_contract_rows(
+    areas: set[str],
+    states: dict[str, str] | None,
+    *,
+    ready_states: set[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    states = states or {}
+    ready_states = ready_states or V7_READY_STATES
+    rows = []
+    blockers = []
+    for area in sorted(areas):
+        state = states.get(area, "missing")
+        if state not in ready_states:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "ownerAssigned": state != "missing",
+                "evidenceFields": ["timestamp", "owner", "environment", "request_or_build_id", "result", "blocker_state"],
+                "rollbackOrDisableControl": area not in blockers,
+                "supportVisible": area in {"disabled_features", "known_limitations", "support", "support_policy", "support_macros"}
+                and area not in blockers,
+            }
+        )
+    return rows, blockers
+
+
+def v70_final_owner_approval_scope_refresh(
+    states: dict[str, str] | None = None,
+    *,
+    controlled_expansion_approved: bool = False,
+    public_launch_approved: bool = False,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    """Record final controlled-expansion approval without approving launch or marketing by default."""
+    rows, blockers = _v7_contract_rows(V70_APPROVAL_SCOPE_AREAS, states)
+    if not controlled_expansion_approved:
+        blockers.append("controlled_expansion_approval")
+    result = {
+        "approvalState": "approved" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "controlledExpansionApproved": controlled_expansion_approved and not blockers,
+        "publicLaunchApproved": public_launch_approved,
+        "paidMarketingApproved": paid_marketing_approved,
+        "separateLaunchAndMarketingApprovalRequired": not public_launch_approved or not paid_marketing_approved,
+        "knownLimitationsVisible": "known_limitations" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v70_production_provider_mobile_support_evidence_refresh(states: dict[str, str] | None = None) -> dict[str, Any]:
+    """Refresh provider, mobile, support, restore, monitoring, and incident evidence for controlled expansion."""
+    rows, blockers = _v7_contract_rows(V70_PROVIDER_EVIDENCE_AREAS, states)
+    result = {
+        "evidenceState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "missingDependenciesClassified": all(row["state"] != "missing" for row in rows),
+        "forbiddenEvidenceExcluded": sorted(FORBIDDEN_EVIDENCE_FIELDS),
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v70_controlled_expansion_cohort_rollout_setup(states: dict[str, str] | None = None) -> dict[str, Any]:
+    """Prepare cohort aliases, flags, support, dashboards, pause criteria, and rollback controls."""
+    rows, blockers = _v7_contract_rows(V70_COHORT_SETUP_AREAS, states)
+    result = {
+        "setupState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "growthIntakeCapped": "cohort_aliases" not in blockers and "eligibility" not in blockers,
+        "trafficSeparated": "traffic_separation" not in blockers,
+        "customerMutationAllowed": False,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v70_expansion_start_smoke_day_zero_verification(
+    states: dict[str, str] | None = None,
+    *,
+    mutation_approved: bool = False,
+) -> dict[str, Any]:
+    """Verify day-zero expansion paths while requiring explicit approval for any production mutation."""
+    rows, blockers = _v7_contract_rows(V70_SMOKE_AREAS, states, ready_states={"verified", "disabled_for_scope", "not_required"})
+    if not mutation_approved:
+        blockers.append("production_mutation_approval")
+    result = {
+        "smokeState": "passed" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "mutationApproved": mutation_approved,
+        "startBlockersConvertedToOwnerActions": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v70_controlled_expansion_start_gate(
+    *,
+    approval: dict[str, Any] | None = None,
+    provider_evidence: dict[str, Any] | None = None,
+    cohort_setup: dict[str, Any] | None = None,
+    smoke: dict[str, Any] | None = None,
+    rollback_required: bool = False,
+    remediate: bool = False,
+) -> dict[str, Any]:
+    """Decide whether controlled expansion starts, holds, rolls back, or enters remediation."""
+    approval = approval or v70_final_owner_approval_scope_refresh()
+    provider_evidence = provider_evidence or v70_production_provider_mobile_support_evidence_refresh()
+    cohort_setup = cohort_setup or v70_controlled_expansion_cohort_rollout_setup()
+    smoke = smoke or v70_expansion_start_smoke_day_zero_verification()
+    blockers = _unique(
+        [
+            *[f"approval:{blocker}" for blocker in approval.get("blockers", [])],
+            *[f"provider:{blocker}" for blocker in provider_evidence.get("blockers", [])],
+            *[f"cohort:{blocker}" for blocker in cohort_setup.get("blockers", [])],
+            *[f"smoke:{blocker}" for blocker in smoke.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif remediate:
+        decision = "remediate"
+    elif blockers:
+        decision = "hold"
+    else:
+        decision = "start_controlled_expansion"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v7_1Allowed": decision == "start_controlled_expansion",
+        "publicLaunchApproved": False,
+        "paidMarketingApproved": False,
+        "handoff": "cohort scope, cadence, dashboards, owners, support coverage, and rollback controls"
+        if decision == "start_controlled_expansion"
+        else "hold v7.1 until controlled-expansion start evidence is approved",
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v71_controlled_expansion_day_one_operations(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V71_DAY_ONE_AREAS, states, ready_states={"active", "verified", "ready"})
+    result = {"operationsState": "active" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v71_expansion_account_revenue_support_fixes(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V71_ACCOUNT_REVENUE_SUPPORT_AREAS, states, ready_states={"fixed", "accepted_gap", "not_required"})
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "revenueFixesAuditable": "billing" not in blockers and "subscription" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v71_expansion_learning_mobile_teacher_provider_fixes(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V71_LEARNING_MOBILE_PROVIDER_AREAS, states, ready_states={"fixed", "accepted_gap", "not_required"})
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "curriculumSpecialAuthorizationRequired": True,
+        "aiPolicyBound": "ai_provider" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v71_expansion_reliability_release_evidence(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V71_RELEASE_EVIDENCE_AREAS, states, ready_states={"ready", "verified", "accepted_gap"})
+    result = {"releaseState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v71_expansion_outcome_gate(
+    *,
+    day_one: dict[str, Any] | None = None,
+    account_fixes: dict[str, Any] | None = None,
+    learning_fixes: dict[str, Any] | None = None,
+    release_evidence: dict[str, Any] | None = None,
+    launch_prep_candidate: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    day_one = day_one or v71_controlled_expansion_day_one_operations()
+    account_fixes = account_fixes or v71_expansion_account_revenue_support_fixes()
+    learning_fixes = learning_fixes or v71_expansion_learning_mobile_teacher_provider_fixes()
+    release_evidence = release_evidence or v71_expansion_reliability_release_evidence()
+    blockers = _unique(
+        [
+            *[f"operations:{blocker}" for blocker in day_one.get("blockers", [])],
+            *[f"account:{blocker}" for blocker in account_fixes.get("blockers", [])],
+            *[f"learning:{blocker}" for blocker in learning_fixes.get("blockers", [])],
+            *[f"release:{blocker}" for blocker in release_evidence.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "remediation"
+    elif launch_prep_candidate:
+        decision = "public_launch_prep"
+    else:
+        decision = "continue_expansion"
+    result = {"decision": decision, "blockers": blockers, "v7_2Allowed": decision == "public_launch_prep", "publicLaunchApproved": False, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v72_launch_scope_pricing_package_copy_readiness(
+    states: dict[str, str] | None = None,
+    *,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V72_LAUNCH_SCOPE_AREAS, states)
+    result = {
+        "scopeState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "paidMarketingApproved": paid_marketing_approved,
+        "paidMarketingSeparateGateRequired": not paid_marketing_approved,
+        "copyReady": "known_limitations" not in blockers and "disabled_features" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v72_web_mobile_app_store_provider_launch_readiness(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V72_PROVIDER_READINESS_AREAS, states)
+    result = {"readinessState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "providerFallbacksReady": "ai_provider" not in blockers and "payment" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v72_support_lifecycle_acquisition_capacity_readiness(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V72_SUPPORT_ACQUISITION_AREAS, states)
+    result = {"capacityState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "growthIntakeCapacityGated": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v72_launch_freeze_rollback_dashboard_evidence_package(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V72_EVIDENCE_PACKAGE_AREAS, states)
+    result = {"packageState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "forbiddenEvidenceExcluded": sorted(FORBIDDEN_EVIDENCE_FIELDS), "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v72_launch_preparation_gate(
+    *,
+    scope: dict[str, Any] | None = None,
+    provider_readiness: dict[str, Any] | None = None,
+    capacity: dict[str, Any] | None = None,
+    evidence_package: dict[str, Any] | None = None,
+    final_launch_approval: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    scope = scope or v72_launch_scope_pricing_package_copy_readiness()
+    provider_readiness = provider_readiness or v72_web_mobile_app_store_provider_launch_readiness()
+    capacity = capacity or v72_support_lifecycle_acquisition_capacity_readiness()
+    evidence_package = evidence_package or v72_launch_freeze_rollback_dashboard_evidence_package()
+    blockers = _unique(
+        [
+            *[f"scope:{blocker}" for blocker in scope.get("blockers", [])],
+            *[f"provider:{blocker}" for blocker in provider_readiness.get("blockers", [])],
+            *[f"capacity:{blocker}" for blocker in capacity.get("blockers", [])],
+            *[f"package:{blocker}" for blocker in evidence_package.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "hold"
+    elif final_launch_approval:
+        decision = "launch_ready"
+    else:
+        decision = "controlled_expansion_only"
+    result = {"decision": decision, "blockers": blockers, "v7_3Allowed": decision == "launch_ready", "publicLaunchApproved": final_launch_approval and decision == "launch_ready", "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v73_final_launch_approval_freeze_execution(
+    states: dict[str, str] | None = None,
+    *,
+    public_launch_approved: bool = False,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V73_APPROVAL_FREEZE_AREAS, states)
+    if not public_launch_approved:
+        blockers.append("public_launch_approval")
+    result = {
+        "approvalState": "approved" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "publicLaunchApproved": public_launch_approved and not blockers,
+        "paidMarketingApproved": paid_marketing_approved,
+        "paidMarketingSeparateGateRequired": not paid_marketing_approved,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v73_staged_launch_enablement_production_smoke(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V73_PRODUCTION_SMOKE_AREAS, states, ready_states={"verified", "disabled_for_scope", "not_required"})
+    result = {"smokeState": "passed" if not blockers else "blocked", "areas": rows, "blockers": blockers, "mutationsScopedAndReversible": not blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v73_launch_room_support_revenue_learning_monitoring(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V73_MONITORING_AREAS, states, ready_states={"active", "healthy", "verified"})
+    result = {"monitoringState": "active" if not blockers else "blocked", "areas": rows, "blockers": blockers, "realUserTrafficSeparated": "acquisition_intake" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v73_launch_incident_remediation_user_communication(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V73_REMEDIATION_AREAS, states, ready_states={"ready", "fixed", "accepted_gap", "not_required"})
+    result = {"remediationState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "limitationsVisible": "user_copy" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v73_launch_outcome_gate(
+    *,
+    approval: dict[str, Any] | None = None,
+    smoke: dict[str, Any] | None = None,
+    monitoring: dict[str, Any] | None = None,
+    remediation: dict[str, Any] | None = None,
+    outcome_healthy: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    approval = approval or v73_final_launch_approval_freeze_execution()
+    smoke = smoke or v73_staged_launch_enablement_production_smoke()
+    monitoring = monitoring or v73_launch_room_support_revenue_learning_monitoring()
+    remediation = remediation or v73_launch_incident_remediation_user_communication()
+    blockers = _unique(
+        [
+            *[f"approval:{blocker}" for blocker in approval.get("blockers", [])],
+            *[f"smoke:{blocker}" for blocker in smoke.get("blockers", [])],
+            *[f"monitoring:{blocker}" for blocker in monitoring.get("blockers", [])],
+            *[f"remediation:{blocker}" for blocker in remediation.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "hold"
+    elif approval.get("publicLaunchApproved") and outcome_healthy:
+        decision = "launched"
+    else:
+        decision = "continue_controlled_expansion"
+    result = {"decision": decision, "blockers": blockers, "v7_4Mode": "launched" if decision == "launched" else "controlled_or_hold", "paidMarketingApproved": approval.get("paidMarketingApproved") is True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v74_post_launch_customer_success_support_operations(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V74_CUSTOMER_SUCCESS_AREAS, states, ready_states={"active", "healthy", "accepted_gap"})
+    result = {"operationsState": "healthy" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v74_revenue_retention_growth_governance(
+    states: dict[str, str] | None = None,
+    *,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V74_REVENUE_GROWTH_AREAS, states, ready_states={"healthy", "reconciled", "accepted_gap", "not_required"})
+    result = {"governanceState": "healthy" if not blockers else "blocked", "areas": rows, "blockers": blockers, "paidMarketingApproved": paid_marketing_approved, "paidMarketingCapacityGateRequired": not paid_marketing_approved, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v74_learning_quality_mobile_provider_reliability_review(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V74_QUALITY_RELIABILITY_AREAS, states, ready_states={"healthy", "reviewed", "accepted_gap"})
+    result = {"qualityState": "healthy" if not blockers else "blocked", "areas": rows, "blockers": blockers, "aiAutonomyPolicyBound": "ai_teacher_quality" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v74_scale_incident_release_roadmap_feedback_loop(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V74_INCIDENT_FEEDBACK_AREAS, states, ready_states={"reviewed", "healthy", "accepted_gap"})
+    result = {"feedbackState": "healthy" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v74_scale_next_strategy_gate(
+    *,
+    customer_success: dict[str, Any] | None = None,
+    revenue_growth: dict[str, Any] | None = None,
+    quality_reliability: dict[str, Any] | None = None,
+    incident_feedback: dict[str, Any] | None = None,
+    scale_approved: bool = False,
+    recommend_v8: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    customer_success = customer_success or v74_post_launch_customer_success_support_operations()
+    revenue_growth = revenue_growth or v74_revenue_retention_growth_governance()
+    quality_reliability = quality_reliability or v74_learning_quality_mobile_provider_reliability_review()
+    incident_feedback = incident_feedback or v74_scale_incident_release_roadmap_feedback_loop()
+    blockers = _unique(
+        [
+            *[f"customer:{blocker}" for blocker in customer_success.get("blockers", [])],
+            *[f"revenue:{blocker}" for blocker in revenue_growth.get("blockers", [])],
+            *[f"quality:{blocker}" for blocker in quality_reliability.get("blockers", [])],
+            *[f"incident:{blocker}" for blocker in incident_feedback.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "remediation"
+    elif recommend_v8:
+        decision = "next_strategic_version"
+    elif scale_approved:
+        decision = "scale_growth"
+    else:
+        decision = "hold"
+    result = {"decision": decision, "blockers": blockers, "v8Recommended": decision == "next_strategic_version", "paidMarketingApproved": revenue_growth.get("paidMarketingApproved") is True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {

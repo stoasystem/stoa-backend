@@ -1,75 +1,74 @@
-# Requirements: v7.0 Final Live Approval And Controlled Expansion Start
+# Requirements: v7.4 Post-Launch Scale Customer Success And Growth Governance
 
-**Milestone:** v7.0
-**Status:** Planned
+**Milestone:** v7.4
+**Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.9 Public Launch Decision And Market Readiness
+**Prior milestone:** v7.3 Public Launch Execution Or Hold Decision
 
 ## Purpose
 
-v7.0 starts the next real execution track after v6.9. It must convert market-readiness contracts into final approved controlled expansion or a clear hold decision. It must not treat v6.9 local completion as public launch approval.
+Operate and govern STOA after launch or controlled expansion. v7.4 must turn live evidence into customer success, revenue reliability, learning quality, support scale, growth governance, and next-strategy decisions.
 
 ## Requirements
 
-### V7APPROVAL-01 Final Owner Approval And Expansion Scope Refresh
+### V7SCALE-01 Post-Launch Customer Success And Support Operations
 
 Acceptance criteria:
 
-- Final decision owner, product owner, support owner, teacher owner, finance owner, mobile owner, provider owners, and incident owner are recorded.
-- Rollout scope, cohort cap, disabled features, pricing posture, support hours, teacher coverage, risk acceptance, and rollback authority are approved.
-- Public launch and paid marketing approval are explicitly separate from controlled expansion approval.
-- Known limitations are visible to users/support where relevant.
+- Customer success, support, onboarding, lifecycle, incident communications, and feedback loops are active.
+- Support load, response time, resolution quality, teacher workload, parent satisfaction, and student friction are tracked.
+- Known limitations and disabled features remain visible.
+- Escalation paths cover billing, login, learning, mobile, AI/provider, notification, and refund issues.
 
-### V7APPROVAL-02 Production Provider Mobile Support Evidence Refresh
-
-Acceptance criteria:
-
-- Payment, notification, support CRM, BI/APM, AI/provider, mobile/app-store, monitoring, restore/tabletop, and incident readiness are refreshed.
-- Evidence includes timestamp, owner, environment, request/build ID where applicable, result, blocker state, fallback, and rollback/disable control.
-- Missing dependencies are classified as accepted, disabled for expansion, hold-blocking, or not required.
-- Evidence excludes secrets, auth tokens, verification codes, raw provider payloads, raw student content, private object keys, and presigned URLs.
-
-### V7APPROVAL-03 Controlled Expansion Cohort And Rollout Setup
+### V7SCALE-02 Revenue Retention Growth Governance
 
 Acceptance criteria:
 
-- Cohort aliases, eligibility, consent state, communications, feature flags, dashboards, support staffing, teacher coverage, pause criteria, and rollback plan are prepared.
-- Growth intake is capped and support-visible.
-- Parent/student/teacher/admin copy explains included and disabled features.
-- Rollout setup distinguishes production, dry-run, test, and internal accounts.
+- Revenue, retention, churn, refunds, failed payments, usage/quota, pricing, lifecycle, and support corrections are reconciled.
+- Referral/waitlist/acquisition quality and capacity gates are reviewed.
+- Paid marketing remains gated by support, revenue, retention, learning quality, and incident readiness.
+- Growth decisions are auditable and owner-approved.
 
-### V7APPROVAL-04 Expansion Start Smoke And Day-Zero Verification
-
-Acceptance criteria:
-
-- Approved smoke covers login, verification, onboarding, entitlement, usage ledger, quota, notification, support, mobile, learning, AI/help, and revenue paths.
-- Any production mutation is approved, scoped, reversible, and tied to pilot/expansion accounts.
-- Request IDs, account aliases, build IDs, timestamps, blocker states, and owner signoff are recorded.
-- Start blockers are converted into owner/action rows.
-
-### VERIFY-84 v7.0 Controlled Expansion Start Gate
+### V7SCALE-03 Learning Quality Mobile Provider Reliability Review
 
 Acceptance criteria:
 
-- Decision is start controlled expansion, hold, rollback, or remediate.
-- Decision uses current approval, provider/mobile/support evidence, cohort setup, smoke results, revenue, learning, and incident readiness.
+- Learning outcomes, curriculum quality, AI teacher quality, recommendations, parent progress reporting, teacher workload, mobile reliability, provider health, and support burden are reviewed.
+- Curriculum editing remains specially authorized.
+- AI autonomy remains reviewed or policy-bound.
+- Quality issues are converted into product, content, AI, support, or accepted-risk actions.
+
+### V7SCALE-04 Scale Incident Release And Roadmap Feedback Loop
+
+Acceptance criteria:
+
+- Incidents, releases, dashboards, alerts, rollback, migrations, data quality, support load, and roadmap feedback are reviewed.
+- Issues have owner, severity, user impact, mitigation, and next action.
+- Release and incident evidence link code SHA, deploy/build IDs, request IDs where applicable, timestamp, and owner.
+- Roadmap feedback separates customer value, growth, learning quality, operations, and technical debt.
+
+### VERIFY-88 v7.4 Scale Or Next Strategy Gate
+
+Acceptance criteria:
+
+- Decision is scale growth, hold, rollback, remediation, or next strategic version.
+- Decision uses customer success, revenue, retention, learning, support, mobile, provider, incident, release, and acquisition evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v7.1 receives cohort scope, operating cadence, dashboards, owners, support coverage, and rollback controls only if expansion starts.
+- v8 recommendation, if any, is based on live risks and opportunities.
 
 ## Out of Scope
 
-- Public launch without final launch approval.
-- Paid marketing without separate approval.
-- Broad expansion beyond the approved cohort cap.
-- Uncontrolled provider writes.
-- Unreviewed AI autonomy.
+- Unbounded paid marketing.
+- Unsupported market/language expansion.
+- Enterprise sales automation unless separately approved.
+- Unreviewed AI autonomy expansion.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V7APPROVAL-01 | Phase 422 | Planned |
-| V7APPROVAL-02 | Phase 423 | Planned |
-| V7APPROVAL-03 | Phase 424 | Planned |
-| V7APPROVAL-04 | Phase 425 | Planned |
-| VERIFY-84 | Phase 426 | Planned |
+| V7SCALE-01 | Phase 442 | Completed |
+| V7SCALE-02 | Phase 443 | Completed |
+| V7SCALE-03 | Phase 444 | Completed |
+| V7SCALE-04 | Phase 445 | Completed |
+| VERIFY-88 | Phase 446 | Completed |

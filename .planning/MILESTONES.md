@@ -2758,5 +2758,24 @@ Key accomplishments:
 
 Known deferred items at close: third-party support provider credentials/adapters, retry mutation workers, single stitched create-delivery to queue/detail integration test with real repository helpers, two-way ticket synchronization, support SLA analytics, and broader CRM/customer messaging automation.
 
+### v7.0-v7.4 Final Approval, Controlled Expansion, Launch, And Scale Governance
+
+**Status:** Completed local gated contract sequence 2026-07-09
+**Started:** 2026-07-09
+**Completed:** 2026-07-09
+**Audits:** `.planning/milestones/v7.0-MILESTONE-AUDIT.md` through `.planning/milestones/v7.4-MILESTONE-AUDIT.md`
+**Roadmaps:** `.planning/milestones/v7.0-ROADMAP.md` through `.planning/milestones/v7.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v7.0-REQUIREMENTS.md` through `.planning/milestones/v7.4-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v7.0-phases/` through `.planning/milestones/v7.4-phases/`
+
+Key accomplishments:
+
+- Added fail-closed v7.0-v7.4 operations contracts in `production_pilot_service`.
+- Covered final controlled-expansion approval, expansion operations, public launch preparation, launch execution or hold, and post-launch scale governance.
+- Kept public launch, paid marketing, broad expansion, and uncontrolled provider writes blocked unless explicit approval and healthy evidence are supplied.
+- Verified with `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff.
+
+Known deferred items at close: real owner approvals, live production evidence, approved scoped production mutations, public launch execution, paid marketing execution, and any external provider writes remain future operational decisions.
+
 ---
-*Last updated: 2026-06-14 after selecting v5.1 rich curriculum editor and production content migration*
+*Last updated: 2026-07-09 after completing v7.0-v7.4 local gated operations contracts*
