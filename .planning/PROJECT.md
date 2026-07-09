@@ -136,7 +136,7 @@ The v6.4 milestone is complete locally. It adds operations risk review, admin/su
 
 The v6.5 milestone is complete locally. It adds production-evidence input contracts for access/signoff refresh, account/payment/usage smoke, notification/support/mobile/learning smoke, first-cohort launch packet execution, and live pilot start handoff. It does not claim real production checks were performed; missing current evidence still returns `hold` and blocks v6.6 real user operations.
 
-The v6.9 milestone remains planned as the next real execution track: a market-readiness decision. This sequence is intentionally not v7: the v6 real-evidence theme is not finished until real cohort, revenue, learning, operations, and launch/hold evidence exist.
+The v6.5-v6.9 execution sequence is complete locally as contracts and gates for current evidence, first cohort operations, revenue retention, learning quality, and market-readiness decisions. This sequence does not claim real pilot users, provider writes, paid marketing, or public launch occurred.
 
 ## Core Value
 
@@ -145,10 +145,10 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v6.8 Learning Outcome And Curriculum Quality Expansion on 2026-07-09 (learning outcome and curriculum quality contracts; market readiness still gated)
+**Latest completed milestone:** v6.9 Public Launch Decision And Market Readiness on 2026-07-09 (market-readiness decision contracts; public launch and paid marketing still separately gated)
 **Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
-**Active milestone:** none — awaiting v6.9 start
-**Next planned milestones:** v6.9 Public Launch Decision And Market Readiness.
+**Active milestone:** none — v6.5-v6.9 sequence complete locally
+**Next planned milestones:** none recorded.
 
 ## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
 
@@ -182,6 +182,17 @@ Parents can trust that parent portal views reflect authorized real student data 
 - AI teacher summary practice quality release.
 - Adaptive recommendation and parent progress release.
 - Learning expansion decision gate for v6.9 handoff.
+
+## Completed Milestone: v6.9 Public Launch Decision And Market Readiness
+
+**Goal:** Make an honest market-readiness decision after real pilot, revenue, retention, learning, and operations evidence.
+
+**Target features:**
+- Market readiness evidence consolidation.
+- Launch scope pricing support and risk review.
+- App store, web production, and provider readiness review.
+- Public launch or controlled expansion plan.
+- Market readiness decision gate.
 
 ## Completed Milestone: v6.5 Live Pilot Evidence Execution And Cohort Start
 
@@ -1167,7 +1178,7 @@ Known current resources:
 | Plan v6.6 first cohort live operations and fix sprint | The first started cohort or blocker package should drive shipped fixes across activation, account, support, mobile, usage, and learning | Complete locally; v6.7 allowed only after cohort/fix blockers close |
 | Plan v6.7 revenue retention and controlled growth execution | Growth needs reliable paid conversion, entitlement, usage/quota, retention, support capacity, and revenue reconciliation under real conditions | Complete locally; v6.8 allowed only after revenue/growth blockers close |
 | Plan v6.8 learning outcome and curriculum quality expansion | Expansion should depend on real learning value, not only operational readiness | Complete locally; v6.9 allowed only after learning-quality blockers close |
-| Plan v6.9 public launch decision and market readiness | Public launch prep must be a decision from real customer, revenue, learning, support, mobile, provider, and release evidence | Planned |
+| Plan v6.9 public launch decision and market readiness | Public launch prep must be a decision from real customer, revenue, learning, support, mobile, provider, and release evidence | Complete locally; public launch prep still requires final owner approval and healthy evidence |
 
 ## Evolution
 
@@ -1187,4 +1198,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-09 after completing v6.8 learning outcome and curriculum quality expansion*
+*Last updated: 2026-07-09 after completing v6.9 public launch decision and market readiness*

@@ -1,21 +1,21 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-09 after v6.8 local learning quality completion
+**Updated:** 2026-07-09 after v6.9 local market readiness completion
 **Mode:** live evidence execution, first cohort operations, revenue retention, learning quality, and market readiness
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v6.0-v6.8 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, controlled growth, learning outcome, curriculum release, AI teacher quality, and parent progress gates.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 68 tests and focused Ruff passed in the v6.8 audit.
-- v6.8 closed as local-contract readiness only.
+- v6.0-v6.9 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, controlled growth, learning outcome, curriculum release, AI teacher quality, parent progress, and market-readiness decision gates.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 73 tests and focused Ruff passed in the v6.9 audit.
+- v6.9 closed as local-contract readiness only.
 
 Important reality check:
 
 - v5.30-v6.4 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
 - Current gates still default to hold or remediation without current approved real evidence.
-- The next five milestones must execute real evidence and customer/product loops, not add more local-only gates.
+- Public launch, paid marketing, and uncontrolled provider writes remain blocked without explicit operational approval and healthy live evidence.
 
 ## Completed: v6.5 Live Pilot Evidence Execution And Cohort Start
 
@@ -83,7 +83,7 @@ Implementation strategy:
 - Rank learning issues by real frequency, severity, student impact, teacher effort, and parent confusion.
 - Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
 
-## Active: v6.9 Public Launch Decision And Market Readiness
+## Completed: v6.9 Public Launch Decision And Market Readiness
 
 Roadmap: `.planning/milestones/v6.9-ROADMAP.md`
 Requirements: `.planning/milestones/v6.9-REQUIREMENTS.md`

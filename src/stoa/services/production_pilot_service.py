@@ -535,6 +535,56 @@ V68_ADAPTIVE_PROGRESS_RELEASE_SURFACES = {
     "teacher_admin_correction",
     "parent_progress_reporting",
 }
+V69_MARKET_EVIDENCE_AREAS = {
+    "cohort_operations",
+    "activation",
+    "account_reliability",
+    "revenue",
+    "retention",
+    "learning_quality",
+    "support",
+    "teacher_operations",
+    "mobile",
+    "provider_health",
+    "incidents",
+    "observability",
+    "release_discipline",
+}
+V69_LAUNCH_SCOPE_RISK_AREAS = {
+    "rollout_scope",
+    "audience",
+    "pricing_package",
+    "lifecycle_messaging",
+    "support_staffing",
+    "teacher_capacity",
+    "disabled_features",
+    "known_limitations",
+    "support_macros",
+    "incident_communications",
+}
+V69_PRODUCTION_PROVIDER_READINESS_AREAS = {
+    "backend",
+    "frontend_web",
+    "mobile_app_store",
+    "providers",
+    "monitoring",
+    "alerting",
+    "rollback",
+    "migration",
+    "incident_readiness",
+}
+V69_ROLLOUT_PLAN_AREAS = {
+    "cohort_market_scope",
+    "growth_limits",
+    "support_staffing",
+    "dashboards",
+    "freeze",
+    "rollback",
+    "owner_approvals",
+    "communications",
+    "known_limitations",
+    "disabled_features",
+}
 
 
 @dataclass(frozen=True)
@@ -4149,6 +4199,213 @@ def v68_learning_expansion_decision_gate(
             "marketReadinessRisks": [],
             "learningQualityRisks": blockers,
         },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def market_readiness_evidence_consolidation(
+    states: dict[str, str] | None = None,
+    *,
+    real_traffic_separated: bool = False,
+) -> dict[str, Any]:
+    """Consolidate market readiness evidence across customer, revenue, learning, support, and operations."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V69_MARKET_EVIDENCE_AREAS):
+        state = states.get(area, "missing")
+        if state not in {"consolidated", "accepted_gap", "not_applicable"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "ownerAssigned": state != "missing",
+                "severityAssigned": state != "missing",
+                "userImpactCaptured": state != "missing",
+                "mitigationCaptured": state != "missing",
+                "rollbackCaptured": state != "missing",
+                "supportSafe": True,
+            }
+        )
+    if not real_traffic_separated:
+        blockers.append("real_traffic_separated")
+    result = {
+        "evidenceState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "realTrafficSeparated": real_traffic_separated,
+        "forbiddenEvidenceExcluded": sorted(FORBIDDEN_EVIDENCE_FIELDS),
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def launch_scope_pricing_support_risk_review(
+    states: dict[str, str] | None = None,
+    *,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    """Review launch scope, pricing, support, disabled features, known limits, and communications."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V69_LAUNCH_SCOPE_RISK_AREAS):
+        state = states.get(area, "missing")
+        if state not in {"reviewed", "ready", "accepted_gap"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "copyReady": area in {"disabled_features", "known_limitations"} and state in {"reviewed", "ready"},
+                "supportReady": area in {"support_staffing", "support_macros", "incident_communications"}
+                and state in {"reviewed", "ready"},
+            }
+        )
+    result = {
+        "reviewState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "roleCopyReady": "disabled_features" not in blockers and "known_limitations" not in blockers,
+        "paidMarketingApproved": paid_marketing_approved,
+        "paidMarketingSeparateApprovalRequired": not paid_marketing_approved,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def app_store_web_production_provider_readiness_review(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Review app, web, backend, provider, monitoring, rollback, migration, and incident readiness."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V69_PRODUCTION_PROVIDER_READINESS_AREAS):
+        state = states.get(area, "missing")
+        if state not in {"reviewed", "ready", "partial_with_constraints", "accepted_gap"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "releaseEvidenceLinks": ["code_sha", "deploy_or_build_id", "timestamp", "owner"],
+                "requestIdWhereApplicable": True,
+                "disablementOrFallbackReady": area in {"providers", "mobile_app_store"}
+                and state in {"ready", "partial_with_constraints"},
+                "constraintsExplicit": state == "partial_with_constraints",
+            }
+        )
+    result = {
+        "readinessState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": blockers,
+        "providerFailuresHaveControls": "providers" not in blockers,
+        "mobileConstraintsExplicit": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def public_launch_or_controlled_expansion_plan(
+    states: dict[str, str] | None = None,
+    *,
+    final_owner_approval: bool = False,
+    healthy_evidence: bool = False,
+    requested_path: str = "controlled_expansion",
+) -> dict[str, Any]:
+    """Prepare staged public-launch-prep or controlled-expansion plan without approving launch by default."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V69_ROLLOUT_PLAN_AREAS):
+        state = states.get(area, "missing")
+        if state not in {"ready", "reviewed", "accepted_gap"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "userVisibleWhenNeeded": area in {"known_limitations", "disabled_features"}
+                and state in {"ready", "reviewed"},
+                "rollbackRelevant": area in {"freeze", "rollback", "dashboards", "owner_approvals"},
+            }
+        )
+    if requested_path == "public_launch_prep" and not final_owner_approval:
+        blockers.append("final_owner_approval")
+    if requested_path == "public_launch_prep" and not healthy_evidence:
+        blockers.append("healthy_evidence")
+    plan_state = "ready" if not blockers else "blocked"
+    result = {
+        "planState": plan_state,
+        "rolloutPath": requested_path if plan_state == "ready" else "hold_or_remediation",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "finalOwnerApproval": final_owner_approval,
+        "healthyEvidence": healthy_evidence,
+        "publicLaunchApproved": requested_path == "public_launch_prep" and plan_state == "ready",
+        "knownLimitationsUserVisible": "known_limitations" not in blockers,
+        "disabledFeaturesUserVisible": "disabled_features" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v69_market_readiness_decision_gate(
+    *,
+    evidence: dict[str, Any] | None = None,
+    scope_review: dict[str, Any] | None = None,
+    production_readiness: dict[str, Any] | None = None,
+    rollout_plan: dict[str, Any] | None = None,
+    rollback_required: bool = False,
+    recommend_next_version: bool = False,
+) -> dict[str, Any]:
+    """Close v6.9 with launch prep, controlled expansion, hold, rollback, or next-version focus."""
+    evidence = evidence or market_readiness_evidence_consolidation()
+    scope_review = scope_review or launch_scope_pricing_support_risk_review()
+    production_readiness = production_readiness or app_store_web_production_provider_readiness_review()
+    rollout_plan = rollout_plan or public_launch_or_controlled_expansion_plan()
+    blockers = _unique(
+        [
+            *[f"evidence:{blocker}" for blocker in evidence.get("blockers", [])],
+            *[f"scope:{blocker}" for blocker in scope_review.get("blockers", [])],
+            *[f"production:{blocker}" for blocker in production_readiness.get("blockers", [])],
+            *[f"rollout:{blocker}" for blocker in rollout_plan.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif recommend_next_version:
+        decision = "next_version_focus"
+    elif blockers:
+        decision = "hold"
+    elif rollout_plan.get("rolloutPath") == "public_launch_prep":
+        decision = "launch_prep"
+    else:
+        decision = "controlled_expansion"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "publicLaunchApproved": decision == "launch_prep" and rollout_plan.get("publicLaunchApproved") is True,
+        "paidMarketingApproved": scope_review.get("paidMarketingApproved") is True,
+        "decisionInputs": [
+            "customer",
+            "revenue",
+            "learning",
+            "support",
+            "operations",
+            "provider",
+            "mobile",
+            "release",
+        ],
+        "v7RecommendationBasedOnRemainingRisks": recommend_next_version,
         "privacy": _privacy_contract(),
     }
     assert_pilot_evidence_safe(result)

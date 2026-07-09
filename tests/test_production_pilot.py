@@ -1282,3 +1282,126 @@ def test_v68_learning_expansion_gate_controls_market_readiness_access():
     assert ready["publicLaunchApproved"] is False
     assert ready["paidMarketingApproved"] is False
     assert ready["marketReadinessRisksSeparated"] is True
+
+
+def test_v69_market_evidence_consolidation_requires_real_traffic_separation():
+    default_evidence = production_pilot_service.market_readiness_evidence_consolidation()
+    assert default_evidence["evidenceState"] == "blocked"
+    assert "cohort_operations" in default_evidence["blockers"]
+    assert "real_traffic_separated" in default_evidence["blockers"]
+
+    states = {
+        area: "consolidated"
+        for area in production_pilot_service.V69_MARKET_EVIDENCE_AREAS
+    }
+    ready = production_pilot_service.market_readiness_evidence_consolidation(
+        states,
+        real_traffic_separated=True,
+    )
+    assert ready["evidenceState"] == "ready"
+    assert ready["realTrafficSeparated"] is True
+    assert "raw_student_content" in ready["forbiddenEvidenceExcluded"]
+    assert all(row["supportSafe"] for row in ready["areas"])
+
+
+def test_v69_launch_scope_review_keeps_paid_marketing_separate():
+    default_review = production_pilot_service.launch_scope_pricing_support_risk_review()
+    assert default_review["reviewState"] == "blocked"
+    assert "rollout_scope" in default_review["blockers"]
+    assert default_review["paidMarketingSeparateApprovalRequired"] is True
+
+    states = {
+        area: "reviewed"
+        for area in production_pilot_service.V69_LAUNCH_SCOPE_RISK_AREAS
+    }
+    ready = production_pilot_service.launch_scope_pricing_support_risk_review(states)
+    assert ready["reviewState"] == "ready"
+    assert ready["roleCopyReady"] is True
+    assert ready["paidMarketingApproved"] is False
+
+
+def test_v69_production_provider_readiness_tracks_mobile_constraints_and_controls():
+    default_ready = production_pilot_service.app_store_web_production_provider_readiness_review()
+    assert default_ready["readinessState"] == "blocked"
+    assert "backend" in default_ready["blockers"]
+
+    states = {
+        area: "ready"
+        for area in production_pilot_service.V69_PRODUCTION_PROVIDER_READINESS_AREAS
+    }
+    states["mobile_app_store"] = "partial_with_constraints"
+    ready = production_pilot_service.app_store_web_production_provider_readiness_review(states)
+    assert ready["readinessState"] == "ready"
+    assert ready["providerFailuresHaveControls"] is True
+    assert ready["mobileConstraintsExplicit"] is True
+
+
+def test_v69_rollout_plan_blocks_public_launch_prep_without_final_approval():
+    states = {
+        area: "ready"
+        for area in production_pilot_service.V69_ROLLOUT_PLAN_AREAS
+    }
+    blocked = production_pilot_service.public_launch_or_controlled_expansion_plan(
+        states,
+        requested_path="public_launch_prep",
+    )
+    assert blocked["planState"] == "blocked"
+    assert "final_owner_approval" in blocked["blockers"]
+    assert blocked["publicLaunchApproved"] is False
+
+    ready = production_pilot_service.public_launch_or_controlled_expansion_plan(
+        states,
+        final_owner_approval=True,
+        healthy_evidence=True,
+        requested_path="public_launch_prep",
+    )
+    assert ready["planState"] == "ready"
+    assert ready["rolloutPath"] == "public_launch_prep"
+    assert ready["publicLaunchApproved"] is True
+
+
+def test_v69_market_readiness_gate_decides_hold_controlled_launch_rollback_or_next_version():
+    default_gate = production_pilot_service.v69_market_readiness_decision_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["publicLaunchApproved"] is False
+
+    rollback = production_pilot_service.v69_market_readiness_decision_gate(
+        evidence={"blockers": []},
+        scope_review={"blockers": [], "paidMarketingApproved": False},
+        production_readiness={"blockers": []},
+        rollout_plan={"blockers": [], "rolloutPath": "controlled_expansion"},
+        rollback_required=True,
+    )
+    assert rollback["decision"] == "rollback"
+
+    next_version = production_pilot_service.v69_market_readiness_decision_gate(
+        evidence={"blockers": []},
+        scope_review={"blockers": [], "paidMarketingApproved": False},
+        production_readiness={"blockers": []},
+        rollout_plan={"blockers": [], "rolloutPath": "controlled_expansion"},
+        recommend_next_version=True,
+    )
+    assert next_version["decision"] == "next_version_focus"
+    assert next_version["v7RecommendationBasedOnRemainingRisks"] is True
+
+    controlled = production_pilot_service.v69_market_readiness_decision_gate(
+        evidence={"blockers": []},
+        scope_review={"blockers": [], "paidMarketingApproved": False},
+        production_readiness={"blockers": []},
+        rollout_plan={"blockers": [], "rolloutPath": "controlled_expansion"},
+    )
+    assert controlled["decision"] == "controlled_expansion"
+
+    launch = production_pilot_service.v69_market_readiness_decision_gate(
+        evidence={"blockers": []},
+        scope_review={"blockers": [], "paidMarketingApproved": False},
+        production_readiness={"blockers": []},
+        rollout_plan={
+            "blockers": [],
+            "rolloutPath": "public_launch_prep",
+            "publicLaunchApproved": True,
+        },
+    )
+    assert launch["decision"] == "launch_prep"
+    assert launch["publicLaunchApproved"] is True
+    assert launch["paidMarketingApproved"] is False

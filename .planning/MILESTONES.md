@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.9 Public Launch Decision And Market Readiness (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added market readiness evidence consolidation contracts across cohort operations, activation, account reliability, revenue, retention, learning, support, teacher operations, mobile, provider health, incidents, observability, and release discipline.
+- Added launch scope, pricing, support, and risk review contracts that keep paid marketing behind separate approval.
+- Added app-store/web/production/provider readiness contracts with release evidence links, provider fallback controls, and explicit mobile constraints.
+- Added public launch or controlled expansion planning contracts that block public launch prep without final owner approval and healthy evidence.
+- Added `v69_market_readiness_decision_gate`, which defaults to hold and can return launch prep, controlled expansion, rollback, or next-version focus from evidence.
+
+---
+
 ## v6.8 Learning Outcome And Curriculum Quality Expansion (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -53,24 +67,6 @@
 - Added production notification/support/mobile/learning smoke contracts that distinguish production evidence from dry-run or local fixture evidence.
 - Added first-cohort launch packet execution contracts with dry-run coverage and start-blocking gap handling.
 - Added `live_pilot_start_decision_handoff`, which allows v6.6 real-user operations only on `start_limited_pilot`.
-
----
-
-## Planned: v6.9 Public Launch Decision And Market Readiness
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.9-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.9-REQUIREMENTS.md`
-**Goal:** Make an honest market-readiness decision after real pilot, revenue, retention, learning, and operations evidence.
-**Phases:** 5
-
-Planned phases:
-
-- Phase 417: Market Readiness Evidence Consolidation. (planned)
-- Phase 418: Launch Scope Pricing Support And Risk Review. (planned)
-- Phase 419: App Store Web Production And Provider Readiness Review. (planned)
-- Phase 420: Public Launch Or Controlled Expansion Plan. (planned)
-- Phase 421: v6.9 Market Readiness Decision Gate. (planned)
 
 ---
 
