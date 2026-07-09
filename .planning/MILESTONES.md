@@ -1,22 +1,16 @@
 # Milestones
 
-## Planned: v6.5 Live Pilot Evidence Execution And Cohort Start
+## v6.5 Live Pilot Evidence Execution And Cohort Start (Shipped: 2026-07-09)
 
-**Status:** Planned
-**Roadmap:** `.planning/ROADMAP.md`
-**Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v6.5-ROADMAP.md`
-**Milestone requirements:** `.planning/milestones/v6.5-REQUIREMENTS.md`
-**Goal:** Execute current real evidence against the locally complete v6 gates, then either start the first limited cohort or publish a current blocker package.
-**Phases:** 5
+**Phases completed:** 5 phases, 5 plans, 0 tasks
 
-Planned phases:
+**Key accomplishments:**
 
-- Phase 397: Production Evidence Access And Approval Refresh. (planned)
-- Phase 398: Production Account Payment Usage Smoke. (planned)
-- Phase 399: Production Notification Support Mobile Learning Smoke. (planned)
-- Phase 400: First Cohort Launch Packet Execution. (planned)
-- Phase 401: Live Pilot Start Decision And Handoff. (planned)
+- Added production evidence access and owner signoff refresh contracts that reject local contracts as production proof.
+- Added production account/payment/usage smoke contracts with explicit blocker packages and read-only mutation defaults.
+- Added production notification/support/mobile/learning smoke contracts that distinguish production evidence from dry-run or local fixture evidence.
+- Added first-cohort launch packet execution contracts with dry-run coverage and start-blocking gap handling.
+- Added `live_pilot_start_decision_handoff`, which allows v6.6 real-user operations only on `start_limited_pilot`.
 
 ---
 

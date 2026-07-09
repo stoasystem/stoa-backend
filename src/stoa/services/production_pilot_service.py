@@ -356,6 +356,56 @@ V6_RELEASE_DISCIPLINE_SURFACES = {
     "fixture_hygiene",
     "owner_handoff",
 }
+V65_PRODUCTION_ACCESS_PATHS = {
+    "admin",
+    "parent",
+    "student",
+    "teacher_support",
+    "provider",
+    "mobile",
+    "monitoring",
+    "deploy",
+    "support",
+}
+V65_ACCOUNT_PAYMENT_USAGE_SURFACES = {
+    "login",
+    "email_verification",
+    "login_code_passwordless_policy",
+    "account_recovery",
+    "role_visibility",
+    "admin_support_visibility",
+    "paid_access",
+    "checkout_paywall",
+    "entitlement_activation",
+    "subscription_state",
+    "usage_ledger",
+    "quota_display",
+    "support_explanations",
+}
+V65_NOTIFICATION_SUPPORT_MOBILE_LEARNING_SURFACES = {
+    "notification_delivery",
+    "support_handoff",
+    "teacher_dispatch_sla",
+    "mobile_testflight_install",
+    "ai_provider_health",
+    "provider_health",
+    "first_learning_action",
+    "learning_path",
+}
+V65_COHORT_LAUNCH_PACKET_AREAS = {
+    "account_aliases",
+    "communication_plan",
+    "consent_state",
+    "support_staffing",
+    "teacher_owner",
+    "launch_room",
+    "dashboards",
+    "rollback_authority",
+    "pause_criteria",
+    "support_macros",
+    "known_disabled_features",
+    "day_one_operating_plan",
+}
 
 
 @dataclass(frozen=True)
@@ -3100,6 +3150,250 @@ def v6_4_controlled_expansion_readiness_gate(
     return result
 
 
+def production_evidence_access_approval_refresh(
+    states: dict[str, str] | None = None,
+    *,
+    owner_signoffs: dict[str, str] | None = None,
+    approved_credential_path: bool = False,
+) -> dict[str, Any]:
+    """Refresh current production access, approvals, and owner signoff evidence."""
+    states = states or {}
+    owner_signoffs = owner_signoffs or {}
+    rows = []
+    blockers = []
+    for path in sorted(V65_PRODUCTION_ACCESS_PATHS):
+        state = states.get(path, "missing")
+        signoff = owner_signoffs.get(path, "missing")
+        if state not in {"available", "disabled_for_pilot", "not_required"}:
+            blockers.append(path)
+        if state in {"available", "disabled_for_pilot"} and signoff != "approved":
+            blockers.append(f"owner_signoff:{path}")
+        rows.append(
+            {
+                "accessPath": path,
+                "state": state,
+                "owner": _v65_access_owner(path),
+                "ownerSignoff": signoff,
+                "sourceType": "real_production_or_approved_credential",
+                "redactedMetadataOnly": True,
+            }
+        )
+    if not approved_credential_path:
+        blockers.append("approved_credential_path")
+    result = {
+        "accessState": "ready" if not blockers else "blocked",
+        "accessPaths": rows,
+        "approvedCredentialPath": approved_credential_path,
+        "blockers": blockers,
+        "evidencePolicy": {
+            "realEvidenceRequired": True,
+            "localContractsAreNotProof": True,
+            "recordRequestIds": True,
+            "recordAccountAliasesOnly": True,
+            "productionMutationAllowed": False,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def production_account_payment_usage_smoke(
+    states: dict[str, str] | None = None,
+    *,
+    production_mutation_approved: bool = False,
+) -> dict[str, Any]:
+    """Check account, payment, entitlement, usage, quota, and support states."""
+    states = states or {}
+    rows = []
+    blockers = []
+    blocker_package = []
+    for surface in sorted(V65_ACCOUNT_PAYMENT_USAGE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"passed", "read_only_verified", "disabled_for_pilot"}:
+            blockers.append(surface)
+            blocker_package.append(_v65_blocker(surface, "account_payment_usage"))
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "owner": _v65_account_owner(surface),
+                "requestIdRequired": state != "disabled_for_pilot",
+                "accountAliasRequired": state != "disabled_for_pilot",
+                "fallback": _v65_account_fallback(surface),
+            }
+        )
+    result = {
+        "smokeState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "blockerPackage": blocker_package,
+        "productionMutationApproved": production_mutation_approved,
+        "mutationPolicy": {
+            "allowed": production_mutation_approved,
+            "scope": "pilot_safe_account_only" if production_mutation_approved else "read_only",
+            "reversible": True,
+            "recorded": production_mutation_approved,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def production_notification_support_mobile_learning_smoke(
+    states: dict[str, str] | None = None,
+    *,
+    disabled_surfaces: set[str] | None = None,
+    evidence_modes: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Check production notification, support, mobile, provider, and learning paths."""
+    states = states or {}
+    disabled = disabled_surfaces or set()
+    evidence_modes = evidence_modes or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V65_NOTIFICATION_SUPPORT_MOBILE_LEARNING_SURFACES):
+        state = "disabled_for_pilot" if surface in disabled else states.get(surface, "missing")
+        mode = "disabled" if surface in disabled else evidence_modes.get(surface, "missing")
+        if state not in {"passed", "read_only_verified", "disabled_for_pilot"}:
+            blockers.append(surface)
+        if state in {"passed", "read_only_verified"} and mode != "production":
+            blockers.append(f"evidence_mode:{surface}")
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "evidenceMode": mode,
+                "owner": _v65_provider_learning_owner(surface),
+                "fallback": _v65_provider_learning_fallback(surface),
+                "supportCopyReady": state == "disabled_for_pilot",
+                "requestOrBuildIdRequired": state != "disabled_for_pilot",
+            }
+        )
+    result = {
+        "smokeState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "disabledSurfaces": sorted(disabled),
+        "blockers": blockers,
+        "dryRunOrLocalFixtureIsNotProductionEvidence": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def first_cohort_launch_packet_execution(
+    packet_states: dict[str, str] | None = None,
+    *,
+    dry_run_passed: bool = False,
+) -> dict[str, Any]:
+    """Finalize first-cohort launch packet and dry-run handoff evidence."""
+    packet_states = packet_states or {}
+    rows = []
+    blockers = []
+    for area in sorted(V65_COHORT_LAUNCH_PACKET_AREAS):
+        state = packet_states.get(area, "missing")
+        if state not in {"finalized", "accepted_gap", "disabled_for_pilot"}:
+            blockers.append(area)
+        rows.append(
+            {
+                "area": area,
+                "state": state,
+                "owner": _v65_launch_packet_owner(area),
+                "startBlocking": state == "missing",
+            }
+        )
+    if not dry_run_passed:
+        blockers.append("dry_run")
+    result = {
+        "packetState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "dryRunPassed": dry_run_passed,
+        "dryRunCoverage": [
+            "login",
+            "onboarding",
+            "entitlement",
+            "usage",
+            "first_learning_action",
+            "notification_support_touchpoints",
+            "mobile_path",
+            "admin_visibility",
+        ],
+        "blockers": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def live_pilot_start_decision_handoff(
+    *,
+    access_refresh: dict[str, Any] | None = None,
+    account_smoke: dict[str, Any] | None = None,
+    support_mobile_learning_smoke: dict[str, Any] | None = None,
+    launch_packet: dict[str, Any] | None = None,
+    accepted_blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run the current v6.5 start decision and prepare v6.6 handoff or blockers."""
+    access_refresh = access_refresh or production_evidence_access_approval_refresh()
+    account_smoke = account_smoke or production_account_payment_usage_smoke()
+    support_mobile_learning_smoke = (
+        support_mobile_learning_smoke or production_notification_support_mobile_learning_smoke()
+    )
+    launch_packet = launch_packet or first_cohort_launch_packet_execution()
+    accepted = accepted_blockers or []
+    blockers = _unique(
+        [
+            *(["access_refresh"] if access_refresh.get("accessState") != "ready" else []),
+            *(["account_smoke"] if account_smoke.get("smokeState") != "ready" else []),
+            *(
+                ["support_mobile_learning_smoke"]
+                if support_mobile_learning_smoke.get("smokeState") != "ready"
+                else []
+            ),
+            *(["launch_packet"] if launch_packet.get("packetState") != "ready" else []),
+            *[f"access:{blocker}" for blocker in access_refresh.get("blockers", [])],
+            *[f"account:{blocker}" for blocker in account_smoke.get("blockers", [])],
+            *[
+                f"support_mobile_learning:{blocker}"
+                for blocker in support_mobile_learning_smoke.get("blockers", [])
+            ],
+            *[f"launch:{blocker}" for blocker in launch_packet.get("blockers", [])],
+        ]
+    )
+    unresolved = [blocker for blocker in blockers if blocker not in accepted]
+    if not unresolved:
+        decision = "start_limited_pilot"
+    elif accepted:
+        decision = "harden_further"
+    else:
+        decision = "hold"
+    result = {
+        "decision": decision,
+        "safeToStart": decision == "start_limited_pilot",
+        "realUserOperationsAllowed": decision == "start_limited_pilot",
+        "blockers": unresolved,
+        "acceptedBlockers": accepted,
+        "v6_6Allowed": decision == "start_limited_pilot",
+        "handoff": (
+            {
+                "cohortScope": "approved_limited_pilot",
+                "dailyOperatingCadence": "daily_pilot_review",
+                "owners": ["product_owner", "support_owner", "teacher_owner", "incident_owner"],
+                "dashboards": ["activation", "usage", "support", "learning", "provider"],
+                "rollbackControls": ["pause_cohort", "disable_provider", "support_macro"],
+            }
+            if decision == "start_limited_pilot"
+            else {"blockerPackageTarget": "v6_6_blocker_burn_down"}
+        ),
+        "outOfScope": ["public_launch", "paid_marketing", "broad_expansion", "uncontrolled_provider_writes"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {
@@ -3590,6 +3884,98 @@ def _v6_learning_mobile_owner(surface: str) -> str:
     if surface in {"ai_help_flow", "curriculum_access"}:
         return "learning_quality_owner"
     return "product_owner"
+
+
+def _v65_access_owner(path: str) -> str:
+    owners = {
+        "admin": "operations",
+        "parent": "product_owner",
+        "student": "product_owner",
+        "teacher_support": "teacher_operations",
+        "provider": "provider_owner",
+        "mobile": "mobile_release_owner",
+        "monitoring": "backend",
+        "deploy": "release_owner",
+        "support": "support_owner",
+    }
+    return owners.get(path, "operations")
+
+
+def _v65_account_owner(surface: str) -> str:
+    if surface in {"paid_access", "checkout_paywall", "entitlement_activation", "subscription_state"}:
+        return "finance_billing_owner"
+    if surface in {"usage_ledger", "quota_display"}:
+        return "backend"
+    if surface in {"admin_support_visibility", "support_explanations"}:
+        return "support_owner"
+    return "account_owner"
+
+
+def _v65_account_fallback(surface: str) -> str:
+    fallbacks = {
+        "login_code_passwordless_policy": "disable passwordless pilot path and use verified email login",
+        "checkout_paywall": "manual pilot entitlement with parent-facing disabled checkout copy",
+        "usage_ledger": "pause learning actions that cannot record support-visible usage",
+        "quota_display": "support-visible manual quota explanation",
+        "support_explanations": "manual owner-authored support note",
+    }
+    return fallbacks.get(surface, f"block pilot start until {surface} evidence is current")
+
+
+def _v65_provider_learning_owner(surface: str) -> str:
+    if surface in {"notification_delivery", "support_handoff"}:
+        return "support_owner"
+    if surface == "teacher_dispatch_sla":
+        return "teacher_operations"
+    if surface == "mobile_testflight_install":
+        return "mobile_release_owner"
+    if surface in {"ai_provider_health", "provider_health"}:
+        return "provider_owner"
+    return "learning_quality_owner"
+
+
+def _v65_provider_learning_fallback(surface: str) -> str:
+    fallbacks = {
+        "notification_delivery": "disable outbound notifications and use manual support communication",
+        "support_handoff": "use internal support queue with manual owner assignment",
+        "teacher_dispatch_sla": "manual teacher owner assignment",
+        "mobile_testflight_install": "use approved web path or hold mobile access",
+        "ai_provider_health": "teacher-reviewed deterministic fallback",
+        "provider_health": "disable provider-dependent path until owner approves",
+        "first_learning_action": "route to reviewed static learning action",
+        "learning_path": "hold cohort start until first learning path is verified",
+    }
+    return fallbacks.get(surface, "hold or disable for pilot with support copy")
+
+
+def _v65_launch_packet_owner(area: str) -> str:
+    owners = {
+        "account_aliases": "support_owner",
+        "communication_plan": "support_owner",
+        "consent_state": "operations",
+        "support_staffing": "support_owner",
+        "teacher_owner": "teacher_operations",
+        "launch_room": "incident_owner",
+        "dashboards": "backend",
+        "rollback_authority": "decision_owner",
+        "pause_criteria": "incident_owner",
+        "support_macros": "support_owner",
+        "known_disabled_features": "product_owner",
+        "day_one_operating_plan": "operations",
+    }
+    return owners.get(area, "operations")
+
+
+def _v65_blocker(surface: str, category: str) -> dict[str, str]:
+    return {
+        "surface": surface,
+        "category": category,
+        "owner": _v65_account_owner(surface),
+        "severity": "start_blocking",
+        "userImpact": f"{surface} is not proven for the approved pilot",
+        "fallback": _v65_account_fallback(surface),
+        "nextAction": f"capture current production evidence or disable {surface} for pilot",
+    }
 
 
 def _unique(values: list[str]) -> list[str]:

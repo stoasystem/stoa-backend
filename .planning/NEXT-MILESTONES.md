@@ -17,7 +17,7 @@ Important reality check:
 - Current gates still default to hold or remediation without current approved real evidence.
 - The next five milestones must execute real evidence and customer/product loops, not add more local-only gates.
 
-## Active: v6.5 Live Pilot Evidence Execution And Cohort Start
+## Completed: v6.5 Live Pilot Evidence Execution And Cohort Start
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
@@ -36,7 +36,7 @@ Implementation strategy:
 - Scoped pilot-safe mutations require explicit approval and rollback.
 - Record redacted request IDs, timestamps, account aliases, build IDs, owner signoffs, blocker states, and rollback controls.
 
-## Planned: v6.6 First Cohort Live Operations And Fix Sprint
+## Active: v6.6 First Cohort Live Operations And Fix Sprint
 
 Roadmap: `.planning/milestones/v6.6-ROADMAP.md`
 Requirements: `.planning/milestones/v6.6-REQUIREMENTS.md`

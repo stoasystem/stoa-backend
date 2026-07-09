@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v6.5
 milestone_name: Live Pilot Evidence Execution And Cohort Start
-status: planned
-last_updated: "2026-07-09T00:00:00.000Z"
-last_activity: 2026-07-09
+status: Awaiting next milestone
+last_updated: "2026-07-09T09:47:13.339Z"
+last_activity: 2026-07-09 — Milestone v6.5 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 397 Production Evidence Access And Approval Refresh planned
-Plan: 0/5 complete
-Status: v6.5 planned after v6.4 completed local operations scale contracts; real pilot/cohort/growth/launch evidence still required
-Last activity: 2026-07-09 - planned v6.5-v6.9 as the next live evidence, first cohort, revenue, learning quality, and market readiness milestones
+Phase: Milestone v6.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-09 — Milestone v6.5 completed and archived
 
 ## Accumulated Context
 
@@ -49,4 +49,4 @@ Last activity: 2026-07-09 - planned v6.5-v6.9 as the next live evidence, first c
 
 ## Operator Next Steps
 
-- Execute v6.5 Phase 397: production evidence access and approval refresh.
+- Start the next milestone with /gsd-new-milestone

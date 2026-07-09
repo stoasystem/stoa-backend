@@ -861,3 +861,117 @@ def test_v64_controlled_expansion_gate_holds_or_rolls_back_without_full_readines
     assert ready["largerCohortAllowed"] is True
     assert ready["publicLaunchApproved"] is False
     assert ready["paidMarketingApproved"] is False
+
+
+def test_v65_production_access_refresh_requires_real_access_and_owner_signoff():
+    default_refresh = production_pilot_service.production_evidence_access_approval_refresh()
+    assert default_refresh["accessState"] == "blocked"
+    assert "approved_credential_path" in default_refresh["blockers"]
+    assert default_refresh["evidencePolicy"]["localContractsAreNotProof"] is True
+
+    states = {
+        path: "available"
+        for path in production_pilot_service.V65_PRODUCTION_ACCESS_PATHS
+    }
+    signoffs = {
+        path: "approved"
+        for path in production_pilot_service.V65_PRODUCTION_ACCESS_PATHS
+    }
+    ready = production_pilot_service.production_evidence_access_approval_refresh(
+        states,
+        owner_signoffs=signoffs,
+        approved_credential_path=True,
+    )
+    assert ready["accessState"] == "ready"
+    assert ready["blockers"] == []
+    assert all(row["redactedMetadataOnly"] for row in ready["accessPaths"])
+
+
+def test_v65_production_account_payment_usage_smoke_builds_blocker_package():
+    default_smoke = production_pilot_service.production_account_payment_usage_smoke()
+    assert default_smoke["smokeState"] == "blocked"
+    assert "usage_ledger" in default_smoke["blockers"]
+    assert default_smoke["blockerPackage"]
+    assert default_smoke["mutationPolicy"]["allowed"] is False
+
+    states = {
+        surface: "read_only_verified"
+        for surface in production_pilot_service.V65_ACCOUNT_PAYMENT_USAGE_SURFACES
+    }
+    states["checkout_paywall"] = "disabled_for_pilot"
+    ready = production_pilot_service.production_account_payment_usage_smoke(states)
+    assert ready["smokeState"] == "ready"
+    assert ready["blockers"] == []
+    assert ready["mutationPolicy"]["scope"] == "read_only"
+
+
+def test_v65_notification_support_mobile_learning_smoke_requires_production_modes():
+    states = {
+        surface: "passed"
+        for surface in production_pilot_service.V65_NOTIFICATION_SUPPORT_MOBILE_LEARNING_SURFACES
+    }
+    missing_modes = production_pilot_service.production_notification_support_mobile_learning_smoke(
+        states
+    )
+    assert missing_modes["smokeState"] == "blocked"
+    assert any(blocker.startswith("evidence_mode:") for blocker in missing_modes["blockers"])
+
+    modes = {
+        surface: "production"
+        for surface in production_pilot_service.V65_NOTIFICATION_SUPPORT_MOBILE_LEARNING_SURFACES
+    }
+    disabled = {"notification_delivery"}
+    ready = production_pilot_service.production_notification_support_mobile_learning_smoke(
+        states,
+        disabled_surfaces=disabled,
+        evidence_modes=modes,
+    )
+    assert ready["smokeState"] == "ready"
+    assert set(ready["disabledSurfaces"]) == disabled
+    assert ready["dryRunOrLocalFixtureIsNotProductionEvidence"] is True
+
+
+def test_v65_first_cohort_launch_packet_requires_finalized_packet_and_dry_run():
+    default_packet = production_pilot_service.first_cohort_launch_packet_execution()
+    assert default_packet["packetState"] == "blocked"
+    assert "dry_run" in default_packet["blockers"]
+
+    states = {
+        area: "finalized"
+        for area in production_pilot_service.V65_COHORT_LAUNCH_PACKET_AREAS
+    }
+    ready = production_pilot_service.first_cohort_launch_packet_execution(
+        states,
+        dry_run_passed=True,
+    )
+    assert ready["packetState"] == "ready"
+    assert "first_learning_action" in ready["dryRunCoverage"]
+    assert ready["blockers"] == []
+
+
+def test_v65_live_pilot_start_decision_handoff_blocks_v66_without_real_evidence():
+    default_gate = production_pilot_service.live_pilot_start_decision_handoff()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v6_6Allowed"] is False
+    assert default_gate["realUserOperationsAllowed"] is False
+
+    ready = production_pilot_service.live_pilot_start_decision_handoff(
+        access_refresh={"accessState": "ready", "blockers": []},
+        account_smoke={"smokeState": "ready", "blockers": []},
+        support_mobile_learning_smoke={"smokeState": "ready", "blockers": []},
+        launch_packet={"packetState": "ready", "blockers": []},
+    )
+    assert ready["decision"] == "start_limited_pilot"
+    assert ready["safeToStart"] is True
+    assert ready["v6_6Allowed"] is True
+    assert "dailyOperatingCadence" in ready["handoff"]
+
+    harden = production_pilot_service.live_pilot_start_decision_handoff(
+        access_refresh={"accessState": "blocked", "blockers": ["provider"]},
+        account_smoke={"smokeState": "ready", "blockers": []},
+        support_mobile_learning_smoke={"smokeState": "ready", "blockers": []},
+        launch_packet={"packetState": "ready", "blockers": []},
+        accepted_blockers=["access:provider"],
+    )
+    assert harden["decision"] == "harden_further"
+    assert harden["v6_6Allowed"] is False

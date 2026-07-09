@@ -1,7 +1,7 @@
 # Requirements: v6.5 Live Pilot Evidence Execution And Cohort Start
 
 **Milestone:** v6.5
-**Status:** Planned
+**Status:** Completed
 **Created:** 2026-07-09
 **Prior milestone:** v6.4 Operations Scale Release And Observability Hardening
 
@@ -69,8 +69,8 @@ Acceptance criteria:
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6LIVE-01 | Phase 397 | Planned |
-| V6LIVE-02 | Phase 398 | Planned |
-| V6LIVE-03 | Phase 399 | Planned |
-| V6LIVE-04 | Phase 400 | Planned |
-| VERIFY-79 | Phase 401 | Planned |
+| V6LIVE-01 | Phase 397 | Completed |
+| V6LIVE-02 | Phase 398 | Completed |
+| V6LIVE-03 | Phase 399 | Completed |
+| V6LIVE-04 | Phase 400 | Completed |
+| VERIFY-79 | Phase 401 | Completed |
