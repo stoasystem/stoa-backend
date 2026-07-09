@@ -1,107 +1,108 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-09 after v6.9 local market readiness completion
-**Mode:** live evidence execution, first cohort operations, revenue retention, learning quality, and market readiness
+**Updated:** 2026-07-09 after v6.9 local market-readiness decision completion
+**Mode:** final approval, controlled expansion, public launch preparation, launch/hold decision, and post-launch scale governance
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v6.0-v6.9 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, controlled growth, learning outcome, curriculum release, AI teacher quality, parent progress, and market-readiness decision gates.
+- v6.0-v6.9 added local contracts and gates for evidence capture, cohort start, cohort operations, revenue retention, learning quality, operations scale, and market-readiness decisions.
 - `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 73 tests and focused Ruff passed in the v6.9 audit.
-- v6.9 closed as local-contract readiness only.
+- v6.9 closed as a market-readiness decision contract only.
 
 Important reality check:
 
-- v5.30-v6.4 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
-- Current gates still default to hold or remediation without current approved real evidence.
-- Public launch, paid marketing, and uncontrolled provider writes remain blocked without explicit operational approval and healthy live evidence.
+- v6.9 does not approve public launch, paid marketing, uncontrolled provider writes, or broad expansion by itself.
+- Public launch prep is possible only with clear evidence, final owner approval, and healthy live evidence.
+- Paid marketing remains separately gated.
 
-## Completed: v6.5 Live Pilot Evidence Execution And Cohort Start
+## Active: v7.0 Final Live Approval And Controlled Expansion Start
 
 Roadmap: `.planning/ROADMAP.md`
 Requirements: `.planning/REQUIREMENTS.md`
-Milestone roadmap: `.planning/milestones/v6.5-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v6.5-REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v7.0-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v7.0-REQUIREMENTS.md`
 
 Function purpose:
 
-- Use approved real accounts/sessions or approved secret-backed credentials.
-- Verify production account, payment, entitlement, usage, verification, notification, support, mobile, provider, and learning paths.
-- Start the first cohort only if current evidence supports `start_limited_pilot`; otherwise publish a blocker package.
+- Convert v6.9 launch/expansion decision inputs into final real approval.
+- Start a larger controlled cohort only if current evidence is healthy.
+- Keep broad public launch and paid marketing blocked unless later milestones explicitly approve them.
 
 Implementation strategy:
 
-- Production checks are read-only by default.
-- Scoped pilot-safe mutations require explicit approval and rollback.
-- Record redacted request IDs, timestamps, account aliases, build IDs, owner signoffs, blocker states, and rollback controls.
+- Refresh final owner approval, support capacity, provider/mobile state, revenue reconciliation, learning quality, and incident readiness.
+- Run production checks read-only by default and use only approved, scoped, reversible expansion actions.
+- Close with controlled expansion start, hold, rollback, or remediation.
 
-## Completed: v6.6 First Cohort Live Operations And Fix Sprint
+## Planned: v7.1 Controlled Expansion Operations And Remediation
 
-Roadmap: `.planning/milestones/v6.6-ROADMAP.md`
-Requirements: `.planning/milestones/v6.6-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v7.1-ROADMAP.md`
+Requirements: `.planning/milestones/v7.1-REQUIREMENTS.md`
 
 Function purpose:
 
-- Operate the started cohort or execute v6.5 blocker fixes.
-- Ship real user fixes across activation, account, entitlement, usage, support, notification, mobile, teacher help, and first learning action.
+- Operate the approved controlled expansion cohort.
+- Fix real bottlenecks across account, billing, usage, support, teacher operations, mobile, AI/provider, curriculum, notifications, and reliability.
 
 Implementation strategy:
 
-- Run daily pilot review if cohort starts.
-- Use the blocker package as the sprint backlog if v6.5 holds.
-- Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
+- Run daily controlled-expansion review.
+- Rank issues by severity, frequency, support load, revenue impact, learning impact, and rollout risk.
+- Close with public-launch-prep, continue expansion, hold, rollback, or remediation.
 
-## Completed: v6.7 Revenue Retention And Controlled Growth Execution
+## Planned: v7.2 Public Launch Preparation And Acquisition Readiness
 
-Roadmap: `.planning/milestones/v6.7-ROADMAP.md`
-Requirements: `.planning/milestones/v6.7-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v7.2-ROADMAP.md`
+Requirements: `.planning/milestones/v7.2-REQUIREMENTS.md`
 
 Function purpose:
 
-- Prove paid conversion, entitlement, usage/quota, lifecycle, retention, support capacity, referral/waitlist intake, and revenue reconciliation under real conditions.
-- Decide controlled growth, hold, rollback, or revenue remediation.
+- Prepare public launch only if controlled expansion evidence is healthy.
+- Finalize launch scope, pricing/package, web/mobile/app-store readiness, support staffing, lifecycle messaging, acquisition limits, waitlist/referral intake, provider readiness, and owner approvals.
 
 Implementation strategy:
 
-- Use v6.5-v6.6 cohort evidence and support tickets.
-- Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
-- Keep growth intake gated by capacity and support readiness.
+- Use v7.1 evidence as the launch-readiness input.
+- Keep paid marketing separately gated.
+- Close with launch-ready, controlled-expansion-only, hold, rollback, or remediation.
 
-## Completed: v6.8 Learning Outcome And Curriculum Quality Expansion
+## Planned: v7.3 Public Launch Execution Or Hold Decision
 
-Roadmap: `.planning/milestones/v6.8-ROADMAP.md`
-Requirements: `.planning/milestones/v6.8-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v7.3-ROADMAP.md`
+Requirements: `.planning/milestones/v7.3-REQUIREMENTS.md`
 
 Function purpose:
 
-- Improve student progress, weak-topic remediation, curriculum, exercises, AI teacher output, adaptive recommendations, and parent progress clarity from real evidence.
-- Ensure growth depends on visible learning value.
+- Execute staged public launch only if final approval and healthy evidence exist.
+- Otherwise continue controlled expansion, hold, rollback, or remediate.
 
 Implementation strategy:
 
-- Rank learning issues by real frequency, severity, student impact, teacher effort, and parent confusion.
-- Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
+- Reconfirm final owner approval, support capacity, provider readiness, mobile/app-store readiness, revenue reconciliation, learning quality, and rollback authority.
+- Use staged rollout, freeze controls, live monitoring, and daily launch-room review.
 
-## Completed: v6.9 Public Launch Decision And Market Readiness
+## Planned: v7.4 Post-Launch Scale Customer Success And Growth Governance
 
-Roadmap: `.planning/milestones/v6.9-ROADMAP.md`
-Requirements: `.planning/milestones/v6.9-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v7.4-ROADMAP.md`
+Requirements: `.planning/milestones/v7.4-REQUIREMENTS.md`
 
 Function purpose:
 
-- Consolidate pilot, revenue, retention, learning, support, mobile, provider, observability, incident, and release evidence.
-- Decide public launch prep, controlled expansion, hold, rollback, or next version focus.
+- Operate the post-launch or post-expansion system at scale.
+- Govern customer success, support operations, revenue reconciliation, learning quality, growth, mobile/provider reliability, incidents, and roadmap feedback.
 
 Implementation strategy:
 
-- Treat public launch as an evidence-based decision, not a milestone default.
-- Require owner approval, provider readiness, support staffing, revenue reconciliation, learning quality, mobile readiness, and incident readiness.
+- Use v7.3 outcome as the operating mode: launched, controlled expansion, hold, rollback, or remediation.
+- Keep paid marketing spend gated by support/revenue/learning capacity.
+- Close with scale, hold, rollback, remediation, or v8 recommendation.
 
 ## Ordering Rationale
 
-1. v6.5 comes first because current approved real evidence is still missing from the local contract chain.
-2. v6.6 follows because the first cohort or blocker package must drive shipped fixes.
-3. v6.7 follows because growth requires reliable paid conversion, retention, support, and revenue reconciliation.
-4. v6.8 follows because learning quality must prove customer value before market expansion.
-5. v6.9 follows because public launch or controlled expansion should be a decision from real evidence, not a version-number default.
+1. v7.0 comes first because v6.9 is a decision contract, not final approval.
+2. v7.1 follows because controlled expansion must produce operational evidence before public launch prep.
+3. v7.2 follows because public launch preparation should depend on controlled expansion health.
+4. v7.3 follows because launch execution must be a go/no-go decision with final evidence.
+5. v7.4 follows because launch or expansion needs post-launch governance, customer success, and scale controls.

@@ -138,6 +138,8 @@ The v6.5 milestone is complete locally. It adds production-evidence input contra
 
 The v6.5-v6.9 execution sequence is complete locally as contracts and gates for current evidence, first cohort operations, revenue retention, learning quality, and market-readiness decisions. This sequence does not claim real pilot users, provider writes, paid marketing, or public launch occurred.
 
+The v7.0-v7.4 sequence is now planned as the next real execution track: final live approval, controlled expansion start, controlled expansion operations, public launch preparation, public launch execution or hold, and post-launch/post-expansion scale governance. v7 is not a launch claim; it is the stage where v6.9 market-readiness contracts must become final approvals and live operating decisions.
+
 ## Core Value
 
 Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
@@ -146,9 +148,20 @@ Parents can trust that parent portal views reflect authorized real student data 
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v6.9 Public Launch Decision And Market Readiness on 2026-07-09 (market-readiness decision contracts; public launch and paid marketing still separately gated)
-**Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
-**Active milestone:** none — v6.5-v6.9 sequence complete locally
-**Next planned milestones:** none recorded.
+**Residual partial gate:** controlled expansion, paid marketing, and public launch still require final owner approval, current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, support capacity, and rollback authority.
+**Active milestone:** v7.0 Final Live Approval And Controlled Expansion Start
+**Next planned milestones:** v7.1 Controlled Expansion Operations And Remediation; v7.2 Public Launch Preparation And Acquisition Readiness; v7.3 Public Launch Execution Or Hold Decision; v7.4 Post-Launch Scale Customer Success And Growth Governance.
+
+## Current Milestone: v7.0 Final Live Approval And Controlled Expansion Start
+
+**Goal:** Turn v6.9 market-readiness contracts into a real controlled-expansion start or an explicit hold.
+
+**Target features:**
+- Final owner approval and expansion scope refresh.
+- Production provider, mobile, support, revenue, learning, restore/tabletop, and incident readiness refresh.
+- Controlled expansion cohort and rollout setup.
+- Expansion start smoke and day-zero verification.
+- Controlled expansion start gate.
 
 ## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
 
@@ -1179,6 +1192,11 @@ Known current resources:
 | Plan v6.7 revenue retention and controlled growth execution | Growth needs reliable paid conversion, entitlement, usage/quota, retention, support capacity, and revenue reconciliation under real conditions | Complete locally; v6.8 allowed only after revenue/growth blockers close |
 | Plan v6.8 learning outcome and curriculum quality expansion | Expansion should depend on real learning value, not only operational readiness | Complete locally; v6.9 allowed only after learning-quality blockers close |
 | Plan v6.9 public launch decision and market readiness | Public launch prep must be a decision from real customer, revenue, learning, support, mobile, provider, and release evidence | Complete locally; public launch prep still requires final owner approval and healthy evidence |
+| Start v7.0 final live approval and controlled expansion start | v6.9 is a market-readiness contract, not final approval; controlled expansion needs current owner approval and healthy live evidence | Planned - active next milestone |
+| Plan v7.1 controlled expansion operations and remediation | A larger controlled cohort should produce operational evidence and fixes before public launch prep | Planned |
+| Plan v7.2 public launch preparation and acquisition readiness | Public launch prep should depend on controlled expansion health and keep paid marketing separately gated | Planned |
+| Plan v7.3 public launch execution or hold decision | Public launch execution must be staged and evidence-based, with hold/rollback/remediation as valid outcomes | Planned |
+| Plan v7.4 post-launch scale customer success and growth governance | Launch or expansion must convert into customer success, revenue, learning quality, support scale, and growth governance | Planned |
 
 ## Evolution
 
@@ -1198,4 +1216,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-09 after completing v6.9 public launch decision and market readiness*
+*Last updated: 2026-07-09 after planning v7.0-v7.4 as final approval, controlled expansion, launch preparation, launch/hold, and scale governance milestones*
