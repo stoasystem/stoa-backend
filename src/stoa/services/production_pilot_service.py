@@ -444,6 +444,51 @@ V66_LEARNING_PARENT_FIX_SURFACES = {
     "recommendations",
     "parent_progress_reporting",
 }
+V67_PAID_BILLING_REVIEW_SURFACES = {
+    "checkout",
+    "paywall",
+    "payment_methods",
+    "entitlement_activation",
+    "renewal",
+    "cancellation",
+    "failed_payment",
+    "invoice",
+    "refund",
+    "manual_correction",
+}
+V67_USAGE_ACCOUNT_RELIABILITY_SURFACES = {
+    "usage_ledger",
+    "idempotency",
+    "quota_display",
+    "quota_blocking",
+    "support_explanations",
+    "reconciliation_reports",
+    "verification_state",
+    "subscription_state",
+    "child_access",
+    "recovery_state",
+}
+V67_LIFECYCLE_RETENTION_SURFACES = {
+    "onboarding",
+    "activation",
+    "reminder",
+    "renewal",
+    "failed_payment",
+    "cancellation",
+    "win_back",
+    "support_capacity",
+    "retention_signals",
+}
+V67_CONTROLLED_INTAKE_SURFACES = {
+    "referral",
+    "waitlist",
+    "invite",
+    "eligibility_copy",
+    "availability_copy",
+    "abuse_handling",
+    "cohort_planning",
+    "support_staffing",
+}
 
 
 @dataclass(frozen=True)
@@ -3622,6 +3667,229 @@ def v66_live_cohort_outcome_gate(
             "incident",
         ],
         "remainingRisksForV6_7": blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def paid_conversion_billing_reality_review(
+    states: dict[str, str] | None = None,
+    *,
+    owner_approved_corrections: bool = False,
+) -> dict[str, Any]:
+    """Review paid conversion, billing, entitlement, invoice, refund, and correction evidence."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V67_PAID_BILLING_REVIEW_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"reviewed", "reconciled", "disabled_for_pilot", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "providerReconciled": state == "reconciled",
+                "supportVisible": surface in {"failed_payment", "invoice", "refund", "manual_correction"},
+                "parentCopyReady": state in {"reviewed", "reconciled", "disabled_for_pilot"},
+                "revenueImpacting": surface
+                in {
+                    "checkout",
+                    "payment_methods",
+                    "entitlement_activation",
+                    "renewal",
+                    "failed_payment",
+                    "refund",
+                    "manual_correction",
+                },
+            }
+        )
+    if not owner_approved_corrections:
+        blockers.append("owner_approved_corrections")
+    result = {
+        "reviewState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": _unique(blockers),
+        "parentCopyReady": all(row["parentCopyReady"] for row in rows),
+        "revenueCorrectionsAuditable": owner_approved_corrections,
+        "reversible": owner_approved_corrections,
+        "reconciliationInputs": ["billing_provider", "entitlement", "usage", "admin_support"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def usage_quota_parent_account_reliability_fixes(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Track usage, quota, account, support explanation, and reconciliation reliability fixes."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V67_USAGE_ACCOUNT_RELIABILITY_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"reliable", "fixed", "accepted_gap", "explicitly_deferred"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "supportSafe": True,
+                "privateLearningContentIncluded": False,
+                "driftVisible": surface
+                in {"usage_ledger", "idempotency", "reconciliation_reports", "quota_display"},
+                "parentSelfServeCovered": surface
+                in {
+                    "verification_state",
+                    "subscription_state",
+                    "child_access",
+                    "quota_display",
+                    "support_explanations",
+                    "recovery_state",
+                },
+            }
+        )
+    result = {
+        "fixState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "supportCanExplainWithoutPrivateLearningContent": True,
+        "driftStaleDuplicateManualOverrideVisible": "reconciliation_reports" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def lifecycle_retention_support_capacity_execution(
+    states: dict[str, str] | None = None,
+    *,
+    support_capacity_measured: bool = False,
+) -> dict[str, Any]:
+    """Execute retention lifecycle surfaces or explicitly disable them for the pilot."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V67_LIFECYCLE_RETENTION_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"executed", "disabled_for_pilot", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "preferencesHandled": surface
+                in {"onboarding", "activation", "reminder", "renewal", "failed_payment", "win_back"},
+                "supportVisible": surface in {"failed_payment", "cancellation", "support_capacity"},
+                "realUserSignal": surface == "retention_signals" and state == "executed",
+            }
+        )
+    if not support_capacity_measured:
+        blockers.append("support_capacity_measured")
+    result = {
+        "executionState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": _unique(blockers),
+        "supportCapacityMeasured": support_capacity_measured,
+        "retentionSignalsDistinguishRealUsers": states.get("retention_signals") == "executed",
+        "testTrafficExcludedFromRetention": True,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def referral_waitlist_controlled_intake_execution(
+    states: dict[str, str] | None = None,
+    *,
+    capacity_gate_ready: bool = False,
+    support_gate_ready: bool = False,
+) -> dict[str, Any]:
+    """Run referral, waitlist, invite, and intake flows only behind capacity gates."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V67_CONTROLLED_INTAKE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"ready", "disabled_for_pilot", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "featureGateRequired": surface in {"referral", "waitlist", "invite"},
+                "supportVisible": surface in {"cohort_planning", "support_staffing"},
+                "publicLaunchSurface": False,
+            }
+        )
+    if not capacity_gate_ready:
+        blockers.append("capacity_gate")
+    if not support_gate_ready:
+        blockers.append("support_gate")
+    result = {
+        "intakeState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": _unique(blockers),
+        "capacityGateReady": capacity_gate_ready,
+        "supportGateReady": support_gate_ready,
+        "publicLaunchApproved": False,
+        "paidMarketingApproved": False,
+        "feedsCohortPlanning": "cohort_planning" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v67_revenue_growth_decision_gate(
+    *,
+    revenue_review: dict[str, Any] | None = None,
+    usage_account: dict[str, Any] | None = None,
+    lifecycle: dict[str, Any] | None = None,
+    intake: dict[str, Any] | None = None,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    """Close v6.7 with controlled growth, hold, rollback, or revenue remediation."""
+    revenue_review = revenue_review or paid_conversion_billing_reality_review()
+    usage_account = usage_account or usage_quota_parent_account_reliability_fixes()
+    lifecycle = lifecycle or lifecycle_retention_support_capacity_execution()
+    intake = intake or referral_waitlist_controlled_intake_execution()
+    blockers = _unique(
+        [
+            *[f"revenue:{blocker}" for blocker in revenue_review.get("blockers", [])],
+            *[f"usage_account:{blocker}" for blocker in usage_account.get("blockers", [])],
+            *[f"lifecycle:{blocker}" for blocker in lifecycle.get("blockers", [])],
+            *[f"intake:{blocker}" for blocker in intake.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "revenue_remediation"
+    else:
+        decision = "controlled_growth"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v6_8Allowed": decision == "controlled_growth",
+        "paidMarketingApproved": False,
+        "publicLaunchApproved": False,
+        "learningRisksSeparated": True,
+        "decisionInputs": [
+            "conversion",
+            "revenue_drift",
+            "usage_accuracy",
+            "retention",
+            "support_load",
+            "parent_comprehension",
+            "incidents",
+        ],
+        "nextMilestoneRiskHandoff": {
+            "learningQualityRisks": [],
+            "revenueAccountRisks": blockers,
+        },
         "privacy": _privacy_contract(),
     }
     assert_pilot_evidence_safe(result)

@@ -1068,3 +1068,112 @@ def test_v66_live_cohort_outcome_gate_allows_v67_only_after_fixes_close():
     )
     assert ready["decision"] == "proceed_to_revenue_retention"
     assert ready["v6_7Allowed"] is True
+
+
+def test_v67_paid_conversion_billing_review_requires_reconciliation_and_owner_approval():
+    default_review = production_pilot_service.paid_conversion_billing_reality_review()
+    assert default_review["reviewState"] == "blocked"
+    assert "checkout" in default_review["blockers"]
+    assert "owner_approved_corrections" in default_review["blockers"]
+
+    states = {
+        surface: "reviewed"
+        for surface in production_pilot_service.V67_PAID_BILLING_REVIEW_SURFACES
+    }
+    states["entitlement_activation"] = "reconciled"
+    states["manual_correction"] = "reconciled"
+    ready = production_pilot_service.paid_conversion_billing_reality_review(
+        states,
+        owner_approved_corrections=True,
+    )
+    assert ready["reviewState"] == "ready"
+    assert ready["blockers"] == []
+    assert ready["parentCopyReady"] is True
+    assert ready["revenueCorrectionsAuditable"] is True
+    assert ready["reversible"] is True
+
+
+def test_v67_usage_quota_account_reliability_excludes_private_learning_content():
+    default_fixes = production_pilot_service.usage_quota_parent_account_reliability_fixes()
+    assert default_fixes["fixState"] == "blocked"
+    assert "usage_ledger" in default_fixes["blockers"]
+
+    states = {
+        surface: "reliable"
+        for surface in production_pilot_service.V67_USAGE_ACCOUNT_RELIABILITY_SURFACES
+    }
+    states["reconciliation_reports"] = "fixed"
+    ready = production_pilot_service.usage_quota_parent_account_reliability_fixes(states)
+    assert ready["fixState"] == "ready"
+    assert ready["supportCanExplainWithoutPrivateLearningContent"] is True
+    assert all(row["supportSafe"] for row in ready["surfaces"])
+    assert not any(row["privateLearningContentIncluded"] for row in ready["surfaces"])
+
+
+def test_v67_lifecycle_retention_requires_support_capacity_measurement():
+    default_execution = production_pilot_service.lifecycle_retention_support_capacity_execution()
+    assert default_execution["executionState"] == "blocked"
+    assert "support_capacity_measured" in default_execution["blockers"]
+
+    states = {
+        surface: "executed"
+        for surface in production_pilot_service.V67_LIFECYCLE_RETENTION_SURFACES
+    }
+    states["win_back"] = "disabled_for_pilot"
+    ready = production_pilot_service.lifecycle_retention_support_capacity_execution(
+        states,
+        support_capacity_measured=True,
+    )
+    assert ready["executionState"] == "ready"
+    assert ready["supportCapacityMeasured"] is True
+    assert ready["retentionSignalsDistinguishRealUsers"] is True
+    assert ready["testTrafficExcludedFromRetention"] is True
+
+
+def test_v67_controlled_intake_requires_capacity_and_support_gates():
+    default_intake = production_pilot_service.referral_waitlist_controlled_intake_execution()
+    assert default_intake["intakeState"] == "blocked"
+    assert "capacity_gate" in default_intake["blockers"]
+    assert "support_gate" in default_intake["blockers"]
+
+    states = {
+        surface: "ready"
+        for surface in production_pilot_service.V67_CONTROLLED_INTAKE_SURFACES
+    }
+    states["referral"] = "disabled_for_pilot"
+    ready = production_pilot_service.referral_waitlist_controlled_intake_execution(
+        states,
+        capacity_gate_ready=True,
+        support_gate_ready=True,
+    )
+    assert ready["intakeState"] == "ready"
+    assert ready["publicLaunchApproved"] is False
+    assert ready["paidMarketingApproved"] is False
+    assert ready["feedsCohortPlanning"] is True
+
+
+def test_v67_revenue_growth_gate_controls_v68_access_and_public_launch_scope():
+    default_gate = production_pilot_service.v67_revenue_growth_decision_gate()
+    assert default_gate["decision"] == "revenue_remediation"
+    assert default_gate["v6_8Allowed"] is False
+
+    rollback = production_pilot_service.v67_revenue_growth_decision_gate(
+        revenue_review={"blockers": []},
+        usage_account={"blockers": []},
+        lifecycle={"blockers": []},
+        intake={"blockers": []},
+        rollback_required=True,
+    )
+    assert rollback["decision"] == "rollback"
+
+    ready = production_pilot_service.v67_revenue_growth_decision_gate(
+        revenue_review={"blockers": []},
+        usage_account={"blockers": []},
+        lifecycle={"blockers": []},
+        intake={"blockers": []},
+    )
+    assert ready["decision"] == "controlled_growth"
+    assert ready["v6_8Allowed"] is True
+    assert ready["paidMarketingApproved"] is False
+    assert ready["publicLaunchApproved"] is False
+    assert ready["learningRisksSeparated"] is True

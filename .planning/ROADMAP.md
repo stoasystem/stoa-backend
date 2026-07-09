@@ -1,102 +1,102 @@
-# Roadmap: v6.6 First Cohort Live Operations And Fix Sprint
+# Roadmap: v6.7 Revenue Retention And Controlled Growth Execution
 
 **Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.5 Live Pilot Evidence Execution And Cohort Start
+**Prior milestone:** v6.6 First Cohort Live Operations And Fix Sprint
 
 ## Goal
 
-Operate the first approved cohort if v6.5 starts it, or execute the v6.5 blocker package until a cohort can start. v6.6 must convert real user evidence into shipped fixes across activation, account state, billing, usage, support, mobile, notification, teacher help, and first learning action.
+Convert pilot usage into a reliable paid/retention loop and a controlled growth decision. v6.7 focuses on checkout/paywall, entitlement, quota, lifecycle messaging, retention, support load, referral/waitlist intake, and revenue reconciliation under real cohort conditions.
 
 ## Function Purpose
 
-- Make the first real cohort usable enough to continue.
-- Fix concrete user-facing failures instead of adding more readiness surfaces.
-- Preserve a daily operating cadence with rollback and pause authority.
+- Prove that STOA can charge, explain access, support billing issues, and retain parents without manual confusion.
+- Prepare controlled growth only if support and revenue operations can handle it.
+- Keep paid marketing out of scope until real conversion and retention evidence support it.
 
 ## Implementation Strategy
 
-- If v6.5 returns `start_limited_pilot`, run daily pilot operations.
-- If v6.5 returns `hold`, treat the blocker package as the sprint backlog.
-- Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
-- Ship focused tests, rollback notes, and support-visible release evidence.
+- Use v6.5-v6.6 cohort evidence and support tickets.
+- Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
+- Run growth intake behind capacity and support gates.
+- Close with controlled growth, hold, remediation, or rollback.
 
 ## Phases
 
-- [x] **Phase 402: Cohort Day-One Operations Or Blocker Sprint Start** - Start cohort operations or convert v6.5 blockers into a fix board.
-- [x] **Phase 403: Activation Account Verification And Entitlement Fixes** - Fix login, verification, role, entitlement, subscription, usage, quota, and admin support gaps.
-- [x] **Phase 404: Support Teacher Notification Mobile Fixes** - Fix support handoff, teacher dispatch/SLA, notification delivery, mobile install/access, and incident escalation gaps.
-- [x] **Phase 405: First Learning Action And Parent Clarity Fixes** - Fix onboarding, curriculum/practice access, AI/help flow, recommendations, and parent progress clarity.
-- [x] **Phase 406: v6.6 Live Cohort Outcome Gate** - Decide continue pilot, hold, rollback, or proceed to revenue/retention execution.
+- [x] **Phase 407: Paid Conversion And Billing Reality Review** - Review checkout, paywall, payment method, entitlement, invoice, refund, failed payment, and subscription evidence.
+- [x] **Phase 408: Usage Quota And Parent Account Reliability Fixes** - Fix usage/quota/account explanations, reconciliation drift, support visibility, and parent self-serve reliability.
+- [x] **Phase 409: Lifecycle Retention And Support Capacity Execution** - Execute onboarding, activation, renewal, reminder, failed payment, cancellation, win-back, and support capacity checks.
+- [x] **Phase 410: Referral Waitlist And Controlled Intake Execution** - Execute referral/waitlist/invite flows behind capacity gates and support visibility.
+- [x] **Phase 411: v6.7 Revenue Growth Decision Gate** - Decide controlled growth, hold, rollback, or revenue remediation.
 
 ## Phase Details
 
-### Phase 402: Cohort Day-One Operations Or Blocker Sprint Start
+### Phase 407: Paid Conversion And Billing Reality Review
 
-**Goal**: Start cohort operations or convert v6.5 blockers into a fix board.
-**Depends on**: v6.5 live pilot start decision.
-**Requirements**: V6COHORT-01
+**Goal**: Review checkout, paywall, payment method, entitlement, invoice, refund, failed payment, and subscription evidence.
+**Depends on**: v6.6 live cohort outcome gate.
+**Requirements**: V6REVEXEC-01
 **Success Criteria**:
 
-1. If v6.5 started the cohort, day-one operations cover activation, support, teacher, billing, notification, mobile, usage, and learning signals.
-2. If v6.5 held, blocker rows include owner, severity, fix path, test path, release path, and target outcome.
-3. Daily review cadence, pause criteria, rollback authority, and support coverage are active.
-4. Evidence distinguishes real cohort usage from test, dry-run, and fixture traffic.
+1. Checkout, paywall, payment methods, entitlement activation, renewal, cancellation, failed payment, invoice, refund, and manual correction evidence are reviewed.
+2. Billing provider state, entitlement state, usage state, and admin support state reconcile for pilot accounts.
+3. Parent copy explains access, limits, failures, and next action.
+4. Revenue-impacting corrections are owner-approved, auditable, and reversible.
 
-### Phase 403: Activation Account Verification And Entitlement Fixes
+### Phase 408: Usage Quota And Parent Account Reliability Fixes
 
-**Goal**: Fix login, verification, role, entitlement, subscription, usage, quota, and admin support gaps.
-**Depends on**: Phase 402.
-**Requirements**: V6COHORT-02
+**Goal**: Fix usage/quota/account explanations, reconciliation drift, support visibility, and parent self-serve reliability.
+**Depends on**: Phase 407.
+**Requirements**: V6REVEXEC-02
 **Success Criteria**:
 
-1. Login, verification, recovery, role visibility, entitlement activation, subscription state, usage writes, quota display, and admin support explanations are fixed or explicitly deferred.
-2. Parent/student/admin support paths are covered by focused tests.
-3. User copy is clear for pending, failed, expired, blocked, disabled, and recovered states.
-4. Revenue-impacting fixes are auditable and reversible.
+1. Usage ledger coverage, idempotency, quota display, quota blocking, support explanations, and reconciliation reports are reliable for pilot scope.
+2. Parent self-serve account states cover verification, subscription, child access, quota, support, and recovery.
+3. Admin/support can explain account and usage state without private learning content.
+4. Drift, stale records, duplicate events, and manual overrides are visible.
 
-### Phase 404: Support Teacher Notification Mobile Fixes
+### Phase 409: Lifecycle Retention And Support Capacity Execution
 
-**Goal**: Fix support handoff, teacher dispatch/SLA, notification delivery, mobile install/access, and incident escalation gaps.
-**Depends on**: Phase 403.
-**Requirements**: V6COHORT-03
+**Goal**: Execute onboarding, activation, renewal, reminder, failed payment, cancellation, win-back, and support capacity checks.
+**Depends on**: Phase 408.
+**Requirements**: V6REVEXEC-03
 **Success Criteria**:
 
-1. Support handoff, support queue, teacher dispatch/SLA, escalation, notification delivery, mobile access/install, and incident handling gaps are fixed or explicitly disabled for pilot.
-2. Operators can see owner, status, next action, and escalation path.
-3. Notification/mobile/support fallback copy is ready where needed.
-4. Fix evidence includes request/build IDs where applicable.
+1. Onboarding, activation, reminder, renewal, failed payment, cancellation, and win-back messages are executed or explicitly disabled.
+2. Preferences, locale, delivery failure, quiet hours where applicable, and support visibility are handled.
+3. Support capacity is measured against real volume and response quality.
+4. Retention signals distinguish real users from test/dry-run traffic.
 
-### Phase 405: First Learning Action And Parent Clarity Fixes
+### Phase 410: Referral Waitlist And Controlled Intake Execution
 
-**Goal**: Fix onboarding, curriculum/practice access, AI/help flow, recommendations, and parent progress clarity.
-**Depends on**: Phase 404.
-**Requirements**: V6COHORT-04
+**Goal**: Execute referral/waitlist/invite flows behind capacity gates and support visibility.
+**Depends on**: Phase 409.
+**Requirements**: V6REVEXEC-04
 **Success Criteria**:
 
-1. Onboarding, first practice/assignment, curriculum access, AI/help flow, recommendations, and parent progress reporting are usable for the cohort.
-2. Parent/student flows explain what to do next without operator intervention.
-3. Learning fixes preserve curriculum authorization and reviewed/policy-bound AI boundaries.
-4. Known learning gaps are ranked for v6.8.
+1. Referral, waitlist, invite, or controlled intake flows run behind feature, capacity, and support gates.
+2. Growth surfaces clearly explain availability, eligibility, and next step.
+3. Abuse/fraud handling is adequate for the internal development stage.
+4. Intake feeds cohort planning and support staffing rather than public launch.
 
-### Phase 406: v6.6 Live Cohort Outcome Gate
+### Phase 411: v6.7 Revenue Growth Decision Gate
 
-**Goal**: Decide continue pilot, hold, rollback, or proceed to revenue/retention execution.
-**Depends on**: Phase 405.
-**Requirements**: VERIFY-80
+**Goal**: Decide controlled growth, hold, rollback, or revenue remediation.
+**Depends on**: Phase 410.
+**Requirements**: VERIFY-81
 **Success Criteria**:
 
-1. Decision is continue pilot, hold, rollback, or proceed to revenue/retention execution.
-2. Decision uses activation, support, teacher, billing, usage, mobile, notification, learning, parent clarity, and incident evidence.
+1. Decision is controlled growth, hold, rollback, or revenue remediation.
+2. Decision uses conversion, revenue drift, usage accuracy, retention, support load, parent comprehension, and incident evidence.
 3. Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-4. v6.7 receives only the cohort and revenue risks that remain after v6.6 fixes.
+4. v6.8 receives learning-quality risks separate from revenue/account risks.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6COHORT-01 | Phase 402 | Completed |
-| V6COHORT-02 | Phase 403 | Completed |
-| V6COHORT-03 | Phase 404 | Completed |
-| V6COHORT-04 | Phase 405 | Completed |
-| VERIFY-80 | Phase 406 | Completed |
+| V6REVEXEC-01 | Phase 407 | Completed |
+| V6REVEXEC-02 | Phase 408 | Completed |
+| V6REVEXEC-03 | Phase 409 | Completed |
+| V6REVEXEC-04 | Phase 410 | Completed |
+| VERIFY-81 | Phase 411 | Completed |

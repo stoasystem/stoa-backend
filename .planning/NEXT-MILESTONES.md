@@ -1,15 +1,15 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-09 after v6.4 local operations scale completion
+**Updated:** 2026-07-09 after v6.7 local revenue retention completion
 **Mode:** live evidence execution, first cohort operations, revenue retention, learning quality, and market readiness
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v6.0-v6.4 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, and controlled expansion gates.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 48 tests and focused Ruff passed in the v6.4 audit.
-- v6.4 closed as local-contract readiness only.
+- v6.0-v6.7 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, and controlled growth gates.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 63 tests and focused Ruff passed in the v6.7 audit.
+- v6.7 closed as local-contract readiness only.
 
 Important reality check:
 
@@ -52,7 +52,7 @@ Implementation strategy:
 - Use the blocker package as the sprint backlog if v6.5 holds.
 - Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
 
-## Active: v6.7 Revenue Retention And Controlled Growth Execution
+## Completed: v6.7 Revenue Retention And Controlled Growth Execution
 
 Roadmap: `.planning/milestones/v6.7-ROADMAP.md`
 Requirements: `.planning/milestones/v6.7-REQUIREMENTS.md`
@@ -68,7 +68,7 @@ Implementation strategy:
 - Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
 - Keep growth intake gated by capacity and support readiness.
 
-## Planned: v6.8 Learning Outcome And Curriculum Quality Expansion
+## Active: v6.8 Learning Outcome And Curriculum Quality Expansion
 
 Roadmap: `.planning/milestones/v6.8-ROADMAP.md`
 Requirements: `.planning/milestones/v6.8-REQUIREMENTS.md`

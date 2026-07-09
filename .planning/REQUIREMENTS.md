@@ -1,74 +1,74 @@
-# Requirements: v6.6 First Cohort Live Operations And Fix Sprint
+# Requirements: v6.7 Revenue Retention And Controlled Growth Execution
 
-**Milestone:** v6.6
+**Milestone:** v6.7
 **Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.5 Live Pilot Evidence Execution And Cohort Start
+**Prior milestone:** v6.6 First Cohort Live Operations And Fix Sprint
 
 ## Purpose
 
-Operate the first real cohort or burn down the v6.5 blockers that prevent it. v6.6 must produce shipped fixes and live operating evidence.
+Complete the real revenue and retention loop before growth. v6.7 must prove paid conversion, entitlement, usage, parent account reliability, lifecycle messaging, support capacity, and controlled intake under real conditions.
 
 ## Requirements
 
-### V6COHORT-01 Cohort Day-One Operations Or Blocker Sprint Start
+### V6REVEXEC-01 Paid Conversion And Billing Reality Review
 
 Acceptance criteria:
 
-- If v6.5 started the cohort, day-one operations cover activation, support, teacher, billing, notification, mobile, usage, and learning signals.
-- If v6.5 held, blocker rows include owner, severity, fix path, test path, release path, and target outcome.
-- Daily review cadence, pause criteria, rollback authority, and support coverage are active.
-- Evidence distinguishes real cohort usage from test, dry-run, and fixture traffic.
+- Checkout, paywall, payment methods, entitlement activation, renewal, cancellation, failed payment, invoice, refund, and manual correction evidence are reviewed.
+- Billing provider state, entitlement state, usage state, and admin support state reconcile for pilot accounts.
+- Parent copy explains access, limits, failures, and next action.
+- Revenue-impacting corrections are owner-approved, auditable, and reversible.
 
-### V6COHORT-02 Activation Account Verification And Entitlement Fixes
-
-Acceptance criteria:
-
-- Login, verification, recovery, role visibility, entitlement activation, subscription state, usage writes, quota display, and admin support explanations are fixed or explicitly deferred.
-- Parent/student/admin support paths are covered by focused tests.
-- User copy is clear for pending, failed, expired, blocked, disabled, and recovered states.
-- Revenue-impacting fixes are auditable and reversible.
-
-### V6COHORT-03 Support Teacher Notification Mobile Fixes
+### V6REVEXEC-02 Usage Quota And Parent Account Reliability Fixes
 
 Acceptance criteria:
 
-- Support handoff, support queue, teacher dispatch/SLA, escalation, notification delivery, mobile access/install, and incident handling gaps are fixed or explicitly disabled for pilot.
-- Operators can see owner, status, next action, and escalation path.
-- Notification/mobile/support fallback copy is ready where needed.
-- Fix evidence includes request/build IDs where applicable.
+- Usage ledger coverage, idempotency, quota display, quota blocking, support explanations, and reconciliation reports are reliable for pilot scope.
+- Parent self-serve account states cover verification, subscription, child access, quota, support, and recovery.
+- Admin/support can explain account and usage state without private learning content.
+- Drift, stale records, duplicate events, and manual overrides are visible.
 
-### V6COHORT-04 First Learning Action And Parent Clarity Fixes
-
-Acceptance criteria:
-
-- Onboarding, first practice/assignment, curriculum access, AI/help flow, recommendations, and parent progress reporting are usable for the cohort.
-- Parent/student flows explain what to do next without operator intervention.
-- Learning fixes preserve curriculum authorization and reviewed/policy-bound AI boundaries.
-- Known learning gaps are ranked for v6.8.
-
-### VERIFY-80 v6.6 Live Cohort Outcome Gate
+### V6REVEXEC-03 Lifecycle Retention And Support Capacity Execution
 
 Acceptance criteria:
 
-- Decision is continue pilot, hold, rollback, or proceed to revenue/retention execution.
-- Decision uses activation, support, teacher, billing, usage, mobile, notification, learning, parent clarity, and incident evidence.
+- Onboarding, activation, reminder, renewal, failed payment, cancellation, and win-back messages are executed or explicitly disabled.
+- Preferences, locale, delivery failure, quiet hours where applicable, and support visibility are handled.
+- Support capacity is measured against real volume and response quality.
+- Retention signals distinguish real users from test/dry-run traffic.
+
+### V6REVEXEC-04 Referral Waitlist And Controlled Intake Execution
+
+Acceptance criteria:
+
+- Referral, waitlist, invite, or controlled intake flows run behind feature, capacity, and support gates.
+- Growth surfaces clearly explain availability, eligibility, and next step.
+- Abuse/fraud handling is adequate for the internal development stage.
+- Intake feeds cohort planning and support staffing rather than public launch.
+
+### VERIFY-81 v6.7 Revenue Growth Decision Gate
+
+Acceptance criteria:
+
+- Decision is controlled growth, hold, rollback, or revenue remediation.
+- Decision uses conversion, revenue drift, usage accuracy, retention, support load, parent comprehension, and incident evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v6.7 receives only the cohort and revenue risks that remain after v6.6 fixes.
+- v6.8 receives learning-quality risks separate from revenue/account risks.
 
 ## Out of Scope
 
+- Paid marketing campaign launch.
 - Public launch.
-- Paid marketing.
-- Cohort expansion without gate approval.
-- Broad new product areas unrelated to cohort evidence.
+- Enterprise sales automation.
+- Multi-country tax/accounting expansion beyond approved scope.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6COHORT-01 | Phase 402 | Completed |
-| V6COHORT-02 | Phase 403 | Completed |
-| V6COHORT-03 | Phase 404 | Completed |
-| V6COHORT-04 | Phase 405 | Completed |
-| VERIFY-80 | Phase 406 | Completed |
+| V6REVEXEC-01 | Phase 407 | Completed |
+| V6REVEXEC-02 | Phase 408 | Completed |
+| V6REVEXEC-03 | Phase 409 | Completed |
+| V6REVEXEC-04 | Phase 410 | Completed |
+| VERIFY-81 | Phase 411 | Completed |

@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.7 Revenue Retention And Controlled Growth Execution (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added paid conversion and billing reality review contracts for checkout, paywall, payment methods, entitlement, renewal, cancellation, failed payment, invoice, refund, and manual correction evidence.
+- Added usage/quota/account reliability contracts that keep support explanations metadata-only and exclude private learning content.
+- Added lifecycle retention and support-capacity execution contracts that require real-user signal separation from test traffic.
+- Added referral/waitlist controlled-intake contracts behind capacity and support gates while keeping public launch and paid marketing blocked.
+- Added `v67_revenue_growth_decision_gate`, which allows v6.8 only after revenue, usage/account, lifecycle, and intake blockers close.
+
+---
+
 ## v6.6 First Cohort Live Operations And Fix Sprint (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -25,24 +39,6 @@
 - Added production notification/support/mobile/learning smoke contracts that distinguish production evidence from dry-run or local fixture evidence.
 - Added first-cohort launch packet execution contracts with dry-run coverage and start-blocking gap handling.
 - Added `live_pilot_start_decision_handoff`, which allows v6.6 real-user operations only on `start_limited_pilot`.
-
----
-
-## Planned: v6.7 Revenue Retention And Controlled Growth Execution
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.7-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.7-REQUIREMENTS.md`
-**Goal:** Convert pilot usage into a reliable paid/retention loop and controlled growth decision.
-**Phases:** 5
-
-Planned phases:
-
-- Phase 407: Paid Conversion And Billing Reality Review. (planned)
-- Phase 408: Usage Quota And Parent Account Reliability Fixes. (planned)
-- Phase 409: Lifecycle Retention And Support Capacity Execution. (planned)
-- Phase 410: Referral Waitlist And Controlled Intake Execution. (planned)
-- Phase 411: v6.7 Revenue Growth Decision Gate. (planned)
 
 ---
 
