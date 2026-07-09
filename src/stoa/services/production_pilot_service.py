@@ -489,6 +489,52 @@ V67_CONTROLLED_INTAKE_SURFACES = {
     "cohort_planning",
     "support_staffing",
 }
+V68_REAL_LEARNING_OUTCOME_SIGNALS = {
+    "completion",
+    "retry",
+    "mastery_progress",
+    "weak_topics",
+    "teacher_help",
+    "ai_draft_review",
+    "parent_report_engagement",
+    "support_contacts",
+}
+V68_CURRICULUM_RELEASE_SURFACES = {
+    "priority_lessons",
+    "exercises",
+    "explanations",
+    "metadata",
+    "sequencing",
+    "validation",
+    "preview",
+    "rollback",
+    "analytics_tags",
+    "progress_integrity",
+    "recommendation_integrity",
+}
+V68_AI_TEACHER_RELEASE_SURFACES = {
+    "summaries",
+    "explanations",
+    "exercise_drafts",
+    "teacher_tools",
+    "review_workflows",
+    "refusal_fallback",
+    "safety_review",
+    "cost_latency_observability",
+    "provider_error_observability",
+}
+V68_ADAPTIVE_PROGRESS_RELEASE_SURFACES = {
+    "recent_learning",
+    "weak_topics",
+    "completed_assignments",
+    "content_availability",
+    "freshness",
+    "duplicate_suppression",
+    "student_explanations",
+    "parent_explanations",
+    "teacher_admin_correction",
+    "parent_progress_reporting",
+}
 
 
 @dataclass(frozen=True)
@@ -3889,6 +3935,219 @@ def v67_revenue_growth_decision_gate(
         "nextMilestoneRiskHandoff": {
             "learningQualityRisks": [],
             "revenueAccountRisks": blockers,
+        },
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def real_learning_outcome_weak_topic_analysis(
+    states: dict[str, str] | None = None,
+    *,
+    top_issues_ranked: bool = False,
+) -> dict[str, Any]:
+    """Analyze real learning outcome signals without mixing operational account risks."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for signal in sorted(V68_REAL_LEARNING_OUTCOME_SIGNALS):
+        state = states.get(signal, "missing")
+        if state not in {"analyzed", "accepted_gap", "insufficient_data"}:
+            blockers.append(signal)
+        rows.append(
+            {
+                "signal": signal,
+                "state": state,
+                "learningProblemOnly": True,
+                "supportSafe": True,
+                "rawPrivateStudentContentIncluded": False,
+                "rankingInputs": ["student_impact", "frequency", "severity", "effort"],
+            }
+        )
+    if not top_issues_ranked:
+        blockers.append("top_issues_ranked")
+    result = {
+        "analysisState": "ready" if not blockers else "blocked",
+        "signals": rows,
+        "blockers": _unique(blockers),
+        "accountBillingNotificationSupportOnboardingSeparated": True,
+        "topIssuesRanked": top_issues_ranked,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def curriculum_exercise_explanation_quality_release(
+    states: dict[str, str] | None = None,
+    *,
+    authorized_content_workflow: bool = False,
+) -> dict[str, Any]:
+    """Release authorized curriculum, exercise, explanation, metadata, and sequencing fixes."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V68_CURRICULUM_RELEASE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"released", "validated", "accepted_gap", "not_applicable"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "specialAuthorizationRequired": True,
+                "validationReady": state in {"released", "validated"},
+                "previewReady": state in {"released", "validated"},
+                "rollbackMetadataReady": state in {"released", "validated"},
+                "analyticsTagged": surface == "analytics_tags" and state in {"released", "validated"},
+            }
+        )
+    if not authorized_content_workflow:
+        blockers.append("authorized_content_workflow")
+    result = {
+        "releaseState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": _unique(blockers),
+        "authorizedContentWorkflow": authorized_content_workflow,
+        "curriculumEditPermissionsBroadened": False,
+        "progressIntegrityPreserved": "progress_integrity" not in blockers,
+        "recommendationIntegrityPreserved": "recommendation_integrity" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def ai_teacher_summary_practice_quality_release(
+    states: dict[str, str] | None = None,
+    *,
+    evaluation_fixtures_updated: bool = False,
+    teacher_review_ready: bool = False,
+) -> dict[str, Any]:
+    """Release AI teacher summary, explanation, exercise draft, review, and fallback quality fixes."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V68_AI_TEACHER_RELEASE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"released", "reviewed", "fallback_ready", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "reviewOrFallbackReady": state in {"released", "reviewed", "fallback_ready"},
+                "providerObservable": surface
+                in {"cost_latency_observability", "provider_error_observability"},
+                "unreviewedAutonomyExpanded": False,
+            }
+        )
+    if not evaluation_fixtures_updated:
+        blockers.append("evaluation_fixtures")
+    if not teacher_review_ready:
+        blockers.append("teacher_review")
+    result = {
+        "qualityState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": _unique(blockers),
+        "evaluationFixturesUpdated": evaluation_fixtures_updated,
+        "teacherReviewReady": teacher_review_ready,
+        "teacherReviewModes": ["accept", "edit", "reject", "explain", "follow_up"],
+        "unsafeOffTopicOverconfidentCaught": "safety_review" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def adaptive_recommendation_parent_progress_release(
+    states: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Release adaptive recommendation and parent progress explanation improvements."""
+    states = states or {}
+    rows = []
+    blockers = []
+    for surface in sorted(V68_ADAPTIVE_PROGRESS_RELEASE_SURFACES):
+        state = states.get(surface, "missing")
+        if state not in {"released", "improved", "accepted_gap"}:
+            blockers.append(surface)
+        rows.append(
+            {
+                "surface": surface,
+                "state": state,
+                "internalScoringExposed": False,
+                "promptExposed": False,
+                "correctionReady": surface == "teacher_admin_correction" and state in {"released", "improved"},
+                "familyExplanationReady": surface
+                in {"student_explanations", "parent_explanations", "parent_progress_reporting"}
+                and state in {"released", "improved"},
+            }
+        )
+    result = {
+        "releaseState": "ready" if not blockers else "blocked",
+        "surfaces": rows,
+        "blockers": blockers,
+        "recommendationInputs": [
+            "recent_learning",
+            "weak_topics",
+            "completed_assignments",
+            "content_availability",
+            "freshness",
+            "duplicate_suppression",
+        ],
+        "parentProgressConnects": ["activity", "outcome", "next_step", "support_recommendation"],
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v68_learning_expansion_decision_gate(
+    *,
+    outcome_analysis: dict[str, Any] | None = None,
+    curriculum_release: dict[str, Any] | None = None,
+    ai_quality: dict[str, Any] | None = None,
+    adaptive_progress: dict[str, Any] | None = None,
+    content_ai_freeze: bool = False,
+) -> dict[str, Any]:
+    """Close v6.8 with learning scale, remediation, hold, or content/AI freeze."""
+    outcome_analysis = outcome_analysis or real_learning_outcome_weak_topic_analysis()
+    curriculum_release = curriculum_release or curriculum_exercise_explanation_quality_release()
+    ai_quality = ai_quality or ai_teacher_summary_practice_quality_release()
+    adaptive_progress = adaptive_progress or adaptive_recommendation_parent_progress_release()
+    blockers = _unique(
+        [
+            *[f"outcome:{blocker}" for blocker in outcome_analysis.get("blockers", [])],
+            *[f"curriculum:{blocker}" for blocker in curriculum_release.get("blockers", [])],
+            *[f"ai:{blocker}" for blocker in ai_quality.get("blockers", [])],
+            *[f"adaptive:{blocker}" for blocker in adaptive_progress.get("blockers", [])],
+        ]
+    )
+    if content_ai_freeze:
+        decision = "content_ai_freeze"
+    elif blockers:
+        decision = "learning_remediation"
+    else:
+        decision = "learning_scale"
+    result = {
+        "decision": decision,
+        "blockers": blockers,
+        "v6_9Allowed": decision == "learning_scale",
+        "publicLaunchApproved": False,
+        "paidMarketingApproved": False,
+        "marketReadinessRisksSeparated": True,
+        "decisionInputs": [
+            "learning_outcome",
+            "parent_comprehension",
+            "teacher_review",
+            "ai_quality",
+            "support_load",
+            "retention",
+        ],
+        "nextMilestoneRiskHandoff": {
+            "marketReadinessRisks": [],
+            "learningQualityRisks": blockers,
         },
         "privacy": _privacy_contract(),
     }

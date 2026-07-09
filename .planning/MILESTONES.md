@@ -1,5 +1,19 @@
 # Milestones
 
+## v6.8 Learning Outcome And Curriculum Quality Expansion (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Added real learning outcome and weak-topic analysis contracts that separate learning problems from account, billing, notification, support, and onboarding risks.
+- Added authorized curriculum/exercise/explanation release contracts with validation, preview, rollback metadata, analytics tags, and preserved progress/recommendation integrity.
+- Added AI teacher summary/practice quality release contracts with evaluation fixture, teacher review, fallback/refusal, safety, and provider observability gates.
+- Added adaptive recommendation and parent progress release contracts that keep internal scoring and prompts private.
+- Added `v68_learning_expansion_decision_gate`, which allows v6.9 only after outcome, curriculum, AI, and adaptive blockers close.
+
+---
+
 ## v6.7 Revenue Retention And Controlled Growth Execution (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks
@@ -39,24 +53,6 @@
 - Added production notification/support/mobile/learning smoke contracts that distinguish production evidence from dry-run or local fixture evidence.
 - Added first-cohort launch packet execution contracts with dry-run coverage and start-blocking gap handling.
 - Added `live_pilot_start_decision_handoff`, which allows v6.6 real-user operations only on `start_limited_pilot`.
-
----
-
-## Planned: v6.8 Learning Outcome And Curriculum Quality Expansion
-
-**Status:** Planned
-**Roadmap:** `.planning/milestones/v6.8-ROADMAP.md`
-**Requirements:** `.planning/milestones/v6.8-REQUIREMENTS.md`
-**Goal:** Improve learning outcomes from real cohort evidence and prepare curriculum/AI quality for controlled growth.
-**Phases:** 5
-
-Planned phases:
-
-- Phase 412: Real Learning Outcome And Weak Topic Analysis. (planned)
-- Phase 413: Curriculum Exercise Explanation Quality Release. (planned)
-- Phase 414: AI Teacher Summary Practice Quality Release. (planned)
-- Phase 415: Adaptive Recommendation And Parent Progress Release. (planned)
-- Phase 416: v6.8 Learning Expansion Decision Gate. (planned)
 
 ---
 

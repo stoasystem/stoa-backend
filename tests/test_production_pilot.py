@@ -1177,3 +1177,108 @@ def test_v67_revenue_growth_gate_controls_v68_access_and_public_launch_scope():
     assert ready["paidMarketingApproved"] is False
     assert ready["publicLaunchApproved"] is False
     assert ready["learningRisksSeparated"] is True
+
+
+def test_v68_learning_outcome_analysis_requires_ranked_real_learning_signals():
+    default_analysis = production_pilot_service.real_learning_outcome_weak_topic_analysis()
+    assert default_analysis["analysisState"] == "blocked"
+    assert "completion" in default_analysis["blockers"]
+    assert "top_issues_ranked" in default_analysis["blockers"]
+
+    states = {
+        signal: "analyzed"
+        for signal in production_pilot_service.V68_REAL_LEARNING_OUTCOME_SIGNALS
+    }
+    ready = production_pilot_service.real_learning_outcome_weak_topic_analysis(
+        states,
+        top_issues_ranked=True,
+    )
+    assert ready["analysisState"] == "ready"
+    assert ready["accountBillingNotificationSupportOnboardingSeparated"] is True
+    assert all(row["supportSafe"] for row in ready["signals"])
+    assert not any(row["rawPrivateStudentContentIncluded"] for row in ready["signals"])
+
+
+def test_v68_curriculum_quality_release_preserves_authorized_workflow():
+    default_release = production_pilot_service.curriculum_exercise_explanation_quality_release()
+    assert default_release["releaseState"] == "blocked"
+    assert "authorized_content_workflow" in default_release["blockers"]
+
+    states = {
+        surface: "released"
+        for surface in production_pilot_service.V68_CURRICULUM_RELEASE_SURFACES
+    }
+    states["preview"] = "validated"
+    ready = production_pilot_service.curriculum_exercise_explanation_quality_release(
+        states,
+        authorized_content_workflow=True,
+    )
+    assert ready["releaseState"] == "ready"
+    assert ready["curriculumEditPermissionsBroadened"] is False
+    assert ready["progressIntegrityPreserved"] is True
+    assert ready["recommendationIntegrityPreserved"] is True
+
+
+def test_v68_ai_teacher_quality_release_requires_fixtures_and_teacher_review():
+    default_quality = production_pilot_service.ai_teacher_summary_practice_quality_release()
+    assert default_quality["qualityState"] == "blocked"
+    assert "evaluation_fixtures" in default_quality["blockers"]
+    assert "teacher_review" in default_quality["blockers"]
+
+    states = {
+        surface: "released"
+        for surface in production_pilot_service.V68_AI_TEACHER_RELEASE_SURFACES
+    }
+    states["refusal_fallback"] = "fallback_ready"
+    ready = production_pilot_service.ai_teacher_summary_practice_quality_release(
+        states,
+        evaluation_fixtures_updated=True,
+        teacher_review_ready=True,
+    )
+    assert ready["qualityState"] == "ready"
+    assert "follow_up" in ready["teacherReviewModes"]
+    assert ready["unsafeOffTopicOverconfidentCaught"] is True
+
+
+def test_v68_adaptive_parent_progress_release_keeps_scores_and_prompts_private():
+    default_release = production_pilot_service.adaptive_recommendation_parent_progress_release()
+    assert default_release["releaseState"] == "blocked"
+    assert "recent_learning" in default_release["blockers"]
+
+    states = {
+        surface: "released"
+        for surface in production_pilot_service.V68_ADAPTIVE_PROGRESS_RELEASE_SURFACES
+    }
+    states["freshness"] = "improved"
+    ready = production_pilot_service.adaptive_recommendation_parent_progress_release(states)
+    assert ready["releaseState"] == "ready"
+    assert all(not row["internalScoringExposed"] for row in ready["surfaces"])
+    assert all(not row["promptExposed"] for row in ready["surfaces"])
+    assert "support_recommendation" in ready["parentProgressConnects"]
+
+
+def test_v68_learning_expansion_gate_controls_market_readiness_access():
+    default_gate = production_pilot_service.v68_learning_expansion_decision_gate()
+    assert default_gate["decision"] == "learning_remediation"
+    assert default_gate["v6_9Allowed"] is False
+
+    freeze = production_pilot_service.v68_learning_expansion_decision_gate(
+        outcome_analysis={"blockers": []},
+        curriculum_release={"blockers": []},
+        ai_quality={"blockers": []},
+        adaptive_progress={"blockers": []},
+        content_ai_freeze=True,
+    )
+    assert freeze["decision"] == "content_ai_freeze"
+
+    ready = production_pilot_service.v68_learning_expansion_decision_gate(
+        outcome_analysis={"blockers": []},
+        curriculum_release={"blockers": []},
+        ai_quality={"blockers": []},
+        adaptive_progress={"blockers": []},
+    )
+    assert ready["decision"] == "learning_scale"
+    assert ready["v6_9Allowed"] is True
+    assert ready["publicLaunchApproved"] is False
+    assert ready["paidMarketingApproved"] is False
+    assert ready["marketReadinessRisksSeparated"] is True

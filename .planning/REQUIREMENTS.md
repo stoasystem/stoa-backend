@@ -1,74 +1,74 @@
-# Requirements: v6.7 Revenue Retention And Controlled Growth Execution
+# Requirements: v6.8 Learning Outcome And Curriculum Quality Expansion
 
-**Milestone:** v6.7
+**Milestone:** v6.8
 **Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v6.6 First Cohort Live Operations And Fix Sprint
+**Prior milestone:** v6.7 Revenue Retention And Controlled Growth Execution
 
 ## Purpose
 
-Complete the real revenue and retention loop before growth. v6.7 must prove paid conversion, entitlement, usage, parent account reliability, lifecycle messaging, support capacity, and controlled intake under real conditions.
+Improve the core learning product from real cohort evidence. v6.8 must make curriculum, exercises, AI teacher tools, recommendations, and parent progress reporting strong enough for controlled growth.
 
 ## Requirements
 
-### V6REVEXEC-01 Paid Conversion And Billing Reality Review
+### V6LEARNEXEC-01 Real Learning Outcome And Weak Topic Analysis
 
 Acceptance criteria:
 
-- Checkout, paywall, payment methods, entitlement activation, renewal, cancellation, failed payment, invoice, refund, and manual correction evidence are reviewed.
-- Billing provider state, entitlement state, usage state, and admin support state reconcile for pilot accounts.
-- Parent copy explains access, limits, failures, and next action.
-- Revenue-impacting corrections are owner-approved, auditable, and reversible.
+- Evidence covers completion, retry, mastery/progress, weak topics, teacher help, AI draft review, parent report engagement, and support contacts.
+- Learning problems are separated from account, billing, notification, support, and onboarding problems.
+- Top issues are ranked by student impact, frequency, severity, and effort.
+- Evidence remains support-safe and excludes raw private student content.
 
-### V6REVEXEC-02 Usage Quota And Parent Account Reliability Fixes
-
-Acceptance criteria:
-
-- Usage ledger coverage, idempotency, quota display, quota blocking, support explanations, and reconciliation reports are reliable for pilot scope.
-- Parent self-serve account states cover verification, subscription, child access, quota, support, and recovery.
-- Admin/support can explain account and usage state without private learning content.
-- Drift, stale records, duplicate events, and manual overrides are visible.
-
-### V6REVEXEC-03 Lifecycle Retention And Support Capacity Execution
+### V6LEARNEXEC-02 Curriculum Exercise Explanation Quality Release
 
 Acceptance criteria:
 
-- Onboarding, activation, reminder, renewal, failed payment, cancellation, and win-back messages are executed or explicitly disabled.
-- Preferences, locale, delivery failure, quiet hours where applicable, and support visibility are handled.
-- Support capacity is measured against real volume and response quality.
-- Retention signals distinguish real users from test/dry-run traffic.
+- Priority lessons, exercises, explanations, metadata, and sequencing are improved through authorized content workflow.
+- Curriculum edit permissions remain specially authorized.
+- Changed content has validation, preview, rollback metadata, and analytics tags.
+- Student/parent flows preserve progress and recommendation integrity.
 
-### V6REVEXEC-04 Referral Waitlist And Controlled Intake Execution
-
-Acceptance criteria:
-
-- Referral, waitlist, invite, or controlled intake flows run behind feature, capacity, and support gates.
-- Growth surfaces clearly explain availability, eligibility, and next step.
-- Abuse/fraud handling is adequate for the internal development stage.
-- Intake feeds cohort planning and support staffing rather than public launch.
-
-### VERIFY-81 v6.7 Revenue Growth Decision Gate
+### V6LEARNEXEC-03 AI Teacher Summary Practice Quality Release
 
 Acceptance criteria:
 
-- Decision is controlled growth, hold, rollback, or revenue remediation.
-- Decision uses conversion, revenue drift, usage accuracy, retention, support load, parent comprehension, and incident evidence.
+- AI summaries, explanations, exercise drafts, and teacher tools have updated evaluation fixtures.
+- Low-quality, unsafe, off-topic, or overconfident outputs are caught by review, refusal, or fallback behavior.
+- Teacher review supports accept, edit, reject, explain, and follow-up workflows efficiently.
+- Cost, latency, fallback, refusal, and provider errors remain observable.
+
+### V6LEARNEXEC-04 Adaptive Recommendation And Parent Progress Release
+
+Acceptance criteria:
+
+- Recommendations account for recent learning, weak topics, completed assignments, content availability, freshness, and duplicate suppression.
+- Parent/student explanations are understandable without exposing internal scoring or prompts.
+- Teachers/admins can correct recommendations and see why they were generated.
+- Parent progress reporting connects activity, outcome, next step, and support recommendation.
+
+### VERIFY-82 v6.8 Learning Expansion Decision Gate
+
+Acceptance criteria:
+
+- Decision is learning scale, hold, remediation, or content/AI freeze.
+- Decision uses learning outcome, parent comprehension, teacher review, AI quality, support load, and retention evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v6.8 receives learning-quality risks separate from revenue/account risks.
+- v6.9 receives market-readiness risks separately from learning-quality risks.
 
 ## Out of Scope
 
-- Paid marketing campaign launch.
-- Public launch.
-- Enterprise sales automation.
-- Multi-country tax/accounting expansion beyond approved scope.
+- Fully autonomous unreviewed AI tutoring.
+- Giving all teachers curriculum-edit permissions.
+- Unsupported subjects/languages beyond approved rollout.
+- Raw prompt or student-content evidence exposure.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V6REVEXEC-01 | Phase 407 | Completed |
-| V6REVEXEC-02 | Phase 408 | Completed |
-| V6REVEXEC-03 | Phase 409 | Completed |
-| V6REVEXEC-04 | Phase 410 | Completed |
-| VERIFY-81 | Phase 411 | Completed |
+| V6LEARNEXEC-01 | Phase 412 | Completed |
+| V6LEARNEXEC-02 | Phase 413 | Completed |
+| V6LEARNEXEC-03 | Phase 414 | Completed |
+| V6LEARNEXEC-04 | Phase 415 | Completed |
+| VERIFY-82 | Phase 416 | Completed |

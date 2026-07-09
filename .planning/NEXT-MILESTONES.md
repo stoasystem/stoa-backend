@@ -1,15 +1,15 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-09 after v6.7 local revenue retention completion
+**Updated:** 2026-07-09 after v6.8 local learning quality completion
 **Mode:** live evidence execution, first cohort operations, revenue retention, learning quality, and market readiness
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v6.0-v6.7 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, and controlled growth gates.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 63 tests and focused Ruff passed in the v6.7 audit.
-- v6.7 closed as local-contract readiness only.
+- v6.0-v6.8 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, cohort operations, revenue retention, controlled growth, learning outcome, curriculum release, AI teacher quality, and parent progress gates.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 68 tests and focused Ruff passed in the v6.8 audit.
+- v6.8 closed as local-contract readiness only.
 
 Important reality check:
 
@@ -68,7 +68,7 @@ Implementation strategy:
 - Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
 - Keep growth intake gated by capacity and support readiness.
 
-## Active: v6.8 Learning Outcome And Curriculum Quality Expansion
+## Completed: v6.8 Learning Outcome And Curriculum Quality Expansion
 
 Roadmap: `.planning/milestones/v6.8-ROADMAP.md`
 Requirements: `.planning/milestones/v6.8-REQUIREMENTS.md`
@@ -83,7 +83,7 @@ Implementation strategy:
 - Rank learning issues by real frequency, severity, student impact, teacher effort, and parent confusion.
 - Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
 
-## Planned: v6.9 Public Launch Decision And Market Readiness
+## Active: v6.9 Public Launch Decision And Market Readiness
 
 Roadmap: `.planning/milestones/v6.9-ROADMAP.md`
 Requirements: `.planning/milestones/v6.9-REQUIREMENTS.md`

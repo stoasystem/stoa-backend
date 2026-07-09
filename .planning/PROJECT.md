@@ -136,7 +136,7 @@ The v6.4 milestone is complete locally. It adds operations risk review, admin/su
 
 The v6.5 milestone is complete locally. It adds production-evidence input contracts for access/signoff refresh, account/payment/usage smoke, notification/support/mobile/learning smoke, first-cohort launch packet execution, and live pilot start handoff. It does not claim real production checks were performed; missing current evidence still returns `hold` and blocks v6.6 real user operations.
 
-The v6.8-v6.9 sequence remains planned as the next real execution track: learning outcome expansion and a market-readiness decision. This sequence is intentionally not v7: the v6 real-evidence theme is not finished until real cohort, revenue, learning, operations, and launch/hold evidence exist.
+The v6.9 milestone remains planned as the next real execution track: a market-readiness decision. This sequence is intentionally not v7: the v6 real-evidence theme is not finished until real cohort, revenue, learning, operations, and launch/hold evidence exist.
 
 ## Core Value
 
@@ -145,10 +145,10 @@ Parents can trust that parent portal views reflect authorized real student data 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v6.7 Revenue Retention And Controlled Growth Execution on 2026-07-09 (revenue retention and controlled growth contracts; learning expansion still gated)
+**Latest completed milestone:** v6.8 Learning Outcome And Curriculum Quality Expansion on 2026-07-09 (learning outcome and curriculum quality contracts; market readiness still gated)
 **Residual partial gate:** real-user activation, controlled growth, paid marketing, and public launch still require current approved external evidence, provider/mobile evidence, approved accounts, support staffing, production restore/tabletop evidence, launch-room readiness, and support capacity.
-**Active milestone:** none — awaiting v6.8 start
-**Next planned milestones:** v6.8 Learning Outcome And Curriculum Quality Expansion; v6.9 Public Launch Decision And Market Readiness.
+**Active milestone:** none — awaiting v6.9 start
+**Next planned milestones:** v6.9 Public Launch Decision And Market Readiness.
 
 ## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
 
@@ -171,6 +171,17 @@ Parents can trust that parent portal views reflect authorized real student data 
 - Lifecycle retention and support capacity execution.
 - Referral, waitlist, and controlled intake execution.
 - Revenue growth decision gate for v6.8 handoff.
+
+## Completed Milestone: v6.8 Learning Outcome And Curriculum Quality Expansion
+
+**Goal:** Improve learning outcomes from real cohort evidence and prepare curriculum/AI quality for controlled growth.
+
+**Target features:**
+- Real learning outcome and weak topic analysis.
+- Curriculum exercise explanation quality release.
+- AI teacher summary practice quality release.
+- Adaptive recommendation and parent progress release.
+- Learning expansion decision gate for v6.9 handoff.
 
 ## Completed Milestone: v6.5 Live Pilot Evidence Execution And Cohort Start
 
@@ -1155,7 +1166,7 @@ Known current resources:
 | Start v6.5 live pilot evidence execution and cohort start | v6.0-v6.4 completed local contract gates, but real users and provider execution remain unproven; the next work must use current production evidence | Complete locally; real start still gated by current approved production evidence |
 | Plan v6.6 first cohort live operations and fix sprint | The first started cohort or blocker package should drive shipped fixes across activation, account, support, mobile, usage, and learning | Complete locally; v6.7 allowed only after cohort/fix blockers close |
 | Plan v6.7 revenue retention and controlled growth execution | Growth needs reliable paid conversion, entitlement, usage/quota, retention, support capacity, and revenue reconciliation under real conditions | Complete locally; v6.8 allowed only after revenue/growth blockers close |
-| Plan v6.8 learning outcome and curriculum quality expansion | Expansion should depend on real learning value, not only operational readiness | Planned |
+| Plan v6.8 learning outcome and curriculum quality expansion | Expansion should depend on real learning value, not only operational readiness | Complete locally; v6.9 allowed only after learning-quality blockers close |
 | Plan v6.9 public launch decision and market readiness | Public launch prep must be a decision from real customer, revenue, learning, support, mobile, provider, and release evidence | Planned |
 
 ## Evolution
@@ -1176,4 +1187,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-09 after planning v6.5-v6.9 as the next live evidence, cohort, revenue, learning, and market-readiness sequence*
+*Last updated: 2026-07-09 after completing v6.8 learning outcome and curriculum quality expansion*
