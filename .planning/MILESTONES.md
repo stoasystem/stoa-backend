@@ -1,5 +1,97 @@
 # Milestones
 
+## Planned: v6.5 Live Pilot Evidence Execution And Cohort Start
+
+**Status:** Planned
+**Roadmap:** `.planning/ROADMAP.md`
+**Requirements:** `.planning/REQUIREMENTS.md`
+**Milestone roadmap:** `.planning/milestones/v6.5-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v6.5-REQUIREMENTS.md`
+**Goal:** Execute current real evidence against the locally complete v6 gates, then either start the first limited cohort or publish a current blocker package.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 397: Production Evidence Access And Approval Refresh. (planned)
+- Phase 398: Production Account Payment Usage Smoke. (planned)
+- Phase 399: Production Notification Support Mobile Learning Smoke. (planned)
+- Phase 400: First Cohort Launch Packet Execution. (planned)
+- Phase 401: Live Pilot Start Decision And Handoff. (planned)
+
+---
+
+## Planned: v6.6 First Cohort Live Operations And Fix Sprint
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.6-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.6-REQUIREMENTS.md`
+**Goal:** Operate the first approved cohort if v6.5 starts it, or execute the v6.5 blocker package until a cohort can start.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 402: Cohort Day-One Operations Or Blocker Sprint Start. (planned)
+- Phase 403: Activation Account Verification And Entitlement Fixes. (planned)
+- Phase 404: Support Teacher Notification Mobile Fixes. (planned)
+- Phase 405: First Learning Action And Parent Clarity Fixes. (planned)
+- Phase 406: v6.6 Live Cohort Outcome Gate. (planned)
+
+---
+
+## Planned: v6.7 Revenue Retention And Controlled Growth Execution
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.7-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.7-REQUIREMENTS.md`
+**Goal:** Convert pilot usage into a reliable paid/retention loop and controlled growth decision.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 407: Paid Conversion And Billing Reality Review. (planned)
+- Phase 408: Usage Quota And Parent Account Reliability Fixes. (planned)
+- Phase 409: Lifecycle Retention And Support Capacity Execution. (planned)
+- Phase 410: Referral Waitlist And Controlled Intake Execution. (planned)
+- Phase 411: v6.7 Revenue Growth Decision Gate. (planned)
+
+---
+
+## Planned: v6.8 Learning Outcome And Curriculum Quality Expansion
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.8-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.8-REQUIREMENTS.md`
+**Goal:** Improve learning outcomes from real cohort evidence and prepare curriculum/AI quality for controlled growth.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 412: Real Learning Outcome And Weak Topic Analysis. (planned)
+- Phase 413: Curriculum Exercise Explanation Quality Release. (planned)
+- Phase 414: AI Teacher Summary Practice Quality Release. (planned)
+- Phase 415: Adaptive Recommendation And Parent Progress Release. (planned)
+- Phase 416: v6.8 Learning Expansion Decision Gate. (planned)
+
+---
+
+## Planned: v6.9 Public Launch Decision And Market Readiness
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v6.9-ROADMAP.md`
+**Requirements:** `.planning/milestones/v6.9-REQUIREMENTS.md`
+**Goal:** Make an honest market-readiness decision after real pilot, revenue, retention, learning, and operations evidence.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 417: Market Readiness Evidence Consolidation. (planned)
+- Phase 418: Launch Scope Pricing Support And Risk Review. (planned)
+- Phase 419: App Store Web Production And Provider Readiness Review. (planned)
+- Phase 420: Public Launch Or Controlled Expansion Plan. (planned)
+- Phase 421: v6.9 Market Readiness Decision Gate. (planned)
+
+---
+
 ## v6.4 Operations Scale Release And Observability Hardening (Shipped: 2026-07-08)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks

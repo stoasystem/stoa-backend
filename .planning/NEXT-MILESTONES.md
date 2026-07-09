@@ -1,105 +1,107 @@
 # Next Product Milestones
 
-**Updated:** 2026-07-08 after v6.4 local operations scale completion
-**Mode:** real evidence execution, pilot start, product remediation, revenue reliability, learning quality, and operational scale
+**Updated:** 2026-07-09 after v6.4 local operations scale completion
+**Mode:** live evidence execution, first cohort operations, revenue retention, learning quality, and market readiness
 
 ## Current Reality
 
 Completed local contract baseline:
 
-- v5.30-v5.34 added metadata-only contracts for live pilot approval, real pilot operations, remediation, controlled expansion, public launch, and post-launch operations.
-- v5.35-v5.39 added metadata-only contracts for real pilot start, live operations feedback, revenue conversion, learning quality, and platform/internal operations scale.
 - v6.0-v6.4 added local real-evidence, first-cohort remediation, revenue/account reliability, learning quality, operations risk, workflow scale, observability, release discipline, and controlled expansion gates.
-- `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff are recorded as passing in the v6.4 evidence.
+- `PYTHONPATH=src pytest tests/test_production_pilot.py` passed with 48 tests and focused Ruff passed in the v6.4 audit.
+- v6.4 closed as local-contract readiness only.
 
 Important reality check:
 
 - v5.30-v6.4 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch happened.
 - Current gates still default to hold or remediation without current approved real evidence.
-- v6 is not a public-launch label. It is the real evidence execution track.
+- The next five milestones must execute real evidence and customer/product loops, not add more local-only gates.
 
-## Completed: v6.0 Real Evidence Capture And Pilot Start Execution
+## Active: v6.5 Live Pilot Evidence Execution And Cohort Start
 
-Milestone roadmap: `.planning/milestones/v6.0-ROADMAP.md`
-Milestone requirements: `.planning/milestones/v6.0-REQUIREMENTS.md`
-
-Function purpose:
-
-- Gather current approved real evidence for admin/parent/student/teacher accounts, providers, mobile, support, monitoring, restore/tabletop, and cohort readiness.
-- Verify paid access, usage recording, login/email verification, notification/support visibility, and mobile paths.
-- Run the real pilot start gate and either start the first cohort or publish a blocker execution package.
-
-Implementation strategy:
-
-- Treat v5 contracts as gate surfaces, not proof of launch.
-- Use real existing sessions/accounts or approved secret-backed credential paths.
-- Record redacted metadata only and keep public launch, paid marketing, broad expansion, and uncontrolled provider writes out of scope.
-
-## Completed: v6.1 First Cohort Product Remediation Sprint
-
-Roadmap: `.planning/milestones/v6.1-ROADMAP.md`
-Requirements: `.planning/milestones/v6.1-REQUIREMENTS.md`
+Roadmap: `.planning/ROADMAP.md`
+Requirements: `.planning/REQUIREMENTS.md`
+Milestone roadmap: `.planning/milestones/v6.5-ROADMAP.md`
+Milestone requirements: `.planning/milestones/v6.5-REQUIREMENTS.md`
 
 Function purpose:
 
-- Operate the first approved cohort or execute v6.0 blocker fixes.
-- Fix user-visible gaps in account/login, entitlement, usage, notification, support, mobile, and first learning action.
+- Use approved real accounts/sessions or approved secret-backed credentials.
+- Verify production account, payment, entitlement, usage, verification, notification, support, mobile, provider, and learning paths.
+- Start the first cohort only if current evidence supports `start_limited_pilot`; otherwise publish a blocker package.
 
 Implementation strategy:
 
-- If v6.0 starts, run daily cohort review.
-- If v6.0 holds, execute the blocker package until the gate can be rerun.
-- Ship focused fixes with regression tests and support-visible evidence.
+- Production checks are read-only by default.
+- Scoped pilot-safe mutations require explicit approval and rollback.
+- Record redacted request IDs, timestamps, account aliases, build IDs, owner signoffs, blocker states, and rollback controls.
 
-## Completed: v6.2 Paid Conversion Usage And Account Reliability Completion
+## Planned: v6.6 First Cohort Live Operations And Fix Sprint
 
-Roadmap: `.planning/milestones/v6.2-ROADMAP.md`
-Requirements: `.planning/milestones/v6.2-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v6.6-ROADMAP.md`
+Requirements: `.planning/milestones/v6.6-REQUIREMENTS.md`
 
 Function purpose:
 
-- Complete checkout/paywall, entitlement activation, subscription state, usage ledger, quota reconciliation, verification lifecycle, billing support, and lifecycle messaging.
-- Make paid access understandable and reliable for real parents.
+- Operate the started cohort or execute v6.5 blocker fixes.
+- Ship real user fixes across activation, account, entitlement, usage, support, notification, mobile, teacher help, and first learning action.
 
 Implementation strategy:
 
-- Use v6.0/v6.1 evidence and support tickets.
-- Reconcile billing provider state, entitlement state, usage state, quota display, and admin/support state.
+- Run daily pilot review if cohort starts.
+- Use the blocker package as the sprint backlog if v6.5 holds.
+- Rank fixes by severity, frequency, learning impact, support load, and revenue impact.
 
-## Completed: v6.3 Learning Outcome And AI Curriculum Quality Sprint
+## Planned: v6.7 Revenue Retention And Controlled Growth Execution
 
-Roadmap: `.planning/milestones/v6.3-ROADMAP.md`
-Requirements: `.planning/milestones/v6.3-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v6.7-ROADMAP.md`
+Requirements: `.planning/milestones/v6.7-REQUIREMENTS.md`
 
 Function purpose:
 
-- Improve curriculum coverage, exercise quality, adaptive recommendations, AI summaries/exercises, teacher review, parent progress reporting, and first-week learning retention.
-- Ensure growth is supported by real learning value.
+- Prove paid conversion, entitlement, usage/quota, lifecycle, retention, support capacity, referral/waitlist intake, and revenue reconciliation under real conditions.
+- Decide controlled growth, hold, rollback, or revenue remediation.
 
 Implementation strategy:
 
-- Prioritize real weak-topic, support, teacher, and parent feedback.
-- Keep curriculum editing restricted to specially authorized operators and AI automation reviewed or policy-bound.
+- Use v6.5-v6.6 cohort evidence and support tickets.
+- Reconcile provider, entitlement, usage, quota, invoice/refund, lifecycle, and support states.
+- Keep growth intake gated by capacity and support readiness.
 
-## Completed: v6.4 Operations Scale Release And Observability Hardening
+## Planned: v6.8 Learning Outcome And Curriculum Quality Expansion
 
-Roadmap: `.planning/milestones/v6.4-ROADMAP.md`
-Requirements: `.planning/milestones/v6.4-REQUIREMENTS.md`
+Roadmap: `.planning/milestones/v6.8-ROADMAP.md`
+Requirements: `.planning/milestones/v6.8-REQUIREMENTS.md`
 
 Function purpose:
 
-- Harden observability, support/admin/teacher workflows, release discipline, rollback, migration safety, incident handling, and operational ownership.
-- Prepare for larger controlled cohorts only after v6.0-v6.3 evidence supports it.
+- Improve student progress, weak-topic remediation, curriculum, exercises, AI teacher output, adaptive recommendations, and parent progress clarity from real evidence.
+- Ensure growth depends on visible learning value.
 
 Implementation strategy:
 
-- Use v6.0-v6.3 evidence as the risk register.
-- Prioritize high-frequency operator tasks and high-severity failure modes.
+- Rank learning issues by real frequency, severity, student impact, teacher effort, and parent confusion.
+- Keep curriculum editing specially authorized and AI automation reviewed or policy-bound.
+
+## Planned: v6.9 Public Launch Decision And Market Readiness
+
+Roadmap: `.planning/milestones/v6.9-ROADMAP.md`
+Requirements: `.planning/milestones/v6.9-REQUIREMENTS.md`
+
+Function purpose:
+
+- Consolidate pilot, revenue, retention, learning, support, mobile, provider, observability, incident, and release evidence.
+- Decide public launch prep, controlled expansion, hold, rollback, or next version focus.
+
+Implementation strategy:
+
+- Treat public launch as an evidence-based decision, not a milestone default.
+- Require owner approval, provider readiness, support staffing, revenue reconciliation, learning quality, mobile readiness, and incident readiness.
 
 ## Ordering Rationale
 
-1. v6.0 comes first because v5 contracts need current real evidence before users can be enabled.
-2. v6.1 follows because real evidence should drive immediate product fixes.
-3. v6.2 follows because paid access, usage, verification, and account reliability are business-critical before growth.
-4. v6.3 follows because learning quality is the core customer value.
-5. v6.4 follows because larger cohorts need repeatable operations, observability, releases, support, and rollback.
+1. v6.5 comes first because current approved real evidence is still missing from the local contract chain.
+2. v6.6 follows because the first cohort or blocker package must drive shipped fixes.
+3. v6.7 follows because growth requires reliable paid conversion, retention, support, and revenue reconciliation.
+4. v6.8 follows because learning quality must prove customer value before market expansion.
+5. v6.9 follows because public launch or controlled expansion should be a decision from real evidence, not a version-number default.

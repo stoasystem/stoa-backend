@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v6.4
-milestone_name: Operations Scale Release And Observability Hardening
-status: Awaiting next milestone
-last_updated: "2026-07-08T11:01:15.408Z"
-last_activity: 2026-07-08 — Milestone v6.4 completed and archived
+milestone: v6.5
+milestone_name: Live Pilot Evidence Execution And Cohort Start
+status: planned
+last_updated: "2026-07-09T00:00:00.000Z"
+last_activity: 2026-07-09
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -19,34 +19,34 @@ progress:
 
 STOA backend.
 
-See: .planning/PROJECT.md (updated 2026-07-07)
+See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: Milestone v6.4 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-08 — Milestone v6.4 completed and archived
+Phase: 397 Production Evidence Access And Approval Refresh planned
+Plan: 0/5 complete
+Status: v6.5 planned after v6.4 completed local operations scale contracts; real pilot/cohort/growth/launch evidence still required
+Last activity: 2026-07-09 - planned v6.5-v6.9 as the next live evidence, first cohort, revenue, learning quality, and market readiness milestones
 
 ## Accumulated Context
 
-- v5.30-v5.34 completed metadata-only live execution contracts for approval, real pilot execution, remediation, controlled expansion, public launch, and post-launch operations.
-- v5.35-v5.39 completed local support-safe contracts for real pilot start, pilot operations, revenue conversion, learning quality, and internal operations scale.
-- Those contracts do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch occurred.
-- v6.0 adds current real evidence inventory, account/payment/usage smoke, notification/support/mobile/provider evidence, launch packet dry-run, and pilot start decision contracts.
-- Current operational default remains hold unless `v6_pilot_start_or_blocker_decision_gate` returns `start_limited_pilot`.
+- v5.30-v6.4 completed local metadata/support-safe contracts and gates for pilot start, cohort remediation, revenue/account reliability, learning quality, operations scale, and controlled expansion readiness.
+- v6.4 audit passed with 48 focused production pilot tests and Ruff, but larger controlled cohort readiness remains local-contract readiness only.
+- v5.30-v6.4 do not prove real pilot users, provider writes, controlled expansion, paid marketing, or public launch occurred.
+- v6.5-v6.9 now focus on current real evidence execution, first cohort operations, revenue/retention, learning quality expansion, and market readiness decision.
 
 ### Pending Todos
 
-- Execute v6.1 only after a current approved `start_limited_pilot` decision, or use the v6.0 blocker package as the remediation target.
-- Gather real approved account/provider/mobile/support evidence outside local contracts before enabling any real cohort.
+- Start v6.5 by refreshing real account/session/provider/mobile/support/deploy access, approvals, and owner signoff.
+- Run production evidence checks read-only by default and use scoped pilot-safe mutations only with explicit approval.
+- Keep public launch, paid marketing, uncontrolled provider writes, and broad expansion out of scope until evidence gates approve them.
 
 ### Blockers/Concerns
 
-- Payment, notification, support CRM, BI/APM, mobile/TestFlight, restore/tabletop, support staffing, and launch-room evidence may still be missing, disabled, or stale.
-- v6.1 real cohort operations must not begin unless v6.0 returns `start_limited_pilot` from current approved evidence.
-- Public launch, paid marketing, uncontrolled provider writes, and broad expansion remain out of scope until later gates approve them.
+- Current approved real evidence may still be missing or stale for payment, notification, support CRM, BI/APM, mobile/TestFlight, restore/tabletop, support staffing, and launch-room readiness.
+- v6.6 cohort operations must not begin unless v6.5 returns `start_limited_pilot`.
+- v6.9 public launch prep must remain a decision from real evidence, not a default outcome.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Execute v6.5 Phase 397: production evidence access and approval refresh.
