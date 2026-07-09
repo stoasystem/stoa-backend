@@ -1,28 +1,118 @@
 # Milestones
 
-## Planned: v7.0 Final Live Approval And Controlled Expansion Start
+## Planned: v8.0 External Rollout Approval And Live Evidence Execution
 
 **Status:** Planned
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
-**Milestone roadmap:** `.planning/milestones/v7.0-ROADMAP.md`
+**Milestone roadmap:** `.planning/milestones/v8.0-ROADMAP.md`
+**Milestone requirements:** `.planning/milestones/v8.0-REQUIREMENTS.md`
+**Goal:** Convert the completed v7 gated rollout contracts into real external rollout action or an explicit hold.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 447: Final External Rollout Approval And Scope Lock. (planned)
+- Phase 448: Live Product Provider Mobile Evidence Execution. (planned)
+- Phase 449: Rollout Communications Support And User Limitation Readiness. (planned)
+- Phase 450: External Rollout Smoke And Rollback Rehearsal. (planned)
+- Phase 451: v8.0 External Rollout Start Gate. (planned)
+
+---
+
+## Planned: v8.1 Live Rollout Operations And Incident Remediation
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v8.1-ROADMAP.md`
+**Requirements:** `.planning/milestones/v8.1-REQUIREMENTS.md`
+**Goal:** Operate the approved external rollout if v8.0 starts it, or execute the v8.0 blocker/remediation package if rollout remains held.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 452: Live Rollout Day-One Operations. (planned)
+- Phase 453: Live Account Revenue Support Incident Fixes. (planned)
+- Phase 454: Live Learning Mobile Provider Incident Fixes. (planned)
+- Phase 455: Rollout Hotfix Release And Communication Evidence. (planned)
+- Phase 456: v8.1 Rollout Operations Decision Gate. (planned)
+
+---
+
+## Planned: v8.2 Revenue Growth Acquisition And Paid Marketing Gate
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v8.2-ROADMAP.md`
+**Requirements:** `.planning/milestones/v8.2-REQUIREMENTS.md`
+**Goal:** Evaluate and execute the next growth step only if rollout operations are healthy.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 457: Revenue Conversion Retention Evidence Review. (planned)
+- Phase 458: Acquisition Referral Waitlist Quality Review. (planned)
+- Phase 459: Growth Support Capacity And Lifecycle Fixes. (planned)
+- Phase 460: Paid Marketing Approval And Experiment Design Gate. (planned)
+- Phase 461: v8.2 Growth Decision Gate. (planned)
+
+---
+
+## Planned: v8.3 Learning Outcomes Scale And AI Curriculum Improvement
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v8.3-ROADMAP.md`
+**Requirements:** `.planning/milestones/v8.3-REQUIREMENTS.md`
+**Goal:** Protect and improve learning outcomes as rollout and growth increase.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 462: Scaled Learning Outcome And Cohort Analysis. (planned)
+- Phase 463: Curriculum Exercise Recommendation Quality Release. (planned)
+- Phase 464: AI Teacher Quality Safety And Cost Release. (planned)
+- Phase 465: Teacher Workload Parent Clarity And Support Reduction. (planned)
+- Phase 466: v8.3 Learning Scale Decision Gate. (planned)
+
+---
+
+## Planned: v8.4 Strategic Scale Reliability And Next-Version Decision
+
+**Status:** Planned
+**Roadmap:** `.planning/milestones/v8.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v8.4-REQUIREMENTS.md`
+**Goal:** Make a strategic scale decision after live rollout, growth, revenue, learning, support, and operations evidence.
+**Phases:** 5
+
+Planned phases:
+
+- Phase 467: Strategic Product Business Operations Review. (planned)
+- Phase 468: Reliability Data Quality And Release Scale Review. (planned)
+- Phase 469: Market Expansion Enterprise And Localization Options. (planned)
+- Phase 470: AI Autonomy Growth And Governance Options. (planned)
+- Phase 471: v8.4 Strategic Scale Or v9 Decision Gate. (planned)
+
+---
+
+## Completed: v7.0 Final Live Approval And Controlled Expansion Start
+
+**Status:** Complete locally 2026-07-09
+**Roadmap:** `.planning/milestones/v7.0-ROADMAP.md`
 **Milestone requirements:** `.planning/milestones/v7.0-REQUIREMENTS.md`
 **Goal:** Turn v6.9 market-readiness contracts into a real controlled-expansion start or an explicit hold.
 **Phases:** 5
 
 Planned phases:
 
-- Phase 422: Final Owner Approval And Expansion Scope Refresh. (planned)
-- Phase 423: Production Provider Mobile Support Evidence Refresh. (planned)
-- Phase 424: Controlled Expansion Cohort And Rollout Setup. (planned)
-- Phase 425: Expansion Start Smoke And Day-Zero Verification. (planned)
-- Phase 426: v7.0 Controlled Expansion Start Gate. (planned)
+- Phase 422: Final Owner Approval And Expansion Scope Refresh. (completed)
+- Phase 423: Production Provider Mobile Support Evidence Refresh. (completed)
+- Phase 424: Controlled Expansion Cohort And Rollout Setup. (completed)
+- Phase 425: Expansion Start Smoke And Day-Zero Verification. (completed)
+- Phase 426: v7.0 Controlled Expansion Start Gate. (completed)
 
 ---
 
-## Planned: v7.1 Controlled Expansion Operations And Remediation
+## Completed: v7.1 Controlled Expansion Operations And Remediation
 
-**Status:** Planned
+**Status:** Complete locally 2026-07-09
 **Roadmap:** `.planning/milestones/v7.1-ROADMAP.md`
 **Requirements:** `.planning/milestones/v7.1-REQUIREMENTS.md`
 **Goal:** Operate the approved controlled expansion cohort and fix real bottlenecks before public launch preparation.
@@ -30,17 +120,17 @@ Planned phases:
 
 Planned phases:
 
-- Phase 427: Controlled Expansion Day-One Operations. (planned)
-- Phase 428: Expansion Account Revenue Support Fixes. (planned)
-- Phase 429: Expansion Learning Mobile Teacher Provider Fixes. (planned)
-- Phase 430: Expansion Reliability Release Evidence. (planned)
-- Phase 431: v7.1 Expansion Outcome Gate. (planned)
+- Phase 427: Controlled Expansion Day-One Operations. (completed)
+- Phase 428: Expansion Account Revenue Support Fixes. (completed)
+- Phase 429: Expansion Learning Mobile Teacher Provider Fixes. (completed)
+- Phase 430: Expansion Reliability Release Evidence. (completed)
+- Phase 431: v7.1 Expansion Outcome Gate. (completed)
 
 ---
 
-## Planned: v7.2 Public Launch Preparation And Acquisition Readiness
+## Completed: v7.2 Public Launch Preparation And Acquisition Readiness
 
-**Status:** Planned
+**Status:** Complete locally 2026-07-09
 **Roadmap:** `.planning/milestones/v7.2-ROADMAP.md`
 **Requirements:** `.planning/milestones/v7.2-REQUIREMENTS.md`
 **Goal:** Prepare public launch only if controlled expansion evidence is healthy.
@@ -48,17 +138,17 @@ Planned phases:
 
 Planned phases:
 
-- Phase 432: Launch Scope Pricing Package And Copy Readiness. (planned)
-- Phase 433: Web Mobile App Store And Provider Launch Readiness. (planned)
-- Phase 434: Support Lifecycle Acquisition And Capacity Readiness. (planned)
-- Phase 435: Launch Freeze Rollback Dashboard And Evidence Package. (planned)
-- Phase 436: v7.2 Launch Preparation Gate. (planned)
+- Phase 432: Launch Scope Pricing Package And Copy Readiness. (completed)
+- Phase 433: Web Mobile App Store And Provider Launch Readiness. (completed)
+- Phase 434: Support Lifecycle Acquisition And Capacity Readiness. (completed)
+- Phase 435: Launch Freeze Rollback Dashboard And Evidence Package. (completed)
+- Phase 436: v7.2 Launch Preparation Gate. (completed)
 
 ---
 
-## Planned: v7.3 Public Launch Execution Or Hold Decision
+## Completed: v7.3 Public Launch Execution Or Hold Decision
 
-**Status:** Planned
+**Status:** Complete locally 2026-07-09
 **Roadmap:** `.planning/milestones/v7.3-ROADMAP.md`
 **Requirements:** `.planning/milestones/v7.3-REQUIREMENTS.md`
 **Goal:** Execute staged public launch only if final approval and healthy evidence exist; otherwise hold, continue controlled expansion, roll back, or remediate.
@@ -66,17 +156,17 @@ Planned phases:
 
 Planned phases:
 
-- Phase 437: Final Launch Approval And Freeze Execution. (planned)
-- Phase 438: Staged Launch Enablement And Production Smoke. (planned)
-- Phase 439: Launch Room Support Revenue Learning Monitoring. (planned)
-- Phase 440: Launch Incident Remediation And User Communication. (planned)
-- Phase 441: v7.3 Launch Outcome Gate. (planned)
+- Phase 437: Final Launch Approval And Freeze Execution. (completed)
+- Phase 438: Staged Launch Enablement And Production Smoke. (completed)
+- Phase 439: Launch Room Support Revenue Learning Monitoring. (completed)
+- Phase 440: Launch Incident Remediation And User Communication. (completed)
+- Phase 441: v7.3 Launch Outcome Gate. (completed)
 
 ---
 
-## Planned: v7.4 Post-Launch Scale Customer Success And Growth Governance
+## Completed: v7.4 Post-Launch Scale Customer Success And Growth Governance
 
-**Status:** Planned
+**Status:** Complete locally 2026-07-09
 **Roadmap:** `.planning/milestones/v7.4-ROADMAP.md`
 **Requirements:** `.planning/milestones/v7.4-REQUIREMENTS.md`
 **Goal:** Operate the post-launch or post-expansion system at scale with customer success, revenue, learning quality, support, growth, and incident governance.
@@ -84,11 +174,11 @@ Planned phases:
 
 Planned phases:
 
-- Phase 442: Post-Launch Customer Success And Support Operations. (planned)
-- Phase 443: Revenue Retention Growth Governance. (planned)
-- Phase 444: Learning Quality Mobile Provider Reliability Review. (planned)
-- Phase 445: Scale Incident Release And Roadmap Feedback Loop. (planned)
-- Phase 446: v7.4 Scale Or Next Strategy Gate. (planned)
+- Phase 442: Post-Launch Customer Success And Support Operations. (completed)
+- Phase 443: Revenue Retention Growth Governance. (completed)
+- Phase 444: Learning Quality Mobile Provider Reliability Review. (completed)
+- Phase 445: Scale Incident Release And Roadmap Feedback Loop. (completed)
+- Phase 446: v7.4 Scale Or Next Strategy Gate. (completed)
 
 ---
 
