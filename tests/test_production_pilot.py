@@ -1632,3 +1632,230 @@ def test_v74_scale_gate_keeps_growth_and_paid_marketing_governed():
     )
     assert scale["decision"] == "scale_growth"
     assert scale["paidMarketingApproved"] is True
+
+
+def test_v80_external_rollout_start_gate_requires_live_approval_and_evidence():
+    default_gate = production_pilot_service.v80_external_rollout_start_gate()
+    assert default_gate["decision"] == "hold"
+    assert default_gate["v8_1Allowed"] is False
+    assert default_gate["paidMarketingApproved"] is False
+
+    approval_states = {
+        area: "approved"
+        for area in production_pilot_service.V80_APPROVAL_SCOPE_AREAS
+    }
+    evidence_states = {
+        area: "verified"
+        for area in production_pilot_service.V80_LIVE_EVIDENCE_AREAS
+    }
+    communication_states = {
+        area: "ready"
+        for area in production_pilot_service.V80_COMMUNICATION_AREAS
+    }
+    smoke_states = {
+        area: "verified"
+        for area in production_pilot_service.V80_SMOKE_ROLLBACK_AREAS
+    }
+    gate = production_pilot_service.v80_external_rollout_start_gate(
+        approval=production_pilot_service.v80_final_external_rollout_approval_scope_lock(
+            approval_states,
+            external_rollout_approved=True,
+        ),
+        evidence=production_pilot_service.v80_live_product_provider_mobile_evidence_execution(
+            evidence_states,
+            mutation_approved=True,
+        ),
+        communications=production_pilot_service.v80_rollout_communications_support_limitation_readiness(
+            communication_states
+        ),
+        smoke=production_pilot_service.v80_external_rollout_smoke_rollback_rehearsal(
+            smoke_states
+        ),
+    )
+    assert gate["decision"] == "rollout_start"
+    assert gate["v8_1Allowed"] is True
+    assert gate["broadExpansionApproved"] is False
+
+
+def test_v81_rollout_operations_gate_controls_growth_readiness():
+    default_gate = production_pilot_service.v81_rollout_operations_decision_gate()
+    assert default_gate["decision"] == "remediation"
+    assert default_gate["v8_2Allowed"] is False
+
+    day_one = {
+        area: "active"
+        for area in production_pilot_service.V81_DAY_ONE_AREAS
+    }
+    account = {
+        area: "fixed"
+        for area in production_pilot_service.V81_ACCOUNT_REVENUE_INCIDENT_AREAS
+    }
+    learning = {
+        area: "fixed"
+        for area in production_pilot_service.V81_LEARNING_MOBILE_PROVIDER_INCIDENT_AREAS
+    }
+    release = {
+        area: "verified"
+        for area in production_pilot_service.V81_RELEASE_COMMUNICATION_AREAS
+    }
+    gate = production_pilot_service.v81_rollout_operations_decision_gate(
+        day_one=production_pilot_service.v81_live_rollout_day_one_operations(day_one),
+        account_fixes=production_pilot_service.v81_live_account_revenue_support_incident_fixes(
+            account
+        ),
+        learning_fixes=production_pilot_service.v81_live_learning_mobile_provider_incident_fixes(
+            learning
+        ),
+        release_evidence=production_pilot_service.v81_rollout_hotfix_release_communication_evidence(
+            release
+        ),
+        growth_ready=True,
+    )
+    assert gate["decision"] == "growth_readiness"
+    assert gate["v8_2Allowed"] is True
+
+
+def test_v82_growth_gate_keeps_paid_marketing_separately_approved():
+    revenue = {
+        area: "healthy"
+        for area in production_pilot_service.V82_REVENUE_EVIDENCE_AREAS
+    }
+    acquisition = {
+        area: "healthy"
+        for area in production_pilot_service.V82_ACQUISITION_QUALITY_AREAS
+    }
+    lifecycle = {
+        area: "fixed"
+        for area in production_pilot_service.V82_SUPPORT_LIFECYCLE_AREAS
+    }
+    marketing = {
+        area: "approved"
+        for area in production_pilot_service.V82_PAID_MARKETING_EXPERIMENT_AREAS
+    }
+    organic = production_pilot_service.v82_growth_decision_gate(
+        revenue=production_pilot_service.v82_revenue_conversion_retention_evidence_review(
+            revenue
+        ),
+        acquisition=production_pilot_service.v82_acquisition_referral_waitlist_quality_review(
+            acquisition
+        ),
+        lifecycle=production_pilot_service.v82_growth_support_capacity_lifecycle_fixes(
+            lifecycle
+        ),
+        marketing=production_pilot_service.v82_paid_marketing_approval_experiment_design_gate(
+            marketing
+        ),
+    )
+    assert organic["decision"] == "remediation"
+    assert organic["paidMarketingApproved"] is False
+
+    paid = production_pilot_service.v82_growth_decision_gate(
+        revenue=production_pilot_service.v82_revenue_conversion_retention_evidence_review(
+            revenue
+        ),
+        acquisition=production_pilot_service.v82_acquisition_referral_waitlist_quality_review(
+            acquisition
+        ),
+        lifecycle=production_pilot_service.v82_growth_support_capacity_lifecycle_fixes(
+            lifecycle
+        ),
+        marketing=production_pilot_service.v82_paid_marketing_approval_experiment_design_gate(
+            marketing,
+            paid_marketing_approved=True,
+        ),
+    )
+    assert paid["decision"] == "paid_marketing_prep"
+    assert paid["paidMarketingApproved"] is True
+
+
+def test_v83_learning_scale_gate_preserves_ai_review_boundary():
+    outcomes = {
+        area: "reviewed"
+        for area in production_pilot_service.V83_LEARNING_OUTCOME_AREAS
+    }
+    curriculum = {
+        area: "validated"
+        for area in production_pilot_service.V83_CURRICULUM_QUALITY_AREAS
+    }
+    ai_quality = {
+        area: "reviewed"
+        for area in production_pilot_service.V83_AI_QUALITY_AREAS
+    }
+    workload = {
+        area: "improved"
+        for area in production_pilot_service.V83_WORKLOAD_CLARITY_AREAS
+    }
+    hold = production_pilot_service.v83_learning_scale_decision_gate(
+        outcomes=production_pilot_service.v83_scaled_learning_outcome_cohort_analysis(outcomes),
+        curriculum=production_pilot_service.v83_curriculum_exercise_recommendation_quality_release(
+            curriculum
+        ),
+        ai_quality=production_pilot_service.v83_ai_teacher_quality_safety_cost_release(
+            ai_quality
+        ),
+        workload=production_pilot_service.v83_teacher_workload_parent_clarity_support_reduction(
+            workload
+        ),
+    )
+    assert hold["decision"] == "hold"
+    assert hold["aiAutonomyApproved"] is False
+
+    scale = production_pilot_service.v83_learning_scale_decision_gate(
+        outcomes=production_pilot_service.v83_scaled_learning_outcome_cohort_analysis(outcomes),
+        curriculum=production_pilot_service.v83_curriculum_exercise_recommendation_quality_release(
+            curriculum
+        ),
+        ai_quality=production_pilot_service.v83_ai_teacher_quality_safety_cost_release(
+            ai_quality
+        ),
+        workload=production_pilot_service.v83_teacher_workload_parent_clarity_support_reduction(
+            workload
+        ),
+        learning_scale_approved=True,
+    )
+    assert scale["decision"] == "learning_scale"
+    assert scale["v8_4Allowed"] is True
+
+
+def test_v84_strategic_gate_separates_scale_market_enterprise_and_v9():
+    strategic = {
+        area: "reviewed"
+        for area in production_pilot_service.V84_STRATEGIC_REVIEW_AREAS
+    }
+    reliability = {
+        area: "healthy"
+        for area in production_pilot_service.V84_RELIABILITY_SCALE_AREAS
+    }
+    market = {
+        area: "evaluated"
+        for area in production_pilot_service.V84_MARKET_ENTERPRISE_AREAS
+    }
+    governance = {
+        area: "evaluated"
+        for area in production_pilot_service.V84_AI_GROWTH_GOVERNANCE_AREAS
+    }
+    base_kwargs = {
+        "strategic_review": production_pilot_service.v84_strategic_product_business_operations_review(
+            strategic
+        ),
+        "reliability": production_pilot_service.v84_reliability_data_quality_release_scale_review(
+            reliability
+        ),
+        "market_options": production_pilot_service.v84_market_expansion_enterprise_localization_options(
+            market
+        ),
+        "governance_options": production_pilot_service.v84_ai_autonomy_growth_governance_options(
+            governance
+        ),
+    }
+    hold = production_pilot_service.v84_strategic_scale_v9_decision_gate(**base_kwargs)
+    assert hold["decision"] == "hold"
+    assert hold["paidMarketingScaleApproved"] is False
+    assert hold["aiAutonomyApproved"] is False
+
+    v9 = production_pilot_service.v84_strategic_scale_v9_decision_gate(
+        **base_kwargs,
+        recommend_v9=True,
+    )
+    assert v9["decision"] == "v9_focus"
+    assert v9["v9Recommended"] is True

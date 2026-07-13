@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v8.0
-milestone_name: External Rollout Approval And Live Evidence Execution
-status: planned
+milestone: v8.4
+milestone_name: Strategic Scale Reliability And Next-Version Decision
+status: complete
 last_updated: "2026-07-09T00:00:00.000Z"
 last_activity: 2026-07-09
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -23,29 +23,28 @@ See: .planning/PROJECT.md (updated 2026-07-09)
 
 ## Current Position
 
-Phase: 447 Final External Rollout Approval And Scope Lock planned
-Plan: 0/5 complete
-Status: v8.0 planned after v7.0-v7.4 completed local gated rollout contracts; real external rollout still requires final approval and healthy live evidence
-Last activity: 2026-07-09 - planned v8.0-v8.4 as external rollout execution, live operations, revenue growth, learning scale, and strategic scale decision milestones
+Phase: 471 Strategic Scale Decision Gate complete
+Plan: 5/5 complete
+Status: v8.0-v8.4 completed as local gated operations contracts after v7.0-v7.4 local gated rollout contracts.
+Last activity: 2026-07-09 - implemented v8.0-v8.4 external rollout, live operations, revenue growth, learning scale, and strategic scale contracts with focused tests and milestone audits.
 
 ## Accumulated Context
 
-- v7.0-v7.4 completed local gated operations contracts for controlled expansion, public launch preparation, launch/hold, and post-launch governance.
-- v7.4 audit states real controlled expansion, public launch, paid marketing, broad expansion, and uncontrolled provider writes remain blocked unless the relevant contract receives explicit approval and healthy live evidence.
-- v8.0-v8.4 now focus on the hard execution boundary: external rollout approval, live operations, growth, learning scale, and strategic scale decision.
+- v7.0-v7.4 completed local gated contracts for controlled expansion, public launch preparation, launch/hold, and post-launch scale governance.
+- v8.0-v8.4 now add local gated contracts for external rollout approval, live rollout operations, revenue growth and paid marketing gate, learning outcomes scale, and strategic scale or next-version decisions.
+- External rollout, paid marketing, broad expansion, market/language expansion, enterprise automation, AI autonomy, and uncontrolled provider writes remain blocked by default.
+- Gate functions only allow progression when explicit approval and healthy evidence are supplied.
 
 ### Pending Todos
 
-- Execute v8.0 Phase 447: final external rollout approval and scope lock.
-- Keep production checks read-only by default.
-- Use only explicitly approved, scoped, reversible rollout actions.
+- Supply real live approvals and evidence before any production rollout, paid marketing, market expansion, enterprise sales automation, AI autonomy expansion, or provider write changes.
+- Use v8 gate outputs to choose the next real operational action: hold, rollback, remediation, rollout start, continue rollout, growth readiness, paid marketing prep, learning scale, strategic scale, or v9 focus.
 
 ### Blockers/Concerns
 
-- Final live approvals, provider/mobile/support evidence, rollout accounts, support staffing, rollback controls, and user-visible limitations may still be missing or stale.
-- Paid marketing, broad expansion, market/language expansion, enterprise sales, and AI autonomy remain separately gated.
-- v8.1 live rollout operations must not begin unless v8.0 starts rollout.
+- No real owner approval or live production evidence was fabricated by this milestone completion.
+- Actual production mutations still require explicit approval, scoped accounts, reversible controls, support coverage, and current evidence.
 
 ## Operator Next Steps
 
-- Start v8.0 Phase 447 with final external rollout approval and scope lock.
+- Review v8.0-v8.4 gate outputs against live evidence before taking any external rollout or growth action.

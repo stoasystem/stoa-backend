@@ -59,6 +59,33 @@ def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict
     return resp.get("Attributes", {})
 
 
+def update_tutor_availability(
+    user_id: str,
+    *,
+    subjects: list[str],
+    weekly_availability: list[dict],
+    updated_at: str,
+) -> dict:
+    table = get_table()
+    resp = table.update_item(
+        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
+        UpdateExpression=(
+            "SET subjects = :subjects, primary_subjects = :subjects, "
+            "dispatch_subjects = :subjects, weekly_availability = :weekly_availability, "
+            "weeklyAvailability = :weekly_availability, availability_status = :availability, "
+            "dispatch_availability = :availability, updated_at = :updated_at"
+        ),
+        ExpressionAttributeValues={
+            ":subjects": subjects,
+            ":weekly_availability": weekly_availability,
+            ":availability": "available",
+            ":updated_at": updated_at,
+        },
+        ReturnValues="ALL_NEW",
+    )
+    return resp.get("Attributes", {})
+
+
 def update_email_verification_state(user_id: str, fields: dict) -> dict:
     """Update bounded email verification metadata on a user profile."""
     if not fields:

@@ -5096,6 +5096,617 @@ def v74_scale_next_strategy_gate(
     return result
 
 
+V80_APPROVAL_SCOPE_AREAS = {
+    "decision_owner",
+    "product_owner",
+    "support_owner",
+    "teacher_owner",
+    "finance_owner",
+    "mobile_owner",
+    "provider_owner",
+    "incident_owner",
+    "release_owner",
+    "rollout_type",
+    "account_scope",
+    "support_coverage",
+    "disabled_features",
+    "pricing_posture",
+    "growth_limits",
+    "risk_acceptance",
+    "rollback_authority",
+}
+V80_LIVE_EVIDENCE_AREAS = {
+    "login",
+    "verification",
+    "onboarding",
+    "entitlement",
+    "usage_ledger",
+    "quota",
+    "checkout_paywall",
+    "notification",
+    "support",
+    "teacher_operations",
+    "mobile_app_store",
+    "ai_provider",
+    "learning",
+    "monitoring",
+    "revenue",
+    "incident_readiness",
+}
+V80_COMMUNICATION_AREAS = {
+    "user_communications",
+    "support_macros",
+    "lifecycle_messages",
+    "incident_communications",
+    "disabled_feature_copy",
+    "known_limitation_copy",
+    "support_staffing",
+    "teacher_coverage",
+    "billing_support",
+    "escalation_paths",
+}
+V80_SMOKE_ROLLBACK_AREAS = {
+    "rollout_flags",
+    "auth",
+    "billing",
+    "usage",
+    "notification",
+    "support",
+    "mobile",
+    "learning",
+    "ai_help",
+    "monitoring",
+    "incident",
+    "rollback",
+    "launch_room",
+}
+V81_DAY_ONE_AREAS = {
+    "rollout_dashboard",
+    "support_room",
+    "teacher_coverage",
+    "incident_watch",
+    "revenue_watch",
+    "learning_watch",
+    "mobile_provider_watch",
+    "rollback_readiness",
+    "real_user_separation",
+    "daily_cadence",
+}
+V81_ACCOUNT_REVENUE_INCIDENT_AREAS = {
+    "auth",
+    "verification",
+    "entitlement",
+    "usage_quota",
+    "billing",
+    "lifecycle",
+    "support",
+    "refund",
+    "account_clarity",
+}
+V81_LEARNING_MOBILE_PROVIDER_INCIDENT_AREAS = {
+    "learning",
+    "ai_provider",
+    "mobile",
+    "notification",
+    "curriculum",
+    "teacher",
+    "recommendation",
+    "parent_progress",
+}
+V81_RELEASE_COMMUNICATION_AREAS = {
+    "tests",
+    "release_notes",
+    "support_macros",
+    "incident_communications",
+    "rollback_notes",
+    "dashboard_evidence",
+    "residual_risks",
+}
+V82_REVENUE_EVIDENCE_AREAS = {
+    "conversion",
+    "retention",
+    "churn",
+    "refunds",
+    "payment_failures",
+    "usage_quota",
+    "pricing",
+    "lifecycle",
+    "support_corrections",
+    "revenue_reconciliation",
+}
+V82_ACQUISITION_QUALITY_AREAS = {
+    "referral",
+    "waitlist",
+    "invite",
+    "acquisition_source_quality",
+    "cohort_fit",
+    "fraud_abuse_signals",
+    "capacity_gate",
+    "source_reporting",
+}
+V82_SUPPORT_LIFECYCLE_AREAS = {
+    "support_capacity",
+    "lifecycle_messaging",
+    "billing_support",
+    "onboarding",
+    "activation",
+    "reminder",
+    "renewal",
+    "failed_payment",
+    "cancellation",
+    "win_back",
+    "teacher_capacity",
+}
+V82_PAID_MARKETING_EXPERIMENT_AREAS = {
+    "owner_approval",
+    "budget",
+    "target_audience",
+    "capacity_gate",
+    "success_metrics",
+    "stop_criteria",
+    "rollback_controls",
+    "support_ready",
+    "copy_limitations",
+    "audit_evidence",
+}
+V83_LEARNING_OUTCOME_AREAS = {
+    "progress",
+    "mastery",
+    "weak_topics",
+    "completion",
+    "retry",
+    "support_contacts",
+    "teacher_help",
+    "parent_report_engagement",
+    "retention",
+    "cohort_source_differences",
+}
+V83_CURRICULUM_QUALITY_AREAS = {
+    "curriculum",
+    "exercises",
+    "explanations",
+    "sequencing",
+    "recommendations",
+    "parent_progress_reporting",
+    "validation",
+    "preview",
+    "rollback_metadata",
+    "analytics_tags",
+}
+V83_AI_QUALITY_AREAS = {
+    "summaries",
+    "practice_generation",
+    "explanations",
+    "teacher_tools",
+    "refusal_fallback",
+    "safety",
+    "cost",
+    "latency",
+    "provider_errors",
+    "teacher_review",
+}
+V83_WORKLOAD_CLARITY_AREAS = {
+    "teacher_workload",
+    "parent_confusion",
+    "support_contacts",
+    "next_steps",
+    "learning_friction",
+    "student_copy",
+    "teacher_copy",
+    "support_macros",
+    "outcome_evidence",
+}
+V84_STRATEGIC_REVIEW_AREAS = {
+    "customer_success",
+    "revenue",
+    "retention",
+    "learning_outcomes",
+    "support_load",
+    "teacher_workload",
+    "mobile_reliability",
+    "provider_health",
+    "acquisition_quality",
+    "incidents",
+    "roadmap_feedback",
+}
+V84_RELIABILITY_SCALE_AREAS = {
+    "reliability",
+    "data_quality",
+    "dashboards",
+    "alerts",
+    "migrations",
+    "rollback",
+    "release_cadence",
+    "incident_response",
+    "operational_ownership",
+}
+V84_MARKET_ENTERPRISE_AREAS = {
+    "market_expansion",
+    "language_expansion",
+    "enterprise_readiness",
+    "school_partnerships",
+    "localization",
+    "support_staffing",
+    "pricing",
+    "billing",
+    "compliance",
+}
+V84_AI_GROWTH_GOVERNANCE_AREAS = {
+    "ai_autonomy",
+    "paid_marketing_scale",
+    "growth_loops",
+    "compliance",
+    "privacy",
+    "audit",
+    "governance",
+    "teacher_oversight",
+    "owner_approval",
+}
+
+
+def v80_final_external_rollout_approval_scope_lock(
+    states: dict[str, str] | None = None,
+    *,
+    external_rollout_approved: bool = False,
+    paid_marketing_approved: bool = False,
+    broad_expansion_approved: bool = False,
+) -> dict[str, Any]:
+    """Lock external rollout approval and scope without approving marketing or broad expansion by default."""
+    rows, blockers = _v7_contract_rows(V80_APPROVAL_SCOPE_AREAS, states)
+    if not external_rollout_approved:
+        blockers.append("external_rollout_approval")
+    result = {
+        "approvalState": "approved" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "externalRolloutApproved": external_rollout_approved and not blockers,
+        "paidMarketingApproved": paid_marketing_approved,
+        "broadExpansionApproved": broad_expansion_approved,
+        "separateGrowthApprovalRequired": not paid_marketing_approved or not broad_expansion_approved,
+        "limitationsVisible": "disabled_features" not in blockers,
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v80_live_product_provider_mobile_evidence_execution(
+    states: dict[str, str] | None = None,
+    *,
+    mutation_approved: bool = False,
+) -> dict[str, Any]:
+    """Execute live evidence checks while requiring explicit approval for any production mutation."""
+    rows, blockers = _v7_contract_rows(V80_LIVE_EVIDENCE_AREAS, states, ready_states={"verified", "disabled_for_scope", "not_required"})
+    if not mutation_approved:
+        blockers.append("production_mutation_approval")
+    result = {
+        "evidenceState": "ready" if not blockers else "blocked",
+        "areas": rows,
+        "blockers": _unique(blockers),
+        "mutationApproved": mutation_approved,
+        "forbiddenEvidenceExcluded": sorted(FORBIDDEN_EVIDENCE_FIELDS),
+        "privacy": _privacy_contract(),
+    }
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v80_rollout_communications_support_limitation_readiness(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V80_COMMUNICATION_AREAS, states, ready_states={"ready", "active", "approved"})
+    result = {"readinessState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "statesDistinguished": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v80_external_rollout_smoke_rollback_rehearsal(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V80_SMOKE_ROLLBACK_AREAS, states, ready_states={"verified", "ready", "active"})
+    result = {"smokeState": "passed" if not blockers else "blocked", "areas": rows, "blockers": blockers, "rollbackCurrent": "rollback" not in blockers, "startBlockersConverted": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v80_external_rollout_start_gate(
+    *,
+    approval: dict[str, Any] | None = None,
+    evidence: dict[str, Any] | None = None,
+    communications: dict[str, Any] | None = None,
+    smoke: dict[str, Any] | None = None,
+    rollback_required: bool = False,
+    remediate: bool = False,
+) -> dict[str, Any]:
+    approval = approval or v80_final_external_rollout_approval_scope_lock()
+    evidence = evidence or v80_live_product_provider_mobile_evidence_execution()
+    communications = communications or v80_rollout_communications_support_limitation_readiness()
+    smoke = smoke or v80_external_rollout_smoke_rollback_rehearsal()
+    blockers = _unique(
+        [
+            *[f"approval:{blocker}" for blocker in approval.get("blockers", [])],
+            *[f"evidence:{blocker}" for blocker in evidence.get("blockers", [])],
+            *[f"communications:{blocker}" for blocker in communications.get("blockers", [])],
+            *[f"smoke:{blocker}" for blocker in smoke.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif remediate:
+        decision = "remediation"
+    elif blockers:
+        decision = "hold"
+    else:
+        decision = "rollout_start"
+    result = {"decision": decision, "blockers": blockers, "v8_1Allowed": decision == "rollout_start", "paidMarketingApproved": False, "broadExpansionApproved": False, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v81_live_rollout_day_one_operations(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V81_DAY_ONE_AREAS, states, ready_states={"active", "verified", "ready"})
+    result = {"operationsState": "active" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v81_live_account_revenue_support_incident_fixes(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V81_ACCOUNT_REVENUE_INCIDENT_AREAS, states, ready_states={"fixed", "accepted_gap", "not_required"})
+    result = {"fixState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "revenueAuditable": "billing" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v81_live_learning_mobile_provider_incident_fixes(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V81_LEARNING_MOBILE_PROVIDER_INCIDENT_AREAS, states, ready_states={"fixed", "accepted_gap", "not_required"})
+    result = {"fixState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "aiPolicyBound": "ai_provider" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v81_rollout_hotfix_release_communication_evidence(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V81_RELEASE_COMMUNICATION_AREAS, states, ready_states={"ready", "verified", "accepted_gap"})
+    result = {"releaseState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "limitationsVisible": "support_macros" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v81_rollout_operations_decision_gate(
+    *,
+    day_one: dict[str, Any] | None = None,
+    account_fixes: dict[str, Any] | None = None,
+    learning_fixes: dict[str, Any] | None = None,
+    release_evidence: dict[str, Any] | None = None,
+    growth_ready: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    day_one = day_one or v81_live_rollout_day_one_operations()
+    account_fixes = account_fixes or v81_live_account_revenue_support_incident_fixes()
+    learning_fixes = learning_fixes or v81_live_learning_mobile_provider_incident_fixes()
+    release_evidence = release_evidence or v81_rollout_hotfix_release_communication_evidence()
+    blockers = _unique(
+        [
+            *[f"operations:{blocker}" for blocker in day_one.get("blockers", [])],
+            *[f"account:{blocker}" for blocker in account_fixes.get("blockers", [])],
+            *[f"learning:{blocker}" for blocker in learning_fixes.get("blockers", [])],
+            *[f"release:{blocker}" for blocker in release_evidence.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "remediation"
+    elif growth_ready:
+        decision = "growth_readiness"
+    else:
+        decision = "continue_rollout"
+    result = {"decision": decision, "blockers": blockers, "v8_2Allowed": decision == "growth_readiness", "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v82_revenue_conversion_retention_evidence_review(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V82_REVENUE_EVIDENCE_AREAS, states, ready_states={"reviewed", "reconciled", "healthy", "accepted_gap"})
+    result = {"reviewState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "realCustomerSeparated": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v82_acquisition_referral_waitlist_quality_review(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V82_ACQUISITION_QUALITY_AREAS, states, ready_states={"reviewed", "healthy", "accepted_gap"})
+    result = {"reviewState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "intakeCapacityGated": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v82_growth_support_capacity_lifecycle_fixes(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V82_SUPPORT_LIFECYCLE_AREAS, states, ready_states={"fixed", "accepted_gap", "not_required"})
+    result = {"fixState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "supportVisible": "support_capacity" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v82_paid_marketing_approval_experiment_design_gate(
+    states: dict[str, str] | None = None,
+    *,
+    paid_marketing_approved: bool = False,
+) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V82_PAID_MARKETING_EXPERIMENT_AREAS, states)
+    if not paid_marketing_approved:
+        blockers.append("paid_marketing_approval")
+    result = {"approvalState": "approved" if not blockers else "blocked", "areas": rows, "blockers": _unique(blockers), "paidMarketingApproved": paid_marketing_approved and not blockers, "spendBlocked": bool(blockers), "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v82_growth_decision_gate(
+    *,
+    revenue: dict[str, Any] | None = None,
+    acquisition: dict[str, Any] | None = None,
+    lifecycle: dict[str, Any] | None = None,
+    marketing: dict[str, Any] | None = None,
+    growth_scale_approved: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    revenue = revenue or v82_revenue_conversion_retention_evidence_review()
+    acquisition = acquisition or v82_acquisition_referral_waitlist_quality_review()
+    lifecycle = lifecycle or v82_growth_support_capacity_lifecycle_fixes()
+    marketing = marketing or v82_paid_marketing_approval_experiment_design_gate()
+    blockers = _unique(
+        [
+            *[f"revenue:{blocker}" for blocker in revenue.get("blockers", [])],
+            *[f"acquisition:{blocker}" for blocker in acquisition.get("blockers", [])],
+            *[f"lifecycle:{blocker}" for blocker in lifecycle.get("blockers", [])],
+            *[f"marketing:{blocker}" for blocker in marketing.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "remediation"
+    elif marketing.get("paidMarketingApproved"):
+        decision = "paid_marketing_prep"
+    elif growth_scale_approved:
+        decision = "growth_scale"
+    else:
+        decision = "organic_only_growth"
+    result = {"decision": decision, "blockers": blockers, "v8_3Allowed": decision in {"growth_scale", "organic_only_growth", "paid_marketing_prep"}, "paidMarketingApproved": marketing.get("paidMarketingApproved") is True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v83_scaled_learning_outcome_cohort_analysis(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V83_LEARNING_OUTCOME_AREAS, states, ready_states={"analyzed", "reviewed", "healthy", "accepted_gap"})
+    result = {"analysisState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "privateContentExcluded": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v83_curriculum_exercise_recommendation_quality_release(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V83_CURRICULUM_QUALITY_AREAS, states, ready_states={"improved", "validated", "accepted_gap"})
+    result = {"releaseState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "specialAuthorizationRequired": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v83_ai_teacher_quality_safety_cost_release(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V83_AI_QUALITY_AREAS, states, ready_states={"improved", "reviewed", "accepted_gap"})
+    result = {"releaseState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "aiAutonomyPolicyBound": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v83_teacher_workload_parent_clarity_support_reduction(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V83_WORKLOAD_CLARITY_AREAS, states, ready_states={"improved", "reduced", "updated", "accepted_gap"})
+    result = {"improvementState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "supportBurdenReduced": "support_contacts" not in blockers, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v83_learning_scale_decision_gate(
+    *,
+    outcomes: dict[str, Any] | None = None,
+    curriculum: dict[str, Any] | None = None,
+    ai_quality: dict[str, Any] | None = None,
+    workload: dict[str, Any] | None = None,
+    learning_scale_approved: bool = False,
+    content_ai_freeze: bool = False,
+    strategic_pivot: bool = False,
+) -> dict[str, Any]:
+    outcomes = outcomes or v83_scaled_learning_outcome_cohort_analysis()
+    curriculum = curriculum or v83_curriculum_exercise_recommendation_quality_release()
+    ai_quality = ai_quality or v83_ai_teacher_quality_safety_cost_release()
+    workload = workload or v83_teacher_workload_parent_clarity_support_reduction()
+    blockers = _unique(
+        [
+            *[f"outcomes:{blocker}" for blocker in outcomes.get("blockers", [])],
+            *[f"curriculum:{blocker}" for blocker in curriculum.get("blockers", [])],
+            *[f"ai:{blocker}" for blocker in ai_quality.get("blockers", [])],
+            *[f"workload:{blocker}" for blocker in workload.get("blockers", [])],
+        ]
+    )
+    if content_ai_freeze:
+        decision = "content_ai_freeze"
+    elif strategic_pivot:
+        decision = "strategic_pivot"
+    elif blockers:
+        decision = "remediation"
+    elif learning_scale_approved:
+        decision = "learning_scale"
+    else:
+        decision = "hold"
+    result = {"decision": decision, "blockers": blockers, "v8_4Allowed": decision == "learning_scale", "aiAutonomyApproved": False, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v84_strategic_product_business_operations_review(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V84_STRATEGIC_REVIEW_AREAS, states, ready_states={"reviewed", "healthy", "accepted_gap"})
+    result = {"reviewState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "trafficSeparated": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v84_reliability_data_quality_release_scale_review(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V84_RELIABILITY_SCALE_AREAS, states, ready_states={"reviewed", "healthy", "accepted_gap"})
+    result = {"reviewState": "ready" if not blockers else "blocked", "areas": rows, "blockers": blockers, "scaleBlockersSeparated": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v84_market_expansion_enterprise_localization_options(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V84_MARKET_ENTERPRISE_AREAS, states, ready_states={"evaluated", "approved", "blocked", "accepted_gap"})
+    result = {"optionState": "evaluated" if not blockers else "blocked", "areas": rows, "blockers": blockers, "unsupportedExpansionBlocked": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v84_ai_autonomy_growth_governance_options(states: dict[str, str] | None = None) -> dict[str, Any]:
+    rows, blockers = _v7_contract_rows(V84_AI_GROWTH_GOVERNANCE_AREAS, states, ready_states={"evaluated", "approved", "blocked", "accepted_gap"})
+    result = {"optionState": "evaluated" if not blockers else "blocked", "areas": rows, "blockers": blockers, "aiAutonomyBlockedByDefault": True, "paidMarketingScaleBlockedByDefault": True, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
+def v84_strategic_scale_v9_decision_gate(
+    *,
+    strategic_review: dict[str, Any] | None = None,
+    reliability: dict[str, Any] | None = None,
+    market_options: dict[str, Any] | None = None,
+    governance_options: dict[str, Any] | None = None,
+    scale_approved: bool = False,
+    market_expansion_approved: bool = False,
+    enterprise_ready: bool = False,
+    recommend_v9: bool = False,
+    rollback_required: bool = False,
+) -> dict[str, Any]:
+    strategic_review = strategic_review or v84_strategic_product_business_operations_review()
+    reliability = reliability or v84_reliability_data_quality_release_scale_review()
+    market_options = market_options or v84_market_expansion_enterprise_localization_options()
+    governance_options = governance_options or v84_ai_autonomy_growth_governance_options()
+    blockers = _unique(
+        [
+            *[f"strategy:{blocker}" for blocker in strategic_review.get("blockers", [])],
+            *[f"reliability:{blocker}" for blocker in reliability.get("blockers", [])],
+            *[f"market:{blocker}" for blocker in market_options.get("blockers", [])],
+            *[f"governance:{blocker}" for blocker in governance_options.get("blockers", [])],
+        ]
+    )
+    if rollback_required:
+        decision = "rollback"
+    elif blockers:
+        decision = "remediation"
+    elif market_expansion_approved:
+        decision = "market_expansion"
+    elif enterprise_ready:
+        decision = "enterprise_readiness"
+    elif recommend_v9:
+        decision = "v9_focus"
+    elif scale_approved:
+        decision = "scale_growth"
+    else:
+        decision = "hold"
+    result = {"decision": decision, "blockers": blockers, "v9Recommended": decision == "v9_focus", "paidMarketingScaleApproved": False, "aiAutonomyApproved": False, "privacy": _privacy_contract()}
+    assert_pilot_evidence_safe(result)
+    return result
+
+
 def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     readiness = [_normalize_item(item) for item in (items or [entry.row() for entry in DEFAULT_READINESS])]
     result = {

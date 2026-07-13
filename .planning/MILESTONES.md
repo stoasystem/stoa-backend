@@ -2867,5 +2867,24 @@ Key accomplishments:
 
 Known deferred items at close: real owner approvals, live production evidence, approved scoped production mutations, public launch execution, paid marketing execution, and any external provider writes remain future operational decisions.
 
+### v8.0-v8.4 External Rollout, Growth, Learning Scale, And Strategic Decision
+
+**Status:** Completed local gated contract sequence 2026-07-09
+**Started:** 2026-07-09
+**Completed:** 2026-07-09
+**Audits:** `.planning/milestones/v8.0-MILESTONE-AUDIT.md` through `.planning/milestones/v8.4-MILESTONE-AUDIT.md`
+**Roadmaps:** `.planning/milestones/v8.0-ROADMAP.md` through `.planning/milestones/v8.4-ROADMAP.md`
+**Requirements:** `.planning/milestones/v8.0-REQUIREMENTS.md` through `.planning/milestones/v8.4-REQUIREMENTS.md`
+**Phase evidence:** `.planning/milestones/v8.0-phases/` through `.planning/milestones/v8.4-phases/`
+
+Key accomplishments:
+
+- Added fail-closed v8.0-v8.4 operations contracts in `production_pilot_service`.
+- Covered external rollout approval, live rollout operations, revenue growth and paid marketing gates, learning outcomes scale, and strategic scale or v9 decision.
+- Kept real rollout, paid marketing, broad expansion, market/language expansion, enterprise automation, AI autonomy, and uncontrolled provider writes blocked unless explicit approval and healthy evidence are supplied.
+- Verified with `PYTHONPATH=src pytest tests/test_production_pilot.py` and focused Ruff.
+
+Known deferred items at close: real owner approvals, live production evidence, approved scoped production mutations, external rollout execution, paid marketing execution, market/language expansion, enterprise automation, AI autonomy expansion, and any external provider writes remain future operational decisions.
+
 ---
-*Last updated: 2026-07-09 after completing v7.0-v7.4 local gated operations contracts*
+*Last updated: 2026-07-09 after completing v8.0-v8.4 local gated operations contracts*

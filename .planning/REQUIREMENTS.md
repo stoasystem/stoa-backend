@@ -1,75 +1,74 @@
-# Requirements: v8.0 External Rollout Approval And Live Evidence Execution
+# Requirements: v8.4 Strategic Scale Reliability And Next-Version Decision
 
-**Milestone:** v8.0
-**Status:** Planned
+**Milestone:** v8.4
+**Status:** Completed
 **Created:** 2026-07-09
-**Prior milestone:** v7.4 Post-Launch Scale Customer Success And Growth Governance
+**Prior milestone:** v8.3 Learning Outcomes Scale And AI Curriculum Improvement
 
 ## Purpose
 
-v8.0 is the hard execution boundary after v7 local gated contracts. It must either start an approved external rollout with live evidence and rollback controls, or hold with a current blocker/remediation package.
+Use live rollout, growth, revenue, learning, support, and operations evidence to decide the next strategic direction. v8.4 must separate scale-ready work from hold/remediation and optional v9 tracks.
 
 ## Requirements
 
-### V8ROLL-01 Final External Rollout Approval And Scope Lock
+### V8STRAT-01 Strategic Product Business Operations Review
 
 Acceptance criteria:
 
-- Final decision owner, product owner, support owner, teacher owner, finance owner, mobile owner, provider owners, incident owner, and release owner are recorded.
-- Rollout type, account/cohort scope, support coverage, disabled features, pricing posture, growth limits, risk acceptance, and rollback authority are locked.
-- Paid marketing and broad expansion approvals are tracked separately from external rollout approval.
-- Known limitations and disabled features are user/support visible.
+- Customer success, revenue, retention, learning outcomes, support load, teacher workload, mobile reliability, provider health, acquisition quality, incidents, and roadmap feedback are reviewed.
+- Findings are grouped into customer value, revenue/growth, learning quality, operations, reliability, and strategic opportunities.
+- Each risk/opportunity has owner, impact, evidence, mitigation, and decision status.
+- Evidence distinguishes real users from internal/test traffic.
 
-### V8ROLL-02 Live Product Provider Mobile Evidence Execution
-
-Acceptance criteria:
-
-- Production checks cover login, verification, onboarding, entitlement, usage ledger, quota, checkout/paywall, notification, support, teacher operations, mobile/app-store, AI/provider, learning, monitoring, revenue, and incident readiness.
-- Evidence includes timestamp, owner, environment, request/build/deploy ID where applicable, blocker state, fallback, and rollback/disable control.
-- Any mutation is explicitly approved, scoped, reversible, and tied to rollout accounts.
-- Evidence excludes secrets, auth tokens, verification codes, raw provider payloads, raw student content, private object keys, and presigned URLs.
-
-### V8ROLL-03 Rollout Communications Support And User Limitation Readiness
+### V8STRAT-02 Reliability Data Quality And Release Scale Review
 
 Acceptance criteria:
 
-- User communications, support macros, lifecycle messages, incident communications, disabled-feature copy, and known limitation copy are ready.
-- Support staffing, teacher coverage, finance/billing support, and escalation paths are active for rollout scope.
-- Preferences, locale, failed delivery, opt-out, refund, billing, login, mobile, AI/provider, and learning support paths are covered.
-- Communications distinguish launch, controlled rollout, hold, and disabled-feature states.
+- Reliability, data quality, dashboards, alerts, migrations, rollback, release cadence, incident response, and operational ownership are reviewed.
+- Release evidence links code SHA, deploy/build IDs, request IDs where applicable, timestamp, and owner.
+- Data drift, support overload, provider degradation, and release regressions have owner/action rows.
+- Scale blockers are separated from strategic opportunities.
 
-### V8ROLL-04 External Rollout Smoke And Rollback Rehearsal
-
-Acceptance criteria:
-
-- Approved smoke verifies rollout flags, auth, billing, usage, notification, support, mobile, learning, AI/help, monitoring, incident, and rollback paths.
-- Rollback rehearsal/tabletop or readback evidence is current.
-- Dashboards and launch-room ownership are active.
-- Start blockers are converted into owner/action rows with severity and next action.
-
-### VERIFY-89 v8.0 External Rollout Start Gate
+### V8STRAT-03 Market Expansion Enterprise And Localization Options
 
 Acceptance criteria:
 
-- Decision is rollout start, hold, rollback, or remediation.
-- Decision uses approval, production evidence, communications, support staffing, smoke, rollback, revenue, learning, mobile, provider, and incident readiness.
+- Market/language expansion, enterprise readiness, school partnerships, localization, support staffing, pricing, billing, and compliance implications are evaluated.
+- Unsupported markets/languages remain blocked unless approved.
+- Enterprise/school options have scope, owner, evidence, support impact, and go/no-go criteria.
+- Localization does not hide incomplete product behavior.
+
+### V8STRAT-04 AI Autonomy Growth And Governance Options
+
+Acceptance criteria:
+
+- AI autonomy, paid marketing scale, growth loops, compliance, privacy, audit, and governance options are evaluated.
+- AI autonomy remains blocked without quality, safety, teacher oversight, and owner approval evidence.
+- Paid marketing scale remains blocked without support, revenue, retention, learning quality, and incident readiness.
+- Governance options are tied to live risks rather than speculative compliance work.
+
+### VERIFY-93 v8.4 Strategic Scale Or v9 Decision Gate
+
+Acceptance criteria:
+
+- Decision is scale growth, hold, rollback, remediation, market expansion, enterprise readiness, or v9 focus.
+- Decision uses product, revenue, learning, support, teacher, mobile, provider, incident, reliability, acquisition, and strategic evidence.
 - Roadmap, requirements, state, milestone snapshots, and project summary are updated.
-- v8.1 receives operating cadence, dashboards, owners, support coverage, and rollback controls only if rollout starts.
+- Any v9 recommendation is based on live risks and opportunities.
 
 ## Out of Scope
 
-- Paid marketing without separate approval.
-- Broad expansion beyond locked scope.
-- Uncontrolled provider writes.
+- Unbounded paid marketing.
+- Unsupported market/language expansion.
+- Enterprise sales automation without separate approval.
 - Unreviewed AI autonomy.
-- Hiding known limitations or disabled features.
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| V8ROLL-01 | Phase 447 | Planned |
-| V8ROLL-02 | Phase 448 | Planned |
-| V8ROLL-03 | Phase 449 | Planned |
-| V8ROLL-04 | Phase 450 | Planned |
-| VERIFY-89 | Phase 451 | Planned |
+| V8STRAT-01 | Phase 467 | Completed |
+| V8STRAT-02 | Phase 468 | Completed |
+| V8STRAT-03 | Phase 469 | Completed |
+| V8STRAT-04 | Phase 470 | Completed |
+| VERIFY-93 | Phase 471 | Completed |

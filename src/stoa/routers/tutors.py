@@ -98,6 +98,18 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _list_value(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (set, tuple)):
+        return list(value)
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [value]
+
+
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -155,6 +167,17 @@ class UpdateStatusRequest(BaseModel):
 class AddNoteRequest(BaseModel):
     content: str
     richContent: dict[str, Any] | None = None
+
+
+class TutorAvailabilitySlot(BaseModel):
+    dayOfWeek: str
+    startTime: str
+    endTime: str
+
+
+class TutorAvailability(BaseModel):
+    weeklyAvailability: list[TutorAvailabilitySlot] = Field(default_factory=list)
+    subjects: list[str] = Field(default_factory=list)
 
 
 class TutorStats(BaseModel):
@@ -229,9 +252,58 @@ class AiTeacherDraftListResponse(BaseModel):
     count: int
 
 
+def _availability_response(profile: dict[str, Any] | None) -> TutorAvailability:
+    profile = profile or {}
+    subjects = [
+        str(subject).strip()
+        for subject in _list_value(
+            profile.get("dispatch_subjects")
+            or profile.get("primary_subjects")
+            or profile.get("subjects")
+            or profile.get("subject_ids")
+        )
+        if str(subject).strip()
+    ]
+    weekly_availability = profile.get("weekly_availability") or profile.get("weeklyAvailability") or []
+    slots = [
+        {
+            "dayOfWeek": str(slot["dayOfWeek"]),
+            "startTime": str(slot["startTime"]),
+            "endTime": str(slot["endTime"]),
+        }
+        for slot in weekly_availability
+        if isinstance(slot, dict)
+        and slot.get("dayOfWeek")
+        and slot.get("startTime")
+        and slot.get("endTime")
+    ]
+    return TutorAvailability(subjects=subjects, weeklyAvailability=slots)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/me/availability", response_model=TutorAvailability)
+async def get_my_availability(user: dict = Depends(require_role("teacher", "tutor", "admin"))):
+    """Return the current teacher availability profile used for dispatch."""
+    return _availability_response(user_repo.get_user(user["sub"]))
+
+
+@router.patch("/me/availability", response_model=TutorAvailability)
+async def update_my_availability(
+    body: TutorAvailability,
+    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+):
+    """Persist teacher availability so student support status can reflect it."""
+    updated = user_repo.update_tutor_availability(
+        user["sub"],
+        subjects=[subject.strip() for subject in body.subjects if subject.strip()],
+        weekly_availability=[slot.model_dump() for slot in body.weeklyAvailability],
+        updated_at=_now(),
+    )
+    return _availability_response(updated)
+
 
 @router.get("/me/stats", response_model=TutorStats)
 async def get_stats(user: dict = Depends(require_role("teacher", "tutor", "admin"))):

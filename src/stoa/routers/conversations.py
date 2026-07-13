@@ -21,7 +21,12 @@ from pydantic import BaseModel
 from stoa.config import settings
 from stoa.deps import require_role
 from stoa.db.dynamodb import get_table
-from stoa.services import ai_service, entitlement_service, usage_ledger_service
+from stoa.services import (
+    ai_service,
+    entitlement_service,
+    teacher_dispatch_service,
+    usage_ledger_service,
+)
 from stoa.services.rate_limit import check_and_record_chat
 
 logger = logging.getLogger(__name__)
@@ -135,6 +140,13 @@ class TeacherHelpResponse(BaseModel):
     teacherName: str | None = None
     createdAt: str
     updatedAt: str | None = None
+
+
+class TeacherAvailabilityResponse(BaseModel):
+    online: bool
+    availableTeachers: int
+    nextWindow: str | None = None
+    responseTime: str | None = None
 
 
 def _generate_title(first_message: str, subject: str) -> str | None:
@@ -537,6 +549,14 @@ def _record_chat_usage(
 # ── Teacher-help router (separate prefix: /teacher-help) ──────────────────────
 
 teacher_help_router = APIRouter()
+
+
+@teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)
+async def get_teacher_help_availability(
+    user: dict = Depends(require_role("student")),
+):
+    """Return student-safe teacher availability for the chat indicator."""
+    return teacher_dispatch_service.teacher_availability_summary()
 
 
 @teacher_help_router.post("/request", response_model=TeacherHelpResponse)

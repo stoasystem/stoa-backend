@@ -299,6 +299,28 @@ def build_dispatch_dashboard(
     }
 
 
+def teacher_availability_summary(
+    teacher_profiles: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return student-safe availability for currently dispatchable teachers."""
+    profiles = teacher_profiles if teacher_profiles is not None else list_teacher_profiles()
+    available = [
+        normalized
+        for normalized in (_normalize_teacher_profile(profile) for profile in profiles)
+        if _is_profile_available_for_dispatch(normalized)
+    ]
+    count = len(available)
+    return {
+        "online": count > 0,
+        "availableTeachers": count,
+        "responseTime": (
+            "Teacher support is available now."
+            if count
+            else "Teacher support will review requests when a qualified teacher is available."
+        ),
+    }
+
+
 def student_dispatch_status(question: dict[str, Any]) -> str:
     """Return a simple student-safe dispatch status."""
     if question.get("status") == QuestionStatus.RESOLVED.value:
@@ -375,6 +397,20 @@ def _refusal_reason(question: dict[str, Any], teacher: dict[str, Any], previous:
     if not teacher["subjects"]:
         return {"refusalCode": "missing_subject_capability", "refusalReason": "Teacher profile has no dispatch subject capability."}
     return None
+
+
+def _is_profile_available_for_dispatch(teacher: dict[str, Any]) -> bool:
+    if not teacher["teacherId"]:
+        return False
+    if teacher["role"] not in ELIGIBLE_ROLES:
+        return False
+    if teacher["availability"] in PAUSED_STATES:
+        return False
+    if teacher["availability"] not in AVAILABLE_STATES:
+        return False
+    if teacher["activeCount"] >= teacher["maxActiveSessions"]:
+        return False
+    return bool(teacher["subjects"])
 
 
 def _has_current_dispatch(question: dict[str, Any], now: str) -> bool:
