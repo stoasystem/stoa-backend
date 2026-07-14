@@ -272,7 +272,7 @@ def connection_response(item: dict[str, Any]) -> dict[str, Any]:
 
 def default_channels_for_user(user: dict[str, Any]) -> set[str]:
     user_id = _user_id(user)
-    return {user_channel(user_id), *{role_channel(role) for role in _role_aliases(_role(user))}}
+    return {user_channel(user_id), *{role_channel(role) for role in _role_channels(_role(user))}}
 
 
 def _authorize_channels(user: dict[str, Any], channels: list[str]) -> list[str]:
@@ -314,9 +314,7 @@ def _role(user: dict[str, Any]) -> str:
     return role
 
 
-def _role_aliases(role: str) -> set[str]:
-    if role in {"teacher", "tutor"}:
-        return {"teacher", "tutor"}
+def _role_channels(role: str) -> set[str]:
     return {role}
 
 

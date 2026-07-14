@@ -373,7 +373,7 @@ def test_adaptive_assignment_start_and_archive_record_feedback_signals(monkeypat
     archived = adaptive_learning_service.transition_assignment(
         assignment_id="assignment-1",
         action="archive",
-        user={"sub": "tutor-1", "role": "tutor"},
+        user={"sub": "teacher-1", "role": "teacher"},
     )
 
     assert started["status"] == "started"
@@ -449,7 +449,7 @@ def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypa
             }
         ],
     )
-    client = TestClient(_app_for_user({"sub": "tutor-1", "role": "tutor"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
 
     response = client.get("/admin/curriculum/analytics/content-quality?contentType=exercise")
 
@@ -549,7 +549,7 @@ def test_curriculum_analytics_dashboard_summarizes_operator_actions(monkeypatch)
             },
         ],
     )
-    client = TestClient(_app_for_user({"sub": "tutor-1", "role": "tutor"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
 
     response = client.get("/admin/curriculum/analytics/dashboard?subjectId=math")
 

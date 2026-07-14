@@ -105,8 +105,6 @@ async def resolve_actor(
         recognized = [_GROUP_ROLES[group] for group in token.groups if group in _GROUP_ROLES]
         if len(recognized) != 1:
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
-        if "tutor" in token.groups:
-            raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
         try:
             local_role = CanonicalRole(str(account.get("role") or ""))
             account_status = AccountStatus(

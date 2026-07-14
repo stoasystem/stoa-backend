@@ -9,7 +9,7 @@ from stoa.db.repositories import practice_repo
 
 SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
 VISIBLE_STATES = {"active"}
-PREVIEW_ROLES = {"admin", "tutor", "teacher"}
+PREVIEW_ROLES = {"admin", "teacher"}
 
 
 def list_catalog(

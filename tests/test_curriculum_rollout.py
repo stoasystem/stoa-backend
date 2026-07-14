@@ -195,13 +195,13 @@ def test_curriculum_catalog_filters_active_supported_content(monkeypatch):
     assert "french" not in body["rolloutSubjects"]
 
 
-def test_curriculum_preview_requires_tutor_or_admin(monkeypatch):
+def test_curriculum_preview_requires_teacher_or_admin(monkeypatch):
     _install_practice_content(monkeypatch)
 
     blocked = _client({"sub": "student-1", "role": "student"}).get(
         "/practice/curriculum/catalog?includePreview=true"
     )
-    allowed = _client({"sub": "tutor-1", "role": "tutor"}).get(
+    allowed = _client({"sub": "teacher-1", "role": "teacher"}).get(
         "/practice/curriculum/catalog?includePreview=true&rolloutState=draft"
     )
 
@@ -217,14 +217,14 @@ def test_curriculum_lesson_hides_answer_key_from_student(monkeypatch):
     student = _client({"sub": "student-1", "role": "student"}).get(
         "/practice/curriculum/lessons/lesson-linear-1?includeAnswers=true"
     )
-    tutor = _client({"sub": "tutor-1", "role": "tutor"}).get(
+    teacher = _client({"sub": "teacher-1", "role": "teacher"}).get(
         "/practice/curriculum/lessons/lesson-linear-1?includeAnswers=true"
     )
 
     assert student.status_code == 200
     assert "answerKey" not in student.json()["exercises"][0]
-    assert tutor.status_code == 200
-    assert tutor.json()["exercises"][0]["answerKey"] == "x = 5"
+    assert teacher.status_code == 200
+    assert teacher.json()["exercises"][0]["answerKey"] == "x = 5"
 
 
 def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
@@ -255,7 +255,7 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     forbidden = _client({"sub": "student-1", "role": "student"}).get(
         "/practice/curriculum/progress?studentId=student-2"
     )
-    tutor = _client({"sub": "tutor-1", "role": "tutor"}).get(
+    teacher = _client({"sub": "teacher-1", "role": "teacher"}).get(
         "/practice/curriculum/progress?studentId=student-1&subjectId=math"
     )
 
@@ -263,4 +263,4 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     assert response.json()["completedLessonIds"] == ["lesson-linear-1"]
     assert response.json()["weakTopics"] == [{"topicId": "linear-equations", "count": 1}]
     assert forbidden.status_code == 403
-    assert tutor.status_code == 200
+    assert teacher.status_code == 200

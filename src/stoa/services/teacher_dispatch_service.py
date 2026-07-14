@@ -13,13 +13,13 @@ from stoa.services import teacher_reply_service
 
 DISPATCH_ACCEPT_TIMEOUT_SECONDS = 10 * 60
 DISPATCH_SLA_RISK_SECONDS = teacher_reply_service.TAKEOVER_TARGET_SECONDS
-ELIGIBLE_ROLES = {"teacher", "tutor", "admin"}
+ELIGIBLE_ROLES = {"teacher", "admin"}
 AVAILABLE_STATES = {"available", "active", "online", "ready"}
 PAUSED_STATES = {"paused", "offline", "busy", "disabled", "inactive"}
 
 
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
-    """Return teacher/tutor/admin profiles usable by the dispatch planner."""
+    """Return teacher/admin profiles usable by the dispatch planner."""
     table = get_table()
     result = table.scan(
         FilterExpression="SK = :profile",

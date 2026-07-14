@@ -63,7 +63,7 @@ def _require_teacher_visible(question: dict[str, Any], user: dict[str, Any]) -> 
     role = user.get("role")
     if role == "admin":
         return
-    if role not in {"teacher", "tutor"}:
+    if role != "teacher":
         raise HTTPException(status_code=403, detail="Role cannot view assistance summaries")
     user_id = str(user.get("sub") or "")
     if question.get("teacher_id") == user_id:

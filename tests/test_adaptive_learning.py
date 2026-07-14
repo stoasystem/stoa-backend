@@ -133,7 +133,7 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
         student_id="student-1",
         source_type="curriculum_exercise",
         source_id="exercise-1",
-        user={"sub": "tutor-1", "role": "tutor"},
+        user={"sub": "teacher-1", "role": "teacher"},
         status="assigned",
     )
     assignment_id = created["assignmentId"]
@@ -180,7 +180,7 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
     )
 
 
-def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
+def test_teacher_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     snapshots, assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
     monkeypatch.setattr(
@@ -220,16 +220,16 @@ def test_tutor_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
         "updated_at": "2026-06-10T00:00:00+00:00",
     }
 
-    tutor_response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    teacher_response = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/memory/refresh"
     )
 
-    assert tutor_response.status_code == 200
+    assert teacher_response.status_code == 200
     assert snapshots[0]["topic_id"] == "linear-equations"
-    assert tutor_response.json()["memorySnapshots"][0]["recent_questions"] == ["question-1"]
-    assert all(item["topicId"] != "linear-equations" for item in tutor_response.json()["recommendations"])
-    assert tutor_response.json()["locale"]["effectiveLocale"] == "de"
-    assert tutor_response.json()["locale"]["canonicalValuesStable"] is True
+    assert teacher_response.json()["memorySnapshots"][0]["recent_questions"] == ["question-1"]
+    assert all(item["topicId"] != "linear-equations" for item in teacher_response.json()["recommendations"])
+    assert teacher_response.json()["locale"]["effectiveLocale"] == "de"
+    assert teacher_response.json()["locale"]["canonicalValuesStable"] is True
 
     parent_response = _app({"sub": "parent-1", "role": "parent"}).get(
         "/adaptive/parents/me/children/student-1/progress"
@@ -278,12 +278,12 @@ def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monk
                 "subject": "math",
                 "topic_ids": ["linear-equations"],
                 "title": "Reviewed linear equation practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
             }
         ],
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).get(
+    response = _app({"sub": "teacher-1", "role": "teacher"}).get(
         "/adaptive/students/student-1/recommendations"
     )
 
@@ -349,7 +349,7 @@ def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
     )
     monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).get(
+    response = _app({"sub": "teacher-1", "role": "teacher"}).get(
         "/adaptive/students/student-1/recommendations"
     )
 
@@ -390,13 +390,13 @@ def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeyp
                 "subject": "math",
                 "topic_ids": ["linear-equations"],
                 "title": "Reviewed linear equation practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
                 "student_delivery_status": "not_delivered",
             }
         ],
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/preview",
         json={
             "policy": {
@@ -436,7 +436,7 @@ def test_assignment_automation_preview_refuses_paused_policy(monkeypatch):
             "policy": {
                 "policyId": "policy-paused",
                 "status": "paused",
-                "pausedReason": "Tutor paused automation during exams.",
+                "pausedReason": "Teacher paused automation during exams.",
                 "sourceTypes": ["memory_snapshot"],
             }
         },
@@ -447,7 +447,7 @@ def test_assignment_automation_preview_refuses_paused_policy(monkeypatch):
     assert body["selected"] == []
     assert body["summary"]["selectedCount"] == 0
     assert body["summary"]["refusalCounts"]["policy_paused"] >= 1
-    assert body["refused"][0]["refusalReason"] == "Tutor paused automation during exams."
+    assert body["refused"][0]["refusalReason"] == "Teacher paused automation during exams."
 
 
 def test_assignment_automation_preview_refuses_out_of_scope_student(monkeypatch):
@@ -515,7 +515,7 @@ def test_assignment_automation_execute_creates_assignments_idempotently(monkeypa
                 "subject": "math",
                 "topic_ids": ["linear-equations"],
                 "title": "Reviewed linear equation practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
             }
         ],
     )
@@ -529,18 +529,18 @@ def test_assignment_automation_execute_creates_assignments_idempotently(monkeypa
             "student_id": "student-1",
             "subject": "math",
             "topic_ids": ["linear-equations"],
-            "created_by": "tutor-1",
+            "created_by": "teacher-1",
             "items": [{"prompt": "Simplify 2/4"}],
             "answer_key": [{"answer": "1/2"}],
         },
     )
     policy = {
         "policyId": "policy-automation-1",
-        "autonomyLevel": "tutor_approved_batch",
+        "autonomyLevel": "teacher_approved_batch",
         "sourceTypes": ["ai_draft"],
         "deliveryMode": "assigned",
     }
-    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    preview = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/preview",
         json={"policy": policy},
     )
@@ -552,11 +552,11 @@ def test_assignment_automation_execute_creates_assignments_idempotently(monkeypa
         "candidates": preview.json()["selected"],
     }
 
-    first = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    first = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/execute",
         json=payload,
     )
-    second = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    second = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/execute",
         json=payload,
     )
@@ -588,7 +588,7 @@ def test_assignment_automation_execute_creates_assignments_idempotently(monkeypa
     assert "answerKey" not in student_body
     assert "sourceSignals" not in student_body["automation"]
     assert student_body["automation"]["explanation"] == (
-        "Tutor-approved practice was assigned for linear-equations based on recent learning signals."
+        "Teacher-approved practice was assigned for linear-equations based on recent learning signals."
     )
 
 
@@ -656,7 +656,7 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
     )
     policy = {
         "policyId": "policy-partial-1",
-        "autonomyLevel": "tutor_approved_batch",
+        "autonomyLevel": "teacher_approved_batch",
         "sourceTypes": ["ai_draft", "memory_snapshot"],
         "deliveryMode": "recommended",
         "maxAssignmentsPerStudent": 3,
@@ -721,17 +721,17 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
                 "subject": "math",
                 "topic_ids": ["linear-equations"],
                 "title": "Reviewed linear equation practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
             }
         ],
     )
     policy = {
         "policyId": "policy-forged-1",
-        "autonomyLevel": "tutor_approved_batch",
+        "autonomyLevel": "teacher_approved_batch",
         "sourceTypes": ["ai_draft"],
         "deliveryMode": "recommended",
     }
-    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    preview = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/preview",
         json={"policy": policy},
     )
@@ -739,7 +739,7 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
     forged = dict(preview.json()["selected"][0])
     forged["sourceId"] = "draft-forged"
 
-    stale = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    stale = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/execute",
         json={
             "batchId": "batch-not-current",
@@ -748,7 +748,7 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
             "candidates": preview.json()["selected"],
         },
     )
-    forged_response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    forged_response = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/execute",
         json={
             "batchId": preview.json()["batchId"],
@@ -807,7 +807,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
                 "subject": "math",
                 "topic_ids": ["linear-equations"],
                 "title": "Reviewed math practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
             },
             {
                 "draft_id": "draft-german",
@@ -817,7 +817,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
                 "subject": "german",
                 "topic_ids": ["grammar"],
                 "title": "Reviewed German practice",
-                "created_by": "tutor-1",
+                "created_by": "teacher-1",
             },
         ],
     )
@@ -831,7 +831,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
             "student_id": "student-1",
             "subject": "math",
             "topic_ids": ["linear-equations"],
-            "created_by": "tutor-1",
+            "created_by": "teacher-1",
             "items": [{"prompt": "Solve x + 2 = 5"}],
             "answer_key": [{"answer": "3"}],
         },
@@ -844,18 +844,18 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
     monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
     policy = {
         "policyId": "policy-subject-1",
-        "autonomyLevel": "tutor_approved_batch",
+        "autonomyLevel": "teacher_approved_batch",
         "sourceTypes": ["ai_draft"],
         "deliveryMode": "assigned",
     }
-    preview = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    preview = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/preview",
         json={"policy": policy, "subject": "math"},
     )
     assert preview.status_code == 200
     assert [item["subject"] for item in preview.json()["selected"]] == ["math"]
 
-    execute = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    execute = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/students/student-1/assignment-automation/batches/execute",
         json={
             "batchId": preview.json()["batchId"],
@@ -893,13 +893,13 @@ def test_reviewed_ai_draft_assignment_requires_draft_visibility(monkeypatch):
             "student_id": "student-1",
             "subject": "math",
             "topic_ids": ["fractions"],
-            "created_by": "other-tutor",
+            "created_by": "other-teacher",
             "items": [{"prompt": "Simplify 2/4"}],
             "answer_key": [{"answer": "1/2"}],
         },
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/assignments",
         json={
             "studentId": "student-1",
@@ -926,14 +926,14 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
             "student_id": "student-1",
             "subject": "math",
             "topic_ids": ["fractions"],
-            "created_by": "tutor-1",
+            "created_by": "teacher-1",
             "items": [{"prompt": "Simplify 2/4"}],
             "answer_key": [{"answer": "1/2"}],
         },
     )
     monkeypatch.setattr(adaptive_learning_service.practice_repo, "record_attempt", lambda *args, **kwargs: attempts.append(kwargs))
 
-    created = _app({"sub": "tutor-1", "role": "tutor"}).post(
+    created = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/adaptive/assignments",
         json={
             "studentId": "student-1",

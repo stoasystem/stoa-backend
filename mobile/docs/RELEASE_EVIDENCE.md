@@ -57,7 +57,7 @@ Expected local result:
 
 - `mobile/src/config/mobileConfig.ts` defaults `EXPO_PUBLIC_STOA_NO_DEMO_FALLBACK` to enabled.
 - Authenticated adapters use backend endpoint paths; no fixture user IDs or demo responses are embedded.
-- Release evidence does not include raw prompts, answers, tutoring transcripts, report artifacts, provider payloads, billing payloads, Cognito token material, secrets, or private object keys.
+- Release evidence does not include raw prompts, answers, teaching transcripts, report artifacts, provider payloads, billing payloads, Cognito token material, secrets, or private object keys.
 
 ## Next Milestone
 

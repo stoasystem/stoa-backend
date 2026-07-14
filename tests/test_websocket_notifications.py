@@ -105,7 +105,7 @@ def test_connection_lifecycle_and_subscription_authorization(monkeypatch):
     assert "conn-1" not in connections
 
 
-def test_teacher_connection_receives_tutor_role_broadcast(monkeypatch):
+def test_teacher_connection_receives_teacher_role_broadcast(monkeypatch):
     events = _install_notification_repo(monkeypatch)
     _install_websocket_repo(monkeypatch)
     sent = []
@@ -116,7 +116,7 @@ def test_teacher_connection_receives_tutor_role_broadcast(monkeypatch):
     event = {
         "event_id": "notif-1",
         "recipient_id": None,
-        "recipient_role": "tutor",
+        "recipient_role": "teacher",
         "event_type": "teacher_requested",
         "target_type": "question",
         "target_id": "question-1",
@@ -135,7 +135,7 @@ def test_teacher_connection_receives_tutor_role_broadcast(monkeypatch):
     assert result["results"] == [{"connection_id": "teacher-conn", "status": "delivered"}]
     assert sent[0][1]["eventId"] == "notif-1"
     assert sent[0][1]["deliveryId"] == result["deliveryId"]
-    assert "role:tutor" in sent[0][0]["subscribed_channels"]
+    assert "role:teacher" in sent[0][0]["subscribed_channels"]
 
 
 def test_direct_user_fanout_records_delivery_attempt_metadata(monkeypatch):

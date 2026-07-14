@@ -32,7 +32,7 @@ ASSIGNMENT_STATUSES = {"draft", "recommended", "assigned", "started", "completed
 CREATABLE_STATUSES = {"draft", "recommended", "assigned"}
 STUDENT_ACTIONS = {"start", "complete", "skip"}
 STALE_AFTER_DAYS = 14
-AUTOMATION_LEVELS = {"off", "suggest_only", "tutor_approved_batch", "auto_create_reviewed", "future_auto_deliver"}
+AUTOMATION_LEVELS = {"off", "suggest_only", "teacher_approved_batch", "auto_create_reviewed", "future_auto_deliver"}
 AUTOMATION_DELIVERY_MODES = {"draft", "recommended", "assigned"}
 AUTOMATION_SOURCE_TYPES = {"ai_draft", "curriculum_exercise", "memory_snapshot", "curriculum_topic"}
 CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
@@ -713,11 +713,11 @@ def _mark_automation_candidate_selected(assignment_state: dict[str, Any], candid
 def _automation_expected_impact(recommendation: dict[str, Any]) -> str:
     candidate_type = str(recommendation.get("type") or "")
     if candidate_type == "reviewed_ai_draft":
-        return "Turn a tutor-reviewed AI practice draft into a controlled assignment candidate."
+        return "Turn a teacher-reviewed AI practice draft into a controlled assignment candidate."
     if candidate_type == "curriculum_exercise":
         return "Use a published curriculum exercise to reinforce the recommended topic."
     if candidate_type == "remediation_topic":
-        return "Flag a weak topic for tutor-reviewed remediation assignment planning."
+        return "Flag a weak topic for teacher-reviewed remediation assignment planning."
     return "Keep learning momentum with a reviewed next-work candidate."
 
 
@@ -1135,8 +1135,8 @@ def _assignment_automation_response(item: dict[str, Any], user: dict[str, Any]) 
 
 def _automation_assignment_explanation(candidate: dict[str, Any], policy: dict[str, Any]) -> str:
     topic = candidate.get("topicId") or "the current learning target"
-    if policy["autonomyLevel"] == "tutor_approved_batch":
-        return f"Tutor-approved practice was assigned for {topic} based on recent learning signals."
+    if policy["autonomyLevel"] == "teacher_approved_batch":
+        return f"Teacher-approved practice was assigned for {topic} based on recent learning signals."
     return f"Reviewed practice was prepared for {topic} based on recent learning signals."
 
 
@@ -1402,7 +1402,7 @@ def _memory_response(
         weak_topics = [_parent_weak_topic(topic) for topic in weak_topics]
     return {
         "studentId": student_id,
-        "roleView": "tutor" if role in {"teacher", "tutor", "admin"} else role,
+        "roleView": "teacher" if role in {"teacher", "admin"} else role,
         "locale": locale_contract(user),
         "subjects": profile.get("subjects", []),
         "subjectActivity": profile.get("subjectActivity", []),
@@ -1450,7 +1450,7 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
             "exerciseId": None,
             "items": draft.get("items") or [],
             "answerKey": draft.get("answer_key") or [],
-            "rationale": "Assigned from tutor-reviewed AI exercise draft.",
+            "rationale": "Assigned from teacher-reviewed AI exercise draft.",
         }
     raise HTTPException(status_code=400, detail="Unsupported assignment source type")
 
@@ -1606,7 +1606,7 @@ def _remediation_candidate(signal: dict[str, Any], assignment_state: dict[str, A
         label=signal["label"],
         rationale="Recent learning evidence points to this topic as the next reviewed remediation area.",
         score=score,
-        review_flags=["tutor_review_required"],
+        review_flags=["teacher_review_required"],
         source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
     )
 
@@ -1630,7 +1630,7 @@ def _curriculum_exercise_candidates(signal: dict[str, Any], assignment_state: di
                 label=str(exercise.get("prompt") or exercise.get("title") or signal["label"]),
                 rationale="A reviewed curriculum exercise is available for this weak topic.",
                 score=score,
-                review_flags=["tutor_review_required", "published_curriculum_only"],
+                review_flags=["teacher_review_required", "published_curriculum_only"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=True),
             )
         )
@@ -1659,9 +1659,9 @@ def _reviewed_draft_candidates(
                 source_id=draft_id,
                 signal=signal,
                 label=str(draft.get("title") or "Reviewed practice exercise"),
-                rationale="A tutor-reviewed AI practice draft matches this learning need.",
+                rationale="A teacher-reviewed AI practice draft matches this learning need.",
                 score=score,
-                review_flags=["accepted_draft_only", "tutor_review_required"],
+                review_flags=["accepted_draft_only", "teacher_review_required"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=True, curriculum_available=False),
             )
         )
@@ -1691,7 +1691,7 @@ def _continuation_candidates(
                 label=topic_id,
                 rationale="Continue with one short reviewed practice item to keep learning memory fresh.",
                 score=30,
-                review_flags=["tutor_review_required"],
+                review_flags=["teacher_review_required"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
             )
         )
@@ -1807,7 +1807,7 @@ def _require_student_visible(student_id: str, user: dict[str, Any]) -> None:
     role = str(user.get("role") or "")
     if role == "student" and user.get("sub") == student_id:
         return
-    if role in {"teacher", "tutor", "admin"}:
+    if role in {"teacher", "admin"}:
         return
     if role == "parent" and _parent_can_view(student_id, user):
         return
@@ -1843,12 +1843,12 @@ def _require_student_assignment_owner(item: dict[str, Any], user: dict[str, Any]
 
 
 def _require_teacher_or_admin(user: dict[str, Any]) -> None:
-    if user.get("role") not in {"teacher", "tutor", "admin"}:
-        raise HTTPException(status_code=403, detail="Tutor or admin access required")
+    if user.get("role") not in {"teacher", "admin"}:
+        raise HTTPException(status_code=403, detail="Teacher or admin access required")
 
 
 def _can_manage_assignments(user: dict[str, Any]) -> bool:
-    return user.get("role") in {"teacher", "tutor", "admin"}
+    return user.get("role") in {"teacher", "admin"}
 
 
 def _existing_assignment(assignment_id: str) -> dict[str, Any]:
@@ -1886,7 +1886,7 @@ def _mistake_attempts_for_topic(mistakes: list[dict[str, Any]], subject: str, to
 def _recommended_steps(subject: str, topic_id: str, mastered: bool) -> list[str]:
     if mastered:
         return [f"Keep {topic_id} fresh with one mixed {subject} practice item."]
-    return [f"Review {topic_id} with a tutor-approved practice item."]
+    return [f"Review {topic_id} with a teacher-approved practice item."]
 
 
 def _freshness(last_seen_at: str | None) -> dict[str, Any]:

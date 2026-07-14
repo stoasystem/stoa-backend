@@ -191,9 +191,9 @@ def _require_report_access(question: dict[str, Any], user: dict[str, Any]) -> No
     role = user.get("role")
     if role == "student" and question.get("student_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Not your question")
-    if role in {"teacher", "tutor"} and not _teacher_visible(question, str(user.get("sub") or "")):
+    if role == "teacher" and not _teacher_visible(question, str(user.get("sub") or "")):
         raise HTTPException(status_code=403, detail="Question is not visible to this teacher workflow")
-    if role not in {"student", "teacher", "tutor", "admin"}:
+    if role not in {"student", "teacher", "admin"}:
         raise HTTPException(status_code=403, detail="Role is not permitted to report content")
 
 

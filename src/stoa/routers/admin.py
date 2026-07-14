@@ -671,7 +671,7 @@ async def add_moderation_case_note(
 async def list_curriculum_authoring_worklist(
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """List internal curriculum authoring items awaiting operational action."""
     return curriculum_ops_service.list_worklist(status=status, limit=limit)
@@ -683,7 +683,7 @@ async def get_curriculum_content_quality(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=200),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return aggregate-only curriculum quality metrics for operators."""
     return curriculum_analytics_service.content_quality_summary(
@@ -696,7 +696,7 @@ async def get_curriculum_content_quality(
 
 @router.get("/curriculum/analytics/warehouse-readiness", response_model=CurriculumWarehouseReadinessResponse)
 async def get_curriculum_warehouse_readiness(
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return local warehouse analytics readiness without requiring live BI infrastructure."""
     return curriculum_analytics_service.warehouse_readiness()
@@ -708,7 +708,7 @@ async def get_curriculum_warehouse_export(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=250),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return bounded aggregate rows shaped for future warehouse ingestion."""
     return curriculum_analytics_service.warehouse_export(
@@ -724,7 +724,7 @@ async def get_curriculum_analytics_dashboard(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=250),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return aggregate operator dashboard signals for curriculum and sequencing health."""
     return curriculum_analytics_service.operator_dashboard(
@@ -737,7 +737,7 @@ async def get_curriculum_analytics_dashboard(
 @router.post("/curriculum/lessons/drafts", response_model=CurriculumVersionResponse)
 async def create_curriculum_lesson_draft(
     body: CurriculumLessonDraftRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Create an internal lesson-plus-exercises authoring draft."""
     return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), user)
@@ -749,7 +749,7 @@ async def create_curriculum_lesson_draft(
 )
 async def dry_run_curriculum_migration(
     manifest: dict[str, Any] = Body(...),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Validate a curriculum migration manifest without mutating content state."""
     return curriculum_migration_service.dry_run(manifest, user)
@@ -762,7 +762,7 @@ async def dry_run_curriculum_migration(
 async def apply_curriculum_migration(
     migration_id: str,
     body: CurriculumMigrationApplyRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Apply a confirmed curriculum migration manifest and persist evidence."""
     return curriculum_migration_service.apply_migration(
@@ -779,7 +779,7 @@ async def apply_curriculum_migration(
 )
 async def read_curriculum_migration(
     migration_id: str,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Read evidence for an applied curriculum migration."""
     return curriculum_migration_service.get_migration(migration_id, user)
@@ -789,7 +789,7 @@ async def read_curriculum_migration(
 async def preview_curriculum_lesson_version(
     public_lesson_id: str,
     version_id: str = Query(..., alias="versionId"),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Preview an unpublished curriculum version without changing student reads."""
     return curriculum_ops_service.preview_lesson(public_lesson_id, version_id)
@@ -800,7 +800,7 @@ async def diff_curriculum_lesson_versions(
     public_lesson_id: str,
     from_version_id: str = Query(..., alias="fromVersionId"),
     to_version_id: str = Query(..., alias="toVersionId"),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return a bounded structural diff between two curriculum versions."""
     return curriculum_ops_service.diff_lesson_versions(
@@ -815,7 +815,7 @@ async def diff_curriculum_lesson_versions(
 async def read_curriculum_lesson_audit(
     public_lesson_id: str,
     limit: int = Query(default=50, ge=1, le=100),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Read bounded lifecycle audit events for one curriculum lesson."""
     return curriculum_ops_service.audit_lesson(public_lesson_id, user, limit=limit)
@@ -829,7 +829,7 @@ async def patch_curriculum_lesson_draft(
     public_lesson_id: str,
     version_id: str,
     body: dict[str, Any] = Body(default_factory=dict),
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Patch a draft curriculum lesson without changing published student reads."""
     return curriculum_ops_service.patch_lesson_draft(public_lesson_id, version_id, body, user)
@@ -842,7 +842,7 @@ async def patch_curriculum_lesson_draft(
 async def preview_curriculum_lesson_validation(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Validate draft publish readiness without mutating the curriculum version."""
     return curriculum_ops_service.validation_preview(public_lesson_id, version_id, user)
@@ -855,7 +855,7 @@ async def preview_curriculum_lesson_validation(
 async def submit_curriculum_lesson_review(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Move a draft curriculum version into QA review."""
     return curriculum_ops_service.submit_review(public_lesson_id, version_id, user)
@@ -868,7 +868,7 @@ async def submit_curriculum_lesson_review(
 async def approve_curriculum_lesson_version(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Approve a reviewed curriculum version for admin publish."""
     return curriculum_ops_service.approve(public_lesson_id, version_id, user)
@@ -882,7 +882,7 @@ async def request_curriculum_lesson_changes(
     public_lesson_id: str,
     version_id: str,
     body: CurriculumReviewNoteRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Return a curriculum version to authoring with review notes."""
     return curriculum_ops_service.request_changes(public_lesson_id, version_id, user, body.reason)
@@ -892,7 +892,7 @@ async def request_curriculum_lesson_changes(
 async def publish_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Publish an approved curriculum version through a conditional manifest update."""
     return curriculum_ops_service.publish(
@@ -908,7 +908,7 @@ async def publish_curriculum_lesson_version(
 async def rollback_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Rollback the published curriculum pointer to a previous safe version."""
     return curriculum_ops_service.rollback(
@@ -924,7 +924,7 @@ async def rollback_curriculum_lesson_version(
 async def archive_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "tutor", "teacher")),
+    user: dict = Depends(require_role("admin", "teacher")),
 ):
     """Archive a curriculum version when no active assignments block it."""
     return curriculum_ops_service.archive(

@@ -99,7 +99,7 @@ def _build_unit(raw: dict, lessons: list[dict]) -> dict:
 def _enforce_curriculum_preview_access(user: dict, include_preview: bool, rollout_state: str | None) -> None:
     preview_requested = include_preview or (rollout_state is not None and rollout_state.lower() != "active")
     if preview_requested and not curriculum_service.can_preview(user):
-        raise HTTPException(status_code=403, detail="Curriculum preview content requires tutor or admin access")
+        raise HTTPException(status_code=403, detail="Curriculum preview content requires teacher or admin access")
 
 
 def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None) -> str:
@@ -108,9 +108,9 @@ def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None)
         if requested_student_id and requested_student_id != user.get("sub"):
             raise HTTPException(status_code=403, detail="Students can only view their own curriculum progress")
         return user["sub"]
-    if role in {"admin", "tutor", "teacher"} and requested_student_id:
+    if role in {"admin", "teacher"} and requested_student_id:
         return requested_student_id
-    raise HTTPException(status_code=400, detail="studentId is required for tutor/admin curriculum progress")
+    raise HTTPException(status_code=400, detail="studentId is required for teacher/admin curriculum progress")
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────

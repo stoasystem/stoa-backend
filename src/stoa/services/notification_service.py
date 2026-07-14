@@ -128,7 +128,7 @@ def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
 
 
 def emit_teacher_requested(*, question_id: str, student_id: str, subject: str) -> None:
-    for recipient_role in ("tutor", "admin"):
+    for recipient_role in ("teacher", "admin"):
         create_event_safe(
             recipient_id=None,
             recipient_role=recipient_role,

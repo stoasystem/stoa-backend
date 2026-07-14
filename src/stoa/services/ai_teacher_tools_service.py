@@ -291,7 +291,7 @@ def _visible_student_questions(student_id: str, user: dict[str, Any]) -> list[di
     questions = response.get("Items", []) if isinstance(response, dict) else []
     visible = [question for question in questions if _can_view_question(question, user)]
     if not visible and user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="No visible student context for this tutor")
+        raise HTTPException(status_code=403, detail="No visible student context for this teacher")
     return visible
 
 
@@ -305,7 +305,7 @@ def _can_view_question(question: dict[str, Any], user: dict[str, Any]) -> bool:
     role = user.get("role")
     if role == "admin":
         return True
-    if role not in {"teacher", "tutor"}:
+    if role != "teacher":
         return False
     user_id = _actor_id(user)
     if question.get("teacher_id") == user_id:
@@ -316,7 +316,7 @@ def _can_view_question(question: dict[str, Any], user: dict[str, Any]) -> bool:
 def _can_view_draft(item: dict[str, Any], user: dict[str, Any]) -> bool:
     if user.get("role") == "admin":
         return True
-    if user.get("role") not in {"teacher", "tutor"}:
+    if user.get("role") != "teacher":
         return False
     if item.get("created_by") == _actor_id(user):
         return True

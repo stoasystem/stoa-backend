@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
 from stoa.config import Settings
-from stoa.routers import notifications, questions, tutors
+from stoa.routers import notifications, questions, teachers
 from stoa.services import notification_service, teacher_assistance_service, websocket_service
 
 
@@ -643,7 +643,7 @@ def test_digest_preview_filters_by_time_window(monkeypatch):
     assert body["items"][0]["eventId"] != older["eventId"]
 
 
-def test_request_teacher_emits_tutor_and_admin_events(monkeypatch):
+def test_request_teacher_emits_teacher_and_admin_events(monkeypatch):
     updates = []
     emitted = []
     monkeypatch.setattr(
@@ -674,11 +674,11 @@ def test_request_teacher_emits_tutor_and_admin_events(monkeypatch):
 
     assert response.status_code == 202
     assert updates[0][1] == "escalated"
-    assert {event["recipient_role"] for event in emitted} == {"tutor", "admin"}
+    assert {event["recipient_role"] for event in emitted} == {"teacher", "admin"}
     assert {event["event_type"] for event in emitted} == {"teacher_requested"}
 
 
-def test_tutor_can_build_assistance_summary_seed(monkeypatch):
+def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     stored = []
     monkeypatch.setattr(
         teacher_assistance_service.question_repo,
@@ -700,8 +700,8 @@ def test_tutor_can_build_assistance_summary_seed(monkeypatch):
         lambda item: stored.append(item),
     )
 
-    client = _app(tutors.router, "/tutors", {"sub": "tutor-1", "role": "tutor"})
-    response = client.get("/tutors/questions/question-1/assistance-summary")
+    client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
+    response = client.get("/teachers/questions/question-1/assistance-summary")
 
     assert response.status_code == 200
     body = response.json()

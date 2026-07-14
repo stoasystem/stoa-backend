@@ -1,4 +1,4 @@
-"""Conversation routes — multi-turn AI tutoring sessions.
+"""Conversation routes — multi-turn AI teaching sessions.
 
 
 Implements the frontend chat API contract:
@@ -160,7 +160,7 @@ def _generate_title(first_message: str, subject: str) -> str | None:
         bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
         prompt = (
             f"Generate a concise title (max 6 words, no punctuation) for a {subject} "
-            f"tutoring conversation that starts with: \"{first_message[:120]}\". "
+            f"teaching conversation that starts with: \"{first_message[:120]}\". "
             "Respond with only the title, nothing else."
         )
         body = _json.dumps({

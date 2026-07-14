@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "file": "tests/test_auth_security.py",
+      "symbol": "test_t472_01_sec001_public_registration_rejects_privilege_without_mutation",
+      "purpose": "negative_input",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_auth_security.py",
+      "symbol": "test_t472_01_confirmation_rejects_non_public_registration_commands_without_mutation",
+      "purpose": "negative_input",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_identity_authorization.py",
+      "symbol": "test_actor_contract_is_single_role_immutable_and_active_only_authorizes",
+      "purpose": "negative_input",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_identity_authorization.py",
+      "symbol": "test_identity_conflicts_never_fallback_or_select_highest_role",
+      "purpose": "historical_reconciliation",
+      "literal": "tutor",
+      "count": 2
+    },
+    {
+      "file": "tests/test_privileged_identity_reconciliation.py",
+      "symbol": "test_t472_05_reconciliation_auto_tightens_only",
+      "purpose": "historical_reconciliation",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_teacher_terminology_gate.py",
+      "symbol": "test_legacy_teacher_role_is_rejected_not_normalized",
+      "purpose": "negative_input",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_teacher_terminology_gate.py",
+      "symbol": "test_legacy_teacher_role_is_rejected_not_normalized",
+      "purpose": "negative_input",
+      "literal": "Tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_teacher_terminology_gate.py",
+      "symbol": "test_legacy_teacher_role_is_rejected_not_normalized",
+      "purpose": "negative_input",
+      "literal": "TUTOR",
+      "count": 1
+    },
+    {
+      "file": "tests/test_teacher_availability.py",
+      "symbol": "test_teacher_router_exposes_no_legacy_route",
+      "purpose": "negative_input",
+      "literal": "tutors",
+      "count": 2
+    }
+  ]
+}

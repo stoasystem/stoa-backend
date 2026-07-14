@@ -122,7 +122,7 @@ async def get_student_memory(
     subject: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
-    """Role-scoped memory summary for student, parent, tutor, teacher, or admin."""
+    """Role-scoped memory summary for student, parent, teacher, or admin."""
     return adaptive_learning_service.get_memory_summary(
         student_id=student_id,
         user=user,
@@ -134,7 +134,7 @@ async def get_student_memory(
 async def refresh_student_memory(
     student_id: str,
     subject: str | None = Query(default=None),
-    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+    user: dict = Depends(require_role("teacher", "admin")),
 ):
     """Persist a durable memory snapshot from current learning evidence."""
     return adaptive_learning_service.get_memory_summary(
@@ -174,7 +174,7 @@ async def list_student_assignments(
     include_archived: bool = Query(default=False, alias="includeArchived"),
     user: dict = Depends(get_current_user),
 ):
-    """Role-scoped assignment list for tutor/admin review and parent progress views."""
+    """Role-scoped assignment list for teacher/admin review and parent progress views."""
     return adaptive_learning_service.list_assignments(
         student_id=student_id,
         user=user,
@@ -187,7 +187,7 @@ async def list_student_assignments(
 async def preview_assignment_automation_batch(
     student_id: str,
     body: AssignmentAutomationPreviewRequest | None = None,
-    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+    user: dict = Depends(require_role("teacher", "admin")),
 ):
     """Preview policy-bounded assignment automation candidates without creating assignments."""
     body = body or AssignmentAutomationPreviewRequest()
@@ -203,7 +203,7 @@ async def preview_assignment_automation_batch(
 async def execute_assignment_automation_batch(
     student_id: str,
     body: AssignmentAutomationExecuteRequest,
-    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+    user: dict = Depends(require_role("teacher", "admin")),
 ):
     """Create reviewed assignments from an approved automation batch."""
     return adaptive_learning_service.execute_assignment_automation_batch(
@@ -220,7 +220,7 @@ async def execute_assignment_automation_batch(
 @router.post("/assignments")
 async def create_assignment(
     body: AssignmentCreateRequest,
-    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+    user: dict = Depends(require_role("teacher", "admin")),
 ):
     """Create a reviewed assignment from curriculum content or an accepted AI draft."""
     return adaptive_learning_service.create_assignment(
@@ -291,7 +291,7 @@ async def skip_assignment(
 async def archive_assignment(
     assignment_id: str,
     body: AssignmentTransitionRequest | None = None,
-    user: dict = Depends(require_role("teacher", "tutor", "admin")),
+    user: dict = Depends(require_role("teacher", "admin")),
 ):
     body = body or AssignmentTransitionRequest()
     return adaptive_learning_service.transition_assignment(

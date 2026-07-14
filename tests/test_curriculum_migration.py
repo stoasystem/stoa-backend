@@ -13,7 +13,7 @@ def _app_for_user(user: dict) -> FastAPI:
     return app
 
 
-def _operator_user(*capabilities: str, role: str = "tutor", sub: str = "migration-operator-1") -> dict:
+def _operator_user(*capabilities: str, role: str = "teacher", sub: str = "migration-operator-1") -> dict:
     return {
         "sub": sub,
         "role": role,

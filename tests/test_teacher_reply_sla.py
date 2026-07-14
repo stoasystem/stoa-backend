@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
-from stoa.routers import admin, questions, teachers, tutors
+from stoa.routers import admin, questions, teachers
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
@@ -245,11 +245,11 @@ def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
     assert "weekly-reports/" not in serialized
 
 
-def test_tutor_note_accepts_rich_teacher_reply_payload(monkeypatch):
+def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     table = FakeTeacherTable()
-    monkeypatch.setattr(tutors, "get_table", lambda: table)
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(
-        tutors,
+        teachers,
         "_get_conversation",
         lambda request_id: {
             "conversation_id": "conv-1",
@@ -258,11 +258,11 @@ def test_tutor_note_accepts_rich_teacher_reply_payload(monkeypatch):
             "escalated_at": "2026-06-08T08:00:00+00:00",
         },
     )
-    monkeypatch.setattr(tutors.user_repo, "get_user", lambda user_id: {"name": "Teacher One"})
+    monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id: {"name": "Teacher One"})
 
-    client = _app(tutors.router, "/tutors", {"sub": "teacher-1", "role": "teacher"})
+    client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post(
-        "/tutors/me/help-requests/help-1/notes",
+        "/teachers/me/help-requests/help-1/notes",
         json={
             "content": "Subtract 5 from both sides.\n3x = 15",
             "richContent": {
@@ -282,7 +282,7 @@ def test_tutor_note_accepts_rich_teacher_reply_payload(monkeypatch):
     assert table.put_items[1]["teacher_response_rich"]["blocks"][1]["type"] == "formula"
 
 
-def test_tutor_help_requests_expose_sla_and_average_response(monkeypatch):
+def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
     conversations = [
         {
             "conversation_id": "conv-1",
@@ -290,7 +290,7 @@ def test_tutor_help_requests_expose_sla_and_average_response(monkeypatch):
             "escalation_request_id": "help-1",
             "escalation_status": "pending",
             "escalated_at": "2026-06-08T08:00:00+00:00",
-            "first_tutor_action_at": "2026-06-08T08:18:00+00:00",
+            "first_teacher_action_at": "2026-06-08T08:18:00+00:00",
             "subject": "Mathematics",
         },
         {
@@ -299,22 +299,22 @@ def test_tutor_help_requests_expose_sla_and_average_response(monkeypatch):
             "escalation_request_id": "help-2",
             "escalation_status": "resolved",
             "escalated_at": "2026-06-08T08:00:00+00:00",
-            "first_tutor_action_at": "2026-06-08T08:42:00+00:00",
+            "first_teacher_action_at": "2026-06-08T08:42:00+00:00",
             "subject": "Mathematics",
         },
     ]
-    monkeypatch.setattr(tutors, "_get_escalated_conversations", lambda: conversations)
-    monkeypatch.setattr(tutors, "_get_student_name", lambda student_id: "Student")
+    monkeypatch.setattr(teachers, "_get_escalated_conversations", lambda: conversations)
+    monkeypatch.setattr(teachers, "_get_student_name", lambda student_id: "Student")
 
-    client = _app(tutors.router, "/tutors", {"sub": "teacher-1", "role": "teacher"})
+    client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
 
-    response = client.get("/tutors/me/help-requests")
+    response = client.get("/teachers/me/help-requests")
     assert response.status_code == 200
     data = response.json()
     items_by_id = {item["requestId"]: item for item in data["items"]}
     assert items_by_id["help-2"]["sla"]["status"] == "breached"
     assert items_by_id["help-1"]["sla"]["requestToFirstActionMinutes"] == 18
 
-    response = client.get("/tutors/me/stats")
+    response = client.get("/teachers/me/stats")
     assert response.status_code == 200
     assert response.json()["averageResponseTimeMinutes"] == 30

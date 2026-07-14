@@ -878,7 +878,7 @@ def daily_pilot_monitoring_incident_operations() -> dict[str, Any]:
 def pilot_support_feedback_learning_quality_evidence() -> dict[str, Any]:
     result = {
         "feedbackState": "ready",
-        "channels": ["parent", "student", "teacher_tutor", "admin", "support_operator"],
+        "channels": ["parent", "student", "teacher", "admin", "support_operator"],
         "qualityEvidence": [
             "ai_summary_quality",
             "exercise_generation_quality",
@@ -5731,7 +5731,7 @@ def launch_scope_audit(items: list[dict[str, Any]] | None = None) -> dict[str, A
             },
         ],
         "recommendedScope": "limited_parent_student_pilot",
-        "excludedFeatures": ["broad public signup", "paid marketing", "unsupervised AI tutoring", "unapproved provider writes"],
+        "excludedFeatures": ["broad public signup", "paid marketing", "unsupervised AI teaching", "unapproved provider writes"],
         "readiness": readiness,
         "stateCounts": _count_by(readiness, "state"),
         "launchBlockers": [row for row in readiness if row["state"] in {"blocked", "failed"}],
@@ -5827,7 +5827,7 @@ def pilot_acceptance_metrics() -> dict[str, Any]:
             "billing_account_issue",
             "training_onboarding_issue",
         ],
-        "feedbackCapture": ["parent", "student", "teacher_tutor", "admin", "support_operator"],
+        "feedbackCapture": ["parent", "student", "teacher", "admin", "support_operator"],
         "decisionCriteria": {
             "expand": "success metrics met and no unresolved critical blockers",
             "hold": "provider/support/stability blockers remain but product core is useful",

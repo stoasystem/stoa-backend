@@ -14,7 +14,7 @@ def _app_for_user(user: dict) -> FastAPI:
     return app
 
 
-def _operator_user(*capabilities: str, role: str = "tutor", sub: str = "operator-1") -> dict:
+def _operator_user(*capabilities: str, role: str = "teacher", sub: str = "operator-1") -> dict:
     return {
         "sub": sub,
         "role": role,
@@ -133,7 +133,7 @@ def _install_curriculum_ops_repo(monkeypatch, active_refs=None):
     }
 
 
-@pytest.mark.parametrize("role", ["admin", "tutor", "teacher"])
+@pytest.mark.parametrize("role", ["admin", "teacher"])
 def test_curriculum_authoring_requires_explicit_capability(monkeypatch, role):
     _install_curriculum_ops_repo(monkeypatch)
     client = TestClient(_app_for_user({"sub": f"{role}-1", "role": role}))

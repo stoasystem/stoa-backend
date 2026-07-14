@@ -294,7 +294,7 @@ def test_parents_me_children_returns_empty_items(monkeypatch):
     assert response.json() == {"items": []}
 
 
-@pytest.mark.parametrize("role", ["student", "teacher", "tutor", "admin"])
+@pytest.mark.parametrize("role", ["student", "teacher", "admin"])
 def test_parents_me_children_rejects_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
@@ -363,7 +363,7 @@ def test_legacy_children_allows_admin(monkeypatch):
     assert response.json() == []
 
 
-@pytest.mark.parametrize("role", ["student", "teacher", "tutor"])
+@pytest.mark.parametrize("role", ["student", "teacher"])
 def test_legacy_children_rejects_other_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
@@ -1163,7 +1163,7 @@ def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
     assert response.status_code == 403
 
 
-@pytest.mark.parametrize("role", ["student", "teacher", "tutor", "admin"])
+@pytest.mark.parametrize("role", ["student", "teacher", "admin"])
 def test_parent_child_summary_rejects_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
@@ -1248,7 +1248,7 @@ def test_parent_child_history_rejects_unlinked_before_data_reads(monkeypatch):
     assert response.status_code == 403
 
 
-@pytest.mark.parametrize("role", ["student", "teacher", "tutor", "admin"])
+@pytest.mark.parametrize("role", ["student", "teacher", "admin"])
 def test_parent_child_history_rejects_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
@@ -1462,7 +1462,7 @@ def test_parent_child_week_report_missing(monkeypatch, week_report):
     assert response.json()["report"] is None
 
 
-@pytest.mark.parametrize("role", ["student", "teacher", "tutor", "admin"])
+@pytest.mark.parametrize("role", ["student", "teacher", "admin"])
 def test_parent_child_report_routes_reject_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 

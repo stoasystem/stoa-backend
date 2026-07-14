@@ -1,4 +1,4 @@
-"""Amazon Bedrock — controlled AI tutoring service.
+"""Amazon Bedrock — controlled AI teaching service.
 
 Implements a lightweight AI harness:
 - Structured system prompt with subject/grade/language injection
@@ -234,7 +234,7 @@ def get_hint_answer(prompt: str, subject: str = "Mathematik", grade: str = "6. K
     """Generate a short 1-2 sentence hint for a practice challenge."""
     safe_prompt = _sanitise_input(prompt)
     system = (
-        "You are a helpful Swiss maths tutor. "
+        "You are a helpful Swiss maths teacher. "
         "Give a concise hint (1-2 sentences, in German) that guides the student "
         "without revealing the answer. No JSON, just plain text."
     )

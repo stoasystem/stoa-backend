@@ -20,7 +20,7 @@
 
 - raw prompts
 - raw answers
-- tutoring transcripts
+- teaching transcripts
 - generated report artifacts
 - provider payloads
 - billing payloads
