@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_current_user
+from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import account_verification_service, locale_service
 
 router = APIRouter()
@@ -22,18 +23,8 @@ router = APIRouter()
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    # role is optional — backend infers from DynamoDB profile if omitted
-    role: str | None = None
 
-
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    role: str                       # frontend: student | parent | tutor | admin
-    name: str | None = None
-    preferredLanguage: str = "de"   # camelCase matches frontend payload
-    # Accept (and silently ignore) any extra frontend onboarding fields
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "forbid"}
 
 
 class UserOut(BaseModel):
@@ -63,7 +54,8 @@ class AuthResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
-    role: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class LogoutRequest(BaseModel):
@@ -72,19 +64,22 @@ class LogoutRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
-    role: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     confirmationCode: str = Field(..., min_length=1, max_length=100)
     newPassword: str = Field(..., min_length=1, max_length=256)
-    role: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class EmailVerificationRequest(BaseModel):
     email: EmailStr
-    role: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class EmailVerificationConfirmRequest(EmailVerificationRequest):
@@ -102,7 +97,8 @@ class EmailVerificationResponse(BaseModel):
 
 class LoginCodeRequest(BaseModel):
     email: EmailStr
-    role: str | None = None
+
+    model_config = {"extra": "forbid"}
 
 
 class LoginCodeConfirmRequest(LoginCodeRequest):
@@ -132,47 +128,22 @@ class LocalePreferenceResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Role helpers
+# Public authentication helpers
 # ---------------------------------------------------------------------------
 
-# Frontend uses "tutor" for what the backend calls "teacher". Cognito group
-# names are plural, so normalize those too when a profile fallback uses claims.
-_ROLE_ALIAS = {
-    "tutor": "teacher",
-    "students": "student",
-    "parents": "parent",
-    "teachers": "teacher",
-    "admins": "admin",
-}
-_ROLE_DISPLAY = {
-    "teacher": "tutor",
-    "students": "student",
-    "parents": "parent",
-    "teachers": "tutor",
-    "admins": "admin",
+_PUBLIC_REGISTRATION_COMMAND = "public_self_service"
+_PUBLIC_GROUPS = {
+    PublicRegistrationRole.STUDENT.value: "students",
+    PublicRegistrationRole.PARENT.value: "parents",
 }
 
 
-def _normalise_role(role: str) -> str:
-    """Map frontend role names to backend role names."""
-    return _ROLE_ALIAS.get(role, role)
+def _public_client_id(settings: Settings) -> str:
+    """Use one non-privileged app client for every public auth operation."""
 
-
-def _display_role(role: str) -> str:
-    """Map backend role names back to frontend role names."""
-    return _ROLE_DISPLAY.get(role, role)
-
-
-def _client_id_for_role(role: str, settings: Settings) -> str:
-    mapping = {
-        "student": settings.cognito_student_client_id,
-        "parent": settings.cognito_parent_client_id,
-        "teacher": settings.cognito_teacher_client_id,
-        "admin": settings.cognito_admin_client_id,
-    }
-    cid = mapping.get(role)
+    cid = settings.cognito_student_client_id
     if not cid:
-        raise HTTPException(status_code=400, detail=f"No Cognito client for role '{role}'")
+        raise HTTPException(status_code=503, detail="Public authentication is unavailable")
     return cid
 
 
@@ -181,7 +152,7 @@ def _get_cognito(settings: Settings):
 
 
 def _build_user_out(profile: dict) -> UserOut:
-    role = _display_role(profile.get("role", "student"))
+    role = profile.get("role", "student")
     effective_locale = locale_service.effective_locale(profile)
     verification = account_verification_service.public_state(profile)
     return UserOut(
@@ -204,13 +175,21 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _role_for_password_flow(email: str, role: str | None) -> str | None:
-    if role:
-        return _normalise_role(role)
-    profile = user_repo.get_user_by_email(email)
-    if not profile:
-        return None
-    return profile.get("role", "student")
+def _approved_public_registration_role(profile: dict) -> str:
+    role = profile.get("registration_role")
+    if (
+        profile.get("registration_command") != _PUBLIC_REGISTRATION_COMMAND
+        or role not in _PUBLIC_GROUPS
+        or profile.get("role") != role
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "identity_conflict",
+                "message": "This account cannot use public account activation.",
+            },
+        )
+    return role
 
 
 def _email_verification_status(profile: dict) -> str:
@@ -253,42 +232,11 @@ def _profile_child_email(profile: dict) -> str:
     )
 
 
-def _profile_from_current_user(current_user: dict, settings: Settings) -> dict | None:
-    user_id = current_user.get("sub", "")
-    if user_id:
-        profile = user_repo.get_user(user_id)
-        if profile:
-            return profile
+def _profile_from_current_user(current_user: dict) -> dict | None:
+    """Load only the authoritative business identity projected by get_current_user."""
 
-    email = current_user.get("email", "")
-    role_from_cognito = None
-    cognito_username = current_user.get("username", "")
-
-    if cognito_username and not email:
-        try:
-            cognito = _get_cognito(settings)
-            user_data = cognito.admin_get_user(
-                UserPoolId=settings.cognito_user_pool_id,
-                Username=cognito_username,
-            )
-            attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
-            email = attrs.get("email", "")
-            role_from_cognito = attrs.get("custom:role")
-        except ClientError:
-            pass
-
-    if email:
-        profile = user_repo.get_user_by_email(email)
-        if profile:
-            return profile
-        return {
-            "user_id": user_id,
-            "email": email,
-            "name": email.split("@")[0],
-            "role": role_from_cognito or current_user.get("role") or "student",
-        }
-
-    return None
+    user_id = current_user.get("user_id") or current_user.get("sub", "")
+    return user_repo.get_user(user_id) if user_id else None
 
 
 def _bind_parent_student_if_possible(parent_email: str | None, student_profile: dict) -> dict | None:
@@ -365,9 +313,9 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
     """Create a Cognito user and DynamoDB profile, then require email verification."""
+    role = body.role.value
+    client_id = _public_client_id(settings)
     cognito = _get_cognito(settings)
-    role = _normalise_role(body.role)
-    client_id = _client_id_for_role(role, settings)
 
     try:
         signup_resp = cognito.sign_up(
@@ -381,19 +329,13 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             cognito.admin_update_user_attributes(
                 UserPoolId=settings.cognito_user_pool_id,
                 Username=body.email,
-                UserAttributes=[
-                    {"Name": "custom:role", "Value": role},
-                    {"Name": "custom:subscription_tier", "Value": "free"},
-                ],
+                UserAttributes=[{"Name": "custom:subscription_tier", "Value": "free"}],
             )
         except ClientError:
             pass
-        # Add user to the role group so the access token carries cognito:groups.
-        # Retry once on transient failure; deps.py has a self-healing fallback but
-        # it's better to get the group right at registration time.
-        _role_to_group = {"student": "students", "parent": "parents",
-                          "teacher": "teachers", "admin": "admins"}
-        group_name = _role_to_group.get(role)
+        # Add only the exact approved public role group. Privileged groups are not
+        # representable in this registration command.
+        group_name = _PUBLIC_GROUPS[role]
         if group_name:
             for _attempt in range(2):
                 try:
@@ -405,7 +347,6 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
                     break
                 except ClientError:
                     if _attempt == 1:
-                        # Log but don't fail registration; deps.py fallback handles it
                         import logging
                         logging.getLogger(__name__).warning(
                             "Failed to add user %s to group %s after 2 attempts",
@@ -421,10 +362,9 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
 
     # Extract onboarding profile fields forwarded by the frontend.
     # Frontend sends nested data under "profile"; legacy payload may use "studentProfile"/"parentProfile".
-    extra = body.model_extra or {}
-    nested = extra.get("profile") or {}
-    student_profile = nested if role == "student" else (extra.get("studentProfile") or {})
-    parent_profile = nested if role == "parent" else (extra.get("parentProfile") or {})
+    nested = body.profile or {}
+    student_profile = nested if role == "student" else (body.studentProfile or {})
+    parent_profile = nested if role == "parent" else (body.parentProfile or {})
 
     if role == "student":
         grade = student_profile.get("grade", "")
@@ -444,7 +384,7 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         age = parent_profile.get("childAge")
     else:
         grade = ""
-        subjects = extra.get("subjects", [])
+        subjects = body.subjects or []
         school_system = ""
         school = ""
         parent_name = ""
@@ -456,6 +396,8 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         "email": body.email,
         "name": body.name or body.email.split("@")[0],
         "role": role,
+        "registration_command": _PUBLIC_REGISTRATION_COMMAND,
+        "registration_role": role,
         "language": body.preferredLanguage,
         "grade": grade,
         "school": school,
@@ -481,33 +423,18 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         _bind_existing_child_if_possible(profile, child_email)
     user_repo.put_user(profile)
 
-    verification_status = "pending_review" if role == "teacher" else None
-
     return _auth_response_for_profile(
         access_token="",
         profile=profile,
-        onboarding_status="email_verification_required" if role != "teacher" else "pending_review",
-        verification_status=verification_status,
+        onboarding_status="email_verification_required",
     )
 
 
 @router.post("/login", response_model=AuthResponse)
 async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
-    """Authenticate user. Role is inferred from DynamoDB profile if not provided."""
-    # Look up role from DynamoDB profile (frontend doesn't send role)
-    if body.role:
-        role = _normalise_role(body.role)
-    else:
-        profile = user_repo.get_user_by_email(body.email)
-        if not profile:
-            raise HTTPException(
-                status_code=401,
-                detail="No account found for this email. Please register first.",
-            )
-        role = profile.get("role", "student")
-
+    """Authenticate through the single public client without caller-selected privilege."""
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
 
     try:
         resp = cognito.initiate_auth(
@@ -542,13 +469,7 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
     # Fetch full profile for response
     profile = user_repo.get_user_by_email(body.email)
     if not profile:
-        profile = {"user_id": "", "email": body.email, "role": role}
-    if not account_verification_service.can_return_tokens(profile):
-        if profile.get("user_id"):
-            profile = user_repo.update_email_verification_state(
-                profile["user_id"],
-                account_verification_service.verified_fields(_utc_now_iso()),
-            ) or profile
+        raise HTTPException(status_code=409, detail={"code": "identity_conflict", "message": "Account recovery is required."})
     if not account_verification_service.can_return_tokens(profile):
         raise HTTPException(
             status_code=403,
@@ -600,9 +521,9 @@ async def resend_email_verification(
             resendAllowed=False,
         )
 
-    role = _role_for_password_flow(body.email, body.role) or profile.get("role", "student")
+    _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
     try:
         resp = cognito.resend_confirmation_code(ClientId=client_id, Username=body.email)
     except ClientError as e:
@@ -692,9 +613,9 @@ async def confirm_email_verification(
             accountActivationStatus=state["accountActivationStatus"],
             resendAllowed=False,
         )
-    role = _role_for_password_flow(body.email, body.role) or profile.get("role", "student")
+    role = _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
     try:
         cognito.confirm_sign_up(
             ClientId=client_id,
@@ -760,21 +681,15 @@ async def confirm_email_verification(
             )
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
-    group_name = {
-        "student": "students",
-        "parent": "parents",
-        "teacher": "teachers",
-        "admin": "admins",
-    }.get(role)
-    if group_name:
-        try:
-            cognito.admin_add_user_to_group(
-                UserPoolId=settings.cognito_user_pool_id,
-                Username=body.email,
-                GroupName=group_name,
-            )
-        except ClientError:
-            pass
+    group_name = _PUBLIC_GROUPS[role]
+    try:
+        cognito.admin_add_user_to_group(
+            UserPoolId=settings.cognito_user_pool_id,
+            Username=body.email,
+            GroupName=group_name,
+        )
+    except ClientError:
+        pass
     updated = user_repo.update_email_verification_state(
         profile["user_id"],
         account_verification_service.verified_fields(_utc_now_iso()),
@@ -808,11 +723,12 @@ async def confirm_login_code(body: LoginCodeConfirmRequest):
 @router.post("/forgot-password", response_model=PasswordResetResponse)
 async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depends(get_settings)):
     """Start Cognito's forgot-password flow without exposing account existence."""
-    role = _role_for_password_flow(body.email, body.role)
-    if role is None:
+    profile = user_repo.get_user_by_email(body.email)
+    if profile is None:
         return PasswordResetResponse(status="accepted")
+    _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
     try:
         resp = cognito.forgot_password(ClientId=client_id, Username=body.email)
     except ClientError as e:
@@ -829,11 +745,12 @@ async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depe
 @router.post("/reset-password", response_model=PasswordResetResponse)
 async def reset_password(body: ResetPasswordRequest, settings: Settings = Depends(get_settings)):
     """Confirm a Cognito forgot-password code and set a new password."""
-    role = _role_for_password_flow(body.email, body.role)
-    if role is None:
+    profile = user_repo.get_user_by_email(body.email)
+    if profile is None:
         raise HTTPException(status_code=400, detail="Invalid password reset request")
+    _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
     try:
         cognito.confirm_forgot_password(
             ClientId=client_id,
@@ -863,7 +780,7 @@ async def me(
     settings: Settings = Depends(get_settings),
 ):
     """Return the authenticated user's profile."""
-    profile = _profile_from_current_user(current_user, settings)
+    profile = _profile_from_current_user(current_user)
     if not profile:
         profile = {
             "user_id": current_user.get("sub", ""),
@@ -881,7 +798,7 @@ async def update_my_locale_preference(
     settings: Settings = Depends(get_settings),
 ):
     """Persist the authenticated user's preferred locale."""
-    profile = _profile_from_current_user(current_user, settings)
+    profile = _profile_from_current_user(current_user)
     if not profile or not profile.get("user_id"):
         raise HTTPException(status_code=404, detail="Profile not found")
     try:
@@ -903,10 +820,8 @@ async def update_my_locale_preference(
 @router.post("/refresh", response_model=AuthResponse)
 async def refresh(body: RefreshRequest, settings: Settings = Depends(get_settings)):
     """Exchange a refresh token for fresh tokens."""
-    # Require role for refresh (or default to student)
-    role = _normalise_role(body.role) if body.role else "student"
     cognito = _get_cognito(settings)
-    client_id = _client_id_for_role(role, settings)
+    client_id = _public_client_id(settings)
 
     try:
         resp = cognito.initiate_auth(
@@ -927,7 +842,7 @@ async def refresh(body: RefreshRequest, settings: Settings = Depends(get_setting
             id="",
             name="",
             email="",
-            role=role,
+            role="",
             preferredLanguage=locale_service.DEFAULT_LOCALE,
             preferredLocale=locale_service.DEFAULT_LOCALE,
             effectiveLocale=locale_service.DEFAULT_LOCALE,

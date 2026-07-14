@@ -272,7 +272,17 @@ async def test_t472_07_repository_missing_fact_is_distinct_from_outage_and_timeo
 
 @pytest.mark.parametrize(
     "public_role",
-    ["admin", "teacher", "tutor", "Admin", "TEACHER", "Ｔｅａｃｈｅｒ", "unknown"],
+    [
+        "admin",
+        "teacher",
+        "tutor",
+        "Admin",
+        "TEACHER",
+        "Ｔｅａｃｈｅｒ",
+        "teachers",
+        "teacher ",
+        " unknown ",
+    ],
     ids=lambda value: f"T-472-01-SEC-001-reject-{value.encode('unicode_escape').decode()}",
 )
 def test_t472_01_sec001_public_registration_rejects_privilege_without_mutation(
@@ -297,7 +307,7 @@ def test_t472_01_sec001_public_registration_rejects_privilege_without_mutation(
     response = TestClient(app).post(
         "/auth/register",
         json={
-            "email": "attacker@example.invalid",
+            "email": "attacker@example.com",
             "password": "ValidPass123!",
             "role": public_role,
         },
@@ -306,6 +316,91 @@ def test_t472_01_sec001_public_registration_rejects_privilege_without_mutation(
     assert response.status_code in {400, 403, 422}
     fake_cognito.assert_zero_mutations()
     assert database_mutations == []
+
+
+@pytest.mark.parametrize(
+    "payload_patch",
+    [
+        {"roles": ["student", "admin"]},
+        {"userRole": "teacher"},
+        {"profile": {"role": "admin"}},
+        {"profile": {"nested": {"roles": ["teacher"]}}},
+    ],
+)
+def test_t472_01_registration_rejects_extra_or_nested_role_selectors_before_calls(
+    payload_patch, monkeypatch, fake_cognito
+):
+    repository_calls = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    monkeypatch.setattr(auth.user_repo, "put_user", repository_calls.append)
+    app = FastAPI()
+    app.include_router(auth.router, prefix="/auth")
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        aws_region="eu-central-2",
+        cognito_user_pool_id="offline-pool",
+        cognito_student_client_id="student-client",
+        cognito_parent_client_id="parent-client",
+        cognito_teacher_client_id="teacher-client",
+        cognito_admin_client_id="admin-client",
+    )
+    payload = {
+        "email": "attacker@example.com",
+        "password": "ValidPass123!",
+        "role": "student",
+        **payload_patch,
+    }
+
+    response = TestClient(app).post("/auth/register", json=payload)
+
+    assert response.status_code == 422
+    fake_cognito.assert_zero_mutations()
+    assert repository_calls == []
+
+
+@pytest.mark.parametrize("role", ["teacher", "admin", "tutor", "unknown"])
+def test_t472_01_confirmation_rejects_non_public_registration_commands_without_mutation(
+    role, monkeypatch, fake_cognito
+):
+    repository_mutations = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda _email: {
+            "user_id": "privileged-1",
+            "email": "privileged@example.com",
+            "role": role,
+            "registration_command": "public_self_service",
+            "registration_role": role,
+            "email_verification_status": "pending_verification",
+            "email_verification_required": True,
+        },
+    )
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda *args, **kwargs: repository_mutations.append((args, kwargs)),
+    )
+    app = FastAPI()
+    app.include_router(auth.router, prefix="/auth")
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        aws_region="eu-central-2",
+        cognito_user_pool_id="offline-pool",
+        cognito_student_client_id="student-client",
+        cognito_parent_client_id="parent-client",
+        cognito_teacher_client_id="teacher-client",
+        cognito_admin_client_id="admin-client",
+    )
+
+    response = TestClient(app).post(
+        "/auth/email-verification/confirm",
+        json={"email": "privileged@example.com", "confirmationCode": "123456"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "identity_conflict"
+    fake_cognito.assert_zero_mutations()
+    assert repository_mutations == []
 
 
 @pytest.mark.parametrize(

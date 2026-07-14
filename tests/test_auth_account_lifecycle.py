@@ -36,6 +36,15 @@ def _client_error(code: str, message: str | None = None) -> ClientError:
     return ClientError({"Error": {"Code": code, "Message": message or code}}, "Cognito")
 
 
+def _public_profile(**values):
+    profile = {
+        "registration_command": "public_self_service",
+        "registration_role": values.get("role", "student"),
+    }
+    profile.update(values)
+    return profile
+
+
 class FakeCognito:
     def __init__(self):
         self.calls = []
@@ -182,13 +191,13 @@ def test_register_keeps_one_sided_parent_email_pending(monkeypatch):
 def test_confirm_email_verification_activates_profile(monkeypatch):
     fake = FakeCognito()
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -239,16 +248,16 @@ def test_login_blocks_unconfirmed_cognito_user(monkeypatch):
     assert response.json()["detail"]["code"] == "email_verification_required"
 
 
-def test_login_repairs_local_pending_state_after_cognito_auth_succeeds(monkeypatch):
+def test_login_does_not_repair_local_pending_state_after_cognito_auth_succeeds(monkeypatch):
     fake = FakeCognito()
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -262,12 +271,9 @@ def test_login_repairs_local_pending_state_after_cognito_auth_succeeds(monkeypat
         json={"email": "student@example.com", "password": "ValidPass123!"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["accessToken"] == "access-token"
-    assert response.json()["emailVerificationStatus"] == "verified"
-    assert response.json()["emailVerificationRequired"] is False
-    assert updates[0][0] == "student-1"
-    assert updates[0][1]["email_verification_status"] == "verified"
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "email_verification_required"
+    assert updates == []
 
 
 def test_login_allows_verified_profile(monkeypatch):
@@ -276,13 +282,13 @@ def test_login_allows_verified_profile(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "verified",
             "email_verification_required": False,
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -324,13 +330,13 @@ def test_resend_email_verification_is_idempotent_during_cooldown(monkeypatch):
 def test_resend_email_verification_records_provider_delivery(monkeypatch):
     fake = FakeCognito()
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -356,13 +362,13 @@ def test_resend_email_verification_repairs_local_state_when_cognito_already_conf
             raise _client_error("NotAuthorizedException", "User is already confirmed.")
 
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: AlreadyConfirmedCognito())
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -390,13 +396,13 @@ def test_confirm_email_verification_marks_expired_code(monkeypatch):
             raise _client_error("ExpiredCodeException")
 
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: ExpiredCognito())
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -418,13 +424,13 @@ def test_confirm_email_verification_marks_expired_code(monkeypatch):
 
 def test_confirm_email_verification_is_idempotent_for_locally_verified_profile(monkeypatch):
     fake = FakeCognito()
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "verified",
         "email_verification_required": False,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
 
@@ -445,13 +451,13 @@ def test_confirm_email_verification_repairs_local_state_when_cognito_already_con
             raise _client_error("NotAuthorizedException", "User cannot be confirmed. Current status is CONFIRMED")
 
     updates = []
-    profile = {
+    profile = _public_profile(**{
         "user_id": "student-1",
         "role": "student",
         "email": "student@example.com",
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
-    }
+    })
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: AlreadyConfirmedCognito())
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
@@ -480,13 +486,13 @@ def test_confirm_email_verification_normalizes_wrong_code(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "pending_verification",
             "email_verification_required": True,
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -507,13 +513,13 @@ def test_confirm_email_verification_normalizes_rate_limit(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "pending_verification",
             "email_verification_required": True,
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -534,13 +540,13 @@ def test_login_disabled_account_returns_support_safe_error(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "verified",
             "email_verification_required": False,
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -561,13 +567,13 @@ def test_resend_disabled_account_returns_support_safe_error(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "pending_verification",
             "email_verification_required": True,
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -644,13 +650,19 @@ def test_forgot_password_is_enumeration_safe_for_unknown_email(monkeypatch):
     assert response.json() == {"status": "accepted", "delivery": None}
 
 
-def test_forgot_password_uses_role_client_without_returning_tokens(monkeypatch):
+def test_forgot_password_uses_public_client_without_returning_tokens(monkeypatch):
     fake = FakeCognito()
     monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {"user_id": "parent-1", "role": "parent", "email": email},
+        lambda email: {
+            "user_id": "parent-1",
+            "role": "parent",
+            "email": email,
+            "registration_command": "public_self_service",
+            "registration_role": "parent",
+        },
     )
 
     response = _auth_client().post("/auth/forgot-password", json={"email": "parent@example.com"})
@@ -660,7 +672,7 @@ def test_forgot_password_uses_role_client_without_returning_tokens(monkeypatch):
     assert body["status"] == "accepted"
     assert "accessToken" not in body
     assert fake.calls[-1][0] == "forgot_password"
-    assert fake.calls[-1][1]["ClientId"] == "parent-client"
+    assert fake.calls[-1][1]["ClientId"] == "student-client"
 
 
 def test_reset_password_confirms_code_without_returning_tokens(monkeypatch):
@@ -669,7 +681,13 @@ def test_reset_password_confirms_code_without_returning_tokens(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {"user_id": "student-1", "role": "student", "email": email},
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "registration_command": "public_self_service",
+            "registration_role": "student",
+        },
     )
 
     response = _auth_client().post(
@@ -696,7 +714,13 @@ def test_reset_password_normalizes_cognito_errors(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {"user_id": "student-1", "role": "student", "email": email},
+        lambda email: {
+            "user_id": "student-1",
+            "role": "student",
+            "email": email,
+            "registration_command": "public_self_service",
+            "registration_role": "student",
+        },
     )
 
     response = _auth_client().post(
