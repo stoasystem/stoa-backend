@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
+from stoa.deps import get_actor, get_current_user
 from stoa.routers import admin, questions
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import moderation_service
 
 
@@ -59,7 +60,15 @@ def _case(**overrides):
 def _questions_app(user):
     app = FastAPI()
     app.include_router(questions.router, prefix="/questions")
-    app.dependency_overrides[get_current_user] = lambda: user
+    role = CanonicalRole(user["role"])
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        user["sub"],
+        "https://identity.test",
+        f"{user['sub']}-subject",
+        role,
+        AccountStatus.ACTIVE,
+        role.value,
+    )
     return TestClient(app)
 
 
@@ -68,6 +77,20 @@ def _admin_app(user):
     app.include_router(admin.router, prefix="/admin")
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app)
+
+
+def _stub_teacher_authorization_facts(monkeypatch):
+    monkeypatch.setattr(moderation_service.question_repo, "get_teacher_session", lambda *_: None)
+    monkeypatch.setattr(moderation_service.question_repo, "get_teacher_assignment", lambda *_: None)
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "teacher" if user_id.startswith("teacher") else "student",
+            "account_status": "active",
+        },
+    )
 
 
 def test_student_can_report_own_question_without_private_image_key(monkeypatch):
@@ -107,10 +130,11 @@ def test_student_cannot_report_another_students_question(monkeypatch):
         json={"surface": "question", "reason": "abuse", "severity": "medium"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_teacher_reporting_requires_visible_question(monkeypatch):
+    _stub_teacher_authorization_facts(monkeypatch)
     monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question(status="pending"))
 
     response = _questions_app({"sub": "teacher-1", "role": "teacher"}).post(
@@ -118,10 +142,11 @@ def test_teacher_reporting_requires_visible_question(monkeypatch):
         json={"surface": "question", "reason": "other", "severity": "low"},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_report_teacher_reply_requires_existing_reply(monkeypatch):
+    _stub_teacher_authorization_facts(monkeypatch)
     monkeypatch.setattr(
         moderation_service.question_repo,
         "get_question",
@@ -133,7 +158,7 @@ def test_report_teacher_reply_requires_existing_reply(monkeypatch):
         json={"surface": "teacher_reply", "reason": "incorrect_answer", "severity": "medium"},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 404
 
 
 def test_admin_moderation_list_is_admin_only(monkeypatch):
