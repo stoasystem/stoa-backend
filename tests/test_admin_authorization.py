@@ -145,5 +145,9 @@ def test_notification_admin_routes_require_distinct_exact_capabilities(monkeypat
     app.include_router(notifications.admin_router, prefix="/admin")
     app.dependency_overrides[get_actor] = lambda: _actor(wrong)
     assert TestClient(app).get(path).status_code == 403
+    app.dependency_overrides[get_actor] = lambda: _actor()
+    assert TestClient(app).get(path).status_code == 403
+    app.dependency_overrides[get_actor] = lambda: _actor("student_data_break_glass")
+    assert TestClient(app).get(path).status_code == 403
     app.dependency_overrides[get_actor] = lambda: _actor(capability)
     assert TestClient(app).get(path).status_code == 200

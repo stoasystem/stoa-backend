@@ -7,7 +7,7 @@ from inspect import isawaitable
 
 from fastapi import Depends, HTTPException, Query
 
-from stoa.db.repositories import question_repo, user_repo
+from stoa.db.repositories import notification_repo, question_repo, user_repo
 from stoa.deps import get_actor
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -272,6 +272,147 @@ def student_actor_dependency(
             action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
+        ),
+    )
+    return dependency
+
+
+def notification_self_dependency(
+    resource_type: ResourceType,
+    action: AuthorizationAction,
+):
+    """Authorize a notification collection/preference/digest/token create to Actor self."""
+
+    async def resolve(resource_id: str):
+        return AuthorizedResource(
+            ResourceRef(resource_type, resource_id, resource_id, owner_id=resource_id),
+            {"owner_id": resource_id},
+        )
+
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        try:
+            await authorize_and_resolve(
+                actor=actor,
+                resource_id=actor.user_id,
+                spec=AuthorizationSpec(
+                    resource_type,
+                    action,
+                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                    resolve,
+                ),
+                fact_repository=get_authorization_fact_repository(),
+            )
+            return actor
+        except SecurityDecisionError as error:
+            _raise_http(error)
+
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            resource_type,
+            action,
+            AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+            resolve,
+        ),
+    )
+    return dependency
+
+
+def authorized_notification_event_dependency(action: AuthorizationAction):
+    """Load one event, bind it to its canonical recipient, then authorize it."""
+
+    async def resolve(event_id: str):
+        item = notification_repo.get_event(event_id)
+        if not item or not item.get("recipient_id"):
+            return None
+        owner_id = str(item["recipient_id"])
+        return AuthorizedResource(
+            ResourceRef(
+                ResourceType.NOTIFICATION_EVENT,
+                event_id,
+                owner_id,
+                owner_id=owner_id,
+            ),
+            item,
+        )
+
+    async def dependency(
+        event_id: str,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    ) -> AuthorizedResource:
+        try:
+            return await authorize_and_resolve(
+                actor=actor,
+                resource_id=event_id,
+                spec=AuthorizationSpec(
+                    ResourceType.NOTIFICATION_EVENT,
+                    action,
+                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                    resolve,
+                ),
+                fact_repository=facts,
+            )
+        except SecurityDecisionError as error:
+            _raise_http(error)
+
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.NOTIFICATION_EVENT,
+            action,
+            AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+            resolve,
+        ),
+    )
+    return dependency
+
+
+def authorized_notification_push_token_dependency(action: AuthorizationAction):
+    """Resolve a token reference under Actor ownership before token mutation."""
+
+    async def dependency(
+        token_reference: str,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    ) -> AuthorizedResource:
+        async def resolve(resource_id: str):
+            item = notification_repo.get_push_token(actor.user_id, resource_id)
+            if not item:
+                return None
+            owner_id = str(item.get("user_id") or "")
+            return AuthorizedResource(
+                ResourceRef(
+                    ResourceType.NOTIFICATION_PUSH_TOKEN,
+                    resource_id,
+                    owner_id,
+                    owner_id=owner_id,
+                ),
+                item,
+            )
+
+        try:
+            return await authorize_and_resolve(
+                actor=actor,
+                resource_id=token_reference,
+                spec=AuthorizationSpec(
+                    ResourceType.NOTIFICATION_PUSH_TOKEN,
+                    action,
+                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                    resolve,
+                ),
+                fact_repository=facts,
+            )
+        except SecurityDecisionError as error:
+            _raise_http(error)
+
+    async def metadata_resolver(resource_id: str):
+        return {"resource_id": resource_id}
+
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.NOTIFICATION_PUSH_TOKEN,
+            action,
+            AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+            metadata_resolver,
         ),
     )
     return dependency

@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from stoa.config import settings
 from stoa.db.repositories import notification_repo
 from stoa.services import websocket_service
+from stoa.security.identity import Actor
 
 
 EVENT_TYPES = {
@@ -231,15 +232,15 @@ def emit_subscription_update(
 
 
 def list_user_events(
-    user: dict[str, Any],
+    user: dict[str, Any] | Actor,
     *,
     status: str | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     if status is not None and status not in STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported notification status")
-    user_id = str(user.get("sub") or "")
-    role = str(user.get("role") or "")
+    user_id = _user_id(user)
+    role = _user_role(user)
     items = [
         item for item in notification_repo.list_events(limit=max(limit, 100))
         if _visible_to_user(item, user_id=user_id, role=role)
@@ -417,7 +418,7 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
 
 
 def digest_preview(
-    user: dict[str, Any],
+    user: dict[str, Any] | Actor,
     *,
     category: str | None = None,
     since: str | None = None,
@@ -426,8 +427,8 @@ def digest_preview(
 ) -> dict[str, Any]:
     if category is not None and category not in PREFERENCE_CATEGORIES:
         raise HTTPException(status_code=400, detail="Unsupported notification preference category")
-    user_id = str(user.get("sub") or "")
-    role = str(user.get("role") or "")
+    user_id = _user_id(user)
+    role = _user_role(user)
     preferences = get_preferences_for_user(user_id)
     items = []
     for item in _sort_events(notification_repo.list_events(limit=max(limit, 100))):
@@ -466,7 +467,7 @@ def digest_preview(
 
 
 def send_digest(
-    user: dict[str, Any],
+    user: dict[str, Any] | Actor,
     *,
     category: str | None = None,
     since: str | None = None,
@@ -478,7 +479,7 @@ def send_digest(
     readiness = email_provider_readiness()
     delivery_id = f"email-{uuid4().hex}"
     event_ids = [str(item["eventId"]) for item in preview["items"]]
-    recipient_email = _safe_text(user.get("email"))
+    recipient_email = _safe_text(_user_value(user, "email"))
     attempt = {
         "delivery_id": delivery_id,
         "attempted_at": now_iso(),
@@ -532,7 +533,7 @@ def send_digest(
 
 
 def register_push_token(
-    user: dict[str, Any],
+    user: dict[str, Any] | Actor,
     *,
     platform: str,
     token: str | None = None,
@@ -546,17 +547,33 @@ def register_push_token(
     clean_provider_reference = _safe_text(provider_token_reference)
     if not clean_token and not clean_provider_reference:
         raise HTTPException(status_code=400, detail="Push token or provider reference is required")
-    user_id = str(user.get("sub") or "")
+    user_id = _user_id(user)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authenticated user is required")
 
     token_hash = _hash_value(clean_token or clean_provider_reference)
     token_reference = f"push-{token_hash[:16]}"
+    # A provider/body alias is itself an ownership coordinate.  Resolve any
+    # existing canonical token before the put so one actor cannot adopt or
+    # rotate another actor's device reference.
+    for existing in notification_repo.list_push_tokens(limit=100):
+        same_material = (
+            existing.get("token_hash") == token_hash
+            or (
+                clean_provider_reference
+                and existing.get("provider_token_reference") == clean_provider_reference
+            )
+        )
+        if same_material and existing.get("user_id") != user_id:
+            from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+
+            error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+            raise HTTPException(error.status_code, detail=error.public_body()) from error
     now = now_iso()
     item = {
         "entity_type": notification_repo.PUSH_TOKEN_ENTITY,
         "user_id": user_id,
-        "role": str(user.get("role") or ""),
+        "role": _user_role(user),
         "platform": normalized_platform,
         "token_reference": token_reference,
         "token_hash": token_hash,
@@ -578,6 +595,17 @@ def revoke_push_token(user: dict[str, Any], token_reference: str) -> dict[str, A
     updated = notification_repo.update_push_token(
         user_id,
         token_reference,
+        {"status": "revoked", "revoked_at": now_iso()},
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Push token not found")
+    return push_token_response(updated)
+
+
+def revoke_authorized_push_token(item: dict[str, Any]) -> dict[str, Any]:
+    updated = notification_repo.update_push_token(
+        str(item.get("user_id") or ""),
+        str(item.get("token_reference") or ""),
         {"status": "revoked", "revoked_at": now_iso()},
     )
     if not updated:
@@ -774,6 +802,41 @@ def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[st
     if not updated:
         raise HTTPException(status_code=404, detail="Notification not found")
     return event_response(updated)
+
+
+def mark_authorized_event(item: dict[str, Any], next_status: str) -> dict[str, Any]:
+    if next_status not in {"read", "archived"}:
+        raise HTTPException(status_code=400, detail="Unsupported notification transition")
+    event_id = str(item.get("event_id") or "")
+    now = now_iso()
+    updates: dict[str, Any] = {"status": next_status}
+    if next_status == "read":
+        updates["read_at"] = item.get("read_at") or now
+    else:
+        updates["archived_at"] = item.get("archived_at") or now
+        updates["read_at"] = item.get("read_at") or now
+    updated = notification_repo.update_event(event_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return event_response(updated)
+
+
+def _user_value(user: dict[str, Any] | Actor, key: str) -> Any:
+    if isinstance(user, Actor):
+        if key == "sub":
+            return user.user_id
+        if key == "role":
+            return user.role.value
+        return dict(user.auth_context).get(key)
+    return user.get(key)
+
+
+def _user_id(user: dict[str, Any] | Actor) -> str:
+    return str(user.user_id if isinstance(user, Actor) else user.get("sub") or user.get("user_id") or "")
+
+
+def _user_role(user: dict[str, Any] | Actor) -> str:
+    return user.role.value if isinstance(user, Actor) else str(user.get("role") or "")
 
 
 def event_response(item: dict[str, Any]) -> dict[str, Any]:

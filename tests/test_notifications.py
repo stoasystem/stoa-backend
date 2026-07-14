@@ -150,7 +150,7 @@ def test_notification_mark_requires_visible_event(monkeypatch):
     client = _app(notifications.router, "/notifications", {"sub": "student-2", "role": "student"})
     response = client.post(f"/notifications/{event['eventId']}/read")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_admin_can_list_operational_notifications(monkeypatch):
@@ -524,6 +524,48 @@ def test_push_token_registration_and_revocation_redacts_raw_token(monkeypatch):
     revoked = client.delete(f"/notifications/push-tokens/{body['tokenReference']}")
     assert revoked.status_code == 200
     assert revoked.json()["status"] == "revoked"
+
+
+def test_push_token_reference_is_hidden_from_unrelated_actor(monkeypatch):
+    _install_push_token_repo(monkeypatch)
+    owner = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    created = owner.post(
+        "/notifications/push-tokens",
+        json={"platform": "ios", "providerTokenReference": "provider-owned-reference"},
+    ).json()
+    other = _app(notifications.router, "/notifications", {"sub": "student-2", "role": "student"})
+
+    denied = other.delete(f"/notifications/push-tokens/{created['tokenReference']}")
+    collision = other.post(
+        "/notifications/push-tokens",
+        json={"platform": "ios", "providerTokenReference": "provider-owned-reference"},
+    )
+
+    assert denied.status_code == 404
+    assert collision.status_code == 404
+    assert owner.delete(f"/notifications/push-tokens/{created['tokenReference']}").status_code == 200
+
+
+def test_notification_event_missing_and_authorization_outage_fail_before_mutation(monkeypatch):
+    events, _ = _install_notification_repo(monkeypatch)
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    assert client.post("/notifications/missing/read").status_code == 404
+
+    updates = []
+    monkeypatch.setattr(
+        notification_service.notification_repo,
+        "get_event",
+        lambda event_id: (_ for _ in ()).throw(RuntimeError("store unavailable")),
+    )
+    monkeypatch.setattr(
+        notification_service.notification_repo,
+        "update_event",
+        lambda event_id, values: updates.append((event_id, values)),
+    )
+    response = client.post("/notifications/notif-1/archive")
+    assert response.status_code == 503
+    assert updates == []
+    assert events == {}
 
 
 def test_push_delivery_records_missing_token_without_breaking_event(monkeypatch):
