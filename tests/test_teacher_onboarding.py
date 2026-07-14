@@ -2,9 +2,6 @@
 
 import pytest
 
-pytest_plugins = ("security.conftest",)
-
-
 def test_t472_04_frozen_clock_supports_invitation_expiry(frozen_clock):
     issued_at = frozen_clock.now()
     frozen_clock.advance(seconds=901)

@@ -13,9 +13,6 @@ from security.conftest import (
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
 
-pytest_plugins = ("security.conftest",)
-
-
 def test_t472_02_jwks_keysets_are_issuer_and_kid_isolated(rsa_jwks_keysets):
     first, second = rsa_jwks_keysets
     assert first.issuer != second.issuer
