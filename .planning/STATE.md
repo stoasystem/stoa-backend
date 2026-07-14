@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-14T19:39:56.979Z"
-last_activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harness
+last_updated: "2026-07-14T20:39:53.000Z"
+last_activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity boundary
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 1
-  percent: 10
+  completed_plans: 2
+  percent: 20
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
-Last activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harness
+Last activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity boundary
 
 ## Accumulated Context
 
@@ -40,6 +40,8 @@ Last activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harn
 - Phase 472 uses one closed canonical role enum: `student|parent|teacher|admin`; historical aliases are rejection/reconciliation inputs only.
 - Security responses expose only stable `code`, safe `message`, and `correlationId`; temporary dependency retries are bounded and idempotent-read-only.
 - Wave 0 client recovery behavior is generated and tested in Phase 472; Phase 478 owns web/mobile rendering and integration.
+- Authentication accepts only RS256 access tokens bound to an explicitly configured issuer and client; JWKS caching is issuer-isolated and bounded through provider outages.
+- Business identity resolves only through a unique issuer-subject binding to one fresh active local role and authoritative grants; request-time email fallback and Cognito privilege mutation are removed.
 
 ### Pending Todos
 
@@ -65,3 +67,4 @@ Last activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harn
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
 | Phase 472 P01 | 7 min | 4 tasks | 18 files |
+| Phase 472 P02 | 45 min | 3 tasks | 9 files |

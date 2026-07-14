@@ -26,8 +26,8 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 - [ ] **V9AUTH-01:** Public registration accepts only explicitly approved self-service roles and rejects `admin`, `teacher`, `tutor`, unknown, and case-variant privileged roles before any Cognito user/group mutation.
 - [ ] **V9AUTH-02:** A long-lived production admin can be created only through an authenticated operator workflow that records actor, target, timestamp, resulting group, and redacted evidence.
 - [ ] **V9AUTH-03:** A teacher can join only through an expiring, single-use invitation and explicit approval; teacher identity alone does not grant curriculum-edit capability.
-- [ ] **V9AUTH-04:** Cognito group, profile role, account status, and capabilities have one reconciliation policy, and token validation performs no best-effort privilege mutation.
-- [ ] **V9AUTH-05:** Access-token validation enforces issuer, token use, allowed app client, signing-key rotation, cache isolation, and stable redacted authentication errors.
+- [x] **V9AUTH-04:** Cognito group, profile role, account status, and capabilities have one reconciliation policy, and token validation performs no best-effort privilege mutation.
+- [x] **V9AUTH-05:** Access-token validation enforces issuer, token use, allowed app client, signing-key rotation, cache isolation, and stable redacted authentication errors.
 - [ ] **V9AUTH-06:** A user can request and confirm a real login code with expiry, replay prevention, attempt limits, anti-enumeration behavior, and provider-failure handling; no deferred placeholder response remains.
 
 ### Resource Authorization
