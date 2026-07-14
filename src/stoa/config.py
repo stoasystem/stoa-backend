@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,13 +41,63 @@ class Settings(BaseSettings):
     cognito_parent_client_id: str = ""
     cognito_teacher_client_id: str = ""
     cognito_admin_client_id: str = ""
+    cognito_allowed_issuers: List[str] = []
+    cognito_access_client_ids: List[str] = []
+    cognito_jwks_connect_timeout_seconds: float = 2.0
+    cognito_jwks_read_timeout_seconds: float = 3.0
+    cognito_jwks_ttl_seconds: int = 300
+    cognito_jwks_max_stale_seconds: int = 900
+
+    @property
+    def allowed_cognito_issuers(self) -> tuple[str, ...]:
+        configured = tuple(value.strip().rstrip("/") for value in self.cognito_allowed_issuers)
+        if configured:
+            return configured
+        if not self.cognito_user_pool_id.strip():
+            return ()
+        return (
+            f"https://cognito-idp.{self.aws_region}.amazonaws.com"
+            f"/{self.cognito_user_pool_id.strip()}",
+        )
+
+    @property
+    def allowed_cognito_access_clients(self) -> tuple[str, ...]:
+        configured = tuple(value.strip() for value in self.cognito_access_client_ids)
+        if configured:
+            return configured
+        return tuple(
+            value.strip()
+            for value in (
+                self.cognito_student_client_id,
+                self.cognito_parent_client_id,
+                self.cognito_teacher_client_id,
+                self.cognito_admin_client_id,
+            )
+            if value.strip()
+        )
+
+    @model_validator(mode="after")
+    def validate_cognito_security_configuration(self) -> "Settings":
+        issuers = self.allowed_cognito_issuers
+        clients = self.allowed_cognito_access_clients
+        if len(set(issuers)) != len(issuers) or len(set(clients)) != len(clients):
+            raise ValueError("Cognito issuer and access-client allowlists must be unique")
+        if any(not value.startswith("https://") for value in issuers):
+            raise ValueError("Cognito issuers must be absolute HTTPS URLs")
+        if self.cognito_jwks_connect_timeout_seconds <= 0 or self.cognito_jwks_read_timeout_seconds <= 0:
+            raise ValueError("Cognito JWKS timeouts must be positive")
+        if self.cognito_jwks_ttl_seconds <= 0:
+            raise ValueError("Cognito JWKS TTL must be positive")
+        if self.cognito_jwks_max_stale_seconds < self.cognito_jwks_ttl_seconds:
+            raise ValueError("Cognito JWKS maximum stale window must be at least its TTL")
+        if self.is_production and (not issuers or not clients):
+            raise ValueError("Production requires Cognito issuer and access-client allowlists")
+        return self
 
     @property
     def cognito_jwks_url(self) -> str:
-        return (
-            f"https://cognito-idp.{self.aws_region}.amazonaws.com"
-            f"/{self.cognito_user_pool_id}/.well-known/jwks.json"
-        )
+        issuer = self.allowed_cognito_issuers[0] if self.allowed_cognito_issuers else ""
+        return f"{issuer}/.well-known/jwks.json"
 
     @property
     def is_production(self) -> bool:

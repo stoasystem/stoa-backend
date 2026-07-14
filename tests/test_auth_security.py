@@ -1,8 +1,11 @@
-"""Wave 0 authentication-security cases; implementation turns focused cases green later."""
+"""Authentication security contracts with no AWS credentials or network access."""
+
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from jose import jwt
 
 from security.conftest import (
     FailingSecurityRepository,
@@ -12,6 +15,27 @@ from security.conftest import (
 )
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.jwks import JwksKeyProvider
+from stoa.security.tokens import verify_access_token
+
+
+def _access_token(keyset, *, issuer=None, client_id="student-client", token_use="access"):
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "iss": issuer or keyset.issuer,
+            "sub": "subject-1",
+            "client_id": client_id,
+            "token_use": token_use,
+            "cognito:groups": ["students"],
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(minutes=5)).timestamp()),
+        },
+        keyset.private_key,
+        algorithm="RS256",
+        headers={"kid": keyset.kid},
+    )
 
 def test_t472_02_jwks_keysets_are_issuer_and_kid_isolated(rsa_jwks_keysets):
     first, second = rsa_jwks_keysets
@@ -35,6 +59,125 @@ async def test_t472_02_jwks_transport_records_refresh_rotation_and_isolation(rsa
     assert await transport.fetch(first.issuer) == rotated
     assert await transport.fetch(second.issuer) == second.jwks
     assert transport.calls == [first.issuer, first.issuer, second.issuer]
+
+
+@pytest.mark.asyncio
+async def test_t472_02_provider_isolates_same_kid_between_issuers(rsa_jwks_keysets):
+    first, second = rsa_jwks_keysets
+    shared_kid = "shared-kid"
+    first_jwks = {"keys": [{**first.jwks["keys"][0], "kid": shared_kid}]}
+    second_jwks = {"keys": [{**second.jwks["keys"][0], "kid": shared_kid}]}
+    transport = FakeAsyncJwksTransport({first.issuer: first_jwks, second.issuer: second_jwks})
+    provider = JwksKeyProvider(transport, ttl_seconds=60, max_stale_seconds=120)
+
+    first_key = await provider.get_key(first.issuer, shared_kid)
+    second_key = await provider.get_key(second.issuer, shared_kid)
+
+    assert first_key.to_dict()["n"] != second_key.to_dict()["n"]
+    assert transport.calls == [first.issuer, second.issuer]
+
+
+@pytest.mark.asyncio
+async def test_t472_02_unknown_kid_refreshes_once_and_supports_rotation(rsa_jwks_keysets):
+    first, _ = rsa_jwks_keysets
+    rotated = {"keys": [{**first.jwks["keys"][0], "kid": "primary-kid-v2"}]}
+    transport = FakeAsyncJwksTransport({first.issuer: [first.jwks, rotated]})
+    provider = JwksKeyProvider(transport, ttl_seconds=60, max_stale_seconds=120)
+
+    await provider.get_key(first.issuer, first.kid)
+    rotated_key = await provider.get_key(first.issuer, "primary-kid-v2")
+
+    assert rotated_key.to_dict()["n"] == first.jwks["keys"][0]["n"]
+    assert transport.calls == [first.issuer, first.issuer]
+
+
+@pytest.mark.asyncio
+async def test_t472_02_known_key_outage_is_bounded_and_unknown_key_fails_closed(
+    rsa_jwks_keysets,
+):
+    first, _ = rsa_jwks_keysets
+    current = 0.0
+    transport = FakeAsyncJwksTransport(
+        {first.issuer: [first.jwks, RuntimeError("offline"), RuntimeError("offline")]}
+    )
+    provider = JwksKeyProvider(
+        transport,
+        ttl_seconds=10,
+        max_stale_seconds=20,
+        monotonic=lambda: current,
+    )
+    cached = await provider.get_key(first.issuer, first.kid)
+    current = 11.0
+    assert await provider.get_key(first.issuer, first.kid) is cached
+    current = 21.0
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await provider.get_key(first.issuer, first.kid)
+    assert exc_info.value.code is SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE
+
+    unknown_transport = FakeAsyncJwksTransport(
+        {first.issuer: [first.jwks, RuntimeError("offline")]}
+    )
+    unknown_provider = JwksKeyProvider(
+        unknown_transport,
+        ttl_seconds=10,
+        max_stale_seconds=20,
+    )
+    await unknown_provider.get_key(first.issuer, first.kid)
+    with pytest.raises(SecurityDecisionError) as unknown_error:
+        await unknown_provider.get_key(first.issuer, "unknown-kid")
+    assert unknown_error.value.code is SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE
+    assert len(unknown_transport.calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("overrides", "expected_code"),
+    [
+        ({"issuer": "https://identity.test/wrong"}, SecurityErrorCode.INVALID_TOKEN),
+        ({"client_id": "wrong-client"}, SecurityErrorCode.INVALID_TOKEN),
+        ({"token_use": "id"}, SecurityErrorCode.INVALID_TOKEN),
+    ],
+)
+async def test_t472_02_verifier_rejects_wrong_issuer_client_and_token_use(
+    rsa_jwks_keysets, overrides, expected_code
+):
+    first, _ = rsa_jwks_keysets
+    transport = FakeAsyncJwksTransport({first.issuer: first.jwks})
+    provider = JwksKeyProvider(transport, ttl_seconds=60, max_stale_seconds=120)
+    token = _access_token(first, **overrides)
+
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await verify_access_token(
+            token,
+            allowed_issuers={first.issuer},
+            allowed_client_ids={"student-client"},
+            key_provider=provider,
+        )
+    assert exc_info.value.code is expected_code
+    assert exc_info.value.public_body().keys() == {"code", "message", "correlationId"}
+
+
+@pytest.mark.asyncio
+async def test_t472_02_verifier_accepts_only_bound_access_token(rsa_jwks_keysets):
+    first, _ = rsa_jwks_keysets
+    provider = JwksKeyProvider(
+        FakeAsyncJwksTransport({first.issuer: first.jwks}),
+        ttl_seconds=60,
+        max_stale_seconds=120,
+    )
+
+    verified = await verify_access_token(
+        _access_token(first),
+        allowed_issuers={first.issuer},
+        allowed_client_ids={"student-client"},
+        key_provider=provider,
+    )
+
+    assert (verified.issuer, verified.subject, verified.client_id) == (
+        first.issuer,
+        "subject-1",
+        "student-client",
+    )
 
 
 @pytest.mark.asyncio

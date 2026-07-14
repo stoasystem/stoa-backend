@@ -3,12 +3,13 @@ from functools import lru_cache
 from typing import Any
 
 import boto3
-import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import ExpiredSignatureError, JWTError, jwt
 
 from stoa.config import Settings, get_settings
+from stoa.security.errors import SecurityDecisionError
+from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
+from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 
 security = HTTPBearer()
 
@@ -43,63 +44,63 @@ def get_sqs_client():
     return boto3.client("sqs", region_name=settings.aws_region)
 
 
-# ---------------------------------------------------------------------------
-# JWKS cache — fetched once per Lambda cold start
-# ---------------------------------------------------------------------------
+@lru_cache(maxsize=8)
+def _configured_jwks_provider(
+    issuers: tuple[str, ...],
+    connect_timeout: float,
+    read_timeout: float,
+    ttl_seconds: int,
+    max_stale_seconds: int,
+) -> JwksKeyProvider:
+    del issuers  # issuer allowlisting happens before the provider is consulted
+    return JwksKeyProvider(
+        HttpxJwksTransport(
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
+        ),
+        ttl_seconds=ttl_seconds,
+        max_stale_seconds=max_stale_seconds,
+    )
 
-_jwks_cache: dict[str, Any] | None = None
+
+def get_jwks_key_provider(settings: Settings = Depends(get_settings)) -> JwksKeyProvider:
+    return _configured_jwks_provider(
+        settings.allowed_cognito_issuers,
+        settings.cognito_jwks_connect_timeout_seconds,
+        settings.cognito_jwks_read_timeout_seconds,
+        settings.cognito_jwks_ttl_seconds,
+        settings.cognito_jwks_max_stale_seconds,
+    )
 
 
-def _fetch_jwks(settings: Settings) -> dict[str, Any]:
-    global _jwks_cache
-    if _jwks_cache is None:
-        resp = httpx.get(settings.cognito_jwks_url, timeout=5.0)
-        resp.raise_for_status()
-        _jwks_cache = {key["kid"]: key for key in resp.json()["keys"]}
-    return _jwks_cache
-
-
-def _get_public_key(token: str, settings: Settings) -> Any:
-    """Return the RSA public key matching the token's kid header."""
-    headers = jwt.get_unverified_headers(token)
-    kid = headers.get("kid")
-    jwks = _fetch_jwks(settings)
-    key_data = jwks.get(kid)
-    if not key_data:
-        raise HTTPException(status_code=401, detail="Unknown signing key")
-    from jose.backends import RSAKey
-    return RSAKey(key_data, algorithm="RS256")
+async def get_verified_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    settings: Settings = Depends(get_settings),
+    key_provider: JwksKeyProvider = Depends(get_jwks_key_provider),
+) -> VerifiedAccessToken:
+    try:
+        return await verify_access_token(
+            credentials.credentials,
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=key_provider,
+        )
+    except SecurityDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    verified: VerifiedAccessToken = Depends(get_verified_token),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    """Validate Cognito JWT (access token) and return the decoded claims."""
-    token = credentials.credentials
-    try:
-        public_key = _get_public_key(token, settings)
-        claims = jwt.decode(
-            token,
-            public_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},  # Access tokens have no aud in Cognito
-        )
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except JWTError as exc:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
-
-    # Verify the token was issued by our User Pool
-    expected_iss = (
-        f"https://cognito-idp.{settings.aws_region}.amazonaws.com"
-        f"/{settings.cognito_user_pool_id}"
-    )
-    if claims.get("iss") != expected_iss:
-        raise HTTPException(status_code=401, detail="Token issuer mismatch")
-
-    if claims.get("token_use") != "access":
-        raise HTTPException(status_code=401, detail="Expected access token")
+    """Temporary compatibility resolver; Plan 472-02 Task 3 replaces its fallbacks."""
+    claims: dict[str, Any] = {
+        "iss": verified.issuer,
+        "sub": verified.subject,
+        "client_id": verified.client_id,
+        "token_use": "access",
+        "cognito:groups": list(verified.groups),
+    }
 
     # Resolve role from Cognito groups (present in access token via cognito:groups).
     # Group names: students → student, parents → parent, teachers → teacher, admins → admin
