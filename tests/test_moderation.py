@@ -5,6 +5,7 @@ from stoa.deps import get_actor, get_current_user
 from stoa.routers import admin, questions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import moderation_service
+from actor_helpers import install_actor_overrides
 
 
 def _question(**overrides):
@@ -75,7 +76,7 @@ def _questions_app(user):
 def _admin_app(user):
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 

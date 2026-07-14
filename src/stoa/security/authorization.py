@@ -38,6 +38,12 @@ class ResourceType(StrEnum):
     TEACHER_PORTAL = "teacher_portal"
     TEACHER_HELP_REQUEST = "teacher_help_request"
     AI_TEACHER_DRAFT = "ai_teacher_draft"
+    NOTIFICATION_COLLECTION = "notification_collection"
+    NOTIFICATION_EVENT = "notification_event"
+    NOTIFICATION_PREFERENCE = "notification_preference"
+    NOTIFICATION_DIGEST = "notification_digest"
+    NOTIFICATION_PUSH_TOKEN = "notification_push_token"
+    OPERATOR_RESOURCE = "operator_resource"
 
 
 class AuthorizationAction(StrEnum):
@@ -68,6 +74,20 @@ class AuthorizationPurpose(StrEnum):
     SUPPORT = "support"
     SAFETY_REVIEW = "safety_review"
     INCIDENT_BREAK_GLASS = "incident_break_glass"
+    NOTIFICATION_SELF_SERVICE = "notification_self_service"
+    NOTIFICATION_EVENT_INSPECTION = "notification_event_inspection"
+    NOTIFICATION_DELIVERY_HEALTH = "notification_delivery_health"
+    IDENTITY_MANAGEMENT = "identity_management"
+    MODERATION_OPERATIONS = "moderation_operations"
+    CURRICULUM_OPERATIONS = "curriculum_operations"
+    ACCOUNT_OPERATIONS = "account_operations"
+    BILLING_OPERATIONS = "billing_operations"
+    USAGE_OPERATIONS = "usage_operations"
+    GLOBAL_OPERATIONS = "global_operations"
+    REPORT_OPERATIONS = "report_operations"
+    REPORT_RECOVERY = "report_recovery"
+    SUPPORT_HANDOFF = "support_handoff"
+    AUDIT_GOVERNANCE = "audit_governance"
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +411,18 @@ class AuthorizationPolicy:
 
         if actor.can_authorize:
             if (
+                purpose is AuthorizationPurpose.NOTIFICATION_SELF_SERVICE
+                and resource.resource_type in {
+                    ResourceType.NOTIFICATION_COLLECTION,
+                    ResourceType.NOTIFICATION_EVENT,
+                    ResourceType.NOTIFICATION_PREFERENCE,
+                    ResourceType.NOTIFICATION_DIGEST,
+                    ResourceType.NOTIFICATION_PUSH_TOKEN,
+                }
+                and resource.owner_id == actor.user_id
+            ):
+                allowed = True
+            elif (
                 purpose is AuthorizationPurpose.SELF_SERVICE
                 and resource.resource_type is ResourceType.TEACHER_PORTAL
                 and resource.owner_id == actor.user_id
@@ -494,6 +526,34 @@ class AuthorizationPolicy:
             return False, None
         grant = _matching_grant(actor, capability, ref, action, purpose)
         return bool(grant), f"grant:{grant.version}" if grant else None
+
+
+def operator_capability_permits(
+    actor: Actor,
+    *,
+    capability: str,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+) -> bool:
+    """Central exact-capability check for explicitly classified operator routes."""
+    operator_role = actor.role is CanonicalRole.ADMIN or (
+        actor.role is CanonicalRole.TEACHER and capability.startswith("curriculum_")
+    )
+    if not actor.can_authorize or not operator_role:
+        return False
+    if purpose is AuthorizationPurpose.INCIDENT_BREAK_GLASS:
+        return False
+    return bool(
+        _matching_grant(
+            actor,
+            capability,
+            resource,
+            action,
+            purpose,
+            allow_global=True,
+        )
+    )
 
 
 async def authorize_and_resolve(

@@ -18,19 +18,58 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 def actor_from_user(user: dict) -> Actor:
     role = CanonicalRole(user["role"])
     capabilities = user.get("grantCapabilities")
+    if capabilities is None and user.get("capabilities"):
+        capabilities = tuple(user["capabilities"])
     if capabilities is None and role is CanonicalRole.ADMIN:
         capabilities = (
             "learning_assignment_manager",
             "assignment_automation_preview",
             "assignment_automation_execute",
             "student_content_review",
+            "admin_identity_manager",
+            "student_support_lookup",
+            "student_safety_review",
+            "curriculum_analytics_reader",
+            "curriculum_analytics_exporter",
+            "curriculum_migration_operator",
+            "curriculum_reviewer",
+            "curriculum_publisher",
+            "curriculum_author",
+            "parent_binding_repairer",
+            "billing_operations_reader",
+            "billing_operations_manager",
+            "billing_accounting_exporter",
+            "billing_rollout_manager",
+            "billing_refund_executor",
+            "usage_event_inspector",
+            "usage_reconciliation_operator",
+            "report_metadata_reader",
+            "report_recovery_reader",
+            "report_recovery_operator",
+            "report_evidence_exporter",
+            "report_handoff_reader",
+            "report_external_handoff_sender",
+            "report_governance_reader",
+            "report_governance_manager",
+            "bi_operations_reader",
+            "bi_exporter",
+            "production_readiness_reader",
+            "platform_operations_reader",
+            "teacher_dispatch_operator",
+            "notification_event_inspector",
+            "notification_delivery_health_reader",
         )
     capabilities = capabilities or ()
-    grants = (
-        tuple(
-            CapabilityGrant(name, str(user.get("grantScope") or "student:student-1"), 1)
-            for name in capabilities
-        )
+    explicit_scope = user.get("grantScope")
+    scopes = (
+        (str(explicit_scope),)
+        if explicit_scope
+        else (("global", "student:student-1") if role is CanonicalRole.ADMIN else ("student:student-1",))
+    )
+    grants = tuple(
+        CapabilityGrant(name, scope, 1)
+        for name in capabilities
+        for scope in scopes
     )
     return Actor(
         str(user["sub"]),
@@ -43,7 +82,7 @@ def actor_from_user(user: dict) -> Actor:
         tuple(
             (key, str(value))
             for key, value in user.items()
-            if key in {"preferredLocale", "preferred_locale", "language"}
+            if key in {"preferredLocale", "preferred_locale", "language", "email"}
         ),
     )
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo, user_repo
-from stoa.deps import require_role
+from stoa.security.admin_authorization import admin_operation
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
     ModerationCaseListResponse,
@@ -49,6 +49,12 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+# All historical role dependencies below resolve through the exact registered
+# method/path capability table.  The name remains local only to keep the route
+# signatures stable while removing role as authority.
+def require_role(*_roles: str):
+    return admin_operation
 
 
 class AdminProvisionCommand(BaseModel):

@@ -13,12 +13,13 @@ from stoa.services import report_audit_retention_service
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 from stoa.services import support_destination_service
+from actor_helpers import install_actor_overrides
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     if settings is not None:
         app.dependency_overrides[get_settings] = lambda: settings
     return app

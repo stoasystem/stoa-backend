@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
 from stoa.routers import admin, auth
+from actor_helpers import install_actor_overrides
 
 
 def _settings() -> Settings:
@@ -28,7 +29,7 @@ def _auth_client() -> TestClient:
 def _admin_client() -> TestClient:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "admin-1", "role": "admin"}
+    install_actor_overrides(app, {"sub": "admin-1", "role": "admin"})
     return TestClient(app)
 
 

@@ -5,12 +5,13 @@ import pytest
 from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service
+from actor_helpers import install_actor_overrides
 
 
 def _app_for_user(user: dict) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return app
 
 

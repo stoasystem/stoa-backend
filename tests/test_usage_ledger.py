@@ -6,6 +6,7 @@ from stoa.config import Settings
 from stoa.deps import get_current_user
 from stoa.routers import admin, parents
 from stoa.services import usage_ledger_service
+from actor_helpers import install_actor_overrides
 from stoa.db.repositories import usage_ledger_repo
 
 
@@ -574,7 +575,7 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
 def test_admin_usage_reconciliation_endpoint_previews_without_repair(monkeypatch):
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "admin-1", "role": "admin"}
+    install_actor_overrides(app, {"sub": "admin-1", "role": "admin"})
     calls = []
     monkeypatch.setattr(
         admin.usage_ledger_service,

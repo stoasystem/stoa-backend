@@ -5,6 +5,7 @@ from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import bi_observability_service
+from actor_helpers import install_actor_overrides
 
 
 def _settings(**overrides) -> Settings:
@@ -14,7 +15,7 @@ def _settings(**overrides) -> Settings:
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     app.dependency_overrides[get_settings] = lambda: settings or _settings()
     return app
 

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import core_smoke_service
+from actor_helpers import install_actor_overrides
 
 
 def test_core_smoke_report_classifies_expected_blocks_without_private_payloads():
@@ -37,7 +38,7 @@ def test_core_smoke_report_classifies_expected_blocks_without_private_payloads()
 def test_admin_core_smoke_endpoint_requires_admin_and_returns_matrix():
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "admin-1", "role": "admin"}
+    install_actor_overrides(app, {"sub": "admin-1", "role": "admin"})
 
     response = TestClient(app).get("/admin/core-smoke")
 
