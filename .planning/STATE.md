@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-14T20:39:53.000Z"
-last_activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity boundary
+last_updated: "2026-07-14T22:05:00.000Z"
+last_activity: 2026-07-14 -- Completed 472-03 public privilege barrier and canonical teacher terminology
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 2
-  percent: 20
+  completed_plans: 3
+  percent: 30
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
-Plan: 3 of 10
+Plan: 4 of 10
 Status: Ready to execute
-Last activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity boundary
+Last activity: 2026-07-14 -- Completed 472-03 public privilege barrier and canonical teacher terminology
 
 ## Accumulated Context
 
@@ -42,6 +42,8 @@ Last activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity
 - Wave 0 client recovery behavior is generated and tested in Phase 472; Phase 478 owns web/mobile rendering and integration.
 - Authentication accepts only RS256 access tokens bound to an explicitly configured issuer and client; JWKS caching is issuer-isolated and bounded through provider outages.
 - Business identity resolves only through a unique issuer-subject binding to one fresh active local role and authoritative grants; request-time email fallback and Cognito privilege mutation are removed.
+- Public self-service registration accepts only exact student/parent commands before provider access, and confirmation revalidates persisted non-privileged registration provenance.
+- `teacher` is the sole active teacher-role/API term; the legacy route is removed and an exact semantic allowlist fails on active contracts or stale exemptions.
 
 ### Pending Todos
 
@@ -68,3 +70,4 @@ Last activity: 2026-07-14 -- Completed 472-02 access-token and explicit identity
 |-------|------|----------|-------|
 | Phase 472 P01 | 7 min | 4 tasks | 18 files |
 | Phase 472 P02 | 45 min | 3 tasks | 9 files |
+| Phase 472 P03 | 83 min | 3 tasks | 41 files |
