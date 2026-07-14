@@ -1,16 +1,22 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
+from stoa.deps import get_actor, get_current_user
 from stoa.config import Settings
 from stoa.routers import notifications, questions, teachers
 from stoa.services import notification_service, teacher_assistance_service, websocket_service
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
     app.dependency_overrides[get_current_user] = lambda: user
+    role = CanonicalRole(user["role"])
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        user["sub"], "https://identity.test", f"{user['sub']}-subject", role,
+        AccountStatus.ACTIVE, role.value,
+    )
     return TestClient(app)
 
 

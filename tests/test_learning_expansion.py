@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user
+from stoa.deps import get_actor, get_current_user
 from stoa.routers import parents, questions, students
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ai_service, learning_profile_service
 
 
@@ -22,7 +23,13 @@ def _question_client(user: dict | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(questions.router, prefix="/questions")
     app.dependency_overrides[get_settings] = _settings
-    app.dependency_overrides[get_current_user] = lambda: user or {"sub": "student-1", "role": "student"}
+    principal = user or {"sub": "student-1", "role": "student"}
+    app.dependency_overrides[get_current_user] = lambda: principal
+    role = CanonicalRole(principal["role"])
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        principal["sub"], "https://identity.test", f"{principal['sub']}-subject",
+        role, AccountStatus.ACTIVE, role.value,
+    )
     return TestClient(app)
 
 
@@ -30,6 +37,11 @@ def _students_client(user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(students.router, prefix="/students")
     app.dependency_overrides[get_current_user] = lambda: user
+    role = CanonicalRole(user["role"])
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        user["sub"], "https://identity.test", f"{user['sub']}-subject", role,
+        AccountStatus.ACTIVE, role.value,
+    )
     return TestClient(app)
 
 
@@ -51,6 +63,11 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     )
     monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
     monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "record_question_usage_event",
+        lambda **_kwargs: {"idempotency_status": "created"},
+    )
     monkeypatch.setattr(
         questions.question_repo,
         "update_status",
@@ -173,6 +190,15 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
         students.practice_repo,
         "get_mistakes",
         lambda student_id: [{"subject_id": "physics", "topic_id": "forces", "created_at": "2026-06-08T10:00:00+00:00"}],
+    )
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+        },
     )
 
     response = _students_client({"sub": "student-1", "role": "student"}).get(
