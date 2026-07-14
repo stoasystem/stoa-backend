@@ -8,7 +8,7 @@ that same :class:`AuthorizedResource` after an allow decision.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from inspect import isawaitable
 from typing import Awaitable, Callable, Mapping, Protocol
@@ -199,10 +199,13 @@ class BreakGlassEvidence:
     reason: str
     notification_reference: str
     review_reference: str
+    issued_at: datetime
     expires_at: datetime
 
     def valid(self, now: datetime) -> bool:
-        return all(
+        bounded = self.issued_at <= now < self.expires_at
+        short_lived = self.expires_at - self.issued_at <= timedelta(minutes=15)
+        return bounded and short_lived and all(
             value.strip()
             for value in (
                 self.incident_id,
@@ -603,3 +606,24 @@ def _matrix_teacher_facts(
 def evaluate_hidden_resource_case(_resource_id: str) -> SecurityHttpResponse:
     """Return the same safe response for existing-but-hidden and absent identifiers."""
     return safe_error_response(SecurityErrorCode.RESOURCE_NOT_FOUND, "hidden-resource")
+
+
+def project_support_lookup(
+    *,
+    account: Mapping[str, object] | None,
+    binding: Mapping[str, object] | None,
+    denial_code: SecurityErrorCode | str | None,
+    correlation_id: str,
+    support_id: str,
+) -> dict[str, object]:
+    """Return bounded support metadata without copying student learning data."""
+    code = denial_code.value if isinstance(denial_code, SecurityErrorCode) else denial_code
+    return {
+        "accountState": str(
+            (account or {}).get("account_status") or (account or {}).get("status") or "unknown"
+        ),
+        "bindingState": str((binding or {}).get("status") or "unknown"),
+        "denialCode": str(code or "none"),
+        "correlationId": correlation_id,
+        "supportId": support_id,
+    }

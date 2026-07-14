@@ -9,6 +9,17 @@ from botocore.exceptions import ClientError
 from stoa.db.dynamodb import get_table
 
 
+AUTHORIZATION_EVENT_TYPES = frozenset(
+    {
+        "authorization_denied",
+        "authorization_sensitive_allowed",
+        "authorization_probe_aggregated",
+        "break_glass_notification_recorded",
+        "break_glass_review_required",
+    }
+)
+
+
 SAFE_AUDIT_FIELDS = frozenset(
     {
         "event_id",
@@ -67,3 +78,71 @@ def append_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
             raise DuplicateSecurityAuditEvent("security audit event already exists") from exc
         raise
     return row
+
+
+def append_authorization_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
+    """Append one allowlisted policy decision or aggregate probe event."""
+    if event.get("event_type") not in AUTHORIZATION_EVENT_TYPES:
+        raise ValueError("unsupported authorization event type")
+    return append_event(stream_id, event)
+
+
+def append_break_glass_evidence(
+    *,
+    stream_id: str,
+    event_id: str,
+    actor_id: str,
+    resource_type: str,
+    action: str,
+    purpose: str,
+    incident_id: str,
+    notification_reference: str,
+    review_reference: str,
+    correlation_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Record immediate notification and independent-review obligations safely."""
+    required = (
+        event_id,
+        actor_id,
+        resource_type,
+        action,
+        purpose,
+        incident_id,
+        notification_reference,
+        review_reference,
+        correlation_id,
+        created_at,
+    )
+    if any(not str(value).strip() for value in required):
+        raise ValueError("complete break-glass evidence is required")
+    common = {
+        "actor_id": actor_id,
+        "resource_type": resource_type,
+        "action": action,
+        "purpose": purpose,
+        "reason_code": "incident_break_glass",
+        "correlation_id": correlation_id,
+        "created_at": created_at,
+    }
+    notification = append_authorization_event(
+        stream_id,
+        {
+            **common,
+            "event_id": f"{event_id}:notification",
+            "event_type": "break_glass_notification_recorded",
+            "target_id": incident_id,
+            "evidence_reference": notification_reference,
+        },
+    )
+    review = append_authorization_event(
+        stream_id,
+        {
+            **common,
+            "event_id": f"{event_id}:review",
+            "event_type": "break_glass_review_required",
+            "target_id": incident_id,
+            "evidence_reference": review_reference,
+        },
+    )
+    return notification, review

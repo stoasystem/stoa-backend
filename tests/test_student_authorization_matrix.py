@@ -1,5 +1,7 @@
 """T-472-05/06/07 actor-resource-action-purpose matrix with positive controls."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from stoa.security.authorization import (
@@ -9,14 +11,16 @@ from stoa.security.authorization import (
     AuthorizationPurpose,
     AuthorizationSpec,
     AuthorizedResource,
+    BreakGlassEvidence,
     ParentAuthorizationFacts,
     ResourceRef,
     ResourceType,
     TeacherAuthorizationFacts,
     authorize_and_resolve,
+    project_support_lookup,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 
 
 MATRIX = [
@@ -348,3 +352,157 @@ def test_teacher_separate_assignment_requires_exact_resource_action_and_purpose_
         ).allowed
         is False
     )
+
+
+def _admin_resource(*, support_metadata=False, break_glass=None):
+    ref = ResourceRef(
+        ResourceType.STUDENT,
+        "student-1",
+        "student-1",
+        relationship_known=True,
+        safe_support_metadata=support_metadata,
+    )
+    return AuthorizedResource(
+        ref,
+        {"user_id": "student-1", "private_answer": "answer-canary"},
+        AuthorizationFacts(break_glass=break_glass),
+    )
+
+
+def _admin(*grants):
+    return Actor(
+        "admin-1",
+        "https://identity.test",
+        "admin-subject",
+        CanonicalRole.ADMIN,
+        AccountStatus.ACTIVE,
+        "admin",
+        tuple(grants),
+    )
+
+
+def test_admin_role_alone_denies_and_support_lookup_is_bounded():
+    decision = AuthorizationPolicy().evaluate(
+        _admin(),
+        _admin_resource(support_metadata=True),
+        AuthorizationAction.LOOKUP,
+        AuthorizationPurpose.SUPPORT,
+        correlation_id="corr-1",
+    )
+    assert decision.allowed is False
+
+    grant = CapabilityGrant("student_support_lookup", "student:student-1", 2)
+    decision = AuthorizationPolicy().evaluate(
+        _admin(grant),
+        _admin_resource(support_metadata=True),
+        AuthorizationAction.LOOKUP,
+        AuthorizationPurpose.SUPPORT,
+        correlation_id="corr-1",
+    )
+    assert decision.allowed is True
+    projection = project_support_lookup(
+        account={
+            "account_status": "active",
+            "messages": "message-canary",
+            "answers": "answer-canary",
+            "reports": "report-canary",
+            "provider_payload": "provider-canary",
+        },
+        binding={"status": "active", "object_key": "object-key-canary"},
+        denial_code=None,
+        correlation_id="corr-1",
+        support_id="support-1",
+    )
+    assert set(projection) == {
+        "accountState",
+        "bindingState",
+        "denialCode",
+        "correlationId",
+        "supportId",
+    }
+    assert not any("canary" in str(value) for value in projection.values())
+
+
+def test_support_metadata_capability_does_not_grant_student_content():
+    lookup = CapabilityGrant("student_support_lookup", "student:student-1", 1)
+    denied = AuthorizationPolicy().evaluate(
+        _admin(lookup),
+        _admin_resource(support_metadata=False),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.SUPPORT,
+    )
+    assert denied.allowed is False
+    content = CapabilityGrant("student_content_review", "student:student-1", 1)
+    allowed = AuthorizationPolicy().evaluate(
+        _admin(content),
+        _admin_resource(support_metadata=False),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.SUPPORT,
+    )
+    assert allowed.allowed is True
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        AuthorizationAction.UPDATE,
+        AuthorizationAction.DELETE,
+        AuthorizationAction.EXPORT,
+        AuthorizationAction.EXTERNAL_SEND,
+        AuthorizationAction.MANAGE_PRIVILEGE,
+        AuthorizationAction.CURRICULUM_MUTATION,
+    ],
+)
+def test_break_glass_is_short_lived_exact_scope_and_read_only(action):
+    now = datetime.now(UTC)
+    evidence = BreakGlassEvidence(
+        "incident-1",
+        "suspected cross-account exposure",
+        "notification-1",
+        "review-1",
+        now - timedelta(minutes=1),
+        now + timedelta(minutes=4),
+    )
+    grant = CapabilityGrant("student_data_break_glass", "student:student-1", 3)
+    decision = AuthorizationPolicy().evaluate(
+        _admin(grant),
+        _admin_resource(break_glass=evidence),
+        action,
+        AuthorizationPurpose.INCIDENT_BREAK_GLASS,
+    )
+    assert decision.allowed is False
+
+
+def test_break_glass_requires_complete_current_short_lived_evidence():
+    now = datetime.now(UTC)
+    grant = CapabilityGrant("student_data_break_glass", "student:student-1", 3)
+    valid = BreakGlassEvidence(
+        "incident-1",
+        "suspected cross-account exposure",
+        "notification-1",
+        "review-1",
+        now - timedelta(minutes=1),
+        now + timedelta(minutes=4),
+    )
+    long_lived = BreakGlassEvidence(
+        "incident-1",
+        "suspected cross-account exposure",
+        "notification-1",
+        "review-1",
+        now - timedelta(minutes=1),
+        now + timedelta(hours=1),
+    )
+    policy = AuthorizationPolicy(clock=lambda: now)
+    assert policy.evaluate(
+        _admin(grant),
+        _admin_resource(break_glass=valid),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.INCIDENT_BREAK_GLASS,
+        correlation_id="corr-break-glass",
+    ).allowed
+    assert not policy.evaluate(
+        _admin(grant),
+        _admin_resource(break_glass=long_lived),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.INCIDENT_BREAK_GLASS,
+    ).allowed

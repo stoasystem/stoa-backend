@@ -359,6 +359,35 @@ def test_security_audit_projection_never_copies_sensitive_inputs():
     }
 
 
+def test_break_glass_evidence_records_notification_and_independent_review(monkeypatch):
+    from stoa.db.repositories import security_audit_repo
+
+    rows = []
+
+    class Table:
+        def put_item(self, **kwargs):
+            rows.append(kwargs["Item"])
+
+    monkeypatch.setattr(security_audit_repo, "get_table", lambda: Table())
+    notification, review = security_audit_repo.append_break_glass_evidence(
+        stream_id="incident-1",
+        event_id="event-1",
+        actor_id="admin-1",
+        resource_type="student",
+        action="read",
+        purpose="incident_break_glass",
+        incident_id="incident-1",
+        notification_reference="notify-1",
+        review_reference="review-1",
+        correlation_id="corr-1",
+        created_at="2026-07-15T10:00:00Z",
+    )
+    assert notification["event_type"] == "break_glass_notification_recorded"
+    assert review["event_type"] == "break_glass_review_required"
+    assert len(rows) == 2
+    assert "token-canary" not in repr(rows)
+
+
 def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monkeypatch):
     from stoa.services import privileged_identity_service
 
