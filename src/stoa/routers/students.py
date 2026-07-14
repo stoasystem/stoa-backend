@@ -5,54 +5,20 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Optional
 
-import boto3
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from stoa.config import Settings, get_settings
-from stoa.db.repositories import practice_repo, question_repo, user_repo
+from stoa.db.repositories import practice_repo, question_repo
 from stoa.db.dynamodb import get_table
-from stoa.deps import get_current_user, require_role
+from stoa.security.authorization import AuthorizationAction, AuthorizedResource
+from stoa.security.route_authorization import (
+    STUDENT_CONTENT_READ,
+    STUDENT_SELF,
+    authorized_student_dependency,
+)
 from stoa.services import learning_profile_service
 
 router = APIRouter()
-
-
-def _resolve_profile(user: dict, settings: Settings) -> dict | None:
-    """Look up the DynamoDB profile for the current JWT user.
-
-    Cognito access tokens carry the internal UUID as `sub`/`username`.
-    DynamoDB profiles are indexed by email (GSI-Email). We call
-    admin_get_user once to get the email, then do a GSI lookup.
-    Profiles created via the register endpoint also store cognito_sub
-    once available (progressive enrichment).
-    """
-    user_id = user.get("sub", "")
-
-    # 1. Try direct lookup by user_id (works for users created via register endpoint
-    #    where we used uuid.uuid4() — may miss Cognito-only users)
-    profile = user_repo.get_user(user_id)
-    if profile:
-        return profile
-
-    # 2. Resolve email via Cognito admin API, then look up by GSI
-    cognito_username = user.get("username", user_id)
-    try:
-        cognito = boto3.client("cognito-idp", region_name=settings.aws_region)
-        data = cognito.admin_get_user(
-            UserPoolId=settings.cognito_user_pool_id,
-            Username=cognito_username,
-        )
-        attrs = {a["Name"]: a["Value"] for a in data.get("UserAttributes", [])}
-        email = attrs.get("email", "")
-    except ClientError:
-        return None
-
-    if not email:
-        return None
-
-    return user_repo.get_user_by_email(email)
 
 
 # ---------------------------------------------------------------------------
@@ -83,14 +49,15 @@ class UpdateStudentProfileRequest(BaseModel):
 
 @router.get("/me/profile", response_model=StudentProfileResponse)
 async def get_my_profile(
-    user: dict = Depends(require_role("student")),
-    settings: Settings = Depends(get_settings),
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
+        )
+    ),
 ):
     """Return the current student's learning profile."""
-    user_id = user["sub"]
-    profile = _resolve_profile(user, settings)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
+    user_id = authorized.ref.student_id
+    profile = authorized.value
     now = datetime.now(timezone.utc).isoformat()
     return StudentProfileResponse(
         id=profile.get("user_id", user_id),
@@ -107,14 +74,15 @@ async def get_my_profile(
 @router.patch("/me/profile", response_model=StudentProfileResponse)
 async def update_my_profile(
     body: UpdateStudentProfileRequest,
-    user: dict = Depends(require_role("student")),
-    settings: Settings = Depends(get_settings),
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.UPDATE, purposes=STUDENT_SELF, self_route=True
+        )
+    ),
 ):
     """Update the current student's learning profile."""
-    profile = _resolve_profile(user, settings)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    user_id = profile.get("user_id", user["sub"])
+    profile = authorized.value
+    user_id = authorized.ref.student_id
 
     now = datetime.now(timezone.utc).isoformat()
     update_expr_parts = ["updated_at = :u"]
@@ -210,18 +178,14 @@ class LearningProfileResponse(BaseModel):
 
 @router.get("/{student_id}/summary", response_model=SummaryResponse)
 async def get_summary(
-    student_id: str,
-    user: dict = Depends(get_current_user),
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
+        )
+    ),
 ):
     """Return aggregated learning stats for a student (student, parent, admin)."""
-    role = user.get("role", "")
-    uid = user["sub"]
-
-    # Students can only see their own summary; parents and admins can see any
-    if role == "student" and uid != student_id:
-        raise HTTPException(status_code=403, detail="Cannot view another student's summary")
-    if role not in ("student", "parent", "admin"):
-        raise HTTPException(status_code=403, detail="Role not permitted")
+    student_id = authorized.ref.student_id
 
     result = question_repo.list_by_student(student_id, limit=500)
     questions = result.get("Items", [])
@@ -246,17 +210,14 @@ async def get_summary(
 
 @router.get("/{student_id}/learning-profile", response_model=LearningProfileResponse)
 async def get_learning_profile(
-    student_id: str,
-    user: dict = Depends(get_current_user),
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
+        )
+    ),
 ):
     """Return subject-level activity and topic seeds for a student."""
-    role = user.get("role", "")
-    uid = user["sub"]
-
-    if role == "student" and uid != student_id:
-        raise HTTPException(status_code=403, detail="Cannot view another student's profile")
-    if role not in ("student", "parent", "admin"):
-        raise HTTPException(status_code=403, detail="Role not permitted")
+    student_id = authorized.ref.student_id
 
     questions = question_repo.list_by_student(student_id, limit=500).get("Items", [])
     mistakes = practice_repo.get_mistakes(student_id)
@@ -269,19 +230,16 @@ async def get_learning_profile(
 
 @router.get("/{student_id}/questions", response_model=QuestionListResponse)
 async def list_questions(
-    student_id: str,
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
+        )
+    ),
     limit: int = Query(default=20, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(get_current_user),
 ):
     """Paginated question history for a student."""
-    role = user.get("role", "")
-    uid = user["sub"]
-
-    if role == "student" and uid != student_id:
-        raise HTTPException(status_code=403, detail="Cannot view another student's questions")
-    if role not in ("student", "parent", "teacher", "admin"):
-        raise HTTPException(status_code=403, detail="Role not permitted")
+    student_id = authorized.ref.student_id
 
     last_key = None
     if next_token:

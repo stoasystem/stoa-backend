@@ -71,6 +71,8 @@ class ResourceRef:
     resource_id: str
     student_id: str
     owner_id: str | None = None
+    question_id: str | None = None
+    session_id: str | None = None
     relationship_known: bool = False
     safe_support_metadata: bool = False
 
@@ -259,7 +261,12 @@ class PolicyDecision:
 
 class AuthorizationFactRepository(Protocol):
     async def facts_for(
-        self, actor: Actor, resource: ResourceRef, action: AuthorizationAction, purpose: AuthorizationPurpose
+        self,
+        actor: Actor,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        resource_value: Mapping[str, object],
     ) -> AuthorizationFacts: ...
 
 
@@ -272,6 +279,7 @@ class CurrentAuthorizationFactRepository:
         resource: ResourceRef,
         action: AuthorizationAction,
         purpose: AuthorizationPurpose,
+        resource_value: Mapping[str, object],
     ) -> AuthorizationFacts:
         if actor.role is CanonicalRole.PARENT:
             from stoa.db.repositories import user_repo
@@ -287,12 +295,10 @@ class CurrentAuthorizationFactRepository:
         if actor.role is CanonicalRole.TEACHER:
             from stoa.db.repositories import question_repo, user_repo
 
-            question = (
-                question_repo.get_question(resource.resource_id)
-                if resource.resource_type is ResourceType.QUESTION
-                else None
-            )
-            session_id = str((question or {}).get("session_id") or "")
+            question = resource_value if resource.resource_type is ResourceType.QUESTION else None
+            if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
+                question = question_repo.get_question(resource.question_id)
+            session_id = str(resource.session_id or (question or {}).get("session_id") or "")
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(
                     question=question,
@@ -344,7 +350,7 @@ class AuthorizationPolicy:
                 )
 
         result = SecurityErrorCode.ACTION_NOT_ALLOWED
-        if not allowed and not resource.relationship_known:
+        if not allowed and not _relationship_known_to_actor(actor, authorized_resource):
             result = SecurityErrorCode.RESOURCE_NOT_FOUND
         if allowed:
             result = SecurityErrorCode.ACTION_NOT_ALLOWED
@@ -429,7 +435,9 @@ async def authorize_and_resolve(
             resolved = AuthorizedResource(
                 ResourceRef(spec.resource_type, resource_id, student_id), loaded
             )
-        facts = fact_repository.facts_for(actor, resolved.ref, spec.action, spec.purpose)
+        facts = fact_repository.facts_for(
+            actor, resolved.ref, spec.action, spec.purpose, resolved.value
+        )
         if isawaitable(facts):
             facts = await facts
         resolved = AuthorizedResource(resolved.ref, resolved.value, facts)
@@ -458,6 +466,37 @@ def _active_account(
         and account.get("role") == role.value
         and (account.get("account_status") or account.get("status")) == "active"
     )
+
+
+def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> bool:
+    """Separate existence hiding from a known formal relationship or scoped role."""
+    if resource.ref.relationship_known:
+        return True
+    if actor.role is CanonicalRole.STUDENT:
+        return actor.user_id == resource.ref.student_id
+    if actor.role is CanonicalRole.ADMIN:
+        return True
+    if actor.role is CanonicalRole.PARENT and resource.facts.parent:
+        rows = (resource.facts.parent.forward, resource.facts.parent.reverse)
+        return any(
+            row
+            and row.get("parent_id") == actor.user_id
+            and row.get("student_id") == resource.ref.student_id
+            for row in rows
+        )
+    if actor.role is CanonicalRole.TEACHER and resource.facts.teacher:
+        facts = resource.facts.teacher
+        question = facts.question or {}
+        assignment = facts.assignment or {}
+        return bool(
+            question.get("teacher_id") == actor.user_id
+            or question.get("dispatched_teacher_id") == actor.user_id
+            or (
+                assignment.get("teacher_id") == actor.user_id
+                and assignment.get("student_id") == resource.ref.student_id
+            )
+        )
+    return False
 
 
 def _expired(value: object, now: datetime) -> bool:
