@@ -12,6 +12,17 @@ from stoa.db.repositories import question_repo, user_repo
 from stoa.db.dynamodb import get_table
 from stoa.deps import require_role
 from stoa.models.question import QuestionStatus
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizedResource,
+)
+from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.route_authorization import (
+    authorized_question_dependency,
+    teacher_capability_dependency,
+    teacher_portal_self_dependency,
+)
 from stoa.services import (
     ai_teacher_tools_service,
     notification_service,
@@ -79,14 +90,13 @@ def _now() -> str:
 
 @router.get("/queue")
 async def get_queue(
-    user: dict = Depends(require_role("teacher", "admin")),
+    actor: Actor = Depends(teacher_portal_self_dependency()),
 ):
     """Return the list of questions awaiting teacher intervention."""
     now = _now()
     questions = _list_escalated_questions()
-    viewer_id = user["sub"]
-    role = user.get("role")
-    if role != "admin":
+    viewer_id = actor.user_id
+    if actor.role is not CanonicalRole.ADMIN:
         questions = [
             item
             for item in questions
@@ -99,7 +109,12 @@ async def get_queue(
 @router.post("/dispatch/preview")
 async def preview_dispatch(
     body: DispatchPreviewRequest,
-    user: dict = Depends(require_role("teacher", "admin")),
+    _actor: Actor = Depends(
+        teacher_capability_dependency(
+            capability_purpose=AuthorizationPurpose.TEACHER_DISPATCH,
+            action=AuthorizationAction.READ,
+        )
+    ),
 ):
     """Preview candidate teacher dispatch without mutating state."""
     item = question_repo.get_question(body.question_id)
@@ -113,7 +128,12 @@ async def preview_dispatch(
 @router.post("/dispatch/run")
 async def run_dispatch(
     body: DispatchRunRequest,
-    user: dict = Depends(require_role("admin")),
+    _actor: Actor = Depends(
+        teacher_capability_dependency(
+            capability_purpose=AuthorizationPurpose.TEACHER_DISPATCH,
+            action=AuthorizationAction.ASSIGN,
+        )
+    ),
 ):
     """Run automatic dispatch for one escalated question."""
     result = teacher_dispatch_service.dispatch_question(body.question_id, now=_now())
@@ -128,7 +148,12 @@ async def run_dispatch(
 
 @router.post("/dispatch/reassign-stale")
 async def reassign_stale_dispatches(
-    user: dict = Depends(require_role("admin")),
+    _actor: Actor = Depends(
+        teacher_capability_dependency(
+            capability_purpose=AuthorizationPurpose.TEACHER_DISPATCH,
+            action=AuthorizationAction.ASSIGN,
+        )
+    ),
 ):
     """Reassign stale dispatch attempts that missed their accept deadline."""
     return teacher_dispatch_service.reassign_timed_out_dispatches(now=_now())
@@ -137,18 +162,21 @@ async def reassign_stale_dispatches(
 @router.post("/questions/{question_id}/takeover", response_model=TakeoverResponse)
 async def takeover(
     question_id: str,
-    user: dict = Depends(require_role("teacher")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.CLAIM,
+            purposes={CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP},
+        )
+    ),
 ):
     """Lock a question to this teacher and start a session."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
+    item = dict(authorized.value)
     if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Question is already taken by a teacher")
     if item.get("status") != QuestionStatus.ESCALATED.value:
         raise HTTPException(status_code=409, detail="Question is not awaiting teacher takeover")
 
-    teacher_id = user["sub"]
+    teacher_id = authorized.facts.teacher.teacher_account["user_id"]
     now = _now()
     if _is_dispatch_restricted_to_other_teacher(item, teacher_id, now):
         raise HTTPException(status_code=409, detail="Question is dispatched to another teacher")
@@ -192,14 +220,15 @@ async def takeover(
 async def reply(
     question_id: str,
     body: ReplyRequest,
-    user: dict = Depends(require_role("teacher")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.RESPOND,
+            purposes={CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP},
+        )
+    ),
 ):
     """Post the teacher's reply to a question they have taken over."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
-    if item.get("teacher_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="You have not taken over this question")
+    item = dict(authorized.value)
     if item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
     if item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
@@ -223,7 +252,8 @@ async def reply(
         QuestionStatus.TEACHER_ACTIVE.value,
         **reply_fields,
     )
-    notification_service.emit_teacher_reply(question=item, teacher_id=user["sub"])
+    teacher_id = str((authorized.facts.teacher.teacher_account or {})["user_id"])
+    notification_service.emit_teacher_reply(question=item, teacher_id=teacher_id)
     return ReplyResponse(
         question_id=question_id,
         teacher_response=reply_fields["teacher_response"],
@@ -241,14 +271,15 @@ async def reply(
 @router.put("/questions/{question_id}/resolve", status_code=status.HTTP_200_OK)
 async def resolve(
     question_id: str,
-    user: dict = Depends(require_role("teacher")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.RESOLVE,
+            purposes={CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP},
+        )
+    ),
 ):
     """Mark a question as resolved and close the teacher session."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
-    if item.get("teacher_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="You have not taken over this question")
+    item = dict(authorized.value)
     if item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
 

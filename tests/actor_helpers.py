@@ -17,23 +17,27 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 
 def actor_from_user(user: dict) -> Actor:
     role = CanonicalRole(user["role"])
-    capabilities = user.get("grantCapabilities") or (
-        "learning_assignment_manager",
-        "assignment_automation_preview",
-        "assignment_automation_execute",
-        "student_content_review",
-    )
+    capabilities = user.get("grantCapabilities")
+    if capabilities is None and role is CanonicalRole.ADMIN:
+        capabilities = (
+            "learning_assignment_manager",
+            "assignment_automation_preview",
+            "assignment_automation_execute",
+            "student_content_review",
+        )
+    capabilities = capabilities or ()
     grants = (
-        tuple(CapabilityGrant(name, "student:student-1", 1) for name in capabilities)
-        if role is CanonicalRole.ADMIN
-        else ()
+        tuple(
+            CapabilityGrant(name, str(user.get("grantScope") or "student:student-1"), 1)
+            for name in capabilities
+        )
     )
     return Actor(
         str(user["sub"]),
         "https://identity.test",
         f"{user['sub']}-subject",
         role,
-        AccountStatus.ACTIVE,
+        AccountStatus(user.get("accountStatus") or "active"),
         role.value,
         grants,
         tuple(
@@ -75,9 +79,17 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                     )
                 )
             if current_actor.role is CanonicalRole.TEACHER and user.get("assigned", True):
+                question = (
+                    _value
+                    if resource.resource_type.value == "question"
+                    else None
+                )
                 return AuthorizationFacts(
                     teacher=TeacherAuthorizationFacts(
-                        assignment={
+                        question=question,
+                        assignment=None
+                        if question
+                        else {
                             "teacher_id": current_actor.user_id,
                             "student_id": resource.student_id,
                             "status": "active",
@@ -88,7 +100,7 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                         teacher_account={
                             "user_id": current_actor.user_id,
                             "role": "teacher",
-                            "account_status": "active",
+                            "account_status": current_actor.account_status.value,
                         },
                         student_account=student,
                     )

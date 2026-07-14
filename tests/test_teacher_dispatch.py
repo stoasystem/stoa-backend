@@ -1,15 +1,15 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
 from stoa.routers import admin, teachers
 from stoa.services import teacher_dispatch_service
+from actor_helpers import install_actor_overrides
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -203,7 +203,7 @@ def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch
         **QUESTION,
         "dispatch_status": "dispatched",
         "dispatched_teacher_id": "teacher-1",
-        "dispatch_deadline_at": "2026-06-15T10:15:00+00:00",
+        "dispatch_deadline_at": "2099-06-15T10:15:00+00:00",
     }
 
     class FakeTable:
@@ -222,7 +222,7 @@ def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch
     other = _app(teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}).post(
         "/teachers/questions/question-1/takeover"
     )
-    assert other.status_code == 409
+    assert other.status_code == 404
 
     mine = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}).post(
         "/teachers/questions/question-1/takeover"
@@ -231,6 +231,66 @@ def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch
     assert updates[0][2]["dispatch_status"] == "accepted"
     assert updates[0][2]["dispatch_accepted_at"] == "2026-06-15T10:05:00+00:00"
     assert table_items[0]["teacher_id"] == "teacher-1"
+
+
+def test_teacher_queue_projects_metadata_without_student_content(monkeypatch):
+    monkeypatch.setattr(
+        teachers,
+        "_list_escalated_questions",
+        lambda: [{**QUESTION, "content": "private answer", "student_profile": {"name": "Hidden"}}],
+    )
+    response = _app(
+        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
+    ).get("/teachers/queue")
+
+    assert response.status_code == 200
+    serialized = str(response.json())
+    assert "private answer" not in serialized
+    assert "Hidden" not in serialized
+    assert "student_id" not in serialized
+
+
+def test_dispatch_controls_require_exact_local_capability(monkeypatch):
+    monkeypatch.setattr(teachers.question_repo, "get_question", lambda _id: dict(QUESTION))
+    monkeypatch.setattr(
+        teachers.teacher_dispatch_service,
+        "plan_dispatch",
+        lambda item, now: {"questionId": item["question_id"], "status": "ready"},
+    )
+    plain = _app(
+        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
+    ).post("/teachers/dispatch/preview", json={"question_id": "question-1"})
+    operator = _app(
+        teachers.router,
+        "/teachers",
+        {
+            "sub": "teacher-1",
+            "role": "teacher",
+            "grantCapabilities": ["teacher_dispatch_operator"],
+            "grantScope": "global",
+        },
+    ).post("/teachers/dispatch/preview", json={"question_id": "question-1"})
+
+    assert plain.status_code == 403
+    assert operator.status_code == 200
+
+
+def test_suspended_teacher_cannot_take_over_and_mutation_does_not_run(monkeypatch):
+    updates = []
+    monkeypatch.setattr(teachers.question_repo, "get_question", lambda _id: dict(QUESTION))
+    monkeypatch.setattr(
+        teachers.question_repo,
+        "update_status",
+        lambda *args, **kwargs: updates.append((args, kwargs)),
+    )
+    response = _app(
+        teachers.router,
+        "/teachers",
+        {"sub": "teacher-1", "role": "teacher", "accountStatus": "suspended"},
+    ).post("/teachers/questions/question-1/takeover")
+
+    assert response.status_code == 404
+    assert updates == []
 
 
 def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):

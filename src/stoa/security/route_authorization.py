@@ -277,6 +277,94 @@ def student_actor_dependency(
     return dependency
 
 
+def teacher_portal_self_dependency():
+    """Authorize the active teacher/admin Actor against their own portal record."""
+
+    async def resolve(resource_id: str):
+        return {"owner_id": resource_id}
+
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        spec = AuthorizationSpec(
+            ResourceType.TEACHER_PORTAL,
+            AuthorizationAction.READ,
+            AuthorizationPurpose.SELF_SERVICE,
+            resolve,
+        )
+        resource = AuthorizedResource(
+            ResourceRef(
+                ResourceType.TEACHER_PORTAL,
+                actor.user_id,
+                actor.user_id,
+                owner_id=actor.user_id,
+                relationship_known=True,
+            ),
+            {"owner_id": actor.user_id},
+        )
+        decision = AuthorizationPolicy().evaluate(
+            actor, resource, spec.action, spec.purpose
+        )
+        if not decision.allowed:
+            from stoa.security.errors import SecurityErrorCode
+
+            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED))
+        return actor
+
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.TEACHER_PORTAL,
+            AuthorizationAction.READ,
+            AuthorizationPurpose.SELF_SERVICE,
+            resolve,
+        ),
+    )
+    return dependency
+
+
+def teacher_capability_dependency(
+    *,
+    capability_purpose: AuthorizationPurpose,
+    action: AuthorizationAction,
+):
+    """Require the exact current local grant for a broader teacher operation."""
+
+    async def resolve(resource_id: str):
+        return {"owner_id": resource_id}
+
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        resource = AuthorizedResource(
+            ResourceRef(
+                ResourceType.TEACHER_PORTAL,
+                actor.user_id,
+                actor.user_id,
+                owner_id=actor.user_id,
+                relationship_known=True,
+            ),
+            {"owner_id": actor.user_id},
+        )
+        decision = AuthorizationPolicy().evaluate(
+            actor, resource, action, capability_purpose
+        )
+        if not decision.allowed:
+            from stoa.security.errors import SecurityErrorCode
+
+            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED))
+        return actor
+
+    dependency.required_capability = {  # type: ignore[attr-defined]
+        AuthorizationPurpose.TEACHER_DISPATCH: "teacher_dispatch_operator",
+        AuthorizationPurpose.AI_TEACHER_TOOLS: "ai_teacher_tools_operator",
+    }[capability_purpose]
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.TEACHER_PORTAL,
+            action,
+            capability_purpose,
+            resolve,
+        ),
+    )
+    return dependency
+
+
 async def authorize_conversation_resource(
     *,
     conversation_id: str,

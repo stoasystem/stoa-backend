@@ -213,21 +213,35 @@ def reassign_timed_out_dispatches(
 
 
 def decorate_queue_item(question: dict[str, Any], *, viewer_id: str | None = None, now: str | None = None) -> dict[str, Any]:
-    """Attach role-safe dispatch and SLA visibility to a teacher queue item."""
+    """Project bounded queue metadata; never copy student content/profile fields."""
     timestamp = now or _now()
-    item = dict(question)
-    dispatch_status = str(item.get("dispatch_status") or "unassigned")
-    assigned_teacher = item.get("dispatched_teacher_id")
-    deadline = item.get("dispatch_deadline_at")
-    queue_age_seconds = _duration_from(item.get("queue_visible_at") or item.get("teacher_requested_at"), timestamp)
+    dispatch_status = str(question.get("dispatch_status") or "unassigned")
+    assigned_teacher = question.get("dispatched_teacher_id")
+    deadline = question.get("dispatch_deadline_at")
+    queue_age_seconds = _duration_from(
+        question.get("queue_visible_at") or question.get("teacher_requested_at"),
+        timestamp,
+    )
     stale = dispatch_status == "dispatched" and _deadline_expired(deadline, timestamp)
+    item = {
+        "question_id": str(question.get("question_id") or ""),
+        "subject": str(question.get("subject") or ""),
+        "status": str(question.get("status") or ""),
+        "queue_visible_at": question.get("queue_visible_at"),
+        "teacher_requested_at": question.get("teacher_requested_at"),
+        "dispatch_status": dispatch_status,
+        "dispatched_teacher_id": assigned_teacher,
+        "dispatch_deadline_at": deadline,
+        "dispatch_attempt_count": int(question.get("dispatch_attempt_count") or 0),
+        "dispatch_no_candidate_reason": question.get("dispatch_no_candidate_reason"),
+    }
     item["dispatch"] = {
         "status": "stale" if stale else dispatch_status,
         "assignedTeacherId": assigned_teacher,
         "assignedToMe": bool(viewer_id and assigned_teacher == viewer_id),
         "deadlineAt": deadline,
-        "attemptCount": int(item.get("dispatch_attempt_count") or 0),
-        "noCandidateReason": item.get("dispatch_no_candidate_reason"),
+        "attemptCount": item["dispatch_attempt_count"],
+        "noCandidateReason": item["dispatch_no_candidate_reason"],
     }
     item["sla"] = {
         "queueAgeSeconds": queue_age_seconds,

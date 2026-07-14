@@ -35,6 +35,9 @@ class ResourceType(StrEnum):
     REPORT = "report"
     TEACHER_ASSIGNMENT = "teacher_assignment"
     PARENT_BINDING = "parent_binding"
+    TEACHER_PORTAL = "teacher_portal"
+    TEACHER_HELP_REQUEST = "teacher_help_request"
+    AI_TEACHER_DRAFT = "ai_teacher_draft"
 
 
 class AuthorizationAction(StrEnum):
@@ -57,6 +60,8 @@ class AuthorizationPurpose(StrEnum):
     SELF_SERVICE = "self_service"
     PARENT_OVERSIGHT = "parent_oversight"
     TEACHER_HELP = "teacher_help"
+    TEACHER_DISPATCH = "teacher_dispatch"
+    AI_TEACHER_TOOLS = "ai_teacher_tools"
     LEARNING_ASSIGNMENT = "learning_assignment"
     ASSIGNMENT_AUTOMATION_PREVIEW = "assignment_automation_preview"
     ASSIGNMENT_AUTOMATION_EXECUTE = "assignment_automation_execute"
@@ -160,17 +165,6 @@ class TeacherAuthorizationFacts:
         question = self.question
         if not question or question.get("student_id") != resource.student_id:
             return False
-        current_teacher = question.get("teacher_id") or question.get("dispatched_teacher_id")
-        if current_teacher != actor_id:
-            return False
-        if question.get("dispatch_status") in {"timed_out", "reassigned", "revoked"}:
-            return False
-        if question.get("dispatch_status") == "dispatched" and _expired(
-            question.get("dispatch_deadline_at"), now
-        ):
-            return False
-        if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
-            return False
         linked_ids = {
             str(question.get("question_id") or ""),
             str(question.get("conversation_id") or ""),
@@ -179,6 +173,8 @@ class TeacherAuthorizationFacts:
         if resource.resource_type not in {
             ResourceType.QUESTION,
             ResourceType.CONVERSATION,
+            ResourceType.TEACHER_HELP_REQUEST,
+            ResourceType.AI_TEACHER_DRAFT,
         } or resource.resource_id not in linked_ids:
             return False
         if action not in {
@@ -188,6 +184,40 @@ class TeacherAuthorizationFacts:
             AuthorizationAction.CLAIM,
         }:
             return False
+        dispatch_status = str(question.get("dispatch_status") or "unassigned")
+        if action is AuthorizationAction.CLAIM:
+            if resource.resource_type is not ResourceType.QUESTION:
+                return False
+            if question.get("status") != "escalated":
+                return False
+            if actor_id in _string_set(question.get("previous_dispatch_teacher_ids")):
+                return False
+            if dispatch_status == "dispatched":
+                return (
+                    question.get("dispatched_teacher_id") == actor_id
+                    and not _expired(question.get("dispatch_deadline_at"), now)
+                )
+            return dispatch_status in {"", "unassigned", "pending"}
+
+        if dispatch_status in {"timed_out", "reassigned", "revoked"}:
+            return False
+        if action in {AuthorizationAction.RESPOND, AuthorizationAction.RESOLVE}:
+            if question.get("teacher_id") != actor_id:
+                return False
+            if question.get("status") not in {"teacher_active", "resolved"}:
+                return False
+        else:
+            current_teacher = question.get("teacher_id") or question.get(
+                "dispatched_teacher_id"
+            )
+            if current_teacher != actor_id:
+                return False
+            if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
+                return False
+            if dispatch_status == "dispatched" and _expired(
+                question.get("dispatch_deadline_at"), now
+            ):
+                return False
         if self.session:
             session = self.session
             if session.get("teacher_id") != actor_id or session.get("student_id") != resource.student_id:
@@ -338,7 +368,32 @@ class AuthorizationPolicy:
         evidence: str | None = None
 
         if actor.can_authorize:
-            if actor.role is CanonicalRole.STUDENT:
+            if (
+                purpose is AuthorizationPurpose.SELF_SERVICE
+                and resource.resource_type is ResourceType.TEACHER_PORTAL
+                and resource.owner_id == actor.user_id
+                and actor.role in {CanonicalRole.TEACHER, CanonicalRole.ADMIN}
+            ):
+                allowed = True
+            elif purpose in {
+                AuthorizationPurpose.TEACHER_DISPATCH,
+                AuthorizationPurpose.AI_TEACHER_TOOLS,
+            }:
+                capability = {
+                    AuthorizationPurpose.TEACHER_DISPATCH: "teacher_dispatch_operator",
+                    AuthorizationPurpose.AI_TEACHER_TOOLS: "ai_teacher_tools_operator",
+                }[purpose]
+                allowed = bool(
+                    _matching_grant(
+                        actor,
+                        capability,
+                        resource,
+                        action,
+                        purpose,
+                        allow_global=True,
+                    )
+                )
+            elif actor.role is CanonicalRole.STUDENT:
                 allowed = actor.user_id == resource.student_id and purpose is AuthorizationPurpose.SELF_SERVICE
             elif actor.role is CanonicalRole.PARENT and authorized_resource.facts.parent:
                 allowed = purpose is AuthorizationPurpose.PARENT_OVERSIGHT and authorized_resource.facts.parent.matches(
@@ -547,13 +602,21 @@ def _matching_grant(
     resource: ResourceRef,
     action: AuthorizationAction,
     purpose: AuthorizationPurpose,
+    *,
+    allow_global: bool = False,
 ):
     return next(
         (
             grant
             for grant in actor.current_grants
             if grant.capability == capability
-            and _scope_matches(grant.scope, resource, action, purpose, allow_global=False)
+            and _scope_matches(
+                grant.scope,
+                resource,
+                action,
+                purpose,
+                allow_global=allow_global,
+            )
         ),
         None,
     )

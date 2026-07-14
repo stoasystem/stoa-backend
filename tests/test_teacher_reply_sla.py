@@ -1,20 +1,15 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_actor, get_current_user
 from stoa.routers import admin, questions, teachers
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.route_authorization import get_authorization_fact_repository
+from actor_helpers import install_actor_overrides
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
-    app.dependency_overrides[get_current_user] = lambda: user
-    role = CanonicalRole(user["role"])
-    app.dependency_overrides[get_actor] = lambda: Actor(
-        user["sub"], "https://identity.test", f"{user['sub']}-subject", role,
-        AccountStatus.ACTIVE, role.value,
-    )
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -152,11 +147,45 @@ def test_teacher_reply_requires_owner_and_active_state(monkeypatch):
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"})
     response = client.post("/teachers/questions/question-1/reply", json={"content": "Safe reply"})
-    assert response.status_code == 403
+    assert response.status_code == 404
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post("/teachers/questions/question-1/reply", json={"content": "Safe reply"})
     assert response.status_code == 409
+
+
+def test_teacher_reply_authorization_outage_returns_503_before_mutation(monkeypatch):
+    updates = []
+    monkeypatch.setattr(
+        teachers.question_repo,
+        "get_question",
+        lambda question_id: {
+            "question_id": question_id,
+            "student_id": "student-1",
+            "status": "teacher_active",
+            "teacher_id": "teacher-1",
+        },
+    )
+    monkeypatch.setattr(
+        teachers.question_repo,
+        "update_status",
+        lambda *args, **kwargs: updates.append((args, kwargs)),
+    )
+
+    class Outage:
+        async def facts_for(self, *_args, **_kwargs):
+            raise RuntimeError("repository unavailable")
+
+    app = FastAPI()
+    app.include_router(teachers.router, prefix="/teachers")
+    install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
+    app.dependency_overrides[get_authorization_fact_repository] = Outage
+    response = TestClient(app).post(
+        "/teachers/questions/question-1/reply", json={"content": "Safe reply"}
+    )
+
+    assert response.status_code == 503
+    assert updates == []
 
 
 def test_teacher_takeover_records_takeover_sla(monkeypatch):
