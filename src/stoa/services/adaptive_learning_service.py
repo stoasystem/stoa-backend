@@ -16,7 +16,6 @@ from stoa.db.repositories import (
     ai_teacher_tools_repo,
     practice_repo,
     question_repo,
-    user_repo,
 )
 from stoa.services import (
     ai_teacher_tools_service,
@@ -1791,50 +1790,6 @@ def _confidence_bucket(score: int) -> str:
     if score >= 60:
         return "medium"
     return "low"
-
-
-def _require_student_visible(student_id: str, user: dict[str, Any]) -> None:
-    role = str(user.get("role") or "")
-    if role == "student" and user.get("sub") == student_id:
-        return
-    if role in {"teacher", "admin"}:
-        return
-    if role == "parent" and _parent_can_view(student_id, user):
-        return
-    raise HTTPException(status_code=403, detail="Student is not visible to this user")
-
-
-def _parent_can_view(student_id: str, user: dict[str, Any]) -> bool:
-    parent_id = str(user.get("sub") or "")
-    profile = user_repo.get_user(student_id)
-    if profile and profile.get("parent_id") == parent_id:
-        return True
-    return any(
-        binding.get("student_id") == student_id and binding.get("status", "active") == "active"
-        for binding in user_repo.list_parent_student_bindings(parent_id)
-    )
-
-
-def _assignment_visible(item: dict[str, Any], user: dict[str, Any]) -> bool:
-    try:
-        _require_student_visible(str(item.get("student_id") or ""), user)
-    except HTTPException:
-        return False
-    if item.get("status") == "draft" and not _can_manage_assignments(user):
-        return False
-    if item.get("status") == "archived" and not _can_manage_assignments(user):
-        return False
-    return True
-
-
-def _require_student_assignment_owner(item: dict[str, Any], user: dict[str, Any]) -> None:
-    if user.get("role") != "student" or user.get("sub") != item.get("student_id"):
-        raise HTTPException(status_code=403, detail="Only the assigned student can update assignment progress")
-
-
-def _require_teacher_or_admin(user: dict[str, Any]) -> None:
-    if user.get("role") not in {"teacher", "admin"}:
-        raise HTTPException(status_code=403, detail="Teacher or admin access required")
 
 
 def _can_manage_assignments(user: dict[str, Any]) -> bool:

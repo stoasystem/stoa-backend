@@ -313,12 +313,6 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
 def test_teacher_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
     snapshots, assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(
-        adaptive_learning_service.user_repo,
-        "get_user",
-        lambda user_id: {"user_id": user_id, "role": "student", "parent_id": "parent-1"},
-    )
-    monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
     assignments["assignment-1"] = {
         "assignment_id": "assignment-1",
         "student_id": "student-1",
@@ -966,12 +960,6 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
             "answer_key": [{"answer": "3"}],
         },
     )
-    monkeypatch.setattr(
-        adaptive_learning_service.user_repo,
-        "get_user",
-        lambda user_id: {"user_id": user_id, "role": "student", "parent_id": "parent-1"},
-    )
-    monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
     policy = {
         "policyId": "policy-subject-1",
         "autonomyLevel": "teacher_approved_batch",
@@ -1114,13 +1102,6 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
 def test_adaptive_locale_metadata_does_not_change_canonical_values(monkeypatch):
     _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(
-        adaptive_learning_service.user_repo,
-        "get_user",
-        lambda user_id: {"user_id": user_id, "role": "student", "parent_id": "parent-1"},
-    )
-    monkeypatch.setattr(adaptive_learning_service.user_repo, "list_parent_student_bindings", lambda parent_id: [])
-
     german = _app({"sub": "student-1", "role": "student", "preferredLocale": "de"}).get(
         "/adaptive/students/me/memory"
     )
