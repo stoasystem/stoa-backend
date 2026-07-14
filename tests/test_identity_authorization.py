@@ -114,3 +114,26 @@ def test_authorization_contract_requires_classification_and_resolver():
             purpose=AuthorizationPurpose.TEACHER_HELP,
             resolver=None,
         )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing-binding",
+        "multiple-groups",
+        "group-role-mismatch",
+        "revoked-current-grant",
+        "authorization-store-outage",
+    ],
+    ids=lambda value: f"T-472-03-identity-{value}",
+)
+def test_identity_authorization_future_fail_closed_cases(case):
+    """Red executable surface for Plans 02 and 05; no fallback can become allow."""
+    from stoa.security.identity_resolution import evaluate_identity_case
+
+    decision = evaluate_identity_case(case)
+    assert decision.allowed is False
+    assert decision.code in {
+        SecurityErrorCode.IDENTITY_CONFLICT,
+        SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+    }
