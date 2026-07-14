@@ -10,7 +10,10 @@ def put_user(item: dict) -> None:
 
 def get_user(user_id: str) -> dict | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": f"USER#{user_id}", "SK": "PROFILE"})
+    resp = table.get_item(
+        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
+        ConsistentRead=True,
+    )
     return resp.get("Item")
 
 
@@ -119,6 +122,7 @@ def put_parent_student_binding(
     source: str = "admin_repair",
     actor: str = "system",
     created_at: str,
+    version: int = 1,
 ) -> dict:
     """Persist the formal parent/student binding and a reverse lookup row."""
     table = get_table()
@@ -130,6 +134,7 @@ def put_parent_student_binding(
         "status": status,
         "source": source,
         "actor": actor,
+        "version": version,
         "created_at": created_at,
         "updated_at": created_at,
     }
@@ -152,7 +157,20 @@ def put_parent_student_binding(
 
 def get_parent_student_binding(parent_id: str, student_id: str) -> dict | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}"})
+    resp = table.get_item(
+        Key={"PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}"},
+        ConsistentRead=True,
+    )
+    return resp.get("Item")
+
+
+def get_student_parent_binding(student_id: str, parent_id: str) -> dict | None:
+    """Read the exact reverse formal row; profile fields never substitute for it."""
+    table = get_table()
+    resp = table.get_item(
+        Key={"PK": f"USER#{student_id}", "SK": f"PARENT#{parent_id}"},
+        ConsistentRead=True,
+    )
     return resp.get("Item")
 
 
@@ -160,6 +178,7 @@ def list_parent_student_bindings(parent_id: str) -> list[dict]:
     table = get_table()
     resp = table.query(
         KeyConditionExpression=Key("PK").eq(f"USER#{parent_id}") & Key("SK").begins_with("CHILD#"),
+        ConsistentRead=True,
     )
     return resp.get("Items", [])
 
@@ -168,6 +187,7 @@ def list_student_parent_bindings(student_id: str) -> list[dict]:
     table = get_table()
     resp = table.query(
         KeyConditionExpression=Key("PK").eq(f"USER#{student_id}") & Key("SK").begins_with("PARENT#"),
+        ConsistentRead=True,
     )
     return resp.get("Items", [])
 

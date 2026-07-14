@@ -1,12 +1,29 @@
-"""Typed policy inputs and repository protocols; evaluation arrives later."""
+"""Central fail-closed student-resource authorization policy.
+
+The policy deliberately has one decision path.  Resolvers load a resource once,
+fact loaders attach current relationship/assignment evidence, and handlers receive
+that same :class:`AuthorizedResource` after an allow decision.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
+from inspect import isawaitable
 from typing import Awaitable, Callable, Mapping, Protocol
 
-from stoa.security.errors import SecurityErrorCode
+from stoa.security.errors import (
+    SecurityDecisionError,
+    SecurityErrorCode,
+    SecurityHttpResponse,
+    safe_error_response,
+)
+from stoa.security.events import SecurityEvent, project_security_event
+from stoa.security.identity import Actor, CanonicalRole
+
+
+POLICY_VERSION = "472.v1"
 
 
 class ResourceType(StrEnum):
@@ -27,6 +44,13 @@ class AuthorizationAction(StrEnum):
     DELETE = "delete"
     RESPOND = "respond"
     ASSIGN = "assign"
+    CLAIM = "claim"
+    RESOLVE = "resolve"
+    LOOKUP = "lookup"
+    EXPORT = "export"
+    EXTERNAL_SEND = "external_send"
+    MANAGE_PRIVILEGE = "manage_privilege"
+    CURRICULUM_MUTATION = "curriculum_mutation"
 
 
 class AuthorizationPurpose(StrEnum):
@@ -39,7 +63,162 @@ class AuthorizationPurpose(StrEnum):
     INCIDENT_BREAK_GLASS = "incident_break_glass"
 
 
-ResourceResolver = Callable[[str], Awaitable[Mapping[str, object] | None]]
+@dataclass(frozen=True, slots=True)
+class ResourceRef:
+    """Canonical identity and ownership coordinates for one loaded resource."""
+
+    resource_type: ResourceType
+    resource_id: str
+    student_id: str
+    owner_id: str | None = None
+    relationship_known: bool = False
+    safe_support_metadata: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.resource_id.strip() or not self.student_id.strip():
+            raise ValueError("resource_id and student_id are required")
+        if not isinstance(self.resource_type, ResourceType):
+            object.__setattr__(self, "resource_type", ResourceType(self.resource_type))
+
+
+@dataclass(frozen=True, slots=True)
+class ParentAuthorizationFacts:
+    forward: Mapping[str, object] | None = None
+    reverse: Mapping[str, object] | None = None
+    parent_account: Mapping[str, object] | None = None
+    student_account: Mapping[str, object] | None = None
+
+    def matches(self, parent_id: str, student_id: str) -> bool:
+        rows = (self.forward, self.reverse)
+        if any(not row or row.get("status") != "active" for row in rows):
+            return False
+        forward, reverse = rows
+        assert forward is not None and reverse is not None
+        coordinates = ("parent_id", "student_id", "relationship", "version")
+        if any(forward.get(key) != reverse.get(key) for key in coordinates):
+            return False
+        if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
+            return False
+        return _active_account(self.parent_account, parent_id, CanonicalRole.PARENT) and _active_account(
+            self.student_account, student_id, CanonicalRole.STUDENT
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TeacherAuthorizationFacts:
+    question: Mapping[str, object] | None = None
+    session: Mapping[str, object] | None = None
+    assignment: Mapping[str, object] | None = None
+    teacher_account: Mapping[str, object] | None = None
+    student_account: Mapping[str, object] | None = None
+
+    def permits(
+        self,
+        actor_id: str,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        now: datetime,
+    ) -> bool:
+        if not _active_account(self.teacher_account, actor_id, CanonicalRole.TEACHER):
+            return False
+        if not _active_account(self.student_account, resource.student_id, CanonicalRole.STUDENT):
+            return False
+        if self._current_task_permits(actor_id, resource, action, purpose):
+            return True
+        assignment = self.assignment
+        if not assignment or assignment.get("status") != "active":
+            return False
+        if assignment.get("teacher_id") != actor_id or assignment.get("student_id") != resource.student_id:
+            return False
+        if _expired(assignment.get("expires_at"), now):
+            return False
+        return _scope_matches(
+            str(assignment.get("scope") or ""), resource, action, purpose, allow_global=False
+        )
+
+    def _current_task_permits(
+        self,
+        actor_id: str,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+    ) -> bool:
+        if purpose is not AuthorizationPurpose.TEACHER_HELP:
+            return False
+        question = self.question
+        if not question or question.get("student_id") != resource.student_id:
+            return False
+        current_teacher = question.get("teacher_id") or question.get("dispatched_teacher_id")
+        if current_teacher != actor_id:
+            return False
+        if question.get("dispatch_status") in {"timed_out", "reassigned", "revoked"}:
+            return False
+        if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
+            return False
+        linked_ids = {
+            str(question.get("question_id") or ""),
+            str(question.get("conversation_id") or ""),
+            str(question.get("session_id") or ""),
+        }
+        if resource.resource_type not in {
+            ResourceType.QUESTION,
+            ResourceType.CONVERSATION,
+        } or resource.resource_id not in linked_ids:
+            return False
+        if action not in {
+            AuthorizationAction.READ,
+            AuthorizationAction.RESPOND,
+            AuthorizationAction.RESOLVE,
+            AuthorizationAction.CLAIM,
+        }:
+            return False
+        if self.session:
+            session = self.session
+            if session.get("teacher_id") != actor_id or session.get("student_id") != resource.student_id:
+                return False
+            if session.get("resolved_at") and action is not AuthorizationAction.READ:
+                return False
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class BreakGlassEvidence:
+    incident_id: str
+    reason: str
+    notification_reference: str
+    review_reference: str
+    expires_at: datetime
+
+    def valid(self, now: datetime) -> bool:
+        return all(
+            value.strip()
+            for value in (
+                self.incident_id,
+                self.reason,
+                self.notification_reference,
+                self.review_reference,
+            )
+        ) and self.expires_at > now
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizationFacts:
+    parent: ParentAuthorizationFacts | None = None
+    teacher: TeacherAuthorizationFacts | None = None
+    break_glass: BreakGlassEvidence | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedResource:
+    """One resolver result, enriched with current facts and passed to the handler."""
+
+    ref: ResourceRef
+    value: Mapping[str, object]
+    facts: AuthorizationFacts = field(default_factory=AuthorizationFacts)
+
+
+ResourceResolver = Callable[[str], Awaitable[Mapping[str, object] | AuthorizedResource | None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,9 +237,332 @@ class AuthorizationSpec:
 class PolicyDecision:
     allowed: bool
     result_code: SecurityErrorCode
-    policy_version: str
+    policy_version: str = POLICY_VERSION
     evidence_reference: str | None = None
+    correlation_id: str | None = None
+    event: Mapping[str, object] | None = None
 
 
 class AuthorizationFactRepository(Protocol):
-    async def facts_for(self, resource_type: ResourceType, resource_id: str) -> Mapping[str, object] | None: ...
+    async def facts_for(
+        self, actor: Actor, resource: ResourceRef, action: AuthorizationAction, purpose: AuthorizationPurpose
+    ) -> AuthorizationFacts: ...
+
+
+class CurrentAuthorizationFactRepository:
+    """Fresh local fact loader; it intentionally keeps no cross-request cache."""
+
+    async def facts_for(
+        self,
+        actor: Actor,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+    ) -> AuthorizationFacts:
+        if actor.role is CanonicalRole.PARENT:
+            from stoa.db.repositories import user_repo
+
+            return AuthorizationFacts(
+                parent=ParentAuthorizationFacts(
+                    forward=user_repo.get_parent_student_binding(actor.user_id, resource.student_id),
+                    reverse=user_repo.get_student_parent_binding(resource.student_id, actor.user_id),
+                    parent_account=user_repo.get_user(actor.user_id),
+                    student_account=user_repo.get_user(resource.student_id),
+                )
+            )
+        return AuthorizationFacts()
+
+
+class AuthorizationPolicy:
+    """Deterministic Actor + ResourceRef + Action + Purpose decision pipeline."""
+
+    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None:
+        self._clock = clock or (lambda: datetime.now(UTC))
+
+    def evaluate(
+        self,
+        actor: Actor,
+        authorized_resource: AuthorizedResource,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        *,
+        correlation_id: str | None = None,
+    ) -> PolicyDecision:
+        action = AuthorizationAction(action)
+        purpose = AuthorizationPurpose(purpose)
+        resource = authorized_resource.ref
+        now = self._clock()
+        allowed = False
+        evidence: str | None = None
+
+        if actor.can_authorize:
+            if actor.role is CanonicalRole.STUDENT:
+                allowed = actor.user_id == resource.student_id and purpose is AuthorizationPurpose.SELF_SERVICE
+            elif actor.role is CanonicalRole.PARENT and authorized_resource.facts.parent:
+                allowed = purpose is AuthorizationPurpose.PARENT_OVERSIGHT and authorized_resource.facts.parent.matches(
+                    actor.user_id, resource.student_id
+                )
+            elif actor.role is CanonicalRole.TEACHER and authorized_resource.facts.teacher:
+                allowed = authorized_resource.facts.teacher.permits(actor.user_id, resource, action, purpose, now)
+            elif actor.role is CanonicalRole.ADMIN:
+                allowed, evidence = self._admin_permits(
+                    actor, authorized_resource, action, purpose, now
+                )
+
+        result = SecurityErrorCode.ACTION_NOT_ALLOWED
+        if not allowed and not resource.relationship_known:
+            result = SecurityErrorCode.RESOURCE_NOT_FOUND
+        if allowed:
+            result = SecurityErrorCode.ACTION_NOT_ALLOWED
+        event = project_security_event(
+            SecurityEvent(
+                actor_id=actor.user_id,
+                canonical_role=actor.role.value,
+                resource_type=resource.resource_type.value,
+                action=action.value,
+                purpose=purpose.value,
+                policy_version=POLICY_VERSION,
+                result_code="allowed" if allowed else result.value,
+                correlation_id=correlation_id or "authorization",
+                evidence_reference=evidence,
+            )
+        )
+        return PolicyDecision(allowed, result, POLICY_VERSION, evidence, correlation_id, event)
+
+    def _admin_permits(
+        self,
+        actor: Actor,
+        resource: AuthorizedResource,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        now: datetime,
+    ) -> tuple[bool, str | None]:
+        ref = resource.ref
+        if purpose is AuthorizationPurpose.INCIDENT_BREAK_GLASS:
+            evidence = resource.facts.break_glass
+            forbidden = {
+                AuthorizationAction.CREATE,
+                AuthorizationAction.UPDATE,
+                AuthorizationAction.DELETE,
+                AuthorizationAction.RESPOND,
+                AuthorizationAction.ASSIGN,
+                AuthorizationAction.CLAIM,
+                AuthorizationAction.RESOLVE,
+                AuthorizationAction.EXPORT,
+                AuthorizationAction.EXTERNAL_SEND,
+                AuthorizationAction.MANAGE_PRIVILEGE,
+                AuthorizationAction.CURRICULUM_MUTATION,
+            }
+            grant = _matching_grant(actor, "student_data_break_glass", ref, action, purpose)
+            return bool(action not in forbidden and evidence and evidence.valid(now) and grant), (
+                evidence.incident_id if evidence and evidence.valid(now) else None
+            )
+        capability = {
+            AuthorizationPurpose.SUPPORT: "student_support_lookup"
+            if ref.safe_support_metadata
+            else "student_content_review",
+            AuthorizationPurpose.SAFETY_REVIEW: "student_safety_review",
+        }.get(purpose)
+        if not capability:
+            return False, None
+        if capability == "student_support_lookup" and action not in {
+            AuthorizationAction.READ,
+            AuthorizationAction.LOOKUP,
+        }:
+            return False, None
+        grant = _matching_grant(actor, capability, ref, action, purpose)
+        return bool(grant), f"grant:{grant.version}" if grant else None
+
+
+async def authorize_and_resolve(
+    *,
+    actor: Actor,
+    resource_id: str,
+    spec: AuthorizationSpec,
+    fact_repository: AuthorizationFactRepository,
+    policy: AuthorizationPolicy | None = None,
+    correlation_id: str | None = None,
+) -> AuthorizedResource:
+    """Load once, load current facts once, decide, and return that exact object."""
+    try:
+        loaded = await spec.resolver(resource_id)
+        if loaded is None:
+            raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
+        if isinstance(loaded, AuthorizedResource):
+            resolved = loaded
+        else:
+            student_id = str(loaded.get("student_id") or loaded.get("user_id") or "")
+            resolved = AuthorizedResource(
+                ResourceRef(spec.resource_type, resource_id, student_id), loaded
+            )
+        facts = fact_repository.facts_for(actor, resolved.ref, spec.action, spec.purpose)
+        if isawaitable(facts):
+            facts = await facts
+        resolved = AuthorizedResource(resolved.ref, resolved.value, facts)
+        decision = (policy or AuthorizationPolicy()).evaluate(
+            actor, resolved, spec.action, spec.purpose, correlation_id=correlation_id
+        )
+        if not decision.allowed:
+            raise SecurityDecisionError(decision.result_code, correlation_id)
+        return resolved
+    except SecurityDecisionError:
+        raise
+    except Exception as exc:
+        raise SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            correlation_id,
+            internal_detail=type(exc).__name__,
+        ) from exc
+
+
+def _active_account(
+    account: Mapping[str, object] | None, user_id: str, role: CanonicalRole
+) -> bool:
+    return bool(
+        account
+        and account.get("user_id") == user_id
+        and account.get("role") == role.value
+        and (account.get("account_status") or account.get("status")) == "active"
+    )
+
+
+def _expired(value: object, now: datetime) -> bool:
+    if not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed <= now
+    except (TypeError, ValueError):
+        return True
+
+
+def _scope_matches(
+    scope: str,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+    *,
+    allow_global: bool,
+) -> bool:
+    exact = {
+        f"resource:{resource.resource_type.value}:{resource.resource_id}",
+        f"student:{resource.student_id}",
+        (
+            f"resource:{resource.resource_type.value}:{resource.resource_id}:"
+            f"action:{action.value}:purpose:{purpose.value}"
+        ),
+    }
+    return scope in exact or (allow_global and scope == "global")
+
+
+def _matching_grant(
+    actor: Actor,
+    capability: str,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+):
+    return next(
+        (
+            grant
+            for grant in actor.current_grants
+            if grant.capability == capability
+            and _scope_matches(grant.scope, resource, action, purpose, allow_global=False)
+        ),
+        None,
+    )
+
+
+def evaluate_matrix_case(
+    *, family: str, actor: str, relation: str, action: str, purpose: str
+) -> PolicyDecision:
+    """Executable reference matrix used by the Wave 0/3 regression contract."""
+    role = CanonicalRole(actor)
+    actor_id = f"{actor}-1"
+    student_id = actor_id if role is CanonicalRole.STUDENT else "student-1"
+    resource_type = {
+        "students": ResourceType.STUDENT,
+        "questions": ResourceType.QUESTION,
+        "conversations": ResourceType.CONVERSATION,
+        "practice": ResourceType.PRACTICE,
+        "adaptive": ResourceType.ADAPTIVE_PROFILE,
+        "reports": ResourceType.REPORT,
+        "teacher_help": ResourceType.QUESTION,
+        "admin_support": ResourceType.STUDENT,
+    }[family]
+    ref = ResourceRef(
+        resource_type,
+        "question-1" if resource_type is ResourceType.QUESTION else f"{family}-1",
+        student_id,
+        relationship_known=relation not in {"unrelated", "one_sided_binding"},
+        safe_support_metadata=family == "admin_support",
+    )
+    parent = _matrix_parent_facts(relation, student_id)
+    teacher = _matrix_teacher_facts(relation, student_id, ref.resource_id)
+    grants = ()
+    if relation == "scoped_grant":
+        from stoa.security.identity import CapabilityGrant
+
+        grants = (CapabilityGrant("student_support_lookup", f"student:{student_id}", 1),)
+    principal = Actor(
+        actor_id,
+        "https://identity.test",
+        f"{actor}-subject",
+        role,
+        __import__("stoa.security.identity", fromlist=["AccountStatus"]).AccountStatus.ACTIVE,
+        role.value,
+        grants,
+    )
+    return AuthorizationPolicy(clock=lambda: datetime(2026, 7, 15, tzinfo=UTC)).evaluate(
+        principal,
+        AuthorizedResource(ref, {"resource_id": ref.resource_id}, AuthorizationFacts(parent, teacher)),
+        AuthorizationAction(action),
+        AuthorizationPurpose(purpose),
+    )
+
+
+def _matrix_parent_facts(relation: str, student_id: str) -> ParentAuthorizationFacts | None:
+    if relation not in {"active_bidirectional_binding", "revoked_binding", "one_sided_binding"}:
+        return None
+    status = "revoked" if relation == "revoked_binding" else "active"
+    row = {
+        "parent_id": "parent-1",
+        "student_id": student_id,
+        "relationship": "child",
+        "version": 1,
+        "status": status,
+    }
+    return ParentAuthorizationFacts(
+        row,
+        None if relation == "one_sided_binding" else dict(row),
+        {"user_id": "parent-1", "role": "parent", "account_status": "active"},
+        {"user_id": student_id, "role": "student", "account_status": "active"},
+    )
+
+
+def _matrix_teacher_facts(
+    relation: str, student_id: str, resource_id: str
+) -> TeacherAuthorizationFacts | None:
+    if relation not in {"assigned", "dispatched", "unassigned", "other_dispatch"}:
+        return None
+    teacher_id = "teacher-1" if relation in {"assigned", "dispatched"} else "teacher-2"
+    question = {
+        "question_id": resource_id,
+        "student_id": student_id,
+        "teacher_id": teacher_id,
+        "dispatched_teacher_id": teacher_id,
+        "dispatch_status": "accepted",
+        "status": "teacher_active",
+    }
+    return TeacherAuthorizationFacts(
+        question=question,
+        teacher_account={"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
+        student_account={"user_id": student_id, "role": "student", "account_status": "active"},
+    )
+
+
+def evaluate_hidden_resource_case(_resource_id: str) -> SecurityHttpResponse:
+    """Return the same safe response for existing-but-hidden and absent identifiers."""
+    return safe_error_response(SecurityErrorCode.RESOURCE_NOT_FOUND, "hidden-resource")
