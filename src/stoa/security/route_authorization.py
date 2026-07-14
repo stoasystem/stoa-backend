@@ -449,12 +449,12 @@ async def authorize_teacher_loaded_resource(
 ) -> AuthorizedResource:
     """Authorize one already-resolved teacher task object without reloading it."""
     student_id = str(loaded.get("student_id") or "")
-    canonical_id = str(
-        loaded.get("conversation_id")
-        or loaded.get("question_id")
-        or loaded.get("draft_id")
-        or ""
-    )
+    id_field = {
+        ResourceType.QUESTION: "question_id",
+        ResourceType.TEACHER_HELP_REQUEST: "conversation_id",
+        ResourceType.AI_TEACHER_DRAFT: "draft_id",
+    }.get(resource_type, "resource_id")
+    canonical_id = str(loaded.get(id_field) or "")
     resolved = AuthorizedResource(
         ResourceRef(
             resource_type,
@@ -527,6 +527,69 @@ def authorized_teacher_resource_dependency(
             AuthorizationPurpose.TEACHER_HELP,
             metadata_resolver,
         ),
+    )
+    return dependency
+
+
+def teacher_tool_purpose(actor: Actor) -> AuthorizationPurpose:
+    """Select broader AI-tool purpose only when the Actor presents that local grant."""
+    if any(
+        grant.capability == "ai_teacher_tools_operator"
+        for grant in actor.current_grants
+    ):
+        return AuthorizationPurpose.AI_TEACHER_TOOLS
+    return AuthorizationPurpose.TEACHER_HELP
+
+
+def authorized_ai_teacher_draft_dependency(
+    *,
+    action: AuthorizationAction,
+    resolver: Callable[[str], Mapping[str, object] | None],
+):
+    """Resolve a draft ID to its student/question owner before lifecycle effects."""
+
+    async def dependency(
+        draft_id: str,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+    ) -> AuthorizedResource:
+        try:
+            loaded = resolver(draft_id)
+            if not loaded:
+                from stoa.security.errors import SecurityErrorCode
+
+                raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+            return await authorize_teacher_loaded_resource(
+                actor=actor,
+                facts=facts,
+                loaded=loaded,
+                resource_type=ResourceType.AI_TEACHER_DRAFT,
+                action=action,
+                purpose=teacher_tool_purpose(actor),
+            )
+        except SecurityDecisionError as error:
+            _raise_http(error)
+        except Exception as exc:
+            from stoa.security.errors import SecurityErrorCode
+
+            _raise_http(
+                SecurityDecisionError(
+                    SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+                    internal_detail=type(exc).__name__,
+                )
+            )
+
+    async def metadata_resolver(resource_id: str):
+        return resolver(resource_id)
+
+    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+        _metadata_spec(ResourceType.AI_TEACHER_DRAFT, action, purpose, metadata_resolver)
+        for purpose in (
+            AuthorizationPurpose.TEACHER_HELP,
+            AuthorizationPurpose.AI_TEACHER_TOOLS,
+        )
     )
     return dependency
 

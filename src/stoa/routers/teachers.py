@@ -10,24 +10,27 @@ from pydantic import BaseModel, Field
 
 from stoa.db.repositories import question_repo, user_repo
 from stoa.db.dynamodb import get_table
-from stoa.deps import get_actor, require_role
+from stoa.deps import get_actor
 from stoa.models.question import QuestionStatus
 from stoa.security.authorization import (
     AuthorizationAction,
-    CurrentAuthorizationFactRepository,
     AuthorizationPurpose,
+    AuthorizationSpec,
     AuthorizedResource,
+    CurrentAuthorizationFactRepository,
     ResourceType,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_authorization import (
+    authorized_ai_teacher_draft_dependency,
     authorized_question_dependency,
     authorized_teacher_resource_dependency,
     authorize_teacher_loaded_resource,
     get_authorization_fact_repository,
     teacher_capability_dependency,
     teacher_portal_self_dependency,
+    teacher_tool_purpose,
 )
 from stoa.services import (
     ai_teacher_tools_service,
@@ -596,6 +599,118 @@ class AiTeacherDraftListResponse(BaseModel):
     count: int
 
 
+async def _authorize_ai_question_context(
+    question_id: str,
+    actor: Actor,
+    facts: CurrentAuthorizationFactRepository,
+) -> AuthorizedResource:
+    question = question_repo.get_question(question_id)
+    if not question:
+        raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+    return await authorize_teacher_loaded_resource(
+        actor=actor,
+        facts=facts,
+        loaded=question,
+        resource_type=ResourceType.QUESTION,
+        action=AuthorizationAction.CREATE,
+        purpose=teacher_tool_purpose(actor),
+    )
+
+
+async def _ai_question_context_dependency(
+    question_id: str,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
+) -> AuthorizedResource:
+    try:
+        return await _authorize_ai_question_context(question_id, actor, facts)
+    except SecurityDecisionError as error:
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from error
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from exc
+
+
+async def _ai_question_metadata_resolver(question_id: str):
+    return question_repo.get_question(question_id)
+
+
+_ai_question_context_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    AuthorizationSpec(ResourceType.QUESTION, AuthorizationAction.CREATE, purpose, _ai_question_metadata_resolver)
+    for purpose in (
+        AuthorizationPurpose.TEACHER_HELP,
+        AuthorizationPurpose.AI_TEACHER_TOOLS,
+    )
+)
+
+
+async def _exercise_context_dependency(
+    body: ExerciseDraftRequest,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
+) -> AuthorizedResource:
+    try:
+        if body.questionId:
+            return await _authorize_ai_question_context(body.questionId, actor, facts)
+        student = user_repo.get_user(body.studentId)
+        if not student or student.get("role") not in {None, "student"}:
+            raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+        context = {
+            "draft_id": f"student-context:{body.studentId}",
+            "student_id": body.studentId,
+            "account_status": student.get("account_status") or student.get("status"),
+        }
+        return await authorize_teacher_loaded_resource(
+            actor=actor,
+            facts=facts,
+            loaded=context,
+            resource_type=ResourceType.AI_TEACHER_DRAFT,
+            action=AuthorizationAction.CREATE,
+            purpose=teacher_tool_purpose(actor),
+        )
+    except SecurityDecisionError as error:
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from error
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from exc
+
+
+async def _exercise_context_metadata_resolver(resource_id: str):
+    return {"student_id": resource_id, "draft_id": f"student-context:{resource_id}"}
+
+
+_exercise_context_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    AuthorizationSpec(ResourceType.AI_TEACHER_DRAFT, AuthorizationAction.CREATE, purpose, _exercise_context_metadata_resolver)
+    for purpose in (
+        AuthorizationPurpose.TEACHER_HELP,
+        AuthorizationPurpose.AI_TEACHER_TOOLS,
+    )
+)
+
+
+def _get_ai_teacher_draft(draft_id: str) -> dict | None:
+    """Late-bind the repository so tests/outages exercise the real dependency boundary."""
+    return ai_teacher_tools_service.ai_teacher_tools_repo.get_draft(draft_id)
+
+
 def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailability:
     profile = profile or {}
     subjects = [
@@ -695,16 +810,18 @@ async def get_question_assistance_summary(
 @router.post("/questions/{question_id}/ai-tools/summary-draft", response_model=AiTeacherDraftResponse)
 async def create_question_summary_draft(
     question_id: str,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(_ai_question_context_dependency),
+    actor: Actor = Depends(get_actor),
 ):
     """Create a reviewed AI teacher summary draft for an accessible question."""
-    return ai_teacher_tools_service.create_summary_draft(question_id, user)
+    return ai_teacher_tools_service.create_summary_draft(authorized, actor)
 
 
 @router.post("/ai-tools/exercise-drafts", response_model=AiTeacherDraftResponse)
 async def create_exercise_draft(
     body: ExerciseDraftRequest,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(_exercise_context_dependency),
+    actor: Actor = Depends(get_actor),
 ):
     """Create a reviewed practice exercise draft from teacher-visible learning context."""
     return ai_teacher_tools_service.create_exercise_draft(
@@ -714,7 +831,8 @@ async def create_exercise_draft(
         difficulty=body.difficulty,
         exercise_count=body.exerciseCount,
         question_id=body.questionId,
-        user=user,
+        actor=actor,
+        authorized_context=authorized,
     )
 
 
@@ -724,48 +842,96 @@ async def list_ai_teacher_drafts(
     status: str | None = None,
     draft_type: str | None = None,
     limit: int = 50,
-    user: dict = Depends(require_role("teacher", "admin")),
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
 ):
     """List visible reviewed AI teacher tool drafts."""
-    items = ai_teacher_tools_service.list_drafts(
-        user=user,
-        student_id=student_id,
-        status=status,
-        draft_type=draft_type,
-        limit=limit,
-    )
+    try:
+        candidates = ai_teacher_tools_service.list_drafts(
+            student_id=student_id,
+            status=status,
+            draft_type=draft_type,
+            limit=limit,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from exc
+    items = []
+    for candidate in candidates:
+        try:
+            authorized = await authorize_teacher_loaded_resource(
+                actor=actor,
+                facts=facts,
+                loaded=candidate,
+                resource_type=ResourceType.AI_TEACHER_DRAFT,
+                action=AuthorizationAction.READ,
+                purpose=teacher_tool_purpose(actor),
+            )
+        except SecurityDecisionError as error:
+            if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
+                raise HTTPException(
+                    status_code=error.status_code, detail=error.public_body()
+                ) from error
+            continue
+        items.append(ai_teacher_tools_service.get_draft(authorized))
     return AiTeacherDraftListResponse(items=items, count=len(items))
 
 
 @router.get("/ai-tools/drafts/{draft_id}", response_model=AiTeacherDraftResponse)
 async def get_ai_teacher_draft(
     draft_id: str,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_ai_teacher_draft_dependency(
+            action=AuthorizationAction.READ,
+            resolver=_get_ai_teacher_draft,
+        )
+    ),
 ):
     """Return one visible reviewed AI teacher tool draft."""
-    return ai_teacher_tools_service.get_draft(draft_id, user)
+    return ai_teacher_tools_service.get_draft(authorized)
 
 
 @router.post("/ai-tools/drafts/{draft_id}/regenerate", response_model=AiTeacherDraftResponse)
 async def regenerate_ai_teacher_draft(
     draft_id: str,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_ai_teacher_draft_dependency(
+            action=AuthorizationAction.CREATE,
+            resolver=_get_ai_teacher_draft,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Create a new draft version while preserving prior draft metadata."""
-    return ai_teacher_tools_service.regenerate_draft(draft_id, user)
+    return ai_teacher_tools_service.regenerate_draft(authorized, actor)
 
 
 @router.post("/ai-tools/drafts/{draft_id}/accept", response_model=AiTeacherDraftResponse)
 async def accept_ai_teacher_draft(
     draft_id: str,
     body: ReviewDraftRequest | None = None,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_ai_teacher_draft_dependency(
+            action=AuthorizationAction.UPDATE,
+            resolver=_get_ai_teacher_draft,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Mark a draft as reviewed and accepted without delivering it to students."""
     return ai_teacher_tools_service.review_draft(
-        draft_id=draft_id,
+        authorized=authorized,
         action="accept",
-        user=user,
+        actor=actor,
         note=body.note if body else None,
     )
 
@@ -774,13 +940,19 @@ async def accept_ai_teacher_draft(
 async def reject_ai_teacher_draft(
     draft_id: str,
     body: ReviewDraftRequest | None = None,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_ai_teacher_draft_dependency(
+            action=AuthorizationAction.UPDATE,
+            resolver=_get_ai_teacher_draft,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Mark a draft as rejected without deleting evidence."""
     return ai_teacher_tools_service.review_draft(
-        draft_id=draft_id,
+        authorized=authorized,
         action="reject",
-        user=user,
+        actor=actor,
         note=body.note if body else None,
     )
 
@@ -789,13 +961,19 @@ async def reject_ai_teacher_draft(
 async def archive_ai_teacher_draft(
     draft_id: str,
     body: ReviewDraftRequest | None = None,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_ai_teacher_draft_dependency(
+            action=AuthorizationAction.UPDATE,
+            resolver=_get_ai_teacher_draft,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Archive a draft from the active teacher workflow without deleting evidence."""
     return ai_teacher_tools_service.review_draft(
-        draft_id=draft_id,
+        authorized=authorized,
         action="archive",
-        user=user,
+        actor=actor,
         note=body.note if body else None,
     )
 

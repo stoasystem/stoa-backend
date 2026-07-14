@@ -8,7 +8,9 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from stoa.db.repositories import ai_teacher_tools_repo, question_repo
+from stoa.db.repositories import ai_teacher_tools_repo
+from stoa.security.authorization import AuthorizedResource
+from stoa.security.identity import Actor
 from stoa.services import learning_profile_service
 
 
@@ -24,9 +26,12 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def create_summary_draft(question_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    question = _visible_question(question_id, user)
-    return draft_response(_store_summary_draft(question=question, user=user))
+def create_summary_draft(
+    authorized: AuthorizedResource, actor: Actor
+) -> dict[str, Any]:
+    return draft_response(
+        _store_summary_draft(question=dict(authorized.value), actor=actor)
+    )
 
 
 def create_exercise_draft(
@@ -36,7 +41,8 @@ def create_exercise_draft(
     topic_ids: list[str],
     difficulty: str,
     exercise_count: int,
-    user: dict[str, Any],
+    actor: Actor,
+    authorized_context: AuthorizedResource,
     question_id: str | None = None,
 ) -> dict[str, Any]:
     subject = _normalize_subject(subject)
@@ -44,8 +50,8 @@ def create_exercise_draft(
     difficulty = _require_choice(difficulty, DIFFICULTIES, "difficulty")
     exercise_count = _require_count(exercise_count)
 
-    question = _visible_question(question_id, user) if question_id else None
-    evidence_questions = [question] if question else _visible_student_questions(student_id, user)
+    question = dict(authorized_context.value) if question_id else None
+    evidence_questions = [question] if question else []
     if question and str(question.get("student_id") or "") != student_id:
         raise HTTPException(status_code=400, detail="Question does not belong to the requested student")
     source_context = _source_context(evidence_questions, student_id=student_id)
@@ -67,8 +73,8 @@ def create_exercise_draft(
         "explanations": _exercise_explanations(topic_ids, exercise_count),
         "source_context": source_context,
         "prompt_version": PROMPT_VERSION,
-        "created_by": _actor_id(user),
-        "created_by_role": str(user.get("role") or ""),
+        "created_by": actor.user_id,
+        "created_by_role": actor.role.value,
         "created_at": created_at,
         "generated_at": created_at,
         "updated_at": created_at,
@@ -84,7 +90,6 @@ def create_exercise_draft(
 
 def list_drafts(
     *,
-    user: dict[str, Any],
     student_id: str | None = None,
     status: str | None = None,
     draft_type: str | None = None,
@@ -100,24 +105,22 @@ def list_drafts(
         draft_type=draft_type,
         limit=limit,
     )
-    return [draft_response(item) for item in items if _can_view_draft(item, user)]
+    return items
 
 
-def get_draft(draft_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    item = _existing_draft(draft_id)
-    _require_can_view_draft(item, user)
-    return draft_response(item)
+def get_draft(authorized: AuthorizedResource) -> dict[str, Any]:
+    return draft_response(dict(authorized.value))
 
 
 def review_draft(
     *,
-    draft_id: str,
+    authorized: AuthorizedResource,
     action: str,
-    user: dict[str, Any],
+    actor: Actor,
     note: str | None = None,
 ) -> dict[str, Any]:
-    item = _existing_draft(draft_id)
-    _require_can_view_draft(item, user)
+    item = dict(authorized.value)
+    draft_id = authorized.ref.resource_id
     action = _require_choice(action, {"accept", "reject", "archive"}, "action")
     if item.get("status") == "archived":
         raise HTTPException(status_code=409, detail="Draft is already archived")
@@ -130,25 +133,32 @@ def review_draft(
         {
             "status": status,
             "updated_at": now,
-            "reviewed_by": _actor_id(user),
+            "reviewed_by": actor.user_id,
             "reviewed_at": now,
             "review_note": _clean_note(note),
             "student_delivery_status": "not_delivered",
         },
+        existing=item,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Draft not found")
     return draft_response(updated)
 
 
-def regenerate_draft(draft_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    item = _existing_draft(draft_id)
-    _require_can_view_draft(item, user)
+def regenerate_draft(
+    authorized: AuthorizedResource, actor: Actor
+) -> dict[str, Any]:
+    item = dict(authorized.value)
+    draft_id = authorized.ref.resource_id
     if item.get("draft_type") == "teacher_summary":
-        question = _visible_question(str(item.get("question_id") or ""), user)
-        regenerated = _store_summary_draft(question=question, user=user, previous_draft_id=draft_id)
+        question = (authorized.facts.teacher.question if authorized.facts.teacher else None)
+        if not question:
+            raise HTTPException(status_code=409, detail="Draft question context is unavailable")
+        regenerated = _store_summary_draft(
+            question=dict(question), actor=actor, previous_draft_id=draft_id
+        )
     elif item.get("draft_type") == "practice_exercise":
-        regenerated = _regenerate_exercise_draft(item, user)
+        regenerated = _regenerate_exercise_draft(item, actor)
     else:
         raise HTTPException(status_code=400, detail="Unsupported draft type")
     return draft_response(regenerated)
@@ -190,7 +200,7 @@ def draft_response(item: dict[str, Any]) -> dict[str, Any]:
 def _store_summary_draft(
     *,
     question: dict[str, Any],
-    user: dict[str, Any],
+    actor: Actor,
     previous_draft_id: str | None = None,
 ) -> dict[str, Any]:
     created_at = now_iso()
@@ -217,8 +227,8 @@ def _store_summary_draft(
         "explanations": [],
         "source_context": _source_context([question], student_id=str(question.get("student_id") or "")),
         "prompt_version": PROMPT_VERSION,
-        "created_by": _actor_id(user),
-        "created_by_role": str(user.get("role") or ""),
+        "created_by": actor.user_id,
+        "created_by_role": actor.role.value,
         "created_at": created_at,
         "generated_at": created_at,
         "updated_at": created_at,
@@ -232,11 +242,8 @@ def _store_summary_draft(
     return item
 
 
-def _regenerate_exercise_draft(item: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
-    question_id = item.get("question_id")
-    question = _visible_question(str(question_id), user) if question_id else None
+def _regenerate_exercise_draft(item: dict[str, Any], actor: Actor) -> dict[str, Any]:
     student_id = str(item.get("student_id") or "")
-    evidence_questions = [question] if question else _visible_student_questions(student_id, user)
     created_at = now_iso()
     draft_id = f"aitool-{uuid4().hex}"
     regenerated = {
@@ -256,9 +263,9 @@ def _regenerate_exercise_draft(item: dict[str, Any], user: dict[str, Any]) -> di
             list(item.get("topic_ids") or ["general"]),
             int(item.get("exercise_count") or 1),
         ),
-        "source_context": _source_context(evidence_questions, student_id=student_id),
-        "created_by": _actor_id(user),
-        "created_by_role": str(user.get("role") or ""),
+        "source_context": dict(item.get("source_context") or {"studentId": student_id}),
+        "created_by": actor.user_id,
+        "created_by_role": actor.role.value,
         "created_at": created_at,
         "generated_at": created_at,
         "updated_at": created_at,
@@ -272,74 +279,6 @@ def _regenerate_exercise_draft(item: dict[str, Any], user: dict[str, Any]) -> di
     regenerated.pop("SK", None)
     ai_teacher_tools_repo.put_draft(regenerated)
     return regenerated
-
-
-def _visible_question(question_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    if not question_id:
-        raise HTTPException(status_code=400, detail="question_id is required")
-    question = question_repo.get_question(question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-    _require_teacher_visible(question, user)
-    return question
-
-
-def _visible_student_questions(student_id: str, user: dict[str, Any]) -> list[dict[str, Any]]:
-    if not student_id:
-        raise HTTPException(status_code=400, detail="student_id is required")
-    response = question_repo.list_by_student(student_id, limit=50)
-    questions = response.get("Items", []) if isinstance(response, dict) else []
-    visible = [question for question in questions if _can_view_question(question, user)]
-    if not visible and user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="No visible student context for this teacher")
-    return visible
-
-
-def _require_teacher_visible(question: dict[str, Any], user: dict[str, Any]) -> None:
-    if _can_view_question(question, user):
-        return
-    raise HTTPException(status_code=403, detail="Question is not visible to this teacher workflow")
-
-
-def _can_view_question(question: dict[str, Any], user: dict[str, Any]) -> bool:
-    role = user.get("role")
-    if role == "admin":
-        return True
-    if role != "teacher":
-        return False
-    user_id = _actor_id(user)
-    if question.get("teacher_id") == user_id:
-        return True
-    return question.get("status") in {"escalated", "teacher_active", "resolved"}
-
-
-def _can_view_draft(item: dict[str, Any], user: dict[str, Any]) -> bool:
-    if user.get("role") == "admin":
-        return True
-    if user.get("role") != "teacher":
-        return False
-    if item.get("created_by") == _actor_id(user):
-        return True
-    question_id = item.get("question_id")
-    if question_id:
-        try:
-            _visible_question(str(question_id), user)
-            return True
-        except HTTPException:
-            return False
-    return False
-
-
-def _require_can_view_draft(item: dict[str, Any], user: dict[str, Any]) -> None:
-    if not _can_view_draft(item, user):
-        raise HTTPException(status_code=403, detail="Draft is not visible to this user")
-
-
-def _existing_draft(draft_id: str) -> dict[str, Any]:
-    item = ai_teacher_tools_repo.get_draft(draft_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Draft not found")
-    return item
 
 
 def _session_summary(question: dict[str, Any], ai_response: dict[str, Any]) -> str:
@@ -482,7 +421,3 @@ def _clean_note(note: str | None) -> str | None:
 
 def _preview(value: Any, *, limit: int) -> str:
     return " ".join(str(value or "").strip().split())[:limit]
-
-
-def _actor_id(user: dict[str, Any]) -> str:
-    return str(user.get("sub") or user.get("username") or "")

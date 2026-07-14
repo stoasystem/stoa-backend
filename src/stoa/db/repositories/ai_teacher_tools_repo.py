@@ -25,8 +25,13 @@ def get_draft(draft_id: str) -> dict[str, Any] | None:
     return response.get("Item")
 
 
-def update_draft(draft_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
-    existing = get_draft(draft_id)
+def update_draft(
+    draft_id: str,
+    updates: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    existing = existing or get_draft(draft_id)
     if not existing:
         return None
     if not updates:

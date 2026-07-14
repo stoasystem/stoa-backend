@@ -85,6 +85,21 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                     in {"question", "teacher_help_request"}
                     else None
                 )
+                if (
+                    resource.resource_type.value == "ai_teacher_draft"
+                    and _value.get("question_id")
+                ):
+                    task_teachers = user.get("taskTeacherByQuestion") or {}
+                    question = {
+                        "question_id": _value.get("question_id"),
+                        "student_id": resource.student_id,
+                        "teacher_id": task_teachers.get(
+                            _value.get("question_id"),
+                            user.get("taskTeacherId", current_actor.user_id),
+                        ),
+                        "status": user.get("taskStatus", "teacher_active"),
+                        "dispatch_status": user.get("taskDispatchStatus", "accepted"),
+                    }
                 return AuthorizationFacts(
                     teacher=TeacherAuthorizationFacts(
                         question=question,

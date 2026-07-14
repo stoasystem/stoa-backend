@@ -175,10 +175,19 @@ class TeacherAuthorizationFacts:
             ResourceType.CONVERSATION,
             ResourceType.TEACHER_HELP_REQUEST,
             ResourceType.AI_TEACHER_DRAFT,
-        } or resource.resource_id not in linked_ids:
+        }:
+            return False
+        task_link_id = (
+            str(resource.question_id or "")
+            if resource.resource_type is ResourceType.AI_TEACHER_DRAFT
+            else resource.resource_id
+        )
+        if task_link_id not in linked_ids:
             return False
         if action not in {
             AuthorizationAction.READ,
+            AuthorizationAction.CREATE,
+            AuthorizationAction.UPDATE,
             AuthorizationAction.RESPOND,
             AuthorizationAction.RESOLVE,
             AuthorizationAction.CLAIM,
@@ -201,7 +210,11 @@ class TeacherAuthorizationFacts:
 
         if dispatch_status in {"timed_out", "reassigned", "revoked"}:
             return False
-        if action in {AuthorizationAction.RESPOND, AuthorizationAction.RESOLVE}:
+        if action in {
+            AuthorizationAction.RESPOND,
+            AuthorizationAction.RESOLVE,
+            AuthorizationAction.UPDATE,
+        }:
             if question.get("teacher_id") != actor_id:
                 return False
             if question.get("status") not in {"teacher_active", "resolved"}:
