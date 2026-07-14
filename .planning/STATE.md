@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-14T22:25:13.650Z"
-last_activity: 2026-07-14 -- Completed 472-04 versioned capabilities and privileged identity lifecycle
+last_updated: "2026-07-14T22:41:12.416Z"
+last_activity: 2026-07-15 -- Completed 472-05 central student-resource authorization policy
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 4
-  percent: 40
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
-Plan: 5 of 10
+Plan: 6 of 10
 Status: Ready to execute
-Last activity: 2026-07-14 -- Completed 472-04 versioned capabilities and privileged identity lifecycle
+Last activity: 2026-07-15 -- Completed 472-05 central student-resource authorization policy
 
 ## Accumulated Context
 
@@ -47,6 +47,7 @@ Last activity: 2026-07-14 -- Completed 472-04 versioned capabilities and privile
 - Current versioned local grants alone authorize capabilities; revocation is visible on the next request and no role or claim source broadens authority.
 - Teacher approval issues only a digest-bound expiring invitation; same-verified-email consumption resumes one deny-first activation command until group, profile, and binding reconcile.
 - Routine admin lifecycle requires `admin_identity_manager`; bootstrap remains first-admin/disaster-only and grants no implicit request-path authority.
+- One central policy now authorizes student resources from a load-once `ResourceRef` plus fresh owner, strict bidirectional parent, current teacher task/assignment, or exact purpose-capability facts; role, legacy links, queue visibility, stale grants, and incomplete break-glass evidence never broaden access.
 
 ### Pending Todos
 
@@ -75,3 +76,4 @@ Last activity: 2026-07-14 -- Completed 472-04 versioned capabilities and privile
 | Phase 472 P02 | 45 min | 3 tasks | 9 files |
 | Phase 472 P03 | 83 min | 3 tasks | 41 files |
 | Phase 472 P04 | 26 min | 3 tasks | 19 files |
+| Phase 472 P05 | 15 min | 3 tasks | 6 files |
