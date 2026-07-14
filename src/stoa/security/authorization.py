@@ -58,6 +58,8 @@ class AuthorizationPurpose(StrEnum):
     PARENT_OVERSIGHT = "parent_oversight"
     TEACHER_HELP = "teacher_help"
     LEARNING_ASSIGNMENT = "learning_assignment"
+    ASSIGNMENT_AUTOMATION_PREVIEW = "assignment_automation_preview"
+    ASSIGNMENT_AUTOMATION_EXECUTE = "assignment_automation_execute"
     SUPPORT = "support"
     SAFETY_REVIEW = "safety_review"
     INCIDENT_BREAK_GLASS = "incident_break_glass"
@@ -402,6 +404,9 @@ class AuthorizationPolicy:
             if ref.safe_support_metadata
             else "student_content_review",
             AuthorizationPurpose.SAFETY_REVIEW: "student_safety_review",
+            AuthorizationPurpose.LEARNING_ASSIGNMENT: "learning_assignment_manager",
+            AuthorizationPurpose.ASSIGNMENT_AUTOMATION_PREVIEW: "assignment_automation_preview",
+            AuthorizationPurpose.ASSIGNMENT_AUTOMATION_EXECUTE: "assignment_automation_execute",
         }.get(purpose)
         if not capability:
             return False, None

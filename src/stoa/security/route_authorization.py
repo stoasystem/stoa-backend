@@ -121,6 +121,56 @@ def authorized_student_dependency(
     return dependency
 
 
+def authorized_student_resource_dependency(
+    *,
+    resource_type: ResourceType,
+    action: AuthorizationAction,
+    purposes: PurposeMap,
+    self_route: bool = False,
+):
+    """Resolve a canonical student account but authorize a typed student fact family."""
+
+    async def resolve(student_id: str):
+        profile = user_repo.get_user(student_id)
+        if not profile or profile.get("role") not in {None, "student"}:
+            return None
+        return AuthorizedResource(
+            ResourceRef(resource_type, student_id, student_id),
+            profile,
+        )
+
+    async def dependency(
+        student_id: str | None = None,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+    ) -> AuthorizedResource:
+        target_id = (
+            actor.user_id
+            if self_route or (student_id is None and actor.role is CanonicalRole.STUDENT)
+            else str(student_id or "")
+        )
+        spec = AuthorizationSpec(
+            resource_type, action, _purpose_for(actor, purposes), resolve
+        )
+        try:
+            return await authorize_and_resolve(
+                actor=actor,
+                resource_id=target_id,
+                spec=spec,
+                fact_repository=facts,
+            )
+        except SecurityDecisionError as error:
+            _raise_http(error)
+
+    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+        _metadata_spec(resource_type, action, purpose, resolve)
+        for purpose in purposes.values()
+    )
+    return dependency
+
+
 def authorized_question_dependency(
     *, action: AuthorizationAction, purposes: PurposeMap
 ):

@@ -49,7 +49,6 @@ def get_memory_summary(
     subject: str | None = None,
     persist: bool = False,
 ) -> dict[str, Any]:
-    _require_student_visible(student_id, user)
     normalized_subject = _safe_subject(subject) if subject else None
     questions = question_repo.list_by_student(student_id, limit=500).get("Items", [])
     mistakes = practice_repo.get_mistakes(student_id)
@@ -97,7 +96,6 @@ def create_assignment(
     due_at: str | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    _require_teacher_or_admin(user)
     if status not in CREATABLE_STATUSES:
         raise HTTPException(status_code=400, detail="Assignment must start as draft, recommended, or assigned")
     item = _create_assignment_item(
@@ -125,8 +123,6 @@ def execute_assignment_automation_batch(
     user: dict[str, Any],
     subject: str | None = None,
 ) -> dict[str, Any]:
-    _require_teacher_or_admin(user)
-    _require_student_visible(student_id, user)
     if not approved:
         raise HTTPException(status_code=400, detail="Approved batch execution requires approval")
     if not candidates:
@@ -259,8 +255,6 @@ def preview_assignment_automation_batch(
     user: dict[str, Any],
     subject: str | None = None,
 ) -> dict[str, Any]:
-    _require_teacher_or_admin(user)
-    _require_student_visible(student_id, user)
     normalized_policy = _automation_policy(policy, student_id=student_id, user=user)
     summary = get_memory_summary(student_id=student_id, user=user, subject=subject)
     assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
@@ -311,7 +305,6 @@ def list_assignments(
     status: str | None = None,
     include_archived: bool = False,
 ) -> dict[str, Any]:
-    _require_student_visible(student_id, user)
     if status and status not in ASSIGNMENT_STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported assignment status")
     items = adaptive_learning_repo.list_assignments(
@@ -319,14 +312,17 @@ def list_assignments(
         status=status,
         include_archived=include_archived and _can_manage_assignments(user),
     )
-    visible = [assignment_response(item, user=user) for item in items if _assignment_visible(item, user)]
+    visible = [assignment_response(item, user=user) for item in items]
     return {"items": visible, "count": len(visible), "locale": locale_contract(user)}
 
 
-def get_assignment(assignment_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    item = _existing_assignment(assignment_id)
-    if not _assignment_visible(item, user):
-        raise HTTPException(status_code=403, detail="Assignment is not visible")
+def get_assignment(
+    assignment_id: str,
+    user: dict[str, Any],
+    *,
+    item: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    item = item or _existing_assignment(assignment_id)
     return assignment_response(item, user=user)
 
 
@@ -338,13 +334,10 @@ def transition_assignment(
     student_answer: str | None = None,
     correct: bool | None = None,
     note: str | None = None,
+    item: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    item = _existing_assignment(assignment_id)
-    if action in STUDENT_ACTIONS:
-        _require_student_assignment_owner(item, user)
-    elif action == "archive":
-        _require_teacher_or_admin(user)
-    else:
+    item = item or _existing_assignment(assignment_id)
+    if action not in STUDENT_ACTIONS | {"archive"}:
         raise HTTPException(status_code=400, detail="Unsupported assignment action")
     if item.get("pending_sequencing_effect"):
         _apply_pending_assignment_effect(item)
@@ -444,9 +437,6 @@ def transition_assignment(
 
 
 def parent_progress_signal(student_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    if user.get("role") != "parent":
-        raise HTTPException(status_code=403, detail="Parent progress signals require parent access")
-    _require_student_visible(student_id, user)
     memory = get_memory_summary(student_id=student_id, user=user)
     assignments = list_assignments(student_id=student_id, user=user)
     completed = [item for item in assignments["items"] if item["status"] == "completed"]

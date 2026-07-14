@@ -1,16 +1,146 @@
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
+import pytest
+
+from stoa.deps import get_actor
 from stoa.routers import adaptive
+from stoa.security.authorization import (
+    AuthorizationFacts,
+    ParentAuthorizationFacts,
+    TeacherAuthorizationFacts,
+)
+from stoa.security.identity import (
+    AccountStatus,
+    Actor,
+    CanonicalRole,
+    CapabilityGrant,
+)
+from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import adaptive_learning_service
 
 
 def _app(user: dict) -> TestClient:
+    role = CanonicalRole(user["role"])
+    grants = ()
+    if role is CanonicalRole.ADMIN:
+        capability_names = user.get("grantCapabilities") or (
+            "learning_assignment_manager",
+            "assignment_automation_preview",
+            "assignment_automation_execute",
+        )
+        grants = tuple(
+            CapabilityGrant(capability, "student:student-1", 1)
+            for capability in capability_names
+        )
+    actor = Actor(
+        str(user["sub"]),
+        "https://identity.test",
+        f"{user['sub']}-subject",
+        role,
+        AccountStatus.ACTIVE,
+        role.value,
+        grants,
+        tuple(
+            (key, str(value))
+            for key, value in user.items()
+            if key in {"preferredLocale", "preferred_locale", "language"}
+        ),
+    )
+
+    class _Facts:
+        async def facts_for(self, current_actor, resource, action, purpose, _value):
+            if user.get("factsOutage"):
+                raise TimeoutError("authorization canary")
+            account = {
+                "user_id": resource.student_id,
+                "role": "student",
+                "account_status": "active",
+            }
+            if current_actor.role is CanonicalRole.PARENT:
+                row = {
+                    "parent_id": current_actor.user_id,
+                    "student_id": resource.student_id,
+                    "relationship": "child",
+                    "status": "active",
+                    "version": 1,
+                }
+                return AuthorizationFacts(
+                    parent=ParentAuthorizationFacts(
+                        row,
+                        dict(row),
+                        {
+                            "user_id": current_actor.user_id,
+                            "role": "parent",
+                            "account_status": "active",
+                        },
+                        account,
+                    )
+                )
+            if current_actor.role is CanonicalRole.TEACHER:
+                assignment = None
+                if user.get("assigned", True):
+                    assignment = {
+                        "teacher_id": current_actor.user_id,
+                        "student_id": resource.student_id,
+                        "status": "active",
+                        "resource_types": [resource.resource_type.value],
+                        "actions": [action.value],
+                        "purposes": [purpose.value],
+                    }
+                return AuthorizationFacts(
+                    teacher=TeacherAuthorizationFacts(
+                        assignment=assignment,
+                        teacher_account={
+                            "user_id": current_actor.user_id,
+                            "role": "teacher",
+                            "account_status": "active",
+                        },
+                        student_account=account,
+                    )
+                )
+            return AuthorizationFacts()
+
     app = FastAPI()
     app.include_router(adaptive.router, prefix="/adaptive")
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_actor] = lambda: actor
+    app.dependency_overrides[get_authorization_fact_repository] = _Facts
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _canonical_student_profiles(monkeypatch):
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = cls(2026, 6, 11, 12, 0, tzinfo=timezone.utc)
+            return value if tz else value.replace(tzinfo=None)
+
+    monkeypatch.setattr(adaptive_learning_service, "datetime", _FixedDateTime)
+
+    def profile(user_id):
+        role = "student"
+        if str(user_id).startswith("parent"):
+            role = "parent"
+        elif str(user_id).startswith("teacher"):
+            role = "teacher"
+        elif str(user_id).startswith("admin"):
+            role = "admin"
+        return {
+            "user_id": user_id,
+            "role": role,
+            "account_status": "active",
+        }
+
+    monkeypatch.setattr(adaptive.user_repo, "get_user", profile)
+    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda _id: [])
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "get_progress",
+        lambda _id, _subject=None: [],
+    )
 
 
 def _install_memory_repo(monkeypatch):
@@ -978,7 +1108,7 @@ def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(
     forbidden = _app({"sub": "student-2", "role": "student"}).post(
         f"/adaptive/assignments/{assignment_id}/skip"
     )
-    assert forbidden.status_code == 403
+    assert forbidden.status_code == 404
 
 
 def test_adaptive_locale_metadata_does_not_change_canonical_values(monkeypatch):
@@ -1068,3 +1198,71 @@ def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
     assert second.json()["completionResult"] == {"correct": True, "attemptCount": 1}
     assert second.json()["sequencingFeedback"] == first.json()["sequencingFeedback"]
     assert completed_lessons == ["lesson-1"]
+
+
+def test_adaptive_unassigned_teacher_is_hidden_before_service_reads(monkeypatch):
+    service_reads = []
+    monkeypatch.setattr(
+        adaptive_learning_service.question_repo,
+        "list_by_student",
+        lambda *_args, **_kwargs: service_reads.append("read") or {"Items": []},
+    )
+
+    response = _app(
+        {"sub": "teacher-1", "role": "teacher", "assigned": False}
+    ).get("/adaptive/students/student-1/memory")
+
+    assert response.status_code == 404
+    assert service_reads == []
+
+
+def test_adaptive_automation_preview_capability_cannot_execute(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    client = _app(
+        {
+            "sub": "admin-1",
+            "role": "admin",
+            "grantCapabilities": ["assignment_automation_preview"],
+        }
+    )
+    preview = client.post(
+        "/adaptive/students/student-1/assignment-automation/batches/preview",
+        json={"policy": {"policyId": "policy-scoped"}},
+    )
+    execute = client.post(
+        "/adaptive/students/student-1/assignment-automation/batches/execute",
+        json={
+            "batchId": "batch-1",
+            "approved": True,
+            "policy": {"policyId": "policy-scoped"},
+            "candidates": [],
+        },
+    )
+
+    assert preview.status_code == 200
+    assert execute.status_code == 403
+
+
+def test_adaptive_authorization_outage_prevents_assignment_mutation(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    writes = []
+    monkeypatch.setattr(
+        adaptive_learning_service.adaptive_learning_repo,
+        "put_assignment",
+        lambda item: writes.append(item),
+    )
+
+    response = _app(
+        {"sub": "teacher-1", "role": "teacher", "factsOutage": True}
+    ).post(
+        "/adaptive/assignments",
+        json={
+            "studentId": "student-1",
+            "sourceType": "curriculum_exercise",
+            "sourceId": "challenge-1",
+        },
+    )
+
+    assert response.status_code == 503
+    assert writes == []
