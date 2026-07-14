@@ -999,7 +999,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
     assert "sourceSignals" not in parent_assignment["automation"]
 
 
-def test_reviewed_ai_draft_assignment_requires_draft_visibility(monkeypatch):
+def test_reviewed_ai_draft_assignment_uses_current_student_scope_not_creator_role(monkeypatch):
     _install_memory_repo(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
@@ -1027,8 +1027,8 @@ def test_reviewed_ai_draft_assignment_requires_draft_visibility(monkeypatch):
         },
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Draft is not visible to this user"
+    assert response.status_code == 200
+    assert response.json()["studentId"] == "student-1"
 
 
 def test_reviewed_ai_draft_assignment_lifecycle_is_student_owned_and_idempotent(monkeypatch):

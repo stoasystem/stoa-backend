@@ -18,7 +18,6 @@ from stoa.db.repositories import (
     question_repo,
 )
 from stoa.services import (
-    ai_teacher_tools_service,
     curriculum_analytics_service,
     curriculum_service,
     learning_profile_service,
@@ -1425,7 +1424,6 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
         draft = ai_teacher_tools_repo.get_draft(source_id)
         if not draft:
             raise HTTPException(status_code=404, detail="AI teacher draft not found")
-        ai_teacher_tools_service._require_can_view_draft(draft, user)  # noqa: SLF001
         if draft.get("draft_type") != "practice_exercise" or draft.get("status") != "accepted":
             raise HTTPException(status_code=409, detail="Only accepted practice exercise drafts can be assigned")
         if str(draft.get("student_id") or "") != student_id:
@@ -1704,7 +1702,11 @@ def _safe_reviewed_ai_drafts(student_id: str, user: dict[str, Any]) -> list[dict
             draft_type="practice_exercise",
             limit=None,
         )
-        return [draft for draft in drafts if ai_teacher_tools_service._can_view_draft(draft, user)]  # noqa: SLF001
+        return [
+            draft
+            for draft in drafts
+            if str(draft.get("student_id") or "") == student_id
+        ]
     except Exception:  # pragma: no cover - defensive around optional data sources in partial test doubles
         return []
 
