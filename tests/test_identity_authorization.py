@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 
+from botocore.exceptions import ClientError
 import pytest
 
 from stoa.security.authorization import (
@@ -13,6 +14,73 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode, safe_error_body
 from stoa.security.events import contains_canary, project_security_event
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.identity import resolve_actor
+from stoa.security.tokens import VerifiedAccessToken
+
+
+class FakeIdentityRepository:
+    def __init__(self, *, binding=None, account=None, grants=None, error=None):
+        self.binding = binding
+        self.account = account
+        self.grants = list(grants or [])
+        self.error = error
+        self.reads = []
+
+    async def get_binding(self, issuer, subject):
+        self.reads.append(("binding", issuer, subject))
+        if self.error:
+            raise self.error
+        return self.binding
+
+    async def get_account(self, user_id):
+        self.reads.append(("account", user_id))
+        if self.error:
+            raise self.error
+        return self.account
+
+    async def get_current_grants(self, user_id):
+        self.reads.append(("grants", user_id))
+        if self.error:
+            raise self.error
+        return self.grants
+
+
+def verified_token(*groups):
+    return VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="student-client",
+        groups=groups or ("students",),
+    )
+
+
+def active_repository(**overrides):
+    values = {
+        "binding": {"status": "active", "user_id": "student-1"},
+        "account": {
+            "user_id": "student-1",
+            "role": "student",
+            "account_status": "active",
+            "email": "not-an-identity@example.invalid",
+            "capabilities": ["cannot-broaden"],
+        },
+        "grants": [
+            {
+                "capability": "student_support_lookup",
+                "scope": "student:student-1",
+                "version": 2,
+                "status": "active",
+            },
+            {
+                "capability": "revoked_capability",
+                "scope": "*",
+                "version": 3,
+                "status": "revoked",
+            },
+        ],
+    }
+    values.update(overrides)
+    return FakeIdentityRepository(**values)
 
 
 async def _resolver(_resource_id: str):
@@ -114,6 +182,124 @@ def test_authorization_contract_requires_classification_and_resolver():
             purpose=AuthorizationPurpose.TEACHER_HELP,
             resolver=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_identity_resolves_only_binding_one_group_active_role_and_fresh_grants():
+    repository = active_repository()
+
+    actor = await resolve_actor(verified_token("students", "unrelated-group"), repository)
+
+    assert actor.user_id == "student-1"
+    assert actor.role is CanonicalRole.STUDENT
+    assert [grant.capability for grant in actor.current_grants] == ["student_support_lookup"]
+    assert repository.reads == [
+        ("binding", "https://identity.test/primary", "subject-1"),
+        ("account", "student-1"),
+        ("grants", "student-1"),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("token", "repository"),
+    [
+        (verified_token("students"), active_repository(binding=None)),
+        (verified_token("students", "admins"), active_repository()),
+        (verified_token("unrelated-group"), active_repository()),
+        (verified_token("tutor"), active_repository()),
+        (verified_token("admins"), active_repository()),
+        (
+            verified_token("students"),
+            active_repository(account={"role": "student", "account_status": "suspended"}),
+        ),
+        (
+            verified_token("students"),
+            active_repository(account={"role": "tutor", "account_status": "active"}),
+        ),
+    ],
+)
+async def test_identity_conflicts_never_fallback_or_select_highest_role(token, repository):
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await resolve_actor(token, repository)
+    assert exc_info.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+    assert all(read[0] != "email" for read in repository.reads)
+
+
+@pytest.mark.asyncio
+async def test_identity_repository_outage_is_temporary_authorization_failure():
+    repository = active_repository(error=TimeoutError("offline"))
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await resolve_actor(verified_token(), repository)
+    assert exc_info.value.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
+    assert "offline" not in repr(exc_info.value.public_body())
+
+
+@pytest.mark.asyncio
+async def test_identity_status_and_grant_revocation_apply_on_next_resolution():
+    repository = active_repository()
+    first = await resolve_actor(verified_token(), repository)
+    assert len(first.current_grants) == 1
+
+    repository.grants[0]["status"] = "revoked"
+    second = await resolve_actor(verified_token(), repository)
+    assert second.current_grants == ()
+
+    repository.account["account_status"] = "suspended"
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await resolve_actor(verified_token(), repository)
+    assert exc_info.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+def test_identity_binding_conditional_create_cannot_repoint(monkeypatch):
+    from stoa.db.repositories import identity_repo
+
+    class FakeTable:
+        def __init__(self):
+            self.items = {}
+
+        def put_item(self, *, Item, ConditionExpression):
+            key = (Item["PK"], Item["SK"])
+            if key in self.items:
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException", "Message": "exists"}},
+                    "PutItem",
+                )
+            self.items[key] = dict(Item)
+
+        def get_item(self, *, Key, ConsistentRead):
+            return {"Item": self.items.get((Key["PK"], Key["SK"]))}
+
+    table = FakeTable()
+    monkeypatch.setattr(identity_repo, "get_table", lambda: table)
+    created = identity_repo.create_identity_binding(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        user_id="student-1",
+        created_at="2026-07-14T12:00:00Z",
+        created_by="admin-1",
+    )
+    same = identity_repo.create_identity_binding(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        user_id="student-1",
+        created_at="2026-07-14T12:01:00Z",
+        created_by="admin-2",
+    )
+    assert same == created
+
+    with pytest.raises(identity_repo.IdentityBindingConflict):
+        identity_repo.create_identity_binding(
+            issuer="https://identity.test/primary",
+            subject="subject-1",
+            user_id="attacker-1",
+            created_at="2026-07-14T12:02:00Z",
+            created_by="admin-2",
+        )
+    binding = identity_repo.get_identity_binding(
+        "https://identity.test/primary", "subject-1"
+    )
+    assert binding["user_id"] == "student-1"
 
 
 @pytest.mark.parametrize(
