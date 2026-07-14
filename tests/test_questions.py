@@ -3,8 +3,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user
+from stoa.deps import get_actor
 from stoa.routers import questions
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 
 
 def _settings() -> Settings:
@@ -16,11 +17,22 @@ def _settings() -> Settings:
     )
 
 
-def _client(*, raise_server_exceptions: bool = True) -> TestClient:
+def _actor(role=CanonicalRole.STUDENT, user_id="student-1"):
+    return Actor(
+        user_id,
+        "https://identity.test",
+        f"{user_id}-subject",
+        role,
+        AccountStatus.ACTIVE,
+        role.value,
+    )
+
+
+def _client(*, raise_server_exceptions: bool = True, actor=None) -> TestClient:
     app = FastAPI()
     app.include_router(questions.router, prefix="/questions")
     app.dependency_overrides[get_settings] = _settings
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "student-1", "role": "student"}
+    app.dependency_overrides[get_actor] = lambda: actor or _actor()
     return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
@@ -488,3 +500,115 @@ def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_recon
     assert len(counter_calls) == 1
     assert len(ledger_calls) == 1
     assert ledger_calls[0]["idempotency_key"] == "question-submit-1"
+
+
+def test_submit_question_rejects_body_owner_substitution_before_any_write(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *_args: calls.append("counter"),
+    )
+    monkeypatch.setattr(
+        questions.question_repo, "put_question", lambda *_args: calls.append("put")
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this equation",
+            "subject": "math",
+            "student_id": "student-2",
+        },
+    )
+    assert response.status_code == 422
+    assert calls == []
+
+
+def test_sec_002_real_other_owner_and_random_question_are_indistinguishable(monkeypatch):
+    real = {
+        "question_id": "question-real",
+        "student_id": "student-1",
+        "subject": "math",
+        "content": "private",
+        "status": "pending",
+        "ai_response": None,
+        "teacher_id": None,
+        "teacher_response": None,
+        "knowledge_points": [],
+        "student_feedback": None,
+        "created_at": "2026-07-15T00:00:00Z",
+        "resolved_at": None,
+    }
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda question_id: real if question_id == "question-real" else None,
+    )
+    client = _client(actor=_actor(user_id="student-2"))
+    hidden = client.get("/questions/question-real")
+    missing = client.get("/questions/question-random")
+    assert hidden.status_code == missing.status_code == 404
+    for response in (hidden, missing):
+        assert response.json()["detail"]["code"] == "resource_not_found"
+        assert response.json()["detail"]["message"] == "The requested resource was not found."
+
+
+def test_bound_parent_and_current_task_teacher_question_positive_controls(monkeypatch):
+    item = {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "subject": "math",
+        "content": "private",
+        "status": "teacher_active",
+        "dispatch_status": "accepted",
+        "teacher_id": "teacher-1",
+        "teacher_response": None,
+        "ai_response": None,
+        "knowledge_points": [],
+        "student_feedback": None,
+        "created_at": "2026-07-15T00:00:00Z",
+        "resolved_at": None,
+    }
+    accounts = {
+        "student-1": {"user_id": "student-1", "role": "student", "account_status": "active"},
+        "parent-1": {"user_id": "parent-1", "role": "parent", "account_status": "active"},
+        "teacher-1": {"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
+    }
+    row = {
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "version": 1,
+        "status": "active",
+    }
+    monkeypatch.setattr(questions.question_repo, "get_question", lambda *_: item)
+    monkeypatch.setattr(questions.question_repo, "get_teacher_session", lambda *_: None)
+    monkeypatch.setattr(questions.question_repo, "get_teacher_assignment", lambda *_: None)
+    monkeypatch.setattr(questions.user_repo, "get_user", lambda user_id: accounts.get(user_id))
+    monkeypatch.setattr(questions.user_repo, "get_parent_student_binding", lambda *_: row)
+    monkeypatch.setattr(questions.user_repo, "get_student_parent_binding", lambda *_: dict(row))
+    parent = _client(actor=_actor(CanonicalRole.PARENT, "parent-1")).get(
+        "/questions/question-1"
+    )
+    teacher = _client(actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get(
+        "/questions/question-1"
+    )
+    assert parent.status_code == teacher.status_code == 200
+
+
+def test_question_repository_outage_returns_503_before_feedback_mutation(monkeypatch):
+    writes = []
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda *_: (_ for _ in ()).throw(TimeoutError("store canary")),
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "update_status",
+        lambda *_args, **_kwargs: writes.append("update"),
+    )
+    response = _client().post("/questions/question-1/feedback", json={"rating": 5})
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
+    assert writes == []

@@ -30,8 +30,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def create_case(question_id: str, body: ModerationReportRequest, user: dict[str, Any]) -> dict[str, Any]:
-    question = question_repo.get_question(question_id)
+def create_case(
+    question_id: str,
+    body: ModerationReportRequest,
+    user: dict[str, Any],
+    *,
+    question: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    question = question if question is not None else question_repo.get_question(question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     _require_report_access(question, user)

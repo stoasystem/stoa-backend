@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 
@@ -21,6 +21,8 @@ class AIResponse(BaseModel):
 
 
 class SubmitQuestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     content: str = Field(..., min_length=5, max_length=2000)
     subject: str = Field(..., pattern="^(math|physics|german|english)$")
     image_s3_key: Optional[str] = None

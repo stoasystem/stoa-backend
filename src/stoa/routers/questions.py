@@ -7,7 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import question_repo, user_repo
-from stoa.deps import get_current_user, require_role
+from stoa.deps import get_actor
+from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
+from stoa.security.identity import Actor
+from stoa.security.route_authorization import (
+    QUESTION_CONTENT_READ,
+    STUDENT_SELF,
+    authorized_question_dependency,
+    student_create_actor_dependency,
+)
 from stoa.models.question import (
     FeedbackRequest,
     QuestionResponse,
@@ -123,11 +131,11 @@ def _question_retry_matches(existing_question: dict[str, Any], body: SubmitQuest
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_question(
     body: SubmitQuestionRequest,
-    user: dict = Depends(require_role("student")),
+    actor: Actor = Depends(student_create_actor_dependency(ResourceType.QUESTION)),
     settings: Settings = Depends(get_settings),
 ):
     """Submit a question; run OCR if an image is provided, then call AI."""
-    student_id = user["sub"]
+    student_id = actor.user_id
     student_profile = user_repo.get_user(student_id) or {}
     subscription_tier = student_profile.get("subscription_tier", "free")
     entitlement = entitlement_service.resolve_student_entitlement(
@@ -240,33 +248,29 @@ async def submit_question(
 
 @router.get("/{question_id}", response_model=QuestionResponse)
 async def get_question(
-    question_id: str,
-    user: dict = Depends(get_current_user),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.READ, purposes=QUESTION_CONTENT_READ
+        )
+    ),
 ):
     """Retrieve a question and its AI/teacher response."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    # Students may only view their own questions
-    if user.get("role") == "student" and item.get("student_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="Not your question")
-
-    return _question_response(item)
+    return _question_response(dict(authorized.value))
 
 
 @router.post("/{question_id}/request-teacher", status_code=status.HTTP_202_ACCEPTED)
 async def request_teacher(
-    question_id: str,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.UPDATE, purposes=STUDENT_SELF
+        )
+    ),
     settings: Settings = Depends(get_settings),
 ):
     """Escalate a question to a human teacher via SQS FIFO queue."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
-    if item.get("student_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="Not your question")
+    question_id = authorized.ref.resource_id
+    student_id = authorized.ref.student_id
+    item = authorized.value
     if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Teacher already active on this question")
 
@@ -279,12 +283,12 @@ async def request_teacher(
     )
     notify_service.enqueue_teacher_request(
         question_id=question_id,
-        student_id=user["sub"],
+        student_id=student_id,
         subject=item["subject"],
     )
     notification_service.emit_teacher_requested(
         question_id=question_id,
-        student_id=user["sub"],
+        student_id=student_id,
         subject=item["subject"],
     )
     dispatch_question = {
@@ -302,7 +306,7 @@ async def request_teacher(
             "reason": type(exc).__name__,
         }
     usage_ledger_service.record_usage_event(
-        student_id=user["sub"],
+        student_id=student_id,
         action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
         quota_period=usage_ledger_service.today_period(),
         idempotency_key=usage_ledger_service.build_usage_idempotency_key(
@@ -322,17 +326,16 @@ async def request_teacher(
 
 @router.post("/{question_id}/feedback", status_code=status.HTTP_200_OK)
 async def submit_feedback(
-    question_id: str,
     body: FeedbackRequest,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.UPDATE, purposes=STUDENT_SELF
+        )
+    ),
 ):
     """Rate a resolved question (1–5 stars)."""
-    item = question_repo.get_question(question_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Question not found")
-    if item.get("student_id") != user["sub"]:
-        raise HTTPException(status_code=403, detail="Not your question")
-
+    question_id = authorized.ref.resource_id
+    item = authorized.value
     question_repo.update_status(question_id, item["status"], student_feedback=body.rating)
     return {"question_id": question_id, "rating": body.rating}
 
@@ -343,9 +346,18 @@ async def submit_feedback(
     status_code=status.HTTP_201_CREATED,
 )
 async def report_question_content(
-    question_id: str,
     body: ModerationReportRequest,
-    user: dict = Depends(get_current_user),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.CREATE, purposes=QUESTION_CONTENT_READ
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Create a moderation case for reportable question content."""
-    return moderation_service.create_case(question_id, body, user)
+    return moderation_service.create_case(
+        authorized.ref.resource_id,
+        body,
+        {"sub": actor.user_id, "role": actor.role.value},
+        question=dict(authorized.value),
+    )
