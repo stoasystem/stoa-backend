@@ -12,6 +12,7 @@ from stoa.security.authorization import (
     ParentAuthorizationFacts,
     ResourceRef,
     ResourceType,
+    TeacherAuthorizationFacts,
     authorize_and_resolve,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
@@ -186,3 +187,164 @@ async def test_resolver_returns_exact_authorized_object_and_outage_prevents_hand
     assert outage.value.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
     assert "authorization canary" not in repr(outage.value.public_body())
     assert handler_calls == [loaded]
+
+
+def _teacher_decision(
+    resource_type=ResourceType.QUESTION,
+    resource_id="question-1",
+    *,
+    question=None,
+    session=None,
+    assignment=None,
+    action=AuthorizationAction.READ,
+    purpose=AuthorizationPurpose.TEACHER_HELP,
+    teacher_status="active",
+):
+    ref = ResourceRef(
+        resource_type,
+        resource_id,
+        "student-1",
+        relationship_known=True,
+    )
+    facts = TeacherAuthorizationFacts(
+        question=question,
+        session=session,
+        assignment=assignment,
+        teacher_account={
+            "user_id": "teacher-1",
+            "role": "teacher",
+            "account_status": teacher_status,
+        },
+        student_account={
+            "user_id": "student-1",
+            "role": "student",
+            "account_status": "active",
+        },
+    )
+    return AuthorizationPolicy().evaluate(
+        _actor(CanonicalRole.TEACHER, "teacher-1"),
+        AuthorizedResource(ref, {"id": resource_id}, AuthorizationFacts(teacher=facts)),
+        action,
+        purpose,
+    )
+
+
+def test_teacher_current_task_is_narrow_and_queue_visibility_never_authorizes():
+    current = {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "teacher_id": "teacher-1",
+        "session_id": "session-1",
+        "status": "teacher_active",
+        "dispatch_status": "accepted",
+        "queue_visible_at": "2026-07-15T09:00:00Z",
+    }
+    session = {
+        "session_id": "session-1",
+        "question_id": "question-1",
+        "teacher_id": "teacher-1",
+        "student_id": "student-1",
+        "resolved_at": None,
+    }
+    assert _teacher_decision(question=current, session=session).allowed is True
+    assert (
+        _teacher_decision(
+            ResourceType.REPORT,
+            "report-1",
+            question=current,
+            session=session,
+        ).allowed
+        is False
+    )
+    queue_only = {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "status": "escalated",
+        "queue_visible_at": "2026-07-15T09:00:00Z",
+    }
+    assert _teacher_decision(question=queue_only).allowed is False
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["wrong_teacher", "stale_dispatch", "reassigned", "wrong_session", "suspended"],
+)
+def test_teacher_stale_wrong_or_suspended_task_denies_immediately(change):
+    question = {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "teacher_id": "teacher-1",
+        "session_id": "session-1",
+        "status": "teacher_active",
+        "dispatch_status": "accepted",
+    }
+    session = {
+        "session_id": "session-1",
+        "teacher_id": "teacher-1",
+        "student_id": "student-1",
+        "resolved_at": None,
+    }
+    teacher_status = "active"
+    if change == "wrong_teacher":
+        question["teacher_id"] = "teacher-2"
+    elif change == "stale_dispatch":
+        question.update(
+            teacher_id=None,
+            dispatched_teacher_id="teacher-1",
+            dispatch_status="dispatched",
+            dispatch_deadline_at="2020-01-01T00:00:00Z",
+        )
+    elif change == "reassigned":
+        question["dispatch_status"] = "reassigned"
+    elif change == "wrong_session":
+        session["teacher_id"] = "teacher-2"
+    elif change == "suspended":
+        teacher_status = "suspended"
+    assert (
+        _teacher_decision(
+            question=question,
+            session=session,
+            teacher_status=teacher_status,
+        ).allowed
+        is False
+    )
+
+
+def test_teacher_separate_assignment_requires_exact_resource_action_and_purpose_scope():
+    assignment = {
+        "teacher_id": "teacher-1",
+        "student_id": "student-1",
+        "status": "active",
+        "scope": (
+            "resource:adaptive_profile:adaptive-1:"
+            "action:read:purpose:learning_assignment"
+        ),
+    }
+    assert (
+        _teacher_decision(
+            ResourceType.ADAPTIVE_PROFILE,
+            "adaptive-1",
+            assignment=assignment,
+            purpose=AuthorizationPurpose.LEARNING_ASSIGNMENT,
+        ).allowed
+        is True
+    )
+    assert (
+        _teacher_decision(
+            ResourceType.REPORT,
+            "report-1",
+            assignment=assignment,
+            purpose=AuthorizationPurpose.LEARNING_ASSIGNMENT,
+        ).allowed
+        is False
+    )
+    revoked = {**assignment, "status": "revoked"}
+    assert (
+        _teacher_decision(
+            ResourceType.ADAPTIVE_PROFILE,
+            "adaptive-1",
+            assignment=revoked,
+            purpose=AuthorizationPurpose.LEARNING_ASSIGNMENT,
+        ).allowed
+        is False
+    )

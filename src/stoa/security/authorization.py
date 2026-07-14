@@ -124,7 +124,7 @@ class TeacherAuthorizationFacts:
             return False
         if not _active_account(self.student_account, resource.student_id, CanonicalRole.STUDENT):
             return False
-        if self._current_task_permits(actor_id, resource, action, purpose):
+        if self._current_task_permits(actor_id, resource, action, purpose, now):
             return True
         assignment = self.assignment
         if not assignment or assignment.get("status") != "active":
@@ -133,9 +133,15 @@ class TeacherAuthorizationFacts:
             return False
         if _expired(assignment.get("expires_at"), now):
             return False
-        return _scope_matches(
+        exact_scope = _scope_matches(
             str(assignment.get("scope") or ""), resource, action, purpose, allow_global=False
         )
+        declared_scope = (
+            resource.resource_type.value in _string_set(assignment.get("resource_types"))
+            and action.value in _string_set(assignment.get("actions"))
+            and purpose.value in _string_set(assignment.get("purposes"))
+        )
+        return exact_scope or declared_scope
 
     def _current_task_permits(
         self,
@@ -143,6 +149,7 @@ class TeacherAuthorizationFacts:
         resource: ResourceRef,
         action: AuthorizationAction,
         purpose: AuthorizationPurpose,
+        now: datetime,
     ) -> bool:
         if purpose is not AuthorizationPurpose.TEACHER_HELP:
             return False
@@ -153,6 +160,10 @@ class TeacherAuthorizationFacts:
         if current_teacher != actor_id:
             return False
         if question.get("dispatch_status") in {"timed_out", "reassigned", "revoked"}:
+            return False
+        if question.get("dispatch_status") == "dispatched" and _expired(
+            question.get("dispatch_deadline_at"), now
+        ):
             return False
         if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
             return False
@@ -267,6 +278,26 @@ class CurrentAuthorizationFactRepository:
                     forward=user_repo.get_parent_student_binding(actor.user_id, resource.student_id),
                     reverse=user_repo.get_student_parent_binding(resource.student_id, actor.user_id),
                     parent_account=user_repo.get_user(actor.user_id),
+                    student_account=user_repo.get_user(resource.student_id),
+                )
+            )
+        if actor.role is CanonicalRole.TEACHER:
+            from stoa.db.repositories import question_repo, user_repo
+
+            question = (
+                question_repo.get_question(resource.resource_id)
+                if resource.resource_type is ResourceType.QUESTION
+                else None
+            )
+            session_id = str((question or {}).get("session_id") or "")
+            return AuthorizationFacts(
+                teacher=TeacherAuthorizationFacts(
+                    question=question,
+                    session=question_repo.get_teacher_session(session_id),
+                    assignment=question_repo.get_teacher_assignment(
+                        actor.user_id, resource.student_id
+                    ),
+                    teacher_account=user_repo.get_user(actor.user_id),
                     student_account=user_repo.get_user(resource.student_id),
                 )
             )
@@ -455,6 +486,12 @@ def _scope_matches(
         ),
     }
     return scope in exact or (allow_global and scope == "global")
+
+
+def _string_set(value: object) -> set[str]:
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return set()
+    return {str(item) for item in value}
 
 
 def _matching_grant(

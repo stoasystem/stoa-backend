@@ -11,8 +11,36 @@ def put_question(item: dict) -> None:
 
 def get_question(question_id: str) -> dict | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": f"QUESTION#{question_id}", "SK": "META"})
+    resp = table.get_item(
+        Key={"PK": f"QUESTION#{question_id}", "SK": "META"},
+        ConsistentRead=True,
+    )
     return resp.get("Item")
+
+
+def get_teacher_session(session_id: str) -> dict | None:
+    """Read a current teacher-session snapshot without changing its lifecycle."""
+    if not session_id:
+        return None
+    response = get_table().get_item(
+        Key={"PK": f"SESSION#{session_id}", "SK": "META"},
+        ConsistentRead=True,
+    )
+    return response.get("Item")
+
+
+def get_teacher_assignment(teacher_id: str, student_id: str) -> dict | None:
+    """Read the existing scoped assignment row; Phase 475 owns its writes."""
+    if not teacher_id or not student_id:
+        return None
+    response = get_table().get_item(
+        Key={
+            "PK": f"TEACHER_ASSIGNMENT#{teacher_id}",
+            "SK": f"STUDENT#{student_id}",
+        },
+        ConsistentRead=True,
+    )
+    return response.get("Item")
 
 
 def list_by_student(student_id: str, limit: int = 20, last_key: dict | None = None) -> dict:
