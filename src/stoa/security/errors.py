@@ -88,3 +88,35 @@ def safe_error_body(
 
 def security_http_status(code: SecurityErrorCode) -> int:
     return _HTTP_STATUS[code]
+
+
+@dataclass(frozen=True, slots=True)
+class SecurityHttpResponse:
+    status_code: int
+    body: dict[str, str]
+    headers: dict[str, str]
+
+
+def safe_error_response(
+    code: SecurityErrorCode,
+    correlation_id: str | None = None,
+    *,
+    retry_after_seconds: int | None = None,
+    **sensitive_detail: Any,
+) -> SecurityHttpResponse:
+    """Create a safe transport projection, emitting Retry-After only for temporary outages."""
+    headers: dict[str, str] = {}
+    if retry_after_seconds is not None:
+        if code not in {
+            SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE,
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+        }:
+            raise ValueError("Retry-After is only valid for temporary dependency errors")
+        if not 1 <= retry_after_seconds <= 120:
+            raise ValueError("Retry-After must be between 1 and 120 seconds")
+        headers["Retry-After"] = str(retry_after_seconds)
+    return SecurityHttpResponse(
+        status_code=security_http_status(code),
+        body=safe_error_body(code, correlation_id, **sensitive_detail),
+        headers=headers,
+    )

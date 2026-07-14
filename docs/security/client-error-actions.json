@@ -1,0 +1,179 @@
+{
+  "errors": {
+    "action_not_allowed": {
+      "action": "none",
+      "http_statuses": [
+        403
+      ],
+      "message_key": "security.action_unavailable",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "This action is not available for your account.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "authentication_required": {
+      "action": "reauthenticate",
+      "http_statuses": [
+        401
+      ],
+      "message_key": "security.sign_in_required",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Please sign in to continue.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "authorization_temporarily_unavailable": {
+      "action": "retry_later",
+      "http_statuses": [
+        503
+      ],
+      "message_key": "security.action_temporarily_unavailable",
+      "retry": {
+        "automatic": true,
+        "idempotent_reads_only": true,
+        "max_attempts": 2,
+        "requires_retry_after": true,
+        "user_resumption_with_idempotency_key": true
+      },
+      "safe_copy": "This action is temporarily unavailable. Try again shortly.",
+      "show_correlation_id": true,
+      "support_guidance": "Share the correlation ID with support."
+    },
+    "identity_conflict": {
+      "action": "start_account_recovery",
+      "http_statuses": [
+        409
+      ],
+      "message_key": "security.account_recovery_required",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Your account needs recovery before you can continue.",
+      "show_correlation_id": true,
+      "support_guidance": "Share the correlation ID with support."
+    },
+    "identity_provider_unavailable": {
+      "action": "retry_later",
+      "http_statuses": [
+        503
+      ],
+      "message_key": "security.sign_in_temporarily_unavailable",
+      "retry": {
+        "automatic": true,
+        "idempotent_reads_only": true,
+        "max_attempts": 2,
+        "requires_retry_after": true,
+        "user_resumption_with_idempotency_key": true
+      },
+      "safe_copy": "Sign-in is temporarily unavailable. Try again shortly.",
+      "show_correlation_id": true,
+      "support_guidance": "Share the correlation ID with support."
+    },
+    "invalid_token": {
+      "action": "reauthenticate",
+      "http_statuses": [
+        401
+      ],
+      "message_key": "security.session_invalid",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Your session is no longer valid. Please sign in again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "parent_binding_required": {
+      "action": "complete_parent_binding",
+      "http_statuses": [
+        409
+      ],
+      "message_key": "security.parent_connection_required",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Complete the parent connection before continuing.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "resource_not_found": {
+      "action": "none",
+      "http_statuses": [
+        404
+      ],
+      "message_key": "security.resource_unavailable",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "The requested item is unavailable.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "teacher_review_pending": {
+      "action": "wait_for_teacher_review",
+      "http_statuses": [
+        409
+      ],
+      "message_key": "security.teacher_review_pending",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Your teacher application is still under review.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "token_expired": {
+      "action": "reauthenticate",
+      "http_statuses": [
+        401
+      ],
+      "message_key": "security.session_expired",
+      "retry": {
+        "automatic": true,
+        "idempotent_reads_only": false,
+        "max_attempts": 1,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Your session expired. We will try once to restore it.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    }
+  },
+  "ownership": {
+    "contract": "Phase 472 generates and tests this shared behavior contract.",
+    "rendering": "Phase 478 owns web and mobile rendering and application integration."
+  },
+  "schemaVersion": "472.1"
+}
