@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
+from inspect import isawaitable
 
 from fastapi import Depends, HTTPException
 
@@ -142,13 +143,19 @@ def authorized_question_dependency(
 
 
 def student_create_actor_dependency(resource_type: ResourceType):
+    return student_actor_dependency(resource_type, AuthorizationAction.CREATE)
+
+
+def student_actor_dependency(
+    resource_type: ResourceType, action: AuthorizationAction
+):
     async def resolve(resource_id: str):
         return {"student_id": resource_id}
 
     async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
         spec = AuthorizationSpec(
             resource_type,
-            AuthorizationAction.CREATE,
+            action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         )
@@ -168,10 +175,83 @@ def student_create_actor_dependency(resource_type: ResourceType):
     dependency.authorization_specs = (  # type: ignore[attr-defined]
         _metadata_spec(
             resource_type,
-            AuthorizationAction.CREATE,
+            action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         ),
+    )
+    return dependency
+
+
+async def authorize_conversation_resource(
+    *,
+    conversation_id: str,
+    actor: Actor,
+    facts: CurrentAuthorizationFactRepository,
+    action: AuthorizationAction,
+    purposes: PurposeMap,
+    resolver: Callable[[str], Mapping[str, object] | None | Awaitable[Mapping[str, object] | None]],
+) -> AuthorizedResource:
+    async def resolve(resource_id: str):
+        item = resolver(resource_id)
+        if isawaitable(item):
+            item = await item
+        if not item:
+            return None
+        student_id = str(item.get("student_id") or "")
+        return AuthorizedResource(
+            ResourceRef(
+                ResourceType.CONVERSATION,
+                resource_id,
+                student_id,
+                question_id=str(item.get("question_id") or "") or None,
+                session_id=str(item.get("session_id") or "") or None,
+            ),
+            item,
+        )
+
+    spec = AuthorizationSpec(
+        ResourceType.CONVERSATION, action, _purpose_for(actor, purposes), resolve
+    )
+    try:
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=conversation_id,
+            spec=spec,
+            fact_repository=facts,
+        )
+    except SecurityDecisionError as error:
+        _raise_http(error)
+
+
+def authorized_conversation_dependency(
+    *,
+    action: AuthorizationAction,
+    purposes: PurposeMap,
+    resolver: Callable[[str], Mapping[str, object] | None],
+):
+    async def dependency(
+        conv_id: str,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+    ) -> AuthorizedResource:
+        return await authorize_conversation_resource(
+            conversation_id=conv_id,
+            actor=actor,
+            facts=facts,
+            action=action,
+            purposes=purposes,
+            resolver=resolver,
+        )
+
+    async def metadata_resolver(resource_id: str):
+        return resolver(resource_id)
+
+    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+        _metadata_spec(ResourceType.CONVERSATION, action, purpose, metadata_resolver)
+        for purpose in purposes.values()
     )
     return dependency
 
@@ -184,6 +264,12 @@ STUDENT_CONTENT_READ = {
     CanonicalRole.ADMIN: AuthorizationPurpose.SUPPORT,
 }
 QUESTION_CONTENT_READ = {
+    CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE,
+    CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT,
+    CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP,
+    CanonicalRole.ADMIN: AuthorizationPurpose.SUPPORT,
+}
+CONVERSATION_CONTENT_READ = {
     CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE,
     CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT,
     CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP,

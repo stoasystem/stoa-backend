@@ -14,13 +14,30 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from stoa.config import settings
-from stoa.deps import require_role
+from stoa.deps import get_actor
 from stoa.db.dynamodb import get_table
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizationSpec,
+    AuthorizedResource,
+    ResourceType,
+)
+from stoa.security.identity import Actor
+from stoa.security.route_authorization import (
+    CONVERSATION_CONTENT_READ,
+    STUDENT_SELF,
+    authorize_conversation_resource,
+    authorized_conversation_dependency,
+    get_authorization_fact_repository,
+    student_actor_dependency,
+    student_create_actor_dependency,
+)
 from stoa.services import (
     ai_service,
     entitlement_service,
@@ -87,12 +104,16 @@ def _chat_limit_for_student(student_id: str) -> int:
 # ── Request / Response models ──────────────────────────────────────────────────
 
 class CreateConversationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     subject: str
     grade: str
     initialMessage: str | None = None
 
 
 class SendMessageRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     content: str
     attachmentIds: list[str] | None = None
 
@@ -129,6 +150,8 @@ class ConversationListResponse(BaseModel):
 
 
 class TeacherHelpRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     conversationId: str
     message: str | None = None
 
@@ -185,8 +208,12 @@ def _generate_title(first_message: str, subject: str) -> str | None:
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ConversationListResponse)
-async def list_conversations(user: dict = Depends(require_role("student"))):
-    student_id = user["sub"]
+async def list_conversations(
+    actor: Actor = Depends(
+        student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.READ)
+    ),
+):
+    student_id = actor.user_id
     items = _list_conversations(student_id)
     summaries = [
         ConversationSummary(
@@ -205,9 +232,9 @@ async def list_conversations(user: dict = Depends(require_role("student"))):
 @router.post("", response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
 async def create_conversation(
     body: CreateConversationRequest,
-    user: dict = Depends(require_role("student")),
+    actor: Actor = Depends(student_create_actor_dependency(ResourceType.CONVERSATION)),
 ):
-    student_id = user["sub"]
+    student_id = actor.user_id
     conv_id = str(uuid.uuid4())
     now = _now()
     title = f"{body.subject} – {body.grade}"
@@ -263,13 +290,16 @@ async def create_conversation(
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
 async def get_conversation(
-    conv_id: str,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.READ,
+            purposes=CONVERSATION_CONTENT_READ,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
 ):
-    student_id = user["sub"]
-    conv = _get_conversation(conv_id)
-    if not conv or conv.get("student_id") != student_id:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conv_id = authorized.ref.resource_id
+    conv = authorized.value
 
     raw_messages = _get_messages(conv_id)
     messages = [
@@ -296,14 +326,18 @@ async def get_conversation(
 
 @router.post("/{conv_id}/messages", response_model=SendMessageResponse)
 async def send_message(
-    conv_id: str,
     body: SendMessageRequest,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.RESPOND,
+            purposes=STUDENT_SELF,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
 ):
-    student_id = user["sub"]
-    conv = _get_conversation(conv_id)
-    if not conv or conv.get("student_id") != student_id:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conv_id = authorized.ref.resource_id
+    student_id = authorized.ref.student_id
+    conv = authorized.value
 
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
@@ -329,9 +363,14 @@ async def send_message(
 
 @router.post("/{conv_id}/messages/stream")
 async def stream_message(
-    conv_id: str,
     body: SendMessageRequest,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.RESPOND,
+            purposes=STUDENT_SELF,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
 ):
     """Send a message and stream the AI reply as Server-Sent Events.
 
@@ -339,10 +378,9 @@ async def stream_message(
     pseudo-streaming: the client receives all SSE events at once, but
     the SSE parser handles them correctly and the UI updates as expected.
     """
-    student_id = user["sub"]
-    conv = _get_conversation(conv_id)
-    if not conv or conv.get("student_id") != student_id:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conv_id = authorized.ref.resource_id
+    student_id = authorized.ref.student_id
+    conv = authorized.value
 
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
@@ -551,9 +589,40 @@ def _record_chat_usage(
 teacher_help_router = APIRouter()
 
 
+async def _teacher_help_conversation_dependency(
+    body: TeacherHelpRequest,
+    actor: Actor = Depends(get_actor),
+    facts=Depends(get_authorization_fact_repository),
+) -> AuthorizedResource:
+    return await authorize_conversation_resource(
+        conversation_id=body.conversationId,
+        actor=actor,
+        facts=facts,
+        action=AuthorizationAction.UPDATE,
+        purposes=STUDENT_SELF,
+        resolver=_get_conversation,
+    )
+
+
+async def _teacher_help_conversation_metadata_resolver(conversation_id: str):
+    return _get_conversation(conversation_id)
+
+
+_teacher_help_conversation_dependency.authorization_specs = (
+    AuthorizationSpec(
+        ResourceType.CONVERSATION,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _teacher_help_conversation_metadata_resolver,
+    ),
+)
+
+
 @teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)
 async def get_teacher_help_availability(
-    user: dict = Depends(require_role("student")),
+    _actor: Actor = Depends(
+        student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.LOOKUP)
+    ),
 ):
     """Return student-safe teacher availability for the chat indicator."""
     return teacher_dispatch_service.teacher_availability_summary()
@@ -562,17 +631,15 @@ async def get_teacher_help_availability(
 @teacher_help_router.post("/request", response_model=TeacherHelpResponse)
 async def request_teacher_help(
     body: TeacherHelpRequest,
-    user: dict = Depends(require_role("student")),
+    authorized: AuthorizedResource = Depends(_teacher_help_conversation_dependency),
 ):
     """Escalate a conversation to a human teacher."""
-    student_id = user["sub"]
+    student_id = authorized.ref.student_id
     request_id = str(uuid.uuid4())
     now = _now()
 
     table = get_table()
-    conv = _get_conversation(body.conversationId)
-    if not conv or conv.get("student_id") != student_id:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conv = authorized.value
 
     # Mark conversation as escalated with request metadata
     try:
