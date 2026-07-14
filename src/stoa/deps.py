@@ -119,6 +119,15 @@ async def get_current_user(actor: Actor = Depends(get_actor)) -> dict[str, Any]:
         "role": actor.role.value,
         "account_status": actor.account_status.value,
         "capabilities": capabilities,
+        "current_grants": [
+            {
+                "capability": grant.capability,
+                "scope": grant.scope,
+                "version": grant.version,
+                "status": "active",
+            }
+            for grant in actor.current_grants
+        ],
     }
 
 

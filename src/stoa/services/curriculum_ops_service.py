@@ -456,32 +456,17 @@ def _require_capability(user: dict[str, Any], *allowed: str) -> None:
 
 
 def curriculum_capabilities(user: dict[str, Any]) -> set[str]:
-    values: list[Any] = []
-    for key in [
-        "curriculum_capabilities",
-        "curriculumCapabilities",
-        "capabilities",
-        "permissions",
-        "scopes",
-        "custom:curriculum_capabilities",
-    ]:
-        values.append(user.get(key))
-    for container_key in ["profile", "metadata", "claims"]:
-        container = user.get(container_key)
-        if isinstance(container, dict):
-            values.extend(
-                [
-                    container.get("curriculum_capabilities"),
-                    container.get("curriculumCapabilities"),
-                    container.get("capabilities"),
-                    container.get("permissions"),
-                    container.get("scopes"),
-                ]
-            )
-
-    capabilities: set[str] = set()
-    for value in values:
-        capabilities.update(_coerce_capabilities(value))
+    grants = user.get("current_grants")
+    if not isinstance(grants, list | tuple):
+        return set()
+    capabilities = {
+        str(grant.get("capability"))
+        for grant in grants
+        if isinstance(grant, dict)
+        and grant.get("status") == "active"
+        and grant.get("scope")
+        and int(grant.get("version") or 0) > 0
+    }
     return capabilities & CURRICULUM_CAPABILITIES
 
 

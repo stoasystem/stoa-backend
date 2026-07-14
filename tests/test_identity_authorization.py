@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from datetime import datetime
 
 from botocore.exceptions import ClientError
 import pytest
@@ -249,6 +250,112 @@ async def test_identity_status_and_grant_revocation_apply_on_next_resolution():
     with pytest.raises(SecurityDecisionError) as exc_info:
         await resolve_actor(verified_token(), repository)
     assert exc_info.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
+    from stoa.db.repositories import capability_repo
+
+    class FakeTable:
+        def __init__(self):
+            self.items = {}
+
+        def put_item(self, *, Item, ConditionExpression):
+            key = (Item["PK"], Item["SK"])
+            if key in self.items:
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
+                )
+            self.items[key] = dict(Item)
+
+        def update_item(self, *, Key, ExpressionAttributeValues, **_kwargs):
+            key = (Key["PK"], Key["SK"])
+            item = self.items.get(key)
+            expected = ExpressionAttributeValues[":expected_version"]
+            if not item or item["version"] != expected:
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
+                )
+            item.update(
+                status=ExpressionAttributeValues[":status"],
+                version=ExpressionAttributeValues[":next_version"],
+                updated_at=ExpressionAttributeValues[":changed_at"],
+            )
+            return {"Attributes": dict(item)}
+
+        def query(self, **_kwargs):
+            return {"Items": list(self.items.values())}
+
+    table = FakeTable()
+    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    grant = capability_repo.grant_capability(
+        user_id="admin-1",
+        grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global",
+        grantor_id="admin-0",
+        reason="approved change",
+        effective_at="2026-07-14T12:00:00Z",
+    )
+    assert grant["version"] == 1
+    assert len(
+        capability_repo.get_current_grants(
+            "admin-1",
+            now=datetime.fromisoformat("2026-07-14T12:01:00+00:00"),
+            table_factory=lambda: table,
+        )
+    ) == 1
+
+    revoked = capability_repo.revoke_capability(
+        user_id="admin-1",
+        grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global",
+        expected_version=1,
+        actor_id="admin-0",
+        reason="access removed",
+        changed_at="2026-07-14T12:02:00Z",
+    )
+    assert revoked["version"] == 2
+    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    with pytest.raises(capability_repo.CapabilityVersionConflict):
+        capability_repo.restore_capability(
+            user_id="admin-1",
+            grant_id="grant-1",
+            capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+            scope="global",
+            expected_version=1,
+            actor_id="admin-0",
+            reason="stale approval",
+            changed_at="2026-07-14T12:03:00Z",
+        )
+
+
+def test_security_audit_projection_never_copies_sensitive_inputs():
+    from stoa.db.repositories.security_audit_repo import project_audit_event
+
+    projected = project_audit_event(
+        {
+            "event_id": "event-1",
+            "event_type": "capability_revoked",
+            "actor_id": "admin-1",
+            "target_id": "teacher-1",
+            "version": 2,
+            "reason_code": "approved_change",
+            "capabilities": ["secret-capability"],
+            "application": {"statement": "private"},
+            "token": "token-canary",
+            "email": "email-canary",
+            "provider_payload": "provider-canary",
+        }
+    )
+    assert projected == {
+        "event_id": "event-1",
+        "event_type": "capability_revoked",
+        "actor_id": "admin-1",
+        "target_id": "teacher-1",
+        "version": 2,
+        "reason_code": "approved_change",
+    }
 
 
 def test_identity_binding_conditional_create_cannot_repoint(monkeypatch):

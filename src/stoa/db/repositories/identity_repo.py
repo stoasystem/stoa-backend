@@ -6,7 +6,6 @@ import asyncio
 from hashlib import sha256
 from typing import Any
 
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
@@ -91,13 +90,9 @@ def get_identity_binding(issuer: str, subject: str) -> dict[str, Any] | None:
 
 
 def get_current_capability_grants(user_id: str) -> list[dict[str, Any]]:
-    response = get_table().query(
-        KeyConditionExpression=(
-            Key("PK").eq(f"USER#{user_id}") & Key("SK").begins_with("CAPABILITY#")
-        ),
-        ConsistentRead=True,
-    )
-    return [dict(item) for item in response.get("Items", [])]
+    from stoa.db.repositories import capability_repo
+
+    return capability_repo.get_current_grants(user_id, table_factory=get_table)
 
 
 class DynamoIdentityRepository:

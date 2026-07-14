@@ -18,7 +18,15 @@ def _operator_user(*capabilities: str, role: str = "teacher", sub: str = "operat
     return {
         "sub": sub,
         "role": role,
-        "capabilities": {capability: "granted" for capability in capabilities},
+        "current_grants": [
+            {
+                "capability": capability,
+                "scope": "global",
+                "status": "active",
+                "version": 1,
+            }
+            for capability in capabilities
+        ],
     }
 
 
@@ -142,6 +150,17 @@ def test_curriculum_authoring_requires_explicit_capability(monkeypatch, role):
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "curriculum_capability_required"
+
+
+def test_curriculum_ignores_claim_profile_and_permission_capabilities():
+    untrusted = {
+        "role": "teacher",
+        "capabilities": {curriculum_ops_service.AUTHOR_CAPABILITY: "granted"},
+        "permissions": [curriculum_ops_service.REVIEWER_CAPABILITY],
+        "claims": {"scopes": curriculum_ops_service.PUBLISHER_CAPABILITY},
+        "profile": {"capabilities": [curriculum_ops_service.AUTHOR_CAPABILITY]},
+    }
+    assert curriculum_ops_service.curriculum_capabilities(untrusted) == set()
 
 
 def test_curriculum_route_still_requires_internal_role(monkeypatch):
