@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-14T19:26:14.264Z"
-last_activity: 2026-07-14 -- Phase 472 execution started
+last_updated: "2026-07-14T19:39:56.979Z"
+last_activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harness
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 10
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
-Plan: 1 of 10
-Status: Executing Phase 472
-Last activity: 2026-07-14 -- Phase 472 execution started
+Plan: 2 of 10
+Status: Ready to execute
+Last activity: 2026-07-14 -- Completed 472-01 security contracts and Wave 0 harness
 
 ## Accumulated Context
 
@@ -37,6 +37,9 @@ Last activity: 2026-07-14 -- Phase 472 execution started
 - The mobile dependency manifest is currently unresolvable and most routes remain placeholder UI; v9.0 requires clean builds and real student/parent journeys.
 - Curriculum mutation remains restricted to explicitly capability-authorized operators; teacher role alone is insufficient.
 - External rollout, paid marketing, new markets, enterprise automation, broader AI autonomy, and uncontrolled provider writes remain out of scope.
+- Phase 472 uses one closed canonical role enum: `student|parent|teacher|admin`; historical aliases are rejection/reconciliation inputs only.
+- Security responses expose only stable `code`, safe `message`, and `correlationId`; temporary dependency retries are bounded and idempotent-read-only.
+- Wave 0 client recovery behavior is generated and tested in Phase 472; Phase 478 owns web/mobile rendering and integration.
 
 ### Pending Todos
 
@@ -56,3 +59,9 @@ Last activity: 2026-07-14 -- Phase 472 execution started
 
 - Run `$gsd-execute-phase 472`.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
+
+## Performance Metrics
+
+| Phase | Plan | Duration | Notes |
+|-------|------|----------|-------|
+| Phase 472 P01 | 7 min | 4 tasks | 18 files |

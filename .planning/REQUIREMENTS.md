@@ -124,15 +124,15 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 
 | Requirement | Phase | Status |
 | --- | --- | --- |
-| V9AUTH-01 | Phase 472 | Pending |
-| V9AUTH-02 | Phase 472 | Pending |
-| V9AUTH-03 | Phase 472 | Pending |
-| V9AUTH-04 | Phase 472 | Pending |
-| V9AUTH-05 | Phase 472 | Pending |
+| V9AUTH-01 | Phase 472 | Complete |
+| V9AUTH-02 | Phase 472 | Complete |
+| V9AUTH-03 | Phase 472 | Complete |
+| V9AUTH-04 | Phase 472 | Complete |
+| V9AUTH-05 | Phase 472 | Complete |
 | V9AUTH-06 | Phase 478 | Pending |
-| V9ACCESS-01 | Phase 472 | Pending |
-| V9ACCESS-02 | Phase 472 | Pending |
-| V9ACCESS-03 | Phase 472 | Pending |
+| V9ACCESS-01 | Phase 472 | Complete |
+| V9ACCESS-02 | Phase 472 | Complete |
+| V9ACCESS-03 | Phase 472 | Complete |
 | V9PRIV-01 | Phase 473 | Pending |
 | V9PRIV-02 | Phase 473 | Pending |
 | V9PRIV-03 | Phase 473 | Pending |

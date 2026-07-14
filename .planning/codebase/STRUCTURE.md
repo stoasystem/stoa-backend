@@ -154,6 +154,15 @@ Many route modules define additional local request/response schemas close to the
 
 - DynamoDB atomic daily counters for chat messages and practice hints.
 
+## Security Contracts
+
+`src/stoa/security/`
+
+- Immutable canonical Actor, account-status, and capability-grant contracts.
+- Typed resource/action/purpose authorization inputs and repository protocols.
+- Stable safe error taxonomy, allowlisted security-event projection, and generated client recovery actions.
+- Policy evaluation, token verification, route inventory, onboarding, and reconciliation are implemented by later Phase 472 plans.
+
 ## Scripts
 
 `scripts/seed_practice.py`
