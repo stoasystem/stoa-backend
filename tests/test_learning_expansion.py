@@ -8,6 +8,7 @@ from stoa.deps import get_actor, get_current_user
 from stoa.routers import parents, questions, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ai_service, learning_profile_service
+from actor_helpers import install_actor_overrides
 
 
 def _settings() -> Settings:
@@ -48,7 +49,7 @@ def _students_client(user: dict) -> TestClient:
 def _parents_client(user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -217,14 +218,15 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
 
 
 def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
-    resolved = parents.ResolvedParent(
-        claims_sub="parent-claims",
-        email="parent@example.com",
-        parent_user_id="parent-1",
-        profile={"user_id": "parent-1", "role": "parent"},
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+        },
     )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: resolved)
-    monkeypatch.setattr(parents, "_get_owned_child_profile", lambda parent, child_id: {"user_id": child_id})
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",

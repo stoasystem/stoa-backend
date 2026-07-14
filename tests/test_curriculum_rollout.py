@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
 from stoa.routers import practice
+from stoa.security import route_authorization
+from actor_helpers import install_actor_overrides
 
 
 SUBJECTS = [
@@ -130,7 +131,7 @@ CHALLENGES = [
 def _client(user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -230,6 +231,15 @@ def test_curriculum_lesson_hides_answer_key_from_student(monkeypatch):
 def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     _install_practice_content(monkeypatch)
     monkeypatch.setattr(
+        route_authorization.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+        },
+    )
+    monkeypatch.setattr(
         practice.practice_repo,
         "get_progress",
         lambda student_id, subject_id=None: [
@@ -262,5 +272,5 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     assert response.status_code == 200
     assert response.json()["completedLessonIds"] == ["lesson-linear-1"]
     assert response.json()["weakTopics"] == [{"topicId": "linear-equations", "count": 1}]
-    assert forbidden.status_code == 403
+    assert forbidden.status_code == 404
     assert teacher.status_code == 200

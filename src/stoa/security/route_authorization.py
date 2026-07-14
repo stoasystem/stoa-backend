@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 from inspect import isawaitable
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor
@@ -79,6 +79,7 @@ def authorized_student_dependency(
     action: AuthorizationAction,
     purposes: PurposeMap,
     self_route: bool = False,
+    query_alias: str | None = None,
 ):
     async def resolve(student_id: str):
         profile = user_repo.get_user(student_id)
@@ -89,12 +90,10 @@ def authorized_student_dependency(
             profile,
         )
 
-    async def dependency(
-        student_id: str | None = None,
-        actor: Actor = Depends(get_actor),
-        facts: CurrentAuthorizationFactRepository = Depends(
-            get_authorization_fact_repository
-        ),
+    async def authorize_target(
+        student_id: str | None,
+        actor: Actor,
+        facts: CurrentAuthorizationFactRepository,
     ) -> AuthorizedResource:
         target_id = (
             actor.user_id
@@ -113,6 +112,26 @@ def authorized_student_dependency(
             )
         except SecurityDecisionError as error:
             _raise_http(error)
+
+    async def path_dependency(
+        student_id: str | None = None,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+    ) -> AuthorizedResource:
+        return await authorize_target(student_id, actor, facts)
+
+    async def query_dependency(
+        student_id: str | None = Query(default=None, alias=query_alias),
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+    ) -> AuthorizedResource:
+        return await authorize_target(student_id, actor, facts)
+
+    dependency = query_dependency if query_alias else path_dependency
 
     dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
         _metadata_spec(ResourceType.STUDENT, action, purpose, resolve)

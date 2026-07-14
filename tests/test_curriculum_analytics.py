@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
 from stoa.routers import admin, practice
 from stoa.services import adaptive_learning_service, curriculum_analytics_service, rate_limit
+from actor_helpers import install_actor_overrides
 
 
 def _app_for_user(user: dict, *, include_admin: bool = False) -> FastAPI:
@@ -11,7 +11,7 @@ def _app_for_user(user: dict, *, include_admin: bool = False) -> FastAPI:
     router = admin.router if include_admin else practice.router
     prefix = "/admin" if include_admin else "/practice"
     app.include_router(router, prefix=prefix)
-    app.dependency_overrides[get_current_user] = lambda: user
+    install_actor_overrides(app, user)
     return app
 
 

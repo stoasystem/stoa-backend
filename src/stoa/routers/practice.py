@@ -44,6 +44,7 @@ _practice_update = student_actor_dependency(ResourceType.PRACTICE, Authorization
 _practice_progress = authorized_student_dependency(
     action=AuthorizationAction.READ,
     purposes=STUDENT_CONTENT_READ,
+    query_alias="studentId",
 )
 
 

@@ -512,7 +512,9 @@ def test_non_question_reconciliation_is_read_only(monkeypatch):
 def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "parent-1", "role": "parent"}
+    from actor_helpers import install_actor_overrides
+
+    install_actor_overrides(app, {"sub": "parent-1", "role": "parent"})
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
