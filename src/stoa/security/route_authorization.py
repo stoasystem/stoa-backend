@@ -27,6 +27,27 @@ from stoa.security.identity import Actor, CanonicalRole
 PurposeMap = Mapping[CanonicalRole, AuthorizationPurpose]
 
 
+def safe_public_dependency(resource_type: ResourceType):
+    """Declare an authenticated route as non-personalized public/catalog data."""
+
+    async def resolve(resource_id: str):
+        return {"student_id": resource_id}
+
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        return actor
+
+    dependency.safe_public = True  # type: ignore[attr-defined]
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            resource_type,
+            AuthorizationAction.READ,
+            AuthorizationPurpose.SELF_SERVICE,
+            resolve,
+        ),
+    )
+    return dependency
+
+
 def get_authorization_fact_repository() -> CurrentAuthorizationFactRepository:
     return CurrentAuthorizationFactRepository()
 
@@ -75,7 +96,11 @@ def authorized_student_dependency(
             get_authorization_fact_repository
         ),
     ) -> AuthorizedResource:
-        target_id = actor.user_id if self_route else str(student_id or "")
+        target_id = (
+            actor.user_id
+            if self_route or (student_id is None and actor.role is CanonicalRole.STUDENT)
+            else str(student_id or "")
+        )
         spec = AuthorizationSpec(
             ResourceType.STUDENT, action, _purpose_for(actor, purposes), resolve
         )
