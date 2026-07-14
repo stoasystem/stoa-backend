@@ -81,7 +81,8 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
             if current_actor.role is CanonicalRole.TEACHER and user.get("assigned", True):
                 question = (
                     _value
-                    if resource.resource_type.value == "question"
+                    if resource.resource_type.value
+                    in {"question", "teacher_help_request"}
                     else None
                 )
                 return AuthorizationFacts(

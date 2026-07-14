@@ -290,6 +290,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
             "conversation_id": "conv-1",
             "student_id": "student-1",
             "escalated": True,
+            "teacher_id": "teacher-1",
             "escalated_at": "2026-06-08T08:00:00+00:00",
         },
     )
@@ -322,6 +323,7 @@ def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
         {
             "conversation_id": "conv-1",
             "student_id": "student-1",
+            "teacher_id": "teacher-1",
             "escalation_request_id": "help-1",
             "escalation_status": "pending",
             "escalated_at": "2026-06-08T08:00:00+00:00",
@@ -331,6 +333,7 @@ def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
         {
             "conversation_id": "conv-2",
             "student_id": "student-2",
+            "teacher_id": "teacher-1",
             "escalation_request_id": "help-2",
             "escalation_status": "resolved",
             "escalated_at": "2026-06-08T08:00:00+00:00",

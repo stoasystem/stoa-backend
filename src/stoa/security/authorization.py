@@ -330,6 +330,15 @@ class CurrentAuthorizationFactRepository:
             question = resource_value if resource.resource_type is ResourceType.QUESTION else None
             if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
                 question = question_repo.get_question(resource.question_id)
+            if resource.resource_type in {
+                ResourceType.TEACHER_HELP_REQUEST,
+                ResourceType.AI_TEACHER_DRAFT,
+            }:
+                question = (
+                    question_repo.get_question(resource.question_id)
+                    if resource.question_id
+                    else resource_value
+                )
             session_id = str(resource.session_id or (question or {}).get("session_id") or "")
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(

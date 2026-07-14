@@ -1,22 +1,16 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_actor, get_current_user
 from stoa.config import Settings
 from stoa.routers import notifications, questions, teachers
 from stoa.services import notification_service, teacher_assistance_service, websocket_service
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from actor_helpers import install_actor_overrides
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
-    app.dependency_overrides[get_current_user] = lambda: user
-    role = CanonicalRole(user["role"])
-    app.dependency_overrides[get_actor] = lambda: Actor(
-        user["sub"], "https://identity.test", f"{user['sub']}-subject", role,
-        AccountStatus.ACTIVE, role.value,
-    )
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -687,12 +681,13 @@ def test_request_teacher_emits_teacher_and_admin_events(monkeypatch):
 def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     stored = []
     monkeypatch.setattr(
-        teacher_assistance_service.question_repo,
+        teachers.question_repo,
         "get_question",
         lambda question_id: {
             "question_id": question_id,
             "student_id": "student-1",
-            "status": "escalated",
+            "status": "teacher_active",
+            "teacher_id": "teacher-1",
             "subject": "physics",
             "content": "Why is friction opposite to motion?",
             "ai_response": {"answer": "Friction resists relative motion."},

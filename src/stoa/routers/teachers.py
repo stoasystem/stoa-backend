@@ -10,16 +10,22 @@ from pydantic import BaseModel, Field
 
 from stoa.db.repositories import question_repo, user_repo
 from stoa.db.dynamodb import get_table
-from stoa.deps import require_role
+from stoa.deps import get_actor, require_role
 from stoa.models.question import QuestionStatus
 from stoa.security.authorization import (
     AuthorizationAction,
+    CurrentAuthorizationFactRepository,
     AuthorizationPurpose,
     AuthorizedResource,
+    ResourceType,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_authorization import (
     authorized_question_dependency,
+    authorized_teacher_resource_dependency,
+    authorize_teacher_loaded_resource,
+    get_authorization_fact_repository,
     teacher_capability_dependency,
     teacher_portal_self_dependency,
 )
@@ -343,6 +349,62 @@ def _get_escalated_conversations() -> list[dict]:
     return resp.get("Items", [])
 
 
+def _resolve_help_request(request_id: str) -> dict | None:
+    """Resolve an external request ID to one canonical conversation/task owner."""
+    conv = _get_conversation(request_id)
+    if not conv or not conv.get("escalated"):
+        conv = next(
+            (
+                item
+                for item in _get_escalated_conversations()
+                if item.get("escalation_request_id") == request_id
+            ),
+            None,
+        )
+    if not conv:
+        return None
+    return _normalize_help_request(conv)
+
+
+def _normalize_help_request(conv: dict) -> dict:
+    normalized = dict(conv)
+    if not normalized.get("status"):
+        normalized["status"] = (
+            QuestionStatus.TEACHER_ACTIVE.value
+            if normalized.get("teacher_id")
+            else QuestionStatus.ESCALATED.value
+        )
+    if not normalized.get("dispatch_status"):
+        normalized["dispatch_status"] = (
+            "accepted" if normalized.get("teacher_id") else "unassigned"
+        )
+    return normalized
+
+
+async def _current_help_requests(
+    actor: Actor, facts: CurrentAuthorizationFactRepository
+) -> list[dict]:
+    current: list[dict] = []
+    for raw in _get_escalated_conversations():
+        conv = _normalize_help_request(raw)
+        try:
+            await authorize_teacher_loaded_resource(
+                actor=actor,
+                facts=facts,
+                loaded=conv,
+                resource_type=ResourceType.TEACHER_HELP_REQUEST,
+                action=AuthorizationAction.READ,
+            )
+        except SecurityDecisionError as error:
+            if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
+                raise HTTPException(
+                    status_code=error.status_code, detail=error.public_body()
+                ) from error
+            continue
+        current.append(conv)
+    return current
+
+
 def _get_student_name(student_id: str) -> str:
     profile = user_repo.get_user(student_id)
     if profile:
@@ -567,19 +629,21 @@ def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailabilit
 # ---------------------------------------------------------------------------
 
 @router.get("/me/availability", response_model=TeacherAvailability)
-async def get_my_availability(user: dict = Depends(require_role("teacher", "admin"))):
+async def get_my_availability(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+):
     """Return the current teacher availability profile used for dispatch."""
-    return _availability_response(user_repo.get_user(user["sub"]))
+    return _availability_response(user_repo.get_user(actor.user_id))
 
 
 @router.patch("/me/availability", response_model=TeacherAvailability)
 async def update_my_availability(
     body: TeacherAvailability,
-    user: dict = Depends(require_role("teacher", "admin")),
+    actor: Actor = Depends(teacher_portal_self_dependency()),
 ):
     """Persist teacher availability so student support status can reflect it."""
     updated = user_repo.update_teacher_availability(
-        user["sub"],
+        actor.user_id,
         subjects=[subject.strip() for subject in body.subjects if subject.strip()],
         weekly_availability=[slot.model_dump() for slot in body.weeklyAvailability],
         updated_at=_now(),
@@ -588,8 +652,13 @@ async def update_my_availability(
 
 
 @router.get("/me/stats", response_model=TeacherStats)
-async def get_stats(user: dict = Depends(require_role("teacher", "admin"))):
-    escalated = _get_escalated_conversations()
+async def get_stats(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
+):
+    escalated = await _current_help_requests(actor, facts)
     pending = sum(1 for c in escalated if c.get("escalation_status", "pending") == "pending")
     response_times = [
         snapshot["requestToFirstActionMinutes"]
@@ -611,10 +680,16 @@ async def get_stats(user: dict = Depends(require_role("teacher", "admin"))):
 @router.get("/questions/{question_id}/assistance-summary", response_model=AssistanceSummaryResponse)
 async def get_question_assistance_summary(
     question_id: str,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_question_dependency(
+            action=AuthorizationAction.READ,
+            purposes={CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP},
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Build a bounded teacher assistance summary seed for an accessible question."""
-    return teacher_assistance_service.build_summary_seed(question_id, user)
+    return teacher_assistance_service.build_summary_seed(authorized, actor)
 
 
 @router.post("/questions/{question_id}/ai-tools/summary-draft", response_model=AiTeacherDraftResponse)
@@ -726,9 +801,14 @@ async def archive_ai_teacher_draft(
 
 
 @router.get("/me/help-requests", response_model=dict)
-async def list_help_requests(user: dict = Depends(require_role("teacher", "admin"))):
-    """Return all escalated conversations as help-request summaries."""
-    escalated = _get_escalated_conversations()
+async def list_help_requests(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
+):
+    """Return only help requests currently assigned to this Actor."""
+    escalated = await _current_help_requests(actor, facts)
     items = []
     for conv in sorted(escalated, key=lambda c: c.get("escalated_at", ""), reverse=True):
         conv_id = conv.get("conversation_id", "")
@@ -752,21 +832,18 @@ async def list_help_requests(user: dict = Depends(require_role("teacher", "admin
 @router.get("/me/help-requests/{request_id}", response_model=TeacherHelpRequestDetail)
 async def get_help_request(
     request_id: str,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_teacher_resource_dependency(
+            resource_type=ResourceType.TEACHER_HELP_REQUEST,
+            action=AuthorizationAction.READ,
+            resolver=_resolve_help_request,
+        )
+    ),
 ):
     """Get full detail of a specific help request including conversation messages."""
     table = get_table()
 
-    # request_id may be the conv_id or a dedicated escalation_request_id
-    # Try by conv_id first, then scan by request_id field
-    conv = _get_conversation(request_id)
-    if not conv or not conv.get("escalated"):
-        # Search by escalation_request_id
-        escalated = _get_escalated_conversations()
-        conv = next((c for c in escalated if c.get("escalation_request_id") == request_id), None)
-
-    if not conv:
-        raise HTTPException(status_code=404, detail="Help request not found")
+    conv = dict(authorized.value)
 
     conv_id = conv.get("conversation_id", "")
     student_id = conv.get("student_id", "")
@@ -842,16 +919,17 @@ async def get_help_request(
 async def update_help_request(
     request_id: str,
     body: UpdateStatusRequest,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_teacher_resource_dependency(
+            resource_type=ResourceType.TEACHER_HELP_REQUEST,
+            action=AuthorizationAction.RESOLVE,
+            resolver=_resolve_help_request,
+        )
+    ),
 ):
     """Update the status of a help request (pending → in_progress → resolved)."""
     table = get_table()
-    conv = _get_conversation(request_id)
-    if not conv or not conv.get("escalated"):
-        escalated = _get_escalated_conversations()
-        conv = next((c for c in escalated if c.get("escalation_request_id") == request_id), None)
-    if not conv:
-        raise HTTPException(status_code=404, detail="Help request not found")
+    conv = dict(authorized.value)
 
     conv_id = conv.get("conversation_id", "")
     now = _now()
@@ -890,19 +968,21 @@ async def update_help_request(
 async def add_note(
     request_id: str,
     body: AddNoteRequest,
-    user: dict = Depends(require_role("teacher", "admin")),
+    authorized: AuthorizedResource = Depends(
+        authorized_teacher_resource_dependency(
+            resource_type=ResourceType.TEACHER_HELP_REQUEST,
+            action=AuthorizationAction.RESPOND,
+            resolver=_resolve_help_request,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
 ):
     """Add a teacher note to a help request (stored in the conversation)."""
     table = get_table()
-    conv = _get_conversation(request_id)
-    if not conv or not conv.get("escalated"):
-        escalated = _get_escalated_conversations()
-        conv = next((c for c in escalated if c.get("escalation_request_id") == request_id), None)
-    if not conv:
-        raise HTTPException(status_code=404, detail="Help request not found")
+    conv = dict(authorized.value)
 
     conv_id = conv.get("conversation_id", "")
-    teacher_id = user["sub"]
+    teacher_id = actor.user_id
     teacher_profile = user_repo.get_user(teacher_id)
     teacher_name = (teacher_profile or {}).get("name", "Teacher")
     note_id = str(uuid.uuid4())

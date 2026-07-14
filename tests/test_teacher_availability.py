@@ -1,21 +1,16 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_actor, get_current_user
 from stoa.routers import conversations, teachers
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import teacher_dispatch_service
+from actor_helpers import install_actor_overrides
 
 
 def _client(router, prefix: str, user: dict) -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
-    app.dependency_overrides[get_current_user] = lambda: user
-    role = CanonicalRole(user["role"])
-    app.dependency_overrides[get_actor] = lambda: Actor(
-        user["sub"], "https://identity.test", f"{user['sub']}-subject", role,
-        AccountStatus.ACTIVE, role.value,
-    )
+    install_actor_overrides(app, user)
     return TestClient(app)
 
 
@@ -146,3 +141,138 @@ def test_teacher_router_exposes_no_legacy_route():
 
     assert all(not route.path.startswith("/tutors") for route in client.app.routes)
     assert client.get("/tutors/me/availability").status_code == 404
+
+
+def test_assistance_summary_requires_current_teacher_and_uses_authorized_question(monkeypatch):
+    stored = []
+    question = {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "status": "teacher_active",
+        "teacher_id": "teacher-1",
+        "subject": "math",
+        "content": "Explain fractions",
+        "private_profile": "must-not-leak",
+    }
+    monkeypatch.setattr(teachers.question_repo, "get_question", lambda _id: question)
+    monkeypatch.setattr(
+        teachers.teacher_assistance_service.notification_repo,
+        "put_summary_seed",
+        lambda item: stored.append(item),
+    )
+
+    current = _client(
+        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
+    ).get("/teachers/questions/question-1/assistance-summary")
+    other = _client(
+        teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
+    ).get("/teachers/questions/question-1/assistance-summary")
+
+    assert current.status_code == 200
+    assert other.status_code == 404
+    assert "must-not-leak" not in str(current.json())
+    assert len(stored) == 1
+
+
+def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch):
+    conversations = [
+        {
+            "conversation_id": "conv-mine",
+            "student_id": "student-1",
+            "escalated": True,
+            "escalation_request_id": "help-mine",
+            "escalation_status": "pending",
+            "teacher_id": "teacher-1",
+            "subject": "math",
+            "escalated_at": "2026-07-15T08:00:00+00:00",
+        },
+        {
+            "conversation_id": "conv-other",
+            "student_id": "student-2",
+            "escalated": True,
+            "escalation_request_id": "help-other",
+            "escalation_status": "pending",
+            "teacher_id": "teacher-2",
+            "subject": "physics",
+            "escalated_at": "2026-07-15T09:00:00+00:00",
+            "request_message": "private-other",
+        },
+    ]
+    monkeypatch.setattr(teachers, "_get_escalated_conversations", lambda: conversations)
+    monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Current Student")
+    client = _client(
+        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
+    )
+
+    listed = client.get("/teachers/me/help-requests")
+    stats = client.get("/teachers/me/stats")
+
+    assert listed.status_code == 200
+    assert [item["requestId"] for item in listed.json()["items"]] == ["help-mine"]
+    assert "private-other" not in str(listed.json())
+    assert stats.status_code == 200
+    assert stats.json()["pendingRequests"] == 1
+
+
+def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch):
+    updates = []
+    conv = {
+        "conversation_id": "conv-1",
+        "student_id": "student-1",
+        "escalated": True,
+        "escalation_request_id": "help-1",
+        "teacher_id": "teacher-1",
+        "escalation_status": "pending",
+    }
+    monkeypatch.setattr(teachers, "_get_conversation", lambda _id: conv)
+    monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
+
+    class Table:
+        def update_item(self, **kwargs):
+            updates.append(kwargs)
+
+    monkeypatch.setattr(teachers, "get_table", lambda: Table())
+    other = _client(
+        teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
+    ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
+    current = _client(
+        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
+    ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
+
+    assert other.status_code == 404
+    assert current.status_code == 200
+    assert len(updates) == 1
+
+
+def test_help_request_authorization_outage_returns_503_before_mutation(monkeypatch):
+    updates = []
+    monkeypatch.setattr(
+        teachers,
+        "_get_conversation",
+        lambda _id: {
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "escalated": True,
+            "teacher_id": "teacher-1",
+        },
+    )
+
+    class Table:
+        def update_item(self, **kwargs):
+            updates.append(kwargs)
+
+    class Outage:
+        async def facts_for(self, *_args, **_kwargs):
+            raise RuntimeError("authorization store unavailable")
+
+    monkeypatch.setattr(teachers, "get_table", lambda: Table())
+    app = FastAPI()
+    app.include_router(teachers.router, prefix="/teachers")
+    install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
+    app.dependency_overrides[get_authorization_fact_repository] = Outage
+    response = TestClient(app).patch(
+        "/teachers/me/help-requests/help-1", json={"status": "resolved"}
+    )
+
+    assert response.status_code == 503
+    assert updates == []

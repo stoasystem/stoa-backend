@@ -6,20 +6,21 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
-from stoa.db.repositories import notification_repo, question_repo
+from stoa.db.repositories import notification_repo
+from stoa.security.authorization import AuthorizedResource
+from stoa.security.identity import Actor
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def build_summary_seed(question_id: str, user: dict[str, Any]) -> dict[str, Any]:
-    question = question_repo.get_question(question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-    _require_teacher_visible(question, user)
+def build_summary_seed(
+    authorized: AuthorizedResource, actor: Actor
+) -> dict[str, Any]:
+    """Build a bounded seed from the exact question authorized by the route."""
+    question = dict(authorized.value)
+    question_id = authorized.ref.resource_id
 
     created_at = now_iso()
     topic_labels = _topic_labels(question)
@@ -37,7 +38,7 @@ def build_summary_seed(question_id: str, user: dict[str, Any]) -> dict[str, Any]
         "suggested_focus": _suggested_focus(question, topic_labels),
         "source_count": _source_count(question),
         "created_at": created_at,
-        "created_by": str(user.get("sub") or ""),
+        "created_by": actor.user_id,
     }
     notification_repo.put_summary_seed(seed)
     return summary_seed_response(seed)
@@ -57,20 +58,6 @@ def summary_seed_response(seed: dict[str, Any]) -> dict[str, Any]:
         "sourceCount": seed.get("source_count") or 0,
         "createdAt": seed.get("created_at"),
     }
-
-
-def _require_teacher_visible(question: dict[str, Any], user: dict[str, Any]) -> None:
-    role = user.get("role")
-    if role == "admin":
-        return
-    if role != "teacher":
-        raise HTTPException(status_code=403, detail="Role cannot view assistance summaries")
-    user_id = str(user.get("sub") or "")
-    if question.get("teacher_id") == user_id:
-        return
-    if question.get("status") in {"escalated", "teacher_active", "resolved"}:
-        return
-    raise HTTPException(status_code=403, detail="Question is not visible to this teacher workflow")
 
 
 def _student_context_summary(question: dict[str, Any], topics: list[str]) -> str:
