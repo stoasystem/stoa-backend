@@ -277,7 +277,9 @@ def student_actor_dependency(
     return dependency
 
 
-def teacher_portal_self_dependency():
+def teacher_portal_self_dependency(
+    action: AuthorizationAction = AuthorizationAction.READ,
+):
     """Authorize the active teacher/admin Actor against their own portal record."""
 
     async def resolve(resource_id: str):
@@ -286,7 +288,7 @@ def teacher_portal_self_dependency():
     async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
         spec = AuthorizationSpec(
             ResourceType.TEACHER_PORTAL,
-            AuthorizationAction.READ,
+            action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         )
@@ -312,7 +314,7 @@ def teacher_portal_self_dependency():
     dependency.authorization_specs = (  # type: ignore[attr-defined]
         _metadata_spec(
             ResourceType.TEACHER_PORTAL,
-            AuthorizationAction.READ,
+            action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         ),

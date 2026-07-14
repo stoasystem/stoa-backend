@@ -711,6 +711,46 @@ def _get_ai_teacher_draft(draft_id: str) -> dict | None:
     return ai_teacher_tools_service.ai_teacher_tools_repo.get_draft(draft_id)
 
 
+async def _teacher_list_metadata_resolver(resource_id: str):
+    return {"student_id": resource_id}
+
+
+async def _help_list_actor_dependency(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+) -> Actor:
+    return actor
+
+
+_help_list_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.TEACHER_HELP_REQUEST,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.TEACHER_HELP,
+        _teacher_list_metadata_resolver,
+    ),
+)
+
+
+async def _ai_draft_list_actor_dependency(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+) -> Actor:
+    return actor
+
+
+_ai_draft_list_actor_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.AI_TEACHER_DRAFT,
+        AuthorizationAction.READ,
+        purpose,
+        _teacher_list_metadata_resolver,
+    )
+    for purpose in (
+        AuthorizationPurpose.TEACHER_HELP,
+        AuthorizationPurpose.AI_TEACHER_TOOLS,
+    )
+)
+
+
 def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailability:
     profile = profile or {}
     subjects = [
@@ -754,7 +794,9 @@ async def get_my_availability(
 @router.patch("/me/availability", response_model=TeacherAvailability)
 async def update_my_availability(
     body: TeacherAvailability,
-    actor: Actor = Depends(teacher_portal_self_dependency()),
+    actor: Actor = Depends(
+        teacher_portal_self_dependency(AuthorizationAction.UPDATE)
+    ),
 ):
     """Persist teacher availability so student support status can reflect it."""
     updated = user_repo.update_teacher_availability(
@@ -768,7 +810,7 @@ async def update_my_availability(
 
 @router.get("/me/stats", response_model=TeacherStats)
 async def get_stats(
-    actor: Actor = Depends(teacher_portal_self_dependency()),
+    actor: Actor = Depends(_help_list_actor_dependency),
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
@@ -842,7 +884,7 @@ async def list_ai_teacher_drafts(
     status: str | None = None,
     draft_type: str | None = None,
     limit: int = 50,
-    actor: Actor = Depends(teacher_portal_self_dependency()),
+    actor: Actor = Depends(_ai_draft_list_actor_dependency),
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
@@ -980,7 +1022,7 @@ async def archive_ai_teacher_draft(
 
 @router.get("/me/help-requests", response_model=dict)
 async def list_help_requests(
-    actor: Actor = Depends(teacher_portal_self_dependency()),
+    actor: Actor = Depends(_help_list_actor_dependency),
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
