@@ -8,6 +8,7 @@ import pytest
 from stoa.deps import get_actor
 from stoa.main import app as main_app
 from stoa.routers import admin, notifications
+from stoa.db.repositories import report_repo
 from stoa.security.admin_authorization import admin_operation, classify_admin_route
 from stoa.security.authorization import ResourceRef, operator_capability_permits, project_support_lookup
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
@@ -97,6 +98,59 @@ def test_support_lookup_projection_is_d15_only():
     )
     assert set(projection) == {"accountState", "bindingState", "denialCode", "correlationId", "supportId"}
     assert "secret" not in repr(projection)
+
+
+def test_report_metadata_content_recovery_export_and_send_capabilities_are_distinct():
+    expected = {
+        ("GET", "/admin/reports/{parent_id}/{student_id}/{week_start}/ops"): "report_metadata_reader",
+        ("GET", "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}"): "report_recovery_reader",
+        ("POST", "/admin/reports/{parent_id}/{student_id}/{week_start}/resend"): "report_recovery_operator",
+        ("GET", "/admin/reports/recovery-evidence"): "report_evidence_exporter",
+        ("POST", "/admin/reports/support-handoff-delivery"): "report_external_handoff_sender",
+        ("POST", "/admin/reports/legal-holds"): "report_governance_manager",
+    }
+    assert {key: classify_admin_route(*key).capability for key in expected} == expected
+
+
+def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda *args: calls.append(args),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_actor] = lambda: _actor(
+        "report_metadata_reader", scope="student:student-other"
+    )
+    response = TestClient(app).get(
+        "/admin/reports/parent-1/student-1/2026-06-01/ops"
+    )
+    assert response.status_code == 403
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("POST", "/admin/reports/bulk-resend"),
+        ("GET", "/admin/reports/recovery-evidence"),
+        ("POST", "/admin/reports/support-handoff-delivery"),
+        ("POST", "/admin/reports/immutable-evidence/persist"),
+        ("POST", "/admin/reports/legal-holds"),
+    ],
+)
+def test_report_bulk_export_send_persist_and_hold_reject_break_glass(method, path):
+    policy = classify_admin_route(method, path)
+    ref = ResourceRef(policy.resource_type, "global", "admin-1", relationship_known=True)
+    assert not operator_capability_permits(
+        _actor("student_data_break_glass"),
+        capability=policy.capability,
+        resource=ref,
+        action=policy.action,
+        purpose=policy.purpose,
+    )
 
 
 def test_admin_role_and_break_glass_cannot_provision_privilege(monkeypatch):
