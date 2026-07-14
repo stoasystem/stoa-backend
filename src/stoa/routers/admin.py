@@ -1,6 +1,8 @@
 """Admin routes — user management, report operations, and platform statistics."""
+from functools import lru_cache
 from typing import Any, Optional
 
+import boto3
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +31,7 @@ from stoa.services import (
     report_recovery_job_service,
     report_recovery_service,
     account_operations_service,
+    privileged_identity_service,
     bi_observability_service,
     external_activation_service,
     curriculum_analytics_service,
@@ -46,6 +49,123 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+
+class AdminProvisionCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str
+    target_email: str
+    issuer: str
+    subject: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class AdminStatusCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str
+    operation: str
+    provider_username: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class CapabilityGrantCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grant_id: str
+    capability: str
+    scope: str
+    reason: str = Field(min_length=1, max_length=1000)
+    effective_at: str
+    expires_at: str | None = None
+
+
+class CapabilityTransitionCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grant_id: str
+    capability: str
+    scope: str
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1000)
+    changed_at: str
+
+
+@lru_cache(maxsize=1)
+def get_privileged_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
+    return boto3.client("cognito-idp", region_name=settings.aws_region)
+
+
+@router.post("/privileged-identities/admins")
+def provision_privileged_admin(
+    payload: AdminProvisionCommand,
+    user: dict[str, Any] = Depends(require_role("admin")),
+    provider: Any = Depends(get_privileged_identity_provider),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return privileged_identity_service.provision_admin(
+        actor=user,
+        provider=provider,
+        user_pool_id=settings.cognito_user_pool_id,
+        **payload.model_dump(),
+    )
+
+
+@router.post("/privileged-identities/admins/{target_id}/status")
+def change_privileged_admin_status(
+    target_id: str,
+    payload: AdminStatusCommand,
+    user: dict[str, Any] = Depends(require_role("admin")),
+    provider: Any = Depends(get_privileged_identity_provider),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return privileged_identity_service.change_admin_status(
+        actor=user,
+        target_id=target_id,
+        provider=provider,
+        user_pool_id=settings.cognito_user_pool_id,
+        **payload.model_dump(),
+    )
+
+
+@router.post("/privileged-identities/{target_id}/capabilities")
+def grant_privileged_capability(
+    target_id: str,
+    payload: CapabilityGrantCommand,
+    user: dict[str, Any] = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    return privileged_identity_service.grant_capability(
+        actor=user,
+        target_id=target_id,
+        **payload.model_dump(),
+    )
+
+
+@router.post("/privileged-identities/{target_id}/capabilities/revoke")
+def revoke_privileged_capability(
+    target_id: str,
+    payload: CapabilityTransitionCommand,
+    user: dict[str, Any] = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    return privileged_identity_service.revoke_capability(
+        actor=user,
+        target_id=target_id,
+        **payload.model_dump(),
+    )
+
+
+@router.post("/privileged-identities/{target_id}/capabilities/restore")
+def restore_privileged_capability(
+    target_id: str,
+    payload: CapabilityTransitionCommand,
+    user: dict[str, Any] = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    return privileged_identity_service.restore_capability(
+        actor=user,
+        target_id=target_id,
+        **payload.model_dump(),
+    )
 
 
 class UserUpdateRequest(BaseModel):

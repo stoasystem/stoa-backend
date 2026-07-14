@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 from datetime import datetime
 
 from botocore.exceptions import ClientError
+from fastapi import HTTPException
 import pytest
 
 from stoa.security.authorization import (
@@ -356,6 +357,144 @@ def test_security_audit_projection_never_copies_sensitive_inputs():
         "version": 2,
         "reason_code": "approved_change",
     }
+
+
+def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monkeypatch):
+    from stoa.services import privileged_identity_service
+
+    commands = {}
+    profiles = {}
+    bindings = {}
+    audits = []
+    repo = privileged_identity_service.privileged_identity_repo
+
+    def create_command(item):
+        existing = commands.get(item["command_id"])
+        if existing:
+            immutable = ("operation", "target_id", "issuer", "subject", "reason", "approved_by")
+            if not all(existing.get(key) == item.get(key) for key in immutable):
+                raise repo.PrivilegedIdentityCommandConflict("conflict")
+            return dict(existing), False
+        commands[item["command_id"]] = dict(item)
+        return dict(item), True
+
+    def update_command(command_id, *, expected_version, status, updated_at, evidence_reference):
+        item = commands[command_id]
+        if item["version"] != expected_version:
+            raise repo.PrivilegedIdentityCommandConflict("stale")
+        item.update(
+            status=status,
+            updated_at=updated_at,
+            evidence_reference=evidence_reference,
+            version=expected_version + 1,
+        )
+        return dict(item)
+
+    monkeypatch.setattr(repo, "create_command", create_command)
+    monkeypatch.setattr(repo, "update_command", update_command)
+    monkeypatch.setattr(
+        privileged_identity_service.user_repo,
+        "put_user",
+        lambda item: profiles.__setitem__(item["user_id"], dict(item)),
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.user_repo,
+        "get_user",
+        lambda user_id: dict(profiles[user_id]) if user_id in profiles else None,
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.identity_repo,
+        "create_identity_binding",
+        lambda **kwargs: bindings.setdefault((kwargs["issuer"], kwargs["subject"]), dict(kwargs)),
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.security_audit_repo,
+        "append_event",
+        lambda stream_id, event: audits.append((stream_id, dict(event))),
+    )
+
+    class Provider:
+        def __init__(self):
+            self.calls = []
+            self.fail_defense = False
+
+        def ensure_admin_identity(self, **kwargs):
+            self.calls.append(("ensure", kwargs))
+
+        def admin_remove_user_from_group(self, **kwargs):
+            self.calls.append(("remove", kwargs))
+            if self.fail_defense:
+                raise TimeoutError("provider payload canary")
+
+        def admin_user_global_sign_out(self, **kwargs):
+            self.calls.append(("signout", kwargs))
+
+    provider = Provider()
+    no_capability = {
+        "user_id": "admin-basic",
+        "role": "admin",
+        "account_status": "active",
+        "capabilities": {},
+    }
+    with pytest.raises(HTTPException) as denied:
+        privileged_identity_service.provision_admin(
+            actor=no_capability,
+            command_id="command-1",
+            target_email="new-admin@example.test",
+            issuer="https://identity.test/primary",
+            subject="new-admin-subject",
+            reason="approved routine provision",
+            provider=provider,
+        )
+    assert denied.value.status_code == 403
+    assert commands == {}
+    assert provider.calls == []
+
+    manager = {
+        **no_capability,
+        "user_id": "admin-manager",
+        "capabilities": {"admin_identity_manager": "granted"},
+    }
+    created = privileged_identity_service.provision_admin(
+        actor=manager,
+        command_id="command-1",
+        target_email="new-admin@example.test",
+        issuer="https://identity.test/primary",
+        subject="new-admin-subject",
+        reason="approved routine provision",
+        provider=provider,
+    )
+    assert created["status"] == "active"
+    assert profiles[created["targetId"]]["account_status"] == "active"
+    assert len(bindings) == 1
+    provider_call_count = len(provider.calls)
+    replay = privileged_identity_service.provision_admin(
+        actor=manager,
+        command_id="command-1",
+        target_email="new-admin@example.test",
+        issuer="https://identity.test/primary",
+        subject="new-admin-subject",
+        reason="approved routine provision",
+        provider=provider,
+    )
+    assert replay["idempotent"] is True
+    assert len(provider.calls) == provider_call_count
+    assert len(bindings) == 1
+
+    provider.fail_defense = True
+    suspended = privileged_identity_service.change_admin_status(
+        actor=manager,
+        command_id="command-2",
+        target_id=created["targetId"],
+        operation="suspend",
+        reason="approved investigation",
+        provider=provider,
+        provider_username="new-admin-subject",
+    )
+    assert suspended["status"] == "suspended"
+    assert suspended["providerDefenseComplete"] is False
+    assert profiles[created["targetId"]]["account_status"] == "suspended"
+    assert "provider payload canary" not in repr(audits)
 
 
 def test_identity_binding_conditional_create_cannot_repoint(monkeypatch):
