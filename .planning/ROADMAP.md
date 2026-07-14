@@ -21,7 +21,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - P0 and P1 findings are mandatory closure items. They cannot be accepted as normal residual risk.
 - Release-blocking P2 findings must be fixed or receive explicit, time-bounded owner acceptance supported by reachability evidence.
-- Curriculum editing remains capability-authorized; the milestone must not grant all teachers/tutors mutation rights.
+- Curriculum editing remains capability-authorized; the milestone must not grant all teachers mutation rights.
 - Production writes, real charging, bulk notification, and user expansion require separate approved operational execution even after code completion.
 - Public launch, paid marketing, new markets, enterprise automation, and expanded AI autonomy remain out of scope.
 
@@ -67,18 +67,42 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Audit findings:** SEC-001, SEC-002, SEC-004.
 
-**Likely plan slices:**
+**Plans:** 10 plans across waves 0–5.
 
-1. Public-role allowlist, formal admin provisioning, teacher invitation/approval, and capability preservation.
-2. Central actor-resource-purpose authorization policy and migration of every identifier-bearing route.
-3. Cognito client/JWKS validation, role reconciliation boundary, route inventory, and negative authorization matrix.
+**Wave 0**
+
+1. `472-01` — Security contracts, safe client actions, and Wave 0 test surfaces.
+
+**Wave 1** *(blocked on Wave 0 completion)*
+
+2. `472-02` — Token verification and explicit identity resolution.
+3. `472-03` — Public privilege barrier and canonical `teacher` terminology.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+4. `472-04` — Versioned capabilities and privileged identity lifecycles.
+
+**Wave 3** *(blocked on Waves 1–2 completion)*
+
+5. `472-05` — Central actor-resource-action-purpose authorization policy.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+6. `472-06` — Student, question, and conversation route migration.
+7. `472-07` — Practice, adaptive, and parent route migration.
+8. `472-08` — Teacher, assistance, conversation, and AI-tool route migration.
+9. `472-09` — Admin capability and notification-resource route migration.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+10. `472-10` — Executable route inventory, dry-run reconciliation, and P0 evidence.
 
 **Success criteria:**
 
 1. Public registration and confirmation cannot create or promote admin, teacher, or tutor accounts, including role aliases and case variants.
 2. The existing formal production-admin workflow remains functional, audited, and outside public registration.
 3. Teacher onboarding requires an expiring one-time approval and does not imply curriculum-edit permission.
-4. Unrelated parents and unassigned teachers receive 403 for every audited student/question/practice/adaptive/report path.
+4. Unrelated parents and unassigned teachers receive indistinguishable `404 resource_not_found` responses when they are not allowed to know a resource exists; `403 action_not_allowed` is used only when resource existence is knowable but the requested action is forbidden.
 5. Owner students, active bound parents, assigned teachers, capability-authorized operators, and admins retain only their intended access.
 6. Wrong-client, wrong-pool, ID-token, unknown-key rotation, and Cognito/JWKS outage tests produce stable fail-closed behavior.
 
@@ -313,7 +337,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 **Likely plan slices:**
 
 1. Liveness/readiness, request/trace correlation, structured redacted logging, metrics, provider timeouts, and alarms.
-2. Exact-key/index and pagination correction for audited practice, WebSocket, teacher/tutor, and admin paths with load/cost evidence.
+2. Exact-key/index and pagination correction for audited practice, WebSocket, teacher, and admin paths with load/cost evidence.
 3. Staging/versioned Lambda deployment, API/provider/mobile smoke, alias promotion, and rollback using one immutable digest.
 
 **Success criteria:**

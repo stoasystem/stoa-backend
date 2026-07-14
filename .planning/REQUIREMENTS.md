@@ -25,14 +25,14 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 
 - [ ] **V9AUTH-01:** Public registration accepts only explicitly approved self-service roles and rejects `admin`, `teacher`, `tutor`, unknown, and case-variant privileged roles before any Cognito user/group mutation.
 - [ ] **V9AUTH-02:** A long-lived production admin can be created only through an authenticated operator workflow that records actor, target, timestamp, resulting group, and redacted evidence.
-- [ ] **V9AUTH-03:** A teacher/tutor can join only through an expiring, single-use invitation and explicit approval; teacher identity alone does not grant curriculum-edit capability.
+- [ ] **V9AUTH-03:** A teacher can join only through an expiring, single-use invitation and explicit approval; teacher identity alone does not grant curriculum-edit capability.
 - [ ] **V9AUTH-04:** Cognito group, profile role, account status, and capabilities have one reconciliation policy, and token validation performs no best-effort privilege mutation.
 - [ ] **V9AUTH-05:** Access-token validation enforces issuer, token use, allowed app client, signing-key rotation, cache isolation, and stable redacted authentication errors.
 - [ ] **V9AUTH-06:** A user can request and confirm a real login code with expiry, replay prevention, attempt limits, anti-enumeration behavior, and provider-failure handling; no deferred placeholder response remains.
 
 ### Resource Authorization
 
-- [ ] **V9ACCESS-01:** One central authorization policy decides whether an owner student, bound parent, assigned teacher/tutor, capability-authorized operator, or admin can access a student resource for a stated purpose.
+- [ ] **V9ACCESS-01:** One central authorization policy decides whether an owner student, bound parent, assigned teacher, capability-authorized operator, or admin can access a student resource for a stated purpose.
 - [ ] **V9ACCESS-02:** Every student, question, practice, adaptive, report, teacher, parent, and admin route that accepts a student/question/resource identifier uses the central policy or documents a stricter policy.
 - [ ] **V9ACCESS-03:** An automated role-resource matrix proves unrelated parents, unassigned teachers, stale/disabled bindings, wrong capabilities, and cross-user identifiers are denied while legitimate actors remain functional.
 
@@ -55,7 +55,7 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 ### Data Consistency And Concurrency
 
 - [ ] **V9DATA-01:** Question quota, idempotency, usage ledger, upload consumption, and initial question persistence commit atomically or converge through an explicitly tested recovery state.
-- [ ] **V9DATA-02:** Concurrent teacher/tutor takeover has exactly one winner, one session, and one notification through a conditional/transactional claim.
+- [ ] **V9DATA-02:** Concurrent teacher takeover has exactly one winner, one session, and one notification through a conditional/transactional claim.
 - [ ] **V9DATA-03:** Parent/student forward and reverse bindings and required profile changes commit transactionally, and a reconciliation tool repairs historical asymmetry idempotently.
 - [ ] **V9DATA-04:** Chat, hint, and related rate-limit counters do not increase after rejection; provider failures and retries follow documented consumption/idempotency semantics.
 - [ ] **V9DATA-05:** Incorrect practice attempts persist a bounded, display-safe student answer and return it accurately in mistake review while handling legacy rows as unknown.
@@ -86,7 +86,7 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 ### Operations And Reliability
 
 - [ ] **V9OPS-01:** Liveness, dependency readiness, request/trace correlation, structured redacted logs, latency/error/business metrics, and actionable alarms cover critical auth, question, billing, notification, and mobile API paths.
-- [ ] **V9OPS-02:** Audited practice, WebSocket, teacher/tutor, and admin access paths use exact keys/indexes and complete pagination so first-page or hard-limit truncation cannot silently omit records.
+- [ ] **V9OPS-02:** Audited practice, WebSocket, teacher, and admin access paths use exact keys/indexes and complete pagination so first-page or hard-limit truncation cannot silently omit records.
 - [ ] **V9OPS-03:** A tested artifact deploys to staging/versioned Lambda aliases, passes API/provider/mobile smoke, and can be rolled back without rebuilding or changing the artifact digest.
 
 ### Closeout And Truth Reconciliation
@@ -114,7 +114,7 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 
 ## Out Of Scope
 
-- Granting curriculum-edit permission to every teacher/tutor; editing remains a separately authorized capability.
+- Granting curriculum-edit permission to every teacher; editing remains a separately authorized capability.
 - Replacing FastAPI, DynamoDB, Cognito, Expo, or the AWS deployment model as a wholesale rewrite.
 - Adding microservices, Step Functions, or SQS solely for architectural preference without a demonstrated v9.0 failure mode.
 - Hiding failed tests, weakening assertions, ignoring dependency findings, or marking placeholder UI as complete.

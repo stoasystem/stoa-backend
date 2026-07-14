@@ -22,7 +22,8 @@ created: 2026-07-14
 | **Quick run command** | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_teacher_onboarding.py` |
 | **Route/matrix command** | `pytest -q tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` |
 | **Migration command** | `pytest -q tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py` |
-| **Focused phase gate** | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_teacher_onboarding.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` |
+| **Notification/client-contract command** | `pytest -q tests/test_notifications.py tests/test_websocket_notifications.py tests/test_client_error_actions.py tests/test_teacher_terminology_gate.py` |
+| **Focused phase gate** | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` |
 | **Full suite command** | `pytest -q` |
 | **Estimated runtime** | Quick/security under 10s; route matrix under 30s; focused gate under 90s (measure during execution) |
 
@@ -34,7 +35,7 @@ All focused tests inject the clock, JWKS transport, Cognito client, and reposito
 
 - **After every task commit:** Run the smallest changed/new test file plus its direct existing regression file.
 - **After every plan wave:** Run the focused phase gate.
-- **Before `$gsd-verify-work`:** Run all focused commands, compare the generated route inventory, scan for forbidden `tutor` contracts, and record the full-suite result without hiding unrelated failures.
+- **Before `$gsd-verify-work`:** Run all focused commands, compare the generated route inventory and client error-action contract, execute the semantic teacher-terminology gate plus its mutation test, and record the full-suite result without hiding unrelated failures.
 - **Max feedback latency:** 10s for unit/security changes, 30s for inventory/matrix changes, and 90s for a wave gate.
 - **Continuity rule:** No three consecutive implementation tasks may lack an automated verification command.
 
@@ -42,17 +43,20 @@ All focused tests inject the clock, JWKS transport, Cognito client, and reposito
 
 ## Per-Task Verification Map
 
-The planner may split route migration into additional plans; each resulting task must retain the corresponding requirement and threat reference below.
+This map follows the actual ten plans and waves 0–5. Every plan task inherits its row's requirements and threat references.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 472-01-* | 01 | 0 | All | T-472-01..08 | Security contracts and executable red-test fixtures exist before implementation | unit/contract | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py` | ❌ W0 | ⬜ pending |
+| 472-01-* | 01 | 0 | All | T-472-01..09 | Security/error/action contracts and executable red-test fixtures exist before implementation | unit/contract | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py` | ❌ W0 | ⬜ pending |
 | 472-02-* | 02 | 1 | V9AUTH-04, V9AUTH-05 | T-472-02, T-472-03 | Tokens are client/issuer/use bound; identity resolves explicitly; conflicts and outages deny | unit/integration | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py` | ❌ W0 | ⬜ pending |
-| 472-03-* | 03 | 1 | V9AUTH-01 | T-472-01 | Public flows cannot create teacher/admin privilege and `tutor` is rejected everywhere | API/regression | `pytest -q tests/test_auth_security.py tests/test_auth_account_lifecycle.py` | partial | ⬜ pending |
+| 472-03-* | 03 | 1 | V9AUTH-01 | T-472-01, T-472-08 | Public flows cannot create privilege; semantic gate forbids active tutor contracts while preserving exact negative/historical fixtures | API/regression/gate | `pytest -q tests/test_auth_security.py tests/test_auth_account_lifecycle.py tests/test_teacher_terminology_gate.py` | partial | ⬜ pending |
 | 472-04-* | 04 | 2 | V9AUTH-02, V9AUTH-03, V9AUTH-04 | T-472-04, T-472-05 | Grants and privileged lifecycles are scoped, idempotent, auditable, and immediately revocable | API/state-machine | `pytest -q tests/test_teacher_onboarding.py tests/test_identity_authorization.py tests/test_provision_production_admin.py` | partial | ⬜ pending |
-| 472-05-* | 05 | 2 | V9ACCESS-01, V9ACCESS-03 | T-472-06, T-472-07 | Central policy enforces owner, formal parent, task-scoped teacher, and purpose capability | policy matrix | `pytest -q tests/test_identity_authorization.py tests/test_student_authorization_matrix.py` | ❌ W0 | ⬜ pending |
-| 472-06-* | 06 | 3 | V9ACCESS-02, V9ACCESS-03 | T-472-06, T-472-08 | Every sensitive registered route has executable policy metadata and positive/negative controls | route inventory/matrix | `pytest -q tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | ❌ W0 | ⬜ pending |
-| 472-07-* | 07 | 4 | V9AUTH-02, V9AUTH-04, V9ACCESS-03 | T-472-02, T-472-05, T-472-07 | Reconciliation is dry-run-first, idempotent, auto-tightens only, and redacts evidence | migration/regression | `pytest -q tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py` | partial | ⬜ pending |
+| 472-05-* | 05 | 3 | V9ACCESS-01, V9ACCESS-03 | T-472-05, T-472-06, T-472-07 | Central policy enforces owner, formal parent, task-scoped teacher, and purpose capability | policy matrix | `pytest -q tests/test_identity_authorization.py tests/test_student_authorization_matrix.py` | ❌ W0 | ⬜ pending |
+| 472-06-* | 06 | 4 | V9ACCESS-02, V9ACCESS-03 | T-472-06, T-472-07 | Student, question, and conversation identifiers use executable policy with allow/deny controls | API/matrix | `pytest -q tests/test_student_authorization_matrix.py tests/test_questions.py` | partial | ⬜ pending |
+| 472-07-* | 07 | 4 | V9ACCESS-02, V9ACCESS-03 | T-472-06, T-472-07 | Practice, adaptive, and parent resources enforce owner/formal-binding scope | API/matrix | `pytest -q tests/test_student_authorization_matrix.py tests/test_parent_children.py tests/test_adaptive_learning.py` | partial | ⬜ pending |
+| 472-08-* | 08 | 4 | V9ACCESS-02, V9ACCESS-03 | T-472-05, T-472-06 | Teacher, help, conversation, assistance, and AI-tool access remains assignment/purpose scoped | API/matrix | `pytest -q tests/test_student_authorization_matrix.py tests/test_teacher_dispatch.py tests/test_ai_teacher_tools.py` | partial | ⬜ pending |
+| 472-09-* | 09 | 4 | V9AUTH-02, V9ACCESS-02, V9ACCESS-03 | T-472-05, T-472-06, T-472-07 | Admin operations require exact capabilities; notification event/push-token resources are Actor-owned and both admin notification routes are separately scoped | API/inventory | `pytest -q tests/test_admin_authorization.py tests/test_notifications.py tests/test_websocket_notifications.py` | partial | ⬜ pending |
+| 472-10-* | 10 | 5 | All | T-472-01..09 | All registered routers are inventoried; terminology/client contracts are deterministic; reconciliation auto-tightens only; evidence is honest | inventory/migration/evidence | `pytest -q tests/test_route_authorization_inventory.py tests/test_teacher_terminology_gate.py tests/test_client_error_actions.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py` | ❌ W0/partial | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -67,6 +71,8 @@ The planner may split route migration into additional plans; each resulting task
 - [ ] `tests/test_student_authorization_matrix.py` — actor-resource-action-purpose matrix across all route families with positive controls.
 - [ ] `tests/test_route_authorization_inventory.py` — registered route coverage and deterministic OpenAPI/inventory projection.
 - [ ] `tests/test_privileged_identity_reconciliation.py` — dry-run/apply, automatic tightening only, checkpoints, idempotency and evidence redaction.
+- [ ] `tests/test_client_error_actions.py` — exhaustive structured-code mapping, correlation-ID support, one refresh, 403/404 no-retry, 409 recovery, Retry-After and bounded idempotent-read/non-idempotent-write behavior.
+- [ ] `tests/test_teacher_terminology_gate.py` — exact allowlist semantics and an active tutor-contract mutation that must fail.
 
 Existing regression files to extend include `test_auth_account_lifecycle.py`, `test_parent_children.py`, `test_questions.py`, `test_teacher_dispatch.py`, `test_adaptive_learning.py`, `test_ai_teacher_tools.py`, `test_curriculum_ops.py`, and `test_provision_production_admin.py`. Tests that claim to verify authorization must exercise the Actor/identity/policy boundary rather than bypass it with a bare raw-claims override.
 
@@ -84,6 +90,7 @@ Existing regression files to extend include `test_auth_account_lifecycle.py`, `t
 | T-472-06 | Unrelated parent/teacher/admin accesses student resources through a forgotten or indirect identifier route | Generated registered-route inventory plus full negative and positive policy matrix |
 | T-472-07 | Outage, missing fact or error differences leak resource existence or fail open | Repository exceptions return safe 503; 403/404 existence policy; no handler mutation or secret/provider leakage |
 | T-472-08 | Hand-maintained authorization inventory drifts from executable FastAPI dependencies | Synthetic unprotected sensitive route makes inventory test fail; OpenAPI projection equals dependency metadata |
+| T-472-09 | Client recovery mapping leaks detail, loops refresh, or retries denied/non-idempotent operations | Exhaustive generated code/action contract; one-refresh cap; 403/404 no retry; 409 recovery; bounded Retry-After idempotent-read behavior; no automatic non-idempotent write replay |
 
 Every route-family matrix includes at least one authorized positive control so blanket denial cannot pass. Responses, logs and audit records use canary assertions to exclude tokens, emails, content, object keys and raw provider messages.
 
@@ -104,7 +111,7 @@ Every route-family matrix includes at least one authorized positive control so b
 
 ## Validation Sign-Off
 
-- [x] Every provisional plan slice has an automated command or explicit Wave 0 dependency.
+- [x] Every actual Plan 01–10 slice and Wave 0–5 has an automated command or explicit Wave 0 dependency.
 - [x] Sampling continuity prevents three consecutive tasks without automated verification.
 - [x] Wave 0 names every currently missing focused test/fixture.
 - [x] Commands contain no watch-mode flags or live-network dependency.
