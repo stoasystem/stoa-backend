@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-14T23:00:13.000Z"
-last_activity: 2026-07-15 -- Completed 472-06 student, question, and conversation route migration
+last_updated: "2026-07-14T23:24:26.000Z"
+last_activity: 2026-07-15 -- Completed 472-07 practice, adaptive, and parent route migration
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 6
-  percent: 60
+  completed_plans: 7
+  percent: 70
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
-Plan: 7 of 10
+Plan: 8 of 10
 Status: Ready to execute
-Last activity: 2026-07-15 -- Completed 472-06 student, question, and conversation route migration
+Last activity: 2026-07-15 -- Completed 472-07 practice, adaptive, and parent route migration
 
 ## Accumulated Context
 
@@ -49,6 +49,7 @@ Last activity: 2026-07-15 -- Completed 472-06 student, question, and conversatio
 - Routine admin lifecycle requires `admin_identity_manager`; bootstrap remains first-admin/disaster-only and grants no implicit request-path authority.
 - One central policy now authorizes student resources from a load-once `ResourceRef` plus fresh owner, strict bidirectional parent, current teacher task/assignment, or exact purpose-capability facts; role, legacy links, queue visibility, stale grants, and incomplete break-glass evidence never broaden access.
 - All student, question, conversation, message, stream, and teacher-help identifiers now enter through executable Actor policy dependencies; self identity is canonical, handlers receive the resolved object, and unrelated real IDs are hidden like random IDs before effects.
+- Practice, adaptive-learning, and parent resources now use Actor policy with explicit safe-public catalog metadata, exact assignment/capability scope, load-once targets, and strict active bidirectional parent-child bindings.
 
 ### Pending Todos
 
@@ -79,3 +80,4 @@ Last activity: 2026-07-15 -- Completed 472-06 student, question, and conversatio
 | Phase 472 P04 | 26 min | 3 tasks | 19 files |
 | Phase 472 P05 | 15 min | 3 tasks | 6 files |
 | Phase 472 P06 | 19 min | 3 tasks | 15 files |
+| Phase 472 P07 | 17 min | 3 tasks | 15 files |
