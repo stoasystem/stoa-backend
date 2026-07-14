@@ -4,18 +4,29 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
-from stoa.deps import get_current_user, require_role
-from stoa.models.report import WeeklyReportResponse
+from stoa.deps import get_actor
 from stoa.models.user import SubscriptionTier
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizationSpec,
+    AuthorizedResource,
+    CurrentAuthorizationFactRepository,
+    ParentAuthorizationFacts,
+    ResourceRef,
+    ResourceType,
+    authorize_and_resolve,
+)
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import (
     account_operations_service,
     learning_profile_service,
@@ -299,79 +310,94 @@ class ParentAccountOperationsResponse(BaseModel):
     supportState: dict[str, Any] = Field(default_factory=dict)
 
 
-def _resolve_parent_profile(user: dict, settings: Settings) -> ResolvedParent:
-    """Resolve a parent JWT to the local DynamoDB parent profile."""
-    claims_sub = user.get("sub", "")
-    if not claims_sub:
-        raise HTTPException(status_code=401, detail="Missing authenticated user id")
+def _parent_account_dependency(action: AuthorizationAction):
+    async def resolve(resource_id: str):
+        return {"student_id": resource_id}
 
-    profile = user_repo.get_user(claims_sub)
-    email = profile.get("email", "") if profile else ""
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        if actor.role is not CanonicalRole.PARENT:
+            error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+            raise HTTPException(status_code=error.status_code, detail=error.public_body())
+        return actor
 
-    if not profile:
-        cognito_username = user.get("username", claims_sub)
-        try:
-            cognito = boto3.client("cognito-idp", region_name=settings.aws_region)
-            data = cognito.admin_get_user(
-                UserPoolId=settings.cognito_user_pool_id,
-                Username=cognito_username,
-            )
-        except ClientError as exc:
-            raise HTTPException(status_code=404, detail="Parent profile not found") from exc
-
-        attrs = {attr["Name"]: attr["Value"] for attr in data.get("UserAttributes", [])}
-        email = attrs.get("email", "")
-        if email:
-            profile = user_repo.get_user_by_email(email)
-
-    if not profile:
-        raise HTTPException(status_code=404, detail="Parent profile not found")
-    if profile.get("role") != "parent":
-        raise HTTPException(status_code=403, detail="Resolved profile is not a parent")
-
-    return ResolvedParent(
-        claims_sub=claims_sub,
-        email=email or profile.get("email", ""),
-        parent_user_id=profile["user_id"],
-        profile=profile,
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        AuthorizationSpec(
+            ResourceType.PARENT_BINDING,
+            action,
+            AuthorizationPurpose.SELF_SERVICE,
+            resolve,
+        ),
     )
+    return dependency
 
 
-def _scan_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
-    table = get_table()
-    scan_kwargs: dict[str, Any] = {
-        "FilterExpression": "#pid = :pid AND #role = :role",
-        "ExpressionAttributeNames": {"#pid": "parent_id", "#role": "role"},
-        "ExpressionAttributeValues": {":pid": parent_user_id, ":role": "student"},
-    }
-    children: list[dict[str, Any]] = []
+_parent_account_read = _parent_account_dependency(AuthorizationAction.READ)
+_parent_account_create = _parent_account_dependency(AuthorizationAction.CREATE)
+async def _parent_child_read(
+    child_id: str,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+) -> AuthorizedResource:
+    async def resolve(resource_id: str):
+        profile = user_repo.get_user(resource_id)
+        if not profile or profile.get("role") not in {None, "student"}:
+            return None
+        return AuthorizedResource(
+            ResourceRef(ResourceType.STUDENT, resource_id, resource_id),
+            profile,
+        )
 
-    while True:
-        result = table.scan(**scan_kwargs)
-        children.extend(result.get("Items", []))
-        last_key = result.get("LastEvaluatedKey")
-        if not last_key:
-            return children
-        scan_kwargs["ExclusiveStartKey"] = last_key
+    spec = AuthorizationSpec(
+        ResourceType.STUDENT,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.PARENT_OVERSIGHT,
+        resolve,
+    )
+    try:
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=child_id,
+            spec=spec,
+            fact_repository=facts,
+        )
+    except SecurityDecisionError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
+
+
+async def _parent_child_metadata_resolver(resource_id: str):
+    return user_repo.get_user(resource_id)
+
+
+_parent_child_read.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.STUDENT,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.PARENT_OVERSIGHT,
+        _parent_child_metadata_resolver,
+    ),
+)
 
 
 def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
-    children: dict[str, dict[str, Any]] = {}
+    children: list[dict[str, Any]] = []
+    parent = user_repo.get_user(parent_user_id)
     for binding in user_repo.list_parent_student_bindings(parent_user_id):
-        if binding.get("status", "active") != "active":
-            continue
         student_id = binding.get("student_id")
         if not student_id:
             continue
-        profile = user_repo.get_user(student_id)
-        if profile and profile.get("role") == "student":
-            profile = {**profile, "relationship": binding.get("relationship", profile.get("relationship", "child"))}
-            children[student_id] = profile
-    for profile in _scan_children_for_parent(parent_user_id):
-        student_id = profile.get("user_id") or profile.get("id")
-        if student_id and student_id not in children:
-            children[student_id] = profile
-    return list(children.values())
+        reverse = user_repo.get_student_parent_binding(str(student_id), parent_user_id)
+        profile = user_repo.get_user(str(student_id))
+        facts = ParentAuthorizationFacts(binding, reverse, parent, profile)
+        if facts.matches(parent_user_id, str(student_id)):
+            children.append(
+                {
+                    **profile,
+                    "relationship": binding.get(
+                        "relationship", profile.get("relationship", "child")
+                    ),
+                }
+            )
+    return children
 
 
 def _subjects_from_profile(profile: dict[str, Any]) -> list[str]:
@@ -429,18 +455,6 @@ def _is_current_week(value: Any) -> bool:
     if parsed is None:
         return False
     return _utc_week_start(parsed) == _utc_week_start()
-
-
-def _get_owned_child_profile(resolved: ResolvedParent, child_id: str) -> dict[str, Any]:
-    binding = user_repo.get_parent_student_binding(resolved.parent_user_id, child_id)
-    if binding and binding.get("status", "active") == "active":
-        child = user_repo.get_user(child_id)
-        if child and child.get("role") == "student":
-            return {**child, "relationship": binding.get("relationship", child.get("relationship", "child"))}
-    for child in _scan_children_for_parent(resolved.parent_user_id):
-        if child.get("user_id") == child_id or child.get("id") == child_id:
-            return child
-    raise HTTPException(status_code=403, detail="Child is not linked to this parent")
 
 
 def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -680,23 +694,27 @@ def _report_state_from_item(report: dict[str, Any]) -> ParentChildReportState:
 
 @router.get("/me/children", response_model=ChildListResponse)
 async def list_my_children(
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(_parent_account_read),
 ):
     """Return children linked to the authenticated parent."""
-    resolved = _resolve_parent_profile(user, settings)
-    children = _list_children_for_parent(resolved.parent_user_id)
+    try:
+        children = _list_children_for_parent(actor.user_id)
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from exc
     return ChildListResponse(items=[_child_summary_from_profile(child) for child in children])
 
 
 @router.get("/me/subscription", response_model=ParentSubscriptionResponse)
 async def get_my_subscription(
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(_parent_account_read),
     settings: Settings = Depends(get_settings),
 ):
     """Return the authenticated parent's current plan and MVP plan options."""
-    resolved = _resolve_parent_profile(user, settings)
-    return subscription_service.get_parent_subscription(resolved.parent_user_id, settings=settings)
+    return subscription_service.get_parent_subscription(actor.user_id, settings=settings)
 
 
 @router.post(
@@ -706,13 +724,12 @@ async def get_my_subscription(
 )
 async def create_my_subscription_checkout(
     body: ParentCheckoutSessionCreate,
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
     """Create a provider checkout session for the authenticated parent."""
-    resolved = _resolve_parent_profile(user, settings)
     return subscription_service.create_checkout_session(
-        parent_id=resolved.parent_user_id,
+        parent_id=actor.user_id,
         requested_tier=body.requested_tier.value,
         success_url=body.success_url,
         cancel_url=body.cancel_url,
@@ -722,24 +739,22 @@ async def create_my_subscription_checkout(
 
 @router.get("/me/subscription/billing", response_model=ParentBillingResponse)
 async def get_my_subscription_billing(
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(_parent_account_read),
     settings: Settings = Depends(get_settings),
 ):
     """Return provider billing status for the authenticated parent."""
-    resolved = _resolve_parent_profile(user, settings)
-    return subscription_service.get_parent_billing(resolved.parent_user_id, settings=settings)
+    return subscription_service.get_parent_billing(actor.user_id, settings=settings)
 
 
 @router.get("/me/account-operations", response_model=ParentAccountOperationsResponse)
 async def get_my_account_operations(
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(_parent_account_read),
     settings: Settings = Depends(get_settings),
 ):
     """Return a consolidated parent account operations summary."""
-    resolved = _resolve_parent_profile(user, settings)
     return account_operations_service.build_parent_operations_summary(
-        resolved.parent_user_id,
+        actor.user_id,
         settings=settings,
         day=day,
     )
@@ -752,13 +767,12 @@ async def get_my_account_operations(
 )
 async def create_my_subscription_request(
     body: ParentSubscriptionRequestCreate,
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
     """Submit a manual subscription request for internal admin processing."""
-    resolved = _resolve_parent_profile(user, settings)
     return subscription_service.create_parent_request(
-        parent_id=resolved.parent_user_id,
+        parent_id=actor.user_id,
         request_type=body.request_type,
         requested_tier=body.requested_tier.value if body.requested_tier else None,
         parent_note=body.parent_note,
@@ -768,29 +782,27 @@ async def create_my_subscription_request(
 @router.get("/me/subscription/requests", response_model=ParentSubscriptionRequestListResponse)
 async def list_my_subscription_requests(
     limit: int = Query(default=25, ge=1, le=50),
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(_parent_account_read),
 ):
     """Return the authenticated parent's recent manual subscription requests."""
-    resolved = _resolve_parent_profile(user, settings)
-    items = subscription_service.list_parent_requests(resolved.parent_user_id, limit=limit)
+    items = subscription_service.list_parent_requests(actor.user_id, limit=limit)
     return ParentSubscriptionRequestListResponse(items=items, count=len(items))
 
 
 @router.get("/me/children/{child_id}/summary", response_model=ParentChildSummaryResponse)
 async def get_child_summary(
     child_id: str,
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
-    resolved = _resolve_parent_profile(user, settings)
-    child = _get_owned_child_profile(resolved, child_id)
+    child = dict(authorized_child.value)
+    child_id = authorized_child.ref.student_id
 
     questions = question_repo.list_by_student(child_id, limit=500).get("Items", [])
     progress = practice_repo.get_progress(child_id)
     mistakes = practice_repo.get_mistakes(child_id)
     conversations = _list_conversations_for_child(child_id)
-    latest_report = _latest_report_for_child(resolved.parent_user_id, child_id)
+    latest_report = _latest_report_for_child(actor.user_id, child_id)
 
     current_week_questions = [item for item in questions if _is_current_week(item.get("created_at"))]
     current_week_progress = [
@@ -850,12 +862,10 @@ async def get_child_summary(
 @router.get("/me/children/{child_id}/learning-profile", response_model=LearningProfileResponse)
 async def get_child_learning_profile(
     child_id: str,
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
     """Return subject-level profile seeds for an authorized child."""
-    resolved = _resolve_parent_profile(user, settings)
-    _get_owned_child_profile(resolved, child_id)
+    child_id = authorized_child.ref.student_id
 
     questions = question_repo.list_by_student(child_id, limit=500).get("Items", [])
     mistakes = practice_repo.get_mistakes(child_id)
@@ -870,18 +880,18 @@ async def get_child_learning_profile(
 async def get_child_usage_summary(
     child_id: str,
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    user: dict = Depends(require_role("parent")),
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
     settings: Settings = Depends(get_settings),
 ):
     """Return a privacy-safe quota usage summary for an authorized child."""
-    resolved = _resolve_parent_profile(user, settings)
-    _get_owned_child_profile(resolved, child_id)
+    child_id = authorized_child.ref.student_id
     summary = usage_ledger_service.build_student_usage_summary(
         student_id=child_id,
         settings=settings,
         day=day,
     )
-    if summary.get("parentId") not in (None, resolved.parent_user_id):
+    if summary.get("parentId") not in (None, actor.user_id):
         raise HTTPException(status_code=403, detail="Not your child usage")
     return summary
 
@@ -890,17 +900,16 @@ async def get_child_usage_summary(
 async def get_child_history(
     child_id: str,
     limit: int = Query(default=20, ge=1, le=100),
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
-    resolved = _resolve_parent_profile(user, settings)
-    _get_owned_child_profile(resolved, child_id)
+    child_id = authorized_child.ref.student_id
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=100))
     activities.extend(_practice_history_events(child_id))
     activities.extend(_conversation_history_events(child_id))
-    activities.extend(_report_history_events(resolved.parent_user_id, child_id))
+    activities.extend(_report_history_events(actor.user_id, child_id))
 
     return ParentChildHistoryResponse(
         items=[_history_event_from_activity(activity) for activity in _sort_activities(activities, limit)]
@@ -910,12 +919,11 @@ async def get_child_history(
 @router.get("/me/children/{child_id}/report", response_model=ParentChildReportState)
 async def get_child_report(
     child_id: str,
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
-    resolved = _resolve_parent_profile(user, settings)
-    _get_owned_child_profile(resolved, child_id)
-    report = _latest_report_for_child(resolved.parent_user_id, child_id)
+    child_id = authorized_child.ref.student_id
+    report = _latest_report_for_child(actor.user_id, child_id)
     if report and report.get("student_id") != child_id:
         report = None
     return _report_state_from_item(report) if report else _missing_report_state()
@@ -925,56 +933,11 @@ async def get_child_report(
 async def get_child_report_by_week(
     child_id: str,
     week: str,
-    user: dict = Depends(require_role("parent")),
-    settings: Settings = Depends(get_settings),
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
-    resolved = _resolve_parent_profile(user, settings)
-    _get_owned_child_profile(resolved, child_id)
-    report = report_repo.get_report_for_child_by_week(resolved.parent_user_id, child_id, week)
+    child_id = authorized_child.ref.student_id
+    report = report_repo.get_report_for_child_by_week(actor.user_id, child_id, week)
     if not report or report.get("student_id") != child_id:
         return _missing_report_state()
     return _report_state_from_item(report)
-
-
-@router.get("/{parent_id}/children", response_model=list[LegacyChildSummary])
-async def list_children(
-    parent_id: str,
-    user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
-):
-    """Return the list of students linked to this parent."""
-    role = user.get("role", "")
-
-    if role not in ("parent", "admin"):
-        raise HTTPException(status_code=403, detail="Role not permitted")
-    if role == "parent":
-        resolved = _resolve_parent_profile(user, settings)
-        if resolved.parent_user_id != parent_id:
-            raise HTTPException(status_code=403, detail="Cannot view another parent's children")
-
-    children = _list_children_for_parent(parent_id)
-    return [_legacy_child_summary_from_profile(child) for child in children]
-
-
-@router.get("/{parent_id}/reports/{week}", response_model=WeeklyReportResponse)
-async def get_report(
-    parent_id: str,
-    week: str,
-    user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
-):
-    """Return the weekly report for a given ISO week (YYYY-MM-DD of Monday)."""
-    role = user.get("role", "")
-
-    if role not in ("parent", "admin"):
-        raise HTTPException(status_code=403, detail="Role not permitted")
-    if role == "parent":
-        resolved = _resolve_parent_profile(user, settings)
-        if resolved.parent_user_id != parent_id:
-            raise HTTPException(status_code=403, detail="Cannot view another parent's reports")
-
-    report = report_repo.get_report_by_week(parent_id, week)
-    if not report:
-        raise HTTPException(status_code=404, detail=f"No report found for week '{week}'")
-
-    return WeeklyReportResponse(**report)

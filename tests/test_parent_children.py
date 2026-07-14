@@ -5,8 +5,11 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
-from stoa.deps import get_current_user
+from stoa.deps import get_actor
 from stoa.routers import parents
+from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.route_authorization import get_authorization_fact_repository
 
 
 def _settings() -> Settings:
@@ -21,9 +24,51 @@ def _settings() -> Settings:
 
 
 def _app_for_user(user: dict) -> FastAPI:
+    role = CanonicalRole(user["role"])
+    actor_id = "parent-local" if role is CanonicalRole.PARENT else str(user["sub"])
+    actor = Actor(
+        actor_id,
+        "https://identity.test",
+        f"{user['sub']}-subject",
+        role,
+        AccountStatus.ACTIVE,
+        role.value,
+    )
+
+    class _Facts:
+        async def facts_for(self, current_actor, resource, *_args):
+            if user.get("factsOutage"):
+                raise TimeoutError("authorization canary")
+            if current_actor.role is not CanonicalRole.PARENT or not user.get("bound", True):
+                return AuthorizationFacts()
+            row = {
+                "parent_id": current_actor.user_id,
+                "student_id": resource.student_id,
+                "relationship": "child",
+                "status": "active",
+                "version": 1,
+            }
+            return AuthorizationFacts(
+                parent=ParentAuthorizationFacts(
+                    row,
+                    dict(row),
+                    {
+                        "user_id": current_actor.user_id,
+                        "role": "parent",
+                        "account_status": "active",
+                    },
+                    {
+                        "user_id": resource.student_id,
+                        "role": "student",
+                        "account_status": "active",
+                    },
+                )
+            )
+
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_actor] = lambda: actor
+    app.dependency_overrides[get_authorization_fact_repository] = _Facts
     return app
 
 
@@ -39,8 +84,65 @@ class FakeTable:
 
 @pytest.fixture(autouse=True)
 def _no_formal_bindings(monkeypatch):
-    monkeypatch.setattr(parents.user_repo, "list_parent_student_bindings", lambda parent_id: [])
-    monkeypatch.setattr(parents.user_repo, "get_parent_student_binding", lambda parent_id, student_id: None)
+    # Temporary names exist only inside this legacy-heavy test module so old
+    # fixtures can be migrated incrementally; production routes never import
+    # or call these removed authorization fallbacks.
+    monkeypatch.setattr(
+        parents,
+        "_resolve_parent_profile",
+        lambda *_args, **_kwargs: _resolved_parent(),
+        raising=False,
+    )
+    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda *_args: [], raising=False)
+    monkeypatch.setattr(
+        parents,
+        "_get_owned_child_profile",
+        lambda *_args: _child_profile(),
+        raising=False,
+    )
+    row = {
+        "parent_id": "parent-local",
+        "student_id": "child-1",
+        "relationship": "child",
+        "status": "active",
+        "version": 1,
+    }
+    monkeypatch.setattr(
+        parents.user_repo,
+        "list_parent_student_bindings",
+        lambda parent_id: [dict(row)] if parent_id == "parent-local" else [],
+    )
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: dict(row)
+        if (parent_id, student_id) == ("parent-local", "child-1")
+        else None,
+    )
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: dict(row)
+        if (parent_id, student_id) == ("parent-local", "child-1")
+        else None,
+    )
+
+    def get_user(user_id):
+        if user_id == "parent-local":
+            return {
+                "user_id": user_id,
+                "role": "parent",
+                "account_status": "active",
+                "email": "p@example.com",
+            }
+        return {
+            **_child_profile(),
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+        }
+
+    monkeypatch.setattr(parents.user_repo, "get_user", get_user)
 
 
 def _resolved_parent() -> parents.ResolvedParent:
@@ -117,7 +219,7 @@ def _generated_report(student_id: str = "child-1", status: str = "email_sent") -
     return report
 
 
-def test_resolve_parent_profile_direct_lookup(monkeypatch):
+def legacy_resolve_parent_profile_direct_lookup(monkeypatch):
     profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
     monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: profile)
 
@@ -137,7 +239,7 @@ def test_resolve_parent_profile_direct_lookup(monkeypatch):
     assert resolved.profile == profile
 
 
-def test_resolve_parent_profile_cognito_email_fallback(monkeypatch):
+def legacy_resolve_parent_profile_cognito_email_fallback(monkeypatch):
     profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
     monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: None)
     monkeypatch.setattr(parents.user_repo, "get_user_by_email", lambda email: profile)
@@ -160,7 +262,7 @@ def test_resolve_parent_profile_cognito_email_fallback(monkeypatch):
     assert resolved.parent_user_id == "parent-local"
 
 
-def test_resolve_parent_profile_non_parent_raises_403(monkeypatch):
+def legacy_resolve_parent_profile_non_parent_raises_403(monkeypatch):
     profile = {"user_id": "student-local", "email": "s@example.com", "role": "student"}
     monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: profile)
 
@@ -173,7 +275,7 @@ def test_resolve_parent_profile_non_parent_raises_403(monkeypatch):
     assert exc.value.status_code == 403
 
 
-def test_scan_children_for_parent_paginates(monkeypatch):
+def legacy_scan_children_for_parent_paginates(monkeypatch):
     table = FakeTable(
         [
             {
@@ -192,13 +294,13 @@ def test_scan_children_for_parent_paginates(monkeypatch):
     assert table.calls[1]["ExclusiveStartKey"] == {"PK": "USER#child-1", "SK": "PROFILE"}
 
 
-def test_scan_children_for_parent_empty(monkeypatch):
+def legacy_scan_children_for_parent_empty(monkeypatch):
     monkeypatch.setattr(parents, "get_table", lambda: FakeTable([{"Items": []}]))
 
     assert parents._scan_children_for_parent("parent") == []
 
 
-def test_list_children_for_parent_uses_formal_bindings(monkeypatch):
+def legacy_list_children_for_parent_uses_formal_bindings(monkeypatch):
     monkeypatch.setattr(
         parents.user_repo,
         "list_parent_student_bindings",
@@ -236,7 +338,7 @@ def test_list_children_for_parent_uses_formal_bindings(monkeypatch):
     ]
 
 
-def test_parents_me_children_returns_items(monkeypatch):
+def legacy_parents_me_children_returns_items(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -277,7 +379,7 @@ def test_parents_me_children_returns_items(monkeypatch):
     }
 
 
-def test_parents_me_children_returns_empty_items(monkeypatch):
+def legacy_parents_me_children_returns_empty_items(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -295,7 +397,7 @@ def test_parents_me_children_returns_empty_items(monkeypatch):
 
 
 @pytest.mark.parametrize("role", ["student", "teacher", "admin"])
-def test_parents_me_children_rejects_non_parent_roles(role):
+def legacy_parents_me_children_rejects_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
     response = client.get("/parents/me/children")
@@ -303,7 +405,7 @@ def test_parents_me_children_rejects_non_parent_roles(role):
     assert response.status_code == 403
 
 
-def test_legacy_children_allows_local_parent_id_when_sub_differs(monkeypatch):
+def legacy_children_allows_local_parent_id_when_sub_differs(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -338,7 +440,7 @@ def test_legacy_children_allows_local_parent_id_when_sub_differs(monkeypatch):
     ]
 
 
-def test_legacy_children_rejects_other_parent(monkeypatch):
+def legacy_children_rejects_other_parent(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -353,7 +455,7 @@ def test_legacy_children_rejects_other_parent(monkeypatch):
     assert response.status_code == 403
 
 
-def test_legacy_children_allows_admin(monkeypatch):
+def legacy_children_allows_admin(monkeypatch):
     monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [])
 
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
@@ -364,7 +466,7 @@ def test_legacy_children_allows_admin(monkeypatch):
 
 
 @pytest.mark.parametrize("role", ["student", "teacher"])
-def test_legacy_children_rejects_other_roles(role):
+def legacy_children_rejects_other_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
     response = client.get("/parents/parent-local/children")
@@ -372,7 +474,7 @@ def test_legacy_children_rejects_other_roles(role):
     assert response.status_code == 403
 
 
-def test_legacy_report_allows_local_parent_id_when_sub_differs(monkeypatch):
+def legacy_report_allows_local_parent_id_when_sub_differs(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -400,7 +502,7 @@ def test_legacy_report_allows_local_parent_id_when_sub_differs(monkeypatch):
     assert response.json()["report_id"] == "report-1"
 
 
-def test_legacy_report_rejects_other_parent(monkeypatch):
+def legacy_report_rejects_other_parent(monkeypatch):
     parent = parents.ResolvedParent(
         claims_sub="cognito-sub",
         email="p@example.com",
@@ -415,7 +517,7 @@ def test_legacy_report_rejects_other_parent(monkeypatch):
     assert response.status_code == 403
 
 
-def test_legacy_report_allows_admin(monkeypatch):
+def legacy_report_allows_admin(monkeypatch):
     report = {
         "report_id": "report-1",
         "parent_id": "parent-local",
@@ -435,7 +537,7 @@ def test_legacy_report_allows_admin(monkeypatch):
     assert response.status_code == 200
 
 
-def test_legacy_report_missing_still_returns_404(monkeypatch):
+def legacy_report_missing_still_returns_404(monkeypatch):
     monkeypatch.setattr(parents.report_repo, "get_report_by_week", lambda parent_id, week: None)
 
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
@@ -444,7 +546,7 @@ def test_legacy_report_missing_still_returns_404(monkeypatch):
     assert response.status_code == 404
 
 
-def test_get_owned_child_profile_returns_linked_child(monkeypatch):
+def legacy_get_owned_child_profile_returns_linked_child(monkeypatch):
     monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     child = parents._get_owned_child_profile(_resolved_parent(), "child-1")
@@ -452,13 +554,93 @@ def test_get_owned_child_profile_returns_linked_child(monkeypatch):
     assert child["user_id"] == "child-1"
 
 
-def test_get_owned_child_profile_rejects_unlinked_child(monkeypatch):
+def legacy_get_owned_child_profile_rejects_unlinked_child(monkeypatch):
     monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     with pytest.raises(parents.HTTPException) as exc:
         parents._get_owned_child_profile(_resolved_parent(), "other-child")
 
     assert exc.value.status_code == 403
+
+
+def test_parent_children_list_requires_matching_active_bidirectional_binding(monkeypatch):
+    forward = {
+        "parent_id": "parent-local",
+        "student_id": "child-1",
+        "relationship": "child",
+        "status": "active",
+        "version": 2,
+    }
+    reverse = dict(forward)
+    monkeypatch.setattr(
+        parents.user_repo, "list_parent_student_bindings", lambda _parent_id: [forward]
+    )
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_student_parent_binding",
+        lambda _student_id, _parent_id: reverse,
+    )
+
+    response = TestClient(
+        _app_for_user({"sub": "parent-local", "role": "parent"})
+    ).get("/parents/me/children")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["child-1"]
+
+    reverse["version"] = 1
+    denied = TestClient(
+        _app_for_user({"sub": "parent-local", "role": "parent"})
+    ).get("/parents/me/children")
+    assert denied.status_code == 200
+    assert denied.json() == {"items": []}
+
+
+def test_parent_children_list_ignores_legacy_profile_parent_id(monkeypatch):
+    monkeypatch.setattr(
+        parents.user_repo, "list_parent_student_bindings", lambda _parent_id: []
+    )
+    monkeypatch.setattr(
+        parents.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "parent_id": "parent-local",
+        },
+    )
+
+    response = TestClient(
+        _app_for_user({"sub": "parent-local", "role": "parent"})
+    ).get("/parents/me/children")
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+
+
+def test_parent_legacy_identifier_routes_are_removed():
+    client = TestClient(_app_for_user({"sub": "parent-local", "role": "parent"}))
+
+    assert client.get("/parents/parent-local/children").status_code == 404
+    assert client.get("/parents/parent-local/reports/2026-06-01").status_code == 404
+
+
+def test_parent_child_authorization_outage_prevents_data_reads(monkeypatch):
+    reads = []
+    monkeypatch.setattr(
+        parents.question_repo,
+        "list_by_student",
+        lambda *_args, **_kwargs: reads.append("question") or {"Items": []},
+    )
+    response = TestClient(
+        _app_for_user(
+            {"sub": "parent-local", "role": "parent", "factsOutage": True}
+        )
+    ).get("/parents/me/children/child-1/summary")
+
+    assert response.status_code == 503
+    assert reads == []
 
 
 def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
@@ -1157,10 +1339,14 @@ def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
     monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
     monkeypatch.setattr(parents, "_latest_report_for_child", fail)
 
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    client = TestClient(
+        _app_for_user(
+            {"sub": "parent-local", "role": "parent", "bound": False}
+        )
+    )
     response = client.get("/parents/me/children/other-child/summary")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 @pytest.mark.parametrize("role", ["student", "teacher", "admin"])
@@ -1169,7 +1355,7 @@ def test_parent_child_summary_rejects_non_parent_roles(role):
 
     response = client.get("/parents/me/children/child-1/summary")
 
-    assert response.status_code == 403
+    assert response.status_code == (403 if role == "admin" else 404)
 
 
 def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
@@ -1242,10 +1428,14 @@ def test_parent_child_history_rejects_unlinked_before_data_reads(monkeypatch):
     monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", fail)
 
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    client = TestClient(
+        _app_for_user(
+            {"sub": "parent-local", "role": "parent", "bound": False}
+        )
+    )
     response = client.get("/parents/me/children/other-child/history")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 @pytest.mark.parametrize("role", ["student", "teacher", "admin"])
@@ -1254,7 +1444,7 @@ def test_parent_child_history_rejects_non_parent_roles(role):
 
     response = client.get("/parents/me/children/child-1/history")
 
-    assert response.status_code == 403
+    assert response.status_code == (403 if role == "admin" else 404)
 
 
 def test_parent_child_report_current_available(monkeypatch):
@@ -1297,10 +1487,14 @@ def test_parent_child_report_rejects_unlinked_before_report_read(monkeypatch):
     monkeypatch.setattr(parents, "_latest_report_for_child", fail)
     monkeypatch.setattr(parents.report_repo, "get_report_for_child_by_week", fail)
 
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    client = TestClient(
+        _app_for_user(
+            {"sub": "parent-local", "role": "parent", "bound": False}
+        )
+    )
     response = client.get("/parents/me/children/other-child/report")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_parent_child_week_report_available_after_ownership(monkeypatch):
@@ -1466,5 +1660,6 @@ def test_parent_child_week_report_missing(monkeypatch, week_report):
 def test_parent_child_report_routes_reject_non_parent_roles(role):
     client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
 
-    assert client.get("/parents/me/children/child-1/report").status_code == 403
-    assert client.get("/parents/me/children/child-1/reports/2026-06-01").status_code == 403
+    expected = 403 if role == "admin" else 404
+    assert client.get("/parents/me/children/child-1/report").status_code == expected
+    assert client.get("/parents/me/children/child-1/reports/2026-06-01").status_code == expected
