@@ -15,6 +15,7 @@ from stoa.routers import (
     practice,
     questions,
     students,
+    teacher_applications,
     teachers,
 )
 
@@ -40,6 +41,11 @@ app.include_router(practice.router, prefix="/practice", tags=["practice"])
 app.include_router(questions.router, prefix="/questions", tags=["questions"])
 app.include_router(students.router, prefix="/students", tags=["students"])
 app.include_router(teachers.router, prefix="/teachers", tags=["teachers"])
+app.include_router(
+    teacher_applications.router,
+    prefix="/teacher-applications",
+    tags=["teacher-applications"],
+)
 app.include_router(parents.router, prefix="/parents", tags=["parents"])
 app.include_router(billing.router, prefix="/billing", tags=["billing"])
 app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])

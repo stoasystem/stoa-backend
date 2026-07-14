@@ -456,18 +456,16 @@ def _require_capability(user: dict[str, Any], *allowed: str) -> None:
 
 
 def curriculum_capabilities(user: dict[str, Any]) -> set[str]:
-    grants = user.get("current_grants")
-    if not isinstance(grants, list | tuple):
+    # ``get_current_user`` constructs this one top-level map from Actor.current_grants.
+    # Nested claims/profile/metadata/permissions/scopes are never consulted.
+    capabilities = user.get("capabilities")
+    if not isinstance(capabilities, dict):
         return set()
-    capabilities = {
-        str(grant.get("capability"))
-        for grant in grants
-        if isinstance(grant, dict)
-        and grant.get("status") == "active"
-        and grant.get("scope")
-        and int(grant.get("version") or 0) > 0
-    }
-    return capabilities & CURRICULUM_CAPABILITIES
+    return {
+        str(capability)
+        for capability, status in capabilities.items()
+        if status is True or str(status).lower() == "granted"
+    } & CURRICULUM_CAPABILITIES
 
 
 def _coerce_capabilities(value: Any) -> set[str]:

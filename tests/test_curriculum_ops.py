@@ -18,15 +18,7 @@ def _operator_user(*capabilities: str, role: str = "teacher", sub: str = "operat
     return {
         "sub": sub,
         "role": role,
-        "current_grants": [
-            {
-                "capability": capability,
-                "scope": "global",
-                "status": "active",
-                "version": 1,
-            }
-            for capability in capabilities
-        ],
+        "capabilities": {capability: "granted" for capability in capabilities},
     }
 
 
@@ -155,7 +147,6 @@ def test_curriculum_authoring_requires_explicit_capability(monkeypatch, role):
 def test_curriculum_ignores_claim_profile_and_permission_capabilities():
     untrusted = {
         "role": "teacher",
-        "capabilities": {curriculum_ops_service.AUTHOR_CAPABILITY: "granted"},
         "permissions": [curriculum_ops_service.REVIEWER_CAPABILITY],
         "claims": {"scopes": curriculum_ops_service.PUBLISHER_CAPABILITY},
         "profile": {"capabilities": [curriculum_ops_service.AUTHOR_CAPABILITY]},

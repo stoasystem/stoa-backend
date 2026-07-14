@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     cognito_jwks_read_timeout_seconds: float = 3.0
     cognito_jwks_ttl_seconds: int = 300
     cognito_jwks_max_stale_seconds: int = 900
+    teacher_activation_invitation_expiry_seconds: int = 900
 
     @property
     def allowed_cognito_issuers(self) -> tuple[str, ...]:

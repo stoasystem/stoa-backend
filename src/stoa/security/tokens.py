@@ -17,6 +17,7 @@ class VerifiedAccessToken:
     subject: str
     client_id: str
     groups: tuple[str, ...]
+    verified_email: str | None = None
 
 
 async def verify_access_token(
@@ -66,7 +67,10 @@ async def verify_access_token(
     groups = claims.get("cognito:groups") or ()
     if not isinstance(groups, (list, tuple)) or not all(isinstance(value, str) for value in groups):
         raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
-    return VerifiedAccessToken(issuer, subject, client_id, tuple(groups))
+    verified_email = None
+    if claims.get("email_verified") is True and isinstance(claims.get("email"), str):
+        verified_email = claims["email"].strip().casefold() or None
+    return VerifiedAccessToken(issuer, subject, client_id, tuple(groups), verified_email)
 
 
 @dataclass(frozen=True, slots=True)
