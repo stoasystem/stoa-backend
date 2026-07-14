@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
 
@@ -14,10 +14,16 @@ from security.conftest import (
     RepositoryUnavailable,
 )
 from stoa.config import Settings, get_settings
+from stoa.deps import (
+    get_current_user,
+    get_identity_repository,
+    get_verified_token,
+    require_role,
+)
 from stoa.routers import auth
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.jwks import JwksKeyProvider
-from stoa.security.tokens import verify_access_token
+from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 
 
 def _access_token(keyset, *, issuer=None, client_id="student-client", token_use="access"):
@@ -178,6 +184,81 @@ async def test_t472_02_verifier_accepts_only_bound_access_token(rsa_jwks_keysets
         "subject-1",
         "student-client",
     )
+
+
+def test_t472_02_dependency_path_denies_suspension_next_request_without_mutation():
+    class MutableRepository:
+        def __init__(self):
+            self.status = "active"
+            self.calls = []
+
+        async def get_binding(self, issuer, subject):
+            self.calls.append(("get_binding", issuer, subject))
+            return {"status": "active", "user_id": "student-1"}
+
+        async def get_account(self, user_id):
+            self.calls.append(("get_account", user_id))
+            return {"role": "student", "account_status": self.status}
+
+        async def get_current_grants(self, user_id):
+            self.calls.append(("get_current_grants", user_id))
+            return []
+
+    repository = MutableRepository()
+    verified = VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="student-client",
+        groups=("students",),
+    )
+    handler_calls = []
+    app = FastAPI()
+
+    @app.get("/protected")
+    async def protected(user=Depends(require_role("student"))):
+        handler_calls.append(user["sub"])
+        return {"userId": user["sub"]}
+
+    app.dependency_overrides[get_verified_token] = lambda: verified
+    app.dependency_overrides[get_identity_repository] = lambda: repository
+    client = TestClient(app)
+
+    assert client.get("/protected").status_code == 200
+    repository.status = "suspended"
+    denied = client.get("/protected")
+    assert denied.status_code == 409
+    assert denied.json()["detail"]["code"] == "identity_conflict"
+    assert handler_calls == ["student-1"]
+    assert {operation for operation, *_ in repository.calls} <= {
+        "get_binding",
+        "get_account",
+        "get_current_grants",
+    }
+
+
+@pytest.mark.asyncio
+async def test_t472_02_legacy_adapter_projects_only_resolved_actor_authority():
+    from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+
+    actor = Actor(
+        user_id="admin-1",
+        issuer="https://identity.test/primary",
+        subject="provider-subject",
+        role=CanonicalRole.ADMIN,
+        account_status=AccountStatus.ACTIVE,
+        cognito_group="admin",
+        current_grants=(CapabilityGrant("student_support_lookup", "student:*", 4),),
+    )
+
+    legacy = await get_current_user(actor)
+    assert legacy == {
+        "sub": "admin-1",
+        "user_id": "admin-1",
+        "cognito_sub": "provider-subject",
+        "role": "admin",
+        "account_status": "active",
+        "capabilities": {"student_support_lookup": "granted"},
+    }
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from stoa.config import Settings, get_settings
-from stoa.security.errors import SecurityDecisionError
+from stoa.db.repositories.identity_repo import DynamoIdentityRepository
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.identity import Actor, CanonicalRole, IdentityRepository, resolve_actor
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 
@@ -89,85 +91,48 @@ async def get_verified_token(
         raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
 
 
-async def get_current_user(
+@lru_cache(maxsize=1)
+def get_identity_repository() -> IdentityRepository:
+    return DynamoIdentityRepository()
+
+
+async def get_actor(
     verified: VerifiedAccessToken = Depends(get_verified_token),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Temporary compatibility resolver; Plan 472-02 Task 3 replaces its fallbacks."""
-    claims: dict[str, Any] = {
-        "iss": verified.issuer,
-        "sub": verified.subject,
-        "client_id": verified.client_id,
-        "token_use": "access",
-        "cognito:groups": list(verified.groups),
+    repository: IdentityRepository = Depends(get_identity_repository),
+) -> Actor:
+    try:
+        return await resolve_actor(verified, repository)
+    except SecurityDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+
+
+async def get_current_user(actor: Actor = Depends(get_actor)) -> dict[str, Any]:
+    """Read-only legacy projection for handlers awaiting typed Actor migration."""
+    capabilities = {
+        grant.capability: "granted"
+        for grant in actor.current_grants
     }
-
-    # Resolve role from Cognito groups (present in access token via cognito:groups).
-    # Group names: students → student, parents → parent, teachers → teacher, admins → admin
-    _group_to_role = {
-        "students": "student",
-        "parents": "parent",
-        "teachers": "teacher",
-        "admins": "admin",
+    return {
+        "sub": actor.user_id,
+        "user_id": actor.user_id,
+        "cognito_sub": actor.subject,
+        "role": actor.role.value,
+        "account_status": actor.account_status.value,
+        "capabilities": capabilities,
     }
-    groups = claims.get("cognito:groups") or []
-    role = next((_group_to_role[g] for g in groups if g in _group_to_role), None)
-
-    # Fallback: custom:role attribute (not typically in access token but kept for safety)
-    if not role:
-        role = claims.get("custom:role")
-
-    # Fallback: look up role in DynamoDB when the user was registered but
-    # not yet added to a Cognito group (e.g. admin_add_user_to_group failed).
-    if not role:
-        from stoa.db.repositories import user_repo  # lazy import to avoid circular deps
-        cognito_username = claims.get("username", "")
-        if cognito_username:
-            try:
-                cognito = boto3.client("cognito-idp", region_name=settings.aws_region)
-                user_data = cognito.admin_get_user(
-                    UserPoolId=settings.cognito_user_pool_id,
-                    Username=cognito_username,
-                )
-                attrs = {a["Name"]: a["Value"] for a in user_data.get("UserAttributes", [])}
-                email = attrs.get("email", "")
-                if email:
-                    profile = user_repo.get_user_by_email(email)
-                    if profile:
-                        raw_role = profile.get("role", "")
-                        # Backend stores "teacher"; frontend/JWT uses "tutor" mapping
-                        _display = {"teacher": "tutor"}
-                        role = _display.get(raw_role, raw_role) or None
-                        # Also add the user to the correct Cognito group so future
-                        # tokens carry the group claim without needing this fallback.
-                        _role_to_group = {
-                            "student": "students", "parent": "parents",
-                            "teacher": "teachers", "tutor": "teachers", "admin": "admins",
-                        }
-                        group = _role_to_group.get(raw_role)
-                        if group:
-                            try:
-                                cognito.admin_add_user_to_group(
-                                    UserPoolId=settings.cognito_user_pool_id,
-                                    Username=cognito_username,
-                                    GroupName=group,
-                                )
-                            except Exception:  # noqa: BLE001
-                                pass  # best-effort; role is already resolved above
-            except Exception:  # noqa: BLE001
-                pass  # if lookup fails, role stays None → 403 on protected routes
-
-    claims["role"] = role
-    return claims
 
 
 def require_role(*roles: str):
     """Return a dependency that ensures the current user has one of the given roles."""
-    async def checker(user: dict = Depends(get_current_user)) -> dict:
-        if user.get("role") not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{user.get('role')}' is not permitted",
-            )
+    canonical_roles = {
+        CanonicalRole(role).value
+        for role in roles
+        if role in {member.value for member in CanonicalRole}
+    }
+
+    async def checker(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+        if user.get("role") not in canonical_roles:
+            error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error.public_body())
         return user
     return checker
