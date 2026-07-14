@@ -140,30 +140,39 @@ The v6.5-v6.9 execution sequence is complete locally as contracts and gates for 
 
 The v7.0-v7.4 sequence is complete locally as gated rollout contracts for final live approval, controlled expansion start, controlled expansion operations, public launch preparation, public launch execution or hold, and post-launch/post-expansion scale governance. It does not approve real external rollout by itself.
 
-The v8.0-v8.4 sequence is now planned as the hard external rollout execution boundary: final live rollout approval, live rollout operations, revenue/growth and paid-marketing gate, learning scale, and strategic scale decision.
+The v8.0-v8.4 sequence is complete as local gated operations contracts. The 2026-07-14 full-project audit found that contract completion materially exceeds integrated product completion: public privileged registration and horizontal student-data access are P0 blockers, the Python suite is red, the mobile app is a non-buildable placeholder skeleton, and infrastructure/live provider evidence is incomplete.
 
 ## Core Value
 
-Parents can trust that parent portal views reflect authorized real student data from the backend, not hidden demo fallbacks.
+Students and parents can complete real learning, account, and paid-access journeys against authorized backend data without hidden demo fallbacks, placeholder screens, privilege escalation, or silent state divergence.
 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
-**Latest completed milestone:** v7.4 Post-Launch Scale Customer Success And Growth Governance on 2026-07-09 (local gated operations contracts; real external rollout still separately gated)
-**Residual partial gate:** external rollout, paid marketing, broad expansion, uncontrolled provider writes, market/language expansion, enterprise sales, and AI autonomy still require explicit approval, current live evidence, support capacity, and rollback authority.
-**Active milestone:** v8.0 External Rollout Approval And Live Evidence Execution
-**Next planned milestones:** v8.1 Live Rollout Operations And Incident Remediation; v8.2 Revenue Growth Acquisition And Paid Marketing Gate; v8.3 Learning Outcomes Scale And AI Curriculum Improvement; v8.4 Strategic Scale Reliability And Next-Version Decision.
+**Latest completed milestone:** v8.4 Strategic Scale Reliability And Next-Version Decision on 2026-07-09 (local gated operations contracts only)
+**Reality audit baseline:** commit `de3bf1e4133550e1c679bf611b026437336bd219`, documented in `docs/audit/full-project-audit.md` with 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
+**Residual release gate:** external beta, broader production rollout, paid marketing, and uncontrolled provider writes remain blocked until v9.0 closes reachable authorization/data defects, restores trustworthy verification, and proves installable core user journeys.
+**Active milestone:** v9.0 Product Reality, Authorization And Core Journey Completion
+**Next milestone:** not committed; v9.1 scope must be selected from v9.0 live evidence rather than more local readiness contracts.
 
-## Current Milestone: v8.0 External Rollout Approval And Live Evidence Execution
+## Current Milestone: v9.0 Product Reality, Authorization And Core Journey Completion
 
-**Goal:** Convert the completed v7 gated rollout contracts into real external rollout action or an explicit hold.
+**Goal:** Convert STOA's broad local backend contracts into a trustworthy, installable product by closing reachable authorization and consistency defects, restoring gated verification, and completing real student/parent mobile journeys with versioned infrastructure and release evidence.
 
 **Target features:**
-- Final external rollout approval and scope lock.
-- Live product, provider, mobile, account, support, revenue, learning, monitoring, and incident evidence execution.
-- Rollout communications, support macros, lifecycle messages, disabled-feature copy, and user limitation readiness.
-- External rollout smoke and rollback rehearsal.
-- External rollout start gate.
+- Privileged identity provisioning and complete student-resource authorization boundaries.
+- Upload/privacy/practice integrity and transactional usage, teacher, relationship, and billing operations.
+- Deterministic Python 3.12 verification, dependency/runtime hygiene, and gated immutable deployment artifacts.
+- Installable Expo client with backend-authoritative auth and functional student/parent learning and paid-access journeys.
+- Versioned infrastructure, full WebSocket delivery, operational observability, staging/rollback, and end-to-end evidence.
+
+## Active Requirements
+
+- Close every P0 and P1 audit finding before v9.0 completion; no risk acceptance may silently downgrade them.
+- Resolve release-blocking P2 findings or record an explicit owner, evidence-based disposition, and target milestone.
+- Keep curriculum mutation restricted to explicitly capability-authorized operators; being a teacher alone is not sufficient.
+- Treat Python 3.12 tests, mobile clean install/build, authorization matrices, provider failure tests, and staging evidence as product acceptance, not optional security polish.
+- Do not expand into paid marketing, new markets, enterprise automation, or broader AI autonomy during v9.0.
 
 ## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
 
@@ -1199,11 +1208,12 @@ Known current resources:
 | Plan v7.2 public launch preparation and acquisition readiness | Public launch prep should depend on controlled expansion health and keep paid marketing separately gated | Complete locally; launch prep still gated |
 | Plan v7.3 public launch execution or hold decision | Public launch execution must be staged and evidence-based, with hold/rollback/remediation as valid outcomes | Complete locally; launch still gated |
 | Plan v7.4 post-launch scale customer success and growth governance | Launch or expansion must convert into customer success, revenue, learning quality, support scale, and growth governance | Complete locally; external scale still gated |
-| Start v8.0 external rollout approval and live evidence execution | v7.0-v7.4 are local gated rollout contracts; the next work must be final external approval and live evidence execution | Planned - active next milestone |
-| Plan v8.1 live rollout operations and incident remediation | Live rollout evidence should drive operational fixes, incident remediation, support actions, and rollback decisions | Planned |
-| Plan v8.2 revenue growth acquisition and paid marketing gate | Growth and paid marketing require healthy rollout, revenue, support, learning, and incident evidence | Planned |
-| Plan v8.3 learning outcomes scale and AI curriculum improvement | Learning outcomes must hold as growth increases, with curriculum and AI quality improvements from real cohorts | Planned |
-| Plan v8.4 strategic scale reliability and next-version decision | Strategic scale, market expansion, enterprise readiness, or v9 should be based on live product and business evidence | Planned |
+| Start v8.0 external rollout approval and live evidence execution | v7.0-v7.4 are local gated rollout contracts; the next work must be final external approval and live evidence execution | Complete as a local gated contract; real rollout was not executed |
+| Plan v8.1 live rollout operations and incident remediation | Live rollout evidence should drive operational fixes, incident remediation, support actions, and rollback decisions | Complete as a local gated contract; live operations remain unproven |
+| Plan v8.2 revenue growth acquisition and paid marketing gate | Growth and paid marketing require healthy rollout, revenue, support, learning, and incident evidence | Complete as a local gated contract; paid marketing remains blocked |
+| Plan v8.3 learning outcomes scale and AI curriculum improvement | Learning outcomes must hold as growth increases, with curriculum and AI quality improvements from real cohorts | Complete as a local gated contract; real cohort scale remains unproven |
+| Plan v8.4 strategic scale reliability and next-version decision | Strategic scale, market expansion, enterprise readiness, or v9 should be based on live product and business evidence | Complete locally; the 2026-07-14 reality audit selected v9.0 product completion |
+| Start v9.0 from the full-project reality audit | The audit found two reachable P0 authorization defects, nine P1 blockers, a red test baseline, and a non-buildable placeholder mobile app; the next milestone must complete real product journeys before adding more readiness contracts | Active - Phase 472 starts with identity and resource authorization closure |
 
 ## Evolution
 
@@ -1223,4 +1233,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-09 after planning v8.0-v8.4 as external rollout, live operations, growth, learning scale, and strategic decision milestones*
+*Last updated: 2026-07-14 after initializing v9.0 from the full-project audit at `de3bf1e`*
