@@ -1,0 +1,630 @@
+{
+  "schema_version": "1.0",
+  "audit_timestamp": "2026-07-14T12:22:42Z",
+  "audit_commit": "de3bf1e4133550e1c679bf611b026437336bd219",
+  "branch": "main",
+  "remote_baseline": "origin/main",
+  "summary": {
+    "total": 31,
+    "P0": 2,
+    "P1": 9,
+    "P2": 18,
+    "P3": 2,
+    "P4": 0
+  },
+  "findings": [
+    {
+      "id": "SEC-001",
+      "category": "security",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "title": "Public registration can create admin or teacher group members",
+      "locations": [
+        {"path": "src/stoa/routers/auth.py", "line_start": 29, "line_end": 36, "symbol": "RegisterRequest"},
+        {"path": "src/stoa/routers/auth.py", "line_start": 365, "line_end": 405, "symbol": "register"},
+        {"path": "src/stoa/routers/auth.py", "line_start": 763, "line_end": 775, "symbol": "confirm_email"}
+      ],
+      "impact": "An unauthenticated caller can obtain administrative or unapproved teacher privileges and reach protected student or operational data.",
+      "trigger": "POST /auth/register with role admin, teacher, or a normalized equivalent, followed by normal confirmation.",
+      "evidence": "The public route accepts an unrestricted role, selects a role client, writes custom:role, and adds the user to admins or teachers. A mocked local TestClient request with role=admin returned 201 and recorded admins group assignment.",
+      "recommended_fix": "Restrict public registration to approved public roles; provision admins through the audited admin workflow and teachers through authenticated, expiring, replay-safe invitations and approval.",
+      "required_tests": ["Reject privileged and unknown public roles", "Teacher invitation expiry and replay", "Cognito group and profile consistency", "Confirmation cannot change privilege"],
+      "dependencies": ["Authoritative role provisioning policy", "Existing privileged Cognito group inventory"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-002",
+      "category": "security",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "title": "Parent and teacher routes permit horizontal access to unrelated student data",
+      "locations": [
+        {"path": "src/stoa/routers/students.py", "line_start": 211, "line_end": 284, "symbol": "student summary/profile/questions routes"},
+        {"path": "src/stoa/routers/questions.py", "line_start": 241, "line_end": 255, "symbol": "get_question"},
+        {"path": "src/stoa/routers/practice.py", "line_start": 105, "line_end": 113, "symbol": "curriculum progress authorization"}
+      ],
+      "impact": "Unrelated parents or teachers can read minors' learning records across family and assignment boundaries.",
+      "trigger": "Authenticate as a parent or teacher and request a known arbitrary student or question identifier.",
+      "evidence": "Affected routes check role but not parent binding or teacher assignment. A local unrelated-parent request to /students/arbitrary-child/summary returned 200.",
+      "recommended_fix": "Centralize resource authorization using active parent bindings, active teacher assignment/session, owner identity, and explicit admin permission, and apply it to every identifier-bearing route.",
+      "required_tests": ["Generated role-resource route matrix", "Unrelated parent denied", "Unassigned teacher denied", "Stale binding denied", "Assigned teacher and owner allowed"],
+      "dependencies": ["Parent binding truth source", "Teacher assignment/session truth source"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-003",
+      "category": "security",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Question OCR accepts another user's S3 object key",
+      "locations": [
+        {"path": "src/stoa/models/question.py", "line_start": 23, "line_end": 28, "symbol": "SubmitQuestionRequest"},
+        {"path": "src/stoa/routers/questions.py", "line_start": 84, "line_end": 110, "symbol": "_build_question_content"},
+        {"path": "src/stoa/routers/files.py", "line_start": 53, "line_end": 81, "symbol": "get_presigned_url"}
+      ],
+      "impact": "A student who obtains another upload key can extract and persist its OCR text, breaking user data isolation.",
+      "trigger": "Submit a question with image_s3_key owned by another user.",
+      "evidence": "Presign issuance creates an owner prefix, but question submission accepts any key and invokes Rekognition without checking that prefix or an upload ownership record.",
+      "recommended_fix": "Persist upload intent and owner, validate exact owner and object metadata after upload, and atomically consume the upload with question creation.",
+      "required_tests": ["Own key accepted", "Foreign key denied", "Malformed prefix denied", "Missing/reused object denied", "Content metadata validated"],
+      "dependencies": ["Upload lifecycle design", "DATA-001 transaction boundary"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "BUG-001",
+      "category": "correctness",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Legacy practice responses expose correct answers before submission",
+      "locations": [
+        {"path": "src/stoa/routers/practice.py", "line_start": 49, "line_end": 66, "symbol": "_build_challenge"},
+        {"path": "src/stoa/routers/practice.py", "line_start": 208, "line_end": 212, "symbol": "get_overview"},
+        {"path": "src/stoa/routers/practice.py", "line_start": 446, "line_end": 480, "symbol": "path and lesson responses"}
+      ],
+      "impact": "Students can bypass exercises, invalidating mastery, adaptive learning, and outcome analytics.",
+      "trigger": "Request practice overview, path, or lesson before answering.",
+      "evidence": "_build_challenge always includes correctAnswer and every listed student response uses it.",
+      "recommended_fix": "Separate preview and result schemas and expose answer-derived fields only after a recorded answer or to an authorized author/admin view.",
+      "required_tests": ["Answer absent from all student previews", "Answer available only after submission", "Author/admin schema remains explicit"],
+      "dependencies": ["Mobile and web curriculum consumer update"],
+      "effort": "S",
+      "blocks_release": true
+    },
+    {
+      "id": "DATA-001",
+      "category": "data_consistency",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Question quota, ledger, and question writes are non-atomic",
+      "locations": [
+        {"path": "src/stoa/routers/questions.py", "line_start": 168, "line_end": 207, "symbol": "submit_question"},
+        {"path": "src/stoa/db/repositories/question_repo.py", "line_start": 31, "line_end": 55, "symbol": "record_daily_question_usage"},
+        {"path": "src/stoa/services/usage_ledger_service.py", "line_start": 356, "line_end": 397, "symbol": "record_question_usage_event"}
+      ],
+      "impact": "Quota can be consumed without a question, ledger and question state can diverge, and retries can double count or become permanently conflicted.",
+      "trigger": "Any exception, timeout, or retry between counter increment, ledger put, and question put.",
+      "evidence": "The implementation explicitly records write_order=counter_then_ledger, followed by a separate question write; current tests also expose the ledger as an unaccounted side effect.",
+      "recommended_fix": "Use a DynamoDB transaction for conditional quota, idempotent ledger, and question state, or a recoverable outbox with explicit compensation and reconciliation.",
+      "required_tests": ["Failure injection at each write", "Concurrent duplicate idempotency key", "Timeout after commit", "Reordered retry", "Historical reconciliation"],
+      "dependencies": ["Documented idempotency contract", "DynamoDB transaction repository support"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "DATA-002",
+      "category": "data_consistency",
+      "severity": "P1",
+      "confidence": "highly_likely",
+      "title": "Stripe checkout creation can orphan or duplicate provider sessions",
+      "locations": [
+        {"path": "src/stoa/services/subscription_service.py", "line_start": 133, "line_end": 227, "symbol": "create_checkout_session"},
+        {"path": "src/stoa/services/subscription_service.py", "line_start": 1730, "line_end": 1778, "symbol": "_create_provider_checkout_session"}
+      ],
+      "impact": "Ambiguous failures can produce orphan or duplicate checkout sessions and inconsistent billing UI/support state.",
+      "trigger": "DynamoDB failure or Lambda timeout after Stripe creates a session, followed by a retry.",
+      "evidence": "Provider creation precedes multiple independent local writes and Stripe Session.create receives no deterministic idempotency key. No live failure injection was performed.",
+      "recommended_fix": "Persist a billing command, use a deterministic Stripe idempotency key, transact local state, and reconcile ambiguous provider outcomes.",
+      "required_tests": ["Provider succeeds then local write fails", "Timeout and Lambda retry", "Duplicate business idempotency key", "Provider reconciliation"],
+      "dependencies": ["Stripe test-mode credentials", "Billing command state design"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "BUG-002",
+      "category": "concurrency",
+      "severity": "P1",
+      "confidence": "highly_likely",
+      "title": "Teacher takeover uses a read-then-write race",
+      "locations": [
+        {"path": "src/stoa/routers/teachers.py", "line_start": 129, "line_end": 174, "symbol": "takeover"}
+      ],
+      "impact": "Two teachers can both receive success, create duplicate sessions and notifications, and leave last-writer-wins ownership.",
+      "trigger": "Concurrent takeover requests while a question is escalated.",
+      "evidence": "The route reads and validates state, performs an unconditional status update, then independently writes a session. Existing tests are sequential.",
+      "recommended_fix": "Conditionally update expected status/dispatch owner and atomically create the session; map the losing conditional write to 409.",
+      "required_tests": ["Barrier-based concurrent takeover", "Only winner has session", "Only one notification", "Winner retry is idempotent"],
+      "dependencies": ["Conditional update and transaction repository support"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "OPS-001",
+      "category": "operations",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Every main push deploys production Lambda code without quality gates",
+      "locations": [
+        {"path": ".github/workflows/deploy.yml", "line_start": 3, "line_end": 75, "symbol": "deploy workflow"}
+      ],
+      "impact": "Known-bad source can be deployed directly to both Lambda functions with no staging smoke or automatic rollback.",
+      "trigger": "Any push to main.",
+      "evidence": "The workflow builds then calls update-function-code for stoa-api and stoa-weekly-report; it has no pytest, lint, types, dependency scan, staging, approval, alias promotion, or rollback gate. Current main has failing tests.",
+      "recommended_fix": "Split verify/build/deploy, require protected checks, promote one immutable tested artifact through staging and Lambda aliases, and pin actions to immutable SHAs.",
+      "required_tests": ["Intentional gate failure blocks deploy", "Staging API smoke", "Artifact digest equality", "Rollback drill"],
+      "dependencies": ["Branch protection", "AWS staging and alias strategy", "TEST-001"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "FEATURE-001",
+      "category": "feature_completeness",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Mobile app is a non-buildable placeholder skeleton",
+      "locations": [
+        {"path": "mobile/app/auth/sign-in.tsx", "line_start": 1, "line_end": 19, "symbol": "SignInRoute"},
+        {"path": "mobile/package.json", "line_start": 14, "line_end": 40, "symbol": "dependency manifest"},
+        {"path": "mobile/app.json", "line_start": 20, "line_end": 25, "symbol": "notification plugin"}
+      ],
+      "impact": "There is no reproducible mobile build or usable student/parent journey despite milestone claims.",
+      "trigger": "Clean dependency install, typecheck, native build, or opening most app routes.",
+      "evidence": "Most routes render StateCard placeholders; sign-in renders text only. No lockfile exists. An isolated npm install fails ETARGET for expo-constants@~19.0.0 and the configured notification icon is absent.",
+      "recommended_fix": "Choose a supported Expo SDK dependency matrix, commit a lockfile, make clean typecheck/native builds pass, and implement the core screens against verified contracts.",
+      "required_tests": ["Clean locked install", "expo-doctor", "TypeScript", "iOS and Android build", "Core navigation and account E2E"],
+      "dependencies": ["BUG-003", "BUG-005", "Supported Expo SDK decision"],
+      "effort": "XL",
+      "blocks_release": true
+    },
+    {
+      "id": "BUG-003",
+      "category": "integration",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Mobile Cognito flow bypasses backend identity provisioning and reads incompatible roles",
+      "locations": [
+        {"path": "mobile/src/services/auth/amplifyAuth.ts", "line_start": 45, "line_end": 89, "symbol": "restoreMobileSession/registerWithEmail"},
+        {"path": "src/stoa/routers/auth.py", "line_start": 365, "line_end": 490, "symbol": "register"},
+        {"path": "src/stoa/deps.py", "line_start": 104, "line_end": 117, "symbol": "role resolution"}
+      ],
+      "impact": "Mobile registration can create orphan Cognito identities and restored sessions can have no usable role, breaking backend authorization and onboarding.",
+      "trigger": "Register or restore a student/parent account through the mobile adapter.",
+      "evidence": "Mobile calls Cognito signUp directly, reads custom:roles plural, and filters singular roles; backend writes custom:role and normally resolves plural Cognito groups, with role-specific clients.",
+      "recommended_fix": "Make backend registration/verification authoritative or reproduce it atomically in Cognito triggers, and publish one role/client normalization contract.",
+      "required_tests": ["Real Cognito sandbox registration", "Email verification", "Token restore role", "Backend /me", "Orphan repair"],
+      "dependencies": ["SEC-001 role policy", "Mobile dependency repair", "Cognito client inventory"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "TEST-001",
+      "category": "testing",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "title": "Full Python suite is red, time-dependent, and leaks into real AWS clients",
+      "locations": [
+        {"path": "tests/test_adaptive_learning.py", "line_start": 83, "line_end": 100, "symbol": "_install_learning_sources"},
+        {"path": "tests/test_adaptive_learning.py", "line_start": 155, "line_end": 180, "symbol": "misplaced practice patches"},
+        {"path": "tests/test_learning_expansion.py", "line_start": 43, "line_end": 74, "symbol": "question submit test"},
+        {"path": "src/stoa/services/adaptive_learning_service.py", "line_start": 666, "line_end": 674, "symbol": "_automation_candidate_stale"}
+      ],
+      "impact": "The suite cannot serve as a deployment or refactoring safety net and may contact ambient AWS configuration.",
+      "trigger": "Run full pytest on Python 3.12 or 3.14 at the audit date.",
+      "evidence": "Both environments reproducibly report 12 failed and 640 passed. Eleven failures stem from missing repository patches and stale dates; one stems from an unmocked ledger side effect.",
+      "recommended_fix": "Deny ambient AWS/network in tests, inject/freeze time, repair fixture placement and side-effect contracts without weakening assertions, and gate CI on target Python.",
+      "required_tests": ["Two consecutive green target-runtime runs", "Future frozen date", "No cloud credentials", "Network/AWS denial assertion"],
+      "dependencies": ["None for initial repair", "OPS-001 for enforcement"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-004",
+      "category": "security",
+      "severity": "P2",
+      "confidence": "highly_likely",
+      "title": "JWT validation does not bind access tokens to allowed app clients and JWKS cannot rotate",
+      "locations": [
+        {"path": "src/stoa/deps.py", "line_start": 50, "line_end": 91, "symbol": "JWKS cache and get_current_user"},
+        {"path": "src/stoa/deps.py", "line_start": 93, "line_end": 157, "symbol": "claim and role resolution"}
+      ],
+      "impact": "Tokens from unintended clients in the pool may be accepted and signing-key rotation can cause persistent authentication failure until cold start.",
+      "trigger": "Use an access token from another app client in the same pool or a token signed by a newly rotated key.",
+      "evidence": "Audience verification is disabled, client_id is not checked, cache is global/unkeyed with no unknown-kid refresh, and synchronous JWKS HTTP runs in an async dependency.",
+      "recommended_fix": "Validate an explicit allowed client_id set, cache by issuer with TTL and refresh-on-unknown-key, use async/cold-start retrieval, and move group repair out of authentication.",
+      "required_tests": ["Wrong client denied", "ID token denied", "Unknown key refresh", "Multiple issuers isolated", "Cognito/JWKS outage"],
+      "dependencies": ["Authoritative Cognito client inventory"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-005",
+      "category": "security",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Upload size, type, ownership, and error controls are incomplete",
+      "locations": [
+        {"path": "src/stoa/routers/files.py", "line_start": 12, "line_end": 76, "symbol": "PresignRequest/get_presigned_url"},
+        {"path": "src/stoa/routers/questions.py", "line_start": 84, "line_end": 110, "symbol": "_build_question_content"}
+      ],
+      "impact": "Oversized or mislabeled objects can be stored/processed and internal S3 errors can be disclosed; ownership failure compounds SEC-003.",
+      "trigger": "Use a presigned PUT with large/mislabeled content or induce S3 presign failure.",
+      "evidence": "_MAX_FILE_SIZE is unused, PUT has no length policy, image/* is broad, no post-upload validation exists, and raw exception text is returned.",
+      "recommended_fix": "Use constrained presigned POST or equivalent, verify metadata and magic bytes before consumption, quarantine/scan, expire unused uploads, and redact errors.",
+      "required_tests": ["Oversize denied", "MIME/extension mismatch", "Magic-byte validation", "Expired/absent upload", "S3 error redaction"],
+      "dependencies": ["Upload lifecycle design", "Bucket policy IaC"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-006",
+      "category": "security",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Student and model content can enter application logs",
+      "locations": [
+        {"path": "src/stoa/services/ai_service.py", "line_start": 70, "line_end": 80, "symbol": "_sanitise_input"},
+        {"path": "src/stoa/services/ai_service.py", "line_start": 130, "line_end": 141, "symbol": "AI JSON fallback"},
+        {"path": "src/stoa/routers/conversations.py", "line_start": 456, "line_end": 458, "symbol": "AI exception logging"}
+      ],
+      "impact": "Minors' educational content and provider details may be retained in operational logs with broader access.",
+      "trigger": "Prompt injection match, malformed model JSON, or provider error.",
+      "evidence": "Logs include the first 120 characters of student input, 200 characters of model output, and full provider exception strings.",
+      "recommended_fix": "Log only structured event metadata, lengths, categories, exception class, and correlation IDs through centralized redaction.",
+      "required_tests": ["Captured logs exclude seeded student content", "Provider secret redaction", "Correlation metadata retained"],
+      "dependencies": ["OPS-004 request correlation"],
+      "effort": "S",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-007",
+      "category": "security",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Locked Python dependencies contain eight published advisories",
+      "locations": [
+        {"path": "requirements.txt", "line_start": 151, "line_end": 151, "symbol": "cryptography pin"},
+        {"path": "requirements.txt", "line_start": 200, "line_end": 200, "symbol": "ecdsa pin"},
+        {"path": "requirements.txt", "line_start": 326, "line_end": 326, "symbol": "pydantic-settings pin"},
+        {"path": "requirements.txt", "line_start": 342, "line_end": 342, "symbol": "python-multipart pin"},
+        {"path": "requirements.txt", "line_start": 364, "line_end": 364, "symbol": "starlette pin"},
+        {"path": "uv.lock", "line_start": 1, "line_end": 1, "symbol": "resolved dependency graph"}
+      ],
+      "impact": "Reachable framework, parsing, availability, or cryptographic weaknesses may remain in production dependencies.",
+      "trigger": "Run pip-audit against the locked requirements at the audit timestamp.",
+      "evidence": "pip-audit reports eight advisories across cryptography 48.0.0, ecdsa 0.19.2, pydantic-settings 2.14.1, python-multipart 0.0.29, and starlette 1.1.0. Reachability varies and was documented in the Markdown report.",
+      "recommended_fix": "Upgrade packages with fixes, remove unused vulnerable dependencies where possible, document temporary applicability exceptions with expiry, and gate new high/critical advisories.",
+      "required_tests": ["Full backend regression", "JWT/auth regression", "Proxy/host tests", "Linux arm64 package import", "Repeat dependency audit"],
+      "dependencies": ["TEST-001 green baseline"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "SEC-008",
+      "category": "security",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Checkout return URL validation accepts arbitrary HTTPS and localhost-prefix lookalikes",
+      "locations": [
+        {"path": "src/stoa/services/subscription_service.py", "line_start": 153, "line_end": 160, "symbol": "create_checkout_session"},
+        {"path": "src/stoa/services/subscription_service.py", "line_start": 1818, "line_end": 1826, "symbol": "_safe_url"}
+      ],
+      "impact": "Checkout completion can redirect users to phishing or untrusted destinations.",
+      "trigger": "An authenticated parent supplies any HTTPS URL or a value such as http://localhost.evil.example.",
+      "evidence": "Validation uses startswith for https:// or http://localhost rather than parsed exact origins.",
+      "recommended_fix": "Parse structurally and allow only configured exact origins and paths per environment; do not accept caller-selected production origins.",
+      "required_tests": ["Lookalike host denied", "Credentials/ports/encoding denied", "Exact configured app URL allowed"],
+      "dependencies": ["Environment-specific application origin configuration"],
+      "effort": "S",
+      "blocks_release": true
+    },
+    {
+      "id": "BUG-004",
+      "category": "correctness",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Practice mistake records discard the student's submitted answer",
+      "locations": [
+        {"path": "src/stoa/routers/practice.py", "line_start": 525, "line_end": 567, "symbol": "submit_answer"},
+        {"path": "src/stoa/routers/practice.py", "line_start": 600, "line_end": 618, "symbol": "get_mistakes"},
+        {"path": "src/stoa/db/repositories/practice_repo.py", "line_start": 148, "line_end": 168, "symbol": "record_attempt"}
+      ],
+      "impact": "Mistake review always shows an empty user answer and loses learning-analysis context.",
+      "trigger": "Submit any incorrect practice answer and retrieve /practice/mistakes.",
+      "evidence": "The route reads student_answer but record_attempt neither accepts nor writes it; the response defaults missing student_answer to an empty string.",
+      "recommended_fix": "Persist a bounded normalized/display-safe student answer with schema version and treat legacy absence as unknown.",
+      "required_tests": ["Wrong scalar answer round trip", "List answer round trip", "Legacy row", "Long/Unicode answer policy"],
+      "dependencies": ["Practice attempt schema decision"],
+      "effort": "S",
+      "blocks_release": false
+    },
+    {
+      "id": "BUG-005",
+      "category": "integration",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Mobile request field names do not match backend Pydantic aliases",
+      "locations": [
+        {"path": "mobile/src/features/student/studentApi.ts", "line_start": 46, "line_end": 56, "symbol": "submitQuestion"},
+        {"path": "src/stoa/models/question.py", "line_start": 23, "line_end": 28, "symbol": "SubmitQuestionRequest"},
+        {"path": "mobile/src/services/notifications/notificationApi.ts", "line_start": 18, "line_end": 28, "symbol": "registerPushToken"},
+        {"path": "src/stoa/routers/notifications.py", "line_start": 61, "line_end": 66, "symbol": "NotificationPushTokenRegisterRequest"}
+      ],
+      "impact": "Mobile question submissions lose idempotency and push-token registrations lose device identity while appearing successful.",
+      "trigger": "Send the current mobile request payloads to FastAPI.",
+      "evidence": "Mobile sends idempotency_key and device_id; backend accepts idempotencyKey and deviceId. A direct Pydantic probe ignores snake-case idempotency_key.",
+      "recommended_fix": "Generate/share an OpenAPI client, use one casing convention, reject unexpected write fields, and validate every mobile payload against backend schemas.",
+      "required_tests": ["OpenAPI request compatibility", "Question retry through local API", "Push token device metadata round trip", "Unexpected field rejection"],
+      "dependencies": ["Mobile dependency repair", "Stable API casing policy"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "FEATURE-002",
+      "category": "feature_completeness",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "WebSocket service has no live route integration or mobile consumer",
+      "locations": [
+        {"path": "src/stoa/services/websocket_service.py", "line_start": 1, "line_end": 250, "symbol": "WebSocket service"},
+        {"path": "src/stoa/db/repositories/websocket_repo.py", "line_start": 1, "line_end": 65, "symbol": "WebSocket repository"},
+        {"path": "src/stoa/config.py", "line_start": 99, "line_end": 108, "symbol": "WebSocket settings"}
+      ],
+      "impact": "The advertised real-time notification path cannot operate end to end.",
+      "trigger": "Attempt a deployed connect/subscribe/fanout flow or search for route handlers/mobile client.",
+      "evidence": "Connection/fanout functions and tests exist, but no API Gateway route handler/IaC or mobile WebSocket consumer exists; live flags default false.",
+      "recommended_fix": "Complete route handlers, authorizer, deployment, mobile reconnect/dedupe, and live smoke, or explicitly scope v9 to polling.",
+      "required_tests": ["Connect/subscribe/fanout/disconnect", "Expired connection cleanup", "Duplicate/out-of-order events", "Mobile background/foreground"],
+      "dependencies": ["OPS-003 infrastructure", "Mobile core app"],
+      "effort": "L",
+      "blocks_release": false,
+      "release_scope": "Blocks any claimed real-time notification release."
+    },
+    {
+      "id": "FEATURE-003",
+      "category": "feature_completeness",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Login-code flow always reports deferred instead of authenticating",
+      "locations": [
+        {"path": "src/stoa/routers/auth.py", "line_start": 792, "line_end": 805, "symbol": "login code endpoint"}
+      ],
+      "impact": "Users cannot complete a passwordless login flow despite its API/planning presence.",
+      "trigger": "Call the login-code endpoint under any supported account state.",
+      "evidence": "The route returns deferred and no tokens; existing tests assert that placeholder behavior.",
+      "recommended_fix": "Implement Cognito custom auth/OTP with delivery, expiry, anti-replay and anti-enumeration, or remove the endpoint and completion claim from the current scope.",
+      "required_tests": ["Request/verify/resend", "Expiry/replay", "Brute-force limits", "Account enumeration", "Email provider failure"],
+      "dependencies": ["Approved email provider", "Authentication product decision"],
+      "effort": "L",
+      "blocks_release": false,
+      "release_scope": "Blocks passwordless-login scope if advertised."
+    },
+    {
+      "id": "PERF-001",
+      "category": "performance",
+      "severity": "P2",
+      "confidence": "highly_likely",
+      "title": "DynamoDB reads use scans, first-page filtering, and hard limits",
+      "locations": [
+        {"path": "src/stoa/db/repositories/practice_repo.py", "line_start": 18, "line_end": 115, "symbol": "practice content reads"},
+        {"path": "src/stoa/db/repositories/practice_repo.py", "line_start": 171, "line_end": 178, "symbol": "get_mistakes"},
+        {"path": "src/stoa/db/repositories/websocket_repo.py", "line_start": 51, "line_end": 56, "symbol": "list_connections"},
+        {"path": "src/stoa/services/websocket_service.py", "line_start": 194, "line_end": 208, "symbol": "fanout_notification_event"}
+      ],
+      "impact": "Records can be silently omitted after page limits and read cost/latency grows with shared partitions.",
+      "trigger": "Datasets exceed the first DynamoDB page or 500 WebSocket connections.",
+      "evidence": "Queries filter broad partitions in Python without LastEvaluatedKey handling; challenge lookup uses a broad filtered query; fanout scans a hard-limited first page. No production benchmark was run.",
+      "recommended_fix": "Create access-pattern-specific keys/GSIs, use exact challenge keys, paginate all reads, and index recipient/channel connection lookup.",
+      "required_tests": ["Multi-page fixtures", "More than 500 connections", "Stable pagination tokens", "Load and capacity-cost benchmark"],
+      "dependencies": ["OPS-003 schema/IaC", "Measured production data shape"],
+      "effort": "XL",
+      "blocks_release": false
+    },
+    {
+      "id": "OPS-002",
+      "category": "operations",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Local runtime and Lambda artifact provenance drift from the target",
+      "locations": [
+        {"path": "pyproject.toml", "line_start": 1, "line_end": 40, "symbol": "Python project configuration"},
+        {"path": "scripts/build_lambda_dist.py", "line_start": 1, "line_end": 301, "symbol": "Lambda build"}
+      ],
+      "impact": "Developers can validate a different runtime or inspect/deploy a stale package, and native behavior is not continuously proven.",
+      "trigger": "Use the checked-in .venv or verify the existing ignored dist artifact.",
+      "evidence": "Local Python is 3.14.5 versus target 3.12; dist verify reports a stale source hash. A fresh 3.12 manylinux arm64 build succeeds, isolating the problem to environment/artifact discipline.",
+      "recommended_fix": "Pin Python, create environments from lock, build once in CI, attest the manifest/digest, and promote that exact artifact through environments.",
+      "required_tests": ["Clean Python 3.12 setup", "Linux arm64 import smoke", "Stale/tampered manifest rejection", "Promotion digest equality"],
+      "dependencies": ["OPS-001 pipeline redesign"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "OPS-003",
+      "category": "operations",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Infrastructure, schema, and recovery are not reproducible from the repository",
+      "locations": [
+        {"path": "src/stoa/config.py", "line_start": 21, "line_end": 145, "symbol": "cloud resource settings"},
+        {"path": ".github/workflows/deploy.yml", "line_start": 39, "line_end": 75, "symbol": "existing-resource deployment"}
+      ],
+      "impact": "New environments, disaster recovery, index changes, and configuration review depend on undocumented external state.",
+      "trigger": "Attempt to bootstrap or restore an environment from this checkout.",
+      "evidence": "No IaC stack, DynamoDB bootstrap/migration, Cognito setup, WebSocket routes, bucket/queue definitions, backup, or restore implementation exists in the repository.",
+      "recommended_fix": "Version authoritative infrastructure and schema contracts, import existing resources, add additive checkpointed migrations, and automate sampled restore.",
+      "required_tests": ["Clean-account synth/deploy", "Drift detection", "Index contract", "Backup restore", "Rollback rehearsal"],
+      "dependencies": ["Infrastructure ownership", "Existing live resource import plan"],
+      "effort": "XL",
+      "blocks_release": true
+    },
+    {
+      "id": "OPS-004",
+      "category": "operations",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Health, request correlation, metrics, and dependency readiness are incomplete",
+      "locations": [
+        {"path": "src/stoa/main.py", "line_start": 54, "line_end": 60, "symbol": "health_check and Lambda handler"}
+      ],
+      "impact": "Operators cannot distinguish process liveness from dependency failure or correlate requests across Lambda and provider events.",
+      "trigger": "DynamoDB, S3, Cognito, queue, or provider degradation while /health remains static ok.",
+      "evidence": "Health is a constant response with version 0.1.0; no global request/trace middleware, consistent structured logs, application metrics, or repository-owned alarms are present.",
+      "recommended_fix": "Add liveness/readiness separation, correlation IDs, structured redacted logs, explicit timeouts, metrics, alarms, and runbooks.",
+      "required_tests": ["Dependency degradation smoke", "Request-ID propagation", "Log redaction", "Timeout/retry behavior", "Alarm synthetic"],
+      "dependencies": ["OPS-003 IaC", "OPS-001 release pipeline"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "ARCH-001",
+      "category": "architecture",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Planning completion materially overstates live product completion",
+      "locations": [
+        {"path": ".planning/STATE.md", "line_start": 28, "line_end": 50, "symbol": "current status"},
+        {"path": ".planning/milestones/v8.4-MILESTONE-AUDIT.md", "line_start": 9, "line_end": 27, "symbol": "v8.4 conclusion"},
+        {"path": "src/stoa/services/production_pilot_service.py", "line_start": 1, "line_end": 6359, "symbol": "local rollout gate contracts"}
+      ],
+      "impact": "Roadmap decisions can be based on local contract completion rather than integrated, live-verified user journeys.",
+      "trigger": "Treat v8.x completed milestones as product/live completion.",
+      "evidence": "Planning explicitly calls v8.4 a local gated operations contract and blocks real rollout, while mobile, WebSocket, providers, and production evidence remain incomplete. There are 1,835 planning files versus 83 backend source files.",
+      "recommended_fix": "Use separate contract-complete, integrated, live-verified, and product-complete states with executable evidence tied to SHA/environment.",
+      "required_tests": ["Milestone evidence schema", "Build/API/browser/device evidence validation", "Unresolved blocker reconciliation"],
+      "dependencies": ["None for status vocabulary", "Live environments for later evidence"],
+      "effort": "M",
+      "blocks_release": false
+    },
+    {
+      "id": "ARCH-002",
+      "category": "architecture",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Oversized modules mix routing, policy, persistence, and provider concerns",
+      "locations": [
+        {"path": "src/stoa/services/production_pilot_service.py", "line_start": 1, "line_end": 6359, "symbol": "production pilot contracts"},
+        {"path": "src/stoa/routers/admin.py", "line_start": 1, "line_end": 3678, "symbol": "admin router"},
+        {"path": "src/stoa/services/subscription_service.py", "line_start": 1, "line_end": 3121, "symbol": "subscription service"},
+        {"path": "src/stoa/services/adaptive_learning_service.py", "line_start": 1, "line_end": 1978, "symbol": "adaptive learning service"}
+      ],
+      "impact": "Changes have large blast radius, failure injection is difficult, and authorization/business rules are more likely to diverge.",
+      "trigger": "Modify a cross-cutting flow in the listed modules.",
+      "evidence": "Large files combine policy, persistence, provider calls, and response construction; the source contains 46 broad except Exception sites.",
+      "recommended_fix": "After the correctness baseline, incrementally extract tested use-case and provider/repository boundaries without changing public APIs.",
+      "required_tests": ["Characterization before extraction", "Failure injection", "Behavior parity", "Repository/provider port contracts"],
+      "dependencies": ["TEST-001 green suite", "Stable API contracts"],
+      "effort": "XL",
+      "blocks_release": false
+    },
+    {
+      "id": "TEST-002",
+      "category": "testing",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Mobile tests validate strings rather than runtime behavior",
+      "locations": [
+        {"path": "mobile/scripts/validate-mobile-contracts.mjs", "line_start": 1, "line_end": 55, "symbol": "contract check script"}
+      ],
+      "impact": "Tests pass while the dependency tree is unresolvable, UI is placeholder-only, and request/auth contracts are incompatible.",
+      "trigger": "Run npm run test:contracts.",
+      "evidence": "The script checks dependency names, route-group substrings, and environment-variable substrings without importing, rendering, typechecking, calling an API, or building native code.",
+      "recommended_fix": "Retain cheap manifest checks but add typecheck, component, OpenAPI adapter, navigation, native build, and device E2E layers.",
+      "required_tests": ["Clean install/typecheck", "Component rendering", "OpenAPI adapter compatibility", "Native build", "Core journey device E2E"],
+      "dependencies": ["FEATURE-001 dependency repair"],
+      "effort": "L",
+      "blocks_release": true
+    },
+    {
+      "id": "DATA-003",
+      "category": "data_consistency",
+      "severity": "P2",
+      "confidence": "highly_likely",
+      "title": "Parent/student forward and reverse bindings can diverge",
+      "locations": [
+        {"path": "src/stoa/db/repositories/user_repo.py", "line_start": 113, "line_end": 150, "symbol": "put_parent_student_binding"},
+        {"path": "src/stoa/routers/auth.py", "line_start": 350, "line_end": 358, "symbol": "registration binding call"},
+        {"path": "src/stoa/routers/auth.py", "line_start": 473, "line_end": 482, "symbol": "registration binding paths"}
+      ],
+      "impact": "Authorization, parent dashboards, and deletion/reconciliation can disagree about the relationship.",
+      "trigger": "Timeout or exception after one binding put and before the reverse put/profile write.",
+      "evidence": "Forward CHILD and reverse PARENT records are independent put_item calls with no transaction.",
+      "recommended_fix": "Use TransactWriteItems with idempotent conditions and provide a historical symmetry reconciliation job.",
+      "required_tests": ["Failure between writes", "Duplicate registration", "Conflicting parent", "Repair idempotency", "One-sided legacy authorization"],
+      "dependencies": ["SEC-002 authorization policy", "DynamoDB transaction support"],
+      "effort": "M",
+      "blocks_release": true
+    },
+    {
+      "id": "BUG-006",
+      "category": "correctness",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "title": "Rejected rate-limit attempts continue increasing counters",
+      "locations": [
+        {"path": "src/stoa/services/rate_limit.py", "line_start": 12, "line_end": 39, "symbol": "_increment_and_check"}
+      ],
+      "impact": "Repeated rejected retries inflate usage records and downstream failures consume quota without a result.",
+      "trigger": "Retry chat/hint after reaching the limit or after a downstream provider failure.",
+      "evidence": "The counter increments unconditionally and raises only when the returned count exceeds the limit.",
+      "recommended_fix": "Use a conditional capped increment and define accepted-versus-successful consumption semantics with operation idempotency.",
+      "required_tests": ["Repeated 429 leaves count capped", "Concurrent final slot", "Provider failure/retry", "UTC day boundary"],
+      "dependencies": ["DATA-001 usage semantics"],
+      "effort": "M",
+      "blocks_release": false
+    },
+    {
+      "id": "DOC-001",
+      "category": "documentation",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "title": "README, environment template, and codebase maps are stale",
+      "locations": [
+        {"path": "README.md", "line_start": 1, "line_end": 35, "symbol": "project documentation"},
+        {"path": ".env.example", "line_start": 1, "line_end": 34, "symbol": "environment template"},
+        {"path": ".planning/codebase/STRUCTURE.md", "line_start": 174, "line_end": 174, "symbol": "stale repository structure claim"},
+        {"path": ".planning/codebase/CONCERNS.md", "line_start": 12, "line_end": 21, "symbol": "stale test inventory"},
+        {"path": ".planning/codebase/TESTING.md", "line_start": 12, "line_end": 16, "symbol": "stale testing status"}
+      ],
+      "impact": "Developers receive incomplete setup/configuration guidance and stakeholders receive stale completion signals.",
+      "trigger": "Set up a clean environment or use planning maps to assess implementation.",
+      "evidence": "README is minimal, .env.example omits many active settings, maps do not reflect 43 test files, and mobile text claims unrendered controls.",
+      "recommended_fix": "Regenerate factual setup, configuration, module, and evidence documentation after runtime and IaC decisions stabilize.",
+      "required_tests": ["Clean-checkout command smoke", "Environment-key coverage check", "Documentation link check"],
+      "dependencies": ["OPS-002", "OPS-003", "FEATURE-001"],
+      "effort": "M",
+      "blocks_release": false
+    },
+    {
+      "id": "QUALITY-001",
+      "category": "maintainability",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "title": "Lint and typing have no enforced baseline",
+      "locations": [
+        {"path": "scripts/seed_practice.py", "line_start": 17, "line_end": 21, "symbol": "unused imports"},
+        {"path": "scripts/seed_practice.py", "line_start": 734, "line_end": 734, "symbol": "ambiguous variable name"},
+        {"path": ".github/workflows/deploy.yml", "line_start": 11, "line_end": 75, "symbol": "missing quality checks"}
+      ],
+      "impact": "New type and lint regressions cannot be separated from existing debt, and interface mismatches remain hidden.",
+      "trigger": "Run Ruff and mypy on the audit baseline.",
+      "evidence": "Ruff reports 5 errors; mypy reports 136 errors in 48 of 83 files; neither command is enforced in CI.",
+      "recommended_fix": "Fix Ruff, classify mypy errors, add required stubs, enforce a non-increasing baseline, and expand strict modules without Any-based suppression.",
+      "required_tests": ["Ruff zero errors", "Mypy non-increasing baseline", "Incremental strict-module gates"],
+      "dependencies": ["TEST-001", "OPS-001"],
+      "effort": "M",
+      "blocks_release": false
+    }
+  ]
+}
