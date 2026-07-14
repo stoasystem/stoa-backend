@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
-from stoa.routers import conversations, tutors
+from stoa.routers import conversations, teachers
 from stoa.services import teacher_dispatch_service
 
 
@@ -70,11 +70,11 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
     assert summary["availableTeachers"] == 1
 
 
-def test_tutor_availability_get_and_patch_persist_profile_fields(monkeypatch):
+def test_teacher_availability_get_and_patch_persist_profile_fields(monkeypatch):
     updates = []
 
     monkeypatch.setattr(
-        tutors.user_repo,
+        teachers.user_repo,
         "get_user",
         lambda user_id: {
             "user_id": user_id,
@@ -85,7 +85,7 @@ def test_tutor_availability_get_and_patch_persist_profile_fields(monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(tutors, "_now", lambda: "2026-07-09T12:00:00+00:00")
+    monkeypatch.setattr(teachers, "_now", lambda: "2026-07-09T12:00:00+00:00")
 
     def update_availability(user_id, *, subjects, weekly_availability, updated_at):
         updates.append(
@@ -104,15 +104,15 @@ def test_tutor_availability_get_and_patch_persist_profile_fields(monkeypatch):
             "dispatch_availability": "available",
         }
 
-    monkeypatch.setattr(tutors.user_repo, "update_tutor_availability", update_availability)
-    client = _client(tutors.router, "/tutors", {"sub": "teacher-1", "role": "teacher"})
+    monkeypatch.setattr(teachers.user_repo, "update_teacher_availability", update_availability)
+    client = _client(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
 
-    get_response = client.get("/tutors/me/availability")
+    get_response = client.get("/teachers/me/availability")
     assert get_response.status_code == 200
     assert get_response.json()["subjects"] == ["Mathematics"]
 
     patch_response = client.patch(
-        "/tutors/me/availability",
+        "/teachers/me/availability",
         json={
             "subjects": ["Physics"],
             "weeklyAvailability": [
@@ -133,3 +133,10 @@ def test_tutor_availability_get_and_patch_persist_profile_fields(monkeypatch):
             "updated_at": "2026-07-09T12:00:00+00:00",
         }
     ]
+
+
+def test_teacher_router_exposes_no_legacy_route():
+    client = _client(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
+
+    assert all(not route.path.startswith("/tutors") for route in client.app.routes)
+    assert client.get("/tutors/me/availability").status_code == 404

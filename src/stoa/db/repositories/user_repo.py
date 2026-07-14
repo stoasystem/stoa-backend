@@ -59,7 +59,7 @@ def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict
     return resp.get("Attributes", {})
 
 
-def update_tutor_availability(
+def update_teacher_availability(
     user_id: str,
     *,
     subjects: list[str],

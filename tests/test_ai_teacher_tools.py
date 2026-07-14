@@ -2,13 +2,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.deps import get_current_user
-from stoa.routers import tutors
+from stoa.routers import teachers
 from stoa.services import ai_teacher_tools_service
 
 
 def _app(user: dict) -> TestClient:
     app = FastAPI()
-    app.include_router(tutors.router, prefix="/tutors")
+    app.include_router(teachers.router, prefix="/teachers")
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app)
 
@@ -59,7 +59,7 @@ def _question(**overrides):
     }
 
 
-def test_tutor_can_create_summary_draft_for_visible_question(monkeypatch):
+def test_teacher_can_create_summary_draft_for_visible_question(monkeypatch):
     drafts = _install_draft_repo(monkeypatch)
     monkeypatch.setattr(
         ai_teacher_tools_service.question_repo,
@@ -67,8 +67,8 @@ def test_tutor_can_create_summary_draft_for_visible_question(monkeypatch):
         lambda question_id: _question(question_id=question_id),
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
-        "/tutors/questions/question-1/ai-tools/summary-draft"
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
+        "/teachers/questions/question-1/ai-tools/summary-draft"
     )
 
     assert response.status_code == 200
@@ -89,14 +89,14 @@ def test_summary_draft_requires_visible_question(monkeypatch):
         lambda question_id: _question(status="ai_answered"),
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
-        "/tutors/questions/question-1/ai-tools/summary-draft"
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
+        "/teachers/questions/question-1/ai-tools/summary-draft"
     )
 
     assert response.status_code == 403
 
 
-def test_tutor_can_create_bounded_exercise_draft_from_visible_student_context(monkeypatch):
+def test_teacher_can_create_bounded_exercise_draft_from_visible_student_context(monkeypatch):
     _install_draft_repo(monkeypatch)
     monkeypatch.setattr(
         ai_teacher_tools_service.question_repo,
@@ -106,8 +106,8 @@ def test_tutor_can_create_bounded_exercise_draft_from_visible_student_context(mo
         },
     )
 
-    response = _app({"sub": "tutor-1", "role": "tutor"}).post(
-        "/tutors/ai-tools/exercise-drafts",
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
+        "/teachers/ai-tools/exercise-drafts",
         json={
             "studentId": "student-1",
             "subject": "math",
@@ -131,7 +131,7 @@ def test_exercise_draft_rejects_out_of_bounds_count(monkeypatch):
     _install_draft_repo(monkeypatch)
 
     response = _app({"sub": "admin-1", "role": "admin"}).post(
-        "/tutors/ai-tools/exercise-drafts",
+        "/teachers/ai-tools/exercise-drafts",
         json={
             "studentId": "student-1",
             "subject": "math",
@@ -149,13 +149,13 @@ def test_draft_lifecycle_accept_archive_and_regenerate_preserve_review_boundary(
     monkeypatch.setattr(
         ai_teacher_tools_service.question_repo,
         "get_question",
-        lambda question_id: _question(question_id=question_id, teacher_id="tutor-1", status="teacher_active"),
+        lambda question_id: _question(question_id=question_id, teacher_id="teacher-1", status="teacher_active"),
     )
-    client = _app({"sub": "tutor-1", "role": "tutor"})
-    created = client.post("/tutors/questions/question-1/ai-tools/summary-draft").json()
+    client = _app({"sub": "teacher-1", "role": "teacher"})
+    created = client.post("/teachers/questions/question-1/ai-tools/summary-draft").json()
 
     accepted = client.post(
-        f"/tutors/ai-tools/drafts/{created['draftId']}/accept",
+        f"/teachers/ai-tools/drafts/{created['draftId']}/accept",
         json={"note": "Looks usable"},
     )
 
@@ -164,12 +164,12 @@ def test_draft_lifecycle_accept_archive_and_regenerate_preserve_review_boundary(
     assert accepted.json()["studentDeliveryStatus"] == "not_delivered"
     assert drafts[created["draftId"]]["review_note"] == "Looks usable"
 
-    regenerated = client.post(f"/tutors/ai-tools/drafts/{created['draftId']}/regenerate")
+    regenerated = client.post(f"/teachers/ai-tools/drafts/{created['draftId']}/regenerate")
     assert regenerated.status_code == 200
     regenerated_body = regenerated.json()
     assert regenerated_body["previousDraftId"] == created["draftId"]
     assert regenerated_body["status"] == "draft"
 
-    archived = client.post(f"/tutors/ai-tools/drafts/{regenerated_body['draftId']}/archive")
+    archived = client.post(f"/teachers/ai-tools/drafts/{regenerated_body['draftId']}/archive")
     assert archived.status_code == 200
     assert archived.json()["status"] == "archived"
