@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import report_repo
 from stoa.routers import admin
+from stoa.security import admin_authorization
 from stoa.services import report_artifact_edit_service
 from stoa.services import report_audit_retention_service
 from stoa.services import report_recovery_job_service
@@ -1510,12 +1511,18 @@ def test_resend_recovery_job_preview_is_admin_only(monkeypatch):
 
 def test_resend_recovery_job_preview_returns_metadata_only(monkeypatch):
     calls = []
+    original_authorize_admin_refs = admin_authorization._authorize_admin_refs
 
     def list_reports_for_admin(**kwargs):
-        calls.append(kwargs)
+        calls.append(("target_read", kwargs))
         return {"Items": [_report()]}
 
+    async def authorize_admin_refs(**kwargs):
+        calls.append(("authorize", tuple(ref.resource_id for ref in kwargs["refs"])))
+        return await original_authorize_admin_refs(**kwargs)
+
     monkeypatch.setattr(report_repo, "list_reports_for_admin", list_reports_for_admin)
+    monkeypatch.setattr(admin_authorization, "_authorize_admin_refs", authorize_admin_refs)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.post(
@@ -1534,15 +1541,23 @@ def test_resend_recovery_job_preview_returns_metadata_only(monkeypatch):
     assert data["refused_count"] == 0
     assert data["sample"][0]["artifacts"] == {"html_available": True, "json_available": True}
     assert data["preview_token"]
+    expected_read = {
+        "status": "email_failed",
+        "week_start": "2026-06-01",
+        "parent_id": None,
+        "student_id": None,
+        "limit": 5,
+        "last_key": None,
+    }
     assert calls == [
-        {
-            "status": "email_failed",
-            "week_start": "2026-06-01",
-            "parent_id": None,
-            "student_id": None,
-            "limit": 5,
-            "last_key": None,
-        }
+        ("target_read", expected_read),
+        (
+            "authorize",
+            (
+                "v1|9:parent_id8:parent-110:student_id9:student-110:week_start10:2026-06-019:report_id36:report-parent-1-student-1-2026-06-01",
+            ),
+        ),
+        ("target_read", expected_read),
     ]
     serialized = str(data)
     assert "weekly-reports/" not in serialized
