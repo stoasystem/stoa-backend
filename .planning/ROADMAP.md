@@ -42,7 +42,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 ## Phases
 
-- [ ] **Phase 472: Privileged Identity And Student Resource Authorization**
+- [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
 - [ ] **Phase 473: Student Content Privacy And Practice Integrity**
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
@@ -67,7 +67,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Audit findings:** SEC-001, SEC-002, SEC-004.
 
-**Plans:** 21/22 plans executed
+**Plans:** 22/22 plans complete
 
 **Wave 0**
 

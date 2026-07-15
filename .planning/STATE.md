@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: executing
-last_updated: "2026-07-15T18:09:21.408Z"
-last_activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumeration equivalence
+status: verifying
+last_updated: "2026-07-15T18:25:04.774Z"
+last_activity: 2026-07-15 -- Plan 472-22 completed six-finding integration and source-bound evidence
 progress:
   total_phases: 10
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 22
-  completed_plans: 21
-  percent: 95
+  completed_plans: 22
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 472 Privileged Identity And Student Resource Authorization — EXECUTING
-Plan: 21 of 22 complete; Wave 11 complete, ready for Wave 12
-Status: Executing second gap closure
-Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumeration equivalence
+Phase: 472 Privileged Identity And Student Resource Authorization — VERIFYING
+Plan: 22 of 22 complete; Wave 12 complete, ready for independent verification
+Status: Verifying second gap closure
+Last activity: 2026-07-15 -- Plan 472-22 completed six-finding integration and source-bound evidence
 
 ## Accumulated Context
 
@@ -65,16 +65,17 @@ Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumer
 - Every registered administrator body target now enters through a typed route provider; bounded unique ResourceRefs require all-of capability decisions and durable per-target evidence before endpoint effects.
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
 - Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
+- All six final review findings pass together in 321 source-bound adversarial/positive controls; the extended Phase 472 gate passes 610 tests, while the full suite retains exactly 23 Phase 474-owned Settings fixture failures.
 
 ### Pending Todos
 
-- Execute Plans 472-17 through 472-22, then independently re-verify all six final review findings while retaining explicit external-evidence limitations.
+- Independently verify all six final review closures while retaining exact external-evidence and Phase 474/475 limitations.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
 ### Blockers/Concerns
 
-- P0 authorization defects block external beta and any broader user rollout until fixed and independently regression-tested.
+- The formerly reproduced P0 authorization defects remain external-rollout blockers until the completed closure is independently verified.
 - The direct main-to-Lambda workflow, red test baseline, and stale artifact/runtime state prevent a trustworthy release candidate today.
 - Mobile native build/device verification cannot begin until Phase 477 repairs and locks the Expo dependency matrix.
 - Authoritative IaC currently appears external to this repository and must be imported or cross-repository traced in Phase 479.
@@ -82,7 +83,7 @@ Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumer
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 472`; do not mark the phase complete until Plans 472-17 through 472-22 execute and independent verification passes.
+- Run independent Phase 472 verification; do not approve external rollout from local tests or unavailable Cognito evidence.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Performance Metrics
@@ -110,6 +111,7 @@ Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumer
 | Phase 472 P19 | 5 min | 3 tasks | 7 files |
 | Phase 472 P21 | 7 min | 2 tasks | 5 files |
 | Phase 472 P20 | 2 min | 2 tasks | 7 files |
+| Phase 472 P22 | 13 min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -124,3 +126,5 @@ Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumer
 - [Phase 472]: Validated route-specific providers are the only source of administrator body-target authority. — Arbitrary JSON and evidence-only dictionaries never create scope; every concrete member is authorized and evidenced before effects.
 - [Phase 472]: Authorization audit key identity is the normalized key ID plus canonically decoded bytes. — Settings, dependency caching, and direct sink construction must reject weak, ambiguous, or duplicate active/retained material before evidence effects.
 - [Phase 472]: Public password recovery never consults the local email profile before provider normalization. — Account existence, role, lifecycle, and delivery metadata cannot select or alter the public initiation/reset projection.
+- [Phase 472]: Final closure evidence is bound to tested source SHA, exact deterministic artifact digests, and the unmodified full-suite delta. — Local success must not absorb Phase 474/475 ownership or unavailable external checks.
+- [Phase 472]: Multi-target bulk, recovery, handoff, and governance commands share one whole-command release invariant. — Every target must allow and persist redacted evidence before the first business effect, independent of input order.
