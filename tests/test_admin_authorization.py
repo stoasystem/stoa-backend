@@ -176,10 +176,22 @@ def test_bulk_body_targets_are_all_of_and_duplicate_safe(monkeypatch):
         {"parent_id": "parent-1", "student_id": "student-1", "week_start": "2026-06-01"},
         {"parent_id": "parent-2", "student_id": "student-2", "week_start": "2026-06-08"},
     ]}
-    assert client.post("/admin/reports/bulk-resend", json=payload).status_code == 403
-    assert mutations == []
+    for reports in (payload["reports"], list(reversed(payload["reports"]))):
+        assert client.post(
+            "/admin/reports/bulk-resend", json={"reports": reports}
+        ).status_code == 403
+        assert mutations == []
     duplicate = {"reports": [payload["reports"][0], payload["reports"][0]]}
     assert client.post("/admin/reports/bulk-resend", json=duplicate).status_code == 403
+    assert mutations == []
+    assert client.post("/admin/reports/bulk-resend", json={"reports": []}).status_code == 422
+    assert client.post(
+        "/admin/reports/bulk-resend", json={"reports": [payload["reports"][0]] * 26}
+    ).status_code == 422
+    assert client.post(
+        "/admin/reports/bulk-resend",
+        json={"reports": [{"parent_id": "parent-1", "student_id": "student-1"}]},
+    ).status_code == 422
     assert mutations == []
 
 
@@ -203,7 +215,10 @@ def test_bulk_body_targets_persist_every_allow_before_first_effect(monkeypatch):
     assert len({row["resource_fingerprint"] for row in sink.events.values()}) == 2
 
 
-def test_later_body_target_audit_failure_prevents_entire_bulk_effect(monkeypatch):
+@pytest.mark.parametrize("reverse_targets", [False, True])
+def test_later_body_target_audit_failure_prevents_entire_bulk_effect(
+    monkeypatch, reverse_targets
+):
     class FailSecondSink(MemoryAuthorizationAuditSink):
         def persist_authorization_decision(self, **values):
             if len(self.events) == 1:
@@ -221,9 +236,116 @@ def test_later_body_target_audit_failure_prevents_entire_bulk_effect(monkeypatch
         {"parent_id": "parent:a", "student_id": "student-1", "week_start": "b"},
         {"parent_id": "parent", "student_id": "student-1", "week_start": "a:b"},
     ]
+    if reverse_targets:
+        reports.reverse()
     response = TestClient(app).post("/admin/reports/bulk-resend", json={"reports": reports})
     assert response.status_code == 503
     assert effects == []
+
+
+def test_recovery_resolver_later_denial_prevents_preview_effect(monkeypatch):
+    effects = []
+    targets = [
+        {"parent_id": "parent-1", "student_id": "student-1", "week_start": "2026-06-01", "report_id": "report-1"},
+        {"parent_id": "parent-2", "student_id": "student-2", "week_start": "2026-06-08", "report_id": "report-2"},
+    ]
+    monkeypatch.setattr(
+        admin.report_recovery_job_service,
+        "_collect_targets",
+        lambda **_kwargs: (targets, 1),
+    )
+    monkeypatch.setattr(
+        admin.report_recovery_job_service,
+        "preview_resend_job",
+        lambda **kwargs: effects.append(kwargs),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_actor] = lambda: _actor_with_grants(
+        "report_recovery_operator", "student:student-1"
+    )
+    response = TestClient(app).post(
+        "/admin/reports/recovery-jobs/resend-email/preview",
+        json={"reason": "bounded preview", "filters": {"status": "email_failed"}},
+    )
+    assert response.status_code == 403
+    assert effects == []
+
+
+@pytest.mark.parametrize("reverse_job_ids", [False, True])
+def test_support_handoff_later_denial_prevents_package_effect(monkeypatch, reverse_job_ids):
+    effects = []
+    jobs = {
+        "job-1": {"job_id": "job-1", "filters": {"student_id": "student-1", "parent_id": "parent-1"}},
+        "job-2": {"job_id": "job-2", "filters": {"student_id": "student-2", "parent_id": "parent-2"}},
+    }
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: jobs[job_id])
+    monkeypatch.setattr(
+        admin.support_handoff_service,
+        "build_package",
+        lambda **kwargs: effects.append(kwargs),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_actor] = lambda: _actor_with_grants(
+        "report_evidence_exporter", "student:student-1"
+    )
+    job_ids = ["job-1", "job-2"]
+    if reverse_job_ids:
+        job_ids.reverse()
+    response = TestClient(app).post(
+        "/admin/reports/support-handoff-package",
+        json={"reason": "safe handoff", "recovery_job_ids": job_ids},
+    )
+    assert response.status_code == 403
+    assert effects == []
+
+
+@pytest.mark.parametrize("reverse_references", [False, True])
+def test_governance_later_audit_failure_blocks_effect_and_ignores_reference_only_fields(
+    monkeypatch, reverse_references
+):
+    class FailSecondSink(MemoryAuthorizationAuditSink):
+        def persist_authorization_decision(self, **values):
+            if len(self.events) == 1:
+                raise RuntimeError("later-governance-audit-outage")
+            return super().persist_authorization_decision(**values)
+
+    effects = []
+    monkeypatch.setattr(
+        admin.report_audit_retention_service,
+        "build_legal_hold_status_response",
+        lambda **kwargs: effects.append(kwargs),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = FailSecondSink
+    app.dependency_overrides[get_actor] = lambda: _actor("report_governance_reader")
+    references = [
+        {
+            "scope": "job",
+            "job_id": "job:one",
+            "student_id": "student-1",
+            "release_evidence": {"target_canary": "must-not-authorize"},
+        },
+        {
+            "scope": "job",
+            "job_id": "job",
+            "student_id": "student-2",
+            "week_start": "one:student-1",
+            "release_evidence": {"target_canary": "must-not-authorize-either"},
+        },
+    ]
+    if reverse_references:
+        references.reverse()
+    response = TestClient(app).post(
+        "/admin/reports/legal-holds/status", json={"references": references}
+    )
+    assert response.status_code == 503
+    assert effects == []
+    assert "target_canary" not in response.text
 
 
 def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monkeypatch):
