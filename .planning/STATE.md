@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T15:46:27.618Z"
-last_activity: 2026-07-15 -- Phase 472 execution started
+last_updated: "2026-07-15T15:55:06.941Z"
+last_activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity recovery
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 22
-  completed_plans: 16
-  percent: 73
+  completed_plans: 17
+  percent: 77
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 Privileged Identity And Student Resource Authorization — EXECUTING
-Plan: 16 of 22 complete; executing Wave 10
+Plan: 17 of 22 complete; executing Wave 10
 Status: Executing second gap closure
-Last activity: 2026-07-15 -- Phase 472 execution started
+Last activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity recovery
 
 ## Accumulated Context
 
@@ -100,6 +100,7 @@ Last activity: 2026-07-15 -- Phase 472 execution started
 | Phase 472 P13 | 10 min | 2 tasks | 5 files |
 | Phase 472 P15 | 8 min | 3 tasks | 8 files |
 | Phase 472 P16 | 6 min | 3 tasks | 3 files |
+| Phase 472 P17 | 8 min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -107,3 +108,5 @@ Last activity: 2026-07-15 -- Phase 472 execution started
 - [Phase 472]: Audit rows and partition keys use keyed actor/resource fingerprints. — Raw student, owner, target, email, and key material must never persist.
 - [Phase 472]: Relationship-sensitive and privileged allows are evidence-before-effect. — An audit outage cannot broaden access or permit sensitive effects.
 - [Phase 472]: Public/global identifier-bearing commands require exact scoped declarations, while safe-public and protected identifiers require compatible executable specs. — One recursive projection now drives validation, checked JSON, and OpenAPI.
+- [Phase 472]: Existing-account public registration resumes only after immutable command, issuer, subject, user ID, and role all match exactly. — Unproved provider accounts receive one safe recovery action before any authority mutation.
+- [Phase 472]: Verification resend selects the local profile only by the immutable command user ID. — Email-index collisions cannot select or activate identity, and already-confirmed recovery must complete command-aware reconciliation.
