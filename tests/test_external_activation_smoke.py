@@ -9,6 +9,11 @@ from actor_helpers import install_actor_overrides
 
 def _settings(**overrides) -> Settings:
     values = {"cognito_user_pool_id": "pool", "s3_images_bucket": "images", **overrides}
+    if overrides.get("environment") == "production":
+        values.update(
+            authorization_audit_active_key_id="test-production-v1",
+            authorization_audit_active_key="test-production-authorization-audit-key-32-bytes",
+        )
     return Settings(**values)
 
 

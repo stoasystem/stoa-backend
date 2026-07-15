@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 
 from stoa.db.repositories import question_repo, user_repo
 from stoa.db.dynamodb import get_table
-from stoa.deps import get_actor
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.question import QuestionStatus
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -22,6 +23,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     authorized_ai_teacher_draft_dependency,
     authorized_question_dependency,
@@ -385,7 +387,10 @@ def _normalize_help_request(conv: dict) -> dict:
 
 
 async def _current_help_requests(
-    actor: Actor, facts: CurrentAuthorizationFactRepository
+    actor: Actor,
+    facts: CurrentAuthorizationFactRepository,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
 ) -> list[dict]:
     current: list[dict] = []
     for raw in _get_escalated_conversations():
@@ -394,6 +399,8 @@ async def _current_help_requests(
             await authorize_teacher_loaded_resource(
                 actor=actor,
                 facts=facts,
+                correlation_id=correlation_id,
+                audit_sink=audit_sink,
                 loaded=conv,
                 resource_type=ResourceType.TEACHER_HELP_REQUEST,
                 action=AuthorizationAction.READ,
@@ -603,6 +610,8 @@ async def _authorize_ai_question_context(
     question_id: str,
     actor: Actor,
     facts: CurrentAuthorizationFactRepository,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
 ) -> AuthorizedResource:
     question = question_repo.get_question(question_id)
     if not question:
@@ -610,6 +619,8 @@ async def _authorize_ai_question_context(
     return await authorize_teacher_loaded_resource(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         loaded=question,
         resource_type=ResourceType.QUESTION,
         action=AuthorizationAction.CREATE,
@@ -623,9 +634,13 @@ async def _ai_question_context_dependency(
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     try:
-        return await _authorize_ai_question_context(question_id, actor, facts)
+        return await _authorize_ai_question_context(
+            question_id, actor, facts, correlation_id, audit_sink
+        )
     except SecurityDecisionError as error:
         raise HTTPException(
             status_code=error.status_code, detail=error.public_body()
@@ -659,10 +674,14 @@ async def _exercise_context_dependency(
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     try:
         if body.questionId:
-            return await _authorize_ai_question_context(body.questionId, actor, facts)
+            return await _authorize_ai_question_context(
+                body.questionId, actor, facts, correlation_id, audit_sink
+            )
         student = user_repo.get_user(body.studentId)
         if not student or student.get("role") not in {None, "student"}:
             raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
@@ -674,6 +693,8 @@ async def _exercise_context_dependency(
         return await authorize_teacher_loaded_resource(
             actor=actor,
             facts=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
             loaded=context,
             resource_type=ResourceType.AI_TEACHER_DRAFT,
             action=AuthorizationAction.CREATE,
@@ -814,8 +835,10 @@ async def get_stats(
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ):
-    escalated = await _current_help_requests(actor, facts)
+    escalated = await _current_help_requests(actor, facts, correlation_id, audit_sink)
     pending = sum(1 for c in escalated if c.get("escalation_status", "pending") == "pending")
     response_times = [
         snapshot["requestToFirstActionMinutes"]
@@ -888,6 +911,8 @@ async def list_ai_teacher_drafts(
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ):
     """List visible reviewed AI teacher tool drafts."""
     try:
@@ -913,6 +938,8 @@ async def list_ai_teacher_drafts(
             authorized = await authorize_teacher_loaded_resource(
                 actor=actor,
                 facts=facts,
+                correlation_id=correlation_id,
+                audit_sink=audit_sink,
                 loaded=candidate,
                 resource_type=ResourceType.AI_TEACHER_DRAFT,
                 action=AuthorizationAction.READ,
@@ -1026,9 +1053,11 @@ async def list_help_requests(
     facts: CurrentAuthorizationFactRepository = Depends(
         get_authorization_fact_repository
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ):
     """Return only help requests currently assigned to this Actor."""
-    escalated = await _current_help_requests(actor, facts)
+    escalated = await _current_help_requests(actor, facts, correlation_id, audit_sink)
     items = []
     for conv in sorted(escalated, key=lambda c: c.get("escalated_at", ""), reverse=True):
         conv_id = conv.get("conversation_id", "")

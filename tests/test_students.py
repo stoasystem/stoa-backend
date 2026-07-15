@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_actor
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import students
 from stoa.security import route_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from audit_helpers import MemoryAuthorizationAuditSink
 
 
 def _actor(role, user_id, grants=()):
@@ -23,6 +24,7 @@ def _client(actor):
     app = FastAPI()
     app.include_router(students.router, prefix="/students")
     app.dependency_overrides[get_actor] = lambda: actor
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return TestClient(app)
 
 

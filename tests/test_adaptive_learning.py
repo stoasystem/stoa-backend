@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 import pytest
 
-from stoa.deps import get_actor
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive
 from stoa.security.authorization import (
     AuthorizationFacts,
@@ -20,6 +20,7 @@ from stoa.security.identity import (
 )
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import adaptive_learning_service
+from audit_helpers import MemoryAuthorizationAuditSink
 
 
 def _app(user: dict) -> TestClient:
@@ -107,6 +108,7 @@ def _app(user: dict) -> TestClient:
     app.include_router(adaptive.router, prefix="/adaptive")
     app.dependency_overrides[get_actor] = lambda: actor
     app.dependency_overrides[get_authorization_fact_repository] = _Facts
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return TestClient(app)
 
 

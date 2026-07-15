@@ -304,6 +304,15 @@ def test_all_production_authorization_call_sites_use_recording_gateway():
                         keywords = {item.arg for item in call.keywords}
                         if not {"correlation_id", "audit_sink"} <= keywords:
                             missing.append(f"{path}:{call.lineno}:authorize_and_resolve")
+                    if (
+                        isinstance(call.func, ast.Name)
+                        and call.func.id == "authorize_teacher_loaded_resource"
+                    ):
+                        keywords = {item.arg for item in call.keywords}
+                        if not {"correlation_id", "audit_sink"} <= keywords:
+                            missing.append(
+                                f"{path}:{call.lineno}:authorize_teacher_loaded_resource"
+                            )
                 has_evaluate = any(
                     isinstance(call.func, ast.Attribute) and call.func.attr == "evaluate"
                     for call in calls
