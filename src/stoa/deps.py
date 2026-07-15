@@ -6,7 +6,12 @@ import boto3
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from stoa.config import Settings, get_settings
+from stoa.config import (
+    Settings,
+    ValidatedAuthorizationAuditKey,
+    get_settings,
+    validate_authorization_audit_keyring,
+)
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
 from stoa.db.repositories.security_audit_repo import (
     AuthorizationAuditSink,
@@ -54,17 +59,19 @@ def get_sqs_client():
 @lru_cache(maxsize=1)
 def _configured_authorization_audit_sink(
     active_key_id: str,
-    active_key: str,
-    previous_keys: tuple[tuple[str, str], ...],
+    active_key: bytes,
+    previous_keys: tuple[tuple[str, bytes], ...],
     probe_window_seconds: int,
     probe_ttl_seconds: int,
     probe_count_cap: int,
     probe_id_cap: int,
 ) -> AuthorizationAuditSink:
-    return DynamoAuthorizationAuditSink(
-        active_key_id=active_key_id,
-        active_secret=active_key,
-        previous_keys=dict(previous_keys),
+    return DynamoAuthorizationAuditSink.from_validated_keyring(
+        active=ValidatedAuthorizationAuditKey(active_key_id, active_key),
+        previous=tuple(
+            ValidatedAuthorizationAuditKey(key_id, secret)
+            for key_id, secret in previous_keys
+        ),
         probe_window_seconds=probe_window_seconds,
         probe_ttl_seconds=probe_ttl_seconds,
         probe_count_cap=probe_count_cap,
@@ -77,10 +84,16 @@ def get_authorization_audit_sink(
 ) -> AuthorizationAuditSink:
     """Construct the durable audit sink only from validated settings."""
     try:
-        return _configured_authorization_audit_sink(
+        active, previous = validate_authorization_audit_keyring(
             settings.authorization_audit_active_key_id,
             settings.authorization_audit_active_key,
-            tuple(sorted(settings.authorization_audit_previous_keys.items())),
+            settings.authorization_audit_previous_keys,
+            allow_development_default=not settings.is_production,
+        )
+        return _configured_authorization_audit_sink(
+            active.key_id,
+            active.secret,
+            tuple(sorted((key.key_id, key.secret) for key in previous)),
             settings.authorization_audit_probe_window_seconds,
             settings.authorization_audit_probe_ttl_seconds,
             settings.authorization_audit_probe_count_cap,

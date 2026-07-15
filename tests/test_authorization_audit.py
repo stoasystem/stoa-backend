@@ -362,6 +362,25 @@ def test_direct_sink_rejects_invalid_keyring_without_exposing_material():
     assert canary not in str(failure.value)
 
 
+def test_direct_sink_rejects_duplicate_material_before_any_table_access(monkeypatch):
+    table_accessed = False
+
+    def unexpected_table_access():
+        nonlocal table_accessed
+        table_accessed = True
+        raise AssertionError("table must not be accessed")
+
+    monkeypatch.setattr(security_audit_repo, "get_table", unexpected_table_access)
+    secret = _strong_audit_key()
+    with pytest.raises(Exception, match="authorization_audit_key_unavailable"):
+        DynamoAuthorizationAuditSink(
+            active_key_id="active-v2",
+            active_secret=secret,
+            previous_keys={"retained-v1": secret},
+        )
+    assert table_accessed is False
+
+
 def test_all_production_authorization_call_sites_use_recording_gateway():
     roots = [Path("src/stoa/security/route_authorization.py"), *Path("src/stoa/routers").glob("*.py")]
     missing = []

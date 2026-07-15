@@ -10,7 +10,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from botocore.exceptions import ClientError
 
-from stoa.config import validate_authorization_audit_keyring
+from stoa.config import ValidatedAuthorizationAuditKey, validate_authorization_audit_keyring
 from stoa.db.dynamodb import get_table
 
 
@@ -193,14 +193,41 @@ class DynamoAuthorizationAuditSink:
             )
         except (TypeError, ValueError) as exc:
             raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable") from exc
-        self._active = AuthorizationAuditKey(active.key_id, active.secret)
-        self._previous = tuple(
-            AuthorizationAuditKey(key.key_id, key.secret) for key in previous
-        )
+        self._install_validated_keyring(active, previous)
         self._window = probe_window_seconds
         self._ttl = probe_ttl_seconds
         self._count_cap = probe_count_cap
         self._id_cap = probe_id_cap
+
+    @classmethod
+    def from_validated_keyring(
+        cls,
+        *,
+        active: ValidatedAuthorizationAuditKey,
+        previous: Sequence[ValidatedAuthorizationAuditKey] = (),
+        probe_window_seconds: int = 300,
+        probe_ttl_seconds: int = 86400,
+        probe_count_cap: int = 100,
+        probe_id_cap: int = 256,
+    ) -> "DynamoAuthorizationAuditSink":
+        """Construct from the canonical validator result used as the cache identity."""
+        sink = cls.__new__(cls)
+        sink._install_validated_keyring(active, previous)
+        sink._window = probe_window_seconds
+        sink._ttl = probe_ttl_seconds
+        sink._count_cap = probe_count_cap
+        sink._id_cap = probe_id_cap
+        return sink
+
+    def _install_validated_keyring(
+        self,
+        active: ValidatedAuthorizationAuditKey,
+        previous: Sequence[ValidatedAuthorizationAuditKey],
+    ) -> None:
+        self._active = AuthorizationAuditKey(active.key_id, active.secret)
+        self._previous = tuple(
+            AuthorizationAuditKey(key.key_id, key.secret) for key in previous
+        )
 
     @property
     def keys(self) -> tuple[AuthorizationAuditKey, ...]:
