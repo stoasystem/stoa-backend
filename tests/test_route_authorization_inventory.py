@@ -156,6 +156,84 @@ def test_nested_dependency_identifier_is_discovered():
     assert item.identifiers == ("question_id", "student_id")
 
 
+def test_public_nested_dependency_without_declaration_fails_closed():
+    from stoa.security.route_inventory import validate_application_inventory
+
+    app = FastAPI()
+
+    class NestedBody(BaseModel):
+        question_id: str
+
+    async def nested_dependency(student_id: str, body: NestedBody):
+        return student_id, body
+
+    @app.post("/public/undeclared")
+    @explicit_route_classification("public", "bounded public submission without identifiers")
+    def endpoint(_: tuple[str, NestedBody] = Depends(nested_dependency)):
+        return {}
+
+    failures = validate_application_inventory(app)
+    assert len(failures) == 1
+    assert "exactly match" in failures[0].reason
+
+
+def test_nested_non_sensitive_control_stays_non_sensitive_and_identifiers_deduplicate():
+    from stoa.security.route_inventory import inventory_application
+
+    class SafeLeaf(BaseModel):
+        locale: str
+        subject: str
+
+    class DuplicateLeaf(BaseModel):
+        student_id: str
+
+    class MixedBody(BaseModel):
+        safe: list[SafeLeaf]
+        first: DuplicateLeaf
+        second: DuplicateLeaf
+
+    app = FastAPI()
+
+    @app.post("/public/safe")
+    @explicit_route_classification("public", "bounded non-sensitive catalog command only")
+    def safe(body: SafeLeaf):
+        return body
+
+    @app.post("/public/deduplicated")
+    @explicit_route_classification(
+        "public",
+        "bounded duplicate registration correlation only",
+        allowed_identifiers=("student_id",),
+        identifier_scope="command-local",
+    )
+    def deduplicated(body: MixedBody):
+        return body
+
+    inventory = {(item.method, item.path): item for item in inventory_application(app)}
+    assert inventory[("POST", "/public/safe")].identifiers == ()
+    assert inventory[("POST", "/public/safe")].sensitive is False
+    assert inventory[("POST", "/public/deduplicated")].identifiers == ("student_id",)
+
+
+def test_safe_public_marker_without_executable_spec_cannot_classify_route():
+    from stoa.security.route_inventory import validate_application_inventory
+
+    app = FastAPI()
+
+    async def metadata_free_dependency(student_id: str):
+        return student_id
+
+    metadata_free_dependency.safe_public = True
+
+    @app.get("/catalog/{student_id}")
+    def endpoint(student_id: str, _: str = Depends(metadata_free_dependency)):
+        return student_id
+
+    failures = validate_application_inventory(app)
+    assert len(failures) == 1
+    assert "no executable authorization" in failures[0].reason
+
+
 @pytest.mark.parametrize(
     ("allowed", "scope", "reason", "with_resource_spec", "expected"),
     [

@@ -76,7 +76,9 @@
     ],
     "classification": "authorized",
     "family": "adaptive",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/adaptive/students/me/assignments",
     "sensitive": true
@@ -92,7 +94,9 @@
     ],
     "classification": "authorized",
     "family": "adaptive",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/adaptive/students/me/memory",
     "sensitive": true
@@ -1621,7 +1625,9 @@
     ],
     "classification": "authorized",
     "family": "questions",
-    "identifiers": [],
+    "identifiers": [
+      "question_id"
+    ],
     "method": "GET",
     "path": "/questions/{question_id}",
     "sensitive": true
@@ -1637,7 +1643,9 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/students/me/profile",
     "sensitive": true
@@ -1671,7 +1679,9 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/students/{student_id}/learning-profile",
     "sensitive": true
@@ -1705,7 +1715,9 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/students/{student_id}/questions",
     "sensitive": true
@@ -1739,7 +1751,9 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "GET",
     "path": "/students/{student_id}/summary",
     "sensitive": true
@@ -1748,7 +1762,7 @@
     "authorization": [
       {
         "action": "read",
-        "capability": null,
+        "capability": "teacher_identity_reviewer",
         "purpose": "identity_management",
         "resource_type": "operator_resource"
       }
@@ -2064,7 +2078,9 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [],
+    "identifiers": [
+      "student_id"
+    ],
     "method": "PATCH",
     "path": "/students/me/profile",
     "sensitive": true
@@ -2533,7 +2549,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/audit-retention/manifest",
     "sensitive": true
@@ -2549,7 +2569,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/audit-retention/status",
     "sensitive": true
@@ -2565,7 +2589,10 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/bulk-resend",
     "sensitive": true
@@ -2581,7 +2608,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/immutable-evidence/persist",
     "sensitive": true
@@ -2597,7 +2628,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/immutable-evidence/status",
     "sensitive": true
@@ -2613,7 +2648,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/legal-holds",
     "sensitive": true
@@ -2629,7 +2668,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/legal-holds/review",
     "sensitive": true
@@ -2645,7 +2688,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/legal-holds/status",
     "sensitive": true
@@ -2823,7 +2870,11 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "job_id",
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/retention-governance/status",
     "sensitive": true
@@ -2893,7 +2944,10 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/support-handoff-delivery",
     "sensitive": true
@@ -2909,7 +2963,10 @@
     ],
     "classification": "admin-capability",
     "family": "reports",
-    "identifiers": [],
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
     "method": "POST",
     "path": "/admin/reports/support-handoff-package",
     "sensitive": true
@@ -3456,7 +3513,9 @@
     ],
     "classification": "authorized",
     "family": "questions",
-    "identifiers": [],
+    "identifiers": [
+      "question_id"
+    ],
     "method": "POST",
     "path": "/questions/{question_id}/feedback",
     "sensitive": true
@@ -3490,7 +3549,9 @@
     ],
     "classification": "authorized",
     "family": "questions",
-    "identifiers": [],
+    "identifiers": [
+      "question_id"
+    ],
     "method": "POST",
     "path": "/questions/{question_id}/reports",
     "sensitive": true
@@ -3506,7 +3567,9 @@
     ],
     "classification": "authorized",
     "family": "questions",
-    "identifiers": [],
+    "identifiers": [
+      "question_id"
+    ],
     "method": "POST",
     "path": "/questions/{question_id}/request-teacher",
     "sensitive": true
@@ -3535,7 +3598,7 @@
     "authorization": [
       {
         "action": "update",
-        "capability": null,
+        "capability": "teacher_identity_reviewer",
         "purpose": "identity_management",
         "resource_type": "operator_resource"
       }
@@ -3692,7 +3755,7 @@
     "authorization": [
       {
         "action": "read",
-        "capability": null,
+        "capability": "teacher_dispatch_operator",
         "purpose": "teacher_dispatch",
         "resource_type": "teacher_portal"
       }
@@ -3710,7 +3773,7 @@
     "authorization": [
       {
         "action": "assign",
-        "capability": null,
+        "capability": "teacher_dispatch_operator",
         "purpose": "teacher_dispatch",
         "resource_type": "teacher_portal"
       }
@@ -3726,7 +3789,7 @@
     "authorization": [
       {
         "action": "assign",
-        "capability": null,
+        "capability": "teacher_dispatch_operator",
         "purpose": "teacher_dispatch",
         "resource_type": "teacher_portal"
       }
