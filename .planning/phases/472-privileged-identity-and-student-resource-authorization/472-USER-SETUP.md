@@ -1,10 +1,34 @@
-# Phase 472: Optional User Setup for External Evidence
+# Phase 472: User Setup Required
 
 **Generated:** 2026-07-15  
 **Phase:** 472-privileged-identity-and-student-resource-authorization  
-**Status:** Incomplete (optional; local Phase 472 verification does not require this)
+**Status:** Incomplete (required before production rollout; local verification does not require it)
 
-Complete these items only if a separately approved non-production Cognito evidence run is desired. Do not use production credentials or authorize production mutation through this file.
+Complete the production audit-key setup before rollout. The Cognito evidence items remain optional unless a separately approved non-production run is desired. Do not use production credentials for sandbox evidence or authorize production mutation through this file.
+
+## Production Authorization Audit Keyring
+
+- [ ] Generate a unique active HMAC key with a cryptographically secure generator and store it in the approved production secret manager.
+- [ ] Use at least 32 random bytes encoded as `base64:<strict-base64>` or `hex:<strict-hex>`; do not use memorable text, repeated material, examples, defaults, or placeholders.
+- [ ] Assign a unique trimmed key ID. During rotation, retained IDs and decoded key bytes must each remain unique.
+- [ ] Configure retained keys only for the bounded replay-recognition window, then remove them under the approved rotation procedure.
+
+| Status | Variable | Source | Add to |
+| --- | --- | --- | --- |
+| [ ] | `AUTHORIZATION_AUDIT_ACTIVE_KEY_ID` | Approved rotation record | Production secret/config deployment |
+| [ ] | `AUTHORIZATION_AUDIT_ACTIVE_KEY` | Approved secret manager | Production secret deployment only |
+| [ ] | `AUTHORIZATION_AUDIT_PREVIOUS_KEYS` | Approved retained-key map | Production secret deployment only |
+
+Never paste key material into planning evidence, logs, commits, tickets, or chat. A failed startup must report only an `authorization_audit_key_*` category.
+
+### Local verification
+
+```bash
+.venv/bin/python -m pytest -q tests/test_authorization_audit.py \
+  -k 'production or key or secret or rotation or duplicate or weak or placeholder'
+```
+
+Expected: all selected tests pass; no external service or production secret is accessed.
 
 ## Approval and Environment
 
