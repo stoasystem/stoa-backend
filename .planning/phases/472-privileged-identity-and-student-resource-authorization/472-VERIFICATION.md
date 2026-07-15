@@ -1,115 +1,103 @@
 ---
 phase: 472-privileged-identity-and-student-resource-authorization
-verified_at: 2026-07-15T15:20:00Z
-status: gaps_found
-verifier: gsd-verifier
-requirements:
-  total: 8
-  passed: 3
-  gaps: 5
-  human_evidence_pending: 6
-review_findings:
-  reproduced: 6
-  phase_owned_blockers: 6
-  deferred_to_phase_475: 0
+verified: 2026-07-15T18:29:00Z
+status: passed
+score: 8/8 requirements verified
+plans_verified: 22/22
+implementation_source_sha: 9ed55ae9b85c5dff21f74615cfcb207c2338b082
+verification_head_sha: 8abf39c97fb2c943c83b4f668f8f09ee6adce0da
+external_evidence: not_run
 ---
 
-# Phase 472 Final Verification
+# Phase 472 Final Independent Verification
 
-## Goal Verdict
+## Result
 
-**Status: `gaps_found`.** Plans 01–16 materially close the original obvious public privileged-role selector, implement strict token/Actor resolution, centralize route authorization, and add durable decision evidence. The independent 114-test gap gate and 546-test Phase 472 gate both pass. Those green gates are not sufficient to declare the phase goal achieved: all six findings in the final code review are reproducible against current production code, and each crosses a Phase 472-owned locked identity, authorization, safe-error, or redacted-evidence boundary.
+**Status: `passed`.** The Phase 472 goal is achieved by the current implementation. Independent source inspection and fresh local execution reproduce closure of CR-01, CR-02, and WR-01 through WR-04. All eight phase requirements pass against actual code and executable behavior. The focused six-finding gate passed **321/321**, the extended Phase 472 gate passed **610/610**, and the fresh full-suite observation contains exactly the accepted Phase 474-owned configuration-fixture delta: **1083 passed / 23 failed / 0 errors / 0 skipped** across 1106 tests.
 
-The two most severe defects are directly reachable. An unauthenticated registration request can adopt an existing Cognito account's subject after `UsernameExistsException` and create its first local public identity command/binding/group without proving account control. Separately, conflict reconciliation identifies removal actions only by `grant_id`, so two current grants sharing an ID resolve to the same first snapshot and one lineage can remain live for later account restoration. Body-only administrator targets, password-recovery enumeration, resend-by-email activation, and weak production audit secrets are also real rather than review-only concerns.
+This result does not claim live Cognito evidence or Phase 475 transaction work. All six external Cognito checks remain **NOT RUN — approval/configuration unavailable**, and teacher takeover/session/notification atomicity remains explicitly deferred to Phase 475/V9DATA-02.
 
-Teacher takeover/session/notification atomicity remains explicitly owned by Phase 475/V9DATA-02 and is not counted as a Phase 472 gap. The six findings below are distinct from that deferred transaction boundary.
+## Independent automated evidence
 
-## Independent Automated Evidence
-
-| Verification | Result |
-| --- | --- |
-| `.venv/bin/python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py` | **114 passed in 1.70s**; no skips or xfails |
-| Extended Phase 472 command from `472-VALIDATION.md` | **546 passed in 9.82s** |
-| Duplicate-grant direct probe | Planner emitted two `remove_grant("same")` actions; apply resolved both to `admin_identity_manager/global`, never the second `student_content_review/student:s-2` grant |
-| Existing-account registration direct HTTP probe | `POST /auth/register` returned **201** and invoked `start_or_resume_public_registration(subject="priv-sub", role="student")` after provider `UsernameExistsException`, without a pre-existing command or proof of control |
-| Password-recovery equivalence probe | Forgot-password unknown returned `delivery: null`, while known returned a masked delivery destination; reset unknown returned legacy `{"detail": ...}`, while known/bad-code returned structured `{code,message,correlationId}` |
-| Resend convergence probe | Provider `already confirmed` updated the email-GSI-selected user to verified and returned `already_verified`; command lookup/reconciliation calls were **zero** |
-| Admin body-target probe | Policy declared `parent_id,student_id`, but `_target()` resolved `("global", "admin-1")` while the mutation body targeted a different parent/student pair |
-| Production key probe | `Settings(environment="production", ..., authorization_audit_active_key="x")` was accepted |
-
-The execution evidence records the final full suite as **1019 passed / 23 failed**. It is not green. The remaining exact failure set is the previously accepted Phase 474-owned strict production `Settings` fixture boundary: 2 external activation, 3 report, and 18 subscription tests. The zero Phase 472 regression delta is useful evidence but does not excuse the independently reproduced gaps above.
-
-## Requirement Verification
-
-| Requirement | Result | Actual-code evidence |
+| Gate | Fresh result | Interpretation |
 | --- | --- | --- |
-| V9AUTH-01 | PASS | Public role validation remains limited to `student|parent`; privileged, historical, case, and unknown inputs are rejected before provider mutation. The existing-subject adoption defect is accounted under V9AUTH-04 because it bypasses identity ownership/convergence rather than accepting a privileged payload role. |
-| V9AUTH-02 | PASS | Routine administrator lifecycle remains authenticated, capability-gated, versioned, and audited; the bootstrap path stays separately controlled. No reviewed finding creates a long-lived admin directly. |
-| V9AUTH-03 | PASS | Teacher activation still requires exact-version approval and bound one-time invitation consumption; role alone does not grant curriculum authority. Live provider convergence remains an external NOT RUN item. |
-| V9AUTH-04 | **GAP** | Existing-provider registration creates a first command/binding/group without proof (`auth.py:381-395,458-468`; `public_identity_service.py:121-180`); resend mutates an email-selected profile outside the immutable command (`auth.py:533-600`); duplicate grant IDs prevent exact all-lineage quarantine (`reconciliation.py:253-268,305-327`). These violate D-18, D-19, D-23, and D-24. |
-| V9AUTH-05 | **GAP** | Issuer/client/use/signature/key-cache token validation passes, and raw Cognito diagnostics are redacted. However, password-recovery paths still expose account/state differences and one unstructured error (`auth.py:740-792`), violating the stable redacted authentication-error and existence-hiding contract in D-28/D-29 and Plan 15. |
-| V9ACCESS-01 | **GAP** | A central policy and recording gateway exist, but a body-only admin mutation is evaluated against `global/admin-1` instead of its affected parent/student (`admin_authorization.py:177-232`; `admin.py:2015-2037`). The policy therefore does not decide the actual resource named by the request. |
-| V9ACCESS-02 | **GAP** | Registered inventory is deterministic at 219/219, but `/admin/parent-bindings/repair` accepts resource identifiers in its body while the executable admin dependency ignores them. Calling central policy with a fabricated global target does not satisfy D-16's identifier-to-resource policy requirement. |
-| V9ACCESS-03 | **GAP** | The existing matrix passes for covered resource shapes, but it lacks body-only exact-scope negative/positive controls and therefore cannot prove unrelated body targets are denied. The direct probe demonstrates the missing matrix case. |
+| `.venv/bin/python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_account_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_admin_authorization.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py` | **321 passed in 4.38s** | Six latest findings, adversarial negatives, and legitimate positives pass together. |
+| `.venv/bin/python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py` | **145 passed in 1.78s** | Current expanded G-01..G-05 focused gate passes; the historical pre-Plans-17..22 count was 114. |
+| Extended command from `472-VALIDATION.md` over the 21 Phase 472 modules | **610 passed in 9.60s** | Identity, token, lifecycle, authorization matrix, audit, inventory, notification, teacher, parent, question, dispatch, adaptive, and curriculum controls pass together. |
+| Route inventory generator `--check` | **PASS** | Checked artifact remains deterministic with 219 unique registered method/path rows and typed-provider metadata for 20 body-target routes. |
+| Client error-action generator `--check` | **PASS** | Structured internal errors/actions and bounded client recovery contract remain byte-stable. |
+| Teacher terminology semantic checker plus terminology module | **PASS; 13/13 allowlisted negative/historical occurrences consumed; 10 passed** | Active contracts use only `teacher`; the rejected historical term exists only in exact negative/reconciliation evidence. |
+| `.venv/bin/python -m pytest -p no:terminal --junitxml=/tmp/phase472-independent-final.xml` | **1106 tests: 1083 passed, 23 failed, 0 errors, 0 skipped in 33.200s** | Every failure is the exact Phase 474-owned strict production `Settings` fixture set; there is no Phase 472 delta. |
 
-## Locked Decision Accounting
+The checked artifact digests independently match the source-bound evidence:
 
-All 33 decisions in `472-CONTEXT.md` were traced to plans, implementation, tests, or a finding. Twenty-four are satisfied by current automated evidence. Nine remain violated by the reproduced findings: **D-12, D-16, D-18, D-19, D-23, D-24, D-28, D-29, and D-32**. Exactly-one-role behavior (D-20), canonical `teacher` terminology (D-22), hidden unrelated resources (D-27), bounded JWKS behavior (D-30), client retry bounds (D-31), and fail-closed dependency behavior (D-33) remain green in the focused gates.
+- Route inventory: `f32226095cf3a0992b1cf94e28f6aefd713580fb839694a88c8c5dcbfaf5eaad`.
+- Client actions: `4bdb9169ff44d6352492ac7956f8ea331c0b2e62862dc6ca66d07bc47ab36317`.
 
-## Final Review Finding Adjudication
+## Six latest findings
 
-### CR-01 — Existing Cognito account can be adopted by unauthenticated registration
+| Finding | Result | Independent implementation and behavior evidence |
+| --- | --- | --- |
+| CR-01 — existing Cognito subject adoption without proof | **CLOSED** | `register()` loads and validates the immutable public command before provider identity lookup on `UsernameExistsException`; missing command, privileged/provider-only identity, role mismatch, subject mismatch, and altered provenance return the same safe recovery action before command/profile/binding/relationship/group mutation. `resume_public_registration()` cannot create a first command and `_require_fingerprint()` binds issuer, subject, user, role, and command. Exact interrupted student and parent commands remain valid positive controls. |
+| CR-02 — `grant_id`-only duplicate-scope lineage/revival | **CLOSED** | Every `remove_grant` action now carries an immutable `GrantCoordinate(capability, scope, generation, grant_id, version)`. Planning sorts and preserves all coordinates; apply validates them before mutation and forwards the exact coordinate into the conditional repository transition. Same-ID grants across scopes/capabilities revoke exactly once under either inventory order; stale replay, audit-failure replay, account restore, and fresh separately approved regrant controls prove old lineages do not become current again. |
+| WR-01 — body-only administrator targets authorized/audited as global | **CLOSED** | Registered body-target routes expose typed target providers. Canonical length-delimited coordinates prevent delimiter collisions and drive both capability scope matching and keyed audit fingerprints. Scalar targets yield one ref; collections are bounded, sorted, unique, and all-of. All decisions are computed before evidence, all allow evidence completes before endpoint execution, and later denial or later audit failure releases no handler/service business mutation. |
+| WR-02 — password-recovery account/state enumeration | **CLOSED** | Forgot-password returns exactly the accepted projection for success, unknown user, disabled user, and not-authorized states without delivery/account metadata. Reset invalid, expired, unknown, disabled, and not-authorized proofs converge on the same structured recovery action; a valid initiation and valid reset still succeed. Provider/local diagnostics, account role/state, email, token, and legacy `detail` do not escape. |
+| WR-03 — resend verification email-GSI bypass | **CLOSED** | Resend begins with `require_public_identity_command()`, loads only `command.user_id`, and never treats the email index as identity authority. Already-confirmed provider state calls `provider_identity()` and `confirm_and_reconcile_public_identity()`; active is returned only after exact binding, canonical group, provider verification, profile provenance, and command activation converge. Duplicate-email decoys and subject mismatch cannot activate. |
+| WR-04 — weak production authorization-audit HMAC secret | **CLOSED** | One canonical validator rejects short, repeated-pattern, placeholder-like, malformed, duplicate-ID, and duplicate-material active/retained keys before sink construction or fingerprint effects. Unique strong active/retained rotation succeeds and recognizes replay. Failures expose only bounded `authorization_audit_key_*` categories and never submitted material. |
 
-**Confirmed; Phase 472 blocker.** `register()` catches `UsernameExistsException`, performs administrator subject lookup, and continues into profile construction and `start_or_resume_public_registration()` (`src/stoa/routers/auth.py:381-395,428-468`). The service creates a command before checking for an existing matching command, then creates the pending profile, binding, and public group (`src/stoa/services/public_identity_service.py:135-180`). The direct HTTP probe returned 201 and handed the existing `priv-sub` to a new student command. This violates D-18/D-19 and Plan 11's explicit “resume only an existing identical command” control. It is not Phase 475 transaction work.
+### Multi-target adversarial matrix
 
-**Required closure:** On `UsernameExistsException`, load and require an existing immutable command whose issuer/subject/user/role fingerprint matches before any local or provider mutation. If none exists, return one enumeration-safe existing-account action and require login/confirmation/recovery proof. Add zero-mutation tests for existing provider-only public and privileged accounts, plus legitimate interrupted-command resume tests.
+The HTTP and service tests independently cover first-allowed/later-denied targets in original and reversed order, duplicate coordinates, mixed students, delimiter-shaped coordinates, empty/malformed/over-limit collections, resolver-derived targets, support-handoff and governance collections, and later audit failure. Denied or audit-failed commands perform zero whole-command business mutation. Successful multi-target commands persist distinct redacted per-target evidence before the first effect; raw parent, student, report, job, fixture, and delimiter-shaped values are absent from durable fingerprints/evidence.
 
-### CR-02 — Duplicate grant IDs do not revoke every current lineage
+The integration fixes were inspected explicitly:
 
-**Confirmed; Phase 472 blocker.** Capability storage keys grant history by capability, scope hash, generation, grant ID, and version (`src/stoa/db/repositories/capability_repo.py:62-75`), so the same ID is legal across lineages. Reconciliation discards that coordinate and stores only `grant.grant_id` in an action (`src/stoa/security/reconciliation.py:260-261`), then resolves with the first matching ID (`:321-323`). The direct probe produced two actions but passed the same first global grant to the adapter twice. The concrete second revocation will encounter a stale/already-revoked pointer while the other current pointer survives; `_restore_admin()` restores account/group without proving all prior lineages revoked (`src/stoa/services/privileged_identity_service.py:205-225`). This directly violates Plan 12's “every current grant” must-have and D-23/D-24 non-revival rule.
+- `69da803` updates the recovery preview regression to require the resolver read before authorization and the business preview read only afterward.
+- `f80e23f` preserves target-read → all-of authorization/evidence → business-read/effect ordering and updates the generated route inventory. No source or test file differs between tested implementation SHA `9ed55ae` and current HEAD; later commits modify planning/evidence documents only.
 
-**Required closure:** Put the full immutable coordinate on every action (`capability`, exact scope or safe coordinate, generation, grant ID, version) and resolve exact equality. Add two same-ID/different-scope or capability current grants, apply/replay/audit-failure controls, restore the account, and prove neither lineage authorizes.
+## Requirement traceability
 
-### WR-01 — Body-only admin targets authorize and audit as global
+| Requirement | Result | Verified behavior |
+| --- | --- | --- |
+| V9AUTH-01 | **PASS** | Public self-service accepts only exact `student|parent`; `admin`, `teacher`, historical teacher terminology, case variants, unknown, nested, and extra selectors are rejected before Cognito/repository mutation. |
+| V9AUTH-02 | **PASS** | Long-lived administrator lifecycle is authenticated, exact-capability gated, versioned, and durably audited; bootstrap/disaster recovery remains separate and no request-path role bypass exists. |
+| V9AUTH-03 | **PASS** | Teacher activation requires exact-version approval followed by bound expiring single-use invitation consumption; teacher role alone grants no curriculum capability. Provider convergence is locally deterministic but live sandbox evidence remains NOT RUN. |
+| V9AUTH-04 | **PASS** | Token resolution is read-only and deny-first; public commands bind exact provider subjects; one canonical role/group/profile/account state and current versioned grants determine authority; reconciliation removes every conflicted full-coordinate lineage without revival. |
+| V9AUTH-05 | **PASS** | Access tokens enforce issuer, access token use, allowed client, signature/key rotation, cache isolation, and safe redacted errors. Password recovery is non-enumerating and public provider failures expose structured actionable projections only. |
+| V9ACCESS-01 | **PASS** | One central policy evaluates owner student, active bidirectional parent binding, current-task/assignment teacher, and exact scoped capability grants using fresh facts. Body-only administrator resources now use exact typed targets. |
+| V9ACCESS-02 | **PASS** | Deterministic inventory covers all 219 registered method/path rows; recursive dependencies and nested identifier annotations fail closed when undeclared, and all 20 body-target administrator routes provide executable typed target metadata. |
+| V9ACCESS-03 | **PASS** | Automated matrices deny unrelated parents, unassigned teachers, stale/asymmetric/disabled bindings, wrong capabilities/scopes, cross-user identifiers, mixed target collections, and dependency/audit outages while preserving owner, bound-parent, assigned-teacher, and exact-operator positives. |
 
-**Confirmed; Phase 472 blocker despite warning severity.** The parent-binding policy declares both target keys (`src/stoa/security/admin_authorization.py:119-123`), but `_target()` reads only query/path values and defaults to `global` plus the actor ID (`:177-232`). The mutation consumes `body.parent_id` and `body.student_id` (`src/stoa/routers/admin.py:2015-2037`). The direct probe reproduced `("global", "admin-1")`. This breaks V9ACCESS-01/02/03, D-12/D-16, and D-32 because authorization scope and durable resource fingerprint do not identify the affected resource.
+All Plan 01–22 `must_haves` are represented by the implementation artifacts and passing executable gates. Blanket denial cannot satisfy the gates because legitimate student, parent, teacher, administrator, interrupted-registration, valid password-reset, exact-scope, and fresh-regrant positives are included.
 
-**Required closure:** Pass validated typed body targets explicitly into the admin authorization dependency/gateway; do not infer arbitrary raw JSON. Use the same canonical target for capability scope and audit HMAC material. Add exact-scope allow, wrong-scope deny-before-effect, two-body-target distinct-fingerprint, and outage tests for every body-only identifier-bearing admin route.
+## Identity, vocabulary, and public-error contracts
 
-### WR-02 — Password recovery enumerates account and lifecycle state
+- Every account has exactly one role from `student|parent|teacher|admin`; ambiguous or multiple STOA role groups fail identity resolution.
+- `teacher` is the sole active teacher term. The 13 historical-term occurrences are exact negative-input or reconciliation allowlist evidence and are consumed by the semantic gate; no compatibility route or accepted alias exists.
+- APIs use structured internal error codes/actions. Public/UI-facing messages remain short, friendly, actionable, correlated, and non-enumerating; provider diagnostics and authorization internals remain redacted.
 
-**Confirmed; Phase 472 blocker.** Unknown forgot-password returns accepted with no delivery while a known public account returns provider delivery metadata (`src/stoa/routers/auth.py:748-764`). Unknown reset exits locally with a legacy detail body, while a known account reaches provider normalization (`:775-792`). Disabled/non-public local profiles can also produce distinct outcomes through `_approved_public_registration_role()`. The direct probe reproduced both differences. Plan 15 explicitly requires preserving account-existence hiding across forgot/reset flows, and D-28/D-29 require one stable safe actionable projection.
+## Full-suite classification
 
-**Required closure:** Make forgot-password initiation indistinguishable for unknown, known, disabled, and privileged emails and omit delivery destination metadata. Normalize reset failure shape/action without local-existence divergence. Add equivalence matrices for status, body keys/message class, headers, provider-call observability, and no local/provider diagnostic leakage.
+The fresh JUnit run contains exactly 23 failures:
 
-### WR-03 — Resend bypasses the immutable public identity command
+- `tests/test_external_activation_smoke.py`: 2.
+- `tests/test_report_service.py`: 3.
+- `tests/test_subscription_operations.py`: 18.
 
-**Confirmed; Phase 472 blocker.** Resend chooses a profile via email GSI (`src/stoa/routers/auth.py:533`), and an “already confirmed” provider response applies `verified_fields()` directly to that user (`:565-580`). It never calls `require_public_identity_command()` or `confirm_and_reconcile_public_identity()`. The direct probe activated `email-gsi-selected` with zero command calls. This violates D-18/D-19 and Plan 11's immutable subject-bound convergence guarantee even if protected Actor resolution later fails closed.
+Every failure occurs while a Phase 474 fixture constructs production `Settings` without the required Cognito issuer/access-client allowlists. There are no errors, skips, xfails used for closure, or failures in a Phase 472-owned module. This is the previously accepted Phase 474 boundary and is recorded as an observed red full suite, not misrepresented as a global pass.
 
-**Required closure:** Route already-confirmed resend through provider identity plus exact command-aware reconciliation. Do not mark any profile verified/active before exact subject, binding, canonical group, provenance, and command activation converge. Add duplicate-email, missing-command, subject-mismatch, partial-step retry, and legitimate already-confirmed tests.
+## External and cross-phase boundaries
 
-### WR-04 — Production accepts weak audit HMAC secrets
+No approved non-production Cognito sandbox configuration is available. The following remain **NOT RUN**, never inferred as passed: live app-client/group inventory, real allowed-client versus wrong-client tokens, live teacher invitation activation/replay, suspension with an old real token, live JWKS rotation, and provider-inventory reconciliation/apply. No AWS, network, Cognito, provider, sandbox, or production mutation was attempted.
 
-**Confirmed; Phase 472 blocker despite warning severity.** Production validation rejects only empty material or the exact development placeholder (`src/stoa/config.py:106-115`); it accepted the one-character key `x`. Because Phase 472 claims durable *redacted* actor/resource evidence, trivially guessable keyed fingerprints do not meet the D-32 privacy boundary or Plan 14's dedicated production keyring guarantee.
+Teacher takeover question/session/notification read-write atomicity remains Phase 475/V9DATA-02. Phase 472 does not claim it closed and does not count that deferred transaction boundary as a failure.
 
-**Required closure:** Require uniformly strong active and previous keys (for example decoded 32-byte random material), reject malformed/predictable/duplicate secrets and duplicate normalized key IDs, and keep key contents out of errors/logs. Add production Settings tests for one-character, repeated, placeholder-like, duplicate active/previous, valid rotation, and development-only fixture behavior.
+## Source and workspace consistency
 
-## External And Cross-Phase Limitations
-
-- Six Cognito sandbox checks remain **NOT RUN — approval/configuration unavailable**: client/group inventory, real allowed-vs-wrong client tokens, teacher invitation activation/replay, old-token suspension, live JWKS rotation, and provider-shaped reconciliation. Deterministic local substitutes passed, but beta/production rollout cannot treat these rows as evidence.
-- No AWS, network, Cognito sandbox, provider, or production mutation was performed during verification.
-- The full suite remains red at 1019/23 with the exact Phase 474-owned strict Settings fixture set. Phase 474 ownership is preserved; this report does not call the suite green.
-- Teacher takeover/session/notification atomicity remains Phase 475/V9DATA-02. None of the six phase-owned findings above depends on absorbing that work into Phase 472.
-
-## Plan-Ready Gap Closure
-
-1. **Identity ownership (V9AUTH-04):** close CR-01 and WR-03 together around immutable command/proof-of-control convergence; tests belong primarily in `tests/test_public_identity_lifecycle.py` and endpoint controls in `tests/test_auth_account_lifecycle.py`.
-2. **Grant coordinate isolation (V9AUTH-04):** close CR-02 in reconciliation/action schema and exact repository transition; add duplicate-ID restore/non-revival tests to `tests/test_privileged_identity_reconciliation.py`.
-3. **Exact admin body resource (V9ACCESS-01..03):** close WR-01 through typed target handoff, exact scope evaluation, and audit fingerprint tests in `tests/test_admin_authorization.py` and `tests/test_authorization_audit.py`.
-4. **Recovery anti-enumeration (V9AUTH-05/D-28/D-29):** close WR-02 with known/unknown/disabled/privileged response equivalence in `tests/test_public_auth_error_boundary.py` and lifecycle tests.
-5. **Audit key strength (D-32):** close WR-04 in production Settings/keyring validation with rotation-safe tests in `tests/test_authorization_audit.py`.
-6. Rerun the 114-test gap gate, 546-test Phase 472 gate, generated-contract checks, direct adversarial probes above, and the full suite. Preserve external NOT RUN and Phase 474/475 boundaries honestly.
-
-Phase 472 must not be marked complete until these closures pass independent verification.
+- Tested implementation source: `9ed55ae9b85c5dff21f74615cfcb207c2338b082`.
+- Current verification HEAD before this artifact edit: `8abf39c97fb2c943c83b4f668f8f09ee6adce0da`.
+- `git diff 9ed55ae..8abf39c` contains only planning/state/evidence documents; no implementation, test, generator, or generated-contract change follows the tested source SHA.
+- Worktree was clean before this verifier updated only this required artifact.
 
 ## Verification Complete
+
+Phase 472 independently verifies as **passed**: **8/8 requirements**, **6/6 latest findings closed**, **22/22 plans represented**, focused **321/321**, expanded gap gate **145/145**, extended **610/610**, deterministic inventory/client/terminology gates passed, and the full-suite delta is exactly the 23 Phase 474-owned fixtures. External Cognito checks remain explicit NOT RUN, and Phase 475 atomicity remains deferred.

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-STOA is a learning platform backend for students, teachers/tutors, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
+STOA is a learning platform backend for students, teachers, parents, and admins. This repository provides the FastAPI service that runs locally with Uvicorn and in production as an AWS Lambda/API Gateway API backed by Cognito, DynamoDB, S3, Bedrock, Rekognition, SQS, and SES.
 
 The shipped report operations platform gives admins a production-verified, backend-mediated recovery workflow for weekly reports: list/detail operations metadata, retry one `generation_failed` report, resend one or more selected `email_failed` reports, run bounded async `email_failed` resend jobs, inspect append-only audit evidence, use a real admin UI without exposing private report artifacts, and follow an operator runbook for safe support use.
 
@@ -154,6 +154,7 @@ Students and parents can complete real learning, account, and paid-access journe
 **Residual release gate:** external beta, broader production rollout, paid marketing, and uncontrolled provider writes remain blocked until v9.0 closes reachable authorization/data defects, restores trustworthy verification, and proves installable core user journeys.
 **Active milestone:** v9.0 Product Reality, Authorization And Core Journey Completion
 **Next milestone:** not committed; v9.1 scope must be selected from v9.0 live evidence rather than more local readiness contracts.
+**Phase 472:** complete and independently verified on 2026-07-15 — 8/8 requirements and all six final identity/authorization review findings closed locally; external Cognito checks remain explicitly not run, and the exact 23 strict Settings fixture failures remain owned by Phase 474.
 
 ## Current Milestone: v9.0 Product Reality, Authorization And Core Journey Completion
 
@@ -1213,7 +1214,7 @@ Known current resources:
 | Plan v8.2 revenue growth acquisition and paid marketing gate | Growth and paid marketing require healthy rollout, revenue, support, learning, and incident evidence | Complete as a local gated contract; paid marketing remains blocked |
 | Plan v8.3 learning outcomes scale and AI curriculum improvement | Learning outcomes must hold as growth increases, with curriculum and AI quality improvements from real cohorts | Complete as a local gated contract; real cohort scale remains unproven |
 | Plan v8.4 strategic scale reliability and next-version decision | Strategic scale, market expansion, enterprise readiness, or v9 should be based on live product and business evidence | Complete locally; the 2026-07-14 reality audit selected v9.0 product completion |
-| Start v9.0 from the full-project reality audit | The audit found two reachable P0 authorization defects, nine P1 blockers, a red test baseline, and a non-buildable placeholder mobile app; the next milestone must complete real product journeys before adding more readiness contracts | Active - Phase 472 starts with identity and resource authorization closure |
+| Start v9.0 from the full-project reality audit | The audit found two reachable P0 authorization defects, nine P1 blockers, a red test baseline, and a non-buildable placeholder mobile app; the next milestone must complete real product journeys before adding more readiness contracts | Active - Phase 472 identity and resource authorization closure is complete; Phase 473 is next |
 
 ## Evolution
 
@@ -1233,4 +1234,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-14 after initializing v9.0 from the full-project audit at `de3bf1e`*
+*Last updated: 2026-07-15 after independent completion of Phase 472 identity and resource authorization closure*
