@@ -189,6 +189,16 @@ async def admin_operation(
     except KeyError as exc:
         error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, internal_detail=str(exc))
         raise HTTPException(error.status_code, detail=error.public_body()) from exc
+    eligible_role = actor.role.value == "admin" or (
+        actor.role.value == "teacher" and policy.capability.startswith("curriculum_")
+    )
+    if (
+        not actor.can_authorize
+        or not eligible_role
+        or not any(grant.capability == policy.capability for grant in actor.current_grants)
+    ):
+        error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+        raise HTTPException(error.status_code, detail=error.public_body()) from error
     resource_id, student_id = await _target(request, policy, actor)
     ref = ResourceRef(policy.resource_type, resource_id, student_id, relationship_known=True)
     if not operator_capability_permits(
