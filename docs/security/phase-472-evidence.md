@@ -30,6 +30,7 @@ The OpenAPI `x-stoa-authorization` extension and checked JSON are generated from
 | 2026-07-15T00:21:34Z | `.venv/bin/python scripts/generate_route_authorization_inventory.py --check` | PASS — byte-for-byte match |
 | 2026-07-15T00:21:35Z | `.venv/bin/pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 459 passed in 5.60s |
 | 2026-07-15T00:21:45Z | `.venv/bin/pytest -q` | OBSERVED RED — 932 passed, 23 failed in 22.40s |
+| 2026-07-15T00:23:20Z | `.venv/bin/pytest -q tests/test_auth_security.py tests/test_teacher_onboarding.py tests/test_identity_authorization.py -k 'client or invitation or suspension or rotation'` | PASS — 12 passed, 61 deselected in 0.41s; deterministic local substitute only |
 
 ## Old audit reproductions and positive controls
 
