@@ -1,15 +1,16 @@
 ---
-last_mapped_commit: 2026-06-02
+last_mapped_commit: ddd2a559cb3f5c82345252fdef0d4c948f0c2155
+last_mapped_date: 2026-07-15
 ---
 
 # Architecture
 
-**Mapped:** 2026-06-02
+**Mapped:** 2026-07-15
 **Scope:** Full repository
 
 ## Summary
 
-The service is a modular FastAPI backend organized around route modules, small service modules, Pydantic schemas, and DynamoDB repository helpers. It uses AWS Lambda as the production compute boundary and DynamoDB as the primary persistence layer.
+The product combines a modular FastAPI backend with a separate Expo/React Native client under `mobile/`. The backend is organized around route modules, small service modules, Pydantic schemas, security-policy contracts, and DynamoDB repository helpers. It uses AWS Lambda as the production compute boundary and DynamoDB as the primary persistence layer; the mobile client consumes the same authenticated HTTP API rather than introducing another backend.
 
 The dominant architecture is request/response HTTP API with synchronous AWS calls. There is no separate worker process in this repo; asynchronous-looking flows such as teacher escalation are represented by SQS messages or DynamoDB state transitions.
 
@@ -35,7 +36,6 @@ Registered routers:
 - `/questions` from `src/stoa/routers/questions.py`
 - `/students` from `src/stoa/routers/students.py`
 - `/teachers` from `src/stoa/routers/teachers.py`
-- `/tutors` from `src/stoa/routers/tutors.py`
 - `/parents` from `src/stoa/routers/parents.py`
 - `/admin` from `src/stoa/routers/admin.py`
 - `/files` from `src/stoa/routers/files.py`
@@ -48,6 +48,7 @@ Observed layers:
 - **Dependency injection/auth:** `src/stoa/deps.py`
 - **HTTP routes:** `src/stoa/routers/*.py`
 - **Pydantic models:** `src/stoa/models/*.py`, plus route-local request/response models.
+- **Authorization/security contracts:** `src/stoa/security/`
 - **Repository helpers:** `src/stoa/db/repositories/*.py`
 - **AWS service helpers:** `src/stoa/services/*.py`
 - **Seed script:** `scripts/seed_practice.py`
@@ -65,7 +66,7 @@ Key files:
 Registration flow:
 
 1. `POST /auth/register` receives frontend-shaped payloads, including camelCase fields.
-2. The route normalizes `tutor` to backend role `teacher`.
+2. The route accepts only canonical public roles; privileged teacher onboarding is outside public registration.
 3. Cognito user is created and password is made permanent.
 4. User is added to a role group.
 5. A DynamoDB user profile is stored through `user_repo.put_user`.
@@ -130,10 +131,10 @@ The practice router transforms DynamoDB records into frontend contract fields, e
 
 ## Data Flow: Human Help
 
-There are two related help flows:
+There are two related teacher-help flows:
 
 - Question escalation via `src/stoa/routers/questions.py`, `src/stoa/routers/teachers.py`, and `src/stoa/services/notify_service.py`.
-- Conversation/tutor escalation via `src/stoa/routers/conversations.py` and `src/stoa/routers/tutors.py`.
+- Conversation escalation through the conversation and teacher route boundaries.
 
 Question escalation:
 
@@ -142,12 +143,60 @@ Question escalation:
 3. SQS receives a teacher request message.
 4. Teacher route scans escalated questions, allows takeover, reply, and resolve.
 
-Conversation escalation:
+Conversation teacher escalation:
 
 1. Student calls `/teacher-help/request`.
 2. Conversation record is marked escalated.
 3. A system message is stored in the conversation.
-4. Tutor routes scan escalated conversations, expose request details, status updates, and notes.
+4. Teacher routes expose authorized request details, status updates, and notes.
+
+## Authorization Architecture
+
+Phase 472 establishes a deny-first authorization boundary around the request handlers. The canonical inputs are actor, resource, action, and purpose contracts in `src/stoa/security/`; executable FastAPI dependency metadata is the source for both runtime decisions and generated route evidence.
+
+The checked artifacts in `docs/security/` are architectural projections rather than hand-maintained API definitions:
+
+- `docs/security/route-authorization-inventory.json` is a deterministic inventory of registered method/path operations and their executable authorization metadata.
+- `docs/security/client-error-actions.json` is the generated client recovery-action contract.
+- `docs/security/phase-472-evidence.md` binds verification results and artifact hashes to the tested source while explicitly separating local evidence from unavailable external checks.
+- `docs/security/tutor-term-allowlist.json` is negative historical evidence used by the terminology gate; `teacher` is the only active role and API term.
+
+Authorization-sensitive decisions are evidence-before-effect. Public identity-provider failures are projected through a closed, redacted error boundary, and audit identities use bounded fingerprints rather than raw resource or actor identifiers.
+
+## Mobile Client Boundary
+
+`mobile/` is an Expo Router application and independent package boundary whose runtime entry point is `expo-router/entry` from `mobile/package.json`.
+
+Composition and flow:
+
+1. `mobile/app/_layout.tsx` creates the root stack and installs `mobile/src/providers/AppProviders.tsx`.
+2. `mobile/app/index.tsx` redirects into the public sign-in route.
+3. Files under `mobile/app/` are route entry points for auth, student, parent, notification, and blocked-account screens.
+4. Route entries delegate journey rendering and data contracts to `mobile/src/features/` and shared state components in `mobile/src/ui/`.
+5. `mobile/src/services/api/mobileApiClient.ts` is the authenticated API boundary and obtains a current Cognito access token from `mobile/src/services/auth/amplifyAuth.ts` for each request.
+
+The mobile client recognizes only `student` and `parent` product roles. `mobile/src/navigation/routes.ts` holds the route/guard/deep-link contract, while notification targets are translated and revalidated after sign-in, account readiness, and role checks in `mobile/src/services/notifications/deepLinks.ts`. Deep links are navigation hints, never authorization.
+
+Mobile data is intentionally split by authority:
+
+- Online mutations, including question submission, teacher help, billing, subscription actions, and challenge answers, remain server-authoritative.
+- Approved read-only summaries may use the SQLite read-through boundary in `mobile/src/services/offline/` and must expose stale state.
+- Auth tokens stay under Amplify session management; local secure storage is restricted to non-token session metadata and is cleared with cached state during sign-out.
+- Push registration uses Expo notification tokens and the backend notification endpoints; provider credentials and physical-device evidence remain release prerequisites rather than source-code fallbacks.
+
+The mobile configuration root is `mobile/src/config/mobileConfig.ts`. It reads only public runtime coordinates, distinguishes development/preview/production channels, and enforces no-demo-fallback behavior for release builds.
+
+## Planning And Evidence Boundary
+
+`.planning/` is a versioned engineering-control plane, not application runtime input. Top-level `PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md`, and `config.json` describe the active milestone and workflow state. Historical milestone records live under `.planning/milestones/`; active or retained phase workspaces live under `.planning/phases/<phase-number>-<slug>/`.
+
+Phase workspaces use numbered plans and summaries plus lifecycle evidence such as `*-CONTEXT.md`, `*-RESEARCH.md`, `*-VALIDATION.md`, `*-VERIFICATION.md`, and `*-REVIEW.md`. Exact artifact names vary when a phase needs a domain-specific audit, runbook, release gate, or evidence ledger. `.planning/codebase/` contains the current whole-repository maps, while `.planning/research/` and `.planning/debug/` retain cross-phase research and resolved diagnostic narratives.
+
+`docs/audit/` is the durable full-project audit boundary. `docs/security/` contains generated or source-bound security evidence intended for deterministic checks and review. Neither directory should contain secrets, raw credentials, tokens, or private provider payloads.
+
+## Terminology Boundary
+
+`teacher` is the sole active human-help role and API term. The older role label appears only in rejected historical evidence and the exact semantic allowlist at `docs/security/tutor-term-allowlist.json`; it must not name current routes, request fields, capabilities, or product behavior.
 
 ## Data Model Shape
 
@@ -162,7 +211,7 @@ Repository-backed entities:
 
 Route-local direct table use:
 
-- Conversations and tutor notes in `src/stoa/routers/conversations.py` and `src/stoa/routers/tutors.py`
+- Conversations and teacher-help notes in `src/stoa/routers/conversations.py` and the teacher route boundary.
 - Student profile updates in `src/stoa/routers/students.py`
 - Admin scans in `src/stoa/routers/admin.py`
 - Parent child lookups in `src/stoa/routers/parents.py`

@@ -1,97 +1,94 @@
 ---
-last_mapped_commit: 2026-06-02
+last_mapped_commit: ddd2a559cb3f5c82345252fdef0d4c948f0c2155
+date: 2026-07-15
 ---
 
 # Conventions
 
-**Mapped:** 2026-06-02
-**Scope:** Full repository
+**Mapped:** 2026-07-15
+**Scope:** Whole-repository reference, incrementally refreshed from `.gitignore`, `.planning/`, `docs/`, and `mobile/`
 
-## Code Style
+## Python Style And Typing
 
-- Python code is formatted in a conventional FastAPI style with route decorators and route-local request/response models.
-- Ruff is configured in `pyproject.toml` with line length `100` and target `py312`.
-- Imports are mostly grouped as standard library, third-party, then local package imports.
-- Module docstrings are used across most source files to explain route or service purpose.
+- Backend code follows conventional FastAPI organization: route decorators, route-local request/response models, and centrally attached routers in `src/stoa/main.py`.
+- Ruff is configured in `pyproject.toml` for a 100-character line length and Python 3.12.
+- Imports generally group standard-library, third-party, and local package imports; module docstrings explain the purpose of most source modules.
+- Modern annotations such as `str | None` are preferred. Pydantic models define most public request and response schemas, while a smaller set of broad or evolving contracts still use raw `dict` values.
+- Repository helpers conventionally return `dict | None` or `list[dict]`.
 
-## Typing
+## FastAPI And Dependency Patterns
 
-- Modern Python union syntax is used, for example `str | None` in `src/stoa/routers/auth.py` and `src/stoa/config.py`.
-- Pydantic models define most API request and response schemas.
-- Some endpoints accept or return raw `dict`, especially where the frontend contract is broad or still evolving, such as `src/stoa/routers/practice.py` and `src/stoa/routers/tutors.py`.
-- Repository helpers return `dict | None` or `list[dict]`.
+- Each route module owns an `APIRouter`; `src/stoa/main.py` is the composition point.
+- Authenticated endpoints use dependencies such as `Depends(get_current_user)` and exact role/capability dependencies rather than handler-local authentication.
+- Settings are injected with `Depends(get_settings)` where practical, although some modules still import the cached global from `src/stoa/config.py`.
+- Cached AWS factories live in `src/stoa/deps.py`; some services still instantiate `boto3` clients directly, so tests often replace provider boundaries explicitly.
+- The current active role vocabulary is student, parent, teacher, and administrator. Public registration is restricted to student and parent; privileged activation follows separate reviewed flows.
 
-## FastAPI Patterns
+## DynamoDB And Time Patterns
 
-- Each route module owns an `APIRouter`.
-- Routers are attached centrally in `src/stoa/main.py`.
-- Auth-protected endpoints use `Depends(get_current_user)` or `Depends(require_role(...))`.
-- Settings are injected with `Depends(get_settings)` when route code needs config.
-- AWS clients are sometimes injected through dependencies, as in `src/stoa/routers/files.py`; elsewhere they are created directly with `boto3.client`.
+- DynamoDB uses manually composed `PK`/`SK` values in a single-table style. Repositories use `Key`/`Attr`, and updates usually build explicit `UpdateExpression` strings.
+- Query access is preferred when keys or GSIs exist; administrative aggregate flows may still scan.
+- Reserved attribute names are mapped through `ExpressionAttributeNames` where needed.
+- Timestamps are ISO strings. New security tests and plans prefer injected or frozen clocks; legacy implementation mixes `datetime.utcnow()` with timezone-aware UTC values.
 
-## Role Pattern
+## Error Handling And Public Contracts
 
-- `src/stoa/deps.py` provides `require_role(*roles)` as a dependency factory.
-- Roles are resolved on the JWT claims dictionary and stored as `claims["role"]`.
-- Group names map to roles in `src/stoa/deps.py`: `students`, `parents`, `teachers`, and `admins`.
-- Frontend `tutor` maps to backend `teacher` in `src/stoa/routers/auth.py`.
-- Some tutor routes accept both `teacher` and `tutor`, for example `src/stoa/routers/tutors.py`.
+- Route validation and authorization failures use `HTTPException`; provider `ClientError` values are normalized before reaching clients.
+- The public identity boundary uses stable, allowlisted error shapes. `docs/security/client-error-actions.json` is the checked client action registry for HTTP statuses, safe copy, retry policy, and correlation-ID handling.
+- Unknown provider failures become generic dependency failures; provider codes, payloads, tokens, and internal diagnostics must not appear in public responses or evidence.
+- Non-critical AI/AWS side effects may still catch broad exceptions and continue. Tests must assert side effects and logs so these branches do not hide regressions.
+- API responses often use camelCase for client compatibility while Python internals and request payload adapters commonly use snake_case.
 
-## Configuration Pattern
+## Mobile TypeScript And Expo Style
 
-- `src/stoa/config.py` uses `BaseSettings` with `.env` loading.
-- `get_settings()` is `lru_cache`-decorated.
-- The module also creates a global `settings = get_settings()`.
-- Several modules import the global `settings` directly, for example `src/stoa/db/dynamodb.py`, `src/stoa/services/ai_service.py`, and `src/stoa/services/rate_limit.py`.
+- `mobile/tsconfig.json` extends Expo defaults, enables `strict`, and maps `@/*` to `mobile/src/*`.
+- `mobile/app/` follows Expo Router file-based routing. Shared behavior lives under `mobile/src/`, grouped by `features/`, `services/`, `release/`, `navigation/`, `config/`, `providers/`, `i18n/`, and `ui/`.
+- Exported data contracts are `type` aliases with discriminated string unions. Examples include `MobileSession` in `mobile/src/services/auth/authTypes.ts` and `DeepLinkValidation` in `mobile/src/services/notifications/deepLinks.ts`.
+- Type-only dependencies use `import type`. Internal imports use the `@/` alias; close siblings use relative imports.
+- Functions are small named exports or typed factories. API modules such as `mobile/src/features/student/studentApi.ts` and `mobile/src/features/parent/parentApi.ts` accept the shared client and return endpoint methods.
+- Boundary values are encoded with `encodeURIComponent`; request adapters translate TypeScript camelCase fields into backend snake_case fields.
+- Native screens use function components and `StyleSheet.create`, as in `mobile/src/ui/StateCard.tsx`; provider composition is centralized in `mobile/src/providers/AppProviders.tsx`.
+- Immutable contract fixtures use `as const`, for example `mobile/src/i18n/mobileCopy.ts` and release telemetry field allow/deny lists.
 
-## AWS Client Pattern
+## Mobile State And Safety Patterns
 
-- `src/stoa/deps.py` defines cached client/resource factories: DynamoDB, S3, Bedrock, Rekognition, and SQS.
-- Some modules bypass those factories and instantiate clients inline with `boto3.client`, including `src/stoa/services/ai_service.py`, `src/stoa/services/ocr_service.py`, `src/stoa/services/notify_service.py`, and Cognito helpers.
-- DynamoDB table access is centralized in `src/stoa/db/dynamodb.py`, but many routers use `get_table()` directly rather than repository abstractions.
+- Routes are declared as explicit arrays in `mobile/src/navigation/routes.ts`, with a path, label, guard, and deep-link flag.
+- Screen contracts in `mobile/src/features/student/studentScreens.ts` and `mobile/src/features/parent/parentScreens.ts` enumerate endpoint dependencies, supported UI states, offline eligibility, and online-only mutations.
+- Cached reads are typed and TTL-bound in `mobile/src/services/offline/readThroughCache.ts`. Mutations remain server-authoritative and are not replayed as offline writes.
+- TanStack Query defaults in `mobile/src/providers/AppProviders.tsx` permit one query retry and no mutation retries.
+- Authentication uses Amplify wrappers in `mobile/src/services/auth/amplifyAuth.ts`; sign-out clears push registration, query state, and secure metadata through `mobile/src/services/auth/signOutCleanup.ts`.
+- `mobile/src/config/mobileConfig.ts` fails fast on required public configuration, strips a trailing API slash, and defaults no-demo-fallback mode to enabled.
+- Client-visible failures are mapped into support-safe account states in `mobile/src/services/auth/accountState.ts`; raw provider detail is not used as display copy.
+- Deep links are derived from typed targets and revalidated against signed-in, account-ready, and role state in `mobile/src/services/notifications/deepLinks.ts`.
 
-## DynamoDB Pattern
+## Contract Generation And Drift Checks
 
-- The table is single-table style with manually composed `PK` and `SK` values.
-- Repositories use `boto3.dynamodb.conditions.Key` and `Attr`.
-- Updates are usually hand-built `UpdateExpression` strings.
-- Reserved attribute names are handled selectively through `ExpressionAttributeNames`, such as `#s` for status and `#n` for name.
-- Query-based access is preferred where keys or GSIs exist; scans are used for admin, parent, teacher, and tutor aggregate/listing flows.
+- Route authorization is projected into `docs/security/route-authorization-inventory.json`; client failure behavior is projected into `docs/security/client-error-actions.json`.
+- Generators must be deterministic: run generation twice, require byte-identical output, then run `scripts/generate_route_authorization_inventory.py --check` and `scripts/generate_client_error_actions.py --check`.
+- Terminology enforcement is semantic, not a raw zero-occurrence search. The checker consumes only exact negative-input or historical-reconciliation exceptions described by `docs/security/tutor-term-allowlist.json`; active contracts use teacher.
+- `mobile/scripts/validate-mobile-contracts.mjs` is a lightweight static contract check. It verifies required dependencies, the `stoa` scheme, route-group exports, and required environment names without importing the native application.
+- Mobile route and journey declarations should stay aligned across `mobile/src/navigation/routes.ts`, `mobile/src/features/*/*Screens.ts`, and `mobile/docs/JOURNEYS.md`.
 
-## Error Handling
+## Security Evidence Practice
 
-- Route-level validation and authorization failures use `HTTPException`.
-- Cognito `ClientError` is mapped to specific HTTP status codes in `src/stoa/routers/auth.py`.
-- Non-critical AWS/AI side effects often use broad `except Exception` and continue:
-  - OCR in `src/stoa/routers/questions.py`
-  - AI answer generation in `src/stoa/routers/questions.py`
-  - Role self-healing in `src/stoa/deps.py`
-  - Title generation and metadata updates in `src/stoa/routers/conversations.py`
-  - Tutor first-action updates in `src/stoa/routers/tutors.py`
-- Logging exists in AI service, practice router, auth group-add fallback, and conversations; some broad catches are silent.
+- Security evidence is source-bound. `docs/security/phase-472-evidence.md` records exact commands, UTC timestamps, result counts, tested source SHA, and deterministic artifact digests.
+- Evidence reports focused gates separately from the full-suite observation. A known red baseline is never restated as globally green.
+- External checks that were not authorized or configured are recorded as `NOT RUN`, never inferred from local doubles.
+- Representative identifiers and outcomes are redacted. Evidence must exclude credentials, raw provider payloads, tokens, private object keys, prompts, answers, transcripts, and billing payloads.
+- The evidence record states whether network, provider, AWS, or production mutation occurred and records cleanup/limitations for any approved external operation.
+- Cross-phase ownership is explicit: Phase 472 owns its focused authorization regressions, Phase 474 owns deterministic global verification and strict production-configuration fixtures, and Phase 475 owns transaction/atomicity semantics.
+- Mobile release evidence applies the same discipline in `mobile/docs/RELEASE_EVIDENCE.md` and the forbidden-field contracts in `mobile/src/release/deviceQa.ts` and `mobile/src/release/releaseTelemetry.ts`.
 
-## Frontend Contract Style
+## GSD Planning Artifacts
 
-- Several route modules explicitly mention alignment with frontend API contracts.
-- API responses often use camelCase even though internal Python data is snake_case.
-- Auth registration accepts extra onboarding fields with `model_config = {"extra": "allow"}` in `src/stoa/routers/auth.py`.
-- Practice responses translate DynamoDB fields into frontend keys with helpers like `_build_challenge`, `_build_lesson`, and `_build_unit`.
+- `.planning/config.json` enables source-grounded plan review, plan checking, verification, and Nyquist validation; automatic phase advance is disabled.
+- A phase directory conventionally contains `*-CONTEXT.md`, one or more `*-PLAN.md` files, task `*-SUMMARY.md` files, `*-VALIDATION.md`, and `*-VERIFICATION.md`. Review-heavy phases may also contain `*-RESEARCH.md`, `*-PATTERNS.md`, `*-REVIEW.md`, and a discussion log.
+- Plans define scope, threats, requirements, commands, evidence, and cross-phase deferrals before implementation. Summaries record actual changes, commands, deviations, and remaining ownership.
+- Validation maps each task to a requirement, test type, command, file-existence state, and status. Verification independently inspects source and reruns evidence before marking the phase passed.
+- Planning documents use concrete backticked paths and preserve historical observations rather than rewriting earlier evidence to match a later run.
 
-## AI Harness Pattern
+## Repository Hygiene
 
-- `src/stoa/services/ai_service.py` constrains Bedrock calls through a fixed system prompt.
-- Student input is sanitized for prompt-injection patterns before model invocation.
-- The main answer path asks for strict JSON and uses repair/fallback parsing.
-- Output validation checks for trivial output and leaked internal terms.
-- History inclusion filters to student/assistant messages and merges consecutive same-role messages.
-
-## Date and Time Pattern
-
-- Most timestamps are ISO strings.
-- Some files use `datetime.utcnow()`, while others use timezone-aware `datetime.now(timezone.utc)`.
-- Daily limits use UTC calendar dates.
-
-## Comments
-
-- Comments are generally purposeful and explain integration quirks, frontend contract alignment, or AWS/Lambda behavior.
-- `src/stoa/routers/conversations.py` documents the API Gateway buffering limitation for the SSE endpoint.
+- `.gitignore` excludes virtual environments, Python caches, local environment files, build output, Ruff/mypy/pytest caches, coverage HTML, package metadata, and macOS metadata.
+- `.env.example` is intentionally trackable; real `.env` variants are ignored.
+- Generated security JSON is committed evidence and should change only through its deterministic generator/check workflow.
