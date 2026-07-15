@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import wraps
+from typing import Any, Awaitable, Callable, Literal
 
 from fastapi import Depends, HTTPException, Request
 
@@ -45,6 +47,140 @@ class AdminRoutePolicy:
     @property
     def capabilities(self) -> tuple[str, ...]:
         return (self.capability, *self.alternate_capabilities)
+
+
+AdminTargetCardinality = Literal["scalar", "collection", "resolver_collection", "reference_only"]
+
+
+@dataclass(frozen=True, slots=True)
+class AdminTargetProvider:
+    """Executable, route-local handoff from a validated body to exact resources."""
+
+    cardinality: AdminTargetCardinality
+    body_parameter: str
+    target_paths: tuple[str, ...]
+    tuple_fields: tuple[str, ...]
+    maximum: int | None = None
+    required: bool = True
+    reference_only: tuple[str, ...] = ()
+    collection_path: str | None = None
+
+
+def _read_typed_path(value: object, path: str) -> object:
+    current = value
+    for part in path.split("."):
+        if current is None:
+            return None
+        if isinstance(current, dict):
+            current = current.get(part)
+        else:
+            current = getattr(current, part, None)
+    return current
+
+
+def _canonical_coordinate(values: tuple[tuple[str, str], ...]) -> str:
+    """Encode typed coordinates without delimiter ambiguity."""
+
+    return "v1|" + "".join(
+        f"{len(key)}:{key}{len(value)}:{value}" for key, value in values
+    )
+
+
+def _provider_refs(
+    provider: AdminTargetProvider,
+    body: object,
+    request: Request,
+    policy: AdminRoutePolicy,
+    actor: Actor,
+) -> tuple[ResourceRef, ...]:
+    request_values = {**request.query_params, **request.path_params}
+    items: list[object]
+    if provider.collection_path:
+        raw = _read_typed_path(body, provider.collection_path)
+        items = list(raw or ()) if isinstance(raw, (list, tuple)) else []
+    else:
+        items = [body]
+    if provider.maximum is not None and len(items) > provider.maximum:
+        raise ValueError("target collection exceeds declared maximum")
+    if provider.required and not items:
+        raise ValueError("target collection is required")
+
+    refs: list[ResourceRef] = []
+    seen: set[str] = set()
+    for item in items:
+        coordinates: list[tuple[str, str]] = []
+        for field in provider.tuple_fields:
+            body_path = field
+            if provider.collection_path and body_path.startswith(provider.collection_path + "."):
+                body_path = body_path[len(provider.collection_path) + 1 :]
+            body_value = _read_typed_path(item, body_path)
+            request_value = request_values.get(field)
+            if body_value not in (None, "") and request_value not in (None, "") and str(body_value) != str(request_value):
+                raise ValueError("conflicting target coordinates")
+            selected = body_value if body_value not in (None, "") else request_value
+            if selected not in (None, ""):
+                coordinates.append((field, str(selected)))
+        # Path/query coordinates enrich the same scalar tuple.
+        if provider.cardinality == "scalar":
+            present = {key for key, _ in coordinates}
+            for field in policy.target_keys:
+                selected = request_values.get(field)
+                if selected not in (None, "") and field not in present:
+                    coordinates.append((field, str(selected)))
+        if not coordinates:
+            if provider.required:
+                raise ValueError("target coordinate is required")
+            continue
+        coordinate = _canonical_coordinate(tuple(coordinates))
+        if coordinate in seen:
+            raise ValueError("duplicate canonical target")
+        seen.add(coordinate)
+        values = dict(coordinates)
+        student_id = str(
+            values.get("student_id")
+            or values.get("user_id")
+            or values.get("parent_id")
+            or actor.user_id
+        )
+        refs.append(ResourceRef(policy.resource_type, coordinate, student_id, relationship_known=True))
+    if not refs and not provider.required:
+        refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+    return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+
+
+def admin_target_provider(provider: AdminTargetProvider):
+    """Wrap a registered endpoint so validated typed targets are authorized first."""
+
+    def decorate(endpoint: Callable[..., Awaitable[Any]]):
+        @wraps(endpoint)
+        async def wrapped(*args, **kwargs):
+            user = kwargs.get("user")
+            if not isinstance(user, dict) or "_admin_authorization" not in user:
+                raise RuntimeError("typed admin target provider lacks authorization context")
+            context = user["_admin_authorization"]
+            body = kwargs.get(provider.body_parameter)
+            try:
+                refs = _provider_refs(
+                    provider,
+                    body,
+                    context["request"],
+                    context["policy"],
+                    context["actor"],
+                )
+            except (TypeError, ValueError) as exc:
+                error = SecurityDecisionError(
+                    SecurityErrorCode.ACTION_NOT_ALLOWED,
+                    context["correlation_id"],
+                    internal_detail=type(exc).__name__,
+                )
+                raise _admin_http_error(error) from exc
+            await _authorize_admin_refs(refs=refs, **context)
+            return await endpoint(*args, **kwargs)
+
+        wrapped.admin_target_provider = provider  # type: ignore[attr-defined]
+        return wrapped
+
+    return decorate
 
 
 def _policy(capability: str, purpose: AuthorizationPurpose, action: AuthorizationAction, *targets: str,
@@ -232,6 +368,72 @@ async def _target(
     return resource_id, student_id
 
 
+def _admin_http_error(error: SecurityDecisionError) -> HTTPException:
+    return HTTPException(
+        error.status_code,
+        detail=error.public_body(),
+        headers={"X-Correlation-ID": str(error.correlation_id)},
+    )
+
+
+async def _authorize_admin_refs(
+    *,
+    refs: tuple[ResourceRef, ...],
+    request: Request,
+    policy: AdminRoutePolicy,
+    actor: Actor,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
+) -> None:
+    if not refs:
+        raise _admin_http_error(
+            SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
+        )
+    # All decisions are computed first.  No allow evidence can turn a later deny
+    # into a partially released command.
+    decisions: list[tuple[ResourceRef, PolicyDecision]] = []
+    for ref in refs:
+        candidates = [
+            operator_capability_decision(
+                actor,
+                capability=capability,
+                resource=ref,
+                action=policy.action,
+                purpose=policy.purpose,
+            )
+            for capability in policy.capabilities
+            if any(grant.capability == capability for grant in actor.current_grants)
+        ]
+        decision = next((item for item in candidates if item.allowed), candidates[0])
+        decisions.append((ref, decision))
+    denied = next(((ref, decision) for ref, decision in decisions if not decision.allowed), None)
+    if denied is not None:
+        ref, decision = denied
+        decision = await _record_admin_decision(
+            actor=actor,
+            resource=ref,
+            action=policy.action,
+            purpose=policy.purpose,
+            decision=decision,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            decision_kind="admin_target",
+        )
+        raise _admin_http_error(SecurityDecisionError(decision.result_code, correlation_id))
+    # Mandatory per-target durable evidence completes before the endpoint body.
+    for ref, decision in decisions:
+        await _record_admin_decision(
+            actor=actor,
+            resource=ref,
+            action=policy.action,
+            purpose=policy.purpose,
+            decision=decision,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            decision_kind="admin_capability",
+        )
+
+
 async def admin_operation(
     request: Request,
     actor: Actor = Depends(get_actor),
@@ -287,6 +489,22 @@ async def admin_operation(
             detail=error.public_body(),
             headers={"X-Correlation-ID": correlation_id},
         ) from error
+    provider = getattr(getattr(route, "endpoint", None), "admin_target_provider", None)
+    if provider is not None:
+        return {
+            "sub": actor.user_id,
+            "user_id": actor.user_id,
+            "role": actor.role.value,
+            "account_status": actor.account_status.value,
+            "capabilities": {grant.capability: "granted" for grant in actor.current_grants},
+            "_admin_authorization": {
+                "request": request,
+                "policy": policy,
+                "actor": actor,
+                "correlation_id": correlation_id,
+                "audit_sink": audit_sink,
+            },
+        }
     try:
         resource_id, student_id = await _target(request, policy, actor, correlation_id)
     except HTTPException as exc:

@@ -2264,6 +2264,23 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "exercises",
+        "description"
+      ],
+      "required": true,
+      "targetPaths": [
+        "publicLessonId"
+      ],
+      "tupleFields": [
+        "public_lesson_id"
+      ]
+    },
     "authorization": [
       {
         "action": "curriculum_mutation",
@@ -2280,6 +2297,23 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "reason",
+        "expectedPublishedVersionId"
+      ],
+      "required": true,
+      "targetPaths": [
+        "versionId"
+      ],
+      "tupleFields": [
+        "version_id"
+      ]
+    },
     "authorization": [
       {
         "action": "curriculum_mutation",
@@ -2360,6 +2394,23 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "reason",
+        "expectedPublishedVersionId"
+      ],
+      "required": true,
+      "targetPaths": [
+        "versionId"
+      ],
+      "tupleFields": [
+        "version_id"
+      ]
+    },
     "authorization": [
       {
         "action": "curriculum_mutation",
@@ -2376,6 +2427,23 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "reason",
+        "expectedPublishedVersionId"
+      ],
+      "required": true,
+      "targetPaths": [
+        "versionId"
+      ],
+      "tupleFields": [
+        "version_id"
+      ]
+    },
     "authorization": [
       {
         "action": "curriculum_mutation",
@@ -2440,6 +2508,25 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "relationship",
+        "reason"
+      ],
+      "required": true,
+      "targetPaths": [
+        "parent_id",
+        "student_id"
+      ],
+      "tupleFields": [
+        "parent_id",
+        "student_id"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2539,6 +2626,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2559,6 +2671,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "read",
@@ -2579,6 +2716,24 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "collection",
+      "collectionPath": "reports",
+      "maximum": 25,
+      "referenceOnly": [],
+      "required": true,
+      "targetPaths": [
+        "reports.parent_id",
+        "reports.student_id",
+        "reports.week_start"
+      ],
+      "tupleFields": [
+        "reports.parent_id",
+        "reports.student_id",
+        "reports.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2598,6 +2753,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2618,6 +2798,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "read",
@@ -2638,6 +2843,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2658,6 +2888,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2678,6 +2933,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "read",
@@ -2698,6 +2978,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "max_targets",
+        "preview_token",
+        "filters.status"
+      ],
+      "required": true,
+      "targetPaths": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ],
+      "tupleFields": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2717,6 +3020,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "max_targets",
+        "preview_token",
+        "filters.status"
+      ],
+      "required": true,
+      "targetPaths": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ],
+      "tupleFields": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -2736,6 +3062,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "max_targets",
+        "preview_token",
+        "filters.status"
+      ],
+      "required": true,
+      "targetPaths": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ],
+      "tupleFields": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "external_send",
@@ -2755,6 +3104,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "max_targets",
+        "preview_token",
+        "filters.status"
+      ],
+      "required": true,
+      "targetPaths": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ],
+      "tupleFields": [
+        "filters.parent_id",
+        "filters.student_id",
+        "filters.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "external_send",
@@ -2860,6 +3232,31 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "collection",
+      "collectionPath": "references",
+      "maximum": 10,
+      "referenceOnly": [
+        "reason",
+        "release_evidence",
+        "break_glass",
+        "evidence_references"
+      ],
+      "required": true,
+      "targetPaths": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ],
+      "tupleFields": [
+        "references.job_id",
+        "references.parent_id",
+        "references.student_id",
+        "references.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "read",
@@ -2934,6 +3331,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "reason",
+        "operator_note",
+        "release_evidence",
+        "fixture.fixture_name"
+      ],
+      "required": false,
+      "targetPaths": [
+        "fixture.parent_id",
+        "fixture.student_id",
+        "fixture.week_start"
+      ],
+      "tupleFields": [
+        "fixture.parent_id",
+        "fixture.student_id",
+        "fixture.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "external_send",
@@ -2953,6 +3373,29 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "reason",
+        "operator_note",
+        "release_evidence",
+        "fixture.fixture_name"
+      ],
+      "required": false,
+      "targetPaths": [
+        "fixture.parent_id",
+        "fixture.student_id",
+        "fixture.week_start"
+      ],
+      "tupleFields": [
+        "fixture.parent_id",
+        "fixture.student_id",
+        "fixture.week_start"
+      ]
+    },
     "authorization": [
       {
         "action": "export",

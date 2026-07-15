@@ -9,7 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import report_repo, user_repo
-from stoa.security.admin_authorization import admin_operation
+from stoa.security.admin_authorization import (
+    AdminTargetProvider,
+    admin_operation,
+    admin_target_provider,
+)
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
     ModerationCaseListResponse,
@@ -55,6 +59,49 @@ router = APIRouter()
 # signatures stable while removing role as authority.
 def require_role(*_roles: str):
     return admin_operation
+
+
+CURRICULUM_DRAFT_TARGET = AdminTargetProvider(
+    "scalar", "body", ("publicLessonId",), ("public_lesson_id",),
+    reference_only=("exercises", "description"),
+)
+CURRICULUM_VERSION_TARGET = AdminTargetProvider(
+    "scalar", "body", ("versionId",), ("version_id",),
+    reference_only=("reason", "expectedPublishedVersionId"),
+)
+PARENT_BINDING_TARGET = AdminTargetProvider(
+    "scalar", "body", ("parent_id", "student_id"), ("parent_id", "student_id"),
+    reference_only=("relationship", "reason"),
+)
+BULK_REPORT_TARGETS = AdminTargetProvider(
+    "collection", "request",
+    ("reports.parent_id", "reports.student_id", "reports.week_start"),
+    ("reports.parent_id", "reports.student_id", "reports.week_start"),
+    maximum=25,
+    collection_path="reports",
+)
+RECOVERY_FILTER_TARGETS = AdminTargetProvider(
+    "resolver_collection", "request",
+    ("filters.parent_id", "filters.student_id", "filters.week_start"),
+    ("filters.parent_id", "filters.student_id", "filters.week_start"),
+    maximum=25,
+    reference_only=("reason", "max_targets", "preview_token", "filters.status"),
+)
+HANDOFF_FIXTURE_TARGET = AdminTargetProvider(
+    "scalar", "body",
+    ("fixture.parent_id", "fixture.student_id", "fixture.week_start"),
+    ("fixture.parent_id", "fixture.student_id", "fixture.week_start"),
+    required=False,
+    reference_only=("reason", "operator_note", "release_evidence", "fixture.fixture_name"),
+)
+GOVERNANCE_REFERENCE_TARGETS = AdminTargetProvider(
+    "collection", "body",
+    ("references.job_id", "references.parent_id", "references.student_id", "references.week_start"),
+    ("references.job_id", "references.parent_id", "references.student_id", "references.week_start"),
+    maximum=10,
+    collection_path="references",
+    reference_only=("reason", "release_evidence", "break_glass", "evidence_references"),
+)
 
 
 class AdminProvisionCommand(BaseModel):
@@ -865,6 +912,7 @@ async def get_curriculum_analytics_dashboard(
 
 
 @router.post("/curriculum/lessons/drafts", response_model=CurriculumVersionResponse)
+@admin_target_provider(CURRICULUM_DRAFT_TARGET)
 async def create_curriculum_lesson_draft(
     body: CurriculumLessonDraftRequest,
     user: dict = Depends(require_role("admin", "teacher")),
@@ -1019,6 +1067,7 @@ async def request_curriculum_lesson_changes(
 
 
 @router.post("/curriculum/lessons/{public_lesson_id}/publish")
+@admin_target_provider(CURRICULUM_VERSION_TARGET)
 async def publish_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
@@ -1035,6 +1084,7 @@ async def publish_curriculum_lesson_version(
 
 
 @router.post("/curriculum/lessons/{public_lesson_id}/rollback")
+@admin_target_provider(CURRICULUM_VERSION_TARGET)
 async def rollback_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
@@ -1051,6 +1101,7 @@ async def rollback_curriculum_lesson_version(
 
 
 @router.post("/curriculum/lessons/{public_lesson_id}/archive")
+@admin_target_provider(CURRICULUM_VERSION_TARGET)
 async def archive_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
@@ -2013,6 +2064,7 @@ async def list_parent_bindings(
 
 
 @router.post("/parent-bindings/repair", response_model=ParentStudentBindingResponse)
+@admin_target_provider(PARENT_BINDING_TARGET)
 async def repair_parent_binding(
     body: ParentStudentBindingRepairRequest,
     user: dict = Depends(require_role("admin")),
@@ -2087,6 +2139,7 @@ async def get_report_operations(
 
 
 @router.post("/reports/bulk-resend", response_model=BulkReportResendResponse)
+@admin_target_provider(BULK_REPORT_TARGETS)
 async def bulk_resend_report_emails(
     request: BulkReportResendRequest,
     user: dict = Depends(require_role("admin")),
@@ -2142,6 +2195,7 @@ async def bulk_resend_report_emails(
     "/reports/recovery-jobs/resend-email/preview",
     response_model=RecoveryJobPreviewResponse,
 )
+@admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def preview_resend_recovery_job(
     request: RecoveryJobPreviewRequest,
     user: dict = Depends(require_role("admin")),
@@ -2162,6 +2216,7 @@ async def preview_resend_recovery_job(
     "/reports/recovery-jobs/resend-email",
     response_model=RecoveryJobResponse,
 )
+@admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def create_resend_recovery_job(
     request: RecoveryJobCreateRequest,
     user: dict = Depends(require_role("admin")),
@@ -2184,6 +2239,7 @@ async def create_resend_recovery_job(
     "/reports/recovery-jobs/retry-generation/preview",
     response_model=RecoveryJobPreviewResponse,
 )
+@admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def preview_generation_retry_recovery_job(
     request: RecoveryJobPreviewRequest,
     user: dict = Depends(require_role("admin")),
@@ -2204,6 +2260,7 @@ async def preview_generation_retry_recovery_job(
     "/reports/recovery-jobs/retry-generation",
     response_model=RecoveryJobResponse,
 )
+@admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def create_generation_retry_recovery_job(
     request: RecoveryJobCreateRequest,
     user: dict = Depends(require_role("admin")),
@@ -2373,6 +2430,7 @@ async def export_recovery_job_support_package(
 
 
 @router.post("/reports/support-handoff-package")
+@admin_target_provider(HANDOFF_FIXTURE_TARGET)
 async def create_support_handoff_package(
     request: Request,
     body: SupportHandoffPackageRequest,
@@ -2432,6 +2490,7 @@ async def create_support_handoff_package(
 
 
 @router.post("/reports/support-handoff-delivery")
+@admin_target_provider(HANDOFF_FIXTURE_TARGET)
 async def create_support_handoff_delivery(
     request: Request,
     body: SupportHandoffPackageRequest,
@@ -2722,6 +2781,7 @@ async def send_support_handoff_message(
 
 
 @router.post("/reports/audit-retention/status")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def get_audit_retention_status(
     request: Request,
     body: AuditRetentionStatusRequest,
@@ -2736,6 +2796,7 @@ async def get_audit_retention_status(
 
 
 @router.post("/reports/audit-retention/manifest")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def create_audit_retention_manifest(
     request: Request,
     body: AuditRetentionManifestRequest,
@@ -2758,6 +2819,7 @@ async def create_audit_retention_manifest(
 
 
 @router.post("/reports/immutable-evidence/status")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def get_immutable_evidence_status(
     request: Request,
     body: AuditRetentionStatusRequest,
@@ -2772,6 +2834,7 @@ async def get_immutable_evidence_status(
 
 
 @router.post("/reports/immutable-evidence/persist")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def persist_immutable_evidence_manifest(
     request: Request,
     body: ImmutableEvidencePersistRequest,
@@ -2793,6 +2856,7 @@ async def persist_immutable_evidence_manifest(
 
 
 @router.post("/reports/retention-governance/status")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def get_retention_governance_status(
     request: Request,
     body: RetentionGovernanceStatusRequest,
@@ -2833,6 +2897,7 @@ async def record_retention_governance_approval(
 
 
 @router.post("/reports/legal-holds/status")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def get_legal_hold_status(
     request: Request,
     body: AuditRetentionStatusRequest,
@@ -2847,6 +2912,7 @@ async def get_legal_hold_status(
 
 
 @router.post("/reports/legal-holds")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def apply_legal_hold_metadata(
     request: Request,
     body: LegalHoldMetadataRequest,
@@ -2868,6 +2934,7 @@ async def apply_legal_hold_metadata(
 
 
 @router.post("/reports/legal-holds/review")
+@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
 async def record_legal_hold_review_metadata(
     request: Request,
     body: LegalHoldReviewMetadataRequest,

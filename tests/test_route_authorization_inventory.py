@@ -496,11 +496,39 @@ def test_openapi_and_checked_json_are_identical_runtime_projections():
         extension = schema["paths"][item["path"]][item["method"].lower()][
             "x-stoa-authorization"
         ]
-        assert extension == {
+        expected = {
             "classification": item["classification"],
             "identifiers": item["identifiers"],
             "authorization": item["authorization"],
         }
+        if "adminTarget" in item:
+            expected["adminTarget"] = item["adminTarget"]
+        assert extension == expected
+
+
+def test_admin_body_target_provider_is_executable_exact_and_projected(monkeypatch):
+    from stoa.main import app
+    from stoa.security.admin_authorization import AdminTargetProvider
+    from stoa.security.route_inventory import inventory_application, validate_application_inventory
+
+    route = next(
+        route for route in app.routes
+        if isinstance(route, APIRoute) and route.path == "/admin/parent-bindings/repair"
+    )
+    provider = route.endpoint.admin_target_provider
+    assert provider.cardinality == "scalar"
+    assert provider.target_paths == ("parent_id", "student_id")
+    item = next(
+        item for item in inventory_application(app)
+        if item.method == "POST" and item.path == route.path
+    )
+    assert item.admin_target["tupleFields"] == ["parent_id", "student_id"]
+
+    monkeypatch.setattr(route.endpoint, "admin_target_provider", AdminTargetProvider(
+        "scalar", "body", ("student_id",), ("student_id",)
+    ))
+    failures = validate_application_inventory(app)
+    assert any("exactly match" in failure.reason for failure in failures if failure.path == route.path)
 
 
 def test_metadata_on_endpoint_without_dependency_is_rejected():

@@ -12,7 +12,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from stoa.security.admin_authorization import AdminRoutePolicy
+from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvider
 from stoa.security.authorization import AuthorizationSpec, ResourceType
 
 
@@ -45,13 +45,14 @@ class RouteInventoryItem:
     identifiers: tuple[str, ...]
     authorization_specs: tuple[InventorySpec, ...]
     sensitive: bool
+    admin_target: dict[str, Any] | None = None
 
     @property
     def authorization_spec(self) -> InventorySpec | None:
         return self.authorization_specs[0] if self.authorization_specs else None
 
     def projection(self) -> dict[str, Any]:
-        return {
+        projection = {
             "method": self.method,
             "path": self.path,
             "family": self.family,
@@ -60,6 +61,9 @@ class RouteInventoryItem:
             "authorization": [asdict(spec) for spec in self.authorization_specs],
             "sensitive": self.sensitive,
         }
+        if self.admin_target is not None:
+            projection["adminTarget"] = self.admin_target
+        return projection
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +184,29 @@ def _route_identifiers(route: APIRoute) -> tuple[str, ...]:
             names.add(alias)
             names.update(_field_aliases(field.field_info.annotation))
     return tuple(sorted(set(filter(None, (_canonical_identifier(name) for name in names)))))
+
+
+def _route_body_aliases(route: APIRoute) -> tuple[str, ...]:
+    aliases: set[str] = set()
+    for dependant in _walk_dependants(route.dependant):
+        for field in dependant.body_params:
+            aliases.update(_field_aliases(field.field_info.annotation))
+    return tuple(sorted(aliases))
+
+
+def _target_projection(provider: AdminTargetProvider | None) -> dict[str, Any] | None:
+    if provider is None:
+        return None
+    return {
+        "cardinality": provider.cardinality,
+        "bodyParameter": provider.body_parameter,
+        "targetPaths": list(provider.target_paths),
+        "tupleFields": list(provider.tuple_fields),
+        "collectionPath": provider.collection_path,
+        "maximum": provider.maximum,
+        "required": provider.required,
+        "referenceOnly": list(provider.reference_only),
+    }
 
 
 def _inventory_spec(
@@ -408,12 +435,14 @@ def inventory_application(app: FastAPI) -> tuple[RouteInventoryItem, ...]:
         if not isinstance(route, APIRoute):
             continue
         identifiers = _route_identifiers(route)
+        target_projection = _target_projection(getattr(route.endpoint, "admin_target_provider", None))
         for method in sorted(route.methods):
             classification, specs = _classify_route(route, method)
             items.append(RouteInventoryItem(
                 method, route.path, _family(route.path), classification, identifiers,
                 specs, classification not in {"public", "safe-public"}
                 and bool(identifiers or specs or classification == "admin-capability"),
+                target_projection,
             ))
     return tuple(sorted(items, key=lambda item: (item.method, item.path)))
 
@@ -428,6 +457,8 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
         if endpoint_metadata and route.endpoint not in graph_calls - {route.dependant.call}:
             failures.append(InventoryFailure("*", route.path, "metadata is not attached to a dependency"))
         identifiers = _route_identifiers(route)
+        body_aliases = _route_body_aliases(route)
+        provider = getattr(route.endpoint, "admin_target_provider", None)
         for method in sorted(route.methods):
             try:
                 classification, specs = _classify_route(route, method)
@@ -435,7 +466,29 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     method, route.path, _family(route.path), classification, identifiers,
                     specs, classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
+                    _target_projection(provider),
                 )
+                if classification == "admin-capability":
+                    policy = next(
+                        getattr(dependant.call, "admin_policy_classifier")(method, route.path)
+                        for dependant in _walk_dependants(route.dependant)
+                        if getattr(dependant.call, "admin_policy_classifier", None) is not None
+                    )
+                    target_names = {_normalized_identifier(value) for value in policy.target_keys}
+                    observed = {
+                        alias for alias in body_aliases
+                        if _normalized_identifier(alias.rsplit(".", 1)[-1]) in target_names
+                    }
+                    if observed and provider is None:
+                        raise ValueError("body target lacks an executable typed provider")
+                    if provider is not None:
+                        declared = set(provider.target_paths)
+                        if observed != declared:
+                            raise ValueError("typed provider target paths do not exactly match policy/body targets")
+                        if provider.cardinality in {"collection", "resolver_collection"} and provider.maximum is None:
+                            raise ValueError("typed collection provider lacks a declared maximum")
+                        if declared & set(provider.reference_only):
+                            raise ValueError("evidence-only field is promoted as an authorization target")
                 marker = getattr(route.endpoint, "stoa_route_classification", None)
                 reason = _validate_identifier_policy(item, marker)
                 if reason:
@@ -458,11 +511,14 @@ def install_authorization_openapi(app: FastAPI) -> None:
         schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
         for item in inventory_application(app):
             operation = schema["paths"][item.path][item.method.lower()]
-            operation["x-stoa-authorization"] = {
+            extension = {
                 "classification": item.classification,
                 "identifiers": list(item.identifiers),
                 "authorization": [asdict(spec) for spec in item.authorization_specs],
             }
+            if item.admin_target is not None:
+                extension["adminTarget"] = item.admin_target
+            operation["x-stoa-authorization"] = extension
         app.openapi_schema = schema
         return schema
 
