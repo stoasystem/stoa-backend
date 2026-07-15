@@ -449,7 +449,7 @@ def test_curriculum_quality_endpoint_returns_aggregate_privacy_boundary(monkeypa
             }
         ],
     )
-    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher", "grantCapabilities": ["curriculum_analytics_reader"], "grantScope": "global"}, include_admin=True))
 
     response = client.get("/admin/curriculum/analytics/content-quality?contentType=exercise")
 
@@ -489,7 +489,7 @@ def test_curriculum_warehouse_readiness_and_export_are_aggregate_only(monkeypatc
             }
         ],
     )
-    client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin", "grantCapabilities": ["curriculum_analytics_reader", "curriculum_analytics_exporter"], "grantScope": "global"}, include_admin=True))
 
     readiness = client.get("/admin/curriculum/analytics/warehouse-readiness")
     export = client.get("/admin/curriculum/analytics/warehouse-export?contentType=exercise")
@@ -549,7 +549,7 @@ def test_curriculum_analytics_dashboard_summarizes_operator_actions(monkeypatch)
             },
         ],
     )
-    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher", "grantCapabilities": ["curriculum_analytics_reader"], "grantScope": "global"}, include_admin=True))
 
     response = client.get("/admin/curriculum/analytics/dashboard?subjectId=math")
 
@@ -567,7 +567,7 @@ def test_curriculum_analytics_dashboard_summarizes_operator_actions(monkeypatch)
 
 def test_curriculum_analytics_dashboard_empty_state(monkeypatch):
     _install_analytics_repo(monkeypatch, metrics=[])
-    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher"}, include_admin=True))
+    client = TestClient(_app_for_user({"sub": "teacher-1", "role": "teacher", "grantCapabilities": ["curriculum_analytics_reader"], "grantScope": "global"}, include_admin=True))
 
     response = client.get("/admin/curriculum/analytics/dashboard")
 

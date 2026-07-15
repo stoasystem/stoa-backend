@@ -18,6 +18,7 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 def actor_from_user(user: dict) -> Actor:
     role = CanonicalRole(user["role"])
     capabilities = user.get("grantCapabilities")
+    legacy_operator_capabilities = capabilities is None and bool(user.get("capabilities"))
     if capabilities is None and user.get("capabilities"):
         capabilities = tuple(user["capabilities"])
     if capabilities is None and role is CanonicalRole.ADMIN:
@@ -29,12 +30,6 @@ def actor_from_user(user: dict) -> Actor:
             "admin_identity_manager",
             "student_support_lookup",
             "student_safety_review",
-            "curriculum_analytics_reader",
-            "curriculum_analytics_exporter",
-            "curriculum_migration_operator",
-            "curriculum_reviewer",
-            "curriculum_publisher",
-            "curriculum_author",
             "parent_binding_repairer",
             "billing_operations_reader",
             "billing_operations_manager",
@@ -64,7 +59,11 @@ def actor_from_user(user: dict) -> Actor:
     scopes = (
         (str(explicit_scope),)
         if explicit_scope
-        else (("global", "student:student-1") if role is CanonicalRole.ADMIN else ("student:student-1",))
+        else (
+            ("global", "student:student-1")
+            if role is CanonicalRole.ADMIN
+            else (("global",) if legacy_operator_capabilities else ("student:student-1",))
+        )
     )
     grants = tuple(
         CapabilityGrant(name, scope, 1)

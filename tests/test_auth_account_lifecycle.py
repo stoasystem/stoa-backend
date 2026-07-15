@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user
 from stoa.routers import admin, auth
 from actor_helpers import install_actor_overrides
 

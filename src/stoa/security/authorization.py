@@ -538,7 +538,8 @@ def operator_capability_permits(
 ) -> bool:
     """Central exact-capability check for explicitly classified operator routes."""
     operator_role = actor.role is CanonicalRole.ADMIN or (
-        actor.role is CanonicalRole.TEACHER and capability.startswith("curriculum_")
+        actor.role is CanonicalRole.TEACHER
+        and (capability.startswith("curriculum_") or capability == "migration_operator")
     )
     if not actor.can_authorize or not operator_role:
         return False

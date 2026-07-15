@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service
 from actor_helpers import install_actor_overrides
@@ -142,7 +141,7 @@ def test_curriculum_authoring_requires_explicit_capability(monkeypatch, role):
     response = client.post("/admin/curriculum/lessons/drafts", json=_draft_payload())
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "curriculum_capability_required"
+    assert response.json()["detail"]["code"] == "action_not_allowed"
 
 
 def test_curriculum_ignores_claim_profile_and_permission_capabilities():
@@ -449,4 +448,4 @@ def test_curriculum_publish_actions_require_publisher_capability(monkeypatch):
     )
 
     assert published.status_code == 403
-    assert published.json()["detail"]["required"] == [curriculum_ops_service.PUBLISHER_CAPABILITY]
+    assert published.json()["detail"]["code"] == "action_not_allowed"

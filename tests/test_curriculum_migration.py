@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_current_user
 from stoa.routers import admin
 from actor_helpers import install_actor_overrides
 from stoa.services import curriculum_migration_service, curriculum_ops_service
@@ -167,7 +166,7 @@ def test_curriculum_migration_requires_operator_or_publisher_capability(monkeypa
     denied_student = student_with_capability.post("/admin/curriculum/migrations/dry-run", json=_manifest())
 
     assert denied_teacher.status_code == 403
-    assert denied_teacher.json()["detail"]["code"] == "curriculum_capability_required"
+    assert denied_teacher.json()["detail"]["code"] == "action_not_allowed"
     assert denied_student.status_code == 403
     assert state["versions"] == {}
 

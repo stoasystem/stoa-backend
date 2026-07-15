@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.db.repositories import report_repo
-from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import release_evidence_service
 from actor_helpers import install_actor_overrides

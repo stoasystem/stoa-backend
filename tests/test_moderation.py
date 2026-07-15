@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.deps import get_actor, get_current_user
+from stoa.deps import get_actor
 from stoa.routers import admin, questions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import moderation_service

@@ -25,11 +25,17 @@ class AdminRoutePolicy:
     action: AuthorizationAction
     resource_type: ResourceType = ResourceType.OPERATOR_RESOURCE
     target_keys: tuple[str, ...] = ()
+    alternate_capabilities: tuple[str, ...] = ()
+
+    @property
+    def capabilities(self) -> tuple[str, ...]:
+        return (self.capability, *self.alternate_capabilities)
 
 
 def _policy(capability: str, purpose: AuthorizationPurpose, action: AuthorizationAction, *targets: str,
-            resource_type: ResourceType = ResourceType.OPERATOR_RESOURCE) -> AdminRoutePolicy:
-    return AdminRoutePolicy(capability, purpose, action, resource_type, targets)
+            resource_type: ResourceType = ResourceType.OPERATOR_RESOURCE,
+            alternate_capabilities: tuple[str, ...] = ()) -> AdminRoutePolicy:
+    return AdminRoutePolicy(capability, purpose, action, resource_type, targets, alternate_capabilities)
 
 
 def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
@@ -53,26 +59,41 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
     if path.startswith("/admin/moderation"):
         return _policy("student_safety_review", AuthorizationPurpose.MODERATION_OPERATIONS, action, "case_id")
     if path.startswith("/admin/curriculum"):
+        alternates: tuple[str, ...] = ()
         if "/analytics/" in path:
             capability = "curriculum_analytics_reader" if "warehouse-export" not in path else "curriculum_analytics_exporter"
             op_action = AuthorizationAction.EXPORT if "warehouse-export" in path else AuthorizationAction.READ
         elif "/migrations/" in path:
-            capability = "curriculum_migration_operator"
+            capability = "migration_operator"
             op_action = action
-        elif method == "GET" or "preview" in path or "diff" in path or "audit" in path or "worklist" in path:
+            alternates = ("curriculum_publisher",)
+        elif "validation-preview" in path or path.endswith("/preview"):
+            capability = "curriculum_author"
+            op_action = AuthorizationAction.READ
+            alternates = ("curriculum_reviewer", "curriculum_publisher")
+        elif "diff" in path or "audit" in path or "worklist" in path or method == "GET":
             capability = "curriculum_reviewer"
             op_action = AuthorizationAction.READ
+            alternates = ("curriculum_publisher",)
+        elif "/submit-review" in path:
+            capability = "curriculum_author"
+            op_action = AuthorizationAction.CURRICULUM_MUTATION
+            alternates = ()
         elif any(marker in path for marker in ("/approve", "/request-changes", "/submit-review")):
             capability = "curriculum_reviewer"
             op_action = AuthorizationAction.CURRICULUM_MUTATION
+            alternates = ("curriculum_publisher",)
         elif any(marker in path for marker in ("/publish", "/rollback", "/archive")):
             capability = "curriculum_publisher"
             op_action = AuthorizationAction.CURRICULUM_MUTATION
+            alternates = ()
         else:
             capability = "curriculum_author"
             op_action = AuthorizationAction.CURRICULUM_MUTATION
+            alternates = ()
         return _policy(capability, AuthorizationPurpose.CURRICULUM_OPERATIONS, op_action,
-                       "public_lesson_id", "version_id", "migration_id")
+                       "public_lesson_id", "version_id", "migration_id",
+                       alternate_capabilities=alternates)
     if path.startswith("/admin/users"):
         capability = "admin_identity_manager" if method != "GET" else "student_support_lookup"
         op_action = AuthorizationAction.MANAGE_PRIVILEGE if method != "GET" else AuthorizationAction.LOOKUP
@@ -190,20 +211,29 @@ async def admin_operation(
         error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, internal_detail=str(exc))
         raise HTTPException(error.status_code, detail=error.public_body()) from exc
     eligible_role = actor.role.value == "admin" or (
-        actor.role.value == "teacher" and policy.capability.startswith("curriculum_")
+        actor.role.value == "teacher"
+        and any(
+            capability.startswith("curriculum_") or capability == "migration_operator"
+            for capability in policy.capabilities
+        )
     )
     if (
         not actor.can_authorize
         or not eligible_role
-        or not any(grant.capability == policy.capability for grant in actor.current_grants)
+        or not any(grant.capability in policy.capabilities for grant in actor.current_grants)
     ):
         error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
         raise HTTPException(error.status_code, detail=error.public_body()) from error
     resource_id, student_id = await _target(request, policy, actor)
     ref = ResourceRef(policy.resource_type, resource_id, student_id, relationship_known=True)
+    selected_capability = next(
+        capability
+        for capability in policy.capabilities
+        if any(grant.capability == capability for grant in actor.current_grants)
+    )
     if not operator_capability_permits(
         actor,
-        capability=policy.capability,
+        capability=selected_capability,
         resource=ref,
         action=policy.action,
         purpose=policy.purpose,
@@ -215,6 +245,9 @@ async def admin_operation(
         "user_id": actor.user_id,
         "role": actor.role.value,
         "account_status": actor.account_status.value,
+        "capabilities": {
+            grant.capability: "granted" for grant in actor.current_grants
+        },
     }
 
 
