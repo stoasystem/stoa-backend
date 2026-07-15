@@ -34,6 +34,54 @@ class GrantSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class GrantCoordinate:
+    """Lossless immutable address of one capability grant revision."""
+
+    capability: str
+    scope: str
+    generation: int
+    grant_id: str
+    version: int
+
+    @classmethod
+    def from_snapshot(cls, grant: GrantSnapshot) -> GrantCoordinate:
+        return cls(
+            capability=grant.capability,
+            scope=grant.scope,
+            generation=grant.generation,
+            grant_id=grant.grant_id,
+            version=grant.version,
+        )
+
+    def validate(self) -> None:
+        strings = (self.capability, self.scope, self.grant_id)
+        if any(not isinstance(value, str) or not value.strip() for value in strings):
+            raise ValueError("complete grant coordinate fields are required")
+        if any(value != value.strip() for value in strings):
+            raise ValueError("grant coordinate fields must be canonical")
+        if (
+            isinstance(self.generation, bool)
+            or isinstance(self.version, bool)
+            or not isinstance(self.generation, int)
+            or not isinstance(self.version, int)
+            or self.generation < 1
+            or self.version < 1
+        ):
+            raise ValueError("positive grant generation and version are required")
+
+    def canonical_material(self) -> str:
+        return "\x1f".join(
+            (
+                self.capability,
+                self.scope,
+                str(self.generation),
+                self.grant_id,
+                str(self.version),
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class IdentitySnapshot:
     provider_subject: str
     issuer: str
@@ -51,6 +99,14 @@ class ReconciliationAction:
     action: str
     reason: str
     target: str | None = None
+    grant_coordinate: GrantCoordinate | None = None
+
+    def __post_init__(self) -> None:
+        if self.action == "remove_grant":
+            if self.grant_coordinate is None or self.target is not None:
+                raise ValueError("remove_grant requires one full grant coordinate")
+        elif self.grant_coordinate is not None:
+            raise ValueError("grant coordinates are valid only for remove_grant")
 
     @property
     def privilege_increase(self) -> bool:
@@ -114,7 +170,7 @@ class TighteningAdapter(Protocol):
     def suspend_local(self, user_id: str, *, action_id: str) -> None: ...
     def remove_group(self, provider_subject: str, group: str, *, action_id: str) -> None: ...
     def global_sign_out(self, provider_subject: str, *, action_id: str) -> None: ...
-    def revoke_grant(self, user_id: str, grant: GrantSnapshot, *, action_id: str) -> None: ...
+    def revoke_grant(self, user_id: str, grant: GrantCoordinate, *, action_id: str) -> None: ...
     def append_audit(self, item_id: str, action: str, *, action_id: str) -> None: ...
 
 
@@ -148,9 +204,8 @@ class RepositoryTighteningAdapter:
     def global_sign_out(self, provider_subject: str, *, action_id: str) -> None:
         self._provider.global_sign_out(provider_subject, action_id=action_id)
 
-    def revoke_grant(self, user_id: str, grant: GrantSnapshot, *, action_id: str) -> None:
-        if grant.status != "active":
-            return
+    def revoke_grant(self, user_id: str, grant: GrantCoordinate, *, action_id: str) -> None:
+        grant.validate()
         instant = self._clock()
         changed_at = instant.isoformat() if hasattr(instant, "isoformat") else str(instant)
         self._capabilities.revoke_capability(
@@ -257,8 +312,23 @@ def plan_identity(snapshot: IdentitySnapshot, *, run_id: str) -> ReconciliationI
             actions.append(ReconciliationAction("remove_group", reason, group))
         if privileged_groups or legacy_groups:
             actions.append(ReconciliationAction("global_sign_out", reason))
-        for grant in snapshot.grants:
-            actions.append(ReconciliationAction("remove_grant", reason, grant.grant_id))
+        for grant in sorted(
+            snapshot.grants,
+            key=lambda value: (
+                value.capability,
+                value.scope,
+                value.generation,
+                value.grant_id,
+                value.version,
+            ),
+        ):
+            actions.append(
+                ReconciliationAction(
+                    "remove_grant",
+                    reason,
+                    grant_coordinate=GrantCoordinate.from_snapshot(grant),
+                )
+            )
 
     before = _safe_state(snapshot)
     after = dict(before)
@@ -295,6 +365,7 @@ def reconcile_inventory(
         raise PermissionError("apply requires separate confirmation and the approved run id")
     if adapter is None:
         raise PermissionError("apply requires an injected tightening adapter")
+    _validate_apply_actions(items)
     store = checkpoints or MemoryCheckpointStore()
     snapshots_by_id = {
         redacted_item_id(item.issuer, item.provider_subject, item.user_id or "missing"): item
@@ -304,8 +375,8 @@ def reconcile_inventory(
     skipped: list[str] = []
     for item in items:
         snapshot = snapshots_by_id[item.item_id]
-        for index, action in enumerate(item.actions):
-            action_id = f"{item.checkpoint}:{index}:{action.action}"
+        for action in item.actions:
+            action_id = _action_id(item, action)
             if store.contains(action_id):
                 skipped.append(action_id)
                 continue
@@ -319,14 +390,45 @@ def reconcile_inventory(
             elif action.action == "global_sign_out":
                 adapter.global_sign_out(snapshot.provider_subject, action_id=action_id)
             elif action.action == "remove_grant" and snapshot.user_id:
-                grant = next(grant for grant in snapshot.grants if grant.grant_id == action.target)
-                adapter.revoke_grant(snapshot.user_id, grant, action_id=action_id)
+                adapter.revoke_grant(
+                    snapshot.user_id,
+                    action.grant_coordinate,
+                    action_id=action_id,
+                )
             else:
                 raise RuntimeError(f"unsupported automatic action: {action.action}")
             adapter.append_audit(item.item_id, action.action, action_id=action_id)
             store.mark(action_id)
             applied.append(action_id)
     return ReconciliationReport(run_id, "apply-tightening", items, tuple(applied), tuple(skipped))
+
+
+def _validate_apply_actions(items: tuple[ReconciliationItem, ...]) -> None:
+    """Fail before the first mutation if any planned grant address is unsafe."""
+    seen: set[tuple[str, GrantCoordinate]] = set()
+    for item in items:
+        for action in item.actions:
+            if action.action != "remove_grant":
+                continue
+            coordinate = action.grant_coordinate
+            if coordinate is None:  # Defensive for deserialized/legacy callers.
+                raise ValueError("remove_grant requires one full grant coordinate")
+            coordinate.validate()
+            identity = (item.item_id, coordinate)
+            if identity in seen:
+                raise ValueError("duplicate grant coordinate in reconciliation item")
+            seen.add(identity)
+
+
+def _action_id(item: ReconciliationItem, action: ReconciliationAction) -> str:
+    if action.grant_coordinate is not None:
+        semantic_target = action.grant_coordinate.canonical_material()
+    else:
+        semantic_target = action.target or ""
+    digest = sha256(
+        "\x1f".join((item.item_id, action.action, semantic_target)).encode("utf-8")
+    ).hexdigest()[:24]
+    return f"{item.checkpoint}:{action.action}:{digest}"
 
 
 _CASES = {
@@ -347,7 +449,7 @@ class _RecordingAdapter:
     def suspend_local(self, user_id: str, *, action_id: str) -> None: pass
     def remove_group(self, provider_subject: str, group: str, *, action_id: str) -> None: pass
     def global_sign_out(self, provider_subject: str, *, action_id: str) -> None: pass
-    def revoke_grant(self, user_id: str, grant: GrantSnapshot, *, action_id: str) -> None: pass
+    def revoke_grant(self, user_id: str, grant: GrantCoordinate, *, action_id: str) -> None: pass
     def append_audit(self, item_id: str, action: str, *, action_id: str) -> None: pass
 
 

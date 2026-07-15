@@ -8,6 +8,7 @@ import importlib.util
 from pathlib import Path
 
 from stoa.security.reconciliation import (
+    GrantCoordinate,
     GrantSnapshot,
     IdentitySnapshot,
     MemoryCheckpointStore,
@@ -224,6 +225,91 @@ def test_dry_run_safe_projection_contains_no_raw_identity_provider_or_group_valu
     assert report.added_grants == ()
 
 
+def test_grant_actions_carry_full_coordinates_and_are_order_independent_and_redacted():
+    from stoa.db.repositories import capability_repo
+
+    grants = (
+        GrantSnapshot(
+            "shared-id", capability_repo.STUDENT_SUPPORT_LOOKUP,
+            "student:student-2", generation=4, version=3,
+        ),
+        GrantSnapshot(
+            "shared-id", capability_repo.ADMIN_IDENTITY_MANAGER,
+            "global", generation=2, version=7,
+        ),
+    )
+    forward = reconcile_inventory(
+        [_snapshot(approved=False, grants=grants)], run_id="coordinate-run"
+    )
+    reverse = reconcile_inventory(
+        [_snapshot(approved=False, grants=tuple(reversed(grants)))], run_id="coordinate-run"
+    )
+    coordinates = tuple(
+        action.grant_coordinate
+        for action in forward.items[0].actions
+        if action.action == "remove_grant"
+    )
+    assert coordinates == tuple(
+        action.grant_coordinate
+        for action in reverse.items[0].actions
+        if action.action == "remove_grant"
+    )
+    assert coordinates == (
+        GrantCoordinate(
+            capability_repo.ADMIN_IDENTITY_MANAGER, "global", 2, "shared-id", 7
+        ),
+        GrantCoordinate(
+            capability_repo.STUDENT_SUPPORT_LOOKUP,
+            "student:student-2", 4, "shared-id", 3,
+        ),
+    )
+    rendered = repr(forward.safe_projection())
+    for secret in ("shared-id", "student:student-2", "admin_identity_manager"):
+        assert secret not in rendered
+
+
+@pytest.mark.parametrize(
+    "coordinate",
+    [
+        GrantCoordinate("", "global", 1, "grant-1", 1),
+        GrantCoordinate("admin_identity_manager", "", 1, "grant-1", 1),
+        GrantCoordinate("admin_identity_manager", "global", 0, "grant-1", 1),
+        GrantCoordinate("admin_identity_manager", "global", 1, "grant-1", 0),
+        GrantCoordinate("admin_identity_manager", " global", 1, "grant-1", 1),
+    ],
+)
+def test_invalid_grant_coordinate_fails_before_any_apply_mutation(coordinate):
+    grant = GrantSnapshot(
+        coordinate.grant_id,
+        coordinate.capability,
+        coordinate.scope,
+        generation=coordinate.generation,
+        version=coordinate.version,
+    )
+    adapter = RecordingAdapter()
+    with pytest.raises(ValueError, match="grant"):
+        reconcile_inventory(
+            [_snapshot(approved=False, grants=(grant,))],
+            run_id="invalid-coordinate",
+            apply=True,
+            environment="sandbox",
+            confirmation="APPLY_TIGHTENING",
+            approved_run_id="invalid-coordinate",
+            adapter=adapter,
+        )
+    assert adapter.calls == []
+
+
+def test_remove_grant_action_rejects_bare_or_mismatched_target_contracts():
+    coordinate = GrantCoordinate("admin_identity_manager", "global", 1, "grant-1", 1)
+    with pytest.raises(ValueError, match="full grant coordinate"):
+        ReconciliationAction("remove_grant", "conflict", target="grant-1")
+    with pytest.raises(ValueError, match="full grant coordinate"):
+        ReconciliationAction(
+            "remove_grant", "conflict", target="other", grant_coordinate=coordinate
+        )
+
+
 def test_privilege_increase_actions_are_never_automatic():
     for action in ("add_group", "restore_account", "grant_capability", "activate_account"):
         assert ReconciliationAction(action, "requires approval").privilege_increase
@@ -246,7 +332,11 @@ def test_all_grants_are_removed_and_grant_count_is_zero_for_every_non_exact_iden
         GrantSnapshot("invalid-1", "student_support_lookup", "global", status="revoked", version=2),
     )
     item = reconcile_inventory([_snapshot(grants=grants, **overrides)], run_id="quarantine").items[0]
-    assert [action.target for action in item.actions if action.action == "remove_grant"] == [
+    assert [
+        action.grant_coordinate.grant_id
+        for action in item.actions
+        if action.action == "remove_grant"
+    ] == [
         "valid-1", "invalid-1"
     ]
     assert item.after["grantCount"] == 0
@@ -441,7 +531,9 @@ def test_stale_reconciliation_action_cannot_revoke_later_regrant(monkeypatch):
         table_factory=lambda: table,
     )
     adapter, _, _ = _repository_adapter(monkeypatch, table, AuditRepository())
-    old = GrantSnapshot("grant-1", capability_repo.ADMIN_IDENTITY_MANAGER, "global")
+    old = GrantCoordinate(
+        capability_repo.ADMIN_IDENTITY_MANAGER, "global", 1, "grant-1", 1
+    )
     adapter.revoke_grant("admin-1", old, action_id="old-action")
     capability_repo.grant_capability(
         user_id="admin-1", command_id="command-2", grant_id="grant-2",
