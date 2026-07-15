@@ -31,6 +31,19 @@ def test_client_action_contract_routes_every_conflict_to_recovery():
             }
 
 
+def test_invalid_password_reset_starts_recovery_without_replaying_write():
+    mapping = CLIENT_ERROR_ACTIONS[SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID]
+    decision = interpret_client_error(
+        SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
+        method="POST",
+        idempotency_key="must-not-enable-replay",
+    )
+    assert mapping.action is ClientAction.START_ACCOUNT_RECOVERY
+    assert decision.action is ClientAction.START_ACCOUNT_RECOVERY
+    assert decision.automatically_retry is False
+    assert decision.allow_user_resumption is False
+
+
 def test_client_action_refreshes_expired_token_exactly_once():
     first = interpret_client_error(SecurityErrorCode.TOKEN_EXPIRED, method="GET")
     second = interpret_client_error(

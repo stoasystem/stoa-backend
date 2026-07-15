@@ -92,6 +92,8 @@ _OPERATION_MAPPINGS: dict[PublicAuthOperation, dict[str, tuple[SecurityErrorCode
     PublicAuthOperation.RESET_PASSWORD: {
         "CodeMismatchException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
         "ExpiredCodeException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
+        "UserDisabledException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
+        "NotAuthorizedException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
         "InvalidPasswordException": (SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET, "password_policy"),
         "InvalidParameterException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
         "UserNotFoundException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),

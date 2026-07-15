@@ -29,6 +29,7 @@ def _error(code: str, message: str = "provider-secret-canary") -> ClientError:
         (PublicAuthOperation.REGISTER, "InvalidPasswordException", SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET),
         (PublicAuthOperation.VERIFICATION_CONFIRM, "ExpiredCodeException", SecurityErrorCode.VERIFICATION_CODE_EXPIRED),
         (PublicAuthOperation.RESET_PASSWORD, "CodeMismatchException", SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID),
+        (PublicAuthOperation.RESET_PASSWORD, "InvalidPasswordException", SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET),
         (PublicAuthOperation.REFRESH, "NotAuthorizedException", SecurityErrorCode.INVALID_TOKEN),
     ],
 )
@@ -144,6 +145,11 @@ def test_every_public_auth_endpoint_redacts_unknown_provider_canary(
         auth.public_identity_service,
         "require_public_identity_command",
         lambda _email: SimpleNamespace(user_id="student-1", activation_complete=False),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_public_profile_for_command",
+        lambda _command: profile,
     )
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")

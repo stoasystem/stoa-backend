@@ -840,10 +840,6 @@ async def reset_password(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Confirm a Cognito forgot-password code and set a new password."""
-    profile = user_repo.get_user_by_email(body.email)
-    if profile is None:
-        raise HTTPException(status_code=400, detail="Invalid password reset request")
-    _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
     client_id = _public_client_id(settings)
     try:

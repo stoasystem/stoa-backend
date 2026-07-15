@@ -1217,7 +1217,7 @@ def test_reset_password_confirms_code_without_returning_tokens(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"status": "confirmed", "delivery": None}
+    assert response.json() == {"status": "confirmed"}
     assert fake.calls[-1][0] == "confirm_forgot_password"
     assert fake.calls[-1][1]["ClientId"] == "student-client"
 
@@ -1252,6 +1252,54 @@ def test_reset_password_normalizes_cognito_errors(monkeypatch):
     assert response.status_code == 400
     assert response.json()["code"] == "password_reset_request_invalid"
     assert set(response.json()) == {"code", "message", "correlationId"}
+
+
+@pytest.mark.parametrize(
+    "provider_code",
+    [
+        "UserNotFoundException",
+        "CodeMismatchException",
+        "ExpiredCodeException",
+        "UserDisabledException",
+        "NotAuthorizedException",
+    ],
+)
+def test_reset_password_invalid_proof_is_account_state_indistinguishable(
+    monkeypatch, provider_code
+):
+    class InvalidResetCognito(FakeCognito):
+        def confirm_forgot_password(self, **kwargs):
+            self.calls.append(("confirm_forgot_password", kwargs))
+            raise _client_error(provider_code, "reset-state-canary")
+
+    fake = InvalidResetCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda _email: (_ for _ in ()).throw(
+            AssertionError("reset must not query local profile")
+        ),
+    )
+
+    response = _auth_client().post(
+        "/auth/reset-password",
+        json={
+            "email": "account-state@example.com",
+            "confirmationCode": "invalid-proof",
+            "newPassword": "NewValidPass123!",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "password_reset_request_invalid",
+        "message": "Request a new password reset code, then try again.",
+        "correlationId": response.headers["X-Correlation-ID"],
+    }
+    assert [name for name, _ in fake.calls] == ["confirm_forgot_password"]
+    assert "reset-state-canary" not in response.text
+    assert "detail" not in response.json()
 
 
 def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):

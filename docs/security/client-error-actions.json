@@ -222,7 +222,7 @@
       "support_guidance": "Do not display internal authorization details."
     },
     "password_reset_request_invalid": {
-      "action": "request_new_code",
+      "action": "start_account_recovery",
       "http_statuses": [
         400
       ],

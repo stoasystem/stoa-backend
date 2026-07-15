@@ -190,7 +190,7 @@ CLIENT_ERROR_ACTIONS: dict[SecurityErrorCode, ClientErrorAction] = {
         SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
         "auth.password_reset_request_invalid",
         "Request a new password reset code, then try again.",
-        ClientAction.REQUEST_NEW_CODE,
+        ClientAction.START_ACCOUNT_RECOVERY,
     ),
     SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED: _entry(
         SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED,
