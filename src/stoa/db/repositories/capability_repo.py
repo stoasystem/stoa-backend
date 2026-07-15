@@ -96,7 +96,7 @@ def grant_capability(
     effective_at: str,
     expected_generation: int,
     expires_at: str | None = None,
-    table_factory: Callable[[], Any] = get_table,
+    table_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Create a new grant lineage, never restore an historical grant."""
     values = [user_id, command_id, grant_id, capability, scope, grantor_id, reason, effective_at]
@@ -107,7 +107,7 @@ def grant_capability(
     if capability == STUDENT_DATA_BREAK_GLASS and not expires_at:
         raise ValueError("break-glass grants must expire")
 
-    table = table_factory()
+    table = (table_factory or get_table)()
     pointer_key = _pointer_key(user_id, capability, scope)
     pointer = _get(table, pointer_key)
     if pointer is None:
@@ -185,14 +185,14 @@ def revoke_capability(
     reason: str,
     changed_at: str,
     action_id: str,
-    table_factory: Callable[[], Any] = get_table,
+    table_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Revoke the exact current pointer, with replay-safe immutable evidence."""
     if expected_generation < 1 or expected_version < 1:
         raise ValueError("expected generation and version are required")
     if not actor_id.strip() or not reason.strip() or not action_id.strip():
         raise ValueError("actor_id, reason and action_id are required")
-    table = table_factory()
+    table = (table_factory or get_table)()
     pointer_key = _pointer_key(user_id, capability, scope)
     pointer = _get(table, pointer_key)
     if pointer is None:
@@ -259,10 +259,10 @@ def get_current_grants(
     user_id: str,
     *,
     now: datetime | None = None,
-    table_factory: Callable[[], Any] = get_table,
+    table_factory: Callable[[], Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Authorize only exact active pointer/revision pairs, with fail-closed legacy fallback."""
-    table = table_factory()
+    table = (table_factory or get_table)()
     items = [dict(item) for item in _query_user_capabilities(table, user_id)]
     pointers = [item for item in items if item.get("entity_type") == "capability_grant_current"]
     revisions = {

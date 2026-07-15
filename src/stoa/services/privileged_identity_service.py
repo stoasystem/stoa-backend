@@ -133,10 +133,12 @@ def revoke_capability(
     *, actor: dict[str, Any], target_id: str, reason: str, **grant: Any
 ) -> dict[str, Any]:
     _require_manager(actor)
+    command_id = _required(grant.pop("command_id", None), "command_id")
     item = capability_repo.revoke_capability(
         user_id=target_id,
         actor_id=_actor_id(actor),
         reason=_required(reason, "reason"),
+        action_id=command_id,
         **grant,
     )
     _audit_capability(actor, target_id, item, "capability_revoked", reason)
@@ -147,14 +149,14 @@ def restore_capability(
     *, actor: dict[str, Any], target_id: str, reason: str, **grant: Any
 ) -> dict[str, Any]:
     _require_manager(actor)
-    item = capability_repo.restore_capability(
-        user_id=target_id,
-        actor_id=_actor_id(actor),
-        reason=_required(reason, "reason"),
-        **grant,
+    del target_id, reason, grant
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "capability_regrant_required",
+            "message": "Issue a new approved capability grant command.",
+        },
     )
-    _audit_capability(actor, target_id, item, "capability_restored", reason)
-    return _grant_response(item)
 
 
 def _reconcile_admin(
@@ -315,6 +317,7 @@ def _grant_response(item: dict[str, Any]) -> dict[str, Any]:
         "scope": item.get("scope"),
         "status": item.get("status"),
         "version": item.get("version"),
+        "generation": item.get("generation"),
     }
 
 

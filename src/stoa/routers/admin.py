@@ -79,20 +79,24 @@ class AdminStatusCommand(BaseModel):
 class CapabilityGrantCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    command_id: str
     grant_id: str
     capability: str
     scope: str
     reason: str = Field(min_length=1, max_length=1000)
     effective_at: str
+    expected_generation: int = Field(ge=0)
     expires_at: str | None = None
 
 
 class CapabilityTransitionCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    command_id: str
     grant_id: str
     capability: str
     scope: str
+    expected_generation: int = Field(ge=1)
     expected_version: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=1000)
     changed_at: str

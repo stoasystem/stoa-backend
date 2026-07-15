@@ -260,42 +260,45 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
         def __init__(self):
             self.items = {}
 
-        def put_item(self, *, Item, ConditionExpression):
-            key = (Item["PK"], Item["SK"])
-            if key in self.items:
-                raise ClientError(
-                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
-                )
-            self.items[key] = dict(Item)
-
-        def update_item(self, *, Key, ExpressionAttributeValues, **_kwargs):
-            key = (Key["PK"], Key["SK"])
-            item = self.items.get(key)
-            expected = ExpressionAttributeValues[":expected_version"]
-            if not item or item["version"] != expected:
-                raise ClientError(
-                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "UpdateItem"
-                )
-            item.update(
-                status=ExpressionAttributeValues[":status"],
-                version=ExpressionAttributeValues[":next_version"],
-                updated_at=ExpressionAttributeValues[":changed_at"],
-            )
-            return {"Attributes": dict(item)}
+        def get_item(self, *, Key, **_kwargs):
+            item = self.items.get((Key["PK"], Key["SK"]))
+            return {"Item": dict(item)} if item else {}
 
         def query(self, **_kwargs):
             return {"Items": list(self.items.values())}
+
+        def apply_capability_transaction(self, operations):
+            pending = dict(self.items)
+            for operation in operations:
+                item = operation["item"]
+                key = (item["PK"], item["SK"])
+                current = pending.get(key)
+                if operation["condition"] == "absent" and current is not None:
+                    raise ClientError(
+                        {"Error": {"Code": "ConditionalCheckFailedException"}}, "TransactWriteItems"
+                    )
+                if operation["condition"] != "absent" and (
+                    not current
+                    or any(current.get(name) != value for name, value in operation["expected"].items())
+                ):
+                    raise ClientError(
+                        {"Error": {"Code": "ConditionalCheckFailedException"}}, "TransactWriteItems"
+                    )
+                pending[key] = dict(item)
+            self.items = pending
 
     table = FakeTable()
     monkeypatch.setattr(capability_repo, "get_table", lambda: table)
     grant = capability_repo.grant_capability(
         user_id="admin-1",
+        command_id="command-1",
         grant_id="grant-1",
         capability=capability_repo.ADMIN_IDENTITY_MANAGER,
         scope="global",
         grantor_id="admin-0",
         reason="approved change",
         effective_at="2026-07-14T12:00:00Z",
+        expected_generation=0,
     )
     assert grant["version"] == 1
     assert len(
@@ -311,23 +314,27 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
         grant_id="grant-1",
         capability=capability_repo.ADMIN_IDENTITY_MANAGER,
         scope="global",
+        expected_generation=1,
         expected_version=1,
         actor_id="admin-0",
         reason="access removed",
         changed_at="2026-07-14T12:02:00Z",
+        action_id="revoke-command-1",
     )
     assert revoked["version"] == 2
     assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
     with pytest.raises(capability_repo.CapabilityVersionConflict):
-        capability_repo.restore_capability(
+        capability_repo.revoke_capability(
             user_id="admin-1",
             grant_id="grant-1",
             capability=capability_repo.ADMIN_IDENTITY_MANAGER,
             scope="global",
+            expected_generation=1,
             expected_version=1,
             actor_id="admin-0",
             reason="stale approval",
             changed_at="2026-07-14T12:03:00Z",
+            action_id="different-command",
         )
 
 

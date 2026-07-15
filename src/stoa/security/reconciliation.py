@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Iterable, Mapping, Protocol
 
@@ -115,6 +116,76 @@ class TighteningAdapter(Protocol):
     def global_sign_out(self, provider_subject: str, *, action_id: str) -> None: ...
     def revoke_grant(self, user_id: str, grant: GrantSnapshot, *, action_id: str) -> None: ...
     def append_audit(self, item_id: str, action: str, *, action_id: str) -> None: ...
+
+
+class RepositoryTighteningAdapter:
+    """Concrete conditional adapter for explicitly authorized tightening runs."""
+
+    def __init__(
+        self,
+        *,
+        local_account: Any,
+        provider: Any,
+        capability_repository: Any,
+        audit_repository: Any,
+        clock: Any | None = None,
+    ) -> None:
+        required = (local_account, provider, capability_repository, audit_repository)
+        if any(collaborator is None for collaborator in required):
+            raise ValueError("all tightening collaborators are required")
+        self._local = local_account
+        self._provider = provider
+        self._capabilities = capability_repository
+        self._audit = audit_repository
+        self._clock = clock or (lambda: datetime.now(UTC))
+
+    def suspend_local(self, user_id: str, *, action_id: str) -> None:
+        self._local.suspend_local(user_id, action_id=action_id)
+
+    def remove_group(self, provider_subject: str, group: str, *, action_id: str) -> None:
+        self._provider.remove_group(provider_subject, group, action_id=action_id)
+
+    def global_sign_out(self, provider_subject: str, *, action_id: str) -> None:
+        self._provider.global_sign_out(provider_subject, action_id=action_id)
+
+    def revoke_grant(self, user_id: str, grant: GrantSnapshot, *, action_id: str) -> None:
+        if grant.status != "active":
+            return
+        instant = self._clock()
+        changed_at = instant.isoformat() if hasattr(instant, "isoformat") else str(instant)
+        self._capabilities.revoke_capability(
+            user_id=user_id,
+            grant_id=grant.grant_id,
+            capability=grant.capability,
+            scope=grant.scope,
+            expected_generation=grant.generation,
+            expected_version=grant.version,
+            actor_id="privileged_identity_reconciliation",
+            reason="privileged_identity_conflict",
+            changed_at=changed_at,
+            action_id=action_id,
+        )
+
+    def append_audit(self, item_id: str, action: str, *, action_id: str) -> None:
+        instant = self._clock()
+        created_at = instant.isoformat() if hasattr(instant, "isoformat") else str(instant)
+        event = {
+            "event_id": action_id,
+            "event_type": "privileged_capability_quarantined",
+            "target_type": "privileged_identity",
+            "action": action,
+            "result_code": "tightened",
+            "reason_code": "privileged_identity_conflict",
+            "evidence_reference": f"reconciliation:{action_id}",
+            "created_at": created_at,
+        }
+        try:
+            self._audit.append_event(item_id, event)
+        except Exception as exc:
+            duplicate = getattr(self._audit, "DuplicateSecurityAuditEvent", ())
+            if duplicate and isinstance(exc, duplicate):
+                return
+            raise
 
 
 @dataclass(slots=True)

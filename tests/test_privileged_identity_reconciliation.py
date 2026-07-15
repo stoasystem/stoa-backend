@@ -2,12 +2,17 @@
 
 import pytest
 from botocore.exceptions import ClientError
+from datetime import UTC, datetime
+from types import SimpleNamespace
+import importlib.util
+from pathlib import Path
 
 from stoa.security.reconciliation import (
     GrantSnapshot,
     IdentitySnapshot,
     MemoryCheckpointStore,
     ReconciliationAction,
+    RepositoryTighteningAdapter,
     reconcile_inventory,
 )
 
@@ -64,6 +69,15 @@ def _legacy_grant(*, grant_id="legacy-1", status="active", version=1):
         "version": version,
         "effective_at": "2026-07-15T10:00:00Z",
     }
+
+
+def _load_cli():
+    path = Path(__file__).parents[1] / "scripts" / "reconcile_privileged_identities.py"
+    spec = importlib.util.spec_from_file_location("reconcile_privileged_identities_cli", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.mark.parametrize(
@@ -327,3 +341,187 @@ def test_legacy_migration_is_atomic_retry_safe_and_duplicates_fail_closed():
             changed_at="2026-07-15T10:01:00Z", action_id="duplicate-action",
             table_factory=lambda: duplicates,
         )
+
+
+class IdempotentCollaborator:
+    def __init__(self):
+        self.calls = []
+
+    def suspend_local(self, user_id, *, action_id):
+        if action_id not in self.calls:
+            self.calls.append(action_id)
+
+    def remove_group(self, provider_subject, group, *, action_id):
+        if action_id not in self.calls:
+            self.calls.append(action_id)
+
+    def global_sign_out(self, provider_subject, *, action_id):
+        if action_id not in self.calls:
+            self.calls.append(action_id)
+
+
+class AuditRepository:
+    class DuplicateSecurityAuditEvent(RuntimeError):
+        pass
+
+    def __init__(self, *, fail_remove_once=False):
+        self.events = {}
+        self.fail_remove_once = fail_remove_once
+
+    def append_event(self, stream_id, event):
+        if self.fail_remove_once and event["action"] == "remove_grant":
+            self.fail_remove_once = False
+            raise RuntimeError("audit unavailable")
+        if event["event_id"] in self.events:
+            raise self.DuplicateSecurityAuditEvent()
+        self.events[event["event_id"]] = (stream_id, dict(event))
+
+
+def _repository_adapter(monkeypatch, table, audit):
+    from stoa.db.repositories import capability_repo
+
+    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    local = IdempotentCollaborator()
+    provider = IdempotentCollaborator()
+    adapter = RepositoryTighteningAdapter(
+        local_account=local,
+        provider=provider,
+        capability_repository=capability_repo,
+        audit_repository=audit,
+        clock=lambda: datetime(2026, 7, 15, 11, 0, tzinfo=UTC),
+    )
+    return adapter, local, provider
+
+
+def test_concrete_adapter_replay_after_audit_failure_revokes_and_audits_exactly_once(monkeypatch):
+    from stoa.db.repositories import capability_repo
+
+    table = CapabilityTable()
+    capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-1", grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global", grantor_id="manager",
+        reason="approved", effective_at="2026-07-15T10:00:00Z", expected_generation=0,
+        table_factory=lambda: table,
+    )
+    audit = AuditRepository(fail_remove_once=True)
+    adapter, _, _ = _repository_adapter(monkeypatch, table, audit)
+    checkpoints = MemoryCheckpointStore()
+    snapshot = _snapshot(
+        user_id="admin-1", approved=False,
+        grants=(GrantSnapshot("grant-1", capability_repo.ADMIN_IDENTITY_MANAGER, "global"),),
+    )
+    kwargs = dict(
+        run_id="authorized-run", apply=True, environment="non-production",
+        confirmation="APPLY_TIGHTENING", approved_run_id="authorized-run",
+        adapter=adapter, checkpoints=checkpoints,
+    )
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        reconcile_inventory([snapshot], **kwargs)
+    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert len([row for row in table.items.values() if row.get("entity_type") == "capability_grant_revision"]) == 2
+
+    reconcile_inventory([snapshot], **kwargs)
+    reconcile_inventory([snapshot], **kwargs)
+    assert len([row for row in table.items.values() if row.get("entity_type") == "capability_grant_revision"]) == 2
+    remove_events = [event for _, event in audit.events.values() if event["action"] == "remove_grant"]
+    assert len(remove_events) == 1
+    rendered = repr(remove_events)
+    for secret in ("admin-1", "grant-1", "global", "issuer.example", "provider-secret-subject"):
+        assert secret not in rendered
+
+
+def test_stale_reconciliation_action_cannot_revoke_later_regrant(monkeypatch):
+    from stoa.db.repositories import capability_repo
+
+    table = CapabilityTable()
+    capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-1", grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global", grantor_id="manager",
+        reason="approved", effective_at="2026-07-15T10:00:00Z", expected_generation=0,
+        table_factory=lambda: table,
+    )
+    adapter, _, _ = _repository_adapter(monkeypatch, table, AuditRepository())
+    old = GrantSnapshot("grant-1", capability_repo.ADMIN_IDENTITY_MANAGER, "global")
+    adapter.revoke_grant("admin-1", old, action_id="old-action")
+    capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-2", grant_id="grant-2",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global", grantor_id="manager",
+        reason="new approval", effective_at="2026-07-15T11:01:00Z", expected_generation=1,
+        table_factory=lambda: table,
+    )
+    with pytest.raises(capability_repo.CapabilityVersionConflict):
+        adapter.revoke_grant("admin-1", old, action_id="old-action")
+    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-2"]
+
+
+def test_restore_is_mutation_free_and_regrant_requires_manager_new_command(monkeypatch):
+    from fastapi import HTTPException
+    from stoa.db.repositories import capability_repo
+    from stoa.services import privileged_identity_service
+
+    actor = {
+        "user_id": "manager", "role": "admin", "account_status": "active",
+        "capabilities": {capability_repo.ADMIN_IDENTITY_MANAGER: True},
+    }
+    monkeypatch.setattr(
+        capability_repo, "restore_capability",
+        SimpleNamespace(side_effect=AssertionError("restore repository mutation must not exist")),
+        raising=False,
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        privileged_identity_service.restore_capability(
+            actor=actor, target_id="admin-1", reason="restore", grant_id="old",
+        )
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "capability_regrant_required"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--apply", "--environment", "production"],
+        ["--apply", "--environment", "non-production"],
+        ["--apply", "--environment", "non-production", "--confirm", "wrong"],
+        [
+            "--apply", "--environment", "non-production", "--confirm", "APPLY_TIGHTENING",
+            "--run-id", "run-1", "--approved-run-id", "other",
+        ],
+        [
+            "--apply", "--environment", "non-production", "--confirm", "APPLY_TIGHTENING",
+            "--run-id", "run-1", "--approved-run-id", "run-1",
+        ],
+    ],
+)
+def test_apply_boundary_rejects_before_adapter_construction(monkeypatch, arguments):
+    cli = _load_cli()
+
+    constructed = []
+    monkeypatch.setattr(cli, "_load_adapter", lambda *_args: constructed.append(True))
+    with pytest.raises(SystemExit):
+        cli.main(arguments)
+    assert constructed == []
+
+
+def test_apply_boundary_constructs_adapter_only_after_all_nonproduction_gates(monkeypatch, tmp_path, capsys):
+    cli = _load_cli()
+
+    config = tmp_path / "adapter.json"
+    config.write_text("{}")
+    constructed = []
+    adapter = RepositoryTighteningAdapter(
+        local_account=IdempotentCollaborator(), provider=IdempotentCollaborator(),
+        capability_repository=SimpleNamespace(), audit_repository=AuditRepository(),
+    )
+    monkeypatch.setattr(
+        cli, "_load_adapter",
+        lambda factory, path: constructed.append((factory, path)) or adapter,
+    )
+    assert cli.main(
+        [
+            "--apply", "--environment", "non-production", "--confirm", "APPLY_TIGHTENING",
+            "--run-id", "run-1", "--approved-run-id", "run-1",
+            "--adapter-factory", "approved.factory:create", "--adapter-config", str(config),
+        ]
+    ) == 0
+    assert constructed == [("approved.factory:create", config)]
+    assert '"mode": "apply-tightening"' in capsys.readouterr().out
