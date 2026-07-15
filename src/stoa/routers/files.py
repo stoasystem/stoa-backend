@@ -6,6 +6,7 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user, get_s3_client
+from stoa.security.route_inventory import explicit_route_classification
 
 router = APIRouter()
 
@@ -51,6 +52,7 @@ class PresignResponse(BaseModel):
 
 
 @router.post("/presign", response_model=PresignResponse)
+@explicit_route_classification("authenticated-global", "Actor-owned generated upload key")
 async def get_presigned_url(
     body: PresignRequest,
     user: dict = Depends(get_current_user),

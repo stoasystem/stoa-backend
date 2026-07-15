@@ -12,6 +12,7 @@ from stoa.db.repositories import user_repo
 from stoa.deps import get_current_user
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import account_verification_service, locale_service
+from stoa.security.route_inventory import explicit_route_classification
 
 router = APIRouter()
 
@@ -311,6 +312,7 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
 # ---------------------------------------------------------------------------
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@explicit_route_classification("public", "non-privileged public registration command")
 async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
     """Create a Cognito user and DynamoDB profile, then require email verification."""
     role = body.role.value
@@ -431,6 +433,7 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
 
 
 @router.post("/login", response_model=AuthResponse)
+@explicit_route_classification("public", "credential authentication entry point")
 async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
     """Authenticate through the single public client without caller-selected privilege."""
     cognito = _get_cognito(settings)
@@ -489,6 +492,7 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
 
 
 @router.post("/email-verification/resend", response_model=EmailVerificationResponse)
+@explicit_route_classification("public", "bounded verification recovery")
 async def resend_email_verification(
     body: EmailVerificationRequest,
     settings: Settings = Depends(get_settings),
@@ -590,6 +594,7 @@ async def resend_email_verification(
 
 
 @router.post("/email-verification/confirm", response_model=EmailVerificationResponse)
+@explicit_route_classification("public", "verification confirmation command")
 async def confirm_email_verification(
     body: EmailVerificationConfirmRequest,
     settings: Settings = Depends(get_settings),
@@ -705,6 +710,7 @@ async def confirm_email_verification(
 
 
 @router.post("/login-code/request", response_model=LoginCodePolicyResponse)
+@explicit_route_classification("public", "disabled login-code policy surface")
 async def request_login_code(body: LoginCodeRequest):
     """Explicitly gate passwordless login until a Cognito-compatible flow exists."""
     return LoginCodePolicyResponse(
@@ -713,6 +719,7 @@ async def request_login_code(body: LoginCodeRequest):
 
 
 @router.post("/login-code/confirm", response_model=LoginCodePolicyResponse)
+@explicit_route_classification("public", "disabled login-code policy surface")
 async def confirm_login_code(body: LoginCodeConfirmRequest):
     """Explicitly reject placeholder login codes; no production token is minted here."""
     return LoginCodePolicyResponse(
@@ -721,6 +728,7 @@ async def confirm_login_code(body: LoginCodeConfirmRequest):
 
 
 @router.post("/forgot-password", response_model=PasswordResetResponse)
+@explicit_route_classification("public", "password recovery entry point")
 async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depends(get_settings)):
     """Start Cognito's forgot-password flow without exposing account existence."""
     profile = user_repo.get_user_by_email(body.email)
@@ -743,6 +751,7 @@ async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depe
 
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
+@explicit_route_classification("public", "password recovery confirmation")
 async def reset_password(body: ResetPasswordRequest, settings: Settings = Depends(get_settings)):
     """Confirm a Cognito forgot-password code and set a new password."""
     profile = user_repo.get_user_by_email(body.email)
@@ -775,6 +784,7 @@ async def reset_password(body: ResetPasswordRequest, settings: Settings = Depend
 
 
 @router.get("/me", response_model=UserOut)
+@explicit_route_classification("authenticated-global", "Actor self account projection")
 async def me(
     current_user: dict = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
@@ -792,6 +802,7 @@ async def me(
 
 
 @router.patch("/me/preferences/locale", response_model=LocalePreferenceResponse)
+@explicit_route_classification("authenticated-global", "Actor self locale preference")
 async def update_my_locale_preference(
     body: LocalePreferenceUpdate,
     current_user: dict = Depends(get_current_user),
@@ -818,6 +829,7 @@ async def update_my_locale_preference(
 
 
 @router.post("/refresh", response_model=AuthResponse)
+@explicit_route_classification("public", "refresh-token authentication entry point")
 async def refresh(body: RefreshRequest, settings: Settings = Depends(get_settings)):
     """Exchange a refresh token for fresh tokens."""
     cognito = _get_cognito(settings)
@@ -851,6 +863,7 @@ async def refresh(body: RefreshRequest, settings: Settings = Depends(get_setting
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@explicit_route_classification("public", "token invalidation entry point")
 async def logout(body: LogoutRequest, settings: Settings = Depends(get_settings)):
     """Revoke the access token globally."""
     cognito = _get_cognito(settings)

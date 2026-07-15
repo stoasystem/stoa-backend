@@ -8,7 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
-from stoa.deps import get_verified_token, require_role
+from stoa.deps import get_verified_token
+from stoa.security.authorization import AuthorizationAction
+from stoa.security.route_authorization import teacher_application_reviewer_dependency
+from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import teacher_application_service
 
@@ -47,6 +50,7 @@ def get_teacher_identity_provider(settings: Settings = Depends(get_settings)) ->
 
 
 @router.post("")
+@explicit_route_classification("public", "no-privilege teacher candidacy submission")
 def apply(payload: TeacherApplicationRequest) -> dict[str, Any]:
     return teacher_application_service.submit_application(payload.model_dump(exclude_none=True))
 
@@ -55,7 +59,9 @@ def apply(payload: TeacherApplicationRequest) -> dict[str, Any]:
 def full_application(
     application_id: str,
     version: int,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    user: dict[str, Any] = Depends(
+        teacher_application_reviewer_dependency(AuthorizationAction.READ)
+    ),
 ) -> dict[str, Any]:
     return teacher_application_service.full_application_for_reviewer(user, application_id, version)
 
@@ -64,7 +70,9 @@ def full_application(
 def review(
     application_id: str,
     payload: TeacherReviewRequest,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    user: dict[str, Any] = Depends(
+        teacher_application_reviewer_dependency(AuthorizationAction.UPDATE)
+    ),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return teacher_application_service.review_application(
@@ -78,6 +86,7 @@ def review(
 
 
 @router.post("/activation/consume")
+@explicit_route_classification("public", "verified invitation activation command")
 def activate(
     payload: TeacherActivationRequest,
     verified: VerifiedAccessToken = Depends(get_verified_token),

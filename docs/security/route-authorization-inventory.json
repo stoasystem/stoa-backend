@@ -1,0 +1,3839 @@
+[
+  {
+    "authorization": [
+      {
+        "action": "delete",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_push_token"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [
+      "token_reference"
+    ],
+    "method": "DELETE",
+    "path": "/notifications/push-tokens/{token_reference}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "assignment_id"
+    ],
+    "method": "GET",
+    "path": "/adaptive/assignments/{assignment_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/adaptive/parents/me/children/{student_id}/progress",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/adaptive/students/me/assignments",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/adaptive/students/me/memory",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/adaptive/students/{student_id}/assignments",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/adaptive/students/{student_id}/memory",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "adaptive_profile"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/adaptive/students/{student_id}/recommendations",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/account-operations/parents/{parent_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "GET",
+    "path": "/admin/account-verification/{user_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "bi_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/bi/alert-routing",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "bi_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/bi/dashboard",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "bi_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/bi/taxonomy",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "bi_exporter",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/bi/warehouse-export",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "bi_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/bi/warehouse-readiness",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "platform_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/core-smoke",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_analytics_reader",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/analytics/content-quality",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_analytics_reader",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/analytics/dashboard",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "curriculum_analytics_exporter",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/analytics/warehouse-export",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_analytics_reader",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/analytics/warehouse-readiness",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/audit",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/diff",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_author|curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "migration_operator|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/migrations/{migration_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/curriculum/worklist",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "production_readiness_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/external-activation/notification-support-smoke",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "production_readiness_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/external-activation/payment-auth-smoke",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "production_readiness_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/external-activation/production-readiness-smoke",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "student_safety_review",
+        "purpose": "moderation_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/moderation/cases",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "student_safety_review",
+        "purpose": "moderation_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/moderation/cases/{case_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "notification_event_inspector",
+        "purpose": "notification_event_inspection",
+        "resource_type": "notification_event"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/notifications",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "notification_delivery_health_reader",
+        "purpose": "notification_delivery_health",
+        "resource_type": "notification_collection"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/notifications/delivery-status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/parent-bindings",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/ops",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "report_evidence_exporter",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/recovery-evidence",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/reports/recovery-jobs",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/recovery-jobs/{job_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/recovery-jobs/{job_id}/audit",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/recovery-jobs/{job_id}/results",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "report_evidence_exporter",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/recovery-jobs/{job_id}/support-package",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "report_evidence_exporter",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/release-evidence/fixture-status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/reports/support-handoff-deliveries",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "delivery_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/support-handoff-deliveries/{delivery_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/reports/support-handoff-sla",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "draft_id",
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/audit",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_recovery_reader",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "draft_id",
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_metadata_reader",
+        "purpose": "report_operations",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/ops",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "platform_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/stats",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/subscriptions/billing",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "billing_accounting_exporter",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/subscriptions/billing/accounting-export",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/subscriptions/billing/provider-readiness",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/subscriptions/billing/rollout-controls",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/subscriptions/billing/{parent_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "GET",
+    "path": "/admin/subscriptions/requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "GET",
+    "path": "/admin/subscriptions/requests/{request_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "teacher_dispatch_operator",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/teacher-dispatch/dashboard",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "usage_reconciliation_operator",
+        "purpose": "usage_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/usage/reconciliation",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "usage_event_inspector",
+        "purpose": "usage_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/usage/students/{student_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "usage_event_inspector",
+        "purpose": "usage_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/usage/students/{student_id}/events",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/users",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "auth",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/auth/me",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/conversations",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/conversations/{conv_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "health",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/health",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_collection"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/notifications",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_digest"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/notifications/digest-preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_preference"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/notifications/preferences",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/account-operations",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/children",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/history",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/learning-profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/report",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/reports/{week}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/summary",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/usage",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/subscription",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/subscription/billing",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/subscription/requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "safe-public",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/curriculum/catalog",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "safe-public",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/curriculum/exercises",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "safe-public",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/curriculum/lessons/{lesson_id}",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [
+      "studentId"
+    ],
+    "method": "GET",
+    "path": "/practice/curriculum/progress",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/lessons/{lesson_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/mistakes",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/overview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "safe-public",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/subjects",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/{subject_id}/{topic_id}/path",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/{subject_id}/{topic_id}/roadmap",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "question"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "question"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "question"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "questions",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/questions/{question_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/me/profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/{student_id}/learning-profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/{student_id}/questions",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/{student_id}/summary",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "GET",
+    "path": "/teacher-applications/{application_id}/versions/{version}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-help",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teacher-help/availability",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/teachers/ai-tools/drafts",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "draft_id"
+    ],
+    "method": "GET",
+    "path": "/teachers/ai-tools/drafts/{draft_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teachers/me/availability",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teachers/me/help-requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "GET",
+    "path": "/teachers/me/help-requests/{request_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teachers/me/stats",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "GET",
+    "path": "/teachers/questions/{question_id}/assistance-summary",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teachers/queue",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_author",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/drafts/{version_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "student_safety_review",
+        "purpose": "moderation_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/admin/moderation/cases/{case_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "billing_rollout_manager",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/admin/subscriptions/billing/rollout-controls",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "billing_operations_manager",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "PATCH",
+    "path": "/admin/subscriptions/requests/{request_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "PATCH",
+    "path": "/admin/users/{user_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "auth",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/auth/me/preferences/locale",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_preference"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/notifications/preferences",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/students/me/profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/teachers/me/availability",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "resolve",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "PATCH",
+    "path": "/teachers/me/help-requests/{request_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "assign",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "studentId"
+    ],
+    "method": "POST",
+    "path": "/adaptive/assignments",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "assignment_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/assignments/{assignment_id}/archive",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "assignment_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/assignments/{assignment_id}/complete",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "assignment_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/assignments/{assignment_id}/skip",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "assignment_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/assignments/{assignment_id}/start",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "assignment_automation_execute",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/students/{student_id}/assignment-automation/batches/execute",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "assignment_automation_preview",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/students/{student_id}/assignment-automation/batches/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "learning_assignment",
+        "resource_type": "adaptive_profile"
+      }
+    ],
+    "classification": "authorized",
+    "family": "adaptive",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/adaptive/students/{student_id}/memory/refresh",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_author",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/drafts",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/archive",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/approve",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/request-changes",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_author",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/submit-review",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "curriculum_author|curriculum_reviewer|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/drafts/{version_id}/validation-preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/publish",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/lessons/{public_lesson_id}/rollback",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": "migration_operator|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/migrations/dry-run",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": "migration_operator|curriculum_publisher",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/curriculum/migrations/{migration_id}/apply",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": "student_safety_review",
+        "purpose": "moderation_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/moderation/cases/{case_id}/notes",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "parent_binding_repairer",
+        "purpose": "account_operations",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/parent-bindings/repair",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/privileged-identities/admins",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/privileged-identities/admins/{target_id}/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/privileged-identities/{target_id}/capabilities",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/privileged-identities/{target_id}/capabilities/restore",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/privileged-identities/{target_id}/capabilities/revoke",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_governance_manager",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/audit-retention/manifest",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_governance_reader",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/audit-retention/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/bulk-resend",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_governance_manager",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/immutable-evidence/persist",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_governance_reader",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/immutable-evidence/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_governance_manager",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/legal-holds",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_governance_manager",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/legal-holds/review",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_governance_reader",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/legal-holds/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/resend-email",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/resend-email/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/retry-generation",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/retry-generation/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/{job_id}/cancel",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/{job_id}/resume",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "job_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/recovery-jobs/{job_id}/resume/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "report_evidence_exporter",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/release-evidence/validate",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_governance_manager",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/retention-governance/approval",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "report_governance_reader",
+        "purpose": "audit_governance",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/retention-governance/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "delivery_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/support-handoff-deliveries/{delivery_id}/messages",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "delivery_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/support-handoff-deliveries/{delivery_id}/provider-sync",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "delivery_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/support-handoff-deliveries/{delivery_id}/retry",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/support-handoff-delivery",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "export",
+        "capability": "report_evidence_exporter",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/reports/support-handoff-package",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "draft_id",
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}/apply",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}/apply",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/edit-drafts",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "draft_id",
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}/apply",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "report_recovery_operator",
+        "purpose": "report_recovery",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/resend",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "external_send",
+        "capability": "report_external_handoff_sender",
+        "purpose": "support_handoff",
+        "resource_type": "report"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "reports",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/reports/{parent_id}/{student_id}/{week_start}/retry-generation",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "billing_refund_executor",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "POST",
+    "path": "/admin/subscriptions/billing/{parent_id}/refunds",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": "billing_operations_manager",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "POST",
+    "path": "/admin/subscriptions/requests/{request_id}/apply",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/email-verification/confirm",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/email-verification/resend",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/forgot-password",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/login",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/login-code/confirm",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/login-code/request",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/logout",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/refresh",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "POST",
+    "path": "/auth/register",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/reset-password",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "billing",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/billing/webhooks/stripe",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/conversations",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/conversations/{conv_id}/messages",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/conversations/{conv_id}/messages/stream",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "files",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/files/presign",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_digest"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/notifications/digest-send",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_push_token"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [
+      "deviceId",
+      "providerTokenReference"
+    ],
+    "method": "POST",
+    "path": "/notifications/push-tokens",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_event"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [
+      "event_id"
+    ],
+    "method": "POST",
+    "path": "/notifications/{event_id}/archive",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "notification_self_service",
+        "resource_type": "notification_event"
+      }
+    ],
+    "classification": "authorized",
+    "family": "notifications",
+    "identifiers": [
+      "event_id"
+    ],
+    "method": "POST",
+    "path": "/notifications/{event_id}/read",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/parents/me/subscription/checkout",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/parents/me/subscription/requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/practice/challenges/{challenge_id}/answer",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/practice/hints",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/practice/lessons/{lesson_id}/complete",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/practice/teacher-help",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "questions",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/questions",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "questions",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/questions/{question_id}/feedback",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "question"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "question"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "question"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "questions",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/questions/{question_id}/reports",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "questions",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/questions/{question_id}/request-teacher",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "POST",
+    "path": "/teacher-applications",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "teacher-applications",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/teacher-applications/activation/consume",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "POST",
+    "path": "/teacher-applications/{application_id}/reviews",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-help",
+    "identifiers": [
+      "conversationId"
+    ],
+    "method": "POST",
+    "path": "/teacher-help/request",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "draft_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/ai-tools/drafts/{draft_id}/accept",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "draft_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/ai-tools/drafts/{draft_id}/archive",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "draft_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/ai-tools/drafts/{draft_id}/regenerate",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "draft_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/ai-tools/drafts/{draft_id}/reject",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "ai_teacher_draft"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "ai_teacher_draft"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "questionId",
+      "studentId"
+    ],
+    "method": "POST",
+    "path": "/teachers/ai-tools/exercise-drafts",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_dispatch",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/dispatch/preview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "assign",
+        "capability": null,
+        "purpose": "teacher_dispatch",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/teachers/dispatch/reassign-stale",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "assign",
+        "capability": null,
+        "purpose": "teacher_dispatch",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/dispatch/run",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/me/help-requests/{request_id}/notes",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "ai_teacher_tools",
+        "resource_type": "question"
+      },
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/questions/{question_id}/ai-tools/summary-draft",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/questions/{question_id}/reply",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "claim",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/questions/{question_id}/takeover",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "resolve",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "question"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "question_id"
+    ],
+    "method": "PUT",
+    "path": "/teachers/questions/{question_id}/resolve",
+    "sensitive": true
+  }
+]

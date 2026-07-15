@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from stoa.config import Settings, get_settings
 from stoa.services import subscription_service
+from stoa.security.route_inventory import explicit_route_classification
 
 router = APIRouter()
 
@@ -23,6 +24,7 @@ class StripeWebhookResponse(BaseModel):
 
 
 @router.post("/webhooks/stripe", response_model=StripeWebhookResponse)
+@explicit_route_classification("public", "provider-signature authenticated webhook")
 async def handle_stripe_webhook(
     request: Request,
     settings: Settings = Depends(get_settings),

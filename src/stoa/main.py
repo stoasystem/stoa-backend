@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from stoa.config import settings
+from stoa.security.route_inventory import (
+    explicit_route_classification,
+    install_authorization_openapi,
+)
 from stoa.routers import (
     adaptive,
     admin,
@@ -56,8 +60,12 @@ app.include_router(files.router, prefix="/files", tags=["files"])
 
 
 @app.get("/health")
+@explicit_route_classification("public", "load-balancer health probe")
 def health_check():
     return {"status": "ok", "version": "0.1.0"}
+
+
+install_authorization_openapi(app)
 
 
 # AWS Lambda handler via Mangum

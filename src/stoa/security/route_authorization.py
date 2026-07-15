@@ -508,6 +508,60 @@ def teacher_capability_dependency(
     return dependency
 
 
+def teacher_application_reviewer_dependency(action: AuthorizationAction):
+    """Require the exact reviewer grant for one application identifier."""
+
+    async def resolve(resource_id: str):
+        return {"resource_id": resource_id, "student_id": resource_id}
+
+    async def dependency(
+        application_id: str,
+        actor: Actor = Depends(get_actor),
+    ) -> dict[str, object]:
+        from stoa.security.authorization import operator_capability_permits
+
+        resource = ResourceRef(
+            ResourceType.OPERATOR_RESOURCE,
+            application_id,
+            actor.user_id,
+            relationship_known=True,
+        )
+        if (
+            actor.role is not CanonicalRole.ADMIN
+            or not actor.can_authorize
+            or not operator_capability_permits(
+                actor,
+                capability="teacher_identity_reviewer",
+                resource=resource,
+                action=action,
+                purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
+            )
+        ):
+            from stoa.security.errors import SecurityErrorCode
+
+            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED))
+        return {
+            "sub": actor.user_id,
+            "user_id": actor.user_id,
+            "role": actor.role.value,
+            "account_status": actor.account_status.value,
+            "capabilities": {
+                grant.capability: "granted" for grant in actor.current_grants
+            },
+        }
+
+    dependency.required_capability = "teacher_identity_reviewer"  # type: ignore[attr-defined]
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.OPERATOR_RESOURCE,
+            action,
+            AuthorizationPurpose.IDENTITY_MANAGEMENT,
+            resolve,
+        ),
+    )
+    return dependency
+
+
 async def authorize_conversation_resource(
     *,
     conversation_id: str,
