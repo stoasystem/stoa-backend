@@ -267,6 +267,27 @@ def test_grant_actions_carry_full_coordinates_and_are_order_independent_and_reda
     for secret in ("shared-id", "student:student-2", "admin_identity_manager"):
         assert secret not in rendered
 
+    applied_ids = []
+    for ordered_grants in (grants, tuple(reversed(grants))):
+        result = reconcile_inventory(
+            [_snapshot(approved=False, grants=ordered_grants)],
+            run_id="coordinate-run",
+            apply=True,
+            environment="sandbox",
+            confirmation="APPLY_TIGHTENING",
+            approved_run_id="coordinate-run",
+            adapter=RecordingAdapter(),
+        )
+        applied_ids.append(
+            tuple(
+                action_id
+                for action_id in result.applied_actions
+                if ":remove_grant:" in action_id
+            )
+        )
+    assert applied_ids[0] == applied_ids[1]
+    assert len(set(applied_ids[0])) == 2
+
 
 @pytest.mark.parametrize(
     "coordinate",
@@ -518,6 +539,172 @@ def test_concrete_adapter_replay_after_audit_failure_revokes_and_audits_exactly_
     rendered = repr(remove_events)
     for secret in ("admin-1", "grant-1", "global", "issuer.example", "provider-secret-subject"):
         assert secret not in rendered
+
+
+@pytest.mark.parametrize("reverse_inventory", [False, True])
+def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
+    monkeypatch, reverse_inventory
+):
+    from stoa.db.repositories import capability_repo
+    from stoa.services import privileged_identity_service
+
+    table = CapabilityTable()
+    coordinates = (
+        GrantCoordinate(
+            capability_repo.ADMIN_IDENTITY_MANAGER, "global", 1, "shared-grant", 1
+        ),
+        GrantCoordinate(
+            capability_repo.STUDENT_SUPPORT_LOOKUP,
+            "student:student-2", 1, "shared-grant", 1,
+        ),
+    )
+    for index, coordinate in enumerate(coordinates, start=1):
+        capability_repo.grant_capability(
+            user_id="admin-1",
+            command_id=f"approved-command-{index}",
+            grant_id=coordinate.grant_id,
+            capability=coordinate.capability,
+            scope=coordinate.scope,
+            grantor_id="manager",
+            reason="approved",
+            effective_at="2026-07-15T10:00:00Z",
+            expected_generation=0,
+            table_factory=lambda: table,
+        )
+    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    audit = AuditRepository(fail_remove_once=True)
+    adapter, _, _ = _repository_adapter(monkeypatch, table, audit)
+    checkpoint = MemoryCheckpointStore()
+    inventory = tuple(
+        GrantSnapshot(
+            coordinate.grant_id,
+            coordinate.capability,
+            coordinate.scope,
+            generation=coordinate.generation,
+            version=coordinate.version,
+        )
+        for coordinate in coordinates
+    )
+    if reverse_inventory:
+        inventory = tuple(reversed(inventory))
+    snapshot = _snapshot(user_id="admin-1", approved=False, grants=inventory)
+    kwargs = dict(
+        run_id="duplicate-coordinate-run",
+        apply=True,
+        environment="non-production",
+        confirmation="APPLY_TIGHTENING",
+        approved_run_id="duplicate-coordinate-run",
+        adapter=adapter,
+        checkpoints=checkpoint,
+    )
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        reconcile_inventory([snapshot], **kwargs)
+    completed = reconcile_inventory([snapshot], **kwargs)
+    replay = reconcile_inventory([snapshot], **kwargs)
+
+    assert capability_repo.get_current_grants(
+        "admin-1", table_factory=lambda: table
+    ) == []
+    remove_ids = {
+        action_id
+        for action_id in completed.applied_actions + replay.skipped_actions
+        if ":remove_grant:" in action_id
+    }
+    assert len(remove_ids) == 2
+    remove_events = [
+        event for _, event in audit.events.values() if event["action"] == "remove_grant"
+    ]
+    assert len(remove_events) == 2
+    assert table.transactions == 4  # two grants plus one exact revoke per lineage
+
+    commands = {}
+    profiles = {
+        "admin-1": {
+            "user_id": "admin-1", "role": "admin", "account_status": "suspended"
+        }
+    }
+    monkeypatch.setattr(
+        privileged_identity_service.privileged_identity_repo,
+        "create_command",
+        lambda item: (commands.setdefault(item["command_id"], dict(item)), True),
+    )
+
+    def update_command(command_id, **updates):
+        command = commands[command_id]
+        command.update(
+            status=updates["status"],
+            version=updates["expected_version"] + 1,
+            evidence_reference=updates["evidence_reference"],
+        )
+        return dict(command)
+
+    monkeypatch.setattr(
+        privileged_identity_service.privileged_identity_repo,
+        "update_command",
+        update_command,
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.user_repo,
+        "get_user",
+        lambda user_id: dict(profiles[user_id]),
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.user_repo,
+        "put_user",
+        lambda item: profiles.__setitem__(item["user_id"], dict(item)),
+    )
+    monkeypatch.setattr(
+        privileged_identity_service.security_audit_repo,
+        "append_event",
+        lambda *_args, **_kwargs: None,
+    )
+
+    class RestoreProvider:
+        def admin_add_user_to_group(self, **_kwargs):
+            return None
+
+    before_restore_transactions = table.transactions
+    restored = privileged_identity_service.change_admin_status(
+        actor={
+            "user_id": "manager",
+            "role": "admin",
+            "account_status": "active",
+            "capabilities": {capability_repo.ADMIN_IDENTITY_MANAGER: True},
+        },
+        command_id="restore-command",
+        target_id="admin-1",
+        operation="restore",
+        reason="separate approved account restore",
+        provider=RestoreProvider(),
+        provider_username="admin-1",
+    )
+    assert restored["status"] == "active"
+    assert profiles["admin-1"]["account_status"] == "active"
+    assert table.transactions == before_restore_transactions
+    assert capability_repo.get_current_grants(
+        "admin-1", table_factory=lambda: table
+    ) == []
+
+    replacement = capability_repo.grant_capability(
+        user_id="admin-1",
+        command_id="new-manager-approved-command",
+        grant_id="new-grant-identity",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global",
+        grantor_id="manager",
+        reason="new approval",
+        effective_at="2026-07-15T12:00:00Z",
+        expected_generation=1,
+        table_factory=lambda: table,
+    )
+    assert (replacement["generation"], replacement["version"]) == (2, 1)
+    assert [
+        row["grant_id"]
+        for row in capability_repo.get_current_grants(
+            "admin-1", table_factory=lambda: table
+        )
+    ] == ["new-grant-identity"]
 
 
 def test_stale_reconciliation_action_cannot_revoke_later_regrant(monkeypatch):

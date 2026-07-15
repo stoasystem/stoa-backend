@@ -11,7 +11,9 @@ from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
     AuthorizationSpec,
+    ResourceRef,
     ResourceType,
+    operator_capability_decision,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode, safe_error_body
 from stoa.security.events import contains_canary, project_security_event
@@ -254,6 +256,37 @@ async def test_identity_status_and_grant_revocation_apply_on_next_resolution():
     with pytest.raises(SecurityDecisionError) as exc_info:
         await resolve_actor(verified_token(), repository)
     assert exc_info.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.asyncio
+async def test_restored_account_fresh_actor_does_not_revive_quarantined_grant_lineages():
+    repository = active_repository(
+        binding={"status": "active", "user_id": "admin-1"},
+        account={
+            "user_id": "admin-1", "role": "admin", "account_status": "active"
+        },
+        grants=[],
+    )
+    token = VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="admin-client",
+        groups=("admins",),
+    )
+
+    actor = await resolve_actor(token, repository)
+    decision = operator_capability_decision(
+        actor,
+        capability="admin_identity_manager",
+        resource=ResourceRef(ResourceType.STUDENT, "student-2", "student-2"),
+        action=AuthorizationAction.UPDATE,
+        purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
+    )
+
+    assert actor.account_status is AccountStatus.ACTIVE
+    assert actor.current_grants == ()
+    assert decision.allowed is False
+    assert decision.result_code is SecurityErrorCode.ACTION_NOT_ALLOWED
 
 
 def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
