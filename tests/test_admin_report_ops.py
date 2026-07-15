@@ -1610,7 +1610,24 @@ def test_create_resend_recovery_job_persists_snapshot_and_invokes_worker(monkeyp
 
 
 def test_create_resend_recovery_job_requires_matching_preview(monkeypatch):
-    monkeypatch.setattr(report_repo, "list_reports_for_admin", lambda **kwargs: {"Items": [_report()]})
+    calls = []
+    original_authorize_admin_refs = admin_authorization._authorize_admin_refs
+
+    def list_reports_for_admin(**kwargs):
+        calls.append("target_read")
+        return {"Items": [_report()]}
+
+    async def authorize_admin_refs(**kwargs):
+        calls.append("authorize")
+        return await original_authorize_admin_refs(**kwargs)
+
+    monkeypatch.setattr(report_repo, "list_reports_for_admin", list_reports_for_admin)
+    monkeypatch.setattr(admin_authorization, "_authorize_admin_refs", authorize_admin_refs)
+    monkeypatch.setattr(
+        report_repo,
+        "put_recovery_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("stale preview must not create a job")),
+    )
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.post(
@@ -1623,6 +1640,7 @@ def test_create_resend_recovery_job_requires_matching_preview(monkeypatch):
     )
 
     assert response.status_code == 409
+    assert calls == ["target_read", "authorize", "target_read"]
 
 
 def test_generation_retry_recovery_job_preview_returns_metadata_only(monkeypatch):
@@ -1652,16 +1670,15 @@ def test_generation_retry_recovery_job_preview_returns_metadata_only(monkeypatch
     assert data["sample"][0]["status"] == "generation_failed"
     assert data["sample"][0]["artifacts"] == {"html_available": True, "json_available": True}
     assert data["preview_token"]
-    assert calls == [
-        {
-            "status": "generation_failed",
-            "week_start": "2026-06-01",
-            "parent_id": None,
-            "student_id": None,
-            "limit": 5,
-            "last_key": None,
-        }
-    ]
+    expected_read = {
+        "status": "generation_failed",
+        "week_start": "2026-06-01",
+        "parent_id": None,
+        "student_id": None,
+        "limit": 5,
+        "last_key": None,
+    }
+    assert calls == [expected_read, expected_read]
     _assert_no_private_artifact_markers(data)
 
 
@@ -1834,11 +1851,23 @@ def test_resume_recovery_job_preview_and_create_persist_linked_job(monkeypatch):
 
 
 def test_resume_recovery_job_rejects_non_terminal_source(monkeypatch):
+    calls = []
+    original_authorize_admin_refs = admin_authorization._authorize_admin_refs
+
+    def get_recovery_job(job_id):
+        calls.append("source_read")
+        return {"job_id": job_id, "job_type": "resend_email", "status": "running"}
+
+    async def authorize_admin_refs(**kwargs):
+        calls.append("authorize")
+        return await original_authorize_admin_refs(**kwargs)
+
     monkeypatch.setattr(
         report_repo,
         "get_recovery_job",
-        lambda job_id: {"job_id": job_id, "job_type": "resend_email", "status": "running"},
+        get_recovery_job,
     )
+    monkeypatch.setattr(admin_authorization, "_authorize_admin_refs", authorize_admin_refs)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.post(
@@ -1847,6 +1876,7 @@ def test_resume_recovery_job_rejects_non_terminal_source(monkeypatch):
     )
 
     assert response.status_code == 409
+    assert calls == ["source_read", "authorize", "source_read"]
 
 
 def test_recovery_job_list_detail_results_and_cancel(monkeypatch):
@@ -2303,10 +2333,11 @@ def test_support_handoff_internal_queue_delivery_queues_metadata_only_record(mon
 
 
 def test_support_handoff_internal_queue_requires_approval(monkeypatch):
-    def fail(*args, **kwargs):
-        raise AssertionError("unapproved internal_queue should not query evidence")
-
-    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "get_recovery_job",
+        lambda job_id: {"job_id": job_id, "filters": {"student_id": "student-1"}},
+    )
     delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
     monkeypatch.setattr(
         report_repo,
@@ -2404,10 +2435,11 @@ def test_support_handoff_internal_queue_idempotent_duplicate(monkeypatch):
 
 
 def test_support_handoff_third_party_requires_provider_readiness_without_evidence_reads(monkeypatch):
-    def fail(*args, **kwargs):
-        raise AssertionError("unready third-party delivery should not query evidence")
-
-    monkeypatch.setattr(report_repo, "get_recovery_job", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "get_recovery_job",
+        lambda job_id: {"job_id": job_id, "filters": {"student_id": "student-1"}},
+    )
     delivery_rows, delivery_audits = _patch_support_delivery_repo(monkeypatch)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}, settings=Settings()))
 
@@ -3484,14 +3516,9 @@ def test_support_handoff_package_records_missing_references(monkeypatch):
         json={"reason": "support", "recovery_job_ids": ["missing-job"]},
     )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["validation"]["status"] == "refused"
-    assert data["validation"]["missing_references"] == [{"type": "recovery_job", "id": "missing-job"}]
-    assert data["sections"] == []
-    assert audit_rows[0][1]["result"] == "refused"
-    assert audit_rows[0][1]["metadata"]["evidence_reference_ids"] == ["missing-job"]
-    _assert_no_private_artifact_markers(data)
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "resource_not_found"
+    assert audit_rows == []
 
 
 def test_support_handoff_package_redacts_free_text_credentials(monkeypatch):

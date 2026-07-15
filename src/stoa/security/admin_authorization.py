@@ -67,6 +67,10 @@ class AdminTargetProvider:
     resolver: str | None = None
 
 
+class _ResolvedTargetNotFound(Exception):
+    """Internal marker converted to the standard correlated 404 projection."""
+
+
 def _read_typed_path(value: object, path: str) -> object:
     current = value
     for part in path.split("."):
@@ -109,17 +113,8 @@ def _provider_refs(
         targets, _ = report_recovery_job_service._collect_targets(  # noqa: SLF001 - allowlisted read-only resolver
             job_type=job_type, filters=filter_values, max_targets=max_targets
         )
-        preview_token = _read_typed_path(body, "preview_token")
-        if preview_token:
-            preview = report_recovery_job_service._preview_job(  # noqa: SLF001
-                job_type=job_type,
-                reason=str(_read_typed_path(body, "reason") or ""),
-                operator=actor.user_id,
-                filters=filter_values,
-                max_targets=max_targets,
-            )
-            if preview["preview_token"] != preview_token:
-                raise ValueError("preview target set changed")
+        # The resolver materializes identity only.  Preview-token/business-state
+        # validation remains in the endpoint service after exact authorization.
         refs = []
         seen = set()
         for target in targets:
@@ -146,27 +141,37 @@ def _provider_refs(
             refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
         return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
     if provider.resolver == "report_recovery_resume":
+        from stoa.db.repositories import report_repo
         from stoa.services import report_recovery_job_service
 
         job_id = str(request_values.get("job_id") or "")
         max_targets = int(_read_typed_path(body, "max_targets") or 25)
         results = list(_read_typed_path(body, "results") or ())
-        report_recovery_job_service._get_resumable_source_job(job_id)  # noqa: SLF001
         normalized = report_recovery_job_service._normalized_resume_results(results)  # noqa: SLF001
+        source_job = report_repo.get_recovery_job(job_id)
+        if not source_job:
+            raise _ResolvedTargetNotFound
+        # A non-terminal/type-invalid source is still an exact job target, but
+        # its business-state rejection must happen only after authorization.
+        if (
+            str(source_job.get("job_type") or report_recovery_job_service.RESEND_JOB_TYPE)
+            not in {
+                report_recovery_job_service.RESEND_JOB_TYPE,
+                report_recovery_job_service.GENERATION_RETRY_JOB_TYPE,
+            }
+            or source_job.get("status") not in report_recovery_job_service.RESUMABLE_SOURCE_STATUSES
+        ):
+            return (
+                ResourceRef(
+                    policy.resource_type,
+                    _canonical_coordinate((("job_id", job_id),)),
+                    actor.user_id,
+                    relationship_known=True,
+                ),
+            )
         targets = report_recovery_job_service._collect_resume_targets(  # noqa: SLF001
             job_id, result_filters=normalized, max_targets=max_targets
         )
-        preview_token = _read_typed_path(body, "preview_token")
-        if preview_token:
-            preview = report_recovery_job_service.preview_resume_job(
-                source_job_id=job_id,
-                reason=str(_read_typed_path(body, "reason") or ""),
-                operator=actor.user_id,
-                results=results,
-                max_targets=max_targets,
-            )
-            if preview["preview_token"] != preview_token:
-                raise ValueError("preview target set changed")
         refs = []
         seen = set()
         for target in targets:
@@ -193,10 +198,17 @@ def _provider_refs(
         from stoa.db.repositories import report_repo
 
         coordinate_maps: list[dict[str, str]] = []
+        destination = str(_read_typed_path(body, "destination_mode") or "preview").strip()
+        consumes_recovery_evidence = destination in {
+            "preview", "copy", "download", "internal_queue", "third_party_support",
+        }
         for job_id in list(_read_typed_path(body, "recovery_job_ids") or ()):
+            if not consumes_recovery_evidence:
+                coordinate_maps.append({"job_id": str(job_id)})
+                continue
             job = report_repo.get_recovery_job(str(job_id))
             if not job:
-                raise ValueError("handoff recovery job target is missing")
+                raise _ResolvedTargetNotFound
             filters = job.get("filters") or {}
             coordinate_maps.append({
                 key: str(value) for key, value in {
@@ -306,6 +318,13 @@ def admin_target_provider(provider: AdminTargetProvider):
                 )
             except HTTPException:
                 raise
+            except _ResolvedTargetNotFound as exc:
+                raise _admin_http_error(
+                    SecurityDecisionError(
+                        SecurityErrorCode.RESOURCE_NOT_FOUND,
+                        context["correlation_id"],
+                    )
+                ) from exc
             except (TypeError, ValueError) as exc:
                 error = SecurityDecisionError(
                     SecurityErrorCode.ACTION_NOT_ALLOWED,
@@ -314,6 +333,11 @@ def admin_target_provider(provider: AdminTargetProvider):
                 )
                 raise _admin_http_error(error) from exc
             except Exception as exc:
+                if int(getattr(exc, "status_code", 500)) == 422:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=str(getattr(exc, "detail", "Invalid recovery target selection")),
+                    ) from exc
                 code = (
                     SecurityErrorCode.ACTION_NOT_ALLOWED
                     if 400 <= int(getattr(exc, "status_code", 500)) < 500

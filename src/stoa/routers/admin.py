@@ -125,6 +125,7 @@ GOVERNANCE_REFERENCE_TARGETS = AdminTargetProvider(
     ("references.job_id", "references.parent_id", "references.student_id", "references.week_start"),
     ("references.job_id", "references.parent_id", "references.student_id", "references.week_start"),
     maximum=10,
+    required=False,
     collection_path="references",
     reference_only=("reason", "release_evidence", "break_glass", "evidence_references"),
 )

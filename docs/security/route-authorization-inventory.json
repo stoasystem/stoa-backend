@@ -2642,7 +2642,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2688,7 +2688,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2772,7 +2772,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2818,7 +2818,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2864,7 +2864,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2910,7 +2910,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -2956,7 +2956,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
@@ -3299,7 +3299,7 @@
         "break_glass",
         "evidence_references"
       ],
-      "required": true,
+      "required": false,
       "resolver": null,
       "targetPaths": [
         "references.job_id",
