@@ -1,4 +1,9 @@
+import base64
+import binascii
+from dataclasses import dataclass
 from functools import lru_cache
+import hashlib
+import re
 from typing import Dict, List
 
 from pydantic import model_validator
@@ -8,10 +13,106 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LOCAL_REPORTS_BUCKET_PLACEHOLDER = "stoa-reports"
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
 DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
+AUDIT_KEY_MINIMUM_BYTES = 32
+_AUDIT_PLACEHOLDER_MARKERS = (
+    "changeme",
+    "default",
+    "development",
+    "example",
+    "insecure",
+    "placeholder",
+    "sample",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedAuthorizationAuditKey:
+    key_id: str
+    secret: bytes
+
+
+def _audit_key_error(category: str) -> ValueError:
+    """Return a category-only error that is safe to log during startup."""
+    return ValueError(f"authorization_audit_key_{category}")
+
+
+def parse_authorization_audit_secret(secret: str) -> bytes:
+    """Decode one audit secret without silently accepting malformed encodings."""
+    value = str(secret)
+    try:
+        if value.startswith("hex:"):
+            encoded = value[4:]
+            if not encoded or len(encoded) % 2 or not re.fullmatch(r"[0-9a-fA-F]+", encoded):
+                raise _audit_key_error("malformed")
+            return bytes.fromhex(encoded)
+        if value.startswith("base64:"):
+            encoded = value[7:]
+            if not encoded:
+                raise _audit_key_error("malformed")
+            return base64.b64decode(encoded, validate=True)
+        return value.encode("utf-8")
+    except (binascii.Error, UnicodeError) as exc:
+        raise _audit_key_error("malformed") from exc
+
+
+def _has_repeated_pattern(material: bytes) -> bool:
+    return any(
+        len(material) % width == 0 and material == material[:width] * (len(material) // width)
+        for width in range(1, min(8, len(material) // 2) + 1)
+    )
+
+
+def validate_authorization_audit_keyring(
+    active_key_id: str,
+    active_secret: str,
+    previous_keys: Dict[str, str] | None = None,
+    *,
+    allow_development_default: bool = False,
+) -> tuple[ValidatedAuthorizationAuditKey, tuple[ValidatedAuthorizationAuditKey, ...]]:
+    """Normalize and validate a unique, 256-bit-or-stronger audit keyring."""
+    raw_entries = [(active_key_id, active_secret), *((previous_keys or {}).items())]
+    validated: list[ValidatedAuthorizationAuditKey] = []
+    key_ids: set[str] = set()
+    material_digests: set[bytes] = set()
+
+    for raw_key_id, raw_secret in raw_entries:
+        key_id = str(raw_key_id).strip()
+        if not key_id:
+            raise _audit_key_error("id_missing")
+        if key_id in key_ids:
+            raise _audit_key_error("id_duplicate")
+
+        secret_text = str(raw_secret)
+        if allow_development_default and len(raw_entries) == 1 and secret_text == DEVELOPMENT_AUDIT_KEY:
+            material = secret_text.encode("utf-8")
+        else:
+            material = parse_authorization_audit_secret(secret_text)
+            marker_text = "".join(chr(byte).lower() for byte in material if chr(byte).isalnum())
+            if len(material) < AUDIT_KEY_MINIMUM_BYTES:
+                raise _audit_key_error("weak")
+            if len(set(material)) < 8 or _has_repeated_pattern(material):
+                raise _audit_key_error("weak")
+            if secret_text == DEVELOPMENT_AUDIT_KEY or any(
+                marker in marker_text for marker in _AUDIT_PLACEHOLDER_MARKERS
+            ):
+                raise _audit_key_error("placeholder")
+
+        digest = hashlib.sha256(material).digest()
+        if digest in material_digests:
+            raise _audit_key_error("material_duplicate")
+        key_ids.add(key_id)
+        material_digests.add(digest)
+        validated.append(ValidatedAuthorizationAuditKey(key_id, material))
+
+    return validated[0], tuple(validated[1:])
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        hide_input_in_errors=True,
+    )
 
     # App
     environment: str = "development"
@@ -103,16 +204,21 @@ class Settings(BaseSettings):
             raise ValueError("Cognito JWKS maximum stale window must be at least its TTL")
         if self.is_production and (not issuers or not clients):
             raise ValueError("Production requires Cognito issuer and access-client allowlists")
-        audit_key_id = self.authorization_audit_active_key_id.strip()
-        audit_key = self.authorization_audit_active_key.strip()
-        if self.is_production and (
-            not audit_key_id or not audit_key or audit_key == DEVELOPMENT_AUDIT_KEY
-        ):
-            raise ValueError("Production requires a non-placeholder authorization audit key")
-        if audit_key_id in self.authorization_audit_previous_keys:
-            raise ValueError("Authorization audit active key cannot also be a previous key")
-        if any(not str(key_id).strip() or not str(secret).strip() for key_id, secret in self.authorization_audit_previous_keys.items()):
-            raise ValueError("Authorization audit previous keys require non-empty IDs and secrets")
+        if self.is_production:
+            validate_authorization_audit_keyring(
+                self.authorization_audit_active_key_id,
+                self.authorization_audit_active_key,
+                self.authorization_audit_previous_keys,
+            )
+        else:
+            # Local startup keeps the explicit development-only default. Any
+            # configured keyring still follows the production parsing contract.
+            validate_authorization_audit_keyring(
+                self.authorization_audit_active_key_id,
+                self.authorization_audit_active_key,
+                self.authorization_audit_previous_keys,
+                allow_development_default=True,
+            )
         if self.authorization_audit_probe_window_seconds <= 0:
             raise ValueError("Authorization audit probe window must be positive")
         if self.authorization_audit_probe_ttl_seconds < self.authorization_audit_probe_window_seconds:

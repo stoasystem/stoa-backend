@@ -10,6 +10,7 @@ from typing import Any, Mapping, Protocol, Sequence
 
 from botocore.exceptions import ClientError
 
+from stoa.config import validate_authorization_audit_keyring
 from stoa.db.dynamodb import get_table
 
 
@@ -177,18 +178,24 @@ class DynamoAuthorizationAuditSink:
         active_key_id: str,
         active_secret: str,
         previous_keys: Mapping[str, str] | None = None,
+        allow_development_default: bool = False,
         probe_window_seconds: int = 300,
         probe_ttl_seconds: int = 86400,
         probe_count_cap: int = 100,
         probe_id_cap: int = 256,
     ) -> None:
-        if not active_key_id.strip() or not active_secret.strip():
-            raise AuthorizationAuditUnavailable("authorization_audit_key_missing")
-        self._active = AuthorizationAuditKey(active_key_id.strip(), active_secret.encode())
+        try:
+            active, previous = validate_authorization_audit_keyring(
+                active_key_id,
+                active_secret,
+                dict(previous_keys or {}),
+                allow_development_default=allow_development_default,
+            )
+        except (TypeError, ValueError) as exc:
+            raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable") from exc
+        self._active = AuthorizationAuditKey(active.key_id, active.secret)
         self._previous = tuple(
-            AuthorizationAuditKey(str(key_id).strip(), str(secret).encode())
-            for key_id, secret in (previous_keys or {}).items()
-            if str(key_id).strip() and str(secret).strip()
+            AuthorizationAuditKey(key.key_id, key.secret) for key in previous
         )
         self._window = probe_window_seconds
         self._ttl = probe_ttl_seconds

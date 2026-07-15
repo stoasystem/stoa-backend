@@ -60,6 +60,10 @@ def _decision(allowed: bool, correlation_id: str = "request-1") -> PolicyDecisio
     )
 
 
+def _strong_audit_key(offset: int = 0) -> str:
+    return "hex:" + bytes((offset + index) % 256 for index in range(32)).hex()
+
+
 @pytest.mark.parametrize("inbound", ["caller-reused", "authorization"])
 def test_correlation_is_server_generated_cached_and_returned(inbound):
     app = FastAPI()
@@ -220,18 +224,20 @@ def test_dynamo_sink_rotation_recognizes_old_key_replay_and_redacts(monkeypatch)
         evidence_reference=None,
         created_at=datetime(2026, 7, 15, tzinfo=UTC),
     )
-    old = DynamoAuthorizationAuditSink(active_key_id="old-v1", active_secret="old-secret")
+    old_secret = _strong_audit_key()
+    new_secret = _strong_audit_key(32)
+    old = DynamoAuthorizationAuditSink(active_key_id="old-v1", active_secret=old_secret)
     old_record = old.persist_authorization_decision(**values)
     rotated = DynamoAuthorizationAuditSink(
         active_key_id="new-v2",
-        active_secret="new-secret",
-        previous_keys={"old-v1": "old-secret"},
+        active_secret=new_secret,
+        previous_keys={"old-v1": old_secret},
     )
     replay = rotated.persist_authorization_decision(**values)
     assert replay.replayed and replay.event_id == old_record.event_id
     assert len(table.rows) == 1
     assert "student-rotation-canary" not in repr(table.rows)
-    assert "old-secret" not in repr(table.rows)
+    assert old_secret not in repr(table.rows)
 
 
 def test_dynamo_probe_aggregate_is_one_bounded_redacted_window(monkeypatch):
@@ -239,7 +245,7 @@ def test_dynamo_probe_aggregate_is_one_bounded_redacted_window(monkeypatch):
     monkeypatch.setattr(security_audit_repo, "get_table", lambda: table)
     sink = DynamoAuthorizationAuditSink(
         active_key_id="test-v1",
-        active_secret="test-secret",
+        active_secret=_strong_audit_key(),
         probe_count_cap=2,
         probe_id_cap=3,
     )
@@ -282,13 +288,78 @@ def test_dynamo_probe_aggregate_is_one_bounded_redacted_window(monkeypatch):
 
 
 def test_production_requires_non_placeholder_audit_key():
-    with pytest.raises(ValueError, match="authorization audit key"):
+    with pytest.raises(ValueError, match="authorization_audit_key_placeholder"):
         Settings(
             environment="production",
             cognito_allowed_issuers=["https://identity.test"],
             cognito_access_client_ids=["client-1"],
             authorization_audit_active_key=DEVELOPMENT_AUDIT_KEY,
         )
+
+
+def _production_settings(**overrides) -> Settings:
+    values = {
+        "environment": "production",
+        "cognito_allowed_issuers": ["https://identity.test"],
+        "cognito_access_client_ids": ["client-1"],
+        "authorization_audit_active_key_id": "active-v2",
+        "authorization_audit_active_key": _strong_audit_key(32),
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+@pytest.mark.parametrize(
+    "secret,category",
+    [
+        ("weak-canary", "weak"),
+        ("short-secret-canary-31-bytes!", "weak"),
+        ("z" * 64, "weak"),
+        ("change-me-placeholder-key-material-123456789", "placeholder"),
+        ("hex:not-hex", "malformed"),
+        ("base64:not valid!", "malformed"),
+    ],
+)
+def test_production_rejects_weak_placeholder_and_malformed_audit_secrets(secret, category):
+    canary = secret
+    with pytest.raises(ValueError, match=f"authorization_audit_key_{category}") as failure:
+        _production_settings(authorization_audit_active_key=secret)
+    assert canary not in str(failure.value)
+
+
+@pytest.mark.parametrize(
+    "previous_keys,category",
+    [
+        ({" retained ": _strong_audit_key(), "retained": _strong_audit_key(64)}, "id_duplicate"),
+        ({"active-v2": _strong_audit_key()}, "id_duplicate"),
+        ({"retained-v1": _strong_audit_key(32)}, "material_duplicate"),
+        ({"retained-v1": "short"}, "weak"),
+    ],
+)
+def test_production_rejects_ambiguous_or_weak_retained_audit_keys(previous_keys, category):
+    with pytest.raises(ValueError, match=f"authorization_audit_key_{category}"):
+        _production_settings(authorization_audit_previous_keys=previous_keys)
+
+
+def test_production_accepts_unique_strong_rotated_keyring_and_normalizes_ids():
+    settings = _production_settings(
+        authorization_audit_active_key_id=" active-v2 ",
+        authorization_audit_previous_keys={" retained-v1 ": _strong_audit_key()},
+    )
+    sink = DynamoAuthorizationAuditSink(
+        active_key_id=settings.authorization_audit_active_key_id,
+        active_secret=settings.authorization_audit_active_key,
+        previous_keys=settings.authorization_audit_previous_keys,
+    )
+    assert [key.key_id for key in sink.keys] == ["active-v2", "retained-v1"]
+    assert all(len(key.secret) == 32 for key in sink.keys)
+
+
+def test_direct_sink_rejects_invalid_keyring_without_exposing_material():
+    canary = "sink-secret-canary"
+    with pytest.raises(Exception, match="authorization_audit_key_unavailable") as failure:
+        DynamoAuthorizationAuditSink(active_key_id="active-v1", active_secret=canary)
+    assert canary not in str(failure.value)
 
 
 def test_all_production_authorization_call_sites_use_recording_gateway():
@@ -514,9 +585,15 @@ async def test_break_glass_positive_requires_working_sink():
 
 def test_missing_audit_key_creates_fail_closed_sink():
     sink = get_authorization_audit_sink(
-        Settings(
+        Settings.model_construct(
             authorization_audit_active_key_id="",
             authorization_audit_active_key="",
+            authorization_audit_previous_keys={},
+            authorization_audit_probe_window_seconds=300,
+            authorization_audit_probe_ttl_seconds=86400,
+            authorization_audit_probe_count_cap=100,
+            authorization_audit_probe_id_cap=256,
+            environment="development",
         )
     )
     with pytest.raises(Exception, match="authorization_audit_key_unavailable"):
