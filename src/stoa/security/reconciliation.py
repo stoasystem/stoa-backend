@@ -28,6 +28,7 @@ class GrantSnapshot:
     capability: str
     scope: str
     status: str = "active"
+    generation: int = 1
     version: int = 1
 
 
@@ -185,14 +186,14 @@ def plan_identity(snapshot: IdentitySnapshot, *, run_id: str) -> ReconciliationI
             actions.append(ReconciliationAction("remove_group", reason, group))
         if privileged_groups or legacy_groups:
             actions.append(ReconciliationAction("global_sign_out", reason))
-        for grant in invalid_grants:
+        for grant in snapshot.grants:
             actions.append(ReconciliationAction("remove_grant", reason, grant.grant_id))
 
     before = _safe_state(snapshot)
     after = dict(before)
     if actions:
         after.update(profileStatus="suspended_pending_review", privilegedGroupCount=0)
-        after["grantCount"] = max(0, len(snapshot.grants) - len(invalid_grants))
+        after["grantCount"] = 0
     checkpoint = sha256(f"{run_id}:{item_id}".encode()).hexdigest()[:24]
     return ReconciliationItem(
         item_id, classification, reason, before, after, tuple(actions), checkpoint,

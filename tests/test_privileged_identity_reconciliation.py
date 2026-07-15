@@ -1,6 +1,7 @@
 """T-472-05 reconciliation contracts: automation tightens privilege only."""
 
 import pytest
+from botocore.exceptions import ClientError
 
 from stoa.security.reconciliation import (
     GrantSnapshot,
@@ -9,6 +10,60 @@ from stoa.security.reconciliation import (
     ReconciliationAction,
     reconcile_inventory,
 )
+
+
+class CapabilityTable:
+    """Atomic in-memory table for the capability repository contract."""
+
+    def __init__(self, items=()):
+        self.items = {(item["PK"], item["SK"]): dict(item) for item in items}
+        self.transactions = 0
+
+    def get_item(self, *, Key, **_kwargs):
+        item = self.items.get((Key["PK"], Key["SK"]))
+        return {"Item": dict(item)} if item else {}
+
+    def query(self, **_kwargs):
+        return {"Items": [dict(item) for item in self.items.values()]}
+
+    def apply_capability_transaction(self, operations):
+        pending = dict(self.items)
+        for operation in operations:
+            item = operation["item"]
+            key = (item["PK"], item["SK"])
+            current = pending.get(key)
+            if operation["condition"] == "absent" and current is not None:
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "TransactWriteItems"
+                )
+            if operation["condition"] != "absent" and (
+                current is None
+                or any(current.get(name) != value for name, value in operation["expected"].items())
+            ):
+                raise ClientError(
+                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "TransactWriteItems"
+                )
+            pending[key] = dict(item)
+        self.items = pending
+        self.transactions += 1
+
+
+def _legacy_grant(*, grant_id="legacy-1", status="active", version=1):
+    from stoa.db.repositories import capability_repo
+
+    return {
+        **capability_repo._grant_key(
+            "admin-1", capability_repo.ADMIN_IDENTITY_MANAGER, "global", grant_id
+        ),
+        "entity_type": "capability_grant",
+        "user_id": "admin-1",
+        "grant_id": grant_id,
+        "capability": capability_repo.ADMIN_IDENTITY_MANAGER,
+        "scope": "global",
+        "status": status,
+        "version": version,
+        "effective_at": "2026-07-15T10:00:00Z",
+    }
 
 
 @pytest.mark.parametrize(
@@ -158,3 +213,117 @@ def test_dry_run_safe_projection_contains_no_raw_identity_provider_or_group_valu
 def test_privilege_increase_actions_are_never_automatic():
     for action in ("add_group", "restore_account", "grant_capability", "activate_account"):
         assert ReconciliationAction(action, "requires approval").privilege_increase
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"approved": False},
+        {"binding_count": 0},
+        {"binding_count": 2},
+        {"groups": ("admins", "teachers")},
+        {"profile_role": "teacher"},
+        {"profile_status": "disabled"},
+    ],
+)
+def test_all_grants_are_removed_and_grant_count_is_zero_for_every_non_exact_identity(overrides):
+    grants = (
+        GrantSnapshot("valid-1", "admin_identity_manager", "global"),
+        GrantSnapshot("invalid-1", "student_support_lookup", "global", status="revoked", version=2),
+    )
+    item = reconcile_inventory([_snapshot(grants=grants, **overrides)], run_id="quarantine").items[0]
+    assert [action.target for action in item.actions if action.action == "remove_grant"] == [
+        "valid-1", "invalid-1"
+    ]
+    assert item.after["grantCount"] == 0
+
+
+def test_lineage_current_pointer_is_the_only_authority_and_history_cannot_revive():
+    from stoa.db.repositories import capability_repo
+
+    table = CapabilityTable()
+    active = capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-1", grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global",
+        grantor_id="manager-1", reason="approved", effective_at="2026-07-15T10:00:00Z",
+        expected_generation=0, table_factory=lambda: table,
+    )
+    assert active["generation"] == 1
+    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-1"]
+
+    revoked = capability_repo.revoke_capability(
+        user_id="admin-1", grant_id="grant-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global", expected_generation=1, expected_version=1, actor_id="manager-1",
+        reason="conflict", changed_at="2026-07-15T10:01:00Z", action_id="action-1",
+        table_factory=lambda: table,
+    )
+    assert revoked["version"] == 2
+    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert len([row for row in table.items.values() if row.get("entity_type") == "capability_grant_revision"]) == 2
+
+    replacement = capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-2", grant_id="grant-2",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global",
+        grantor_id="manager-1", reason="new approval", effective_at="2026-07-15T10:02:00Z",
+        expected_generation=1, table_factory=lambda: table,
+    )
+    assert (replacement["generation"], replacement["version"]) == (2, 1)
+    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-2"]
+
+
+def test_lineage_stale_revoke_cannot_touch_replacement_and_ids_cannot_be_reused():
+    from stoa.db.repositories import capability_repo
+
+    table = CapabilityTable()
+    capability_repo.grant_capability(
+        user_id="admin-1", command_id="command-1", grant_id="grant-1",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global", grantor_id="manager",
+        reason="approved", effective_at="2026-07-15T10:00:00Z", expected_generation=0,
+        table_factory=lambda: table,
+    )
+    capability_repo.revoke_capability(
+        user_id="admin-1", grant_id="grant-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global", expected_generation=1, expected_version=1, actor_id="manager", reason="conflict",
+        changed_at="2026-07-15T10:01:00Z", action_id="action-1", table_factory=lambda: table,
+    )
+    for command_id, grant_id in (("command-1", "grant-2"), ("command-2", "grant-1")):
+        with pytest.raises(capability_repo.CapabilityVersionConflict):
+            capability_repo.grant_capability(
+                user_id="admin-1", command_id=command_id, grant_id=grant_id,
+                capability=capability_repo.ADMIN_IDENTITY_MANAGER, scope="global", grantor_id="manager",
+                reason="invalid reuse", effective_at="2026-07-15T10:02:00Z", expected_generation=1,
+                table_factory=lambda: table,
+            )
+
+
+def test_legacy_migration_is_atomic_retry_safe_and_duplicates_fail_closed():
+    from stoa.db.repositories import capability_repo
+
+    table = CapabilityTable([_legacy_grant()])
+    assert len(capability_repo.get_current_grants("admin-1", table_factory=lambda: table)) == 1
+    revoked = capability_repo.revoke_capability(
+        user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global", expected_generation=1, expected_version=1, actor_id="manager",
+        reason="migration quarantine", changed_at="2026-07-15T10:01:00Z", action_id="legacy-action",
+        table_factory=lambda: table,
+    )
+    assert revoked["status"] == "revoked"
+    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    before = dict(table.items)
+    capability_repo.revoke_capability(
+        user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global", expected_generation=1, expected_version=1, actor_id="manager",
+        reason="migration quarantine", changed_at="2026-07-15T10:01:00Z", action_id="legacy-action",
+        table_factory=lambda: table,
+    )
+    assert table.items == before
+
+    duplicates = CapabilityTable([_legacy_grant(), _legacy_grant(grant_id="legacy-2")])
+    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: duplicates) == []
+    with pytest.raises(capability_repo.CapabilityVersionConflict):
+        capability_repo.revoke_capability(
+            user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+            scope="global", expected_generation=1, expected_version=1, actor_id="manager", reason="conflict",
+            changed_at="2026-07-15T10:01:00Z", action_id="duplicate-action",
+            table_factory=lambda: duplicates,
+        )
