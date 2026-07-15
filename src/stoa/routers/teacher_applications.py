@@ -50,7 +50,12 @@ def get_teacher_identity_provider(settings: Settings = Depends(get_settings)) ->
 
 
 @router.post("")
-@explicit_route_classification("public", "no-privilege teacher candidacy submission")
+@explicit_route_classification(
+    "public",
+    "idempotent teacher candidacy submission only",
+    allowed_identifiers=("application_id",),
+    identifier_scope="command-local",
+)
 def apply(payload: TeacherApplicationRequest) -> dict[str, Any]:
     return teacher_application_service.submit_application(payload.model_dump(exclude_none=True))
 

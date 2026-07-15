@@ -332,7 +332,12 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
 # ---------------------------------------------------------------------------
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-@explicit_route_classification("public", "non-privileged public registration command")
+@explicit_route_classification(
+    "public",
+    "pending parent-registration correlation only",
+    allowed_identifiers=("parent_id",),
+    identifier_scope="command-local",
+)
 async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
     """Create a Cognito user and DynamoDB profile, then require email verification."""
     role = body.role.value

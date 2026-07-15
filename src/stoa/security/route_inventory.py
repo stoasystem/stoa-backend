@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Iterable, Literal
+from types import UnionType
+from typing import Annotated, Any, Callable, Iterable, Literal, Union, get_args, get_origin
 
 from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
@@ -16,12 +17,15 @@ from stoa.security.authorization import AuthorizationSpec, ResourceType
 
 
 RouteAccess = Literal["public", "authenticated-global"]
+IdentifierScope = Literal["command-local", "self-only"]
 
 
 @dataclass(frozen=True, slots=True)
 class ExplicitRouteClassification:
     access: RouteAccess
     reason: str
+    allowed_identifiers: tuple[str, ...] = ()
+    identifier_scope: IdentifierScope | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +69,13 @@ class InventoryFailure:
     reason: str
 
 
-def explicit_route_classification(access: RouteAccess, reason: str):
+def explicit_route_classification(
+    access: RouteAccess,
+    reason: str,
+    *,
+    allowed_identifiers: Iterable[str] = (),
+    identifier_scope: IdentifierScope | None = None,
+):
     """Mark an endpoint as deliberately public or authenticated global state."""
 
     if not reason.strip():
@@ -73,7 +83,10 @@ def explicit_route_classification(access: RouteAccess, reason: str):
 
     def decorate(endpoint: Callable[..., Any]) -> Callable[..., Any]:
         endpoint.stoa_route_classification = ExplicitRouteClassification(  # type: ignore[attr-defined]
-            access, reason.strip()
+            access,
+            reason.strip(),
+            tuple(allowed_identifiers),
+            identifier_scope,
         )
         return endpoint
 
@@ -92,13 +105,47 @@ def _walk_dependants(root: Dependant) -> Iterable[Dependant]:
         stack.extend(reversed(dependant.dependencies))
 
 
-def _field_aliases(annotation: Any, *, prefix: str = "") -> set[str]:
+def _field_aliases(
+    annotation: Any,
+    *,
+    prefix: str = "",
+    model_path: frozenset[type[BaseModel]] = frozenset(),
+) -> set[str]:
+    """Return dotted schema aliases from every supported annotation shape.
+
+    ``model_path`` is path-local rather than global: it prevents recursive model
+    cycles while still allowing the same model to be declared in two branches.
+    """
+
     aliases: set[str] = set()
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        return _field_aliases(
+            get_args(annotation)[0], prefix=prefix, model_path=model_path
+        )
+    if origin in {Union, UnionType}:
+        for argument in get_args(annotation):
+            aliases.update(
+                _field_aliases(argument, prefix=prefix, model_path=model_path)
+            )
+        return aliases
+    if origin is not None:
+        for argument in get_args(annotation):
+            aliases.update(
+                _field_aliases(argument, prefix=prefix, model_path=model_path)
+            )
+        return aliases
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        if annotation in model_path:
+            return aliases
+        next_path = model_path | {annotation}
         for name, field in annotation.model_fields.items():
             alias = str(field.alias or name)
-            aliases.add(f"{prefix}{alias}" if prefix else alias)
-            aliases.update(_field_aliases(field.annotation, prefix=f"{alias}."))
+            path = f"{prefix}.{alias}" if prefix else alias
+            aliases.add(path)
+            aliases.update(
+                _field_aliases(field.annotation, prefix=path, model_path=next_path)
+            )
     return aliases
 
 
@@ -122,17 +169,29 @@ def _canonical_identifier(value: str) -> str | None:
 
 
 def _route_identifiers(route: APIRoute) -> tuple[str, ...]:
-    names = {
-        str(field.alias or field.name)
-        for field in (*route.dependant.path_params, *route.dependant.query_params)
-    }
-    for field in route.dependant.body_params:
-        names.update(_field_aliases(field.field_info.annotation))
-    return tuple(sorted(filter(None, (_canonical_identifier(name) for name in names))))
+    names: set[str] = set()
+    for dependant in _walk_dependants(route.dependant):
+        for field in (
+            *dependant.path_params,
+            *dependant.query_params,
+            *dependant.body_params,
+        ):
+            alias = str(field.alias or field.name)
+            names.add(alias)
+            names.update(_field_aliases(field.field_info.annotation))
+    return tuple(sorted(set(filter(None, (_canonical_identifier(name) for name in names)))))
 
 
-def _inventory_spec(spec: AuthorizationSpec) -> InventorySpec:
-    return InventorySpec(spec.resource_type.value, spec.action.value, spec.purpose.value)
+def _inventory_spec(
+    spec: AuthorizationSpec,
+    capability: str | None = None,
+) -> InventorySpec:
+    return InventorySpec(
+        spec.resource_type.value,
+        spec.action.value,
+        spec.purpose.value,
+        capability,
+    )
 
 
 def _admin_inventory_spec(policy: AdminRoutePolicy) -> InventorySpec:
@@ -158,10 +217,21 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     for dependant in _walk_dependants(route.dependant):
         call = dependant.call
         safe_public = safe_public or bool(getattr(call, "safe_public", False))
-        specs.extend(_inventory_spec(spec) for spec in getattr(call, "authorization_specs", ()))
+        capability = getattr(call, "required_capability", None)
+        specs.extend(
+            _inventory_spec(spec, capability)
+            for spec in getattr(call, "authorization_specs", ())
+        )
         classifier = getattr(call, "admin_policy_classifier", None)
         if classifier is not None:
             admin_policies.append(classifier(method, route.path))
+    marker = getattr(route.endpoint, "stoa_route_classification", None)
+    if marker is not None and not isinstance(marker, ExplicitRouteClassification):
+        raise ValueError("invalid explicit route classification")
+    if marker is not None and (admin_policies or specs):
+        raise ValueError(
+            "explicit public/global declaration cannot accompany executable resource authorization"
+        )
     if admin_policies:
         if len(admin_policies) != 1:
             raise ValueError("duplicate admin policy classifiers")
@@ -170,7 +240,6 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     elif specs:
         classification = "safe-public" if safe_public else "authorized"
     else:
-        marker = getattr(route.endpoint, "stoa_route_classification", None)
         if not isinstance(marker, ExplicitRouteClassification):
             raise ValueError("route has no executable authorization or explicit public/global classification")
         classification = marker.access
@@ -185,15 +254,127 @@ _NOTIFICATION_IDS = {
     "pushtoken", "deviceid",
 }
 
+_IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
+    "studentid": frozenset({
+        ResourceType.STUDENT.value,
+        ResourceType.QUESTION.value,
+        ResourceType.CONVERSATION.value,
+        ResourceType.PRACTICE.value,
+        ResourceType.ADAPTIVE_PROFILE.value,
+        ResourceType.REPORT.value,
+        ResourceType.TEACHER_ASSIGNMENT.value,
+        ResourceType.PARENT_BINDING.value,
+        ResourceType.TEACHER_HELP_REQUEST.value,
+        ResourceType.AI_TEACHER_DRAFT.value,
+    }),
+    "childid": frozenset({ResourceType.STUDENT.value, ResourceType.PARENT_BINDING.value}),
+    "parentid": frozenset({ResourceType.PARENT_BINDING.value}),
+    "questionid": frozenset({
+        ResourceType.QUESTION.value,
+        ResourceType.CONVERSATION.value,
+        ResourceType.TEACHER_HELP_REQUEST.value,
+        ResourceType.AI_TEACHER_DRAFT.value,
+    }),
+    "conversationid": frozenset({ResourceType.CONVERSATION.value, ResourceType.TEACHER_HELP_REQUEST.value}),
+    "sessionid": frozenset({
+        ResourceType.QUESTION.value,
+        ResourceType.CONVERSATION.value,
+        ResourceType.PRACTICE.value,
+        ResourceType.ADAPTIVE_PROFILE.value,
+    }),
+    "assignmentid": frozenset({ResourceType.TEACHER_ASSIGNMENT.value, ResourceType.ADAPTIVE_PROFILE.value}),
+    "requestid": frozenset({ResourceType.TEACHER_HELP_REQUEST.value}),
+    "reportid": frozenset({ResourceType.REPORT.value}),
+    "draftid": frozenset({ResourceType.AI_TEACHER_DRAFT.value}),
+    "notificationid": frozenset({ResourceType.NOTIFICATION_EVENT.value}),
+    "eventid": frozenset({ResourceType.NOTIFICATION_EVENT.value}),
+    "tokenreference": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
+    "providertokenreference": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
+    "pushtoken": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
+    "deviceid": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
+    "applicationid": frozenset({ResourceType.OPERATOR_RESOURCE.value}),
+}
 
-def _validate_identifier_policy(item: RouteInventoryItem) -> str | None:
-    normalized = {"".join(char.lower() for char in value if char.isalnum()) for value in item.identifiers}
+_SELF_ONLY_IDENTIFIERS = frozenset({"userid"})
+
+
+def _normalized_identifier(value: str) -> str:
+    return "".join(char.lower() for char in value if char.isalnum())
+
+
+def _narrow_identifier_reason(reason: str) -> bool:
+    normalized = " ".join(reason.lower().split())
+    generic = {
+        "command local identifier",
+        "identifier declaration",
+        "public command identifier",
+        "public identifier",
+        "public route",
+        "self only identifier",
+        "synthetic mutation",
+    }
+    return len(normalized.split()) >= 4 and normalized not in generic
+
+
+def _validate_explicit_declaration(
+    item: RouteInventoryItem,
+    marker: ExplicitRouteClassification,
+) -> str | None:
+    declared = marker.allowed_identifiers
+    canonical_declared = tuple(_canonical_identifier(value) for value in declared)
+    if any(value is None for value in canonical_declared):
+        return "explicit identifier declaration contains a wildcard or unknown identifier"
+    if len(set(declared)) != len(declared):
+        return "explicit identifier declaration contains duplicates"
+    if set(declared) != set(item.identifiers):
+        return "explicit identifier declaration must exactly match observed identifiers"
+    if not item.identifiers:
+        if marker.identifier_scope is not None:
+            return "identifier scope requires at least one observed identifier"
+        return None
+    if not _narrow_identifier_reason(marker.reason):
+        return "identifier-bearing explicit route requires a narrow non-generic reason"
+    if marker.access == "public":
+        if marker.identifier_scope != "command-local":
+            return "explicit-public identifiers require command-local scope"
+        return None
+    if marker.identifier_scope != "self-only":
+        return "authenticated-global identifiers require self-only scope"
+    if any(_normalized_identifier(value) not in _SELF_ONLY_IDENTIFIERS for value in item.identifiers):
+        return "authenticated-global identifiers must be Actor-self command fields"
+    return None
+
+
+def _validate_spec_compatibility(item: RouteInventoryItem) -> str | None:
+    if any(spec.capability for spec in item.authorization_specs):
+        return None
+    resource_types = {spec.resource_type for spec in item.authorization_specs}
+    for identifier in item.identifiers:
+        allowed = _IDENTIFIER_RESOURCE_TYPES.get(_normalized_identifier(identifier))
+        if item.classification == "safe-public" and _normalized_identifier(identifier) in {
+            "studentid",
+            "childid",
+            "userid",
+        }:
+            allowed = frozenset({ResourceType.STUDENT.value})
+        if allowed is not None and not resource_types & allowed:
+            return f"identifier {identifier} lacks a compatible executable authorization spec"
+    return None
+
+
+def _validate_identifier_policy(
+    item: RouteInventoryItem,
+    marker: ExplicitRouteClassification | None,
+) -> str | None:
+    normalized = {_normalized_identifier(value) for value in item.identifiers}
+    if marker is not None:
+        reason = _validate_explicit_declaration(item, marker)
+        if reason:
+            return reason
     if not item.identifiers:
         return None
-    if item.classification in {"public", "safe-public"}:
+    if item.classification in {"public", "authenticated-global"}:
         return None
-    if item.classification == "authenticated-global":
-        return "identifier-bearing route is classified public/global without executable owner policy"
     if not item.authorization_specs:
         return "sensitive identifiers have no executable authorization spec"
     if normalized & _NOTIFICATION_IDS:
@@ -211,6 +392,9 @@ def _validate_identifier_policy(item: RouteInventoryItem) -> str | None:
         )
         if not valid:
             return "notification/event/token identifier lacks Actor-owner or exact admin-capability policy"
+    compatibility = _validate_spec_compatibility(item)
+    if compatibility:
+        return compatibility
     return None
 
 
@@ -252,7 +436,8 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     specs, classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                 )
-                reason = _validate_identifier_policy(item)
+                marker = getattr(route.endpoint, "stoa_route_classification", None)
+                reason = _validate_identifier_policy(item, marker)
                 if reason:
                     failures.append(InventoryFailure(method, route.path, reason))
             except (KeyError, TypeError, ValueError) as error:
