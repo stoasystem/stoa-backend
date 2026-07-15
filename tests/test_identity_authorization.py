@@ -124,7 +124,10 @@ def test_safe_error_contract_has_exact_fields_and_drops_internal_detail():
     assert error.status_code == 503
     assert error.public_body() == {
         "code": "identity_provider_unavailable",
-        "message": "Sign-in is temporarily unavailable. Try again later.",
+        "message": (
+            "Try again in a few minutes. If the problem continues, contact support "
+            "and share the reference shown."
+        ),
         "correlationId": "corr-123",
     }
     assert canary not in repr(error.public_body())
