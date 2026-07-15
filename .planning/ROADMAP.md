@@ -67,7 +67,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Audit findings:** SEC-001, SEC-002, SEC-004.
 
-**Plans:** 16/16 plans executed; independent verification pending
+**Plans:** 16/22 plans executed; 6 second-gap-closure plans ready
 
 **Wave 0**
 
@@ -114,6 +114,21 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 **Wave 9** *(blocked on Plans 472-11 through 472-15)*
 
 16. `472-16` — Gap-closure integration, regression, and evidence gate.
+
+**Wave 10** *(second gap closure; blocked on Plan 472-16)*
+
+17. `472-17` — Proof-bound existing-account registration resume and immutable-command verification resend.
+18. `472-18` — Full grant-coordinate reconciliation and collision-safe non-revival evidence.
+19. `472-19` — Typed scalar and collection admin body-target authorization with all-of audit evidence.
+21. `472-21` — Strong, unique production authorization-audit HMAC keyring validation.
+
+**Wave 11** *(blocked on Plan 472-17)*
+
+20. `472-20` — Account-state-indistinguishable password recovery and reset responses.
+
+**Wave 12** *(blocked on Plans 472-17 through 472-21)*
+
+22. `472-22` — Six-finding integration, deterministic regression, and source-bound evidence gate.
 
 **Success criteria:**
 

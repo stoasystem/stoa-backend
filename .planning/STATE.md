@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: verifying
-last_updated: "2026-07-15T14:17:10Z"
-last_activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and evidence gate
+status: ready_to_execute
+last_updated: "2026-07-15T15:40:17.181Z"
+last_activity: 2026-07-15 - Phase 472 second gap closure planned and independently checked (6 plans, waves 10-12)
 progress:
   total_phases: 10
   completed_phases: 0
-  total_plans: 16
+  total_plans: 22
   completed_plans: 16
-  percent: 100
+  percent: 73
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 472 (Privileged Identity And Student Resource Authorization) — VERIFYING
-Plan: 16 of 16
-Status: All plans executed; independent phase verification pending
-Last activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and evidence gate
+Phase: 472 Privileged Identity And Student Resource Authorization
+Plan: 16 of 22 complete; 6 second-gap-closure plans ready across waves 10-12
+Status: Ready to execute second gap closure
+Last activity: 2026-07-15 - Phase 472 second gap closure planned and independently checked (6 plans, waves 10-12)
 
 ## Accumulated Context
 
@@ -63,7 +63,7 @@ Last activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and e
 
 ### Pending Todos
 
-- Independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
+- Execute Plans 472-17 through 472-22, then independently re-verify all six final review findings while retaining explicit external-evidence limitations.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -77,7 +77,7 @@ Last activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and e
 
 ## Operator Next Steps
 
-- Run the independent Phase 472 verifier; do not mark the phase complete before that result.
+- Run `$gsd-execute-phase 472`; do not mark the phase complete until Plans 472-17 through 472-22 execute and independent verification passes.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Performance Metrics
