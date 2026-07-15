@@ -58,23 +58,46 @@ def create_identity_binding(
             raise
         existing = get_identity_binding(normalized_issuer, normalized_subject)
         if existing and existing.get("user_id") == normalized_user_id:
+            _create_or_repair_identity_inventory(existing, created_at=created_at)
             return existing
         raise IdentityBindingConflict("external identity is already bound") from exc
 
-    table.put_item(
-        Item={
-            "PK": f"USER#{normalized_user_id}",
-            "SK": f"IDENTITY#{issuer_hash(normalized_issuer)}#{normalized_subject}",
-            "entity_type": "user_identity_inventory",
-            "issuer": normalized_issuer,
-            "subject": normalized_subject,
-            "user_id": normalized_user_id,
-            "binding_pk": binding["PK"],
-            "created_at": created_at,
-        },
-        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
-    )
+    _create_or_repair_identity_inventory(binding, created_at=created_at)
     return binding
+
+
+def _create_or_repair_identity_inventory(
+    binding: dict[str, Any], *, created_at: str
+) -> None:
+    """Create only the reverse row that exactly describes an authoritative binding."""
+
+    inventory = {
+        "PK": f"USER#{binding['user_id']}",
+        "SK": f"IDENTITY#{issuer_hash(binding['issuer'])}#{binding['subject']}",
+        "entity_type": "user_identity_inventory",
+        "issuer": binding["issuer"],
+        "subject": binding["subject"],
+        "user_id": binding["user_id"],
+        "binding_pk": binding["PK"],
+        "created_at": created_at,
+    }
+    table = get_table()
+    try:
+        table.put_item(
+            Item=inventory,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+            raise
+        response = table.get_item(
+            Key={"PK": inventory["PK"], "SK": inventory["SK"]},
+            ConsistentRead=True,
+        )
+        existing = response.get("Item") or {}
+        immutable = ("issuer", "subject", "user_id", "binding_pk")
+        if any(existing.get(field) != inventory[field] for field in immutable):
+            raise IdentityBindingConflict("identity inventory conflicts with binding") from exc
 
 
 def get_identity_binding(issuer: str, subject: str) -> dict[str, Any] | None:
