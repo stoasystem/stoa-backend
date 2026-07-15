@@ -13,6 +13,10 @@ from stoa.db.repositories.public_identity_repo import (
     PublicIdentityCommandState,
 )
 from stoa.services import account_verification_service
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.identity import Actor, IdentityRepository, resolve_actor
+from stoa.security.jwks import JwksKeyProvider
+from stoa.security.tokens import verify_access_token
 
 
 PUBLIC_GROUPS = {"student": "students", "parent": "parents"}
@@ -69,6 +73,49 @@ def get_completed_public_profile(command: PublicIdentityCommandState) -> dict[st
     if profile.get("account_status") != "active":
         raise PublicIdentityCommandConflict("public profile is not active")
     return profile
+
+
+async def resolve_public_access_token(
+    access_token: str,
+    *,
+    allowed_issuers: tuple[str, ...],
+    allowed_client_ids: tuple[str, ...],
+    key_provider: JwksKeyProvider,
+    identity_repository: IdentityRepository,
+) -> tuple[Actor, dict[str, Any]]:
+    """Resolve a token response through the same verified identity path as requests."""
+
+    verified = await verify_access_token(
+        access_token,
+        allowed_issuers=allowed_issuers,
+        allowed_client_ids=allowed_client_ids,
+        key_provider=key_provider,
+    )
+    actor = await resolve_actor(verified, identity_repository)
+    try:
+        profile = await identity_repository.get_account(actor.user_id)
+    except Exception as exc:
+        raise SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        ) from exc
+    if not profile:
+        raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+    profile = dict(profile)
+    if (
+        profile.get("user_id") != actor.user_id
+        or profile.get("role") != actor.role.value
+        or profile.get("account_status") != "active"
+        or profile.get("registration_command") != PUBLIC_REGISTRATION_COMMAND
+        or profile.get("registration_role") != actor.role.value
+        or actor.role.value not in PUBLIC_ROLES
+    ):
+        raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+    if verified.verified_email is not None:
+        local_email = str(profile.get("email") or "").strip().casefold()
+        if local_email != verified.verified_email:
+            raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+    return actor, profile
 
 
 def start_or_resume_public_registration(
@@ -268,5 +315,6 @@ __all__ = [
     "provider_identity",
     "get_completed_public_profile",
     "require_public_identity_command",
+    "resolve_public_access_token",
     "start_or_resume_public_registration",
 ]

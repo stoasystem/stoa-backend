@@ -1,5 +1,5 @@
 from botocore.exceptions import ClientError
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
 from types import SimpleNamespace
@@ -141,6 +141,18 @@ def _legacy_public_identity_service_adapter(monkeypatch):
         )
         return SimpleNamespace(), updated or profile
 
+    async def resolve_token(*_args, **_kwargs):
+        profile = auth.user_repo.get_user_by_email("student@example.com")
+        if not profile or not auth.account_verification_service.can_return_tokens(profile):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "email_verification_required",
+                    "message": "Email verification is required before login.",
+                },
+            )
+        return SimpleNamespace(user_id=profile["user_id"]), profile
+
     monkeypatch.setattr(
         auth.public_identity_service, "require_public_identity_command", command_for
     )
@@ -154,6 +166,9 @@ def _legacy_public_identity_service_adapter(monkeypatch):
     )
     monkeypatch.setattr(
         auth.public_identity_service, "confirm_and_reconcile_public_identity", confirm
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service, "resolve_public_access_token", resolve_token
     )
 
 

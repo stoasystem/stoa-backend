@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from botocore.exceptions import ClientError
+from jose import jwt
 import pytest
 
 from stoa.db.repositories import identity_repo, public_identity_repo
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import resolve_actor
+from stoa.security.jwks import JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken
+from security.conftest import FakeAsyncJwksTransport
 
 
 class MemoryTable:
@@ -267,3 +272,130 @@ def test_confirmation_rejects_provider_subject_mismatch_before_activation(monkey
         )
     command = public_identity_repo.get_public_identity_command("student@example.test")
     assert command.activation_complete is False
+
+
+def _signed_public_token(keyset, *, subject="subject-1", groups=("students",), email=None):
+    now = datetime.now(timezone.utc)
+    claims = {
+        "iss": keyset.issuer,
+        "sub": subject,
+        "client_id": "student-client",
+        "token_use": "access",
+        "cognito:groups": list(groups),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+    }
+    if email:
+        claims.update(email=email, email_verified=True)
+    return jwt.encode(
+        claims,
+        keyset.private_key,
+        algorithm="RS256",
+        headers={"kid": keyset.kid},
+    )
+
+
+@pytest.mark.asyncio
+async def test_verified_token_binding_ignores_duplicate_email_decoy(
+    monkeypatch, rsa_jwks_keysets
+):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": "student-1",
+        "email": "shared@example.test",
+        "role": "student",
+        "account_status": "active",
+        "registration_command": "public_self_service",
+        "registration_role": "student",
+        "email_verification_status": "verified",
+        "email_verification_required": False,
+    }
+
+    class Repository:
+        def __init__(self):
+            self.reads = []
+
+        async def get_binding(self, issuer, subject):
+            self.reads.append(("binding", issuer, subject))
+            return {"status": "active", "user_id": "student-1"}
+
+        async def get_account(self, user_id):
+            self.reads.append(("account", user_id))
+            return dict(profile)
+
+        async def get_current_grants(self, user_id):
+            self.reads.append(("grants", user_id))
+            return []
+
+    repository = Repository()
+    monkeypatch.setattr(
+        public_identity_service.user_repo,
+        "get_user_by_email",
+        lambda _email: (_ for _ in ()).throw(AssertionError("email fallback used")),
+    )
+    provider = JwksKeyProvider(
+        FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
+        ttl_seconds=60,
+        max_stale_seconds=120,
+    )
+    actor, resolved = await public_identity_service.resolve_public_access_token(
+        _signed_public_token(keyset, email="shared@example.test"),
+        allowed_issuers=(keyset.issuer,),
+        allowed_client_ids=("student-client",),
+        key_provider=provider,
+        identity_repository=repository,
+    )
+    assert actor.user_id == "student-1"
+    assert resolved["user_id"] == "student-1"
+    assert repository.reads == [
+        ("binding", keyset.issuer, "subject-1"),
+        ("account", "student-1"),
+        ("grants", "student-1"),
+        ("account", "student-1"),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["missing_binding", "subject_mismatch", "revoked"])
+async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+
+    class Repository:
+        async def get_binding(self, issuer, subject):
+            if case == "missing_binding":
+                return None
+            if case == "subject_mismatch":
+                return {"status": "active", "user_id": "foreign-user"}
+            return {"status": "active", "user_id": "student-1"}
+
+        async def get_account(self, user_id):
+            return {
+                "user_id": "student-1" if case == "subject_mismatch" else user_id,
+                "email": "student@example.test",
+                "role": "student",
+                "account_status": "revoked" if case == "revoked" else "active",
+                "registration_command": "public_self_service",
+                "registration_role": "student",
+            }
+
+        async def get_current_grants(self, user_id):
+            return []
+
+    provider = JwksKeyProvider(
+        FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
+        ttl_seconds=60,
+        max_stale_seconds=120,
+    )
+    with pytest.raises(SecurityDecisionError) as denied:
+        await public_identity_service.resolve_public_access_token(
+            _signed_public_token(keyset),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=provider,
+            identity_repository=Repository(),
+        )
+    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT

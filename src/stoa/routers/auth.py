@@ -8,10 +8,11 @@ from pydantic import BaseModel, EmailStr, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
-from stoa.deps import get_current_user
+from stoa.deps import get_current_user, get_identity_repository, get_jwks_key_provider
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import account_verification_service, locale_service, public_identity_service
 from stoa.security.route_inventory import explicit_route_classification
+from stoa.security.errors import SecurityDecisionError
 
 router = APIRouter()
 
@@ -462,7 +463,12 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
 
 @router.post("/login", response_model=AuthResponse)
 @explicit_route_classification("public", "credential authentication entry point")
-async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
+async def login(
+    body: LoginRequest,
+    settings: Settings = Depends(get_settings),
+    key_provider=Depends(get_jwks_key_provider),
+    identity_repository=Depends(get_identity_repository),
+):
     """Authenticate through the single public client without caller-selected privilege."""
     cognito = _get_cognito(settings)
     client_id = _public_client_id(settings)
@@ -497,20 +503,16 @@ async def login(body: LoginRequest, settings: Settings = Depends(get_settings)):
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
 
-    # Fetch full profile for response
-    profile = user_repo.get_user_by_email(body.email)
-    if not profile:
-        raise HTTPException(status_code=409, detail={"code": "identity_conflict", "message": "Account recovery is required."})
-    if not account_verification_service.can_return_tokens(profile):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "email_verification_required",
-                "message": "Email verification is required before login.",
-                "emailVerificationStatus": _email_verification_status(profile),
-                "accountActivationStatus": account_verification_service.account_activation_status(profile),
-            },
+    try:
+        _, profile = await public_identity_service.resolve_public_access_token(
+            access_token,
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=key_provider,
+            identity_repository=identity_repository,
         )
+    except SecurityDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
 
     return _auth_response_for_profile(
         access_token=access_token,
@@ -860,7 +862,12 @@ async def update_my_locale_preference(
 
 @router.post("/refresh", response_model=AuthResponse)
 @explicit_route_classification("public", "refresh-token authentication entry point")
-async def refresh(body: RefreshRequest, settings: Settings = Depends(get_settings)):
+async def refresh(
+    body: RefreshRequest,
+    settings: Settings = Depends(get_settings),
+    key_provider=Depends(get_jwks_key_provider),
+    identity_repository=Depends(get_identity_repository),
+):
     """Exchange a refresh token for fresh tokens."""
     cognito = _get_cognito(settings)
     client_id = _public_client_id(settings)
@@ -878,17 +885,21 @@ async def refresh(body: RefreshRequest, settings: Settings = Depends(get_setting
         raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
 
     result = resp["AuthenticationResult"]
-    return AuthResponse(
-        accessToken=result["AccessToken"],
-        user=UserOut(
-            id="",
-            name="",
-            email="",
-            role="",
-            preferredLanguage=locale_service.DEFAULT_LOCALE,
-            preferredLocale=locale_service.DEFAULT_LOCALE,
-            effectiveLocale=locale_service.DEFAULT_LOCALE,
-        ),
+    access_token = result["AccessToken"]
+    try:
+        _, profile = await public_identity_service.resolve_public_access_token(
+            access_token,
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=key_provider,
+            identity_repository=identity_repository,
+        )
+    except SecurityDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    return _auth_response_for_profile(
+        access_token=access_token,
+        profile=profile,
+        onboarding_status="completed",
     )
 
 
