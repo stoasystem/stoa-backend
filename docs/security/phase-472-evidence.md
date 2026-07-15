@@ -1,24 +1,44 @@
 # Phase 472 authorization evidence
 
-Evidence window: 2026-07-15T00:21:21Z–2026-07-15T00:22:08Z UTC  
-Source SHA: `c8cb6c6e2b4364ebe98d071b6f6410fa9fe3df05`  
-Environment: local offline test process in `/Users/zhdeng/stoa-backend`  
-Safety statement: **no production mutation, provider call, AWS call, network access, identity change, group change, grant change, or data mutation was performed.**
+Evidence window: 2026-07-15T14:11:00Z–2026-07-15T14:16:19Z UTC<br>
+Tested source SHA: `6d7b54c682e032660461b907d19ab112c5b5a8d6` (verification-only commit; implementation tree is unchanged from `14000ce906e8945fb6b254975fdc92953c934acf`)<br>
+Environment: local offline test process in `/Users/zhdeng/stoa-backend`<br>
+Safety statement: **no production mutation, provider call, AWS call, network access, identity change, group change, grant change, or external data mutation was performed.** All test effects were deterministic in-memory/local fixtures.
 
 ## Deterministic artifacts
 
 | Artifact | SHA-256 | Result |
 | --- | --- | --- |
-| `docs/security/route-authorization-inventory.json` | `7dd3d59314983fc1ad974889723e404368b99f7588b228c68614c28cac08dfcf` | 219 unique registered method/path rows: 109 admin capability, 89 authorized, 14 explicit public, 4 safe-public, 3 authenticated-global |
-| `docs/security/client-error-actions.json` | `b4ad8ef27773da0eac8521605eded3ecd3e7c1a23d3bceb3c2058b2bb493d895` | D-29/D-31 deterministic check passed; UI rendering/integration remains Phase 478 |
+| `docs/security/route-authorization-inventory.json` | `0d5e6d193febd94f6a80c48b5002e813d05b6b7fe815f1cef1b34d2bfa86a139` | 219 unique registered method/path rows: 109 admin capability, 89 authorized, 14 explicit public, 4 safe-public, 3 authenticated-global; generated twice, byte-identical, then `--check` passed |
+| `docs/security/client-error-actions.json` | `32567c792e1f216a263342c0e60d1323b03744d68d4cf3b7db502d19ddf40f15` | D-29/D-31 deterministic check passed after two byte-identical generations; UI rendering/integration remains Phase 478 |
 | local redacted reconciliation output | `dbd6c6109f9eab2d3fd26238a529ad6d90a31a2dca1088feeb1938035dce78f4` | dry-run only; 4 production-shaped fixtures, 11 tightening/isolation proposals, zero role or grant additions |
 
 The OpenAPI `x-stoa-authorization` extension and checked JSON are generated from the same recursive `APIRoute.dependant` inspection. The inventory tests also mutate a newly registered router, a sensitive path, an event identifier, push-token body aliases, unrelated policy metadata, and endpoint-only metadata; each mutation fails closed.
+
+## G-01 through G-05 closure
+
+The combined reproduction command was `uv run python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py`: **PASS — 114 passed in 1.75s, with zero skips and zero xfails**.
+
+| Gap | Local result and positive control | Redacted representative outcome |
+| --- | --- | --- |
+| G-01 stable public identity binding | PASS — student and parent register/confirm/login resolve the token subject to one fresh Actor; duplicate-email, subject mismatch, partial retry, binding conflict, and revoked-account negatives pass | Success projects only the bound local account; conflict returns a stable safe code and correlation reference, never provider subject, email, token, or profile canary |
+| G-02 privileged grant quarantine | PASS — every non-exact privileged classification removes the current grant pointer; restore/replay cannot revive historical grants; an exact approved active identity remains authorized | Evidence uses generation/version state and redacted identity fingerprints; no raw grant, subject, group, or account identifier is projected |
+| G-03 recursive route identifiers | PASS — dependency, Pydantic, `Annotated`, union/container mutations and all 11 real sensitive-route controls are classified; compatible legitimate executable policies remain green | Inventory records bounded field/resource classifications only; injected student/event/token/content canaries do not appear in checked metadata |
+| G-04 durable authorization audit | PASS — deny, probe, relationship-sensitive allow, admin capability, and break-glass decisions persist; legitimate allows reach handlers only with working mandatory evidence; outage controls deny/fail closed before effects | Rows contain keyed actor/resource fingerprints, bounded result/action/purpose, server correlation, and no raw resource, student, owner, email, content, object key, or key material |
+| G-05 public provider error boundary | PASS — unknown-provider canaries across all eight public operations return the closed safe contract; known actionable cases and successful controls remain valid | Public result is only stable `code`, actionable `message`, and server-owned `correlationId`; provider code/message/operation, email, token, and pool canaries are absent |
+
+These tests do not modify or claim closure of the teacher takeover read/write race. Atomic question/session/notification convergence remains Phase 475/V9DATA-02.
 
 ## Exact automated commands and results
 
 | UTC | Exact command | Result |
 | --- | --- | --- |
+| 2026-07-15T14:15:19Z | `uv run python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py` | PASS — 114 passed in 1.75s; no skips/xfails |
+| 2026-07-15T14:15:22Z | `uv run python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 546 passed in 10.22s |
+| 2026-07-15T14:15:33Z | `uv run python scripts/generate_route_authorization_inventory.py --check` and `uv run python scripts/generate_client_error_actions.py --check` after the prior double-generation byte comparisons | PASS — both checked; SHA-256 values above |
+| 2026-07-15T14:15:33Z | `uv run python scripts/check_teacher_terminology.py --allowlist docs/security/tutor-term-allowlist.json` | PASS — 13 exact negative/historical occurrences consumed; the mutation/contract module separately reports 10 passed |
+| 2026-07-15T14:15:43Z | `uv run python -m pytest -q --tb=short` | OBSERVED RED — 1019 passed, 23 failed in 35.78s; zero delta from the accepted Phase 474-owned baseline |
+| 2026-07-15T14:14:51Z | `uv run python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_security.py tests/test_teacher_onboarding.py tests/test_identity_authorization.py -k 'client or binding or invitation or suspension or rotation'` | PASS — 18 passed, 65 deselected in 0.33s; deterministic local substitute only |
 | 2026-07-15T00:21:21Z | `.venv/bin/pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_teacher_onboarding.py` | PASS — 73 passed in 0.58s |
 | 2026-07-15T00:21:22Z | `.venv/bin/pytest -q tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | PASS — 49 passed in 1.04s |
 | 2026-07-15T00:21:23Z | `.venv/bin/pytest -q tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py` | PASS — 26 passed in 0.07s |
@@ -57,7 +77,7 @@ Rollback is code/config rollback plus continued local suspension and review. It 
 
 ## Full-suite limitation and ownership
 
-The pre-Plan-10 baseline was 903 passed and 33 failed. Plan 10 made the owned reconciliation, route inventory, and stale semantic terminology contracts green. The current observation is 932 passed and 23 failed. All remaining failures are strict production-configuration fixtures in `test_external_activation_smoke.py`, `test_report_service.py`, and `test_subscription_operations.py`; they fail while constructing production `Settings` without the now-required Cognito issuer/access-client allowlists. They are assigned to Phase 474 and were not weakened or represented as Phase 472 success.
+The pre-Plan-10 baseline was 903 passed and 33 failed. The accepted pre-Plan-16 gap-closure baseline was 1019 passed and 23 failed. The current observation is again **1019 passed and 23 failed**, so the Phase 472 regression delta is zero. All remaining failures are strict production-configuration fixtures in `test_external_activation_smoke.py` (2), `test_report_service.py` (3), and `test_subscription_operations.py` (18); they fail while constructing production `Settings` without the now-required Cognito issuer/access-client allowlists. They are assigned to Phase 474 and were not weakened, reassigned, or represented as Phase 472 success.
 
 ## External evidence gate
 

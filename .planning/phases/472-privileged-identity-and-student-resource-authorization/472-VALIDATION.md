@@ -129,10 +129,10 @@ Every route-family matrix includes at least one authorized positive control so b
 ## Plan 472-16 Execution Observation
 
 - **Tested source SHA:** `6d7b54c682e032660461b907d19ab112c5b5a8d6` (the Task 1 verification-only commit; implementation source is unchanged from `14000ce906e8945fb6b254975fdc92953c934acf`).
-- **G-01..G-05 reproduction gate:** `114 passed in 1.69s`; no skips or xfails.
-- **Extended focused Phase 472 gate:** `546 passed in 10.11s`.
+- **G-01..G-05 reproduction gate:** latest timestamped run `114 passed in 1.75s`; no skips or xfails.
+- **Extended focused Phase 472 gate:** latest timestamped run `546 passed in 10.22s`.
 - **Teacher terminology semantic gate:** PASS; all 13 exact negative/historical occurrences consumed, with `10 passed` in the mutation/contract module.
 - **Generated contracts:** both generators were run twice, compared byte-for-byte, and passed `--check`. Route inventory SHA-256 is `0d5e6d193febd94f6a80c48b5002e813d05b6b7fe815f1cef1b34d2bfa86a139`; client actions SHA-256 is `32567c792e1f216a263342c0e60d1323b03744d68d4cf3b7db502d19ddf40f15`.
-- **Full-suite observation:** `1019 passed, 23 failed in 33.60s`. The delta from the accepted Phase 474 baseline is zero. All failures remain strict production `Settings` fixtures in `tests/test_external_activation_smoke.py` (2), `tests/test_report_service.py` (3), and `tests/test_subscription_operations.py` (18); no Phase 472 failure is hidden or reassigned.
+- **Full-suite observation:** latest timestamped run `1019 passed, 23 failed in 35.78s`. The delta from the accepted Phase 474 baseline is zero. All failures remain strict production `Settings` fixtures in `tests/test_external_activation_smoke.py` (2), `tests/test_report_service.py` (3), and `tests/test_subscription_operations.py` (18); no Phase 472 failure is hidden or reassigned.
 - **External evidence:** the six Cognito sandbox checks remain **NOT RUN — approval/configuration unavailable**. No AWS, network, provider, sandbox, or production write was attempted.
 - **Cross-phase boundary:** teacher takeover/session/notification atomicity remains Phase 475/V9DATA-02 and is not claimed closed here.
