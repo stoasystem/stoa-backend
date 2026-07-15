@@ -57,6 +57,12 @@ This map follows the actual ten plans and waves 0–5. Every plan task inherits 
 | 472-08-* | 08 | 4 | V9ACCESS-02, V9ACCESS-03 | T-472-05, T-472-06 | Teacher, help, conversation, assistance, and AI-tool access remains assignment/purpose scoped | API/matrix | `pytest -q tests/test_student_authorization_matrix.py tests/test_teacher_dispatch.py tests/test_ai_teacher_tools.py` | partial | ⬜ pending |
 | 472-09-* | 09 | 4 | V9AUTH-02, V9ACCESS-02, V9ACCESS-03 | T-472-05, T-472-06, T-472-07 | Admin operations require exact capabilities; notification event/push-token resources are Actor-owned and both admin notification routes are separately scoped | API/inventory | `pytest -q tests/test_admin_authorization.py tests/test_notifications.py tests/test_websocket_notifications.py` | partial | ⬜ pending |
 | 472-10-* | 10 | 5 | All | T-472-01..09 | All registered routers are inventoried; terminology/client contracts are deterministic; reconciliation auto-tightens only; evidence is honest | inventory/migration/evidence | `pytest -q tests/test_route_authorization_inventory.py tests/test_teacher_terminology_gate.py tests/test_client_error_actions.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py` | ❌ W0/partial | ⬜ pending |
+| 472-11-* | 11 | 6 | V9AUTH-04, V9AUTH-05 | G-01 | Public student/parent lifecycle establishes and resolves one issuer-subject binding; email is never an authorization fallback | API/integration | `pytest -q tests/test_public_identity_lifecycle.py` | ✅ | ✅ green |
+| 472-12-* | 12 | 6 | V9AUTH-04 | G-02 | Every non-exact privileged identity loses all current grants and restore cannot revive them | reconciliation/state-machine | `pytest -q tests/test_privileged_identity_reconciliation.py` | ✅ | ✅ green |
+| 472-13-* | 13 | 7 | V9ACCESS-02, V9ACCESS-03 | G-03 | Recursive dependency and annotation identifiers are classified and require compatible executable policy | inventory/mutation | `pytest -q tests/test_route_authorization_inventory.py` | ✅ | ✅ green |
+| 472-14-* | 14 | 6 | V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | G-04 | Deny, probe, and sensitive allow decisions persist redacted evidence and sensitive effects fail closed on audit outage | audit/integration | `pytest -q tests/test_authorization_audit.py` | ✅ | ✅ green |
+| 472-15-* | 15 | 8 | V9AUTH-05 | G-05 | All eight public provider operations expose only stable actionable structured errors and redacted telemetry | API/contract | `pytest -q tests/test_public_auth_error_boundary.py tests/test_client_error_actions.py` | ✅ | ✅ green |
+| 472-16-* | 16 | 9 | V9AUTH-04, V9AUTH-05, V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | G-01..G-05 | All five closures and earlier Phase 472 controls pass together; generated contracts and limitations are recorded truthfully | integration/evidence | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -119,3 +125,14 @@ Every route-family matrix includes at least one authorized positive control so b
 - [x] `nyquist_compliant: true` is set because the strategy maps every phase requirement to executable evidence; `wave_0_complete` remains false until the files exist.
 
 **Approval:** pending plan-checker verification
+
+## Plan 472-16 Execution Observation
+
+- **Tested source SHA:** `6d7b54c682e032660461b907d19ab112c5b5a8d6` (the Task 1 verification-only commit; implementation source is unchanged from `14000ce906e8945fb6b254975fdc92953c934acf`).
+- **G-01..G-05 reproduction gate:** `114 passed in 1.69s`; no skips or xfails.
+- **Extended focused Phase 472 gate:** `546 passed in 10.11s`.
+- **Teacher terminology semantic gate:** PASS; all 13 exact negative/historical occurrences consumed, with `10 passed` in the mutation/contract module.
+- **Generated contracts:** both generators were run twice, compared byte-for-byte, and passed `--check`. Route inventory SHA-256 is `0d5e6d193febd94f6a80c48b5002e813d05b6b7fe815f1cef1b34d2bfa86a139`; client actions SHA-256 is `32567c792e1f216a263342c0e60d1323b03744d68d4cf3b7db502d19ddf40f15`.
+- **Full-suite observation:** `1019 passed, 23 failed in 33.60s`. The delta from the accepted Phase 474 baseline is zero. All failures remain strict production `Settings` fixtures in `tests/test_external_activation_smoke.py` (2), `tests/test_report_service.py` (3), and `tests/test_subscription_operations.py` (18); no Phase 472 failure is hidden or reassigned.
+- **External evidence:** the six Cognito sandbox checks remain **NOT RUN — approval/configuration unavailable**. No AWS, network, provider, sandbox, or production write was attempted.
+- **Cross-phase boundary:** teacher takeover/session/notification atomicity remains Phase 475/V9DATA-02 and is not claimed closed here.
