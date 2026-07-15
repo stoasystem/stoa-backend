@@ -1,7 +1,7 @@
 # Phase 472 authorization evidence
 
-Evidence window: 2026-07-15T14:11:00Z–2026-07-15T14:16:19Z UTC<br>
-Tested source SHA: `6d7b54c682e032660461b907d19ab112c5b5a8d6` (verification-only commit; implementation tree is unchanged from `14000ce906e8945fb6b254975fdc92953c934acf`)<br>
+Evidence window: 2026-07-15T18:20:13Z–2026-07-15T18:21:23Z UTC<br>
+Tested source SHA: `9ed55ae9b85c5dff21f74615cfcb207c2338b082` (includes post-wave ordering test `69da80319cf2e6abb0f6c2d8d85fc42aca6ca211`, integration fix `f80e23f53459163307632c3194e4c73be0bb4879`, and the Plan 22 multi-target integration matrix)<br>
 Environment: local offline test process in `/Users/zhdeng/stoa-backend`<br>
 Safety statement: **no production mutation, provider call, AWS call, network access, identity change, group change, grant change, or external data mutation was performed.** All test effects were deterministic in-memory/local fixtures.
 
@@ -9,13 +9,28 @@ Safety statement: **no production mutation, provider call, AWS call, network acc
 
 | Artifact | SHA-256 | Result |
 | --- | --- | --- |
-| `docs/security/route-authorization-inventory.json` | `0d5e6d193febd94f6a80c48b5002e813d05b6b7fe815f1cef1b34d2bfa86a139` | 219 unique registered method/path rows: 109 admin capability, 89 authorized, 14 explicit public, 4 safe-public, 3 authenticated-global; generated twice, byte-identical, then `--check` passed |
-| `docs/security/client-error-actions.json` | `32567c792e1f216a263342c0e60d1323b03744d68d4cf3b7db502d19ddf40f15` | D-29/D-31 deterministic check passed after two byte-identical generations; UI rendering/integration remains Phase 478 |
+| `docs/security/route-authorization-inventory.json` | `f32226095cf3a0992b1cf94e28f6aefd713580fb839694a88c8c5dcbfaf5eaad` | 219 unique registered method/path rows, including executable typed-provider metadata on 20 body-target routes; generated twice, byte-identical, then `--check` passed |
+| `docs/security/client-error-actions.json` | `4bdb9169ff44d6352492ac7956f8ea331c0b2e62862dc6ca66d07bc47ab36317` | D-29/D-31 deterministic check passed after two byte-identical generations; UI rendering/integration remains Phase 478 |
 | local redacted reconciliation output | `dbd6c6109f9eab2d3fd26238a529ad6d90a31a2dca1088feeb1938035dce78f4` | dry-run only; 4 production-shaped fixtures, 11 tightening/isolation proposals, zero role or grant additions |
 
 The OpenAPI `x-stoa-authorization` extension and checked JSON are generated from the same recursive `APIRoute.dependant` inspection. The inventory tests also mutate a newly registered router, a sensitive path, an event identifier, push-token body aliases, unrelated policy metadata, and endpoint-only metadata; each mutation fails closed.
 
-## G-01 through G-05 closure
+## Final-review CR-01, CR-02, and WR-01 through WR-04 closure
+
+The source-bound combined command was `.venv/bin/python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_account_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_admin_authorization.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py`: **PASS — 321 passed in 4.15s**, with no skip, xfail, source-text-only substitute, or network dependency.
+
+| Finding | Adversarial reproduction and legitimate positive | Redacted representative outcome |
+| --- | --- | --- |
+| CR-01 existing-account adoption | Provider-only public, provider-only privileged, altered-role, and altered-subject registration attempts return the same safe action before command/profile/binding/group/relationship mutation; exact interrupted student and parent commands resume | `email_already_registered` tells the caller to sign in or reset; provider subject, account class, email, and provider canaries are absent |
+| CR-02 duplicate grant IDs | Same-ID grants in two capability/scope lineages are revoked by full coordinate in either inventory order; audit-failure replay, account restore, stale action, and fresh manager-approved regrant controls pass | Two distinct redacted removal action/evidence identities persist; neither historical lineage becomes current after restore |
+| WR-01 typed administrator targets | Scalar exact-scope allow/wrong-scope deny and registered collection all-of tests cover first-allowed/later-denied, reversed order, duplicate/mixed students, delimiter-shaped coordinates, resolver reads, and later audit failure before the first business effect | Each concrete target receives a distinct keyed fingerprint; raw parent, student, report, job, fixture, and delimiter-shaped values are absent |
+| WR-02 password recovery enumeration | Forgot-password success/unknown/disabled/not-authorized cases expose exactly `{status: accepted}`; reset unknown/bad/expired/disabled/not-authorized proofs expose one structured recovery action; valid initiation and valid reset remain functional | No delivery destination, local role/state, provider diagnostic, legacy `detail`, token, or email canary is returned |
+| WR-03 resend command bypass | Already-confirmed resend loads the immutable command, selects the command user profile, verifies the provider subject, and completes exact reconciliation; duplicate-email selection is rejected; legitimate convergence reaches active | The email index cannot select authority; public output contains only bounded verification/activation state and no raw subject |
+| WR-04 weak audit keyring | Weak, short, repeated, placeholder, malformed, duplicate-ID, and duplicate-material active/retained keys fail before table/fingerprint effects; a unique strong active/retained rotation writes and recognizes replay | Errors expose only `authorization_audit_key_*` categories; submitted key material and key canaries are absent |
+
+The corrected collection invariant is whole-command: canonical targets are sorted and deduplicated, all decisions are computed before evidence writes, every allow is durably evidenced before the endpoint executes, and a later denial or later audit failure releases no handler/service mutation. `69da803` and `f80e23f` additionally pin recovery preview ordering to target-read → authorization/evidence → business read/effect. Reference-only reason, note, release-evidence, break-glass, fixture-name, preview-token, and result-filter fields never create target authority.
+
+## Historical G-01 through G-05 closure (Plans 11–16)
 
 The combined reproduction command was `uv run python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py`: **PASS — 114 passed in 1.75s, with zero skips and zero xfails**.
 
@@ -33,6 +48,10 @@ These tests do not modify or claim closure of the teacher takeover read/write ra
 
 | UTC | Exact command | Result |
 | --- | --- | --- |
+| 2026-07-15T18:20:13Z | `.venv/bin/python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_account_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_admin_authorization.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py` | PASS — 321 passed in 4.15s; six findings plus legitimate positives, zero skips/xfails |
+| 2026-07-15T18:20:24Z | `.venv/bin/python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 610 passed in 9.70s |
+| 2026-07-15T18:20:42Z | Both generator `--check` commands, `scripts/check_teacher_terminology.py --root . --allowlist docs/security/tutor-term-allowlist.json`, then `pytest -q tests/test_teacher_terminology_gate.py` | PASS — artifact digests above; 13 exact negative/historical occurrences consumed; terminology module 10 passed |
+| 2026-07-15T18:20:48Z | `.venv/bin/python -m pytest -p no:terminal --junitxml=/tmp/phase472-plan22-final.xml` | OBSERVED RED — 1106 tests in 34.529s: 1083 passed, 23 failed, zero errors/skips; exact Phase 474-owned delta below |
 | 2026-07-15T14:15:19Z | `uv run python -m pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py` | PASS — 114 passed in 1.75s; no skips/xfails |
 | 2026-07-15T14:15:22Z | `uv run python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 546 passed in 10.22s |
 | 2026-07-15T14:15:33Z | `uv run python scripts/generate_route_authorization_inventory.py --check` and `uv run python scripts/generate_client_error_actions.py --check` after the prior double-generation byte comparisons | PASS — both checked; SHA-256 values above |
@@ -77,7 +96,13 @@ Rollback is code/config rollback plus continued local suspension and review. It 
 
 ## Full-suite limitation and ownership
 
-The pre-Plan-10 baseline was 903 passed and 33 failed. The accepted pre-Plan-16 gap-closure baseline was 1019 passed and 23 failed. The current observation is again **1019 passed and 23 failed**, so the Phase 472 regression delta is zero. All remaining failures are strict production-configuration fixtures in `test_external_activation_smoke.py` (2), `test_report_service.py` (3), and `test_subscription_operations.py` (18); they fail while constructing production `Settings` without the now-required Cognito issuer/access-client allowlists. They are assigned to Phase 474 and were not weakened, reassigned, or represented as Phase 472 success.
+The pre-Plan-10 baseline was 903 passed and 33 failed. The accepted pre-Plan-16 gap-closure baseline was 1019 passed and 23 failed. The source-bound Plan 22 observation is **1083 passed and 23 failed** across 1106 tests; the increased pass count is the added Phase 472 closure coverage and the failure delta remains zero. All remaining failures are strict production-configuration fixtures in `test_external_activation_smoke.py` (2), `test_report_service.py` (3), and `test_subscription_operations.py` (18); they fail while constructing production `Settings` without the now-required Cognito issuer/access-client allowlists. They are assigned to Phase 474 and were not edited, weakened, reassigned, or represented as Phase 472 success.
+
+Exact Phase 474-owned failure set:
+
+- `tests/test_external_activation_smoke.py`: `test_payment_auth_smoke_blocks_missing_provider_and_cognito_config`; `test_production_readiness_smoke_lists_read_only_release_checks`.
+- `tests/test_report_service.py`: `test_report_artifacts_bucket_rejects_production_placeholder`; `test_report_artifacts_bucket_rejects_blank_production_value`; `test_report_artifacts_bucket_returns_trimmed_cdk_value_in_production`.
+- `tests/test_subscription_operations.py`: `test_production_checkout_requires_explicit_live_enablement`; `test_live_checkout_includes_twint_when_capability_is_confirmed`; `test_production_checkout_reports_missing_live_configuration`; `test_admin_provider_readiness_reports_missing_production_config`; `test_admin_provider_readiness_rejects_test_key_in_production`; `test_admin_provider_readiness_reports_twint_pending`; `test_admin_provider_readiness_redacts_provider_failures`; `test_admin_provider_readiness_reports_live_success`; `test_admin_can_execute_direct_refund_and_export_finance_handoff`; `test_admin_direct_refund_requires_eligible_billing`; `test_admin_direct_refund_replays_duplicate_idempotency_key`; `test_admin_direct_refund_provider_failure_does_not_mutate_billing`; `test_admin_direct_refund_blocks_expired_twint_window`; `test_admin_rollout_controls_default_from_static_config`; `test_admin_can_update_checkout_and_refund_rollout_controls`; `test_rollout_checkout_rollback_blocks_new_live_checkout`; `test_rollout_refund_rollback_blocks_new_refund_but_preserves_export`; `test_provider_readiness_reports_webhook_last_observed_event`.
 
 ## External evidence gate
 
