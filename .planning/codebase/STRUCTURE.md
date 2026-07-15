@@ -161,6 +161,7 @@ Many route modules define additional local request/response schemas close to the
 - Immutable canonical Actor, account-status, and capability-grant contracts.
 - Typed resource/action/purpose authorization inputs and repository protocols.
 - Stable safe error taxonomy, allowlisted security-event projection, and generated client recovery actions.
+- `public_auth_errors.py` is the closed operation-aware boundary for redacted public identity-provider failures.
 - Policy evaluation, token verification, route inventory, onboarding, and reconciliation are implemented by later Phase 472 plans.
 
 ## Scripts
