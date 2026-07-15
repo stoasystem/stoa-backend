@@ -142,6 +142,57 @@ def start_or_resume_public_registration(
         registration_command=PUBLIC_REGISTRATION_COMMAND,
         created_at=timestamp,
     )
+    return _resume_public_registration(
+        command=command,
+        issuer=issuer,
+        subject=subject,
+        user_id=user_id,
+        role=role,
+        profile=profile,
+        provider=provider,
+        user_pool_id=user_pool_id,
+        timestamp=timestamp,
+    )
+
+
+def resume_public_registration(
+    *,
+    command: PublicIdentityCommandState,
+    issuer: str,
+    subject: str,
+    role: str,
+    profile: dict[str, Any],
+    provider: Any,
+    user_pool_id: str,
+    now: Callable[[], datetime] | None = None,
+) -> tuple[PublicIdentityCommandState, dict[str, Any]]:
+    """Resume only a previously persisted command; never create first authority."""
+
+    return _resume_public_registration(
+        command=command,
+        issuer=issuer,
+        subject=subject,
+        user_id=command.user_id,
+        role=role,
+        profile=profile,
+        provider=provider,
+        user_pool_id=user_pool_id,
+        timestamp=_timestamp(now),
+    )
+
+
+def _resume_public_registration(
+    *,
+    command: PublicIdentityCommandState,
+    issuer: str,
+    subject: str,
+    user_id: str,
+    role: str,
+    profile: dict[str, Any],
+    provider: Any,
+    user_pool_id: str,
+    timestamp: str,
+) -> tuple[PublicIdentityCommandState, dict[str, Any]]:
     _require_fingerprint(command, issuer=issuer, subject=subject, user_id=user_id, role=role)
 
     existing = user_repo.get_user(command.user_id)
@@ -315,6 +366,7 @@ __all__ = [
     "provider_identity",
     "get_completed_public_profile",
     "require_public_identity_command",
+    "resume_public_registration",
     "resolve_public_access_token",
     "start_or_resume_public_registration",
 ]

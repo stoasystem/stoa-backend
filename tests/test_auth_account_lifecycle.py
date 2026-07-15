@@ -165,11 +165,99 @@ def _legacy_public_identity_service_adapter(monkeypatch):
         auth.public_identity_service, "start_or_resume_public_registration", start
     )
     monkeypatch.setattr(
+        auth.public_identity_service, "resume_public_registration", start
+    )
+    monkeypatch.setattr(
         auth.public_identity_service, "confirm_and_reconcile_public_identity", confirm
     )
     monkeypatch.setattr(
         auth.public_identity_service, "resolve_public_access_token", resolve_token
     )
+
+
+def test_register_username_exists_without_command_returns_safe_action_before_lookup(monkeypatch):
+    class ExistingCognito(FakeCognito):
+        def sign_up(self, **kwargs):
+            self.calls.append(("sign_up", kwargs))
+            raise _client_error("UsernameExistsException", "provider-state-canary")
+
+    fake = ExistingCognito()
+    mutations = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: (_ for _ in ()).throw(
+            auth.public_identity_service.PublicIdentityCommandConflict("missing")
+        ),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "start_or_resume_public_registration",
+        lambda **kwargs: mutations.append(("start", kwargs)),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "resume_public_registration",
+        lambda **kwargs: mutations.append(("resume", kwargs)),
+    )
+
+    response = _auth_client().post(
+        "/auth/register",
+        json={
+            "email": "existing@example.com",
+            "password": "ValidPass123!",
+            "role": "student",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "email_already_registered"
+    assert "provider-state-canary" not in response.text
+    assert [name for name, _ in fake.calls] == ["sign_up"]
+    assert mutations == []
+
+
+def test_register_username_exists_resumes_only_exact_command(monkeypatch):
+    class ExistingCognito(FakeCognito):
+        def sign_up(self, **kwargs):
+            self.calls.append(("sign_up", kwargs))
+            raise _client_error("UsernameExistsException")
+
+    fake = ExistingCognito()
+    resumed = []
+    command = SimpleNamespace(
+        issuer="https://cognito-idp.eu-central-2.amazonaws.com/pool-id",
+        subject="cognito-user-sub",
+        user_id="cognito-user-sub",
+        role="student",
+    )
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: command,
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "resume_public_registration",
+        lambda **kwargs: resumed.append(kwargs) or (command, kwargs["profile"]),
+    )
+
+    response = _auth_client().post(
+        "/auth/register",
+        json={
+            "email": "student@example.com",
+            "password": "ValidPass123!",
+            "role": "student",
+        },
+    )
+
+    assert response.status_code == 201
+    assert [name for name, _ in fake.calls] == ["sign_up", "admin_get_user"]
+    assert resumed[0]["command"] is command
+    assert resumed[0]["subject"] == "cognito-user-sub"
+    assert resumed[0]["role"] == "student"
 
 
 def test_register_records_email_verification_policy_and_parent_binding(monkeypatch):

@@ -356,6 +356,7 @@ async def register(
 
     issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
     provider_subject = ""
+    resume_command = None
     try:
         signup_resp = cognito.sign_up(
             ClientId=client_id,
@@ -382,11 +383,37 @@ async def register(
         code = e.response["Error"]["Code"]
         if code == "UsernameExistsException":
             try:
+                resume_command = public_identity_service.require_public_identity_command(
+                    body.email
+                )
+            except public_identity_service.PublicIdentityCommandConflict:
+                return public_auth_error_response(
+                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
+                )
+            except Exception as exc:
+                raise _public_identity_dependency_error() from exc
+            if resume_command.role != role:
+                return public_auth_error_response(
+                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
+                )
+            try:
                 provider_subject = public_identity_service.provider_identity(
                     cognito,
                     user_pool_id=settings.cognito_user_pool_id,
                     email=body.email,
                 )["subject"]
+                if (
+                    resume_command.issuer != issuer
+                    or resume_command.subject != provider_subject
+                    or resume_command.user_id != provider_subject
+                ):
+                    return public_auth_error_response(
+                        normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
+                    )
+            except public_identity_service.PublicIdentityCommandConflict:
+                return public_auth_error_response(
+                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
+                )
             except Exception as exc:
                 raise _public_identity_dependency_error() from exc
         if code != "UsernameExistsException":
@@ -446,9 +473,9 @@ async def register(
     }
     if age is not None:
         profile["age"] = int(age)
-    if role == "student":
+    if role == "student" and resume_command is None:
         _bind_parent_student_if_possible(parent_email, profile)
-    if role == "parent":
+    if role == "parent" and resume_command is None:
         child_email = (
             parent_profile.get("childEmail")
             or parent_profile.get("studentEmail")
@@ -456,16 +483,27 @@ async def register(
         )
         _bind_existing_child_if_possible(profile, child_email)
     try:
-        _, profile = public_identity_service.start_or_resume_public_registration(
-            email=body.email,
-            issuer=issuer,
-            subject=provider_subject,
-            user_id=provider_subject,
-            role=role,
-            profile=profile,
-            provider=cognito,
-            user_pool_id=settings.cognito_user_pool_id,
-        )
+        if resume_command is None:
+            _, profile = public_identity_service.start_or_resume_public_registration(
+                email=body.email,
+                issuer=issuer,
+                subject=provider_subject,
+                user_id=provider_subject,
+                role=role,
+                profile=profile,
+                provider=cognito,
+                user_pool_id=settings.cognito_user_pool_id,
+            )
+        else:
+            _, profile = public_identity_service.resume_public_registration(
+                command=resume_command,
+                issuer=issuer,
+                subject=provider_subject,
+                role=role,
+                profile=profile,
+                provider=cognito,
+                user_pool_id=settings.cognito_user_pool_id,
+            )
     except public_identity_service.PublicIdentityCommandConflict as exc:
         raise _public_identity_conflict() from exc
     except public_identity_service.PublicIdentityDependencyError as exc:
