@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T15:55:06.941Z"
-last_activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity recovery
+last_updated: "2026-07-15T16:03:19.101Z"
+last_activity: 2026-07-15 -- Plan 472-18 completed collision-safe grant reconciliation
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 22
-  completed_plans: 17
-  percent: 77
+  completed_plans: 18
+  percent: 82
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 Privileged Identity And Student Resource Authorization — EXECUTING
-Plan: 17 of 22 complete; executing Wave 10
+Plan: 18 of 22 complete; executing Wave 10
 Status: Executing second gap closure
-Last activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity recovery
+Last activity: 2026-07-15 -- Plan 472-18 completed collision-safe grant reconciliation
 
 ## Accumulated Context
 
@@ -60,6 +60,8 @@ Last activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity r
 - Route identifier discovery now traverses all FastAPI dependencies and nested annotation containers; exact scoped declarations and executable specs fail closed across runtime, checked JSON, and OpenAPI.
 - All eight public authentication operations now use one closed provider-error taxonomy with exact actionable structured responses, server-owned correlation, bounded retries, and redacted internal telemetry.
 - G-01 through G-05 pass together in 114 independent local reproductions; route/client contracts are byte-stable and evidence is bound to the tested source SHA without claiming unavailable live checks.
+- Reconciliation grant actions now carry immutable capability, exact scope, generation, grant ID, and version coordinates; duplicate caller IDs across lineages cannot collapse into first-match revocation.
+- Account restore remains capability-mutation-free, and a fresh Actor cannot regain quarantined authority without a new manager-approved command and new grant identity.
 
 ### Pending Todos
 
@@ -101,6 +103,7 @@ Last activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity r
 | Phase 472 P15 | 8 min | 3 tasks | 8 files |
 | Phase 472 P16 | 6 min | 3 tasks | 3 files |
 | Phase 472 P17 | 8 min | 3 tasks | 5 files |
+| Phase 472 P18 | 4 min | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -110,3 +113,5 @@ Last activity: 2026-07-15 -- Plan 472-17 completed proof-bound public identity r
 - [Phase 472]: Public/global identifier-bearing commands require exact scoped declarations, while safe-public and protected identifiers require compatible executable specs. — One recursive projection now drives validation, checked JSON, and OpenAPI.
 - [Phase 472]: Existing-account public registration resumes only after immutable command, issuer, subject, user ID, and role all match exactly. — Unproved provider accounts receive one safe recovery action before any authority mutation.
 - [Phase 472]: Verification resend selects the local profile only by the immutable command user ID. — Email-index collisions cannot select or activate identity, and already-confirmed recovery must complete command-aware reconciliation.
+- [Phase 472]: Reconciliation action identity is bound to the complete immutable grant coordinate. — Duplicate grant IDs across capabilities or scopes must produce distinct deterministic revoke/checkpoint operations.
+- [Phase 472]: Account restoration never restores capability history. — Only a new manager-approved command and new grant identity may create a later active generation.
