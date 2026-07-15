@@ -568,8 +568,9 @@ async def resend_email_verification(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Resend Cognito's sign-up confirmation code without exposing provider internals."""
-    profile = user_repo.get_user_by_email(body.email)
-    if not profile:
+    try:
+        command = public_identity_service.require_public_identity_command(body.email)
+    except public_identity_service.PublicIdentityCommandConflict:
         return EmailVerificationResponse(
             status="accepted",
             emailVerificationStatus=account_verification_service.STATUS_PENDING,
@@ -577,8 +578,19 @@ async def resend_email_verification(
             accountActivationStatus=account_verification_service.PENDING_EMAIL,
             resendAllowed=False,
         )
+    except Exception as exc:
+        raise _public_identity_dependency_error() from exc
+    try:
+        if command.activation_complete:
+            profile = public_identity_service.get_completed_public_profile(command)
+        else:
+            profile = public_identity_service.get_public_profile_for_command(command)
+    except public_identity_service.PublicIdentityCommandConflict as exc:
+        raise _public_identity_conflict() from exc
+    except Exception as exc:
+        raise _public_identity_dependency_error() from exc
     public_state = account_verification_service.public_state(profile)
-    if account_verification_service.is_email_verified(profile):
+    if command.activation_complete:
         return EmailVerificationResponse(
             status="already_verified",
             emailVerificationStatus=public_state["emailVerificationStatus"],
@@ -604,11 +616,35 @@ async def resend_email_verification(
         code = e.response["Error"]["Code"]
         message = str(e.response["Error"].get("Message") or "")
         if _is_already_confirmed_provider_error(code, message):
-            updated = user_repo.update_email_verification_state(
-                profile["user_id"],
-                account_verification_service.verified_fields(_utc_now_iso()),
-            )
-            state = account_verification_service.public_state(updated or profile)
+            try:
+                provider = public_identity_service.provider_identity(
+                    cognito,
+                    user_pool_id=settings.cognito_user_pool_id,
+                    email=body.email,
+                )
+                issuer = public_identity_service.canonical_public_issuer(
+                    settings.allowed_cognito_issuers
+                )
+                reconciled_command, profile = (
+                    public_identity_service.confirm_and_reconcile_public_identity(
+                        email=body.email,
+                        issuer=issuer,
+                        provider_subject=provider["subject"],
+                        provider_status=provider["status"],
+                        provider_email=provider["email"],
+                        provider_email_verified=provider["email_verified"],
+                        provider_enabled=provider["enabled"],
+                        provider=cognito,
+                        user_pool_id=settings.cognito_user_pool_id,
+                    )
+                )
+            except public_identity_service.PublicIdentityCommandConflict as exc:
+                raise _public_identity_conflict() from exc
+            except Exception as exc:
+                raise _public_identity_dependency_error() from exc
+            if not reconciled_command.activation_complete:
+                raise _public_identity_conflict()
+            state = account_verification_service.public_state(profile)
             return EmailVerificationResponse(
                 status="already_verified",
                 emailVerificationStatus=state["emailVerificationStatus"],
@@ -640,7 +676,7 @@ async def resend_email_verification(
         )
 
     updated = user_repo.update_email_verification_state(
-        profile["user_id"],
+        command.user_id,
         account_verification_service.resend_record_fields(profile, _utc_now_iso()),
     )
     state = account_verification_service.public_state(updated or profile)

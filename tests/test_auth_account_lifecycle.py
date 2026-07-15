@@ -131,7 +131,7 @@ def _legacy_public_identity_service_adapter(monkeypatch):
         role = auth._approved_public_registration_role(profile)
         del role
         if auth.account_verification_service.is_email_verified(profile):
-            return SimpleNamespace(), profile
+            return SimpleNamespace(activation_complete=True), profile
         updated = auth.user_repo.update_email_verification_state(
             profile["user_id"],
             {
@@ -139,7 +139,7 @@ def _legacy_public_identity_service_adapter(monkeypatch):
                 "account_status": "active",
             },
         )
-        return SimpleNamespace(), updated or profile
+        return SimpleNamespace(activation_complete=True), updated or profile
 
     async def resolve_token(*_args, **_kwargs):
         profile = auth.user_repo.get_user_by_email("student@example.com")
@@ -159,6 +159,11 @@ def _legacy_public_identity_service_adapter(monkeypatch):
     monkeypatch.setattr(
         auth.public_identity_service,
         "get_completed_public_profile",
+        lambda command: auth.user_repo.get_user_by_email(command.email),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_public_profile_for_command",
         lambda command: auth.user_repo.get_user_by_email(command.email),
     )
     monkeypatch.setattr(
@@ -478,14 +483,14 @@ def test_resend_email_verification_is_idempotent_during_cooldown(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
-        lambda email: {
+        lambda email: _public_profile(**{
             "user_id": "student-1",
             "role": "student",
             "email": email,
             "email_verification_status": "pending_verification",
             "email_verification_required": True,
             "email_verification_last_resend_at": auth._utc_now_iso(),
-        },
+        }),
     )
 
     response = _auth_client().post(
@@ -525,6 +530,90 @@ def test_resend_email_verification_records_provider_delivery(monkeypatch):
     assert response.json()["status"] == "sent"
     assert fake.calls[-1][0] == "resend_confirmation_code"
     assert updates[0][1]["email_verification_resend_count"] == 1
+
+
+def test_resend_missing_command_is_bounded_and_mutation_free(monkeypatch):
+    fake = FakeCognito()
+    profile_reads = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: (_ for _ in ()).throw(
+            auth.public_identity_service.PublicIdentityCommandConflict("missing")
+        ),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_public_profile_for_command",
+        lambda command: profile_reads.append(command),
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "unknown@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "accepted",
+        "emailVerificationStatus": "pending_verification",
+        "emailVerificationRequired": True,
+        "accountActivationStatus": "pending_email_verification",
+        "resendAllowed": False,
+        "delivery": None,
+    }
+    assert profile_reads == []
+    assert fake.calls == []
+
+
+def test_resend_uses_command_user_and_never_email_index(monkeypatch):
+    fake = FakeCognito()
+    updates = []
+    command = SimpleNamespace(
+        user_id="command-user",
+        email="shared@example.com",
+        role="student",
+        activation_complete=False,
+    )
+    profile = _public_profile(**{
+        "user_id": "command-user",
+        "role": "student",
+        "email": "shared@example.com",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    })
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: command,
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_public_profile_for_command",
+        lambda loaded: profile if loaded is command else None,
+    )
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda _email: (_ for _ in ()).throw(AssertionError("email index used")),
+    )
+    monkeypatch.setattr(
+        auth.user_repo,
+        "update_email_verification_state",
+        lambda user_id, fields: updates.append((user_id, fields)) or {**profile, **fields},
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "shared@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "sent"
+    assert updates[0][0] == "command-user"
+    assert [name for name, _ in fake.calls] == ["resend_confirmation_code"]
 
 
 def test_resend_email_verification_repairs_local_state_when_cognito_already_confirmed(monkeypatch):

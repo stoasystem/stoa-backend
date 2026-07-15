@@ -66,12 +66,21 @@ def require_public_identity_command(email: str) -> PublicIdentityCommandState:
 def get_completed_public_profile(command: PublicIdentityCommandState) -> dict[str, Any]:
     if not command.activation_complete:
         raise PublicIdentityCommandConflict("public identity command is not active")
-    profile = user_repo.get_user(command.user_id)
-    if not profile:
-        raise PublicIdentityDependencyError("active public profile is missing")
-    _require_matching_profile(profile, command)
+    profile = get_public_profile_for_command(command)
     if profile.get("account_status") != "active":
         raise PublicIdentityCommandConflict("public profile is not active")
+    return profile
+
+
+def get_public_profile_for_command(
+    command: PublicIdentityCommandState,
+) -> dict[str, Any]:
+    """Load a public profile only through its immutable command user id."""
+
+    profile = user_repo.get_user(command.user_id)
+    if not profile:
+        raise PublicIdentityDependencyError("command-owned public profile is missing")
+    _require_matching_profile(profile, command)
     return profile
 
 
@@ -365,6 +374,7 @@ __all__ = [
     "confirm_and_reconcile_public_identity",
     "provider_identity",
     "get_completed_public_profile",
+    "get_public_profile_for_command",
     "require_public_identity_command",
     "resume_public_registration",
     "resolve_public_access_token",
