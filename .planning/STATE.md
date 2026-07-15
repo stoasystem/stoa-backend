@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: executing
-last_updated: "2026-07-15T13:58:03.179Z"
-last_activity: 2026-07-15 -- Completed Plan 472-15 safe structured public Cognito error boundary
+status: verifying
+last_updated: "2026-07-15T14:17:10Z"
+last_activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and evidence gate
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 16
-  completed_plans: 15
-  percent: 94
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +23,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 472 (Privileged Identity And Student Resource Authorization) — EXECUTING
+Phase: 472 (Privileged Identity And Student Resource Authorization) — VERIFYING
 Plan: 16 of 16
-Status: Ready to execute Plan 472-16 in Wave 9
-Last activity: 2026-07-15 -- Completed Plan 472-15 safe structured public Cognito error boundary
+Status: All plans executed; independent phase verification pending
+Last activity: 2026-07-15 -- Completed Plan 472-16 gap-closure integration and evidence gate
 
 ## Accumulated Context
 
@@ -53,16 +53,17 @@ Last activity: 2026-07-15 -- Completed Plan 472-15 safe structured public Cognit
 - Every canonical teacher route now uses Actor plus executable self, current-task, assignment, or exact-capability policy; queue metadata is bounded, indirect help/draft IDs resolve before effects, and stale assignments never preserve access.
 - All 219 registered FastAPI method/path operations now derive deterministic authorization inventory and OpenAPI metadata from the executable dependency graph; unknown routes and sensitive identifier mutations fail closed.
 - Privileged identity reconciliation is redacted and dry-run-first, can only suspend/remove/sign-out/revoke automatically, and requires a separate active `admin_identity_manager` command for any elevation.
-- The complete Phase 472 focused gate reports 459 passed; the full suite reports 932 passed and 23 unrelated strict production-configuration fixture failures owned by Phase 474.
+- The extended Phase 472 focused gate reports 546 passed; the full suite reports 1019 passed and the same 23 unrelated strict production-configuration fixture failures owned by Phase 474.
 - Non-production Cognito sandbox evidence was not approved/configured and remains explicitly NOT RUN; no production/provider mutation was performed.
 - Conflicted privileged identities now lose every current grant through a conditional current-pointer transition backed by immutable generation/version history.
 - Account/provider restore cannot revive historical capability authority; only a new manager-approved command and grant identity can create the next generation.
 - Route identifier discovery now traverses all FastAPI dependencies and nested annotation containers; exact scoped declarations and executable specs fail closed across runtime, checked JSON, and OpenAPI.
 - All eight public authentication operations now use one closed provider-error taxonomy with exact actionable structured responses, server-owned correlation, bounded retries, and redacted internal telemetry.
+- G-01 through G-05 pass together in 114 independent local reproductions; route/client contracts are byte-stable and evidence is bound to the tested source SHA without claiming unavailable live checks.
 
 ### Pending Todos
 
-- Execute Plan 472-16, then independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
+- Independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -76,7 +77,7 @@ Last activity: 2026-07-15 -- Completed Plan 472-15 safe structured public Cognit
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 472`.
+- Run the independent Phase 472 verifier; do not mark the phase complete before that result.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Performance Metrics
@@ -98,6 +99,7 @@ Last activity: 2026-07-15 -- Completed Plan 472-15 safe structured public Cognit
 | Phase 472 P14 | 45 min | 3 tasks | 20 files |
 | Phase 472 P13 | 10 min | 2 tasks | 5 files |
 | Phase 472 P15 | 8 min | 3 tasks | 8 files |
+| Phase 472 P16 | 6 min | 3 tasks | 3 files |
 
 ## Decisions
 
