@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T12:40:59.342Z"
-last_activity: 2026-07-15 -- Completed Plan 472-11 canonical public identity lifecycle
+last_updated: "2026-07-15T12:53:39.355Z"
+last_activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non-revival
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 16
-  completed_plans: 11
-  percent: 69
+  completed_plans: 12
+  percent: 75
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (Privileged Identity And Student Resource Authorization) — EXECUTING
-Plan: 12 of 16
-Status: Executing Phase 472 gap closure
-Last activity: 2026-07-15 -- Completed Plan 472-11 canonical public identity lifecycle
+Plan: 14 of 16
+Status: Ready to execute Plan 472-14 in Wave 6
+Last activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non-revival
 
 ## Accumulated Context
 
@@ -55,10 +55,12 @@ Last activity: 2026-07-15 -- Completed Plan 472-11 canonical public identity lif
 - Privileged identity reconciliation is redacted and dry-run-first, can only suspend/remove/sign-out/revoke automatically, and requires a separate active `admin_identity_manager` command for any elevation.
 - The complete Phase 472 focused gate reports 459 passed; the full suite reports 932 passed and 23 unrelated strict production-configuration fixture failures owned by Phase 474.
 - Non-production Cognito sandbox evidence was not approved/configured and remains explicitly NOT RUN; no production/provider mutation was performed.
+- Conflicted privileged identities now lose every current grant through a conditional current-pointer transition backed by immutable generation/version history.
+- Account/provider restore cannot revive historical capability authority; only a new manager-approved command and grant identity can create the next generation.
 
 ### Pending Todos
 
-- Execute Plans 472-12 through 472-16, then independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
+- Execute Plans 472-14, 472-13, 472-15, and 472-16, then independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -90,3 +92,4 @@ Last activity: 2026-07-15 -- Completed Plan 472-11 canonical public identity lif
 | Phase 472 P09 | 8 min | 4 tasks | 20 files |
 | Phase 472 P10 | 18 min | 4 tasks | 18 files |
 | Phase 472 P11 | 30 min | 3 tasks | 7 files |
+| Phase 472 P12 | 13 min | 2 tasks | 7 files |
