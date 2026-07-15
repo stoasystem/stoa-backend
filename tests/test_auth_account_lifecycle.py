@@ -327,7 +327,8 @@ def test_login_blocks_unconfirmed_cognito_user(monkeypatch):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "email_verification_required"
+    assert response.json()["code"] == "email_verification_required"
+    assert set(response.json()) == {"code", "message", "correlationId"}
 
 
 def test_login_does_not_repair_local_pending_state_after_cognito_auth_succeeds(monkeypatch):
@@ -499,8 +500,8 @@ def test_confirm_email_verification_marks_expired_code(monkeypatch):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "verification_code_expired"
-    assert response.json()["detail"]["message"] == "Verification code expired"
+    assert response.json()["code"] == "verification_code_expired"
+    assert response.json()["message"] == "Request a new verification code, then try again."
     assert updates[0][1]["email_verification_status"] == "expired_verification"
 
 
@@ -583,7 +584,7 @@ def test_confirm_email_verification_normalizes_wrong_code(monkeypatch):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "verification_code_invalid"
+    assert response.json()["code"] == "verification_code_invalid"
 
 
 def test_confirm_email_verification_normalizes_rate_limit(monkeypatch):
@@ -610,7 +611,7 @@ def test_confirm_email_verification_normalizes_rate_limit(monkeypatch):
     )
 
     assert response.status_code == 429
-    assert response.json()["detail"]["code"] == "verification_confirmation_limited"
+    assert response.json()["code"] == "auth_request_rate_limited"
 
 
 def test_login_disabled_account_returns_support_safe_error(monkeypatch):
@@ -637,7 +638,7 @@ def test_login_disabled_account_returns_support_safe_error(monkeypatch):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "account_disabled"
+    assert response.json()["code"] == "account_disabled"
 
 
 def test_resend_disabled_account_returns_support_safe_error(monkeypatch):
@@ -664,7 +665,7 @@ def test_resend_disabled_account_returns_support_safe_error(monkeypatch):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "account_disabled"
+    assert response.json()["code"] == "account_disabled"
 
 
 def test_login_code_policy_is_deferred_without_tokens():
@@ -815,7 +816,8 @@ def test_reset_password_normalizes_cognito_errors(monkeypatch):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid password reset request"
+    assert response.json()["code"] == "password_reset_request_invalid"
+    assert set(response.json()) == {"code", "message", "correlationId"}
 
 
 def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):

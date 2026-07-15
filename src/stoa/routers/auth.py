@@ -13,6 +13,12 @@ from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import account_verification_service, locale_service, public_identity_service
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.errors import SecurityDecisionError
+from stoa.security.public_auth_errors import (
+    PublicAuthOperation,
+    normalize_cognito_failure,
+    public_auth_error_response,
+)
+from stoa.security.request_correlation import get_request_correlation_id
 
 router = APIRouter()
 
@@ -338,7 +344,11 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
     allowed_identifiers=("parent_id",),
     identifier_scope="command-local",
 )
-async def register(body: RegisterRequest, settings: Settings = Depends(get_settings)):
+async def register(
+    body: RegisterRequest,
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
     """Create a Cognito user and DynamoDB profile, then require email verification."""
     role = body.role.value
     client_id = _public_client_id(settings)
@@ -364,8 +374,10 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
                 Username=body.email,
                 UserAttributes=[{"Name": "custom:subscription_tier", "Value": "free"}],
             )
-        except ClientError:
-            pass
+        except ClientError as exc:
+            return public_auth_error_response(
+                normalize_cognito_failure(PublicAuthOperation.REGISTER, exc, correlation_id)
+            )
     except ClientError as e:
         code = e.response["Error"]["Code"]
         if code == "UsernameExistsException":
@@ -377,10 +389,10 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
                 )["subject"]
             except Exception as exc:
                 raise _public_identity_dependency_error() from exc
-        if code in ("InvalidPasswordException", "InvalidParameterException"):
-            raise HTTPException(status_code=400, detail="Password does not meet requirements")
         if code != "UsernameExistsException":
-            raise HTTPException(status_code=503, detail="Public authentication is temporarily unavailable")
+            return public_auth_error_response(
+                normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
+            )
 
     # Extract onboarding profile fields forwarded by the frontend.
     # Frontend sends nested data under "profile"; legacy payload may use "studentProfile"/"parentProfile".
@@ -473,6 +485,7 @@ async def login(
     settings: Settings = Depends(get_settings),
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Authenticate through the single public client without caller-selected privilege."""
     cognito = _get_cognito(settings)
@@ -485,26 +498,9 @@ async def login(
             ClientId=client_id,
         )
     except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code in ("NotAuthorizedException", "UserNotFoundException"):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        if code == "UserNotConfirmedException":
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "email_verification_required",
-                    "message": "Email verification is required before login.",
-                },
-            )
-        if code == "UserDisabledException":
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "account_disabled",
-                    "message": "This account is disabled. Contact support.",
-                },
-            )
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.LOGIN, e, correlation_id)
+        )
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
 
@@ -531,6 +527,7 @@ async def login(
 async def resend_email_verification(
     body: EmailVerificationRequest,
     settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Resend Cognito's sign-up confirmation code without exposing provider internals."""
     profile = user_repo.get_user_by_email(body.email)
@@ -587,21 +584,10 @@ async def resend_email_verification(
                 account_verification_service.resend_limited_fields(_utc_now_iso()),
             )
             state = account_verification_service.public_state(updated or profile)
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "code": "verification_resend_limited",
-                    "emailVerificationStatus": state["emailVerificationStatus"],
-                },
-            )
-        if code == "UserDisabledException":
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "account_disabled",
-                    "message": "This account is disabled. Contact support.",
-                    "emailVerificationStatus": public_state["emailVerificationStatus"],
-                },
+            return public_auth_error_response(
+                normalize_cognito_failure(
+                    PublicAuthOperation.VERIFICATION_RESEND, e, correlation_id
+                )
             )
         if code in ("InvalidParameterException", "NotAuthorizedException", "UserNotFoundException"):
             return EmailVerificationResponse(
@@ -611,7 +597,9 @@ async def resend_email_verification(
                 accountActivationStatus=public_state["accountActivationStatus"],
                 resendAllowed=False,
             )
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.VERIFICATION_RESEND, e, correlation_id)
+        )
 
     updated = user_repo.update_email_verification_state(
         profile["user_id"],
@@ -633,6 +621,7 @@ async def resend_email_verification(
 async def confirm_email_verification(
     body: EmailVerificationConfirmRequest,
     settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Confirm Cognito's sign-up code and activate the local account profile."""
     try:
@@ -675,12 +664,10 @@ async def confirm_email_verification(
                 command.user_id,
                 account_verification_service.expired_fields(_utc_now_iso()),
             )
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "verification_code_expired",
-                    "message": "Verification code expired",
-                },
+            return public_auth_error_response(
+                normalize_cognito_failure(
+                    PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
+                )
             )
         elif code in (
             "CodeMismatchException",
@@ -688,31 +675,17 @@ async def confirm_email_verification(
             "NotAuthorizedException",
             "UserNotFoundException",
         ):
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "verification_code_invalid",
-                    "message": "Invalid verification request",
-                },
-            )
-        elif code == "UserDisabledException":
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "account_disabled",
-                    "message": "This account is disabled. Contact support.",
-                },
-            )
-        elif code in ("LimitExceededException", "TooManyRequestsException"):
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "code": "verification_confirmation_limited",
-                    "message": "Verification confirmation rate limit exceeded",
-                },
+            return public_auth_error_response(
+                normalize_cognito_failure(
+                    PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
+                )
             )
         elif not already_confirmed:
-            raise HTTPException(status_code=503, detail="Public authentication is temporarily unavailable")
+            return public_auth_error_response(
+                normalize_cognito_failure(
+                    PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
+                )
+            )
 
     try:
         provider = public_identity_service.provider_identity(
@@ -766,7 +739,11 @@ async def confirm_login_code(body: LoginCodeConfirmRequest):
 
 @router.post("/forgot-password", response_model=PasswordResetResponse)
 @explicit_route_classification("public", "password recovery entry point")
-async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depends(get_settings)):
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
     """Start Cognito's forgot-password flow without exposing account existence."""
     profile = user_repo.get_user_by_email(body.email)
     if profile is None:
@@ -780,16 +757,20 @@ async def forgot_password(body: ForgotPasswordRequest, settings: Settings = Depe
         code = e.response["Error"]["Code"]
         if code in ("UserNotFoundException", "ResourceNotFoundException"):
             return PasswordResetResponse(status="accepted")
-        if code in ("LimitExceededException", "TooManyRequestsException"):
-            raise HTTPException(status_code=429, detail="Password reset request rate limit exceeded")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.FORGOT_PASSWORD, e, correlation_id)
+        )
     delivery = resp.get("CodeDeliveryDetails")
     return PasswordResetResponse(status="accepted", delivery=delivery)
 
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
 @explicit_route_classification("public", "password recovery confirmation")
-async def reset_password(body: ResetPasswordRequest, settings: Settings = Depends(get_settings)):
+async def reset_password(
+    body: ResetPasswordRequest,
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
     """Confirm a Cognito forgot-password code and set a new password."""
     profile = user_repo.get_user_by_email(body.email)
     if profile is None:
@@ -805,18 +786,9 @@ async def reset_password(body: ResetPasswordRequest, settings: Settings = Depend
             Password=body.newPassword,
         )
     except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code in (
-            "CodeMismatchException",
-            "ExpiredCodeException",
-            "InvalidPasswordException",
-            "InvalidParameterException",
-            "UserNotFoundException",
-        ):
-            raise HTTPException(status_code=400, detail="Invalid password reset request")
-        if code in ("LimitExceededException", "TooManyRequestsException"):
-            raise HTTPException(status_code=429, detail="Password reset request rate limit exceeded")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.RESET_PASSWORD, e, correlation_id)
+        )
     return PasswordResetResponse(status="confirmed")
 
 
@@ -872,6 +844,7 @@ async def refresh(
     settings: Settings = Depends(get_settings),
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Exchange a refresh token for fresh tokens."""
     cognito = _get_cognito(settings)
@@ -884,10 +857,9 @@ async def refresh(
             ClientId=client_id,
         )
     except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code == "NotAuthorizedException":
-            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.REFRESH, e, correlation_id)
+        )
 
     result = resp["AuthenticationResult"]
     access_token = result["AccessToken"]
@@ -910,13 +882,16 @@ async def refresh(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 @explicit_route_classification("public", "token invalidation entry point")
-async def logout(body: LogoutRequest, settings: Settings = Depends(get_settings)):
+async def logout(
+    body: LogoutRequest,
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
     """Revoke the access token globally."""
     cognito = _get_cognito(settings)
     try:
         cognito.global_sign_out(AccessToken=body.access_token)
     except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code == "NotAuthorizedException":
-            raise HTTPException(status_code=401, detail="Invalid access token")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        return public_auth_error_response(
+            normalize_cognito_failure(PublicAuthOperation.LOGOUT, e, correlation_id)
+        )
