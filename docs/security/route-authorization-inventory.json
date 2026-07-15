@@ -2274,6 +2274,7 @@
         "description"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "publicLessonId"
       ],
@@ -2307,6 +2308,7 @@
         "expectedPublishedVersionId"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "versionId"
       ],
@@ -2404,6 +2406,7 @@
         "expectedPublishedVersionId"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "versionId"
       ],
@@ -2437,6 +2440,7 @@
         "expectedPublishedVersionId"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "versionId"
       ],
@@ -2518,6 +2522,7 @@
         "reason"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "parent_id",
         "student_id"
@@ -2638,6 +2643,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2683,6 +2689,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2723,6 +2730,7 @@
       "maximum": 25,
       "referenceOnly": [],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "reports.parent_id",
         "reports.student_id",
@@ -2765,6 +2773,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2810,6 +2819,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2855,6 +2865,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2900,6 +2911,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2945,6 +2957,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -2990,6 +3003,7 @@
         "filters.status"
       ],
       "required": true,
+      "resolver": "report_recovery_filters",
       "targetPaths": [
         "filters.parent_id",
         "filters.student_id",
@@ -3028,10 +3042,10 @@
       "referenceOnly": [
         "reason",
         "max_targets",
-        "preview_token",
         "filters.status"
       ],
-      "required": true,
+      "required": false,
+      "resolver": "report_recovery_filters",
       "targetPaths": [
         "filters.parent_id",
         "filters.student_id",
@@ -3074,6 +3088,7 @@
         "filters.status"
       ],
       "required": true,
+      "resolver": "report_recovery_filters",
       "targetPaths": [
         "filters.parent_id",
         "filters.student_id",
@@ -3112,10 +3127,10 @@
       "referenceOnly": [
         "reason",
         "max_targets",
-        "preview_token",
         "filters.status"
       ],
-      "required": true,
+      "required": false,
+      "resolver": "report_recovery_filters",
       "targetPaths": [
         "filters.parent_id",
         "filters.student_id",
@@ -3164,6 +3179,27 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "results",
+        "max_targets",
+        "preview_token"
+      ],
+      "required": true,
+      "resolver": "report_recovery_resume",
+      "targetPaths": [],
+      "tupleFields": [
+        "parent_id",
+        "student_id",
+        "week_start",
+        "report_id"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -3182,6 +3218,26 @@
     "sensitive": true
   },
   {
+    "adminTarget": {
+      "bodyParameter": "request",
+      "cardinality": "resolver_collection",
+      "collectionPath": null,
+      "maximum": 25,
+      "referenceOnly": [
+        "reason",
+        "results",
+        "max_targets"
+      ],
+      "required": false,
+      "resolver": "report_recovery_resume",
+      "targetPaths": [],
+      "tupleFields": [
+        "parent_id",
+        "student_id",
+        "week_start",
+        "report_id"
+      ]
+    },
     "authorization": [
       {
         "action": "update",
@@ -3244,6 +3300,7 @@
         "evidence_references"
       ],
       "required": true,
+      "resolver": null,
       "targetPaths": [
         "references.job_id",
         "references.parent_id",
@@ -3343,6 +3400,7 @@
         "fixture.fixture_name"
       ],
       "required": false,
+      "resolver": "support_handoff",
       "targetPaths": [
         "fixture.parent_id",
         "fixture.student_id",
@@ -3385,6 +3443,7 @@
         "fixture.fixture_name"
       ],
       "required": false,
+      "resolver": "support_handoff",
       "targetPaths": [
         "fixture.parent_id",
         "fixture.student_id",

@@ -86,6 +86,31 @@ RECOVERY_FILTER_TARGETS = AdminTargetProvider(
     ("filters.parent_id", "filters.student_id", "filters.week_start"),
     maximum=25,
     reference_only=("reason", "max_targets", "preview_token", "filters.status"),
+    resolver="report_recovery_filters",
+)
+RECOVERY_FILTER_PREVIEW_TARGETS = AdminTargetProvider(
+    "resolver_collection", "request",
+    ("filters.parent_id", "filters.student_id", "filters.week_start"),
+    ("filters.parent_id", "filters.student_id", "filters.week_start"),
+    maximum=25,
+    required=False,
+    reference_only=("reason", "max_targets", "filters.status"),
+    resolver="report_recovery_filters",
+)
+RECOVERY_RESUME_TARGETS = AdminTargetProvider(
+    "resolver_collection", "request", (),
+    ("parent_id", "student_id", "week_start", "report_id"),
+    maximum=25,
+    reference_only=("reason", "results", "max_targets", "preview_token"),
+    resolver="report_recovery_resume",
+)
+RECOVERY_RESUME_PREVIEW_TARGETS = AdminTargetProvider(
+    "resolver_collection", "request", (),
+    ("parent_id", "student_id", "week_start", "report_id"),
+    maximum=25,
+    required=False,
+    reference_only=("reason", "results", "max_targets"),
+    resolver="report_recovery_resume",
 )
 HANDOFF_FIXTURE_TARGET = AdminTargetProvider(
     "scalar", "body",
@@ -93,6 +118,7 @@ HANDOFF_FIXTURE_TARGET = AdminTargetProvider(
     ("fixture.parent_id", "fixture.student_id", "fixture.week_start"),
     required=False,
     reference_only=("reason", "operator_note", "release_evidence", "fixture.fixture_name"),
+    resolver="support_handoff",
 )
 GOVERNANCE_REFERENCE_TARGETS = AdminTargetProvider(
     "collection", "body",
@@ -2195,7 +2221,7 @@ async def bulk_resend_report_emails(
     "/reports/recovery-jobs/resend-email/preview",
     response_model=RecoveryJobPreviewResponse,
 )
-@admin_target_provider(RECOVERY_FILTER_TARGETS)
+@admin_target_provider(RECOVERY_FILTER_PREVIEW_TARGETS)
 async def preview_resend_recovery_job(
     request: RecoveryJobPreviewRequest,
     user: dict = Depends(require_role("admin")),
@@ -2239,7 +2265,7 @@ async def create_resend_recovery_job(
     "/reports/recovery-jobs/retry-generation/preview",
     response_model=RecoveryJobPreviewResponse,
 )
-@admin_target_provider(RECOVERY_FILTER_TARGETS)
+@admin_target_provider(RECOVERY_FILTER_PREVIEW_TARGETS)
 async def preview_generation_retry_recovery_job(
     request: RecoveryJobPreviewRequest,
     user: dict = Depends(require_role("admin")),
@@ -2283,6 +2309,7 @@ async def create_generation_retry_recovery_job(
     "/reports/recovery-jobs/{job_id}/resume/preview",
     response_model=RecoveryJobResumePreviewResponse,
 )
+@admin_target_provider(RECOVERY_RESUME_PREVIEW_TARGETS)
 async def preview_resume_recovery_job(
     job_id: str,
     request: RecoveryJobResumePreviewRequest,
@@ -2305,6 +2332,7 @@ async def preview_resume_recovery_job(
     "/reports/recovery-jobs/{job_id}/resume",
     response_model=RecoveryJobResponse,
 )
+@admin_target_provider(RECOVERY_RESUME_TARGETS)
 async def create_resume_recovery_job(
     job_id: str,
     request: RecoveryJobResumeCreateRequest,

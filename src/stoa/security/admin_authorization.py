@@ -64,6 +64,7 @@ class AdminTargetProvider:
     required: bool = True
     reference_only: tuple[str, ...] = ()
     collection_path: str | None = None
+    resolver: str | None = None
 
 
 def _read_typed_path(value: object, path: str) -> object:
@@ -94,6 +95,141 @@ def _provider_refs(
     actor: Actor,
 ) -> tuple[ResourceRef, ...]:
     request_values = {**request.query_params, **request.path_params}
+    if provider.resolver == "report_recovery_filters":
+        from stoa.services import report_recovery_job_service
+
+        filters = _read_typed_path(body, "filters")
+        filter_values = filters.model_dump() if hasattr(filters, "model_dump") else dict(filters or {})
+        max_targets = int(_read_typed_path(body, "max_targets") or 25)
+        job_type = (
+            report_recovery_job_service.GENERATION_RETRY_JOB_TYPE
+            if "retry-generation" in request.url.path
+            else report_recovery_job_service.RESEND_JOB_TYPE
+        )
+        targets, _ = report_recovery_job_service._collect_targets(  # noqa: SLF001 - allowlisted read-only resolver
+            job_type=job_type, filters=filter_values, max_targets=max_targets
+        )
+        preview_token = _read_typed_path(body, "preview_token")
+        if preview_token:
+            preview = report_recovery_job_service._preview_job(  # noqa: SLF001
+                job_type=job_type,
+                reason=str(_read_typed_path(body, "reason") or ""),
+                operator=actor.user_id,
+                filters=filter_values,
+                max_targets=max_targets,
+            )
+            if preview["preview_token"] != preview_token:
+                raise ValueError("preview target set changed")
+        refs = []
+        seen = set()
+        for target in targets:
+            coordinates = tuple(
+                (field, str(target[field]))
+                for field in ("parent_id", "student_id", "week_start", "report_id")
+                if target.get(field) not in (None, "")
+            )
+            if not coordinates:
+                raise ValueError("resolved target is malformed")
+            coordinate = _canonical_coordinate(coordinates)
+            if coordinate in seen:
+                raise ValueError("duplicate canonical target")
+            seen.add(coordinate)
+            refs.append(ResourceRef(
+                policy.resource_type,
+                coordinate,
+                str(target.get("student_id") or target.get("parent_id") or actor.user_id),
+                relationship_known=True,
+            ))
+        if not refs and provider.required:
+            raise ValueError("resolved target collection is required")
+        if not refs:
+            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+    if provider.resolver == "report_recovery_resume":
+        from stoa.services import report_recovery_job_service
+
+        job_id = str(request_values.get("job_id") or "")
+        max_targets = int(_read_typed_path(body, "max_targets") or 25)
+        results = list(_read_typed_path(body, "results") or ())
+        report_recovery_job_service._get_resumable_source_job(job_id)  # noqa: SLF001
+        normalized = report_recovery_job_service._normalized_resume_results(results)  # noqa: SLF001
+        targets = report_recovery_job_service._collect_resume_targets(  # noqa: SLF001
+            job_id, result_filters=normalized, max_targets=max_targets
+        )
+        preview_token = _read_typed_path(body, "preview_token")
+        if preview_token:
+            preview = report_recovery_job_service.preview_resume_job(
+                source_job_id=job_id,
+                reason=str(_read_typed_path(body, "reason") or ""),
+                operator=actor.user_id,
+                results=results,
+                max_targets=max_targets,
+            )
+            if preview["preview_token"] != preview_token:
+                raise ValueError("preview target set changed")
+        refs = []
+        seen = set()
+        for target in targets:
+            coordinates = tuple(
+                (field, str(target[field]))
+                for field in ("parent_id", "student_id", "week_start", "report_id")
+                if target.get(field) not in (None, "")
+            )
+            coordinate = _canonical_coordinate(coordinates)
+            if not coordinates or coordinate in seen:
+                raise ValueError("malformed or duplicate resolved target")
+            seen.add(coordinate)
+            refs.append(ResourceRef(
+                policy.resource_type, coordinate,
+                str(target.get("student_id") or target.get("parent_id") or actor.user_id),
+                relationship_known=True,
+            ))
+        if not refs and provider.required:
+            raise ValueError("resolved target collection is required")
+        if not refs:
+            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+    if provider.resolver == "support_handoff":
+        from stoa.db.repositories import report_repo
+
+        coordinate_maps: list[dict[str, str]] = []
+        for job_id in list(_read_typed_path(body, "recovery_job_ids") or ()):
+            job = report_repo.get_recovery_job(str(job_id))
+            if not job:
+                raise ValueError("handoff recovery job target is missing")
+            filters = job.get("filters") or {}
+            coordinate_maps.append({
+                key: str(value) for key, value in {
+                    "job_id": job_id,
+                    "parent_id": filters.get("parent_id"),
+                    "student_id": filters.get("student_id"),
+                }.items() if value not in (None, "")
+            })
+        fixture = _read_typed_path(body, "fixture")
+        if fixture is not None:
+            fixture_values = {
+                key: str(_read_typed_path(fixture, key))
+                for key in ("parent_id", "student_id", "week_start")
+                if _read_typed_path(fixture, key) not in (None, "")
+            }
+            if fixture_values:
+                coordinate_maps.append(fixture_values)
+        refs = []
+        seen = set()
+        for values in coordinate_maps:
+            coordinates = tuple((key, values[key]) for key in ("job_id", "parent_id", "student_id", "week_start") if key in values)
+            coordinate = _canonical_coordinate(coordinates)
+            if coordinate in seen:
+                raise ValueError("duplicate canonical target")
+            seen.add(coordinate)
+            refs.append(ResourceRef(
+                policy.resource_type, coordinate,
+                values.get("student_id") or values.get("parent_id") or actor.user_id,
+                relationship_known=True,
+            ))
+        if not refs:
+            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
     items: list[object]
     if provider.collection_path:
         raw = _read_typed_path(body, provider.collection_path)
@@ -168,9 +304,23 @@ def admin_target_provider(provider: AdminTargetProvider):
                     context["policy"],
                     context["actor"],
                 )
+            except HTTPException:
+                raise
             except (TypeError, ValueError) as exc:
                 error = SecurityDecisionError(
                     SecurityErrorCode.ACTION_NOT_ALLOWED,
+                    context["correlation_id"],
+                    internal_detail=type(exc).__name__,
+                )
+                raise _admin_http_error(error) from exc
+            except Exception as exc:
+                code = (
+                    SecurityErrorCode.ACTION_NOT_ALLOWED
+                    if 400 <= int(getattr(exc, "status_code", 500)) < 500
+                    else SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
+                )
+                error = SecurityDecisionError(
+                    code,
                     context["correlation_id"],
                     internal_detail=type(exc).__name__,
                 )

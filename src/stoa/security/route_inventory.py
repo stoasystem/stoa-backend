@@ -206,6 +206,7 @@ def _target_projection(provider: AdminTargetProvider | None) -> dict[str, Any] |
         "maximum": provider.maximum,
         "required": provider.required,
         "referenceOnly": list(provider.reference_only),
+        "resolver": provider.resolver,
     }
 
 
