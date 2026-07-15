@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import report_repo
-from stoa.deps import get_current_user
 from stoa.routers import admin
 from stoa.services import report_artifact_edit_service
 from stoa.services import report_audit_retention_service
@@ -1477,6 +1476,11 @@ def test_recovery_job_audit_timeline_returns_job_scope(monkeypatch):
     calls = []
     monkeypatch.setattr(
         report_repo,
+        "get_recovery_job",
+        lambda job_id: {"job_id": job_id, "filters": {}},
+    )
+    monkeypatch.setattr(
+        report_repo,
         "list_recovery_job_audit_events",
         lambda job_id, **kwargs: calls.append((job_id, kwargs)) or {"Items": []},
     )
@@ -2792,10 +2796,11 @@ def test_support_handoff_delivery_detail_404_for_missing_record(monkeypatch):
 
 
 def test_support_handoff_delivery_detail_rejects_invalid_audit_token(monkeypatch):
-    def fail(*args, **kwargs):
-        raise AssertionError("invalid audit token should stop before delivery lookup")
-
-    monkeypatch.setattr(report_repo, "get_support_handoff_delivery_record", fail)
+    monkeypatch.setattr(
+        report_repo,
+        "get_support_handoff_delivery_record",
+        lambda delivery_id: {"delivery_id": delivery_id},
+    )
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.get(

@@ -131,6 +131,29 @@ def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
     assert calls == []
 
 
+def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monkeypatch):
+    mutations = []
+    monkeypatch.setattr(
+        admin.report_recovery_job_service,
+        "cancel_recovery_job",
+        lambda *args, **kwargs: mutations.append((args, kwargs)),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_actor] = lambda: _actor("report_recovery_operator")
+
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: None)
+    assert TestClient(app).post("/admin/reports/recovery-jobs/missing/cancel").status_code == 404
+    monkeypatch.setattr(
+        report_repo,
+        "get_recovery_job",
+        lambda job_id: (_ for _ in ()).throw(RuntimeError("store unavailable")),
+    )
+    response = TestClient(app).post("/admin/reports/recovery-jobs/job-1/cancel")
+    assert response.status_code == 503
+    assert mutations == []
+
+
 @pytest.mark.parametrize(
     "method,path",
     [

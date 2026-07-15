@@ -138,8 +138,38 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
     raise KeyError(f"unclassified admin route: {method} {path}")
 
 
-def _target(request: Request, policy: AdminRoutePolicy, actor: Actor) -> tuple[str, str]:
+async def _target(request: Request, policy: AdminRoutePolicy, actor: Actor) -> tuple[str, str]:
     values = {**request.query_params, **request.path_params}
+    try:
+        if values.get("job_id"):
+            from stoa.db.repositories import report_repo
+
+            job = report_repo.get_recovery_job(str(values["job_id"]))
+            if not job:
+                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+                raise HTTPException(error.status_code, detail=error.public_body())
+            filters = job.get("filters") or {}
+            values.setdefault("student_id", filters.get("student_id"))
+            values.setdefault("parent_id", filters.get("parent_id"))
+        if values.get("delivery_id"):
+            from stoa.db.repositories import report_repo
+
+            delivery = report_repo.get_support_handoff_delivery_record(
+                str(values["delivery_id"])
+            )
+            if not delivery:
+                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
+                raise HTTPException(error.status_code, detail=error.public_body())
+            values.setdefault("student_id", delivery.get("student_id"))
+            values.setdefault("parent_id", delivery.get("parent_id"))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(error.status_code, detail=error.public_body()) from exc
     selected = [(key, str(values[key])) for key in policy.target_keys if values.get(key)]
     if not selected:
         return "global", actor.user_id
@@ -159,7 +189,7 @@ async def admin_operation(
     except KeyError as exc:
         error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, internal_detail=str(exc))
         raise HTTPException(error.status_code, detail=error.public_body()) from exc
-    resource_id, student_id = _target(request, policy, actor)
+    resource_id, student_id = await _target(request, policy, actor)
     ref = ResourceRef(policy.resource_type, resource_id, student_id, relationship_known=True)
     if not operator_capability_permits(
         actor,
