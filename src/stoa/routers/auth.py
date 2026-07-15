@@ -1,5 +1,4 @@
 """Authentication routes — aligned with frontend API contract."""
-import uuid
 from datetime import datetime, timezone
 
 import boto3
@@ -11,7 +10,7 @@ from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_current_user
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
-from stoa.services import account_verification_service, locale_service
+from stoa.services import account_verification_service, locale_service, public_identity_service
 from stoa.security.route_inventory import explicit_route_classification
 
 router = APIRouter()
@@ -201,6 +200,26 @@ def _is_already_confirmed_provider_error(code: str, message: str) -> bool:
     return code in {"InvalidParameterException", "NotAuthorizedException"} and "CONFIRMED" in message.upper()
 
 
+def _public_identity_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "code": "identity_conflict",
+            "message": "Your account needs recovery before you can continue.",
+        },
+    )
+
+
+def _public_identity_dependency_error() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "code": "identity_provider_unavailable",
+            "message": "Sign-in is temporarily unavailable. Try again later.",
+        },
+    )
+
+
 def _auth_response_for_profile(
     *,
     access_token: str,
@@ -319,6 +338,8 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
     client_id = _public_client_id(settings)
     cognito = _get_cognito(settings)
 
+    issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
+    provider_subject = ""
     try:
         signup_resp = cognito.sign_up(
             ClientId=client_id,
@@ -326,7 +347,11 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             Password=body.password,
             UserAttributes=[{"Name": "email", "Value": body.email}],
         )
-        user_id = signup_resp.get("UserSub") or str(uuid.uuid4())
+        provider_subject = str(signup_resp.get("UserSub") or "").strip()
+        if not provider_subject:
+            raise public_identity_service.PublicIdentityDependencyError(
+                "provider signup omitted subject"
+            )
         try:
             cognito.admin_update_user_attributes(
                 UserPoolId=settings.cognito_user_pool_id,
@@ -335,32 +360,21 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             )
         except ClientError:
             pass
-        # Add only the exact approved public role group. Privileged groups are not
-        # representable in this registration command.
-        group_name = _PUBLIC_GROUPS[role]
-        if group_name:
-            for _attempt in range(2):
-                try:
-                    cognito.admin_add_user_to_group(
-                        UserPoolId=settings.cognito_user_pool_id,
-                        Username=body.email,
-                        GroupName=group_name,
-                    )
-                    break
-                except ClientError:
-                    if _attempt == 1:
-                        import logging
-                        logging.getLogger(__name__).warning(
-                            "Failed to add user %s to group %s after 2 attempts",
-                            body.email, group_name,
-                        )
     except ClientError as e:
         code = e.response["Error"]["Code"]
         if code == "UsernameExistsException":
-            raise HTTPException(status_code=409, detail="Email already registered")
+            try:
+                provider_subject = public_identity_service.provider_identity(
+                    cognito,
+                    user_pool_id=settings.cognito_user_pool_id,
+                    email=body.email,
+                )["subject"]
+            except Exception as exc:
+                raise _public_identity_dependency_error() from exc
         if code in ("InvalidPasswordException", "InvalidParameterException"):
             raise HTTPException(status_code=400, detail="Password does not meet requirements")
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        if code != "UsernameExistsException":
+            raise HTTPException(status_code=503, detail="Public authentication is temporarily unavailable")
 
     # Extract onboarding profile fields forwarded by the frontend.
     # Frontend sends nested data under "profile"; legacy payload may use "studentProfile"/"parentProfile".
@@ -394,7 +408,7 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
         age = None
 
     profile = {
-        "user_id": user_id,
+        "user_id": provider_subject,
         "email": body.email,
         "name": body.name or body.email.split("@")[0],
         "role": role,
@@ -423,7 +437,21 @@ async def register(body: RegisterRequest, settings: Settings = Depends(get_setti
             or parent_profile.get("child_email")
         )
         _bind_existing_child_if_possible(profile, child_email)
-    user_repo.put_user(profile)
+    try:
+        _, profile = public_identity_service.start_or_resume_public_registration(
+            email=body.email,
+            issuer=issuer,
+            subject=provider_subject,
+            user_id=provider_subject,
+            role=role,
+            profile=profile,
+            provider=cognito,
+            user_pool_id=settings.cognito_user_pool_id,
+        )
+    except public_identity_service.PublicIdentityCommandConflict as exc:
+        raise _public_identity_conflict() from exc
+    except public_identity_service.PublicIdentityDependencyError as exc:
+        raise _public_identity_dependency_error() from exc
 
     return _auth_response_for_profile(
         access_token="",
@@ -600,16 +628,19 @@ async def confirm_email_verification(
     settings: Settings = Depends(get_settings),
 ):
     """Confirm Cognito's sign-up code and activate the local account profile."""
-    profile = user_repo.get_user_by_email(body.email)
-    if not profile:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "verification_request_invalid",
-                "message": "Invalid verification request",
-            },
-        )
-    if account_verification_service.is_email_verified(profile):
+    try:
+        command = public_identity_service.require_public_identity_command(body.email)
+    except public_identity_service.PublicIdentityCommandConflict as exc:
+        raise _public_identity_conflict() from exc
+    except Exception as exc:
+        raise _public_identity_dependency_error() from exc
+    if command.activation_complete:
+        try:
+            profile = public_identity_service.get_completed_public_profile(command)
+        except public_identity_service.PublicIdentityCommandConflict as exc:
+            raise _public_identity_conflict() from exc
+        except Exception as exc:
+            raise _public_identity_dependency_error() from exc
         state = account_verification_service.public_state(profile)
         return EmailVerificationResponse(
             status="already_verified",
@@ -618,9 +649,9 @@ async def confirm_email_verification(
             accountActivationStatus=state["accountActivationStatus"],
             resendAllowed=False,
         )
-    role = _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
     client_id = _public_client_id(settings)
+    already_confirmed = False
     try:
         cognito.confirm_sign_up(
             ClientId=client_id,
@@ -631,21 +662,10 @@ async def confirm_email_verification(
         code = e.response["Error"]["Code"]
         message = str(e.response["Error"].get("Message") or "")
         if _is_already_confirmed_provider_error(code, message):
-            updated = user_repo.update_email_verification_state(
-                profile["user_id"],
-                account_verification_service.verified_fields(_utc_now_iso()),
-            )
-            state = account_verification_service.public_state(updated or profile)
-            return EmailVerificationResponse(
-                status="already_verified",
-                emailVerificationStatus=state["emailVerificationStatus"],
-                emailVerificationRequired=state["emailVerificationRequired"],
-                accountActivationStatus=state["accountActivationStatus"],
-                resendAllowed=False,
-            )
-        if code == "ExpiredCodeException":
+            already_confirmed = True
+        elif code == "ExpiredCodeException":
             user_repo.update_email_verification_state(
-                profile["user_id"],
+                command.user_id,
                 account_verification_service.expired_fields(_utc_now_iso()),
             )
             raise HTTPException(
@@ -655,7 +675,7 @@ async def confirm_email_verification(
                     "message": "Verification code expired",
                 },
             )
-        if code in (
+        elif code in (
             "CodeMismatchException",
             "InvalidParameterException",
             "NotAuthorizedException",
@@ -668,7 +688,7 @@ async def confirm_email_verification(
                     "message": "Invalid verification request",
                 },
             )
-        if code == "UserDisabledException":
+        elif code == "UserDisabledException":
             raise HTTPException(
                 status_code=403,
                 detail={
@@ -676,7 +696,7 @@ async def confirm_email_verification(
                     "message": "This account is disabled. Contact support.",
                 },
             )
-        if code in ("LimitExceededException", "TooManyRequestsException"):
+        elif code in ("LimitExceededException", "TooManyRequestsException"):
             raise HTTPException(
                 status_code=429,
                 detail={
@@ -684,24 +704,34 @@ async def confirm_email_verification(
                     "message": "Verification confirmation rate limit exceeded",
                 },
             )
-        raise HTTPException(status_code=500, detail=f"Cognito error: {code}")
+        elif not already_confirmed:
+            raise HTTPException(status_code=503, detail="Public authentication is temporarily unavailable")
 
-    group_name = _PUBLIC_GROUPS[role]
     try:
-        cognito.admin_add_user_to_group(
-            UserPoolId=settings.cognito_user_pool_id,
-            Username=body.email,
-            GroupName=group_name,
+        provider = public_identity_service.provider_identity(
+            cognito,
+            user_pool_id=settings.cognito_user_pool_id,
+            email=body.email,
         )
-    except ClientError:
-        pass
-    updated = user_repo.update_email_verification_state(
-        profile["user_id"],
-        account_verification_service.verified_fields(_utc_now_iso()),
-    )
-    state = account_verification_service.public_state(updated or profile)
+        issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
+        _, profile = public_identity_service.confirm_and_reconcile_public_identity(
+            email=body.email,
+            issuer=issuer,
+            provider_subject=provider["subject"],
+            provider_status=provider["status"],
+            provider_email=provider["email"],
+            provider_email_verified=provider["email_verified"],
+            provider_enabled=provider["enabled"],
+            provider=cognito,
+            user_pool_id=settings.cognito_user_pool_id,
+        )
+    except public_identity_service.PublicIdentityCommandConflict as exc:
+        raise _public_identity_conflict() from exc
+    except Exception as exc:
+        raise _public_identity_dependency_error() from exc
+    state = account_verification_service.public_state(profile)
     return EmailVerificationResponse(
-        status="confirmed",
+        status="already_verified" if already_confirmed else "confirmed",
         emailVerificationStatus=state["emailVerificationStatus"],
         emailVerificationRequired=state["emailVerificationRequired"],
         accountActivationStatus=state["accountActivationStatus"],

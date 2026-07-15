@@ -1,6 +1,8 @@
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
+from types import SimpleNamespace
 
 from stoa.config import Settings, get_settings
 from stoa.routers import admin, auth
@@ -69,6 +71,20 @@ class FakeCognito:
         self.calls.append(("admin_add_user_to_group", kwargs))
         return {}
 
+    def admin_get_user(self, **kwargs):
+        self.calls.append(("admin_get_user", kwargs))
+        email = kwargs["Username"]
+        return {
+            "Username": "cognito-user-sub",
+            "UserStatus": "CONFIRMED",
+            "Enabled": True,
+            "UserAttributes": [
+                {"Name": "sub", "Value": "cognito-user-sub"},
+                {"Name": "email", "Value": email},
+                {"Name": "email_verified", "Value": "true"},
+            ],
+        }
+
     def initiate_auth(self, **kwargs):
         self.calls.append(("initiate_auth", kwargs))
         return {"AuthenticationResult": {"AccessToken": "access-token"}}
@@ -88,6 +104,57 @@ class FakeCognito:
     def confirm_sign_up(self, **kwargs):
         self.calls.append(("confirm_sign_up", kwargs))
         return {}
+
+
+@pytest.fixture(autouse=True)
+def _legacy_public_identity_service_adapter(monkeypatch):
+    """Keep legacy route edge-case tests isolated from DynamoDB; lifecycle tests cover the real service."""
+
+    def command_for(email):
+        profile = auth.user_repo.get_user_by_email(email)
+        if not profile:
+            raise auth.public_identity_service.PublicIdentityCommandConflict("missing")
+        role = auth._approved_public_registration_role(profile)
+        return SimpleNamespace(
+            user_id=profile["user_id"],
+            email=email,
+            role=role,
+            activation_complete=auth.account_verification_service.is_email_verified(profile),
+        )
+
+    def start(**kwargs):
+        auth.user_repo.put_user(kwargs["profile"])
+        return SimpleNamespace(), kwargs["profile"]
+
+    def confirm(**kwargs):
+        profile = auth.user_repo.get_user_by_email(kwargs["email"])
+        role = auth._approved_public_registration_role(profile)
+        del role
+        if auth.account_verification_service.is_email_verified(profile):
+            return SimpleNamespace(), profile
+        updated = auth.user_repo.update_email_verification_state(
+            profile["user_id"],
+            {
+                **auth.account_verification_service.verified_fields(auth._utc_now_iso()),
+                "account_status": "active",
+            },
+        )
+        return SimpleNamespace(), updated or profile
+
+    monkeypatch.setattr(
+        auth.public_identity_service, "require_public_identity_command", command_for
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_completed_public_profile",
+        lambda command: auth.user_repo.get_user_by_email(command.email),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service, "start_or_resume_public_registration", start
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service, "confirm_and_reconcile_public_identity", confirm
+    )
 
 
 def test_register_records_email_verification_policy_and_parent_binding(monkeypatch):

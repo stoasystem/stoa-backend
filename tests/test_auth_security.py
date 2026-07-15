@@ -381,6 +381,13 @@ def test_t472_01_confirmation_rejects_non_public_registration_commands_without_m
         "update_email_verification_state",
         lambda *args, **kwargs: repository_mutations.append((args, kwargs)),
     )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: (_ for _ in ()).throw(
+            auth.public_identity_service.PublicIdentityCommandConflict("invalid public role")
+        ),
+    )
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
     app.dependency_overrides[get_settings] = lambda: Settings(
