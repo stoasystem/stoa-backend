@@ -15,7 +15,7 @@ from stoa.config import DEVELOPMENT_AUDIT_KEY, Settings
 from stoa.db.repositories import security_audit_repo
 from stoa.db.repositories.security_audit_repo import DynamoAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import notifications
+from stoa.routers import admin, notifications
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationFacts,
@@ -359,6 +359,36 @@ def test_real_admin_mandatory_allow_outage_returns_safe_correlated_503(monkeypat
     assert response.headers["X-Correlation-ID"] == response.json()["detail"]["correlationId"]
     assert "audit-outage-canary" not in response.text
     assert effects == []
+
+
+def test_admin_collection_evidence_is_per_target_deterministic_and_redacted(monkeypatch):
+    from stoa.db.repositories import report_repo
+
+    sink = MemoryAuthorizationAuditSink()
+    effects = []
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda *args: effects.append(args) or None)
+    actor = Actor(
+        "admin-1", "https://identity.test", "admin-subject", CanonicalRole.ADMIN,
+        AccountStatus.ACTIVE, "admin",
+        (CapabilityGrant("report_recovery_operator", "global", 1),),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_actor] = lambda: actor
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    client = TestClient(app)
+    targets = [
+        {"parent_id": "parent:redaction-a", "student_id": "student-redaction-a", "week_start": "2026-06-01"},
+        {"parent_id": "parent-redaction", "student_id": "student-redaction-b", "week_start": "a:2026-06-01"},
+    ]
+    assert client.post("/admin/reports/bulk-resend", json={"reports": targets}).status_code == 200
+    first = {row["resource_fingerprint"] for row in sink.events.values()}
+    assert client.post("/admin/reports/bulk-resend", json={"reports": list(reversed(targets))}).status_code == 200
+    second = {row["resource_fingerprint"] for row in sink.events.values()}
+    assert first == second and len(first) == 2
+    rendered = repr(sink.events)
+    for raw in ("parent:redaction-a", "student-redaction-a", "student-redaction-b", "a:2026-06-01"):
+        assert raw not in rendered
 
 
 def _generated_student_app(monkeypatch, *, sink, facts):
