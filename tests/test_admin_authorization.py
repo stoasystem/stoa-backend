@@ -28,6 +28,15 @@ def _actor(*capabilities: str, scope: str = "global") -> Actor:
     )
 
 
+def _actor_with_grants(capability: str, *scopes: str) -> Actor:
+    actor = _actor(capability)
+    return Actor(
+        actor.user_id, actor.issuer, actor.subject, actor.role, actor.account_status,
+        actor.cognito_group,
+        tuple(CapabilityGrant(capability, scope, index + 1) for index, scope in enumerate(scopes)),
+    )
+
+
 def _registered_admin_routes() -> list[tuple[str, str, APIRoute]]:
     rows = []
     for route in main_app.routes:
@@ -131,6 +140,90 @@ def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
     )
     assert response.status_code == 403
     assert calls == []
+
+
+def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(user_repo := admin.user_repo, "get_user", lambda value: {
+        "user_id": value, "role": "parent" if value.startswith("parent") else "student"
+    })
+    monkeypatch.setattr(user_repo, "update_student_parent_link", lambda *args: calls.append(("link", args)))
+    monkeypatch.setattr(user_repo, "put_parent_student_binding", lambda **values: calls.append(("binding", values)) or values)
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer", scope="student:student-1")
+    response = TestClient(app).post("/admin/parent-bindings/repair", json={
+        "parent_id": "parent-1", "student_id": "student-1", "relationship": "child", "reason": "repair"
+    })
+    assert response.status_code == 200
+    assert [kind for kind, _ in calls] == ["link", "binding"]
+
+
+def test_bulk_body_targets_are_all_of_and_duplicate_safe(monkeypatch):
+    mutations = []
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda *args: mutations.append(("lookup", args)) or {
+        "report_id": "report-1", "parent_id": args[0], "student_id": args[1], "week_start": args[2]
+    })
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_actor] = lambda: _actor_with_grants(
+        "report_recovery_operator", "student:student-1"
+    )
+    client = TestClient(app)
+    payload = {"reports": [
+        {"parent_id": "parent-1", "student_id": "student-1", "week_start": "2026-06-01"},
+        {"parent_id": "parent-2", "student_id": "student-2", "week_start": "2026-06-08"},
+    ]}
+    assert client.post("/admin/reports/bulk-resend", json=payload).status_code == 403
+    assert mutations == []
+    duplicate = {"reports": [payload["reports"][0], payload["reports"][0]]}
+    assert client.post("/admin/reports/bulk-resend", json=duplicate).status_code == 403
+    assert mutations == []
+
+
+def test_bulk_body_targets_persist_every_allow_before_first_effect(monkeypatch):
+    sink = MemoryAuthorizationAuditSink()
+    effects = []
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda *args: effects.append(args) or None)
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    app.dependency_overrides[get_actor] = lambda: _actor_with_grants(
+        "report_recovery_operator", "student:student-1", "student:student-2"
+    )
+    reports = [
+        {"parent_id": "parent-1", "student_id": "student-1", "week_start": "2026-06-01"},
+        {"parent_id": "parent-2", "student_id": "student-2", "week_start": "2026-06-08"},
+    ]
+    response = TestClient(app).post("/admin/reports/bulk-resend", json={"reports": reports})
+    assert response.status_code == 200
+    assert len(effects) == len(sink.events) == 2
+    assert len({row["resource_fingerprint"] for row in sink.events.values()}) == 2
+
+
+def test_later_body_target_audit_failure_prevents_entire_bulk_effect(monkeypatch):
+    class FailSecondSink(MemoryAuthorizationAuditSink):
+        def persist_authorization_decision(self, **values):
+            if len(self.events) == 1:
+                raise RuntimeError("later-audit-outage")
+            return super().persist_authorization_decision(**values)
+
+    effects = []
+    sink = FailSecondSink()
+    monkeypatch.setattr(report_repo, "get_report_for_child_by_week", lambda *args: effects.append(args))
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    app.dependency_overrides[get_actor] = lambda: _actor("report_recovery_operator")
+    reports = [
+        {"parent_id": "parent:a", "student_id": "student-1", "week_start": "b"},
+        {"parent_id": "parent", "student_id": "student-1", "week_start": "a:b"},
+    ]
+    response = TestClient(app).post("/admin/reports/bulk-resend", json={"reports": reports})
+    assert response.status_code == 503
+    assert effects == []
 
 
 def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monkeypatch):

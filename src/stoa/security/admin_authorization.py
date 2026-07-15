@@ -136,10 +136,11 @@ def _provider_refs(
             raise ValueError("duplicate canonical target")
         seen.add(coordinate)
         values = dict(coordinates)
+        leaf_values = {key.rsplit(".", 1)[-1]: value for key, value in coordinates}
         student_id = str(
-            values.get("student_id")
-            or values.get("user_id")
-            or values.get("parent_id")
+            leaf_values.get("student_id")
+            or leaf_values.get("user_id")
+            or leaf_values.get("parent_id")
             or actor.user_id
         )
         refs.append(ResourceRef(policy.resource_type, coordinate, student_id, relationship_known=True))
