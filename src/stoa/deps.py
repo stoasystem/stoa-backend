@@ -8,6 +8,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
+from stoa.db.repositories.security_audit_repo import (
+    AuthorizationAuditSink,
+    DynamoAuthorizationAuditSink,
+)
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole, IdentityRepository, resolve_actor
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
@@ -44,6 +48,42 @@ def get_rekognition_client():
 def get_sqs_client():
     settings = get_settings()
     return boto3.client("sqs", region_name=settings.aws_region)
+
+
+@lru_cache(maxsize=1)
+def _configured_authorization_audit_sink(
+    active_key_id: str,
+    active_key: str,
+    previous_keys: tuple[tuple[str, str], ...],
+    probe_window_seconds: int,
+    probe_ttl_seconds: int,
+    probe_count_cap: int,
+    probe_id_cap: int,
+) -> AuthorizationAuditSink:
+    return DynamoAuthorizationAuditSink(
+        active_key_id=active_key_id,
+        active_secret=active_key,
+        previous_keys=dict(previous_keys),
+        probe_window_seconds=probe_window_seconds,
+        probe_ttl_seconds=probe_ttl_seconds,
+        probe_count_cap=probe_count_cap,
+        probe_id_cap=probe_id_cap,
+    )
+
+
+def get_authorization_audit_sink(
+    settings: Settings = Depends(get_settings),
+) -> AuthorizationAuditSink:
+    """Construct the durable audit sink only from validated settings."""
+    return _configured_authorization_audit_sink(
+        settings.authorization_audit_active_key_id,
+        settings.authorization_audit_active_key,
+        tuple(sorted(settings.authorization_audit_previous_keys.items())),
+        settings.authorization_audit_probe_window_seconds,
+        settings.authorization_audit_probe_ttl_seconds,
+        settings.authorization_audit_probe_count_cap,
+        settings.authorization_audit_probe_id_cap,
+    )
 
 
 @lru_cache(maxsize=8)

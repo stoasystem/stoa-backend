@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from stoa.config import settings
 from stoa.db.repositories import practice_repo
-from stoa.deps import get_actor
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -26,6 +27,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
     authorized_student_dependency,
@@ -52,6 +54,8 @@ async def _authorize_practice_item(
     *,
     actor: Actor,
     facts: CurrentAuthorizationFactRepository,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
     item_id: str,
     item: dict | None,
     action: AuthorizationAction,
@@ -76,6 +80,8 @@ async def _authorize_practice_item(
             resource_id=item_id,
             spec=spec,
             fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
         )
     except SecurityDecisionError as error:
         raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
@@ -96,10 +102,14 @@ async def _authorized_lesson_read(
     lesson_id: str,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     return await _authorize_practice_item(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         item_id=lesson_id,
         item=practice_repo.get_lesson(lesson_id),
         action=AuthorizationAction.READ,
@@ -110,10 +120,14 @@ async def _authorized_lesson_update(
     lesson_id: str,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     return await _authorize_practice_item(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         item_id=lesson_id,
         item=practice_repo.get_lesson(lesson_id),
         action=AuthorizationAction.UPDATE,
@@ -124,10 +138,14 @@ async def _authorized_challenge_update(
     challenge_id: str,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     return await _authorize_practice_item(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         item_id=challenge_id,
         item=practice_repo.get_challenge(challenge_id),
         action=AuthorizationAction.UPDATE,
@@ -138,11 +156,15 @@ async def _authorized_body_challenge_update(
     body: dict,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     challenge_id = str(body.get("challengeId") or "").strip()
     return await _authorize_practice_item(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         item_id=challenge_id,
         item=practice_repo.get_challenge(challenge_id) if challenge_id else None,
         action=AuthorizationAction.UPDATE,

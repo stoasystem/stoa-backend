@@ -5,7 +5,8 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 import pytest
 
-from stoa.deps import get_actor
+from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import app as main_app
 from stoa.routers import admin, notifications
 from stoa.db.repositories import report_repo
@@ -121,6 +122,7 @@ def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
     )
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor(
         "report_metadata_reader", scope="student:student-other"
     )
@@ -140,6 +142,7 @@ def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monk
     )
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor("report_recovery_operator")
 
     monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: None)
@@ -181,6 +184,7 @@ def test_admin_role_and_break_glass_cannot_provision_privilege(monkeypatch):
     monkeypatch.setattr(admin.privileged_identity_service, "provision_admin", lambda **kwargs: calls.append(kwargs))
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor("student_data_break_glass")
     response = TestClient(app).post(
         "/admin/privileged-identities/admins",
@@ -220,6 +224,7 @@ def test_notification_admin_routes_require_distinct_exact_capabilities(monkeypat
     )
     app = FastAPI()
     app.include_router(notifications.admin_router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor(wrong)
     assert TestClient(app).get(path).status_code == 403
     app.dependency_overrides[get_actor] = lambda: _actor()

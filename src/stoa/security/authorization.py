@@ -13,10 +13,12 @@ from enum import StrEnum
 from inspect import isawaitable
 from typing import Awaitable, Callable, Mapping, Protocol
 
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.security.errors import (
     SecurityDecisionError,
     SecurityErrorCode,
     SecurityHttpResponse,
+    normalize_correlation_id,
     safe_error_response,
 )
 from stoa.security.events import SecurityEvent, project_security_event
@@ -324,6 +326,98 @@ class PolicyDecision:
     event: Mapping[str, object] | None = None
 
 
+def requires_durable_evidence(
+    actor: Actor,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+) -> bool:
+    """Classify allows whose effects must wait for durable evidence."""
+    owner_self = (
+        purpose in {
+            AuthorizationPurpose.SELF_SERVICE,
+            AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+        }
+        and actor.user_id in {resource.student_id, resource.owner_id}
+        and actor.role in {CanonicalRole.STUDENT, CanonicalRole.TEACHER}
+    )
+    if owner_self and action not in {
+        AuthorizationAction.EXPORT,
+        AuthorizationAction.EXTERNAL_SEND,
+        AuthorizationAction.MANAGE_PRIVILEGE,
+    }:
+        return False
+    return True
+
+
+async def record_authorization_decision(
+    *,
+    actor: Actor,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+    decision: PolicyDecision,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
+    decision_kind: str = "policy",
+) -> PolicyDecision:
+    """Persist required evidence before the decision can reach a handler."""
+    canonical_id = normalize_correlation_id(correlation_id)
+    if decision.allowed and not requires_durable_evidence(actor, resource, action, purpose):
+        return decision
+    try:
+        result = audit_sink.persist_authorization_decision(
+            correlation_id=canonical_id,
+            actor_id=actor.user_id,
+            actor_role=actor.role.value,
+            policy_version=decision.policy_version,
+            resource_type=resource.resource_type.value,
+            resource_id=resource.resource_id,
+            student_id=resource.student_id,
+            owner_id=resource.owner_id,
+            scope_discriminator="|".join(
+                value
+                for value in (resource.question_id, resource.session_id)
+                if value
+            ),
+            action=action.value,
+            purpose=purpose.value,
+            result="allowed" if decision.allowed else decision.result_code.value,
+            decision_kind=decision_kind,
+            evidence_reference=decision.evidence_reference,
+        )
+        if isawaitable(result):
+            result = await result
+        if not decision.allowed:
+            aggregate = audit_sink.aggregate_authorization_probe(
+                record=result,
+                actor_id=actor.user_id,
+                resource_type=resource.resource_type.value,
+                action=action.value,
+                purpose=purpose.value,
+                result=decision.result_code.value,
+                policy_version=decision.policy_version,
+            )
+            if isawaitable(aggregate):
+                await aggregate
+    except Exception as exc:
+        if decision.allowed:
+            raise SecurityDecisionError(
+                SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+                canonical_id,
+                internal_detail=type(exc).__name__,
+            ) from exc
+        # Evidence degradation must never turn a denial into an allow or oracle.
+    return PolicyDecision(
+        decision.allowed,
+        decision.result_code,
+        decision.policy_version,
+        decision.evidence_reference,
+        canonical_id,
+        decision.event,
+    )
+
+
 class AuthorizationFactRepository(Protocol):
     async def facts_for(
         self,
@@ -528,24 +622,24 @@ class AuthorizationPolicy:
         return bool(grant), f"grant:{grant.version}" if grant else None
 
 
-def operator_capability_permits(
+def operator_capability_decision(
     actor: Actor,
     *,
     capability: str,
     resource: ResourceRef,
     action: AuthorizationAction,
     purpose: AuthorizationPurpose,
-) -> bool:
-    """Central exact-capability check for explicitly classified operator routes."""
+) -> PolicyDecision:
+    """Return a structured exact-capability decision for operator routes."""
     operator_role = actor.role is CanonicalRole.ADMIN or (
         actor.role is CanonicalRole.TEACHER
         and (capability.startswith("curriculum_") or capability == "migration_operator")
     )
     if not actor.can_authorize or not operator_role:
-        return False
+        return PolicyDecision(False, SecurityErrorCode.ACTION_NOT_ALLOWED)
     if purpose is AuthorizationPurpose.INCIDENT_BREAK_GLASS:
-        return False
-    return bool(
+        return PolicyDecision(False, SecurityErrorCode.ACTION_NOT_ALLOWED)
+    allowed = bool(
         _matching_grant(
             actor,
             capability,
@@ -555,6 +649,25 @@ def operator_capability_permits(
             allow_global=True,
         )
     )
+    return PolicyDecision(allowed, SecurityErrorCode.ACTION_NOT_ALLOWED)
+
+
+def operator_capability_permits(
+    actor: Actor,
+    *,
+    capability: str,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+) -> bool:
+    """Compatibility projection; production callers record the structured decision."""
+    return operator_capability_decision(
+        actor,
+        capability=capability,
+        resource=resource,
+        action=action,
+        purpose=purpose,
+    ).allowed
 
 
 async def authorize_and_resolve(
@@ -563,13 +676,26 @@ async def authorize_and_resolve(
     resource_id: str,
     spec: AuthorizationSpec,
     fact_repository: AuthorizationFactRepository,
+    audit_sink: AuthorizationAuditSink,
+    correlation_id: str,
     policy: AuthorizationPolicy | None = None,
-    correlation_id: str | None = None,
 ) -> AuthorizedResource:
     """Load once, load current facts once, decide, and return that exact object."""
     try:
         loaded = await spec.resolver(resource_id)
         if loaded is None:
+            missing = ResourceRef(spec.resource_type, resource_id, resource_id)
+            decision = PolicyDecision(False, SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id=correlation_id)
+            await record_authorization_decision(
+                actor=actor,
+                resource=missing,
+                action=spec.action,
+                purpose=spec.purpose,
+                decision=decision,
+                correlation_id=correlation_id,
+                audit_sink=audit_sink,
+                decision_kind="resolver",
+            )
             raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
         if isinstance(loaded, AuthorizedResource):
             resolved = loaded
@@ -586,6 +712,15 @@ async def authorize_and_resolve(
         resolved = AuthorizedResource(resolved.ref, resolved.value, facts)
         decision = (policy or AuthorizationPolicy()).evaluate(
             actor, resolved, spec.action, spec.purpose, correlation_id=correlation_id
+        )
+        decision = await record_authorization_decision(
+            actor=actor,
+            resource=resolved.ref,
+            action=spec.action,
+            purpose=spec.purpose,
+            decision=decision,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
         )
         if not decision.allowed:
             raise SecurityDecisionError(decision.result_code, correlation_id)

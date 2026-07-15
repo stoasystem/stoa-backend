@@ -1,8 +1,12 @@
-"""Append-only, allowlisted security lifecycle evidence."""
+"""Append-only, allowlisted security lifecycle and authorization evidence."""
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
+import hashlib
+import hmac
+from typing import Any, Mapping, Protocol, Sequence
 
 from botocore.exceptions import ClientError
 
@@ -25,6 +29,7 @@ SAFE_AUDIT_FIELDS = frozenset(
         "event_id",
         "event_type",
         "actor_id",
+        "actor_fingerprint",
         "actor_role",
         "target_id",
         "target_type",
@@ -38,12 +43,325 @@ SAFE_AUDIT_FIELDS = frozenset(
         "correlation_id",
         "command_id",
         "created_at",
+        "decision_kind",
+        "resource_fingerprint",
+        "audit_key_id",
+        "probe_bucket",
+        "probe_count",
+        "threshold_reached",
+        "first_seen_at",
+        "last_seen_at",
+        "expires_at",
     }
 )
 
 
 class DuplicateSecurityAuditEvent(RuntimeError):
     """An immutable audit event identifier has already been used."""
+
+
+class AuthorizationAuditUnavailable(RuntimeError):
+    """Durable authorization evidence cannot currently be recorded."""
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizationAuditKey:
+    key_id: str
+    secret: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizationAuditRecord:
+    event_id: str
+    resource_fingerprint: str
+    audit_key_id: str
+    replayed: bool = False
+
+
+class AuthorizationAuditSink(Protocol):
+    """Minimal durable boundary used by the authorization gateway."""
+
+    def persist_authorization_decision(
+        self,
+        *,
+        correlation_id: str,
+        actor_id: str,
+        actor_role: str,
+        policy_version: str,
+        resource_type: str,
+        resource_id: str,
+        student_id: str,
+        owner_id: str | None,
+        scope_discriminator: str,
+        action: str,
+        purpose: str,
+        result: str,
+        decision_kind: str,
+        evidence_reference: str | None,
+        created_at: datetime | None = None,
+    ) -> AuthorizationAuditRecord: ...
+
+    def aggregate_authorization_probe(
+        self,
+        *,
+        record: AuthorizationAuditRecord,
+        actor_id: str,
+        resource_type: str,
+        action: str,
+        purpose: str,
+        result: str,
+        policy_version: str,
+        created_at: datetime | None = None,
+    ) -> Mapping[str, Any]: ...
+
+
+def _canonical_parts(parts: Sequence[str]) -> bytes:
+    encoded = bytearray()
+    for part in parts:
+        value = str(part).encode("utf-8")
+        encoded.extend(len(value).to_bytes(4, "big"))
+        encoded.extend(value)
+    return bytes(encoded)
+
+
+def _keyed_fingerprint(key: AuthorizationAuditKey, parts: Sequence[str]) -> str:
+    return hmac.new(key.secret, _canonical_parts(parts), hashlib.sha256).hexdigest()
+
+
+def _decision_event_id(
+    key: AuthorizationAuditKey,
+    *,
+    correlation_id: str,
+    actor_id: str,
+    policy_version: str,
+    resource_type: str,
+    action: str,
+    purpose: str,
+    result: str,
+    decision_kind: str,
+    resource_fingerprint: str,
+) -> str:
+    material = _canonical_parts(
+        (
+            correlation_id,
+            actor_id,
+            policy_version,
+            resource_type,
+            action,
+            purpose,
+            result,
+            decision_kind,
+            resource_fingerprint,
+            key.key_id,
+        )
+    )
+    return hashlib.sha256(material).hexdigest()
+
+
+class DynamoAuthorizationAuditSink:
+    """DynamoDB-backed evidence sink with keyed identities and bounded probes."""
+
+    def __init__(
+        self,
+        *,
+        active_key_id: str,
+        active_secret: str,
+        previous_keys: Mapping[str, str] | None = None,
+        probe_window_seconds: int = 300,
+        probe_ttl_seconds: int = 86400,
+        probe_count_cap: int = 100,
+        probe_id_cap: int = 256,
+    ) -> None:
+        if not active_key_id.strip() or not active_secret.strip():
+            raise AuthorizationAuditUnavailable("authorization_audit_key_missing")
+        self._active = AuthorizationAuditKey(active_key_id.strip(), active_secret.encode())
+        self._previous = tuple(
+            AuthorizationAuditKey(str(key_id).strip(), str(secret).encode())
+            for key_id, secret in (previous_keys or {}).items()
+            if str(key_id).strip() and str(secret).strip()
+        )
+        self._window = probe_window_seconds
+        self._ttl = probe_ttl_seconds
+        self._count_cap = probe_count_cap
+        self._id_cap = probe_id_cap
+
+    @property
+    def keys(self) -> tuple[AuthorizationAuditKey, ...]:
+        return (self._active, *self._previous)
+
+    def _identity_for_key(
+        self,
+        key: AuthorizationAuditKey,
+        *,
+        correlation_id: str,
+        actor_id: str,
+        policy_version: str,
+        resource_type: str,
+        resource_id: str,
+        student_id: str,
+        owner_id: str | None,
+        scope_discriminator: str,
+        action: str,
+        purpose: str,
+        result: str,
+        decision_kind: str,
+    ) -> tuple[str, str, str]:
+        actor_fingerprint = _keyed_fingerprint(key, ("actor", actor_id))
+        fingerprint = _keyed_fingerprint(
+            key,
+            (resource_type, resource_id, student_id, owner_id or "", scope_discriminator),
+        )
+        return fingerprint, _decision_event_id(
+            key,
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            policy_version=policy_version,
+            resource_type=resource_type,
+            action=action,
+            purpose=purpose,
+            result=result,
+            decision_kind=decision_kind,
+            resource_fingerprint=fingerprint,
+        ), actor_fingerprint
+
+    def persist_authorization_decision(
+        self,
+        *,
+        correlation_id: str,
+        actor_id: str,
+        actor_role: str,
+        policy_version: str,
+        resource_type: str,
+        resource_id: str,
+        student_id: str,
+        owner_id: str | None,
+        scope_discriminator: str,
+        action: str,
+        purpose: str,
+        result: str,
+        decision_kind: str,
+        evidence_reference: str | None,
+        created_at: datetime | None = None,
+    ) -> AuthorizationAuditRecord:
+        now = created_at or datetime.now(UTC)
+        candidates = [
+            (*self._identity_for_key(
+                key,
+                correlation_id=correlation_id,
+                actor_id=actor_id,
+                policy_version=policy_version,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                student_id=student_id,
+                owner_id=owner_id,
+                scope_discriminator=scope_discriminator,
+                action=action,
+                purpose=purpose,
+                result=result,
+                decision_kind=decision_kind,
+            ), key)
+            for key in self.keys
+        ]
+        table = get_table()
+        for fingerprint, event_id, actor_fingerprint, key in candidates[1:]:
+            existing = table.get_item(
+                Key={"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"EVENT#{event_id}"},
+                ConsistentRead=True,
+            ).get("Item")
+            if existing:
+                return AuthorizationAuditRecord(event_id, fingerprint, key.key_id, True)
+        fingerprint, event_id, actor_fingerprint, key = candidates[0]
+        event_type = "authorization_sensitive_allowed" if result == "allowed" else "authorization_denied"
+        event = {
+            "event_id": event_id,
+            "event_type": event_type,
+            "actor_fingerprint": actor_fingerprint,
+            "actor_role": actor_role,
+            "resource_type": resource_type,
+            "action": action,
+            "purpose": purpose,
+            "result_code": result,
+            "version": policy_version,
+            "decision_kind": decision_kind,
+            "resource_fingerprint": fingerprint,
+            "audit_key_id": key.key_id,
+            "evidence_reference": evidence_reference,
+            "correlation_id": correlation_id,
+            "created_at": now.isoformat(),
+        }
+        try:
+            append_authorization_event(actor_fingerprint, event)
+        except DuplicateSecurityAuditEvent:
+            return AuthorizationAuditRecord(event_id, fingerprint, key.key_id, True)
+        return AuthorizationAuditRecord(event_id, fingerprint, key.key_id)
+
+    def aggregate_authorization_probe(
+        self,
+        *,
+        record: AuthorizationAuditRecord,
+        actor_id: str,
+        resource_type: str,
+        action: str,
+        purpose: str,
+        result: str,
+        policy_version: str,
+        created_at: datetime | None = None,
+    ) -> Mapping[str, Any]:
+        now = created_at or datetime.now(UTC)
+        epoch = int(now.timestamp())
+        bucket = epoch - (epoch % self._window)
+        aggregate_id = hashlib.sha256(
+            _canonical_parts(
+                (
+                    actor_id,
+                    resource_type,
+                    action,
+                    purpose,
+                    result,
+                    policy_version,
+                    record.audit_key_id,
+                    str(bucket),
+                )
+            )
+        ).hexdigest()
+        audit_key = next(key for key in self.keys if key.key_id == record.audit_key_id)
+        actor_fingerprint = _keyed_fingerprint(audit_key, ("actor", actor_id))
+        key = {"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"PROBE#{aggregate_id}"}
+        table = get_table()
+        existing = table.get_item(Key=key, ConsistentRead=True).get("Item") or {}
+        seen = set(existing.get("decision_event_ids") or ())
+        if record.event_id in seen or len(seen) >= self._id_cap:
+            return existing
+        count = min(int(existing.get("probe_count") or 0) + 1, self._count_cap)
+        seen.add(record.event_id)
+        safe = project_audit_event(
+            {
+                "event_id": aggregate_id,
+                "event_type": "authorization_probe_aggregated",
+                "actor_fingerprint": actor_fingerprint,
+                "resource_type": resource_type,
+                "action": action,
+                "purpose": purpose,
+                "result_code": result,
+                "version": policy_version,
+                "audit_key_id": record.audit_key_id,
+                "probe_bucket": str(bucket),
+                "probe_count": count,
+                "threshold_reached": count >= min(10, self._count_cap),
+                "first_seen_at": existing.get("first_seen_at") or now.isoformat(),
+                "last_seen_at": now.isoformat(),
+                "expires_at": bucket + self._ttl,
+            }
+        )
+        row = {
+            "PK": key["PK"],
+            "SK": key["SK"],
+            "entity_type": "authorization_probe_aggregate",
+            **safe,
+            "decision_event_ids": sorted(seen),
+        }
+        table.put_item(Item=row)
+        return row
 
 
 def project_audit_event(event: Mapping[str, Any]) -> dict[str, Any]:

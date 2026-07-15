@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db.repositories import adaptive_learning_repo, user_repo
-from stoa.deps import get_actor
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -21,6 +22,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     get_authorization_fact_repository,
     authorized_student_resource_dependency,
@@ -185,6 +187,8 @@ async def _authorize_loaded_resource(
     *,
     actor: Actor,
     facts: CurrentAuthorizationFactRepository,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
     resource_type: ResourceType,
     resource_id: str,
     student_id: str,
@@ -214,6 +218,8 @@ async def _authorize_loaded_resource(
             resource_id=resource_id,
             spec=spec,
             fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
         )
     except SecurityDecisionError as error:
         raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
@@ -229,11 +235,15 @@ def _assignment_dependency(
         facts: CurrentAuthorizationFactRepository = Depends(
             get_authorization_fact_repository
         ),
+        correlation_id: str = Depends(get_request_correlation_id),
+        audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> AuthorizedResource:
         item = adaptive_learning_repo.get_assignment(assignment_id)
         return await _authorize_loaded_resource(
             actor=actor,
             facts=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
             resource_type=ResourceType.ADAPTIVE_PROFILE,
             resource_id=assignment_id,
             student_id=str((item or {}).get("student_id") or ""),
@@ -265,11 +275,15 @@ async def _authorized_assignment_create(
     body: AssignmentCreateRequest,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     student = user_repo.get_user(body.student_id)
     return await _authorize_loaded_resource(
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         resource_type=ResourceType.ADAPTIVE_PROFILE,
         resource_id=body.student_id,
         student_id=body.student_id,

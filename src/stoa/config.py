@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import Dict, List
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_REPORTS_BUCKET_PLACEHOLDER = "stoa-reports"
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
+DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
 
 
 class Settings(BaseSettings):
@@ -48,6 +49,15 @@ class Settings(BaseSettings):
     cognito_jwks_ttl_seconds: int = 300
     cognito_jwks_max_stale_seconds: int = 900
     teacher_activation_invitation_expiry_seconds: int = 900
+
+    # Authorization evidence. Production must replace the local-only key.
+    authorization_audit_active_key_id: str = "development-v1"
+    authorization_audit_active_key: str = DEVELOPMENT_AUDIT_KEY
+    authorization_audit_previous_keys: Dict[str, str] = {}
+    authorization_audit_probe_window_seconds: int = 300
+    authorization_audit_probe_ttl_seconds: int = 86400
+    authorization_audit_probe_count_cap: int = 100
+    authorization_audit_probe_id_cap: int = 256
 
     @property
     def allowed_cognito_issuers(self) -> tuple[str, ...]:
@@ -93,6 +103,22 @@ class Settings(BaseSettings):
             raise ValueError("Cognito JWKS maximum stale window must be at least its TTL")
         if self.is_production and (not issuers or not clients):
             raise ValueError("Production requires Cognito issuer and access-client allowlists")
+        audit_key_id = self.authorization_audit_active_key_id.strip()
+        audit_key = self.authorization_audit_active_key.strip()
+        if not audit_key_id or not audit_key:
+            raise ValueError("Authorization audit active key ID and key are required")
+        if self.is_production and audit_key == DEVELOPMENT_AUDIT_KEY:
+            raise ValueError("Production requires a non-placeholder authorization audit key")
+        if audit_key_id in self.authorization_audit_previous_keys:
+            raise ValueError("Authorization audit active key cannot also be a previous key")
+        if any(not str(key_id).strip() or not str(secret).strip() for key_id, secret in self.authorization_audit_previous_keys.items()):
+            raise ValueError("Authorization audit previous keys require non-empty IDs and secrets")
+        if self.authorization_audit_probe_window_seconds <= 0:
+            raise ValueError("Authorization audit probe window must be positive")
+        if self.authorization_audit_probe_ttl_seconds < self.authorization_audit_probe_window_seconds:
+            raise ValueError("Authorization audit probe TTL must cover at least one window")
+        if self.authorization_audit_probe_count_cap <= 0 or self.authorization_audit_probe_id_cap <= 0:
+            raise ValueError("Authorization audit probe bounds must be positive")
         return self
 
     @property

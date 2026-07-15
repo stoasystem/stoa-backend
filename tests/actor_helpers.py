@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
-from stoa.deps import get_actor, get_current_user
+from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink, get_current_user
 from stoa.security.authorization import (
     AuthorizationFacts,
     ParentAuthorizationFacts,
@@ -164,4 +165,5 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
     app.dependency_overrides[get_actor] = lambda: actor
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[get_authorization_fact_repository] = Facts
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return actor

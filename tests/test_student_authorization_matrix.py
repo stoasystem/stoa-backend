@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from audit_helpers import MemoryAuthorizationAuditSink
+
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationFacts,
@@ -166,6 +168,8 @@ async def test_resolver_returns_exact_authorized_object_and_outage_prevents_hand
             resolver,
         ),
         fact_repository=OwnerFacts(),
+        audit_sink=MemoryAuthorizationAuditSink(),
+        correlation_id="request-owner-1",
     )
     handler_calls.append(resolved.value)
     assert resolved.value is loaded
@@ -187,6 +191,8 @@ async def test_resolver_returns_exact_authorized_object_and_outage_prevents_hand
                 resolver,
             ),
             fact_repository=OutageFacts(),
+            audit_sink=MemoryAuthorizationAuditSink(),
+            correlation_id="request-outage-1",
         )
     assert outage.value.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
     assert "authorization canary" not in repr(outage.value.public_body())

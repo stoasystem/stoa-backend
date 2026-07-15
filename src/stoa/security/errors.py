@@ -57,7 +57,7 @@ def normalize_correlation_id(value: str | None) -> str:
     return candidate if _CORRELATION_ID.fullmatch(candidate) else str(uuid4())
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class SecurityDecisionError(Exception):
     """Internal error that never projects its diagnostic detail to a client."""
 

@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
-from stoa.deps import get_actor
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.user import SubscriptionTier
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -27,6 +28,7 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services import (
     account_operations_service,
     learning_profile_service,
@@ -337,6 +339,8 @@ async def _parent_child_read(
     child_id: str,
     actor: Actor = Depends(get_actor),
     facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     async def resolve(resource_id: str):
         profile = user_repo.get_user(resource_id)
@@ -359,6 +363,8 @@ async def _parent_child_read(
             resource_id=child_id,
             spec=spec,
             fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
         )
     except SecurityDecisionError as error:
         raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
