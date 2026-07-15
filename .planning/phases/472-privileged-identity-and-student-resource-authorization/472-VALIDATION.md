@@ -1,9 +1,9 @@
 ---
 phase: 472
 slug: privileged-identity-and-student-resource-authorization
-status: draft
+status: green
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-07-14
 ---
 
@@ -63,6 +63,12 @@ This map follows the actual ten plans and waves 0–5. Every plan task inherits 
 | 472-14-* | 14 | 6 | V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | G-04 | Deny, probe, and sensitive allow decisions persist redacted evidence and sensitive effects fail closed on audit outage | audit/integration | `pytest -q tests/test_authorization_audit.py` | ✅ | ✅ green |
 | 472-15-* | 15 | 8 | V9AUTH-05 | G-05 | All eight public provider operations expose only stable actionable structured errors and redacted telemetry | API/contract | `pytest -q tests/test_public_auth_error_boundary.py tests/test_client_error_actions.py` | ✅ | ✅ green |
 | 472-16-* | 16 | 9 | V9AUTH-04, V9AUTH-05, V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | G-01..G-05 | All five closures and earlier Phase 472 controls pass together; generated contracts and limitations are recorded truthfully | integration/evidence | `pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | ✅ | ✅ green |
+| 472-17-* | 17 | 10 | V9AUTH-04 | CR-01, WR-03 | Existing-provider registration resumes only an exact immutable command; resend converges only the command-owned subject/profile | API/state-machine | `pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_account_lifecycle.py` | ✅ | ✅ green |
+| 472-18-* | 18 | 10 | V9AUTH-04 | CR-02 | Reconciliation actions bind the full immutable grant coordinate and account restore cannot revive either colliding lineage | reconciliation/state-machine | `pytest -q tests/test_privileged_identity_reconciliation.py tests/test_identity_authorization.py` | ✅ | ✅ green |
+| 472-19-* | 19 | 10 | V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | WR-01 | Every registered typed body target is authorized all-of and durably evidenced before endpoint effects | API/inventory/audit | `pytest -q tests/test_admin_authorization.py tests/test_authorization_audit.py tests/test_route_authorization_inventory.py tests/test_admin_report_ops.py` | ✅ | ✅ green |
+| 472-20-* | 20 | 11 | V9AUTH-05 | WR-02 | Forgot/reset behavior is account-state indistinguishable and exposes only safe actionable structured outcomes | API/contract | `pytest -q tests/test_auth_account_lifecycle.py tests/test_public_auth_error_boundary.py tests/test_client_error_actions.py` | ✅ | ✅ green |
+| 472-21-* | 21 | 10 | V9ACCESS-01, V9ACCESS-03 | WR-04 | Active and retained production audit keys share one strong canonical fail-closed keyring contract | configuration/audit | `pytest -q tests/test_authorization_audit.py tests/test_identity_authorization.py` | ✅ | ✅ green |
+| 472-22-* | 22 | 12 | V9AUTH-04, V9AUTH-05, V9ACCESS-01, V9ACCESS-02, V9ACCESS-03 | CR-01, CR-02, WR-01..04 | All six final findings and legitimate positives pass together; deterministic contracts and cross-phase limits remain exact | integration/evidence | `pytest -q tests/test_public_identity_lifecycle.py tests/test_auth_account_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_admin_authorization.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -124,7 +130,7 @@ Every route-family matrix includes at least one authorized positive control so b
 - [x] Expected feedback latency is bounded and will be measured during execution.
 - [x] `nyquist_compliant: true` is set because the strategy maps every phase requirement to executable evidence; `wave_0_complete` remains false until the files exist.
 
-**Approval:** pending plan-checker verification
+**Approval:** executed and independently observed by Plan 472-22
 
 ## Plan 472-16 Execution Observation
 
@@ -136,3 +142,14 @@ Every route-family matrix includes at least one authorized positive control so b
 - **Full-suite observation:** latest timestamped run `1019 passed, 23 failed in 35.78s`. The delta from the accepted Phase 474 baseline is zero. All failures remain strict production `Settings` fixtures in `tests/test_external_activation_smoke.py` (2), `tests/test_report_service.py` (3), and `tests/test_subscription_operations.py` (18); no Phase 472 failure is hidden or reassigned.
 - **External evidence:** the six Cognito sandbox checks remain **NOT RUN — approval/configuration unavailable**. No AWS, network, provider, sandbox, or production write was attempted.
 - **Cross-phase boundary:** teacher takeover/session/notification atomicity remains Phase 475/V9DATA-02 and is not claimed closed here.
+
+## Plan 472-22 Execution Observation
+
+- **Tested source SHA:** `9ed55ae9b85c5dff21f74615cfcb207c2338b082`. This includes post-wave integration commits `69da80319cf2e6abb0f6c2d8d85fc42aca6ca211` and `f80e23f53459163307632c3194e4c73be0bb4879`; the latter preserves target-read → all-of authorization/evidence → business-read/effect ordering. Plan 22 additionally pins order reversal and later denial/audit failure across bulk, recovery-resolver, handoff, and governance registered endpoints.
+- **Six-finding gate:** `321 passed in 4.15s` at `2026-07-15T18:20:13Z`. CR-01, CR-02, WR-01, WR-02, WR-03, and WR-04 each have adversarial negatives and a legitimate positive. Collection controls cover first-allowed/later-denied in either input order, duplicate/mixed targets, malformed/empty/over-limit collections, delimiter-shaped coordinates, reference-only nested fields, and later audit failure with zero whole-command effect.
+- **Extended focused Phase 472 gate:** `610 passed in 9.70s` at `2026-07-15T18:20:24Z`; no skip or xfail was used to establish closure.
+- **Teacher terminology semantic gate:** PASS at `2026-07-15T18:20:42Z`; all 13 exact historical/negative occurrences were consumed and the 10-test mutation/contract module passed.
+- **Generated contracts:** both generators were run twice with byte-identical output, then both `--check` commands passed. Route inventory SHA-256 is `f32226095cf3a0992b1cf94e28f6aefd713580fb839694a88c8c5dcbfaf5eaad`; client actions SHA-256 is `4bdb9169ff44d6352492ac7956f8ea331c0b2e62862dc6ca66d07bc47ab36317`.
+- **Full-suite observation:** the source-bound JUnit run started at `2026-07-15T18:20:48Z` and recorded `1106` tests in `34.529s`: **1083 passed / 23 failed**, zero errors and zero skips. The exact failures remain the Phase 474-owned strict production `Settings` fixtures: 2 in `tests/test_external_activation_smoke.py`, 3 in `tests/test_report_service.py`, and 18 in `tests/test_subscription_operations.py`. No Phase 472 failure is hidden or reassigned.
+- **External evidence:** all six Cognito sandbox checks remain **NOT RUN — approval/configuration unavailable**. No AWS, network, Cognito, provider, sandbox, or production mutation was performed.
+- **Cross-phase boundary:** Phase 475/V9DATA-02 still owns teacher takeover/session/notification atomicity; Plan 472-22 does not claim or implement that transaction.
