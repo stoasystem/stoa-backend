@@ -99,7 +99,7 @@ CLIENT_ERROR_ACTIONS: dict[SecurityErrorCode, ClientErrorAction] = {
     SecurityErrorCode.IDENTITY_CONFLICT: _entry(
         SecurityErrorCode.IDENTITY_CONFLICT,
         "security.account_recovery_required",
-        "Your account needs recovery before you can continue.",
+        "Contact support and share the reference shown so we can restore your account.",
         ClientAction.START_ACCOUNT_RECOVERY,
         show_correlation_id=True,
     ),
@@ -130,7 +130,7 @@ CLIENT_ERROR_ACTIONS: dict[SecurityErrorCode, ClientErrorAction] = {
     SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE: _entry(
         SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE,
         "security.sign_in_temporarily_unavailable",
-        "Sign-in is temporarily unavailable. Try again shortly.",
+        "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
         ClientAction.RETRY_LATER,
         show_correlation_id=True,
         retry=_OUTAGE_RETRY,

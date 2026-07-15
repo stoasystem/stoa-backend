@@ -132,7 +132,7 @@
         "requires_retry_after": false,
         "user_resumption_with_idempotency_key": false
       },
-      "safe_copy": "Your account needs recovery before you can continue.",
+      "safe_copy": "Contact support and share the reference shown so we can restore your account.",
       "show_correlation_id": true,
       "support_guidance": "Share the correlation ID with support."
     },
@@ -149,7 +149,7 @@
         "requires_retry_after": true,
         "user_resumption_with_idempotency_key": true
       },
-      "safe_copy": "Sign-in is temporarily unavailable. Try again shortly.",
+      "safe_copy": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
       "show_correlation_id": true,
       "support_guidance": "Share the correlation ID with support."
     },
