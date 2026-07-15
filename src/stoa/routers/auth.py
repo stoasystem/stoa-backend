@@ -120,7 +120,6 @@ class LoginCodePolicyResponse(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     status: str
-    delivery: dict | None = None
 
 
 class LocalePreferenceUpdate(BaseModel):
@@ -819,23 +818,18 @@ async def forgot_password(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Start Cognito's forgot-password flow without exposing account existence."""
-    profile = user_repo.get_user_by_email(body.email)
-    if profile is None:
-        return PasswordResetResponse(status="accepted")
-    _approved_public_registration_role(profile)
     cognito = _get_cognito(settings)
     client_id = _public_client_id(settings)
     try:
-        resp = cognito.forgot_password(ClientId=client_id, Username=body.email)
+        cognito.forgot_password(ClientId=client_id, Username=body.email)
     except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code in ("UserNotFoundException", "ResourceNotFoundException"):
-            return PasswordResetResponse(status="accepted")
-        return public_auth_error_response(
-            normalize_cognito_failure(PublicAuthOperation.FORGOT_PASSWORD, e, correlation_id)
+        failure = normalize_cognito_failure(
+            PublicAuthOperation.FORGOT_PASSWORD, e, correlation_id
         )
-    delivery = resp.get("CodeDeliveryDetails")
-    return PasswordResetResponse(status="accepted", delivery=delivery)
+        if failure.publicly_accepted:
+            return PasswordResetResponse(status="accepted")
+        return public_auth_error_response(failure)
+    return PasswordResetResponse(status="accepted")
 
 
 @router.post("/reset-password", response_model=PasswordResetResponse)

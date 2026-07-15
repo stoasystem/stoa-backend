@@ -71,6 +71,19 @@ def test_rate_limit_is_bounded_without_automatic_write_replay():
     assert CLIENT_ERROR_ACTIONS[failure.code].retry.automatic is False
 
 
+@pytest.mark.parametrize(
+    "provider_code",
+    ["UserNotFoundException", "UserDisabledException", "NotAuthorizedException"],
+)
+def test_forgot_password_account_outcomes_are_accepted_not_public_errors(provider_code):
+    failure = normalize_cognito_failure(
+        PublicAuthOperation.FORGOT_PASSWORD, _error(provider_code), "corr-recovery"
+    )
+    assert failure.publicly_accepted is True
+    with pytest.raises(ValueError, match="accepted provider outcomes"):
+        public_auth_error_response(failure)
+
+
 _UNKNOWN_CODE = "SecretUnknownProviderCode"
 _UNKNOWN_MESSAGE = "email=secret@example.test token=secret-token pool=secret-pool"
 

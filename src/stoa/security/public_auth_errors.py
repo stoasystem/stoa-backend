@@ -38,6 +38,7 @@ class NormalizedPublicAuthFailure:
     category: str
     provider_code_digest: str
     retry_after_seconds: int | None = None
+    publicly_accepted: bool = False
 
     @property
     def telemetry(self) -> dict[str, str]:
@@ -74,7 +75,20 @@ _OPERATION_MAPPINGS: dict[PublicAuthOperation, dict[str, tuple[SecurityErrorCode
         "UserNotFoundException": (SecurityErrorCode.VERIFICATION_CODE_INVALID, "invalid_code"),
         "ExpiredCodeException": (SecurityErrorCode.VERIFICATION_CODE_EXPIRED, "expired_code"),
     },
-    PublicAuthOperation.FORGOT_PASSWORD: {},
+    PublicAuthOperation.FORGOT_PASSWORD: {
+        "UserNotFoundException": (
+            SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
+            "recovery_accepted",
+        ),
+        "UserDisabledException": (
+            SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
+            "recovery_accepted",
+        ),
+        "NotAuthorizedException": (
+            SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
+            "recovery_accepted",
+        ),
+    },
     PublicAuthOperation.RESET_PASSWORD: {
         "CodeMismatchException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
         "ExpiredCodeException": (SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID, "invalid_reset"),
@@ -121,12 +135,18 @@ def normalize_cognito_failure(
         category=category,
         provider_code_digest=_provider_code_digest(provider_code),
         retry_after_seconds=retry_after,
+        publicly_accepted=(
+            operation is PublicAuthOperation.FORGOT_PASSWORD
+            and category == "recovery_accepted"
+        ),
     )
     logger.warning("public_auth_provider_failure", extra={"public_auth": failure.telemetry})
     return failure
 
 
 def public_auth_error_response(failure: NormalizedPublicAuthFailure) -> JSONResponse:
+    if failure.publicly_accepted:
+        raise ValueError("accepted provider outcomes cannot be projected as public errors")
     safe = safe_error_response(
         failure.code,
         failure.correlation_id,

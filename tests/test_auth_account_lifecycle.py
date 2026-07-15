@@ -1127,18 +1127,44 @@ def test_admin_can_inspect_account_verification_status(monkeypatch):
     assert body["supportAction"] == "resend_verification_code"
 
 
-def test_forgot_password_is_enumeration_safe_for_unknown_email(monkeypatch):
-    monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: None)
+@pytest.mark.parametrize(
+    "provider_code",
+    [None, "UserNotFoundException", "UserDisabledException", "NotAuthorizedException"],
+)
+def test_forgot_password_is_account_state_indistinguishable(monkeypatch, provider_code):
+    class RecoveryCognito(FakeCognito):
+        def forgot_password(self, **kwargs):
+            self.calls.append(("forgot_password", kwargs))
+            if provider_code:
+                raise _client_error(provider_code, "recovery-state-canary")
+            return {
+                "CodeDeliveryDetails": {
+                    "Destination": "delivery-canary@example.com",
+                    "DeliveryMedium": "EMAIL",
+                }
+            }
 
-    def fail_cognito(settings):
-        raise AssertionError("unknown account should not call Cognito")
+    fake = RecoveryCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake)
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda _email: (_ for _ in ()).throw(
+            AssertionError("recovery must not query local profile")
+        ),
+    )
 
-    monkeypatch.setattr(auth, "_get_cognito", fail_cognito)
-
-    response = _auth_client().post("/auth/forgot-password", json={"email": "missing@example.com"})
+    response = _auth_client().post(
+        "/auth/forgot-password", json={"email": "account-state@example.com"}
+    )
 
     assert response.status_code == 200
-    assert response.json() == {"status": "accepted", "delivery": None}
+    assert response.json() == {"status": "accepted"}
+    assert set(response.headers) >= {"content-type", "content-length"}
+    assert [name for name, _ in fake.calls] == ["forgot_password"]
+    public_surface = response.text.lower()
+    assert "delivery-canary" not in public_surface
+    assert "recovery-state-canary" not in public_surface
 
 
 def test_forgot_password_uses_public_client_without_returning_tokens(monkeypatch):
@@ -1160,7 +1186,7 @@ def test_forgot_password_uses_public_client_without_returning_tokens(monkeypatch
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "accepted"
+    assert body == {"status": "accepted"}
     assert "accessToken" not in body
     assert fake.calls[-1][0] == "forgot_password"
     assert fake.calls[-1][1]["ClientId"] == "student-client"
