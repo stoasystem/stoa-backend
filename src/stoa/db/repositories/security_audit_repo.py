@@ -328,40 +328,63 @@ class DynamoAuthorizationAuditSink:
         actor_fingerprint = _keyed_fingerprint(audit_key, ("actor", actor_id))
         key = {"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"PROBE#{aggregate_id}"}
         table = get_table()
-        existing = table.get_item(Key=key, ConsistentRead=True).get("Item") or {}
-        seen = set(existing.get("decision_event_ids") or ())
-        if record.event_id in seen or len(seen) >= self._id_cap:
-            return existing
-        count = min(int(existing.get("probe_count") or 0) + 1, self._count_cap)
-        seen.add(record.event_id)
-        safe = project_audit_event(
-            {
-                "event_id": aggregate_id,
-                "event_type": "authorization_probe_aggregated",
-                "actor_fingerprint": actor_fingerprint,
-                "resource_type": resource_type,
-                "action": action,
-                "purpose": purpose,
-                "result_code": result,
-                "version": policy_version,
-                "audit_key_id": record.audit_key_id,
-                "probe_bucket": str(bucket),
-                "probe_count": count,
-                "threshold_reached": count >= min(10, self._count_cap),
-                "first_seen_at": existing.get("first_seen_at") or now.isoformat(),
-                "last_seen_at": now.isoformat(),
-                "expires_at": bucket + self._ttl,
+        for _attempt in range(3):
+            existing = table.get_item(Key=key, ConsistentRead=True).get("Item") or {}
+            seen = set(existing.get("decision_event_ids") or ())
+            if (
+                record.event_id in seen
+                or len(seen) >= self._id_cap
+                or int(existing.get("probe_count") or 0) >= self._count_cap
+            ):
+                return existing
+            count = min(int(existing.get("probe_count") or 0) + 1, self._count_cap)
+            seen.add(record.event_id)
+            version = int(existing.get("probe_version") or 0) + 1
+            safe = project_audit_event(
+                {
+                    "event_id": aggregate_id,
+                    "event_type": "authorization_probe_aggregated",
+                    "actor_fingerprint": actor_fingerprint,
+                    "resource_type": resource_type,
+                    "action": action,
+                    "purpose": purpose,
+                    "result_code": result,
+                    "version": policy_version,
+                    "audit_key_id": record.audit_key_id,
+                    "probe_bucket": str(bucket),
+                    "probe_count": count,
+                    "threshold_reached": count >= min(10, self._count_cap),
+                    "first_seen_at": existing.get("first_seen_at") or now.isoformat(),
+                    "last_seen_at": now.isoformat(),
+                    "expires_at": bucket + self._ttl,
+                }
+            )
+            row = {
+                "PK": key["PK"],
+                "SK": key["SK"],
+                "entity_type": "authorization_probe_aggregate",
+                **safe,
+                "probe_version": version,
+                "decision_event_ids": sorted(seen),
             }
-        )
-        row = {
-            "PK": key["PK"],
-            "SK": key["SK"],
-            "entity_type": "authorization_probe_aggregate",
-            **safe,
-            "decision_event_ids": sorted(seen),
-        }
-        table.put_item(Item=row)
-        return row
+            condition = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+            values = None
+            if existing:
+                condition = "probe_version = :expected_version"
+                values = {":expected_version": version - 1}
+            try:
+                kwargs: dict[str, Any] = {
+                    "Item": row,
+                    "ConditionExpression": condition,
+                }
+                if values:
+                    kwargs["ExpressionAttributeValues"] = values
+                table.put_item(**kwargs)
+                return row
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                    raise
+        raise AuthorizationAuditUnavailable("authorization_probe_concurrent_update")
 
 
 def project_audit_event(event: Mapping[str, Any]) -> dict[str, Any]:

@@ -172,7 +172,16 @@ class _MemoryTable:
 
     def put_item(self, *, Item, ConditionExpression=None, **_kwargs):
         key = (Item["PK"], Item["SK"])
-        if ConditionExpression and key in self.rows:
+        existing = self.rows.get(key)
+        expected = (_kwargs.get("ExpressionAttributeValues") or {}).get(":expected_version")
+        conflict = bool(
+            ConditionExpression
+            and (
+                ("attribute_not_exists" in ConditionExpression and existing is not None)
+                or ("probe_version" in ConditionExpression and (existing or {}).get("probe_version") != expected)
+            )
+        )
+        if conflict:
             error = {"Error": {"Code": "ConditionalCheckFailedException"}}
             from botocore.exceptions import ClientError
 
@@ -213,6 +222,53 @@ def test_dynamo_sink_rotation_recognizes_old_key_replay_and_redacts(monkeypatch)
     assert len(table.rows) == 1
     assert "student-rotation-canary" not in repr(table.rows)
     assert "old-secret" not in repr(table.rows)
+
+
+def test_dynamo_probe_aggregate_is_one_bounded_redacted_window(monkeypatch):
+    table = _MemoryTable()
+    monkeypatch.setattr(security_audit_repo, "get_table", lambda: table)
+    sink = DynamoAuthorizationAuditSink(
+        active_key_id="test-v1",
+        active_secret="test-secret",
+        probe_count_cap=2,
+        probe_id_cap=3,
+    )
+    for index in range(4):
+        record = sink.persist_authorization_decision(
+            correlation_id=f"request-{index}",
+            actor_id="parent-probe@example.test",
+            actor_role="parent",
+            policy_version="472.v1",
+            resource_type="student",
+            resource_id=f"guessed-student-{index}",
+            student_id=f"guessed-student-{index}",
+            owner_id=None,
+            scope_discriminator="",
+            action="read",
+            purpose="parent_oversight",
+            result="resource_not_found",
+            decision_kind="policy",
+            evidence_reference=None,
+        )
+        sink.aggregate_authorization_probe(
+            record=record,
+            actor_id="parent-probe@example.test",
+            resource_type="student",
+            action="read",
+            purpose="parent_oversight",
+            result="resource_not_found",
+            policy_version="472.v1",
+        )
+    aggregate_rows = [
+        row for row in table.rows.values()
+        if row.get("entity_type") == "authorization_probe_aggregate"
+    ]
+    assert len(aggregate_rows) == 1
+    assert aggregate_rows[0]["probe_count"] == 2
+    assert len(aggregate_rows[0]["decision_event_ids"]) == 2
+    rendered = repr(aggregate_rows)
+    assert "guessed-student" not in rendered
+    assert "@example.test" not in rendered
 
 
 def test_production_requires_non_placeholder_audit_key():
