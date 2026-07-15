@@ -10,11 +10,11 @@ def test_workflow_audit_maps_ai_surfaces_and_blocks_full_autonomy():
     assert "teacher_summary_draft" in workflow_ids
     assert "practice_exercise_draft" in workflow_ids
     assert "student_question_answer" in workflow_ids
-    assert "fully_autonomous_tutoring" in workflow_ids
+    assert "fully_autonomous_teaching" in workflow_ids
 
     validation = ai_operations_service.validate_autonomy_boundaries()
     assert validation["status"] == "passed"
-    assert "fully_autonomous_tutoring" in validation["blockedAutonomy"]
+    assert "fully_autonomous_teaching" in validation["blockedAutonomy"]
 
 
 def test_quality_rubric_requires_all_dimensions_and_safe_output():
@@ -114,5 +114,5 @@ def test_release_gate_evidence_records_blockers_without_enabling_autonomy():
 
     assert evidence["releaseState"] == "ai-operations-ready-local-contracts"
     assert evidence["fixtureCount"] >= 7
-    assert "fully_autonomous_tutoring" in evidence["remainingBlockers"]
+    assert "fully_autonomous_teaching" in evidence["remainingBlockers"]
     assert evidence["autonomyValidation"]["status"] == "passed"

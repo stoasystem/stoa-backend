@@ -37,6 +37,20 @@
       "count": 1
     },
     {
+      "file": "tests/test_privileged_identity_reconciliation.py",
+      "symbol": "test_inventory_classifies_every_privileged_authority_conflict",
+      "purpose": "historical_reconciliation",
+      "literal": "tutor",
+      "count": 1
+    },
+    {
+      "file": "tests/test_privileged_identity_reconciliation.py",
+      "symbol": "test_inventory_classifies_every_privileged_authority_conflict",
+      "purpose": "historical_reconciliation",
+      "literal": "tutors",
+      "count": 1
+    },
+    {
       "file": "tests/test_teacher_terminology_gate.py",
       "symbol": "test_legacy_teacher_role_is_rejected_not_normalized",
       "purpose": "negative_input",

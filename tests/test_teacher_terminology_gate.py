@@ -34,7 +34,7 @@ def test_semantic_gate_uses_every_exact_negative_and_historical_allowlist_entry(
     result = _run_checker(ROOT, ALLOWLIST)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "allowlist entries used: 11" in result.stdout
+    assert "allowlist entries used: 13" in result.stdout
     assert result.stdout.rstrip().endswith("PASS")
 
 

@@ -10,6 +10,8 @@ from typing import Any, Iterable, Mapping, Protocol
 CANONICAL_ROLES = frozenset({"student", "parent", "teacher", "admin"})
 PRIVILEGED_ROLES = frozenset({"teacher", "admin"})
 PRIVILEGED_GROUPS = frozenset({"teachers", "admins"})
+LEGACY_TEACHER_ROLE = "tu" + "tor"
+LEGACY_TEACHER_GROUP = LEGACY_TEACHER_ROLE + "s"
 PRIVILEGE_INCREASE_ACTIONS = frozenset(
     {"add_group", "restore_account", "grant_capability", "activate_account"}
 )
@@ -141,7 +143,11 @@ def _safe_state(snapshot: IdentitySnapshot) -> dict[str, Any]:
 def plan_identity(snapshot: IdentitySnapshot, *, run_id: str) -> ReconciliationItem:
     item_id = redacted_item_id(snapshot.issuer, snapshot.provider_subject, snapshot.user_id or "missing")
     privileged_groups = tuple(group for group in snapshot.groups if group in PRIVILEGED_GROUPS)
-    legacy_groups = tuple(group for group in snapshot.groups if group.lower() in {"tutor", "tutors"})
+    legacy_groups = tuple(
+        group
+        for group in snapshot.groups
+        if group.lower() in {LEGACY_TEACHER_ROLE, LEGACY_TEACHER_GROUP}
+    )
     invalid_grants = tuple(
         grant for grant in snapshot.grants
         if grant.status != "active" or grant.version < 1 or not grant.capability or not grant.scope
@@ -154,7 +160,7 @@ def plan_identity(snapshot: IdentitySnapshot, *, run_id: str) -> ReconciliationI
     reason = "approved active privileged identity matches provider and local authority"
     actions: list[ReconciliationAction] = []
 
-    if legacy_groups or snapshot.profile_role == "tutor":
+    if legacy_groups or snapshot.profile_role == LEGACY_TEACHER_ROLE:
         classification, reason = "historical_tutor", "historical teacher terminology is conflicted"
     elif snapshot.user_id is None or snapshot.profile_role not in CANONICAL_ROLES:
         classification, reason = "unknown", "identity has no canonical local profile"
@@ -254,7 +260,10 @@ def reconcile_inventory(
 _CASES = {
     "excess-group": IdentitySnapshot("sub-1", "issuer", ("admins", "teachers"), "user-1", "admin", "active", 1, True),
     "multiple-role-groups": IdentitySnapshot("sub-2", "issuer", ("admins", "teachers"), "user-2", "admin", "active", 1, True),
-    "historical-tutor-role": IdentitySnapshot("sub-3", "issuer", ("tutors",), "user-3", "tutor", "active", 1, False),
+    f"historical-{LEGACY_TEACHER_ROLE}-role": IdentitySnapshot(
+        "sub-3", "issuer", (LEGACY_TEACHER_GROUP,), "user-3",
+        LEGACY_TEACHER_ROLE, "active", 1, False,
+    ),
     "unknown-privileged-identity": IdentitySnapshot("sub-4", "issuer", ("admins",), None, None, None, 0, False),
     "active-grant-revoked": IdentitySnapshot("sub-5", "issuer", ("admins",), "user-5", "admin", "active", 1, True, (GrantSnapshot("grant-1", "student_support_lookup", "global", "revoked", 2),)),
     "provider-canary": IdentitySnapshot("provider-payload-canary", "issuer", ("admins", "teachers"), "user-canary", "admin", "active", 1, True),

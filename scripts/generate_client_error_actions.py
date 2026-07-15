@@ -16,13 +16,17 @@ def render() -> str:
     return render_client_error_actions()
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
+    if args.check:
+        return 0 if args.output.exists() and args.output.read_text() == render() else 1
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render(), encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
