@@ -20,6 +20,7 @@ tech-stack:
 key-files:
   created:
     - .planning/phases/472-privileged-identity-and-student-resource-authorization/472-16-SUMMARY.md
+    - .planning/phases/472-privileged-identity-and-student-resource-authorization/472-USER-SETUP.md
   modified:
     - .planning/phases/472-privileged-identity-and-student-resource-authorization/472-VALIDATION.md
     - docs/security/phase-472-evidence.md
@@ -92,7 +93,7 @@ None - plan executed exactly as written.
 
 ## User Setup Required
 
-- Optional external evidence requires separately approved, non-production Cognito sandbox configuration. It was not provided, so all six external rows remain explicitly NOT RUN.
+- Optional external evidence requires separately approved, non-production Cognito sandbox configuration. It was not provided, so all six external rows remain explicitly NOT RUN. The approval, configuration, evidence, and cleanup checklist is in [472-USER-SETUP.md](./472-USER-SETUP.md).
 
 ## Verification
 
