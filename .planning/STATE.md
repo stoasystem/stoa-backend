@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T12:53:39.355Z"
-last_activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non-revival
+last_updated: "2026-07-15T13:15:11.640Z"
+last_activity: 2026-07-15 -- Completed Plan 472-14 durable authorization audit evidence
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 16
-  completed_plans: 12
-  percent: 75
+  completed_plans: 13
+  percent: 81
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 (Privileged Identity And Student Resource Authorization) — EXECUTING
-Plan: 14 of 16
-Status: Ready to execute Plan 472-14 in Wave 6
-Last activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non-revival
+Plan: 13 of 16
+Status: Ready to execute Plan 472-13 in Wave 7
+Last activity: 2026-07-15 -- Completed Plan 472-14 durable authorization audit evidence
 
 ## Accumulated Context
 
@@ -60,7 +60,7 @@ Last activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non
 
 ### Pending Todos
 
-- Execute Plans 472-14, 472-13, 472-15, and 472-16, then independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
+- Execute Plans 472-13, 472-15, and 472-16, then independently re-verify Phase 472 local P0 closure while retaining explicit external-evidence limitations.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -93,3 +93,10 @@ Last activity: 2026-07-15 -- Completed Plan 472-12 capability quarantine and non
 | Phase 472 P10 | 18 min | 4 tasks | 18 files |
 | Phase 472 P11 | 30 min | 3 tasks | 7 files |
 | Phase 472 P12 | 13 min | 2 tasks | 7 files |
+| Phase 472 P14 | 45 min | 3 tasks | 20 files |
+
+## Decisions
+
+- [Phase 472]: Canonical authorization correlation IDs are generated server-side and never reuse an inbound header. — Prevents client-selected audit correlation and replay confusion.
+- [Phase 472]: Audit rows and partition keys use keyed actor/resource fingerprints. — Raw student, owner, target, email, and key material must never persist.
+- [Phase 472]: Relationship-sensitive and privileged allows are evidence-before-effect. — An audit outage cannot broaden access or permit sensitive effects.
