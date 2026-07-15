@@ -1,186 +1,97 @@
 ---
 phase: 472-privileged-identity-and-student-resource-authorization
-reviewed: 2026-07-15T03:00:00Z
+reviewed: 2026-07-15T14:25:52Z
 status: issues_found
 depth: standard
-files_reviewed: 78
-files_reviewed_list:
-  - docs/security/client-error-actions.json
-  - docs/security/phase-472-evidence.md
-  - docs/security/route-authorization-inventory.json
-  - docs/security/tutor-term-allowlist.json
-  - scripts/check_teacher_terminology.py
-  - scripts/generate_route_authorization_inventory.py
-  - scripts/provision_production_admin.py
-  - scripts/reconcile_privileged_identities.py
-  - src/stoa/config.py
-  - src/stoa/db/repositories/ai_teacher_tools_repo.py
-  - src/stoa/db/repositories/capability_repo.py
-  - src/stoa/db/repositories/identity_repo.py
-  - src/stoa/db/repositories/privileged_identity_repo.py
-  - src/stoa/db/repositories/question_repo.py
-  - src/stoa/db/repositories/security_audit_repo.py
-  - src/stoa/db/repositories/teacher_application_repo.py
-  - src/stoa/db/repositories/user_repo.py
-  - src/stoa/deps.py
-  - src/stoa/main.py
-  - src/stoa/models/question.py
-  - src/stoa/models/user.py
-  - src/stoa/routers/adaptive.py
-  - src/stoa/routers/admin.py
-  - src/stoa/routers/auth.py
-  - src/stoa/routers/conversations.py
-  - src/stoa/routers/notifications.py
-  - src/stoa/routers/parents.py
-  - src/stoa/routers/practice.py
-  - src/stoa/routers/questions.py
-  - src/stoa/routers/students.py
-  - src/stoa/routers/teacher_applications.py
-  - src/stoa/routers/teachers.py
-  - src/stoa/security/admin_authorization.py
-  - src/stoa/security/authorization.py
-  - src/stoa/security/client_error_actions.py
-  - src/stoa/security/errors.py
-  - src/stoa/security/events.py
-  - src/stoa/security/identity.py
-  - src/stoa/security/identity_resolution.py
-  - src/stoa/security/jwks.py
-  - src/stoa/security/reconciliation.py
-  - src/stoa/security/route_authorization.py
-  - src/stoa/security/route_inventory.py
-  - src/stoa/security/tokens.py
-  - src/stoa/services/adaptive_learning_service.py
-  - src/stoa/services/ai_teacher_tools_service.py
-  - src/stoa/services/curriculum_ops_service.py
-  - src/stoa/services/moderation_service.py
-  - src/stoa/services/notification_service.py
-  - src/stoa/services/privileged_identity_service.py
-  - src/stoa/services/teacher_application_service.py
-  - src/stoa/services/teacher_assistance_service.py
-  - src/stoa/services/teacher_dispatch_service.py
-  - tests/actor_helpers.py
-  - tests/security/conftest.py
-  - tests/test_adaptive_learning.py
-  - tests/test_admin_authorization.py
-  - tests/test_admin_report_ops.py
-  - tests/test_ai_operations.py
-  - tests/test_ai_teacher_tools.py
-  - tests/test_auth_security.py
-  - tests/test_conversations.py
-  - tests/test_curriculum_ops.py
-  - tests/test_identity_authorization.py
-  - tests/test_notifications.py
-  - tests/test_parent_children.py
-  - tests/test_practice.py
-  - tests/test_privileged_identity_reconciliation.py
-  - tests/test_provision_production_admin.py
-  - tests/test_questions.py
-  - tests/test_route_authorization_inventory.py
-  - tests/test_student_authorization_matrix.py
-  - tests/test_students.py
-  - tests/test_teacher_availability.py
-  - tests/test_teacher_dispatch.py
-  - tests/test_teacher_onboarding.py
-  - tests/test_teacher_reply_sla.py
-  - tests/test_teacher_terminology_gate.py
+files_reviewed: 91
 findings:
-  critical: 3
+  critical: 2
   warning: 4
   info: 0
-  total: 7
+  total: 6
 ---
 
-# Phase 472: Code Review Report
-
-**Reviewed:** 2026-07-15T03:00:00Z  
-**Depth:** standard  
-**Files Reviewed:** 78  
-**Status:** issues_found
-
-## Narrative Findings (AI reviewer)
+# Phase 472 Final Code Review
 
 ## Summary
 
-本次审查覆盖 Phase 472 SUMMARY 指定的 78 个实现、契约、证据与测试文件，重点追踪了 Cognito token 到稳定业务身份的绑定、能力授权的新鲜读取、学生资源策略、管理员路由分类、教师任务接管、特权身份对账和安全事件投影。当前聚焦门禁可通过，但存在 3 个发布阻断问题和 4 个警告：新注册的学生/家长没有建立严格解析所必需的身份绑定；教师接管是非条件写入；异常身份对账保留仍为 active 的能力授权；此外，路由清单、授权审计和公开认证错误边界仍有缺口。
+The final review re-adjudicated the 91 deduplicated `key-files` entries named by Plans 01–16 (88 non-planning implementation/test/contract files plus the three planning-linked evidence entries) and traced the new gap-closure paths across their production call chains. The focused gap suite passes (`114 passed`), and the prior findings for stable token-bound login, conflicted-identity grant quarantine, recursive dependency identifiers, durable authorization decisions, provider-code redaction, and email-profile fallback are materially implemented.
 
-已复跑 Phase 472 选定授权套件，371 项通过；完整 459 项 Phase 472 聚焦命令也已启动验证。已知全套 23 个 Phase 474 严格生产 Settings fixture 失败未计为本阶段回归。
+Phase 472 still has two release-blocking edge cases. First, an unauthenticated caller can adopt an already-existing Cognito email into a new public identity command without proving control of that account. Second, reconciliation cannot reliably revoke two current grants that reuse the same `grant_id`, so one grant can survive conflict quarantine and revive after the separately supported account restore path. Four warnings remain around body-only admin targets, public recovery enumeration, bypassing the resumable confirmation command from the resend endpoint, and insufficient audit-key strength validation.
 
-## Critical Issues
+The teacher takeover/session/notification race remains a real issue, but Plans 16 and the evidence correctly leave it to Phase 475/V9DATA-02. It is not counted as a Phase 472 finding and must not be represented as closed here.
 
-### CR-01: 公共注册没有创建严格身份解析所必需的 `(issuer, sub) -> user_id` 绑定
+## Critical Findings
 
-**Severity:** Critical  
-**File:** `src/stoa/routers/auth.py:329-426`  
-**Impact:** `/auth/register` 从 Cognito 得到 `UserSub` 并写入本地学生/家长 profile，但整个注册/确认流程没有调用 `identity_repo.create_identity_binding`。Phase 472 的所有受保护请求随后在 `resolve_actor()` 中先读取绑定；缺失绑定会固定返回 `identity_conflict`。因此新注册并完成邮箱验证的学生和家长仍无法访问任何受保护产品资源，这是新身份模型对主注册路径的确定性功能阻断。
+### CR-01: `UsernameExistsException` lets an unauthenticated caller create the first local command and binding for an existing Cognito account
 
-**Evidence:** `auth.py:329` 已取得 Cognito `UserSub`，`auth.py:396-426` 只构造并写入 profile；仓库全局调用检索显示 `create_identity_binding()` 只用于教师激活和管理员配置。与此同时，`src/stoa/security/identity.py:95-100` 对不存在的绑定直接拒绝。现有注册测试只断言 profile/关系状态，没有覆盖“注册 → 确认 → 使用真实绑定解析 Actor”的正向链路。
+**Files:** `src/stoa/routers/auth.py:381-395`, `src/stoa/routers/auth.py:428-468`, `src/stoa/services/public_identity_service.py:135-180`
 
-**Actionable fix:** 在公共注册生命周期中以配置的规范 issuer、Cognito `UserSub` 和稳定 `user_id` 条件创建绑定。保持 deny-first：profile 在邮箱确认前仍为非 active；绑定/profile/inventory 任一步失败时返回安全的可恢复错误并保留可重试命令。增加学生和家长的端到端测试，证明确认后 `get_actor` 成功，并覆盖绑定冲突、部分写入重试和重复确认。
+When public registration receives `UsernameExistsException`, the route performs an administrator lookup by the caller-supplied email, accepts the returned subject, and continues exactly as if this request had created the Cognito account. There is no requirement that a matching public identity command already exist and no password, confirmation-code, or authenticated-subject proof before `start_or_resume_public_registration()` creates the command, pending profile, canonical binding, and public Cognito group.
 
-### CR-02: 教师接管在授权读取后执行无条件写入，两个并发接管都可能成功
+An attacker who knows an existing Cognito email can therefore choose its local public role/profile data and attach relationship inputs to its provider subject. Against a pre-existing teacher/admin Cognito user without a local binding, this can also bind the privileged provider subject to an attacker-selected student/parent profile and add a second group, causing identity quarantine/denial. The attacker does not receive the victim's token, but they can corrupt identity ownership and availability before the account owner authenticates.
 
-**Severity:** Critical  
-**File:** `src/stoa/routers/teachers.py:171-219`  
-**Impact:** 两名教师可以同时读取同一条 `escalated`/未分派问题并分别通过 CLAIM 策略，然后都调用无条件 `update_status()`、创建各自 session 并发送接管通知。最后写入者覆盖 `teacher_id/session_id`，但先写者仍收到成功响应并留下孤立 session 与错误通知。这破坏单一当前教师的不变量，并形成典型授权检查到效果执行之间的 TOCTOU。
+**Required fix:** Treat `UsernameExistsException` as resumable only when an immutable command already exists and its subject/role fingerprint matches. Otherwise return the enumeration-safe existing-account action and require proof of account control (login or confirmation/recovery ceremony) before creating any profile, binding, group, or relationship input. Add endpoint tests for an existing provider-only public account and an existing privileged provider account, asserting zero local/provider mutation.
 
-**Evidence:** `teachers.py:182-191` 仅检查已加载快照，`teachers.py:195-205` 调用无条件更新；对应 `src/stoa/db/repositories/question_repo.py:86-99` 没有 `ConditionExpression`。相邻的自动 dispatch 路径已在 `teacher_dispatch_service.py:140-164` 使用条件更新，说明该竞态在接管路径中是不一致遗漏。`tests/test_teacher_dispatch.py:199-233` 只验证单请求成功/他人拒绝，没有并发 claim-conflict 测试。
+### CR-02: Conflict quarantine identifies grants only by `grant_id`, so duplicate IDs across scopes leave authority behind
 
-**Actionable fix:** 将接管改为条件状态转换，条件至少绑定当前 `status=escalated`、dispatch 状态、允许的 `dispatched_teacher_id` 和未过期 deadline；条件失败返回安全的 409。最好用 DynamoDB transaction 同时写 question 与唯一 session（或先条件 claim，再以条件/幂等键创建 session），通知仅在 claim 成功后发出。增加两个教师共享同一旧快照时仅一方成功的测试。
+**Files:** `src/stoa/security/reconciliation.py:253-268`, `src/stoa/security/reconciliation.py:305-327`, `src/stoa/db/repositories/capability_repo.py:62-75`, `src/stoa/db/repositories/capability_repo.py:129-172`
 
-### CR-03: 对账只撤销“格式无效”授权，冲突身份的有效授权会在账户恢复后自动复活
+Capability history keys include capability, scope hash, generation, `grant_id`, and version, so the repository permits the same caller-supplied `grant_id` in multiple capability/scope lineages. Reconciliation, however, emits `remove_grant` actions whose only target is `grant.grant_id`, then resolves each action with `next(... if grant.grant_id == action.target)`. For two active grants sharing an ID, both actions select the first snapshot. The first revocation succeeds; the second attempts to revoke the already-revoked pointer with a different action ID and aborts, leaving the other current grant active.
 
-**Severity:** Critical  
-**File:** `src/stoa/security/reconciliation.py:151-195`  
-**Impact:** 对于缺少批准、重复绑定、多角色或 provider/local 不匹配的身份，对账会暂停账户并移除组，但只把 `invalid_grants` 加入 `remove_grant`。状态为 active、版本大于零且字段非空的授权会原样保留。管理员之后显式恢复账户/组时，这些旧授权立即重新进入 `resolve_actor()`，无需单独批准 capability grant，形成 reconciliation 后的自动再提升，违反 D-24 的“恢复与授权分别显式批准”。
+The account/group tightening performed earlier prevents immediate use, but `privileged_identity_service._restore_admin()` can later restore the account and provider group without checking for residual current grants. The surviving grant then becomes effective again, recreating the exact non-revival defect this gap plan intended to close.
 
-**Evidence:** `reconciliation.py:151-154` 把撤销集合限制为格式/状态无效授权，`reconciliation.py:188-189` 只为该集合生成 `remove_grant`，`reconciliation.py:195` 也保留其余 grantCount。`tests/test_privileged_identity_reconciliation.py:60-83` 只覆盖一个 version=0 的无效授权，没有“missing approval + active valid grant”或恢复后授权复活的控制。
-
-**Actionable fix:** 任何非 `exact_approved_active_match` 的特权身份都应自动撤销/隔离全部当前授权，或把授权移入不可生效的 quarantined 状态；恢复账户不能恢复旧授权，必须由 active `admin_identity_manager` 逐项、带 scope/reason/version 重新批准。扩展 snapshot 以校验 capability allowlist、effective/expiry 和 grant ownership，并增加异常身份携带有效全局授权的回归测试。
+**Required fix:** Carry an immutable full grant coordinate in every action (`capability`, `scope`, `generation`, `version`, and `grant_id`) and resolve by that coordinate, never by grant ID alone. Add a reproduction with two active current grants sharing one ID across different scopes/capabilities, apply the plan, restore the account, and prove that neither old lineage authorizes.
 
 ## Warnings
 
-### WR-01: 路由清单没有递归收集依赖参数，嵌套依赖中的敏感 ID 可被漏报
+### WR-01: Body-only admin targets are authorized and audited as `global` instead of the affected resource
 
-**Severity:** Warning  
-**File:** `src/stoa/security/route_inventory.py:124-131`  
-**Impact:** 清单虽然递归遍历 dependency tree 读取授权元数据，但 identifier 检测只读取根 `route.dependant` 的 path/query/body 参数。若 `student_id`、`event_id` 或 token reference 仅由嵌套 dependency 声明，清单会将 identifiers 记录为空；配合 explicit public/global 标记可绕过 identifier-policy 检查，使发布清单对新增敏感参数失明。
+**Files:** `src/stoa/security/admin_authorization.py:177-232`, `src/stoa/routers/admin.py:2015-2035`
 
-**Evidence:** 用当前实现构造 `GET /probe`（endpoint 标记 public，嵌套 `Depends` 声明 `student_id: Query`）时，`inventory_projection()` 输出 `identifiers: []`、`sensitive: false`。`tests/test_route_authorization_inventory.py:72-95` 仅覆盖 endpoint 自身的 path/body 参数，没有 dependency 参数变异测试。证据文档第 16 行声称使用递归 dependency inspection，但该递归目前只覆盖分类元数据。
+`_target()` reads only `request.query_params` and `request.path_params`. Several sensitive admin mutations carry their target solely in a Pydantic body; for example, parent-binding repair mutates `body.parent_id` and `body.student_id` while the declared admin policy names both target keys. The authorization gateway therefore constructs `resource_id="global"` and `student_id=actor.user_id`, evaluates scope against the wrong target, and persists a fingerprint that cannot distinguish the affected parent/student pair.
 
-**Actionable fix:** 在 `_route_identifiers()` 中遍历 `_walk_dependants(route.dependant)`，聚合每个 dependant 的 path/query/body 参数，并递归处理 Pydantic 容器/union/Annotated。增加 nested dependency 的 student/event/token identifier 变异测试；对 public/safe-public 的敏感 ID 也应要求明确、窄化的公开资源类型，而不是无条件跳过。
+This makes exact target-scoped grants unusable and lets all body targets under a global grant collapse to indistinguishable audit identities. Parse the validated body target through an explicit dependency/typed handoff (without arbitrary raw-body inference), and include it in both capability scope evaluation and the HMAC resource identity. Add body-only positive/negative scope tests and two-target audit-fingerprint controls.
 
-### WR-02: 授权决策生成了安全事件但从未持久化，拒绝、探测与敏感允许均无审计证据
+### WR-02: Password-recovery responses remain public account and state enumeration oracles
 
-**Severity:** Warning  
-**File:** `src/stoa/security/authorization.py:468-481`  
-**Impact:** 策略构造了包含 actor/resource/action/purpose/result/correlation 的 allowlisted event，但调用者仅检查 `decision.allowed`，从未调用 `security_audit_repo.append_authorization_event()`。因此跨学生尝试、资源枚举、敏感允许和重复 probe 没有 D-32 要求的持久审计/聚合告警，事故调查证据与检测能力缺失。
+**Files:** `src/stoa/routers/auth.py:740-764`, `src/stoa/routers/auth.py:767-792`, `src/stoa/security/public_auth_errors.py:52-91`
 
-**Evidence:** `authorize_and_resolve()` 在 `authorization.py:587-592` 取得 decision 后直接返回或抛错；源码全局检索中，`append_authorization_event()` 除 repository 定义和 break-glass helper 外没有生产调用。现有测试只验证事件投影和 repository helper，未验证一次真实拒绝会产生审计记录，也未验证审计故障策略。
+`forgot_password()` returns `{"status":"accepted","delivery":null}` for an unknown local email but returns Cognito delivery details for a known public account. A known disabled account maps to `account_disabled` while an unknown account stays accepted, and `_approved_public_registration_role()` produces a distinct conflict for non-public profiles. `reset_password()` similarly returns a plain local "Invalid password reset request" before contacting Cognito for unknown emails but structured provider-derived outcomes for known ones.
 
-**Actionable fix:** 向授权管线注入 audit sink，在安全拒绝和敏感允许路径写入稳定 event_id/correlation ID；重复探测使用有界聚合。明确失败语义：拒绝本身仍应保持拒绝，敏感允许若审计是强制控制则在审计不可用时 fail closed 为安全 503。增加真实依赖路径的 persisted-event、redaction、重复聚合和 audit-outage 测试。
+These differences disclose whether an email exists and whether it belongs to a disabled or non-public account even though the route explicitly claims not to expose account existence. Return one indistinguishable accepted projection for forgot-password initiation and one operation-safe reset failure independent of the local lookup result; do not return delivery destination metadata. Add known/unknown/disabled/privileged equivalence tests.
 
-### WR-03: 公开认证端点把 Cognito 内部错误代码直接返回给客户端
+### WR-03: Verification resend can activate an arbitrary email-GSI profile outside the resumable identity command
 
-**Severity:** Warning  
-**File:** `src/stoa/routers/auth.py:363,468,579,687,748,782,848,876`  
-**Impact:** 未被显式映射的 provider 错误以 `Cognito error: {code}` 返回，暴露身份提供商实现和故障类型，并绕过 Phase 472 的统一安全错误 `{code,message,correlationId}` 契约。不同配置/用户状态可由公开端点探测，且客户端无法按 D-29/D-31 的稳定动作处理。
+**Files:** `src/stoa/routers/auth.py:533-600`, `src/stoa/services/public_identity_service.py:190-256`, `src/stoa/services/public_identity_service.py:78-118`
 
-**Evidence:** register、login、verification、password reset、refresh、logout 均存在相同 fallback；这些 fallback 没有使用 `safe_error_response()`，也没有 correlation ID。聚焦测试只覆盖已知 provider code，不覆盖未知 code 的响应投影与 canary 泄漏。
+When Cognito says a user is already confirmed, the resend route directly applies `verified_fields()` to the profile selected by `get_user_by_email()` and returns `already_verified`. It does not load the immutable public identity command, verify its subject, complete missing binding/group steps, or mark command activation. Login/refresh later require an active profile and stable binding but do not consult `activation_complete`, so a matching binding/group can produce an Actor even while the durable command is incomplete; a duplicate-email GSI row can also be activated incorrectly.
 
-**Actionable fix:** 将 provider exception 仅写入经脱敏的内部 telemetry，公开响应统一映射为稳定的 `identity_provider_unavailable`（临时依赖错误）或 `invalid_token/authentication_required`，带 correlation ID 和适当 `Retry-After`。增加未知 provider code/message/canary 不出现在响应中的参数化测试。
+Route all already-confirmed recovery through `provider_identity()` plus `confirm_and_reconcile_public_identity()`, and preserve non-active state until the command's exact subject, binding, group, verification, and activation steps converge. Replace the existing test that blesses direct local repair with command-aware partial-failure and duplicate-email tests.
 
-### WR-04: 登录成功后仍按 email 选择本地 profile，绕过稳定 subject 绑定用于响应/生命周期判断
+### WR-04: Production accepts arbitrarily weak HMAC audit secrets
 
-**Severity:** Warning  
-**File:** `src/stoa/routers/auth.py:470-489`  
-**Impact:** Cognito 已返回 access token 后，登录路径通过最终一致 GSI 的 email `Limit=1` 获取任意一个本地 profile，并据此决定是否返回 token以及构造姓名、角色和账户状态。重复/大小写漂移/旧 profile 可导致披露另一业务身份的元数据，或让已撤销主体因同邮箱 active profile 而收到 token（后续受保护调用虽会由严格绑定拒绝）。这与 D-19“email 永不作为安全身份 fallback”冲突。
+**Files:** `src/stoa/config.py:53-60`, `src/stoa/config.py:106-121`, `src/stoa/db/repositories/security_audit_repo.py:174-196`
 
-**Evidence:** `auth.py:473` 调用 `get_user_by_email()`；`src/stoa/db/repositories/user_repo.py:20-28` 使用 GSI `Limit=1` 且不做唯一性/subject 校验。严格请求路径已经提供 `(issuer, sub)` 绑定解析，但登录响应未复用它。现有测试没有两个同邮箱 profile 或 token subject/profile 不一致的负向控制。
+Production validation rejects an empty or exact development placeholder secret, but accepts a one-character replacement secret and equally weak previous keys. Because resource and actor privacy relies on keyed fingerprints, a low-entropy configured secret makes offline guessing feasible to anyone who can read audit rows and knows likely resource identifiers.
 
-**Actionable fix:** 验证刚签发的 access token并通过 `(issuer, sub)` 一致读取绑定/profile/status，只有该 Actor 可授权时才返回业务用户响应；email 只用于凭据提交，不参与本地身份选择。对绑定缺失/重复、email 重复、subject 不匹配和撤销账户增加测试。
+Require high-entropy secret material (for example, decoded 256-bit random keys), validate active and retained keys uniformly, reject duplicate key material/IDs, and test short/predictable production secrets. Avoid measuring strength only by string inequality with the development default.
+
+## Re-adjudication of Previous Findings
+
+- **Stable public binding and subject-bound login:** Implemented for normal register/confirm/login/refresh flow. CR-01 and WR-03 cover the remaining recovery edge cases.
+- **Conflicted identity grant non-revival:** The normal full-coordinate case is implemented with current pointers and immutable revisions; CR-02 is a remaining collision case that can still revive authority.
+- **Recursive dependency identifiers:** Implemented with cycle-safe dependency and annotation traversal; no actionable bypass found in the reviewed registered graph.
+- **Durable authorization decision/probe persistence:** Central, direct, operator, and admin decision paths now use the gateway; mandatory allows fail closed and denial outages preserve denial as explicitly planned. WR-01 concerns incorrect admin target identity, not missing gateway wiring.
+- **Safe Cognito errors:** All reviewed Cognito `ClientError` fallbacks use the closed provider mapping and no raw provider code/message reaches clients. WR-02 covers semantic enumeration rather than provider-string leakage.
+- **Email profile fallback removal from login/refresh:** Implemented. Token-returning responses resolve through verified issuer/subject and `Actor.user_id`.
+- **Teacher takeover race:** Still open and correctly owned by Phase 475; Phase 472 evidence does not claim otherwise.
+
+## Verification Observation
+
+`pytest -q tests/test_public_identity_lifecycle.py tests/test_privileged_identity_reconciliation.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_route_authorization_inventory.py` completed with **114 passed**. This confirms the documented focused evidence but does not exercise the adversarial cases above. The recorded full-suite result remains **1019 passed / 23 Phase-474-owned strict Settings fixture failures**, with external Cognito sandbox checks not run and no AWS/network/production writes.
 
 ---
 
-_Reviewed: 2026-07-15T03:00:00Z_  
-_Reviewer: the agent (gsd-code-reviewer)_  
+_Reviewer: gsd-code-reviewer_  
 _Depth: standard_
