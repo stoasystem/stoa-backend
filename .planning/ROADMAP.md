@@ -67,7 +67,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Audit findings:** SEC-001, SEC-002, SEC-004.
 
-**Plans:** 10/10 plans executed; phase verification pending
+**Plans:** 10/16 plans executed; 6 gap-closure plans planned and independently checked
 
 **Wave 0**
 
@@ -97,9 +97,27 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 10. `472-10` — Executable route inventory, dry-run reconciliation, and P0 evidence.
 
+**Wave 6** *(gap closure; blocked on Wave 5 completion)*
+
+11. `472-11` — Canonical public identity registration and token-bound login.
+12. `472-12` — Conflict-wide capability quarantine and non-revival proof.
+14. `472-14` — Durable authorization decisions and bounded probe evidence.
+
+**Wave 7** *(blocked on Plan 472-11)*
+
+13. `472-13` — Recursive dependency identifier inventory and explicit public route declarations.
+
+**Wave 8** *(blocked on Plans 472-11 and 472-13)*
+
+15. `472-15` — Safe structured public Cognito error boundary.
+
+**Wave 9** *(blocked on Plans 472-11 through 472-15)*
+
+16. `472-16` — Gap-closure integration, regression, and evidence gate.
+
 **Success criteria:**
 
-1. Public registration and confirmation cannot create or promote admin, teacher, or tutor accounts, including role aliases and case variants.
+1. Public registration and confirmation cannot create or promote admin or teacher accounts, including rejected historical role aliases and case variants.
 2. The existing formal production-admin workflow remains functional, audited, and outside public registration.
 3. Teacher onboarding requires an expiring one-time approval and does not imply curriculum-edit permission.
 4. Unrelated parents and unassigned teachers receive indistinguishable `404 resource_not_found` responses when they are not allowed to know a resource exists; `403 action_not_allowed` is used only when resource existence is knowable but the requested action is forbidden.
