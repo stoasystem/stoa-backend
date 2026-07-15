@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T16:22:21.805Z"
-last_activity: 2026-07-15 -- Plan 472-19 completed typed admin body-target authorization
+last_updated: "2026-07-15T18:09:21.408Z"
+last_activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumeration equivalence
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 22
-  completed_plans: 20
-  percent: 91
+  completed_plans: 21
+  percent: 95
 ---
 
 # Project State
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 472 Privileged Identity And Student Resource Authorization — EXECUTING
-Plan: 20 of 22 complete; Wave 10 complete, ready for Wave 11
+Plan: 21 of 22 complete; Wave 11 complete, ready for Wave 12
 Status: Executing second gap closure
-Last activity: 2026-07-15 -- Plan 472-21 completed strong production audit HMAC keyring validation
+Last activity: 2026-07-15 -- Plan 472-20 completed password recovery anti-enumeration equivalence
 
 ## Accumulated Context
 
@@ -64,6 +64,7 @@ Last activity: 2026-07-15 -- Plan 472-21 completed strong production audit HMAC 
 - Account restore remains capability-mutation-free, and a fresh Actor cannot regain quarantined authority without a new manager-approved command and new grant identity.
 - Every registered administrator body target now enters through a typed route provider; bounded unique ResourceRefs require all-of capability decisions and durable per-target evidence before endpoint effects.
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
+- Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
 
 ### Pending Todos
 
@@ -108,6 +109,7 @@ Last activity: 2026-07-15 -- Plan 472-21 completed strong production audit HMAC 
 | Phase 472 P18 | 4 min | 2 tasks | 3 files |
 | Phase 472 P19 | 5 min | 3 tasks | 7 files |
 | Phase 472 P21 | 7 min | 2 tasks | 5 files |
+| Phase 472 P20 | 2 min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -121,3 +123,4 @@ Last activity: 2026-07-15 -- Plan 472-21 completed strong production audit HMAC 
 - [Phase 472]: Account restoration never restores capability history. — Only a new manager-approved command and new grant identity may create a later active generation.
 - [Phase 472]: Validated route-specific providers are the only source of administrator body-target authority. — Arbitrary JSON and evidence-only dictionaries never create scope; every concrete member is authorized and evidenced before effects.
 - [Phase 472]: Authorization audit key identity is the normalized key ID plus canonically decoded bytes. — Settings, dependency caching, and direct sink construction must reject weak, ambiguous, or duplicate active/retained material before evidence effects.
+- [Phase 472]: Public password recovery never consults the local email profile before provider normalization. — Account existence, role, lifecycle, and delivery metadata cannot select or alter the public initiation/reset projection.
