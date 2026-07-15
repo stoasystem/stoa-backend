@@ -67,7 +67,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Audit findings:** SEC-001, SEC-002, SEC-004.
 
-**Plans:** 9/10 plans executed
+**Plans:** 10/10 plans executed; phase verification pending
 
 **Wave 0**
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-last_updated: "2026-07-15T00:06:22.129Z"
-last_activity: 2026-07-15 -- Completed 472-09 admin, report, and notification capability migration
+last_updated: "2026-07-15T00:24:00.000Z"
+last_activity: 2026-07-15 -- Completed 472-10 executable route inventory and P0 evidence plan; phase verification pending
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 10
-  completed_plans: 9
-  percent: 90
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 472 (privileged-identity-and-student-resource-authorization) — EXECUTING
 Plan: 10 of 10
-Status: Ready to execute
-Last activity: 2026-07-15 -- Completed 472-09 admin, report, and notification capability migration
+Status: All plans executed; awaiting independent phase verification
+Last activity: 2026-07-15 -- Completed 472-10 executable route inventory and P0 evidence plan
 
 ## Accumulated Context
 
@@ -51,10 +51,14 @@ Last activity: 2026-07-15 -- Completed 472-09 admin, report, and notification ca
 - All student, question, conversation, message, stream, and teacher-help identifiers now enter through executable Actor policy dependencies; self identity is canonical, handlers receive the resolved object, and unrelated real IDs are hidden like random IDs before effects.
 - Practice, adaptive-learning, and parent resources now use Actor policy with explicit safe-public catalog metadata, exact assignment/capability scope, load-once targets, and strict active bidirectional parent-child bindings.
 - Every canonical teacher route now uses Actor plus executable self, current-task, assignment, or exact-capability policy; queue metadata is bounded, indirect help/draft IDs resolve before effects, and stale assignments never preserve access.
+- All 219 registered FastAPI method/path operations now derive deterministic authorization inventory and OpenAPI metadata from the executable dependency graph; unknown routes and sensitive identifier mutations fail closed.
+- Privileged identity reconciliation is redacted and dry-run-first, can only suspend/remove/sign-out/revoke automatically, and requires a separate active `admin_identity_manager` command for any elevation.
+- The complete Phase 472 focused gate reports 459 passed; the full suite reports 932 passed and 23 unrelated strict production-configuration fixture failures owned by Phase 474.
+- Non-production Cognito sandbox evidence was not approved/configured and remains explicitly NOT RUN; no production/provider mutation was performed.
 
 ### Pending Todos
 
-- Execute Phase 472 from Wave 0 through Wave 5 using the route inventory and P0 reproductions from `docs/audit/full-project-audit.md`.
+- Independently verify Phase 472 local P0 closure and retain the explicit external-evidence limitations before changing phase status.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -84,3 +88,4 @@ Last activity: 2026-07-15 -- Completed 472-09 admin, report, and notification ca
 | Phase 472 P07 | 17 min | 3 tasks | 15 files |
 | Phase 472 P08 | 20 min | 3 tasks | 15 files |
 | Phase 472 P09 | 8 min | 4 tasks | 20 files |
+| Phase 472 P10 | 18 min | 4 tasks | 18 files |
