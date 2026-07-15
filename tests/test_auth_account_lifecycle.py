@@ -265,6 +265,145 @@ def test_register_username_exists_resumes_only_exact_command(monkeypatch):
     assert resumed[0]["role"] == "student"
 
 
+@pytest.mark.parametrize(
+    ("case", "command_role", "provider_subject"),
+    [
+        ("provider_only_public", None, "cognito-user-sub"),
+        ("provider_only_privileged", None, "privileged-provider-sub"),
+        ("altered_role", "parent", "cognito-user-sub"),
+        ("altered_subject", "student", "different-provider-sub"),
+    ],
+)
+def test_existing_account_adoption_matrix_is_indistinguishable_and_mutation_free(
+    monkeypatch, case, command_role, provider_subject
+):
+    class ExistingCognito(FakeCognito):
+        def sign_up(self, **kwargs):
+            self.calls.append(("sign_up", kwargs))
+            raise _client_error("UsernameExistsException", f"{case}-provider-canary")
+
+        def admin_get_user(self, **kwargs):
+            self.calls.append(("admin_get_user", kwargs))
+            return {
+                "Username": provider_subject,
+                "UserStatus": "CONFIRMED",
+                "Enabled": True,
+                "UserAttributes": [
+                    {"Name": "sub", "Value": provider_subject},
+                    {"Name": "email", "Value": kwargs["Username"]},
+                    {"Name": "email_verified", "Value": "true"},
+                ],
+            }
+
+    fake = ExistingCognito()
+    mutations = []
+    command = (
+        SimpleNamespace(
+            issuer="https://cognito-idp.eu-central-2.amazonaws.com/pool-id",
+            subject="cognito-user-sub",
+            user_id="cognito-user-sub",
+            role=command_role,
+        )
+        if command_role
+        else None
+    )
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: command
+        if command
+        else (_ for _ in ()).throw(
+            auth.public_identity_service.PublicIdentityCommandConflict("missing")
+        ),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "start_or_resume_public_registration",
+        lambda **kwargs: mutations.append(("start", kwargs)),
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "resume_public_registration",
+        lambda **kwargs: mutations.append(("resume", kwargs)),
+    )
+    monkeypatch.setattr(
+        auth,
+        "_bind_parent_student_if_possible",
+        lambda *args: mutations.append(("relationship", args)),
+    )
+
+    response = _auth_client().post(
+        "/auth/register",
+        json={
+            "email": "shared@example.com",
+            "password": "ValidPass123!",
+            "role": "student",
+        },
+    )
+
+    assert response.status_code == 409
+    assert set(response.json()) == {"code", "message", "correlationId"}
+    assert response.json()["code"] == "email_already_registered"
+    assert response.json()["message"] == (
+        "This email already has an account. Sign in instead, or reset your password."
+    )
+    assert "provider-canary" not in response.text
+    assert mutations == []
+    assert [name for name, _ in fake.calls] in (
+        ["sign_up"],
+        ["sign_up", "admin_get_user"],
+    )
+    assert all(
+        name not in {"admin_update_user_attributes", "admin_add_user_to_group"}
+        for name, _ in fake.calls
+    )
+
+
+@pytest.mark.parametrize("role", ["student", "parent"])
+def test_matching_interrupted_public_command_resumes_exact_role(monkeypatch, role):
+    class ExistingCognito(FakeCognito):
+        def sign_up(self, **kwargs):
+            self.calls.append(("sign_up", kwargs))
+            raise _client_error("UsernameExistsException")
+
+    fake = ExistingCognito()
+    subject = "cognito-user-sub"
+    command = SimpleNamespace(
+        issuer="https://cognito-idp.eu-central-2.amazonaws.com/pool-id",
+        subject=subject,
+        user_id=subject,
+        role=role,
+    )
+    resumed = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: command,
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "resume_public_registration",
+        lambda **kwargs: resumed.append(kwargs) or (command, kwargs["profile"]),
+    )
+
+    response = _auth_client().post(
+        "/auth/register",
+        json={
+            "email": f"{role}@example.com",
+            "password": "ValidPass123!",
+            "role": role,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["user"]["role"] == role
+    assert resumed[0]["command"] is command
+    assert resumed[0]["role"] == role
+    assert resumed[0]["subject"] == subject
+
+
 def test_register_records_email_verification_policy_and_parent_binding(monkeypatch):
     fake = FakeCognito()
     stored = {}
@@ -648,6 +787,98 @@ def test_resend_email_verification_repairs_local_state_when_cognito_already_conf
     assert response.json()["emailVerificationRequired"] is False
     assert updates[0][0] == "student-1"
     assert updates[0][1]["email_verification_status"] == "verified"
+
+
+def test_already_confirmed_resend_reconciles_exact_command_subject(monkeypatch):
+    class AlreadyConfirmedCognito(FakeCognito):
+        def resend_confirmation_code(self, **kwargs):
+            self.calls.append(("resend_confirmation_code", kwargs))
+            raise _client_error("NotAuthorizedException", "User is already confirmed.")
+
+    fake = AlreadyConfirmedCognito()
+    command = SimpleNamespace(
+        user_id="command-user",
+        email="student@example.com",
+        role="student",
+        activation_complete=False,
+    )
+    completed = SimpleNamespace(
+        user_id=command.user_id,
+        email=command.email,
+        role=command.role,
+        activation_complete=True,
+    )
+    pending = _public_profile(**{
+        "user_id": "command-user",
+        "role": "student",
+        "email": "student@example.com",
+        "account_status": "pending_verification",
+        "email_verification_status": "pending_verification",
+        "email_verification_required": True,
+    })
+    active = {
+        **pending,
+        "account_status": "active",
+        "email_verification_status": "verified",
+        "email_verification_required": False,
+    }
+    reconciliations = []
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: command,
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "get_public_profile_for_command",
+        lambda loaded: pending if loaded is command else None,
+    )
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "confirm_and_reconcile_public_identity",
+        lambda **kwargs: reconciliations.append(kwargs) or (completed, active),
+    )
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user_by_email",
+        lambda _email: (_ for _ in ()).throw(AssertionError("email index used")),
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "student@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "already_verified"
+    assert response.json()["accountActivationStatus"] == "active"
+    assert reconciliations[0]["provider_subject"] == "cognito-user-sub"
+    assert reconciliations[0]["email"] == "student@example.com"
+    assert [name for name, _ in fake.calls] == [
+        "resend_confirmation_code",
+        "admin_get_user",
+    ]
+
+
+def test_resend_command_dependency_failure_does_not_touch_provider(monkeypatch):
+    fake = FakeCognito()
+    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    monkeypatch.setattr(
+        auth.public_identity_service,
+        "require_public_identity_command",
+        lambda _email: (_ for _ in ()).throw(TimeoutError("dependency-canary")),
+    )
+
+    response = _auth_client().post(
+        "/auth/email-verification/resend",
+        json={"email": "student@example.com"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "identity_provider_unavailable"
+    assert "dependency-canary" not in response.text
+    assert fake.calls == []
 
 
 def test_confirm_email_verification_marks_expired_code(monkeypatch):

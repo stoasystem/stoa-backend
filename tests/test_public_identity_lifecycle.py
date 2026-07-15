@@ -274,6 +274,60 @@ def test_confirmation_rejects_provider_subject_mismatch_before_activation(monkey
     assert command.activation_complete is False
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("issuer", "https://identity.test/secondary"),
+        ("subject", "attacker-subject"),
+        ("role", "parent"),
+    ],
+)
+def test_registration_resume_rejects_fingerprint_changes_before_mutation(
+    monkeypatch, field, value
+):
+    from stoa.services import public_identity_service
+
+    table = MemoryTable()
+    monkeypatch.setattr(public_identity_repo, "get_table", lambda: table)
+    command = public_identity_repo.create_or_get_public_identity_command(
+        email="student@example.test",
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        user_id="subject-1",
+        role="student",
+        created_at="2026-07-15T12:00:00Z",
+    )
+    monkeypatch.setattr(
+        public_identity_service.user_repo,
+        "get_user",
+        lambda _user_id: (_ for _ in ()).throw(AssertionError("profile read before proof")),
+    )
+    mutations = []
+
+    class Provider:
+        def admin_add_user_to_group(self, **kwargs):
+            mutations.append(("group", kwargs))
+
+    values = {
+        "issuer": "https://identity.test/primary",
+        "subject": "subject-1",
+        "role": "student",
+    }
+    values[field] = value
+    with pytest.raises(public_identity_repo.PublicIdentityCommandConflict):
+        public_identity_service.resume_public_registration(
+            command=command,
+            profile={"user_id": "subject-1"},
+            provider=Provider(),
+            user_pool_id="pool-id",
+            **values,
+        )
+
+    unchanged = public_identity_repo.get_public_identity_command("student@example.test")
+    assert unchanged == command
+    assert mutations == []
+
+
 def _signed_public_token(keyset, *, subject="subject-1", groups=("students",), email=None):
     now = datetime.now(timezone.utc)
     claims = {

@@ -1,6 +1,7 @@
 """Authentication security contracts with no AWS credentials or network access."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -24,6 +25,17 @@ from stoa.routers import auth
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.jwks import JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
+
+
+def test_public_identity_runtime_uses_only_canonical_teacher_vocabulary():
+    legacy_teacher_term = "tu" + "tor"
+    runtime_files = (
+        Path("src/stoa/routers/auth.py"),
+        Path("src/stoa/services/public_identity_service.py"),
+        Path("src/stoa/db/repositories/public_identity_repo.py"),
+    )
+    for path in runtime_files:
+        assert legacy_teacher_term not in path.read_text().casefold()
 
 
 def _access_token(keyset, *, issuer=None, client_id="student-client", token_use="access"):
