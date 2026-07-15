@@ -27,6 +27,7 @@ def test_client_action_contract_routes_every_conflict_to_recovery():
                 ClientAction.COMPLETE_PARENT_BINDING,
                 ClientAction.WAIT_FOR_TEACHER_REVIEW,
                 ClientAction.START_ACCOUNT_RECOVERY,
+                ClientAction.REAUTHENTICATE,
             }
 
 
@@ -88,7 +89,7 @@ def test_safe_error_retry_header_semantics_and_body_shape():
     assert response.headers == {"Retry-After": "15"}
     assert response.body == {
         "code": "identity_provider_unavailable",
-        "message": "Sign-in is temporarily unavailable. Try again later.",
+        "message": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
         "correlationId": "corr-503",
     }
     with pytest.raises(ValueError):

@@ -10,7 +10,7 @@ import random
 from stoa.security.errors import SecurityErrorCode, security_http_status
 
 
-CONTRACT_VERSION = "472.1"
+CONTRACT_VERSION = "472.2"
 MAX_RETRY_AFTER_SECONDS = 120
 MAX_BACKOFF_SECONDS = 120.0
 
@@ -22,6 +22,9 @@ class ClientAction(StrEnum):
     START_ACCOUNT_RECOVERY = "start_account_recovery"
     CONTACT_SUPPORT = "contact_support"
     RETRY_LATER = "retry_later"
+    VERIFY_EMAIL = "verify_email"
+    CORRECT_INPUT = "correct_input"
+    REQUEST_NEW_CODE = "request_new_code"
     NONE = "none"
 
 
@@ -139,6 +142,61 @@ CLIENT_ERROR_ACTIONS: dict[SecurityErrorCode, ClientErrorAction] = {
         ClientAction.RETRY_LATER,
         show_correlation_id=True,
         retry=_OUTAGE_RETRY,
+    ),
+    SecurityErrorCode.INVALID_CREDENTIALS: _entry(
+        SecurityErrorCode.INVALID_CREDENTIALS,
+        "auth.invalid_credentials",
+        "Check your email and password, then try signing in again.",
+        ClientAction.CORRECT_INPUT,
+    ),
+    SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED: _entry(
+        SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED,
+        "auth.email_verification_required",
+        "Verify your email, then sign in again.",
+        ClientAction.VERIFY_EMAIL,
+    ),
+    SecurityErrorCode.ACCOUNT_DISABLED: _entry(
+        SecurityErrorCode.ACCOUNT_DISABLED,
+        "auth.account_disabled",
+        "Contact support and share the reference shown to restore access to your account.",
+        ClientAction.CONTACT_SUPPORT,
+        show_correlation_id=True,
+    ),
+    SecurityErrorCode.EMAIL_ALREADY_REGISTERED: _entry(
+        SecurityErrorCode.EMAIL_ALREADY_REGISTERED,
+        "auth.email_already_registered",
+        "This email already has an account. Sign in instead, or reset your password.",
+        ClientAction.REAUTHENTICATE,
+    ),
+    SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET: _entry(
+        SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET,
+        "auth.password_requirements_not_met",
+        "Choose a stronger password that meets the listed requirements, then try again.",
+        ClientAction.CORRECT_INPUT,
+    ),
+    SecurityErrorCode.VERIFICATION_CODE_INVALID: _entry(
+        SecurityErrorCode.VERIFICATION_CODE_INVALID,
+        "auth.verification_code_invalid",
+        "Check the verification code and try again.",
+        ClientAction.CORRECT_INPUT,
+    ),
+    SecurityErrorCode.VERIFICATION_CODE_EXPIRED: _entry(
+        SecurityErrorCode.VERIFICATION_CODE_EXPIRED,
+        "auth.verification_code_expired",
+        "Request a new verification code, then try again.",
+        ClientAction.REQUEST_NEW_CODE,
+    ),
+    SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID: _entry(
+        SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
+        "auth.password_reset_request_invalid",
+        "Request a new password reset code, then try again.",
+        ClientAction.REQUEST_NEW_CODE,
+    ),
+    SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED: _entry(
+        SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED,
+        "auth.request_rate_limited",
+        "Wait a few minutes before trying this action again.",
+        ClientAction.RETRY_LATER,
     ),
 }
 

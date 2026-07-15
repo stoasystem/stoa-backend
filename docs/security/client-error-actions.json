@@ -1,5 +1,22 @@
 {
   "errors": {
+    "account_disabled": {
+      "action": "contact_support",
+      "http_statuses": [
+        403
+      ],
+      "message_key": "auth.account_disabled",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Contact support and share the reference shown to restore access to your account.",
+      "show_correlation_id": true,
+      "support_guidance": "Share the correlation ID with support."
+    },
     "action_not_allowed": {
       "action": "none",
       "http_statuses": [
@@ -14,6 +31,23 @@
         "user_resumption_with_idempotency_key": false
       },
       "safe_copy": "This action is not available for your account.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "auth_request_rate_limited": {
+      "action": "retry_later",
+      "http_statuses": [
+        429
+      ],
+      "message_key": "auth.request_rate_limited",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Wait a few minutes before trying this action again.",
       "show_correlation_id": false,
       "support_guidance": "Do not display internal authorization details."
     },
@@ -51,6 +85,40 @@
       "show_correlation_id": true,
       "support_guidance": "Share the correlation ID with support."
     },
+    "email_already_registered": {
+      "action": "reauthenticate",
+      "http_statuses": [
+        409
+      ],
+      "message_key": "auth.email_already_registered",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "This email already has an account. Sign in instead, or reset your password.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "email_verification_required": {
+      "action": "verify_email",
+      "http_statuses": [
+        403
+      ],
+      "message_key": "auth.email_verification_required",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Verify your email, then sign in again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
     "identity_conflict": {
       "action": "start_account_recovery",
       "http_statuses": [
@@ -85,6 +153,23 @@
       "show_correlation_id": true,
       "support_guidance": "Share the correlation ID with support."
     },
+    "invalid_credentials": {
+      "action": "correct_input",
+      "http_statuses": [
+        401
+      ],
+      "message_key": "auth.invalid_credentials",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Check your email and password, then try signing in again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
     "invalid_token": {
       "action": "reauthenticate",
       "http_statuses": [
@@ -116,6 +201,40 @@
         "user_resumption_with_idempotency_key": false
       },
       "safe_copy": "Complete the parent connection before continuing.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "password_requirements_not_met": {
+      "action": "correct_input",
+      "http_statuses": [
+        400
+      ],
+      "message_key": "auth.password_requirements_not_met",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Choose a stronger password that meets the listed requirements, then try again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "password_reset_request_invalid": {
+      "action": "request_new_code",
+      "http_statuses": [
+        400
+      ],
+      "message_key": "auth.password_reset_request_invalid",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Request a new password reset code, then try again.",
       "show_correlation_id": false,
       "support_guidance": "Do not display internal authorization details."
     },
@@ -169,11 +288,45 @@
       "safe_copy": "Your session expired. We will try once to restore it.",
       "show_correlation_id": false,
       "support_guidance": "Do not display internal authorization details."
+    },
+    "verification_code_expired": {
+      "action": "request_new_code",
+      "http_statuses": [
+        400
+      ],
+      "message_key": "auth.verification_code_expired",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Request a new verification code, then try again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
+    },
+    "verification_code_invalid": {
+      "action": "correct_input",
+      "http_statuses": [
+        400
+      ],
+      "message_key": "auth.verification_code_invalid",
+      "retry": {
+        "automatic": false,
+        "idempotent_reads_only": false,
+        "max_attempts": 0,
+        "requires_retry_after": false,
+        "user_resumption_with_idempotency_key": false
+      },
+      "safe_copy": "Check the verification code and try again.",
+      "show_correlation_id": false,
+      "support_guidance": "Do not display internal authorization details."
     }
   },
   "ownership": {
     "contract": "Phase 472 generates and tests this shared behavior contract.",
     "rendering": "Phase 478 owns web and mobile rendering and application integration."
   },
-  "schemaVersion": "472.1"
+  "schemaVersion": "472.2"
 }

@@ -20,19 +20,37 @@ class SecurityErrorCode(StrEnum):
     RESOURCE_NOT_FOUND = "resource_not_found"
     IDENTITY_PROVIDER_UNAVAILABLE = "identity_provider_unavailable"
     AUTHORIZATION_TEMPORARILY_UNAVAILABLE = "authorization_temporarily_unavailable"
+    INVALID_CREDENTIALS = "invalid_credentials"
+    EMAIL_VERIFICATION_REQUIRED = "email_verification_required"
+    ACCOUNT_DISABLED = "account_disabled"
+    EMAIL_ALREADY_REGISTERED = "email_already_registered"
+    PASSWORD_REQUIREMENTS_NOT_MET = "password_requirements_not_met"
+    VERIFICATION_CODE_INVALID = "verification_code_invalid"
+    VERIFICATION_CODE_EXPIRED = "verification_code_expired"
+    PASSWORD_RESET_REQUEST_INVALID = "password_reset_request_invalid"
+    AUTH_REQUEST_RATE_LIMITED = "auth_request_rate_limited"
 
 
 _PUBLIC_MESSAGES: dict[SecurityErrorCode, str] = {
     SecurityErrorCode.AUTHENTICATION_REQUIRED: "Please sign in to continue.",
     SecurityErrorCode.INVALID_TOKEN: "Your session is not valid. Please sign in again.",
     SecurityErrorCode.TOKEN_EXPIRED: "Your session has expired. Please sign in again.",
-    SecurityErrorCode.IDENTITY_CONFLICT: "Your account needs recovery before you can continue.",
+    SecurityErrorCode.IDENTITY_CONFLICT: "Contact support and share the reference shown so we can restore your account.",
     SecurityErrorCode.PARENT_BINDING_REQUIRED: "Complete the parent connection before continuing.",
     SecurityErrorCode.TEACHER_REVIEW_PENDING: "Your teacher application is still under review.",
     SecurityErrorCode.ACTION_NOT_ALLOWED: "You cannot perform this action.",
     SecurityErrorCode.RESOURCE_NOT_FOUND: "The requested resource was not found.",
-    SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE: "Sign-in is temporarily unavailable. Try again later.",
+    SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE: "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
     SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE: "This action is temporarily unavailable. Try again later.",
+    SecurityErrorCode.INVALID_CREDENTIALS: "Check your email and password, then try signing in again.",
+    SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED: "Verify your email, then sign in again.",
+    SecurityErrorCode.ACCOUNT_DISABLED: "Contact support and share the reference shown to restore access to your account.",
+    SecurityErrorCode.EMAIL_ALREADY_REGISTERED: "This email already has an account. Sign in instead, or reset your password.",
+    SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET: "Choose a stronger password that meets the listed requirements, then try again.",
+    SecurityErrorCode.VERIFICATION_CODE_INVALID: "Check the verification code and try again.",
+    SecurityErrorCode.VERIFICATION_CODE_EXPIRED: "Request a new verification code, then try again.",
+    SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID: "Request a new password reset code, then try again.",
+    SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED: "Wait a few minutes before trying this action again.",
 }
 
 _HTTP_STATUS: dict[SecurityErrorCode, int] = {
@@ -46,6 +64,15 @@ _HTTP_STATUS: dict[SecurityErrorCode, int] = {
     SecurityErrorCode.RESOURCE_NOT_FOUND: 404,
     SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE: 503,
     SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE: 503,
+    SecurityErrorCode.INVALID_CREDENTIALS: 401,
+    SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED: 403,
+    SecurityErrorCode.ACCOUNT_DISABLED: 403,
+    SecurityErrorCode.EMAIL_ALREADY_REGISTERED: 409,
+    SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET: 400,
+    SecurityErrorCode.VERIFICATION_CODE_INVALID: 400,
+    SecurityErrorCode.VERIFICATION_CODE_EXPIRED: 400,
+    SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID: 400,
+    SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED: 429,
 }
 
 _CORRELATION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
