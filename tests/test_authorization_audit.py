@@ -18,7 +18,12 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import notifications
 from stoa.security.authorization import (
     AuthorizationAction,
+    AuthorizationFacts,
+    AuthorizationPolicy,
     AuthorizationPurpose,
+    AuthorizedResource,
+    BreakGlassEvidence,
+    ParentAuthorizationFacts,
     PolicyDecision,
     ResourceRef,
     ResourceType,
@@ -27,6 +32,11 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from stoa.security.request_correlation import get_request_correlation_id
+from stoa.security.route_authorization import (
+    STUDENT_CONTENT_READ,
+    authorized_student_dependency,
+    get_authorization_fact_repository,
+)
 from stoa.services import notification_service
 
 
@@ -340,3 +350,135 @@ def test_real_admin_mandatory_allow_outage_returns_safe_correlated_503(monkeypat
     assert response.headers["X-Correlation-ID"] == response.json()["detail"]["correlationId"]
     assert "audit-outage-canary" not in response.text
     assert effects == []
+
+
+def _generated_student_app(monkeypatch, *, sink, facts):
+    from stoa.db.repositories import user_repo
+
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id: {"user_id": user_id, "role": "student", "account_status": "active"},
+    )
+    effects = []
+    app = FastAPI()
+    dependency = authorized_student_dependency(
+        action=AuthorizationAction.READ,
+        purposes=STUDENT_CONTENT_READ,
+    )
+
+    @app.get("/students/{student_id}")
+    def handler(_resource=Depends(dependency)):
+        effects.append(True)
+        return {"ok": True}
+
+    app.dependency_overrides[get_actor] = lambda: _actor(CanonicalRole.PARENT, "parent-1")
+    app.dependency_overrides[get_authorization_fact_repository] = lambda: facts
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    return app, effects
+
+
+def test_generated_denial_outage_preserves_hidden_error_and_zero_handler_effect(monkeypatch):
+    class NoRelationship:
+        async def facts_for(self, *_args):
+            return AuthorizationFacts()
+
+    app, effects = _generated_student_app(
+        monkeypatch,
+        sink=MemoryAuthorizationAuditSink(fail=True),
+        facts=NoRelationship(),
+    )
+    response = TestClient(app).get("/students/student-hidden-canary")
+    assert response.status_code == 404
+    assert response.headers["X-Correlation-ID"] == response.json()["detail"]["correlationId"]
+    assert "canary" not in response.text
+    assert effects == []
+
+
+def test_generated_parent_allow_outage_returns_503_before_handler(monkeypatch):
+    row = {
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "version": 1,
+        "status": "active",
+    }
+
+    class ActiveRelationship:
+        async def facts_for(self, *_args):
+            return AuthorizationFacts(
+                parent=ParentAuthorizationFacts(
+                    row,
+                    dict(row),
+                    {"user_id": "parent-1", "role": "parent", "account_status": "active"},
+                    {"user_id": "student-1", "role": "student", "account_status": "active"},
+                )
+            )
+
+    app, effects = _generated_student_app(
+        monkeypatch,
+        sink=MemoryAuthorizationAuditSink(fail=True),
+        facts=ActiveRelationship(),
+    )
+    response = TestClient(app).get("/students/student-1")
+    assert response.status_code == 503
+    assert response.headers["X-Correlation-ID"] == response.json()["detail"]["correlationId"]
+    assert effects == []
+
+
+@pytest.mark.asyncio
+async def test_break_glass_positive_requires_working_sink():
+    now = datetime(2026, 7, 15, tzinfo=UTC)
+    actor = Actor(
+        "admin-1",
+        "https://identity.test",
+        "admin-subject",
+        CanonicalRole.ADMIN,
+        AccountStatus.ACTIVE,
+        "admin",
+        (CapabilityGrant("student_data_break_glass", "student:student-1", 1),),
+    )
+    resource = AuthorizedResource(
+        ResourceRef(ResourceType.STUDENT, "student-1", "student-1"),
+        {"student_id": "student-1"},
+        AuthorizationFacts(
+            break_glass=BreakGlassEvidence(
+                "incident-1",
+                "urgent safety review",
+                "notification-1",
+                "review-1",
+                now,
+                now.replace(minute=now.minute + 10),
+            )
+        ),
+    )
+    decision = AuthorizationPolicy(clock=lambda: now).evaluate(
+        actor,
+        resource,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.INCIDENT_BREAK_GLASS,
+        correlation_id="break-glass-request",
+    )
+    sink = MemoryAuthorizationAuditSink()
+    recorded = await record_authorization_decision(
+        actor=actor,
+        resource=resource.ref,
+        action=AuthorizationAction.READ,
+        purpose=AuthorizationPurpose.INCIDENT_BREAK_GLASS,
+        decision=decision,
+        correlation_id="break-glass-request",
+        audit_sink=sink,
+    )
+    assert recorded.allowed
+    assert len(sink.events) == 1
+
+
+def test_missing_audit_key_creates_fail_closed_sink():
+    sink = get_authorization_audit_sink(
+        Settings(
+            authorization_audit_active_key_id="",
+            authorization_audit_active_key="",
+        )
+    )
+    with pytest.raises(Exception, match="authorization_audit_key_unavailable"):
+        sink.persist_authorization_decision()

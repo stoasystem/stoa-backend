@@ -105,9 +105,9 @@ class Settings(BaseSettings):
             raise ValueError("Production requires Cognito issuer and access-client allowlists")
         audit_key_id = self.authorization_audit_active_key_id.strip()
         audit_key = self.authorization_audit_active_key.strip()
-        if not audit_key_id or not audit_key:
-            raise ValueError("Authorization audit active key ID and key are required")
-        if self.is_production and audit_key == DEVELOPMENT_AUDIT_KEY:
+        if self.is_production and (
+            not audit_key_id or not audit_key or audit_key == DEVELOPMENT_AUDIT_KEY
+        ):
             raise ValueError("Production requires a non-placeholder authorization audit key")
         if audit_key_id in self.authorization_audit_previous_keys:
             raise ValueError("Authorization audit active key cannot also be a previous key")

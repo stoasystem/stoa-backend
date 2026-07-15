@@ -3,9 +3,10 @@ from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
-from stoa.deps import get_actor
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import parents
 from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -69,6 +70,7 @@ def _app_for_user(user: dict) -> FastAPI:
     app.include_router(parents.router, prefix="/parents")
     app.dependency_overrides[get_actor] = lambda: actor
     app.dependency_overrides[get_authorization_fact_repository] = _Facts
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return app
 
 

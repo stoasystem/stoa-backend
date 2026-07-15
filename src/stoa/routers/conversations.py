@@ -19,7 +19,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from stoa.config import settings
-from stoa.deps import get_actor
+from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -29,6 +30,7 @@ from stoa.security.authorization import (
     ResourceType,
 )
 from stoa.security.identity import Actor
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     CONVERSATION_CONTENT_READ,
     STUDENT_SELF,
@@ -593,11 +595,15 @@ async def _teacher_help_conversation_dependency(
     body: TeacherHelpRequest,
     actor: Actor = Depends(get_actor),
     facts=Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ) -> AuthorizedResource:
     return await authorize_conversation_resource(
         conversation_id=body.conversationId,
         actor=actor,
         facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
         action=AuthorizationAction.UPDATE,
         purposes=STUDENT_SELF,
         resolver=_get_conversation,

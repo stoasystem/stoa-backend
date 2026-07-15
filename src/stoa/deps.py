@@ -11,6 +11,7 @@ from stoa.db.repositories.identity_repo import DynamoIdentityRepository
 from stoa.db.repositories.security_audit_repo import (
     AuthorizationAuditSink,
     DynamoAuthorizationAuditSink,
+    UnavailableAuthorizationAuditSink,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole, IdentityRepository, resolve_actor
@@ -75,15 +76,18 @@ def get_authorization_audit_sink(
     settings: Settings = Depends(get_settings),
 ) -> AuthorizationAuditSink:
     """Construct the durable audit sink only from validated settings."""
-    return _configured_authorization_audit_sink(
-        settings.authorization_audit_active_key_id,
-        settings.authorization_audit_active_key,
-        tuple(sorted(settings.authorization_audit_previous_keys.items())),
-        settings.authorization_audit_probe_window_seconds,
-        settings.authorization_audit_probe_ttl_seconds,
-        settings.authorization_audit_probe_count_cap,
-        settings.authorization_audit_probe_id_cap,
-    )
+    try:
+        return _configured_authorization_audit_sink(
+            settings.authorization_audit_active_key_id,
+            settings.authorization_audit_active_key,
+            tuple(sorted(settings.authorization_audit_previous_keys.items())),
+            settings.authorization_audit_probe_window_seconds,
+            settings.authorization_audit_probe_ttl_seconds,
+            settings.authorization_audit_probe_count_cap,
+            settings.authorization_audit_probe_id_cap,
+        )
+    except Exception:
+        return UnavailableAuthorizationAuditSink()
 
 
 @lru_cache(maxsize=8)

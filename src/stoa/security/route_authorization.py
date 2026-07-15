@@ -79,11 +79,8 @@ async def _record_or_raise(**kwargs) -> PolicyDecision:
 
 def _purpose_for(actor: Actor, purposes: PurposeMap) -> AuthorizationPurpose:
     purpose = purposes.get(actor.role)
-    if purpose is None:
-        from stoa.security.errors import SecurityErrorCode
-
-        _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED))
-    return purpose
+    # An unmapped role still enters the policy/gateway and is durably denied.
+    return purpose or next(iter(purposes.values()), AuthorizationPurpose.SELF_SERVICE)
 
 
 def _metadata_spec(

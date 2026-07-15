@@ -115,6 +115,16 @@ class AuthorizationAuditSink(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
+class UnavailableAuthorizationAuditSink:
+    """Injected fail-closed boundary for absent or invalid key configuration."""
+
+    def persist_authorization_decision(self, **_values):
+        raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable")
+
+    def aggregate_authorization_probe(self, **_values):
+        raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable")
+
+
 def _canonical_parts(parts: Sequence[str]) -> bytes:
     encoded = bytearray()
     for part in parts:
