@@ -35,6 +35,11 @@ class TransactionOperationKind(StrEnum):
     ASSOCIATION_PUT = "association_put"
     STORAGE_QUOTA_UPDATE = "storage_quota_update"
     QUESTION_PUT = "question_put"
+    MESSAGE_COMMAND_PUT = "message_command_put"
+    CHAT_QUOTA_OPERATION_PUT = "chat_quota_operation_put"
+    CHAT_QUOTA_UPDATE = "chat_quota_update"
+    MESSAGE_COMMAND_UPDATE = "message_command_update"
+    ASSISTANT_MESSAGE_PUT = "assistant_message_put"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +85,142 @@ def association_key(
         "PK": f"ATTACHMENT#{attachment_id}",
         "SK": f"REF#{resource_type.upper()}#{resource_id}#MESSAGE#{message_id}",
     }
+
+
+def message_command_key(conversation_id: str, idempotency_key: str) -> dict[str, str]:
+    return {
+        "PK": f"CONV#{conversation_id}",
+        "SK": f"MESSAGE_COMMAND#{idempotency_key}",
+    }
+
+
+def chat_quota_key(owner_id: str, quota_period: str) -> dict[str, str]:
+    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT#{quota_period}"}
+
+
+def chat_quota_operation_key(owner_id: str, command_id: str) -> dict[str, str]:
+    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT_QUOTA_OP#{command_id}"}
+
+
+def get_message_command(
+    conversation_id: str,
+    idempotency_key: str,
+    *,
+    table: Any | None = None,
+) -> dict[str, Any] | None:
+    response = (table or get_table()).get_item(
+        Key=message_command_key(conversation_id, idempotency_key), ConsistentRead=True
+    )
+    return response.get("Item")
+
+
+def build_message_command_claim_transaction(
+    *,
+    command: dict[str, Any],
+    owner_id: str,
+    quota_period: str,
+    expected_counter: int,
+    limit: int,
+    expires_at: int,
+) -> list[TransactionOperation]:
+    command_id = str(command["command_id"])
+    expected_exists = expected_counter > 0
+    counter_condition = (
+        "#count=:expected AND :next<=:limit"
+        if expected_exists
+        else "attribute_not_exists(#count) AND :next<=:limit"
+    )
+    values: dict[str, Any] = {
+        ":next": expected_counter + 1,
+        ":limit": limit,
+        ":expires": expires_at,
+    }
+    if expected_exists:
+        values[":expected"] = expected_counter
+    return [
+        TransactionOperation(
+            TransactionOperationKind.MESSAGE_COMMAND_PUT,
+            {
+                "Put": {
+                    "Item": {
+                        **message_command_key(
+                            str(command["conversation_id"]), str(command["idempotency_key"])
+                        ),
+                        **command,
+                        "counter_value": expected_counter + 1,
+                    },
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
+            {
+                "Put": {
+                    "Item": {
+                        **chat_quota_operation_key(owner_id, command_id),
+                        "entity_type": "chat_quota_operation",
+                        "command_id": command_id,
+                        "owner_id": owner_id,
+                        "quota_period": quota_period,
+                        "counter_value": expected_counter + 1,
+                        "created_at": command["created_at"],
+                        "expires_at": expires_at,
+                    },
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.CHAT_QUOTA_UPDATE,
+            {
+                "Update": {
+                    "Key": chat_quota_key(owner_id, quota_period),
+                    "UpdateExpression": "SET #count=:next, #ttl=if_not_exists(#ttl,:expires)",
+                    "ConditionExpression": counter_condition,
+                    "ExpressionAttributeNames": {"#count": "count", "#ttl": "expires_at"},
+                    "ExpressionAttributeValues": {
+                        **values,
+                    },
+                }
+            },
+        ),
+    ]
+
+
+def claim_message_command_and_quota(
+    *,
+    command: dict[str, Any],
+    owner_id: str,
+    quota_period: str,
+    limit: int,
+    expires_at: int,
+    table: Any | None = None,
+) -> tuple[bool, int]:
+    """Atomically create a message command and charge its daily quota once."""
+    target = table or get_table()
+    expected = 0
+    for _ in range(3):
+        counter = target.get_item(
+            Key=chat_quota_key(owner_id, quota_period), ConsistentRead=True
+        ).get("Item") or {}
+        expected = int(counter.get("count", 0))
+        if expected >= limit:
+            return False, expected
+        operations = build_message_command_claim_transaction(
+            command=command,
+            owner_id=owner_id,
+            quota_period=quota_period,
+            expected_counter=expected,
+            limit=limit,
+            expires_at=expires_at,
+        )
+        try:
+            transact(operations, table=target)
+        except AttachmentTransactionError:
+            continue
+        return True, expected + 1
+    return False, expected
 
 
 def question_association_key(attachment_id: str, question_id: str) -> dict[str, str]:
@@ -572,6 +713,7 @@ def build_message_attachment_transaction(
     owner_id: str,
     limit_bytes: int,
     now_iso: str,
+    command: dict[str, Any] | None = None,
 ) -> list[TransactionOperation]:
     operations: list[TransactionOperation] = [
         TransactionOperation(
@@ -682,7 +824,204 @@ def build_message_attachment_transaction(
                 },
             )
         )
+    if command is not None:
+        operations.append(
+            TransactionOperation(
+                TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
+                {
+                    "Update": {
+                        "Key": message_command_key(
+                            str(command["conversation_id"]),
+                            str(command["idempotency_key"]),
+                        ),
+                        "UpdateExpression": "SET #status=:committed, message_committed_at=:now",
+                        "ConditionExpression": (
+                            "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":owner": owner_id,
+                            ":fingerprint": command["fingerprint"],
+                            ":claimed": "claimed",
+                            ":committed": "message_committed",
+                            ":now": now_iso,
+                        },
+                    }
+                },
+            )
+        )
     return operations
+
+
+def claim_message_ai_lease(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    now_epoch: int,
+    expires_at: int,
+    max_attempts: int = 3,
+    table: Any | None = None,
+) -> tuple[bool, int]:
+    target = table or get_table()
+    command = get_message_command(conversation_id, idempotency_key, table=target) or {}
+    attempt = int(command.get("attempt", 0)) + 1
+    status = command.get("status")
+    can_claim = status == "message_committed" or (
+        status == "ai_running"
+        and int(command.get("expiresAt", 0)) <= now_epoch
+        and attempt <= max_attempts
+    )
+    if not can_claim or attempt > max_attempts:
+        return False, int(command.get("attempt", 0))
+    try:
+        target.update_item(
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=(
+                "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
+                "expiresAt=:expires, attempt=:attempt"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND (#status=:committed OR "
+                "(#status=:running AND expiresAt<=:now AND attempt<:max_attempts))"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":committed": "message_committed",
+                ":running": "ai_running",
+                ":lease_owner": lease_owner,
+                ":claimed": now_epoch,
+                ":expires": expires_at,
+                ":now": now_epoch,
+                ":attempt": attempt,
+                ":max_attempts": max_attempts,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False, int(command.get("attempt", 0))
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True, attempt
+
+
+def complete_message_command(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    assistant_message: dict[str, Any],
+    result_json: str,
+    completed_at: str,
+    table: Any | None = None,
+) -> bool:
+    operations = [
+        TransactionOperation(
+            TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
+            {
+                "Put": {
+                    "Item": assistant_message,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
+            {
+                "Update": {
+                    "Key": message_command_key(conversation_id, idempotency_key),
+                    "UpdateExpression": (
+                        "SET #status=:completed, result_json=:result, completed_at=:completed_at "
+                        "REMOVE leaseOwner, claimedAt, expiresAt"
+                    ),
+                    "ConditionExpression": (
+                        "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":owner": owner_id,
+                        ":running": "ai_running",
+                        ":completed": "completed",
+                        ":lease_owner": lease_owner,
+                        ":result": result_json,
+                        ":completed_at": completed_at,
+                    },
+                }
+            },
+        ),
+    ]
+    try:
+        transact(operations, table=table)
+    except AttachmentTransactionError:
+        return False
+    return True
+
+
+def renew_message_ai_lease(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    now_epoch: int,
+    expires_at: int,
+    table: Any | None = None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression="SET claimedAt=:now, expiresAt=:expires",
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
+                "AND expiresAt>:now"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":running": "ai_running",
+                ":lease_owner": lease_owner,
+                ":now": now_epoch,
+                ":expires": expires_at,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def mark_message_command_terminal(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    now_iso: str,
+    table: Any | None = None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=(
+                "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"
+            ),
+            ConditionExpression="owner_id=:owner AND #status=:running AND attempt>=:max",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":running": "ai_running",
+                ":terminal": "terminal_failed",
+                ":now": now_iso,
+                ":max": 3,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def reserve_upload_for_question(

@@ -162,10 +162,14 @@ def test_upload_contract_rejects_unsupported_purpose(field: str, value: str) -> 
 def test_attachment_error_registry_is_exhaustive_and_retry_is_bounded() -> None:
     assert set(ATTACHMENT_ERROR_REGISTRY) == set(AttachmentErrorCode)
     retryable = [code for code, contract in ATTACHMENT_ERROR_REGISTRY.items() if contract.retryable]
-    assert retryable == [AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE]
+    assert retryable == [
+        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+        AttachmentErrorCode.MESSAGE_IN_PROGRESS,
+    ]
     outage = ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE]
     assert outage.idempotent_only is True
     assert outage.max_attempts == 2
+    assert ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.MESSAGE_IN_PROGRESS].max_attempts == 20
     assert {contract.client_action for contract in ATTACHMENT_ERROR_REGISTRY.values()} <= set(
         AttachmentClientAction
     )
@@ -1499,6 +1503,38 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
         not ("Update" in operation and operation["Update"]["Key"]["PK"].startswith("STORAGE#"))
         for operation in repository.transactions[0]
     )
+
+
+def test_message_command_claim_groups_command_quota_operation_and_counter() -> None:
+    command = {
+        "command_id": "opaque-command",
+        "conversation_id": "opaque-conversation",
+        "idempotency_key": "safe-key",
+        "owner_id": "student-1",
+        "fingerprint": "f" * 64,
+        "status": "claimed",
+        "created_at": "2026-07-16T00:00:00Z",
+    }
+    operations = attachment_repo.build_message_command_claim_transaction(
+        command=command,
+        owner_id="student-1",
+        quota_period="2026-07-16",
+        expected_counter=4,
+        limit=8,
+        expires_at=2_000_000_000,
+    )
+    assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_PUT,
+        attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
+        attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
+    ]
+    command_item = operations[0]["Put"]["Item"]
+    assert command_item["fingerprint"] == "f" * 64
+    assert command_item["counter_value"] == 5
+    assert "content" not in command_item and "attachment_ids" not in command_item
+    quota_item = operations[1]["Put"]["Item"]
+    assert quota_item["SK"] == "CHAT_QUOTA_OP#opaque-command"
+    assert operations[2]["Update"]["ExpressionAttributeValues"][":next"] == 5
 
 
 def _archive(parts: dict[str, str | bytes]) -> bytes:

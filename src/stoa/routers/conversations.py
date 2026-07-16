@@ -9,10 +9,13 @@ Implements the frontend chat API contract:
   POST /teacher-help/request                 escalate to teacher
 """
 import json
+import hashlib
 import logging
+import struct
+import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,6 +26,7 @@ from stoa.config import settings
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import attachment_repo
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -32,7 +36,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.identity import Actor
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
-from stoa.security.attachment_errors import AttachmentDecisionError
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     CONVERSATION_CONTENT_READ,
@@ -126,6 +130,7 @@ class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
+    idempotencyKey: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._~-]+$")
     attachmentIds: list[AttachmentReference] | None = Field(default=None, max_length=8)
 
     @model_validator(mode="after")
@@ -138,38 +143,30 @@ class SendMessageRequest(BaseModel):
         return self
 
 
-@dataclass(frozen=True, slots=True)
-class PreparedMessageAttachments:
-    actor: Actor
-    items: list[tuple[str, dict]]
-    effective_plan: str
-
-
-async def _message_attachment_dependency(
+async def _message_command_dependency(
+    conv_id: str,
     body: SendMessageRequest,
     actor: Actor = Depends(get_actor),
     correlation_id: str = Depends(get_request_correlation_id),
-) -> PreparedMessageAttachments:
-    try:
-        prepared = attachment_service.prepare_message_attachments(
-            body.attachmentIds or [], actor
+) -> dict:
+    """Stage A: compute and compare the command before attachment resolution."""
+    fingerprint = message_request_fingerprint(body)
+    existing = attachment_repo.get_message_command(conv_id, body.idempotencyKey)
+    if existing and existing.get("owner_id") != actor.user_id:
+        existing = None
+    if existing and existing.get("fingerprint") != fingerprint:
+        _raise_attachment(
+            AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT),
+            correlation_id,
         )
-        effective_plan = "free"
-        if body.attachmentIds:
-            effective_plan = _attachment_plan_for_student(actor.user_id)
-            attachment_service.ensure_message_attachment_capacity(
-                prepared, actor.user_id, effective_plan
-            )
-        return PreparedMessageAttachments(actor, prepared, effective_plan)
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    return {"actor": actor, "fingerprint": fingerprint, "existing": existing}
 
 
 async def _attachment_inventory_resolver(resource_id: str):
     return {"student_id": resource_id}
 
 
-_message_attachment_dependency.authorization_specs = (  # type: ignore[attr-defined]
+_message_command_dependency.authorization_specs = (  # type: ignore[attr-defined]
     AuthorizationSpec(
         ResourceType.UPLOAD,
         AuthorizationAction.UPDATE,
@@ -183,6 +180,23 @@ _message_attachment_dependency.authorization_specs = (  # type: ignore[attr-defi
         _attachment_inventory_resolver,
     ),
 )
+
+
+def message_request_fingerprint(body: SendMessageRequest) -> str:
+    """Canonical v1 fingerprint over exact UTF-8 content and ordered typed IDs."""
+    content = body.content.encode("utf-8")
+    framed = bytearray(b"stoa.conversation.send.v1")
+    framed.extend(struct.pack(">I", len(content)))
+    framed.extend(content)
+    references = body.attachmentIds or []
+    framed.extend(struct.pack(">I", len(references)))
+    for reference in references:
+        type_byte = b"\x01" if reference.upload_id is not None else b"\x02"
+        opaque_id = str(reference.upload_id or reference.attachment_id).encode("utf-8")
+        framed.extend(type_byte)
+        framed.extend(struct.pack(">I", len(opaque_id)))
+        framed.extend(opaque_id)
+    return hashlib.sha256(bytes(framed)).hexdigest()
 
 
 class ChatMessage(BaseModel):
@@ -411,44 +425,25 @@ async def send_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
-    attachment_command: PreparedMessageAttachments = Depends(
-        _message_attachment_dependency
-    ),
+    message_command: dict = Depends(_message_command_dependency),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
     conv = authorized.value
 
-    actor = attachment_command.actor
-    prepared = attachment_command.items
-    effective_plan = attachment_command.effective_plan
-    usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
-    table = get_table()
     try:
-        student_msg, assistant_msg = _send_message_impl(
+        result = _execute_message_command(
             conv_id=conv_id,
             student_id=student_id,
             subject=conv.get("subject", "math"),
             grade=conv.get("grade", ""),
-            content=body.content,
-            actor=actor,
-            prepared_attachments=prepared,
-            effective_plan=effective_plan,
-            table=table,
+            body=body,
+            command_context=message_command,
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-    _record_chat_usage(
-        student_id=student_id,
-        conv_id=conv_id,
-        student_message_id=student_msg.id,
-        subject=conv.get("subject", "math"),
-        grade=conv.get("grade", ""),
-        usage_counter=usage_counter,
-        created_at=student_msg.createdAt,
-    )
-    return SendMessageResponse(studentMessage=student_msg, assistantMessage=assistant_msg)
+    return result
 
 
 @router.post("/{conv_id}/messages/stream")
@@ -461,9 +456,7 @@ async def stream_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
-    attachment_command: PreparedMessageAttachments = Depends(
-        _message_attachment_dependency
-    ),
+    message_command: dict = Depends(_message_command_dependency),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Send a message and stream the AI reply as Server-Sent Events.
@@ -476,34 +469,19 @@ async def stream_message(
     student_id = authorized.ref.student_id
     conv = authorized.value
 
-    actor = attachment_command.actor
-    prepared = attachment_command.items
-    effective_plan = attachment_command.effective_plan
-    usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
-    table = get_table()
     try:
-        student_msg, assistant_msg = _send_message_impl(
+        result = _execute_message_command(
             conv_id=conv_id,
             student_id=student_id,
             subject=conv.get("subject", "math"),
             grade=conv.get("grade", ""),
-            content=body.content,
-            actor=actor,
-            prepared_attachments=prepared,
-            effective_plan=effective_plan,
-            table=table,
+            body=body,
+            command_context=message_command,
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-    _record_chat_usage(
-        student_id=student_id,
-        conv_id=conv_id,
-        student_message_id=student_msg.id,
-        subject=conv.get("subject", "math"),
-        grade=conv.get("grade", ""),
-        usage_counter=usage_counter,
-        created_at=student_msg.createdAt,
-    )
+    student_msg = result.studentMessage
+    assistant_msg = result.assistantMessage
 
     def _sse(event_type: str, data: dict) -> str:
         return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
@@ -537,6 +515,319 @@ async def stream_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+_MESSAGE_POLL_ATTEMPTS = 20
+_MESSAGE_POLL_SECONDS = 0.05
+_AI_LEASE_SECONDS = 120
+
+
+def _completed_command_response(command: dict) -> SendMessageResponse | None:
+    if command.get("status") != "completed" or not command.get("result_json"):
+        return None
+    try:
+        return SendMessageResponse.model_validate_json(str(command["result_json"]))
+    except (ValueError, TypeError):
+        return None
+
+
+def _wait_for_message_command(
+    conversation_id: str,
+    idempotency_key: str,
+    fingerprint: str,
+    *,
+    table,
+) -> SendMessageResponse:
+    for _ in range(_MESSAGE_POLL_ATTEMPTS):
+        command = attachment_repo.get_message_command(
+            conversation_id, idempotency_key, table=table
+        )
+        if command and command.get("fingerprint") != fingerprint:
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
+            )
+        if command and (result := _completed_command_response(command)) is not None:
+            return result
+        time.sleep(_MESSAGE_POLL_SECONDS)
+    raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+
+
+def _execute_message_command(
+    *,
+    conv_id: str,
+    student_id: str,
+    subject: str,
+    grade: str,
+    body: SendMessageRequest,
+    command_context: dict,
+) -> SendMessageResponse:
+    """Run the shared regular/SSE command through claim, message, and AI fences."""
+    actor: Actor = command_context["actor"]
+    fingerprint = str(command_context["fingerprint"])
+    table = get_table()
+    existing = command_context.get("existing")
+    if existing and (result := _completed_command_response(existing)) is not None:
+        return result
+    if existing and existing.get("status") == "ai_running":
+        if int(existing.get("expiresAt", 0)) > int(datetime.now(timezone.utc).timestamp()):
+            return _wait_for_message_command(
+                conv_id, body.idempotencyKey, fingerprint, table=table
+            )
+    if existing and existing.get("status") == "terminal_failed":
+        raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+
+    command_id = str(
+        uuid5(NAMESPACE_URL, f"stoa.conversation.send.v1:{conv_id}:{body.idempotencyKey}")
+    )
+    student_msg_id = str(uuid5(UUID(command_id), "student-message"))
+    assistant_msg_id = str(uuid5(UUID(command_id), "assistant-message"))
+    created_at = str(existing.get("created_at")) if existing else _now()
+    command = existing or {
+        "entity_type": "message_command",
+        "command_id": command_id,
+        "conversation_id": conv_id,
+        "owner_id": student_id,
+        "idempotency_key": body.idempotencyKey,
+        "fingerprint": fingerprint,
+        "status": "claimed",
+        "student_message_id": student_msg_id,
+        "assistant_message_id": assistant_msg_id,
+        "attachment_count": len(body.attachmentIds or []),
+        "attempt": 0,
+        "created_at": created_at,
+    }
+
+    quota_period = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    quota_limit = _chat_limit_for_student(student_id)
+    resume_after_message = bool(
+        existing and existing.get("status") in {"message_committed", "ai_running"}
+    )
+    prior_messages: list[dict] = []
+    if resume_after_message:
+        prior_messages = [
+            item for item in _get_messages(conv_id) if item.get("message_id") != student_msg_id
+        ]
+        stored_student = table.get_item(
+            Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(student_msg_id)},
+            ConsistentRead=True,
+        ).get("Item")
+        if not stored_student:
+            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+        attachment_ids = list(stored_student.get("attachment_ids", []))
+        stored_attachments = attachment_repo.get_attachments(attachment_ids, table=table)
+        prepared = [
+            ("attachment", stored_attachments[value])
+            for value in attachment_ids
+            if value in stored_attachments
+        ]
+        attachments = attachment_service.attachment_summaries_for_records(
+            attachment_ids, stored_attachments
+        )
+        counter_value = int(existing.get("counter_value", 1))
+    else:
+        # Stage B is entered only for an absent command, or to resume a claimed
+        # command lost before its deterministic message transaction.
+        prepared = attachment_service.prepare_message_attachments(
+            body.attachmentIds or [], actor
+        )
+        effective_plan = "free"
+        if body.attachmentIds:
+            effective_plan = _attachment_plan_for_student(student_id)
+            attachment_service.ensure_message_attachment_capacity(
+                prepared, student_id, effective_plan
+            )
+        prior_messages = _get_messages(conv_id)
+        if not existing:
+            claimed, counter_value = attachment_repo.claim_message_command_and_quota(
+                command=command,
+                owner_id=student_id,
+                quota_period=quota_period,
+                limit=quota_limit,
+                expires_at=int(datetime.now(timezone.utc).timestamp()) + 172800,
+                table=table,
+            )
+            if not claimed:
+                raced = attachment_repo.get_message_command(
+                    conv_id, body.idempotencyKey, table=table
+                )
+                if raced:
+                    if raced.get("fingerprint") != fingerprint:
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
+                        )
+                    return _wait_for_message_command(
+                        conv_id, body.idempotencyKey, fingerprint, table=table
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=(
+                        f"Daily chat message limit ({quota_limit}) reached. Try again tomorrow."
+                    ),
+                )
+        else:
+            counter_value = int(existing.get("counter_value", 1))
+        student_item = {
+            "PK": _conv_pk(conv_id),
+            "SK": _msg_sk(student_msg_id),
+            "message_id": student_msg_id,
+            "conversation_id": conv_id,
+            "student_id": student_id,
+            "role": "student",
+            "content": body.content,
+            "created_at": created_at,
+        }
+        deterministic_attachment_ids = [
+            str(uuid5(UUID(command_id), f"attachment:{index}"))
+            for index, (kind, _) in enumerate(prepared)
+            if kind == "upload"
+        ]
+        try:
+            attachments = attachment_service.bind_message_attachments(
+                message=student_item,
+                conversation_id=conv_id,
+                actor=actor,
+                prepared=prepared,
+                effective_plan=effective_plan,
+                command=command,
+                attachment_ids=deterministic_attachment_ids,
+            )
+        except AttachmentDecisionError:
+            raced = attachment_repo.get_message_command(
+                conv_id, body.idempotencyKey, table=table
+            )
+            if raced and raced.get("fingerprint") == fingerprint:
+                return _wait_for_message_command(
+                    conv_id, body.idempotencyKey, fingerprint, table=table
+                )
+            raise
+
+    usage_counter = {
+        "quotaPeriod": quota_period,
+        "counterKey": f"USAGE#{student_id}/CHAT#{quota_period}",
+        "counterValue": counter_value,
+    }
+    _record_chat_usage(
+        student_id=student_id,
+        conv_id=conv_id,
+        student_message_id=student_msg_id,
+        subject=subject,
+        grade=grade,
+        usage_counter=usage_counter,
+        created_at=created_at,
+    )
+
+    lease_owner = str(uuid.uuid4())
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    lease_claimed, _attempt = attachment_repo.claim_message_ai_lease(
+        conversation_id=conv_id,
+        idempotency_key=body.idempotencyKey,
+        owner_id=student_id,
+        lease_owner=lease_owner,
+        now_epoch=now_epoch,
+        expires_at=now_epoch + _AI_LEASE_SECONDS,
+        table=table,
+    )
+    if not lease_claimed:
+        current = attachment_repo.get_message_command(
+            conv_id, body.idempotencyKey, table=table
+        ) or {}
+        if (
+            current.get("status") == "ai_running"
+            and int(current.get("expiresAt", 0)) <= now_epoch
+            and int(current.get("attempt", 0)) >= 3
+        ):
+            attachment_repo.mark_message_command_terminal(
+                conversation_id=conv_id,
+                idempotency_key=body.idempotencyKey,
+                owner_id=student_id,
+                now_iso=_now(),
+                table=table,
+            )
+        return _wait_for_message_command(
+            conv_id, body.idempotencyKey, fingerprint, table=table
+        )
+
+    attachment_context = ""
+    if prepared:
+        attachment_context = attachment_service.extract_message_attachment_context(
+            prepared,
+            s3=boto3.client("s3", region_name=settings.aws_region),
+            settings=settings,
+        )
+    normalized_subject = {
+        "Mathematics": "math", "Mathematik": "math", "math": "math",
+        "Physics": "physics", "Physik": "physics", "physics": "physics",
+        "German": "german", "Deutsch": "german", "german": "german",
+        "English": "english", "english": "english",
+        "French": "french", "Französisch": "french", "french": "french",
+    }.get(subject, "math")
+    try:
+        ai_result = ai_service.get_ai_answer(
+            content=body.content,
+            subject=normalized_subject,
+            grade=grade,
+            language="de",
+            history=prior_messages,
+            attachment_context=attachment_context,
+        )
+        steps = "\n".join(
+            f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
+        )
+        answer = ai_result.get("answer", "")
+        hints = ai_result.get("hints", [])
+        hint = ("\n\n**Hinweis:** " + hints[0]) if hints else ""
+        ai_content = f"{steps}\n\n{answer}{hint}".strip() or (
+            answer or "Entschuldigung, ich konnte keine Antwort generieren."
+        )
+    except Exception:
+        logger.error("conversation_ai_failed exception_class=%s command_id=%s", "Exception", command_id)
+        ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
+
+    assistant_created_at = _now()
+    student_message = ChatMessage(
+        id=student_msg_id,
+        conversationId=conv_id,
+        role="student",
+        content=body.content,
+        createdAt=created_at,
+        status="sent",
+        attachments=attachments,
+    )
+    assistant_message = ChatMessage(
+        id=assistant_msg_id,
+        conversationId=conv_id,
+        role="assistant",
+        content=ai_content,
+        createdAt=assistant_created_at,
+        status="sent",
+    )
+    result = SendMessageResponse(
+        studentMessage=student_message, assistantMessage=assistant_message
+    )
+    assistant_item = {
+        "PK": _conv_pk(conv_id),
+        "SK": _msg_sk(assistant_msg_id),
+        "message_id": assistant_msg_id,
+        "conversation_id": conv_id,
+        "student_id": student_id,
+        "role": "assistant",
+        "content": ai_content,
+        "created_at": assistant_created_at,
+    }
+    if not attachment_repo.complete_message_command(
+        conversation_id=conv_id,
+        idempotency_key=body.idempotencyKey,
+        owner_id=student_id,
+        lease_owner=lease_owner,
+        assistant_message=assistant_item,
+        result_json=result.model_dump_json(),
+        completed_at=assistant_created_at,
+        table=table,
+    ):
+        return _wait_for_message_command(
+            conv_id, body.idempotencyKey, fingerprint, table=table
+        )
+    return result
 
 
 def _send_message_impl(

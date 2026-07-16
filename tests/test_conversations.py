@@ -1,6 +1,9 @@
 import json
+import asyncio
+import subprocess
+import sys
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
@@ -37,65 +40,25 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 
 def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
     ledger_calls = []
-    rate_limit_calls = []
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "subject": "math",
-            "grade": "Sek1",
-        },
-    )
-    monkeypatch.setattr(
-        conversations,
-        "check_and_record_chat",
-        lambda student_id, limit=None: (
-            rate_limit_calls.append({"student_id": student_id, "limit": limit})
-            or {
-                "quotaPeriod": "2026-07-04",
-                "counterKey": "USAGE#student-1/CHAT#2026-07-04",
-                "counterValue": 2,
-                "limit": limit,
-                "expiresAt": 1,
-            }
-        ),
-    )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda student_id: 8)
-    monkeypatch.setattr(
-        conversations,
-        "_send_message_impl",
-        lambda **kwargs: (
-            conversations.ChatMessage(
-                id="student-message-1",
-                conversationId=kwargs["conv_id"],
-                role="student",
-                content=kwargs["content"],
-                createdAt="2026-07-04T10:00:00+00:00",
-            ),
-            conversations.ChatMessage(
-                id="assistant-message-1",
-                conversationId=kwargs["conv_id"],
-                role="assistant",
-                content="assistant reply",
-                createdAt="2026-07-04T10:00:01+00:00",
-            ),
-        ),
-    )
     monkeypatch.setattr(
         conversations.usage_ledger_service,
         "record_usage_event",
         lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
     )
 
-    response = _client(conversations.router).post(
-        "/conversations/conv-1/messages",
-        json={"content": "raw student message"},
+    conversations._record_chat_usage(
+        student_id="student-1",
+        conv_id="conv-1",
+        student_message_id="student-message-1",
+        subject="math",
+        grade="Sek1",
+        usage_counter={
+            "quotaPeriod": "2026-07-04",
+            "counterKey": "USAGE#student-1/CHAT#2026-07-04",
+            "counterValue": 2,
+        },
+        created_at="2026-07-04T10:00:00+00:00",
     )
-
-    assert response.status_code == 200
-    assert rate_limit_calls == [{"student_id": "student-1", "limit": 8}]
     assert ledger_calls[0]["action"] == "chat_message"
     assert ledger_calls[0]["counter_value"] == 2
     assert ledger_calls[0]["metadata"] == {
@@ -282,8 +245,9 @@ def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(monk
         lambda **_kwargs: calls.append("message") or None,
     )
     client = _client(conversations.router, actor=_actor(user_id="student-2"))
-    hidden = client.post("/conversations/conv-real/messages/stream", json={"content": "swap"})
-    missing = client.post("/conversations/conv-random/messages/stream", json={"content": "swap"})
+    payload = {"content": "swap", "idempotencyKey": "hidden-check"}
+    hidden = client.post("/conversations/conv-real/messages/stream", json=payload)
+    missing = client.post("/conversations/conv-random/messages/stream", json=payload)
     assert hidden.status_code == missing.status_code == 404
     assert hidden.json()["detail"]["code"] == missing.json()["detail"]["code"]
     assert calls == []
@@ -302,7 +266,7 @@ def test_conversation_store_outage_returns_503_before_message_mutation(monkeypat
         lambda **_kwargs: calls.append("message") or None,
     )
     response = _client(conversations.router).post(
-        "/conversations/conv-1/messages", json={"content": "hello"}
+        "/conversations/conv-1/messages", json={"content": "hello", "idempotencyKey": "store-outage"}
     )
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
@@ -333,6 +297,166 @@ def test_message_attachment_request_is_typed_bounded_unique_and_nonempty() -> No
                 "attachmentIds": [{"uploadId": f"upload-{index}"} for index in range(9)],
             }
         )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [None, "", "contains space", "x" * 65, "slash/not-safe", "ümlaut"],
+)
+def test_message_idempotency_key_is_required_bounded_and_safe(key) -> None:
+    payload = {"content": "hello"}
+    if key is not None:
+        payload["idempotencyKey"] = key
+    with pytest.raises(ValidationError):
+        conversations.SendMessageRequest.model_validate(payload)
+
+
+def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
+    def fingerprint(content, refs):
+        payload = {"content": content, "idempotencyKey": "fingerprint"}
+        if refs:
+            payload["attachmentIds"] = refs
+        return conversations.message_request_fingerprint(
+            conversations.SendMessageRequest.model_validate(payload)
+        )
+
+    baseline = fingerprint("a|bc", [{"uploadId": "x"}, {"attachmentId": "yz"}])
+    variants = {
+        fingerprint("ab|c", [{"uploadId": "x"}, {"attachmentId": "yz"}]),
+        fingerprint("a|bc ", [{"uploadId": "x"}, {"attachmentId": "yz"}]),
+        fingerprint("a|bc", [{"attachmentId": "x"}, {"attachmentId": "yz"}]),
+        fingerprint("a|bc", [{"attachmentId": "yz"}, {"uploadId": "x"}]),
+        fingerprint("é", []),
+        fingerprint("e\u0301", []),
+        fingerprint("a|bd", [{"uploadId": "x"}, {"attachmentId": "yz"}]),
+    }
+    assert baseline not in variants
+    assert fingerprint("é", []) != fingerprint("e\u0301", [])
+    code = (
+        "from stoa.routers.conversations import SendMessageRequest,message_request_fingerprint;"
+        "print(message_request_fingerprint(SendMessageRequest.model_validate("
+        "{'content':'a|bc','idempotencyKey':'fingerprint','attachmentIds':"
+        "[{'uploadId':'x'},{'attachmentId':'yz'}]})))"
+    )
+    reproduced = subprocess.check_output([sys.executable, "-c", code], text=True).strip()
+    assert reproduced == baseline
+
+
+def _completed_command(body: conversations.SendMessageRequest) -> dict:
+    response = conversations.SendMessageResponse(
+        studentMessage=conversations.ChatMessage(
+            id="student-original", conversationId="conv-1", role="student",
+            content=body.content, createdAt="2026-07-16T00:00:00Z",
+        ),
+        assistantMessage=conversations.ChatMessage(
+            id="assistant-original", conversationId="conv-1", role="assistant",
+            content="original answer", createdAt="2026-07-16T00:00:01Z",
+        ),
+    )
+    return {
+        "owner_id": "student-1",
+        "fingerprint": conversations.message_request_fingerprint(body),
+        "status": "completed",
+        "result_json": response.model_dump_json(),
+    }
+
+
+def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(monkeypatch) -> None:
+    body = conversations.SendMessageRequest.model_validate(
+        {
+            "content": "exact bytes",
+            "idempotencyKey": "replay-key",
+            "attachmentIds": [{"uploadId": "now-consumed"}],
+        }
+    )
+    command = _completed_command(body)
+    effects = []
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: effects.append("prepare"),
+    )
+    result = conversations._execute_message_command(
+        conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
+        body=body,
+        command_context={
+            "actor": _actor(),
+            "fingerprint": conversations.message_request_fingerprint(body),
+            "existing": command,
+        },
+    )
+    assert result.studentMessage.id == "student-original"
+    assert result.assistantMessage.id == "assistant-original"
+    assert effects == []
+
+
+def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
+    body = conversations.SendMessageRequest.model_validate(
+        {"content": "changed", "idempotencyKey": "same-key"}
+    )
+    effects = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: {
+            "owner_id": "student-1", "fingerprint": "0" * 64, "status": "completed"
+        },
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: effects.append("prepare"),
+    )
+    with pytest.raises(HTTPException) as captured:
+        asyncio.run(
+            conversations._message_command_dependency(
+                "conv-1", body, _actor(), "correlation-1"
+            )
+        )
+    assert captured.value.detail["code"] == "message_idempotency_conflict"
+    assert effects == []
+
+
+def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch) -> None:
+    body = conversations.SendMessageRequest.model_validate(
+        {
+            "content": "private",
+            "idempotencyKey": "foreign-new",
+            "attachmentIds": [{"attachmentId": "foreign"}],
+        }
+    )
+    effects = []
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        ),
+    )
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "claim_message_command_and_quota",
+        lambda **_kwargs: effects.append("claim"),
+    )
+    monkeypatch.setattr(
+        conversations.ai_service, "get_ai_answer", lambda **_kwargs: effects.append("ai")
+    )
+    with pytest.raises(AttachmentDecisionError) as captured:
+        conversations._execute_message_command(
+            conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
+            body=body,
+            command_context={
+                "actor": _actor(),
+                "fingerprint": conversations.message_request_fingerprint(body),
+                "existing": None,
+            },
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
+    assert effects == []
 
 
 def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkeypatch) -> None:
@@ -388,7 +512,23 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
             ),
         ),
     )
-    payload = {"content": "use notes", "attachmentIds": [{"attachmentId": "attachment-1"}]}
+    payload = {"content": "use notes", "idempotencyKey": "attachment-parity", "attachmentIds": [{"attachmentId": "attachment-1"}]}
+    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        conversations,
+        "_execute_message_command",
+        lambda **kwargs: conversations.SendMessageResponse(
+            studentMessage=conversations.ChatMessage(
+                id="student-message", conversationId=kwargs["conv_id"], role="student",
+                content=kwargs["body"].content, createdAt="2026-07-16T00:00:00Z",
+                attachments=[summary],
+            ),
+            assistantMessage=conversations.ChatMessage(
+                id="assistant-message", conversationId=kwargs["conv_id"], role="assistant",
+                content="reply", createdAt="2026-07-16T00:00:01Z",
+            ),
+        ),
+    )
     regular = _client(conversations.router).post("/conversations/conv-1/messages", json=payload)
     streamed = _client(conversations.router).post(
         "/conversations/conv-1/messages/stream", json=payload
@@ -400,7 +540,7 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
     for key, value in safe.items():
         assert json.dumps(value) in streamed.text
     assert "object_key" not in regular.text + streamed.text
-    assert len(calls) == 2
+    assert len(calls) == 0
 
 
 def test_conversation_history_batch_projects_only_safe_attachment_summaries(monkeypatch) -> None:
@@ -520,6 +660,18 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        conversations,
+        "_execute_message_command",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        ),
+    )
+    monkeypatch.setattr(
         conversations, "_record_chat_usage", lambda **kwargs: effects.append("usage")
     )
     monkeypatch.setattr(
@@ -541,7 +693,7 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
     )
     response = _client(conversations.router).post(
         "/conversations/conv-1/messages",
-        json={"content": "private-message-canary"},
+        json={"content": "private-message-canary", "idempotencyKey": "dependency-cancel"},
     )
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "upload_service_unavailable"

@@ -18,6 +18,8 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_CHUNK_CONFLICT = "upload_chunk_conflict"
     STORAGE_QUOTA_EXCEEDED = "storage_quota_exceeded"
     UPLOAD_SERVICE_UNAVAILABLE = "upload_service_unavailable"
+    MESSAGE_IDEMPOTENCY_CONFLICT = "message_idempotency_conflict"
+    MESSAGE_IN_PROGRESS = "message_in_progress"
 
 
 class AttachmentClientAction(StrEnum):
@@ -73,6 +75,19 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = 
         retryable=True,
         idempotent_only=True,
         max_attempts=2,
+    ),
+    AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: AttachmentErrorContract(
+        409,
+        "This message key was already used for a different request.",
+        AttachmentClientAction.SELECT_FILE,
+    ),
+    AttachmentErrorCode.MESSAGE_IN_PROGRESS: AttachmentErrorContract(
+        409,
+        "This message is still being processed. Try again shortly.",
+        AttachmentClientAction.RETRY_LATER,
+        retryable=True,
+        idempotent_only=True,
+        max_attempts=20,
     ),
 }
 

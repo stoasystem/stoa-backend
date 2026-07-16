@@ -891,6 +891,8 @@ def bind_message_attachments(
     effective_plan: str,
     now: datetime | None = None,
     repository: Any = attachment_repo,
+    command: dict[str, Any] | None = None,
+    attachment_ids: list[str] | None = None,
 ) -> list[AttachmentSummary]:
     """Atomically persist a message and every fresh/reused attachment reference."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
@@ -899,9 +901,10 @@ def bind_message_attachments(
     summaries: list[AttachmentSummary] = []
     associations: list[dict[str, Any]] = []
     attachment_ids: list[str] = []
+    deterministic_ids = iter(attachment_ids or [])
     for kind, item in prepared:
         if kind == "upload":
-            attachment_id = str(uuid4())
+            attachment_id = next(deterministic_ids, str(uuid4()))
             attachment = {
                 "attachment_id": attachment_id,
                 "owner_id": actor.user_id,
@@ -957,6 +960,7 @@ def bind_message_attachments(
                 owner_id=actor.user_id,
                 limit_bytes=limit,
                 now_iso=now.isoformat(),
+                command=command,
             )
         )
     except attachment_repo.AttachmentTransactionError as exc:
@@ -1197,6 +1201,17 @@ def list_attachment_summaries(
         for attachment_id, item in records.items()
         if item.get("status") == "active"
     }
+
+
+def attachment_summaries_for_records(
+    attachment_ids: list[str], records: dict[str, dict[str, Any]]
+) -> list[AttachmentSummary]:
+    """Project already-authorized active records without another repository read."""
+    return [
+        _attachment_summary(records[value])
+        for value in attachment_ids
+        if value in records and records[value].get("status") == "active"
+    ]
 
 
 def _attachment_summary(item: dict[str, Any]) -> AttachmentSummary:
