@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from boto3.dynamodb.types import TypeSerializer
+from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
@@ -28,6 +28,15 @@ def storage_key(owner_id: str) -> dict[str, str]:
     return {"PK": f"STORAGE#{owner_id}", "SK": "USAGE"}
 
 
+def association_key(
+    attachment_id: str, resource_type: str, resource_id: str, message_id: str
+) -> dict[str, str]:
+    return {
+        "PK": f"ATTACHMENT#{attachment_id}",
+        "SK": f"REF#{resource_type.upper()}#{resource_id}#MESSAGE#{message_id}",
+    }
+
+
 def create_upload_intent(item: dict[str, Any], *, table: Any | None = None) -> None:
     try:
         (table or get_table()).put_item(
@@ -48,6 +57,136 @@ def get_attachment(attachment_id: str, *, table: Any | None = None) -> dict[str,
         Key=attachment_key(attachment_id), ConsistentRead=True
     )
     return response.get("Item")
+
+
+def get_attachments(
+    attachment_ids: list[str], *, table: Any | None = None
+) -> dict[str, dict[str, Any]]:
+    if not attachment_ids:
+        return {}
+    target = table or get_table()
+    if hasattr(target, "batch_get_item"):
+        response = target.batch_get_item(
+            RequestItems={target.name: {"Keys": [attachment_key(value) for value in attachment_ids]}}
+        )
+        items = response.get("Responses", {}).get(target.name, [])
+    elif hasattr(target, "meta") and hasattr(target.meta, "client"):
+        serializer = TypeSerializer()
+        response = target.meta.client.batch_get_item(
+            RequestItems={
+                target.name: {
+                    "Keys": [
+                        {key: serializer.serialize(value) for key, value in attachment_key(item).items()}
+                        for item in attachment_ids
+                    ]
+                }
+            }
+        )
+        deserializer = TypeDeserializer()
+        items = [
+            {key: deserializer.deserialize(value) for key, value in item.items()}
+            for item in response.get("Responses", {}).get(target.name, [])
+        ]
+    else:
+        items = [item for value in attachment_ids if (item := get_attachment(value, table=target))]
+    return {str(item.get("attachment_id")): item for item in items if item.get("attachment_id")}
+
+
+def build_message_attachment_transaction(
+    *,
+    message: dict[str, Any],
+    fresh: list[tuple[dict[str, Any], dict[str, Any]]],
+    reused: list[dict[str, Any]],
+    associations: list[dict[str, Any]],
+    owner_id: str,
+    limit_bytes: int,
+    now_iso: str,
+) -> list[dict[str, Any]]:
+    operations: list[dict[str, Any]] = [
+        {
+            "Put": {
+                "Item": message,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        }
+    ]
+    for upload, attachment in fresh:
+        operations.extend(
+            [
+                {
+                    "Update": {
+                        "Key": upload_key(upload["upload_id"]),
+                        "UpdateExpression": "SET #s=:consumed, #v=#v+:one",
+                        "ConditionExpression": (
+                            "#owner=:owner AND #s=:validated AND #v=:version "
+                            "AND expires_at>:now"
+                        ),
+                        "ExpressionAttributeNames": {
+                            "#owner": "owner_id",
+                            "#s": "status",
+                            "#v": "version",
+                        },
+                        "ExpressionAttributeValues": {
+                            ":owner": owner_id,
+                            ":validated": "validated",
+                            ":consumed": "consumed",
+                            ":version": int(upload["version"]),
+                            ":one": 1,
+                            ":now": int(upload["consume_epoch"]),
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
+                        "ConditionExpression": "attribute_not_exists(PK)",
+                    }
+                },
+            ]
+        )
+    for attachment in reused:
+        operations.append(
+            {
+                "ConditionCheck": {
+                    "Key": attachment_key(attachment["attachment_id"]),
+                    "ConditionExpression": "owner_id=:owner AND #status=:active",
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {":owner": owner_id, ":active": "active"},
+                }
+            }
+        )
+    operations.extend(
+        {
+            "Put": {
+                "Item": association,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        }
+        for association in associations
+    )
+    fresh_bytes = sum(int(attachment["content_length"]) for _, attachment in fresh)
+    if fresh_bytes:
+        operations.append(
+            {
+                "Update": {
+                    "Key": storage_key(owner_id),
+                    "UpdateExpression": (
+                        "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
+                        "limit_bytes=:limit, updated_at=:updated"
+                    ),
+                    "ConditionExpression": (
+                        "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":zero": 0,
+                        ":size": fresh_bytes,
+                        ":limit": limit_bytes,
+                        ":updated": now_iso,
+                    },
+                }
+            }
+        )
+    return operations
 
 
 def get_storage_usage(owner_id: str, *, table: Any | None = None) -> int:

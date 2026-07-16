@@ -14,9 +14,9 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stoa.config import settings
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
@@ -30,6 +30,8 @@ from stoa.security.authorization import (
     ResourceType,
 )
 from stoa.security.identity import Actor
+from stoa.models.attachment import AttachmentReference, AttachmentSummary
+from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     CONVERSATION_CONTENT_READ,
@@ -45,6 +47,7 @@ from stoa.services import (
     entitlement_service,
     teacher_dispatch_service,
     usage_ledger_service,
+    attachment_service,
 )
 from stoa.services.rate_limit import check_and_record_chat
 
@@ -117,7 +120,16 @@ class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
-    attachmentIds: list[str] | None = None
+    attachmentIds: list[AttachmentReference] | None = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def unique_attachments(self) -> "SendMessageRequest":
+        if self.attachmentIds is not None and not self.attachmentIds:
+            raise ValueError("attachmentIds must be omitted or contain at least one reference")
+        identities = [reference.identity for reference in self.attachmentIds or []]
+        if len(identities) != len(set(identities)):
+            raise ValueError("attachment references must be unique")
+        return self
 
 
 class ChatMessage(BaseModel):
@@ -127,6 +139,7 @@ class ChatMessage(BaseModel):
     content: str
     createdAt: str
     status: str = "sent"
+    attachments: list[AttachmentSummary] = Field(default_factory=list)
 
 
 class SendMessageResponse(BaseModel):
@@ -268,6 +281,8 @@ async def create_conversation(
             grade=body.grade,
             content=body.initialMessage,
             table=table,
+            actor=actor,
+            prepared_attachments=[],
         )
         _record_chat_usage(
             student_id=student_id,
@@ -304,6 +319,8 @@ async def get_conversation(
     conv = authorized.value
 
     raw_messages = _get_messages(conv_id)
+    attachment_ids = [value for message in raw_messages for value in message.get("attachment_ids", [])]
+    attachment_summaries = attachment_service.list_attachment_summaries(attachment_ids)
     messages = [
         ChatMessage(
             id=m["message_id"],
@@ -312,6 +329,11 @@ async def get_conversation(
             content=m["content"],
             createdAt=m["created_at"],
             status="sent",
+            attachments=[
+                attachment_summaries[value]
+                for value in m.get("attachment_ids", [])
+                if value in attachment_summaries
+            ],
         )
         for m in raw_messages
     ]
@@ -336,11 +358,17 @@ async def send_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
+    actor: Actor = Depends(get_actor),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
     conv = authorized.value
 
+    try:
+        prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
@@ -349,6 +377,8 @@ async def send_message(
         subject=conv.get("subject", "math"),
         grade=conv.get("grade", ""),
         content=body.content,
+        actor=actor,
+        prepared_attachments=prepared,
         table=table,
     )
     _record_chat_usage(
@@ -373,6 +403,8 @@ async def stream_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
+    actor: Actor = Depends(get_actor),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Send a message and stream the AI reply as Server-Sent Events.
 
@@ -384,6 +416,10 @@ async def stream_message(
     student_id = authorized.ref.student_id
     conv = authorized.value
 
+    try:
+        prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     student_msg, assistant_msg = _send_message_impl(
@@ -392,6 +428,8 @@ async def stream_message(
         subject=conv.get("subject", "math"),
         grade=conv.get("grade", ""),
         content=body.content,
+        actor=actor,
+        prepared_attachments=prepared,
         table=table,
     )
     _record_chat_usage(
@@ -408,6 +446,7 @@ async def stream_message(
         return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
     def generate():
+        yield _sse("student_message", student_msg.model_dump(mode="json", by_alias=True))
         yield _sse("message_start", {
             "messageId": assistant_msg.id,
             "role": "assistant",
@@ -444,6 +483,8 @@ def _send_message_impl(
     grade: str,
     content: str,
     table,
+    actor: Actor,
+    prepared_attachments: list[tuple[str, dict]] | None = None,
 ) -> tuple[ChatMessage, ChatMessage]:
     """Persist student message, call Bedrock, persist AI reply. Returns both messages."""
     now = _now()
@@ -464,8 +505,7 @@ def _send_message_impl(
     # sees the prior turns (student + assistant only; teacher/system excluded).
     prior_messages = _get_messages(conv_id)
 
-    # Save student message
-    table.put_item(Item={
+    student_item = {
         "PK": _conv_pk(conv_id),
         "SK": _msg_sk(student_msg_id),
         "message_id": student_msg_id,
@@ -474,7 +514,17 @@ def _send_message_impl(
         "role": "student",
         "content": content,
         "created_at": now,
-    })
+    }
+    effective_plan = entitlement_service.resolve_student_entitlement(
+        student_id, settings=settings
+    ).get("effectivePlan", "free")
+    attachments = attachment_service.bind_message_attachments(
+        message=student_item,
+        conversation_id=conv_id,
+        actor=actor,
+        prepared=prepared_attachments or [],
+        effective_plan=str(effective_plan),
+    )
 
     # Call Bedrock AI with full conversation history for multi-turn context
     try:
@@ -548,10 +598,19 @@ def _send_message_impl(
 
     return (
         ChatMessage(id=student_msg_id, conversationId=conv_id, role="student",
-                    content=content, createdAt=now, status="sent"),
+                    content=content, createdAt=now, status="sent", attachments=attachments),
         ChatMessage(id=assistant_msg_id, conversationId=conv_id, role="assistant",
                     content=ai_content, createdAt=_now(), status="sent"),
     )
+
+
+def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> None:
+    error.correlation_id = correlation_id
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=error.public_body(),
+        headers={"X-Correlation-ID": correlation_id},
+    ) from error
 
 
 def _record_chat_usage(

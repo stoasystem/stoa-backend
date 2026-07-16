@@ -16,7 +16,7 @@ from stoa.config import (
     Settings,
 )
 from stoa.db.repositories import attachment_repo
-from stoa.models.attachment import UploadIntentRequest
+from stoa.models.attachment import AttachmentReference, AttachmentStatus, AttachmentSummary, UploadIntentRequest
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
@@ -109,6 +109,138 @@ def resolve_owned_attachment(
     if not item or item.get("owner_id") != actor.user_id or item.get("status") != "active":
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     return item
+
+
+def prepare_message_attachments(
+    references: list[AttachmentReference],
+    actor: Actor,
+    *,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Resolve the complete owner list before any message, quota, or AI effect."""
+    now = now or datetime.now(UTC)
+    prepared: list[tuple[str, dict[str, Any]]] = []
+    for reference in references:
+        if reference.upload_id is not None:
+            item = resolve_owned_upload(reference.upload_id, actor, now=now, repository=repository)
+            if item.get("status") != "validated" or item.get("expected_kind") != "conversation_attachment":
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+            prepared.append(("upload", item))
+        else:
+            prepared.append(
+                (
+                    "attachment",
+                    resolve_owned_attachment(
+                        str(reference.attachment_id), actor, repository=repository
+                    ),
+                )
+            )
+    return prepared
+
+
+def bind_message_attachments(
+    *,
+    message: dict[str, Any],
+    conversation_id: str,
+    actor: Actor,
+    prepared: list[tuple[str, dict[str, Any]]],
+    effective_plan: str,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> list[AttachmentSummary]:
+    """Atomically persist a message and every fresh/reused attachment reference."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    fresh: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    reused: list[dict[str, Any]] = []
+    summaries: list[AttachmentSummary] = []
+    associations: list[dict[str, Any]] = []
+    attachment_ids: list[str] = []
+    for kind, item in prepared:
+        if kind == "upload":
+            attachment_id = str(uuid4())
+            attachment = {
+                "attachment_id": attachment_id,
+                "owner_id": actor.user_id,
+                "student_id": actor.user_id,
+                "entity_type": "attachment",
+                "object_key": item["object_key"],
+                "original_filename": item["original_filename"],
+                "detected_type": item["detected_type"],
+                "content_length": int(item["content_length"]),
+                "status": "active",
+                "created_at": now.isoformat(),
+                "source_upload_id": item["upload_id"],
+                "etag": item.get("etag"),
+            }
+            item = {**item, "consume_epoch": int(now.timestamp())}
+            fresh.append((item, attachment))
+        else:
+            attachment = item
+            attachment_id = str(item["attachment_id"])
+            reused.append(item)
+        attachment_ids.append(attachment_id)
+        associations.append(
+            {
+                **repository.association_key(
+                    attachment_id, "conversation", conversation_id, message["message_id"]
+                ),
+                "attachment_id": attachment_id,
+                "owner_id": actor.user_id,
+                "resource_type": "conversation",
+                "resource_id": conversation_id,
+                "message_id": message["message_id"],
+                "created_at": now.isoformat(),
+            }
+        )
+        summaries.append(_attachment_summary(attachment))
+    message["attachment_ids"] = attachment_ids
+    fresh_bytes = sum(int(attachment["content_length"]) for _, attachment in fresh)
+    limit = storage_limit_for_entitlement(effective_plan)
+    if repository.get_storage_usage(actor.user_id) + fresh_bytes > limit:
+        raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+    try:
+        repository.transact(
+            repository.build_message_attachment_transaction(
+                message=message,
+                fresh=fresh,
+                reused=reused,
+                associations=associations,
+                owner_id=actor.user_id,
+                limit_bytes=limit,
+                now_iso=now.isoformat(),
+            )
+        )
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        code = (
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            if exc.category == "dependency_failure"
+            else AttachmentErrorCode.UPLOAD_NOT_FOUND
+        )
+        raise AttachmentDecisionError(code) from None
+    return summaries
+
+
+def list_attachment_summaries(
+    attachment_ids: list[str], *, repository: Any = attachment_repo
+) -> dict[str, AttachmentSummary]:
+    records = repository.get_attachments(list(dict.fromkeys(attachment_ids)))
+    return {
+        attachment_id: _attachment_summary(item)
+        for attachment_id, item in records.items()
+        if item.get("status") == "active"
+    }
+
+
+def _attachment_summary(item: dict[str, Any]) -> AttachmentSummary:
+    return AttachmentSummary(
+        attachmentId=item["attachment_id"],
+        filename=item["original_filename"],
+        mediaType=item["detected_type"],
+        sizeBytes=int(item["content_length"]),
+        status=AttachmentStatus.ACTIVE,
+        createdAt=item["created_at"],
+    )
 
 
 def finalize_upload(

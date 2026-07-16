@@ -1,10 +1,16 @@
+import json
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+import pytest
+from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
+from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 
 
@@ -303,3 +309,132 @@ def test_conversation_store_outage_returns_503_before_message_mutation(monkeypat
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
     assert calls == []
+
+
+def _attachment_summary() -> AttachmentSummary:
+    return AttachmentSummary(
+        attachmentId="attachment-1",
+        filename="notes.pdf",
+        mediaType="application/pdf",
+        sizeBytes=123,
+        status=AttachmentStatus.ACTIVE,
+        createdAt=datetime(2026, 7, 16, tzinfo=timezone.utc),
+    )
+
+
+def test_message_attachment_request_is_typed_bounded_unique_and_nonempty() -> None:
+    for attachments in ([], [{"uploadId": "upload-1"}, {"uploadId": "upload-1"}]):
+        with pytest.raises(ValidationError):
+            conversations.SendMessageRequest.model_validate(
+                {"content": "hello", "attachmentIds": attachments}
+            )
+    with pytest.raises(ValidationError):
+        conversations.SendMessageRequest.model_validate(
+            {
+                "content": "hello",
+                "attachmentIds": [{"uploadId": f"upload-{index}"} for index in range(9)],
+            }
+        )
+
+
+def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkeypatch) -> None:
+    summary = _attachment_summary()
+    conv = {
+        "conversation_id": "conv-1",
+        "student_id": "student-1",
+        "subject": "math",
+        "grade": "Sek1",
+    }
+    calls = []
+    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda references, actor: calls.append((references, actor.user_id)) or [],
+    )
+    monkeypatch.setattr(
+        conversations,
+        "check_and_record_chat",
+        lambda *_args, **_kwargs: {
+            "quotaPeriod": "2026-07-16",
+            "counterKey": "counter",
+            "counterValue": 1,
+        },
+    )
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_record_chat_usage", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        conversations,
+        "_send_message_impl",
+        lambda **kwargs: (
+            conversations.ChatMessage(
+                id="student-message",
+                conversationId=kwargs["conv_id"],
+                role="student",
+                content=kwargs["content"],
+                createdAt="2026-07-16T00:00:00Z",
+                attachments=[summary],
+            ),
+            conversations.ChatMessage(
+                id="assistant-message",
+                conversationId=kwargs["conv_id"],
+                role="assistant",
+                content="reply",
+                createdAt="2026-07-16T00:00:01Z",
+            ),
+        ),
+    )
+    payload = {"content": "use notes", "attachmentIds": [{"attachmentId": "attachment-1"}]}
+    regular = _client(conversations.router).post("/conversations/conv-1/messages", json=payload)
+    streamed = _client(conversations.router).post(
+        "/conversations/conv-1/messages/stream", json=payload
+    )
+    safe = regular.json()["studentMessage"]["attachments"][0]
+    assert safe == summary.model_dump(mode="json", by_alias=True)
+    assert 'event: student_message' in streamed.text
+    assert f'"attachments": [{json.dumps(safe, separators=(",", ":"))}]' not in streamed.text
+    for key, value in safe.items():
+        assert json.dumps(value) in streamed.text
+    assert "object_key" not in regular.text + streamed.text
+    assert len(calls) == 2
+
+
+def test_conversation_history_batch_projects_only_safe_attachment_summaries(monkeypatch) -> None:
+    summary = _attachment_summary()
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda *_: {
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "subject": "math",
+            "grade": "Sek1",
+        },
+    )
+    monkeypatch.setattr(
+        conversations,
+        "_get_messages",
+        lambda *_: [
+            {
+                "message_id": "message-1",
+                "role": "student",
+                "content": "my document",
+                "created_at": "2026-07-16T00:00:00Z",
+                "attachment_ids": ["attachment-1"],
+                "object_key": "uploads/private/provider-canary.pdf",
+                "extracted_text": "raw extracted canary",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "list_attachment_summaries",
+        lambda ids: {"attachment-1": summary} if ids == ["attachment-1"] else {},
+    )
+    response = _client(conversations.router).get("/conversations/conv-1")
+    assert response.status_code == 200
+    assert response.json()["messages"][0]["attachments"] == [
+        summary.model_dump(mode="json", by_alias=True)
+    ]
+    assert "provider-canary" not in response.text
+    assert "raw extracted canary" not in response.text

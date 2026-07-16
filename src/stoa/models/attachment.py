@@ -80,6 +80,12 @@ class AttachmentReference(_AttachmentModel):
             raise ValueError("exactly one opaque attachment reference is required")
         return self
 
+    @property
+    def identity(self) -> tuple[str, str]:
+        if self.upload_id is not None:
+            return ("upload", self.upload_id)
+        return ("attachment", str(self.attachment_id))
+
 
 def public_attachment_schema_fields(model: type[BaseModel]) -> set[str]:
     """Expose aliases for structural privacy checks without serializing an instance."""

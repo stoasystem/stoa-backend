@@ -31,10 +31,13 @@ from stoa.security.attachment_errors import (
 )
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services.attachment_service import (
+    bind_message_attachments,
     create_upload_intent,
     finalize_upload,
+    prepare_message_attachments,
     storage_limit_for_entitlement,
 )
+from stoa.db.repositories import attachment_repo
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 
@@ -425,3 +428,144 @@ def test_foreign_finalize_is_hidden_before_s3_read() -> None:
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert s3.calls == []
+
+
+class _MessageAttachmentRepository:
+    association_key = staticmethod(attachment_repo.association_key)
+    build_message_attachment_transaction = staticmethod(
+        attachment_repo.build_message_attachment_transaction
+    )
+
+    def __init__(self, uploads=None, attachments=None, used_bytes=0) -> None:
+        self.uploads = uploads or {}
+        self.attachments = attachments or {}
+        self.used_bytes = used_bytes
+        self.transactions = []
+
+    def get_upload_intent(self, upload_id):
+        return self.uploads.get(upload_id)
+
+    def get_attachment(self, attachment_id):
+        return self.attachments.get(attachment_id)
+
+    def get_storage_usage(self, owner_id):
+        return self.used_bytes
+
+    def transact(self, operations):
+        self.transactions.append(operations)
+
+
+def _validated_upload(owner="student-1") -> dict:
+    return {
+        "upload_id": "upload-1",
+        "owner_id": owner,
+        "object_key": "uploads/private/provider-coordinate-canary.pdf",
+        "original_filename": "notes.pdf",
+        "detected_type": "application/pdf",
+        "content_length": 321,
+        "status": "validated",
+        "expected_kind": "conversation_attachment",
+        "version": 3,
+        "expires_at": 2_000_000_000,
+        "etag": "private-version-canary",
+    }
+
+
+def _saved_attachment(owner="student-1") -> dict:
+    return {
+        "attachment_id": "attachment-saved",
+        "owner_id": owner,
+        "object_key": "uploads/private/saved-provider-coordinate.pdf",
+        "original_filename": "saved.pdf",
+        "detected_type": "application/pdf",
+        "content_length": 777,
+        "status": "active",
+        "created_at": "2026-07-16T00:00:00+00:00",
+    }
+
+
+def test_prepare_message_attachments_conceals_missing_foreign_and_invalid_as_no_effect() -> None:
+    for repository in (
+        _MessageAttachmentRepository(),
+        _MessageAttachmentRepository(uploads={"upload-1": _validated_upload("foreign")}),
+        _MessageAttachmentRepository(
+            uploads={"upload-1": {**_validated_upload(), "status": "invalid"}}
+        ),
+    ):
+        with pytest.raises(AttachmentDecisionError) as error:
+            prepare_message_attachments(
+                [AttachmentReference(uploadId="upload-1")],
+                _student_actor(),
+                repository=repository,
+            )
+        assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
+        assert repository.transactions == []
+
+
+def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> None:
+    repository = _MessageAttachmentRepository(
+        uploads={"upload-1": _validated_upload()},
+        attachments={"attachment-saved": _saved_attachment()},
+    )
+    references = [
+        AttachmentReference(uploadId="upload-1"),
+        AttachmentReference(attachmentId="attachment-saved"),
+    ]
+    prepared = prepare_message_attachments(
+        references, _student_actor(), repository=repository
+    )
+    summaries = bind_message_attachments(
+        message={
+            "PK": "CONV#conv-1",
+            "SK": "MSG#message-1",
+            "message_id": "message-1",
+            "content": "use both",
+        },
+        conversation_id="conv-1",
+        actor=_student_actor(),
+        prepared=prepared,
+        effective_plan="free",
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert len(repository.transactions) == 1
+    operations = repository.transactions[0]
+    assert sum("Update" in operation for operation in operations) == 2
+    storage_updates = [
+        operation["Update"]
+        for operation in operations
+        if "Update" in operation and operation["Update"]["Key"]["PK"].startswith("STORAGE#")
+    ]
+    assert storage_updates[0]["ExpressionAttributeValues"][":size"] == 321
+    assert sum("ConditionCheck" in operation for operation in operations) == 1
+    message = operations[0]["Put"]["Item"]
+    assert message["attachment_ids"][1] == "attachment-saved"
+    public = str([summary.model_dump(by_alias=True) for summary in summaries])
+    assert "provider-coordinate" not in public
+    assert "private-version" not in public
+
+
+def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
+    repository = _MessageAttachmentRepository(
+        attachments={"attachment-saved": _saved_attachment()}, used_bytes=FREE_STORAGE_BYTES
+    )
+    prepared = prepare_message_attachments(
+        [AttachmentReference(attachmentId="attachment-saved")],
+        _student_actor(),
+        repository=repository,
+    )
+    bind_message_attachments(
+        message={"PK": "CONV#other", "SK": "MSG#new", "message_id": "new"},
+        conversation_id="other",
+        actor=_student_actor(),
+        prepared=prepared,
+        effective_plan="free",
+        repository=repository,
+    )
+    assert all(
+        not (
+            "Update" in operation
+            and operation["Update"]["Key"]["PK"].startswith("STORAGE#")
+        )
+        for operation in repository.transactions[0]
+    )
