@@ -53,7 +53,7 @@ from stoa.services.attachment_service import (
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.db.repositories import attachment_repo
 from stoa.services.entitlement_service import resolve_student_entitlement
-from stoa.services import ai_service
+from stoa.services import ai_service, attachment_service
 from stoa.services.ocr_service import OcrAttachmentFailure, extract_text_from_attachment
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 from stoa.services.document_extraction_service import (
@@ -693,12 +693,16 @@ class _GeneratedBody:
         self.remaining = size
         self.byte = byte
         self.total_read = 0
+        self.close_count = 0
 
     def read(self, limit: int) -> bytes:
         amount = min(limit, self.remaining)
         self.remaining -= amount
         self.total_read += amount
         return self.byte * amount
+
+    def close(self) -> None:
+        self.close_count += 1
 
 
 class _PromotionRepository:
@@ -775,6 +779,7 @@ def test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version() -> 
         expected_digest.update(b"a" * (1024 * 1024))
     assert repository.validated["content_sha256"] == expected_digest.hexdigest()
     assert repository.validated["immutable_version_id"] == "immutable-version-exact"
+    assert body.close_count == 1
 
 
 def test_max_plus_one_is_rejected_after_exact_sentinel_read_and_no_promotion() -> None:
@@ -793,6 +798,96 @@ def test_max_plus_one_is_rejected_after_exact_sentinel_read_and_no_promotion() -
     assert body.total_read == 1025
     assert s3.put_lengths == []
     assert repository.invalid == "upload_too_large"
+    assert body.close_count == 1
+
+
+class _ProviderBodySpy:
+    def __init__(
+        self,
+        data: bytes,
+        *,
+        read_exception: Exception | None = None,
+        close_exception: Exception | None = None,
+    ) -> None:
+        self.data = data
+        self.offset = 0
+        self.read_exception = read_exception
+        self.close_exception = close_exception
+        self.read_count = 0
+        self.close_count = 0
+
+    def read(self, limit: int) -> bytes:
+        self.read_count += 1
+        if self.read_exception is not None:
+            raise self.read_exception
+        value = self.data[self.offset : self.offset + limit]
+        self.offset += len(value)
+        return value
+
+    def close(self) -> None:
+        self.close_count += 1
+        if self.close_exception is not None:
+            raise self.close_exception
+
+
+@pytest.mark.parametrize(
+    "case,body_data,expected_size,max_bytes,expected_code",
+    [
+        ("length_mismatch", b"ab", 3, 3, AttachmentErrorCode.UPLOAD_INVALID),
+        ("oversize", b"abcd", 3, 3, AttachmentErrorCode.UPLOAD_TOO_LARGE),
+        (
+            "read_exception",
+            b"abc",
+            3,
+            3,
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+        ),
+    ],
+)
+def test_validation_provider_body_closes_once_on_every_read_exit(
+    case, body_data, expected_size, max_bytes, expected_code
+) -> None:
+    body = _ProviderBodySpy(
+        body_data,
+        read_exception=(RuntimeError("provider-read-private-canary") if case == "read_exception" else None),
+    )
+    repository = _PromotionRepository()
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            _validating_document(expected_size, max_bytes=max_bytes),
+            _student_actor(),
+            s3=_PromotionS3(body),
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert captured.value.code is expected_code
+    assert body.close_count == 1
+
+
+def test_validation_failure_and_close_exception_preserve_stable_error(monkeypatch) -> None:
+    body = _ProviderBodySpy(
+        b"abc", close_exception=RuntimeError("close-provider-private-canary")
+    )
+    monkeypatch.setattr(
+        attachment_service,
+        "validate_uploaded_file",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValidationFailure(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
+        ),
+    )
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            _validating_document(3, max_bytes=3),
+            _student_actor(),
+            s3=_PromotionS3(body),
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=_PromotionRepository(),
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH
+    assert body.close_count == 1
+    assert "private-canary" not in str(captured.value)
 
 
 def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
