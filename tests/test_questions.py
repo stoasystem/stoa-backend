@@ -102,17 +102,13 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
             "blockingReason": None,
         },
     )
-    monkeypatch.setattr(
-        questions.question_repo, "record_daily_question_usage", lambda *args: 1
-    )
+    monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
     monkeypatch.setattr(
         questions.usage_ledger_service,
         "record_question_usage_event",
         lambda **kwargs: {},
     )
-    monkeypatch.setattr(
-        questions.question_repo, "update_status", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -132,7 +128,12 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
     )
     monkeypatch.setattr(
         questions.entitlement_service,
@@ -169,7 +170,9 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
+    monkeypatch.setattr(
+        questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {}
+    )
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -209,7 +212,12 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
     )
     monkeypatch.setattr(
         questions.entitlement_service,
@@ -242,7 +250,9 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
+    monkeypatch.setattr(
+        questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {}
+    )
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -265,6 +275,54 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
     assert body["ocr_metadata"]["correction_applied"] is False
 
 
+def test_question_quota_race_stable_error_has_no_question_or_ai_effect(monkeypatch):
+    _patch_question_submit_dependencies(monkeypatch)
+    effects = []
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: _prepared_question_attachment(),
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda *args, **kwargs: "private-ocr-canary",
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+        ),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "release_question_attachment_reservation",
+        lambda *args, **kwargs: effects.append("released"),
+    )
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **kwargs: effects.append("ai"),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "private-question-canary",
+            "subject": "math",
+            "attachment": {"uploadId": "upload-1"},
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "storage_quota_exceeded"
+    assert response.json()["detail"]["message"] == (
+        "Storage is full. Delete attachments or upgrade your plan."
+    )
+    assert effects == ["released"]
+    assert "private-question-canary" not in response.text
+    assert "private-ocr-canary" not in response.text
+
+
 def test_get_question_hides_private_image_key(monkeypatch):
     monkeypatch.setattr(
         questions.question_repo,
@@ -276,7 +334,12 @@ def test_get_question_hides_private_image_key(monkeypatch):
             "content": "Question content",
             "attachment_id": "attachment-1",
             "has_image": True,
-            "ocr_metadata": {"status": "succeeded", "source": "rekognition_s3", "text_length": 12, "correction_applied": False},
+            "ocr_metadata": {
+                "status": "succeeded",
+                "source": "rekognition_s3",
+                "text_length": 12,
+                "correction_applied": False,
+            },
             "status": "pending",
             "ai_response": None,
             "teacher_id": None,
@@ -307,7 +370,9 @@ def test_check_daily_limit_uses_atomic_counter(monkeypatch):
     monkeypatch.setattr(
         questions.question_repo,
         "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: calls.append((student_id, day, limit, expires_at)) or 2,
+        lambda student_id, day, limit, expires_at: (
+            calls.append((student_id, day, limit, expires_at)) or 2
+        ),
     )
 
     questions._check_daily_limit("student-1", "free", settings)
@@ -322,7 +387,9 @@ def test_check_daily_limit_uses_effective_entitlement(monkeypatch):
     monkeypatch.setattr(
         questions.question_repo,
         "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: calls.append((student_id, day, limit, expires_at)) or 1,
+        lambda student_id, day, limit, expires_at: (
+            calls.append((student_id, day, limit, expires_at)) or 1
+        ),
     )
 
     questions._check_daily_limit(
@@ -359,7 +426,9 @@ def test_record_daily_question_usage_returns_none_on_condition_failure(monkeypat
 
     monkeypatch.setattr(questions.question_repo, "get_table", lambda: FakeTable())
 
-    assert questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 2, 1) is None
+    assert (
+        questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 2, 1) is None
+    )
 
 
 def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
@@ -433,7 +502,12 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
     )
     monkeypatch.setattr(
         questions.entitlement_service,
@@ -475,7 +549,12 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
     )
     monkeypatch.setattr(
         questions.entitlement_service,
@@ -535,9 +614,7 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
 
 def test_question_contract_has_no_client_storage_coordinates() -> None:
     schema = _client().app.openapi()
-    request_schema = str(
-        schema["components"]["schemas"]["SubmitQuestionRequest"]
-    ).lower()
+    request_schema = str(schema["components"]["schemas"]["SubmitQuestionRequest"]).lower()
     response_schema = str(schema["components"]["schemas"]["QuestionResponse"]).lower()
     for forbidden in ("image_s3_key", "s3key", "objectkey", "bucket"):
         assert forbidden not in request_schema
@@ -785,7 +862,9 @@ def test_request_teacher_records_support_visible_usage_event(monkeypatch):
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
-    monkeypatch.setattr(questions.notification_service, "emit_teacher_requested", lambda **kwargs: None)
+    monkeypatch.setattr(
+        questions.notification_service, "emit_teacher_requested", lambda **kwargs: None
+    )
     monkeypatch.setattr(
         questions.teacher_dispatch_service,
         "dispatch_question",
@@ -810,13 +889,20 @@ def test_request_teacher_records_support_visible_usage_event(monkeypatch):
     }
 
 
-def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_reconciliation(monkeypatch):
+def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_reconciliation(
+    monkeypatch,
+):
     ledger_calls = []
     counter_calls = []
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Sek1", "language": "de"},
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
     )
     monkeypatch.setattr(
         questions.entitlement_service,
@@ -872,9 +958,7 @@ def test_submit_question_rejects_body_owner_substitution_before_any_write(monkey
         "record_daily_question_usage",
         lambda *_args: calls.append("counter"),
     )
-    monkeypatch.setattr(
-        questions.question_repo, "put_question", lambda *_args: calls.append("put")
-    )
+    monkeypatch.setattr(questions.question_repo, "put_question", lambda *_args: calls.append("put"))
     response = _client().post(
         "/questions",
         json={
@@ -950,12 +1034,8 @@ def test_bound_parent_and_current_task_teacher_question_positive_controls(monkey
     monkeypatch.setattr(questions.user_repo, "get_user", lambda user_id: accounts.get(user_id))
     monkeypatch.setattr(questions.user_repo, "get_parent_student_binding", lambda *_: row)
     monkeypatch.setattr(questions.user_repo, "get_student_parent_binding", lambda *_: dict(row))
-    parent = _client(actor=_actor(CanonicalRole.PARENT, "parent-1")).get(
-        "/questions/question-1"
-    )
-    teacher = _client(actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get(
-        "/questions/question-1"
-    )
+    parent = _client(actor=_actor(CanonicalRole.PARENT, "parent-1")).get("/questions/question-1")
+    teacher = _client(actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get("/questions/question-1")
     assert parent.status_code == teacher.status_code == 200
 
 

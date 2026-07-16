@@ -11,6 +11,7 @@ from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 
 
@@ -50,13 +51,16 @@ def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
     monkeypatch.setattr(
         conversations,
         "check_and_record_chat",
-        lambda student_id, limit=None: rate_limit_calls.append({"student_id": student_id, "limit": limit}) or {
-            "quotaPeriod": "2026-07-04",
-            "counterKey": "USAGE#student-1/CHAT#2026-07-04",
-            "counterValue": 2,
-            "limit": limit,
-            "expiresAt": 1,
-        },
+        lambda student_id, limit=None: (
+            rate_limit_calls.append({"student_id": student_id, "limit": limit})
+            or {
+                "quotaPeriod": "2026-07-04",
+                "counterKey": "USAGE#student-1/CHAT#2026-07-04",
+                "counterValue": 2,
+                "limit": limit,
+                "expiresAt": 1,
+            }
+        ),
     )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda student_id: 8)
     monkeypatch.setattr(
@@ -162,9 +166,7 @@ def test_conversation_list_and_create_derive_owner_from_actor(monkeypatch):
     monkeypatch.setattr(conversations, "get_table", lambda: Table())
     client = _client(conversations.router)
     assert client.get("/conversations").status_code == 200
-    created = client.post(
-        "/conversations", json={"subject": "math", "grade": "Sek1"}
-    )
+    created = client.post("/conversations", json={"subject": "math", "grade": "Sek1"})
     assert created.status_code == 201
     assert listed == ["student-1"]
     assert stored[0]["student_id"] == "student-1"
@@ -218,9 +220,9 @@ def test_unrelated_parent_conversation_is_hidden(monkeypatch):
             "account_status": "active",
         },
     )
-    response = _client(
-        conversations.router, actor=_actor(CanonicalRole.PARENT, "parent-1")
-    ).get("/conversations/conv-1")
+    response = _client(conversations.router, actor=_actor(CanonicalRole.PARENT, "parent-1")).get(
+        "/conversations/conv-1"
+    )
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "resource_not_found"
 
@@ -255,12 +257,12 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id: accounts.get(user_id))
-    current = _client(
-        conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-1")
-    ).get("/conversations/conv-1")
-    stale = _client(
-        conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-2")
-    ).get("/conversations/conv-1")
+    current = _client(conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get(
+        "/conversations/conv-1"
+    )
+    stale = _client(conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-2")).get(
+        "/conversations/conv-1"
+    )
     assert current.status_code == 200
     assert stale.status_code == 404
     assert stale.json()["detail"]["code"] == "resource_not_found"
@@ -280,12 +282,8 @@ def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(monk
         lambda **_kwargs: calls.append("message") or None,
     )
     client = _client(conversations.router, actor=_actor(user_id="student-2"))
-    hidden = client.post(
-        "/conversations/conv-real/messages/stream", json={"content": "swap"}
-    )
-    missing = client.post(
-        "/conversations/conv-random/messages/stream", json={"content": "swap"}
-    )
+    hidden = client.post("/conversations/conv-real/messages/stream", json={"content": "swap"})
+    missing = client.post("/conversations/conv-random/messages/stream", json={"content": "swap"})
     assert hidden.status_code == missing.status_code == 404
     assert hidden.json()["detail"]["code"] == missing.json()["detail"]["code"]
     assert calls == []
@@ -397,7 +395,7 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
     )
     safe = regular.json()["studentMessage"]["attachments"][0]
     assert safe == summary.model_dump(mode="json", by_alias=True)
-    assert 'event: student_message' in streamed.text
+    assert "event: student_message" in streamed.text
     assert f'"attachments": [{json.dumps(safe, separators=(",", ":"))}]' not in streamed.text
     for key, value in safe.items():
         assert json.dumps(value) in streamed.text
@@ -490,4 +488,65 @@ def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch)
     )
     assert events == ["bind", "extract", "ai"]
     assert student.attachments == [_attachment_summary()]
-    assert "internal extracted canary" not in str(stored) + student.model_dump_json() + assistant.model_dump_json()
+    assert (
+        "internal extracted canary"
+        not in str(stored) + student.model_dump_json() + assistant.model_dump_json()
+    )
+
+
+def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_effect(
+    monkeypatch,
+) -> None:
+    effects = []
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": "student-1",
+            "subject": "math",
+            "grade": "Sek1",
+        },
+    )
+    monkeypatch.setattr(
+        conversations,
+        "check_and_record_chat",
+        lambda *args, **kwargs: {
+            "quotaPeriod": "2026-07-16",
+            "counterKey": "opaque-counter",
+            "counterValue": 1,
+        },
+    )
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(
+        conversations, "_record_chat_usage", lambda **kwargs: effects.append("usage")
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "bind_message_attachments",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        ),
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "extract_message_attachment_context",
+        lambda *args, **kwargs: effects.append("extract"),
+    )
+    monkeypatch.setattr(
+        conversations.ai_service,
+        "get_ai_answer",
+        lambda **kwargs: effects.append("ai"),
+    )
+    response = _client(conversations.router).post(
+        "/conversations/conv-1/messages",
+        json={"content": "private-message-canary"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "upload_service_unavailable"
+    assert response.json()["detail"]["message"] == (
+        "Uploads are temporarily unavailable. Try again later."
+    )
+    assert effects == []
+    assert "private-message-canary" not in response.text

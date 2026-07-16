@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import threading
@@ -1318,6 +1319,163 @@ def test_generic_transaction_client_error_is_retryable_and_redacted() -> None:
         captured.value.outcome is attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
     )
     assert "raw-provider-reason-private-canary" not in str(captured.value)
+
+
+class _OutcomeMessageRepository(_MessageAttachmentRepository):
+    def __init__(self, outcome, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.outcome = outcome
+        self.persisted = {
+            "uploads": deepcopy(self.uploads),
+            "attachments": deepcopy(self.attachments),
+            "associations": {},
+            "messages": {},
+            "questions": {},
+            "used_bytes": self.used_bytes,
+            "refs": {
+                key: int(value.get("ref_count", 0)) for key, value in self.attachments.items()
+            },
+            "ocr": 0,
+            "parser": 0,
+            "ai": 0,
+        }
+
+    def transact(self, operations):
+        self.transactions.append(operations)
+        raise attachment_repo.AttachmentTransactionError(self.outcome)
+
+
+class _OutcomeQuestionRepository(_OutcomeMessageRepository):
+    question_association_key = staticmethod(attachment_repo.question_association_key)
+    build_question_attachment_transaction = staticmethod(
+        attachment_repo.build_question_attachment_transaction
+    )
+
+
+@pytest.mark.parametrize(
+    "outcome,code,action,status",
+    [
+        (
+            attachment_repo.AttachmentTransactionOutcome.QUOTA_EXCEEDED,
+            AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED,
+            AttachmentClientAction.DELETE_OR_UPGRADE,
+            409,
+        ),
+        (
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+            AttachmentClientAction.RETRY_LATER,
+            503,
+        ),
+        (
+            attachment_repo.AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT,
+            AttachmentErrorCode.UPLOAD_NOT_FOUND,
+            AttachmentClientAction.SELECT_FILE,
+            404,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "path", ["question_fresh", "question_reuse", "message_fresh", "message_reuse"]
+)
+def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stable_error(
+    outcome, code, action, status, path
+) -> None:
+    fresh = path.endswith("fresh")
+    repository_type = (
+        _OutcomeQuestionRepository if path.startswith("question") else _OutcomeMessageRepository
+    )
+    repository = repository_type(
+        outcome,
+        uploads={
+            "upload-1": _validated_question_upload()
+            if path.startswith("question")
+            else _validated_upload()
+        }
+        if fresh
+        else None,
+        attachments={"attachment-saved": {**_saved_attachment(), "detected_type": "image/jpeg"}}
+        if not fresh
+        else None,
+        used_bytes=1234,
+    )
+    before = deepcopy(repository.persisted)
+    if path.startswith("question"):
+        if fresh:
+            upload = {
+                **repository.uploads["upload-1"],
+                "status": "consuming",
+                "consume_epoch": 2_000_000_000,
+            }
+            prepared = {
+                "kind": "upload",
+                "record": upload,
+                "attachment": {
+                    **upload,
+                    "attachment_id": "attachment-new",
+                    "status": "active",
+                    "created_at": "2026-07-16T00:00:00+00:00",
+                },
+            }
+        else:
+            prepared = {
+                "kind": "attachment",
+                "record": repository.attachments["attachment-saved"],
+                "attachment": repository.attachments["attachment-saved"],
+            }
+        def call():
+            return commit_question_with_attachment(
+                question={
+                    "PK": "QUESTION#question-zero-effect",
+                    "SK": "META",
+                    "question_id": "question-zero-effect",
+                    "student_id": "student-1",
+                },
+                prepared=prepared,
+                actor=_student_actor(),
+                effective_plan="free",
+                repository=repository,
+            )
+    else:
+        prepared = [
+            (
+                "upload" if fresh else "attachment",
+                repository.uploads["upload-1"]
+                if fresh
+                else repository.attachments["attachment-saved"],
+            )
+        ]
+        def call():
+            return bind_message_attachments(
+                message={
+                    "PK": "CONV#conv-zero-effect",
+                    "SK": "MSG#message-zero-effect",
+                    "message_id": "message-zero-effect",
+                },
+                conversation_id="conv-zero-effect",
+                actor=_student_actor(),
+                prepared=prepared,
+                effective_plan="free",
+                repository=repository,
+            )
+    with pytest.raises(AttachmentDecisionError) as captured:
+        call()
+    assert captured.value.code is code
+    contract = ATTACHMENT_ERROR_REGISTRY[code]
+    assert contract.http_status == status
+    assert contract.client_action is action
+    assert repository.persisted == before
+    public = captured.value.public_body()
+    assert set(public) == {"code", "message", "correlationId"}
+    assert public["code"] == code.value
+    for canary in (
+        "student-1",
+        "provider-coordinate",
+        "immutable-version",
+        "private-bucket",
+        "Amazon",
+    ):
+        assert canary not in str(public)
 
 
 def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:

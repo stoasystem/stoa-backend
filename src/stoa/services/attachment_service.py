@@ -629,9 +629,7 @@ def _validate_and_promote_completed(
             except Exception:
                 pass
         if immutable_version:
-            _delete_exact_if_present(
-                s3, settings, immutable_key, immutable_version
-            )
+            _delete_exact_if_present(s3, settings, immutable_key, immutable_version)
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
 
 
@@ -676,15 +674,18 @@ def resolve_owned_attachment(
 
 
 def _require_immutable_record(item: dict[str, Any]) -> None:
-    if not all(
-        item.get(field)
-        for field in (
-            "immutable_object_key",
-            "immutable_version_id",
-            "immutable_etag",
-            "content_sha256",
+    if (
+        not all(
+            item.get(field)
+            for field in (
+                "immutable_object_key",
+                "immutable_version_id",
+                "immutable_etag",
+                "content_sha256",
+            )
         )
-    ) or int(item.get("content_length", 0)) <= 0:
+        or int(item.get("content_length", 0)) <= 0
+    ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
 
 
@@ -862,13 +863,8 @@ def commit_question_with_attachment(
                 now_iso=now.isoformat(),
             )
         )
-    except attachment_repo.AttachmentRepositoryConflict as exc:
-        code = (
-            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            if exc.category == "dependency_failure"
-            else AttachmentErrorCode.UPLOAD_NOT_FOUND
-        )
-        raise AttachmentDecisionError(code) from None
+    except attachment_repo.AttachmentTransactionError as exc:
+        raise AttachmentDecisionError(_transaction_error_code(exc.outcome)) from None
     return _attachment_summary(attachment)
 
 
@@ -963,14 +959,25 @@ def bind_message_attachments(
                 now_iso=now.isoformat(),
             )
         )
-    except attachment_repo.AttachmentRepositoryConflict as exc:
-        code = (
-            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            if exc.category == "dependency_failure"
-            else AttachmentErrorCode.UPLOAD_NOT_FOUND
-        )
-        raise AttachmentDecisionError(code) from None
+    except attachment_repo.AttachmentTransactionError as exc:
+        raise AttachmentDecisionError(_transaction_error_code(exc.outcome)) from None
     return summaries
+
+
+def _transaction_error_code(
+    outcome: attachment_repo.AttachmentTransactionOutcome,
+) -> AttachmentErrorCode:
+    return {
+        attachment_repo.AttachmentTransactionOutcome.QUOTA_EXCEEDED: (
+            AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED
+        ),
+        attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY: (
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ),
+        attachment_repo.AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT: (
+            AttachmentErrorCode.UPLOAD_NOT_FOUND
+        ),
+    }[outcome]
 
 
 def extract_message_attachment_context(
