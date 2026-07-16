@@ -46,6 +46,7 @@ from stoa.services.attachment_service import (
 from stoa.db.repositories import attachment_repo
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services import ai_service
+from stoa.services.ocr_service import OcrAttachmentFailure, extract_text_from_attachment
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 from stoa.services.document_extraction_service import (
     MAX_EXTRACTED_CHARACTERS,
@@ -899,6 +900,67 @@ def test_ai_prompt_uses_silent_bounded_attachment_sanitization(caplog) -> None:
     assert "raw-extracted-log-canary" in messages[-1]["content"]
     assert "ignore previous instructions" not in messages[-1]["content"].lower()
     assert "raw-extracted-log-canary" not in caplog.text
+
+
+class _OcrClient:
+    def __init__(self, *, error_code: str | None = None) -> None:
+        self.error_code = error_code
+        self.calls = []
+
+    def detect_text(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.error_code:
+            from botocore.exceptions import ClientError
+
+            raise ClientError(
+                {"Error": {"Code": self.error_code, "Message": "provider-detail-canary"}},
+                "DetectText",
+            )
+        return {
+            "TextDetections": [
+                {
+                    "Type": "LINE",
+                    "DetectedText": "later",
+                    "Geometry": {"BoundingBox": {"Top": 0.9}},
+                },
+                {
+                    "Type": "LINE",
+                    "DetectedText": "first",
+                    "Geometry": {"BoundingBox": {"Top": 0.1}},
+                },
+            ]
+        }
+
+
+def test_private_ocr_boundary_uses_resolved_attachment_and_safe_categories() -> None:
+    attachment = {
+        **_saved_attachment(),
+        "detected_type": "image/png",
+        "object_key": "uploads/private/ocr-coordinate-canary.png",
+    }
+    client = _OcrClient()
+    result = extract_text_from_attachment(
+        attachment,
+        settings_obj=Settings(s3_images_bucket="private-images"),
+        client=client,
+    )
+    assert result == "first\nlater"
+    assert client.calls[0]["Image"]["S3Object"] == {
+        "Bucket": "private-images",
+        "Name": "uploads/private/ocr-coordinate-canary.png",
+    }
+    for code, terminal in (
+        ("ThrottlingException", False),
+        ("InvalidS3ObjectException", True),
+    ):
+        with pytest.raises(OcrAttachmentFailure) as error:
+            extract_text_from_attachment(
+                attachment,
+                settings_obj=Settings(s3_images_bucket="private-images"),
+                client=_OcrClient(error_code=code),
+            )
+        assert error.value.terminal is terminal
+        assert "provider-detail-canary" not in str(error.value)
 
 
 class _RetentionRepository:

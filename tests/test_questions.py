@@ -7,6 +7,8 @@ from stoa.config import Settings, get_settings
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import questions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.services.ocr_service import OcrAttachmentFailure
 
 
 def _settings() -> Settings:
@@ -77,6 +79,49 @@ def _attachment_summary() -> dict:
     }
 
 
+def _patch_question_submit_dependencies(monkeypatch) -> None:
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": 2},
+            "blockingReason": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.question_repo, "record_daily_question_usage", lambda *args: 1
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "record_question_usage_event",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        questions.question_repo, "update_status", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **kwargs: {
+            "answer": "AI answer",
+            "steps": [],
+            "hints": [],
+            "similar_exercises": [],
+        },
+    )
+
+
 def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch):
     stored = {}
     usage_calls = []
@@ -102,8 +147,8 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     )
     monkeypatch.setattr(
         questions.ocr_service,
-        "extract_text_from_s3",
-        lambda bucket, key: "raw OCR text from image",
+        "extract_text_from_attachment",
+        lambda attachment, settings_obj: "raw OCR text from image",
     )
     monkeypatch.setattr(
         questions.attachment_service,
@@ -147,6 +192,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     assert body["ocr_metadata"]["correction_applied"] is True
     assert body["ocr_metadata"]["text_length"] == len("raw OCR text from image")
     assert "private/student-1/image.png" not in str(body)
+    assert "raw OCR text from image" not in str(body)
     assert stored["attachment_id"] == "attachment-1"
     assert stored["attachment_source_identity"] == "upload:upload-1"
     assert stored["ocr_text"] == "raw OCR text from image"
@@ -172,7 +218,11 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         },
     )
     monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
-    monkeypatch.setattr(questions.ocr_service, "extract_text_from_s3", lambda bucket, key: "Equation from image")
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda attachment, settings_obj: "Equation from image",
+    )
     monkeypatch.setattr(
         questions.attachment_service,
         "reserve_question_attachment",
@@ -207,7 +257,8 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
 
     assert response.status_code == 201
     body = response.json()
-    assert body["content"] == "Please solve\n\n[Image text: Equation from image]"
+    assert body["content"] == "Please solve"
+    assert "Equation from image" not in str(body)
     assert body["ocr_metadata"]["correction_applied"] is False
 
 
@@ -490,6 +541,160 @@ def test_question_contract_has_no_client_storage_coordinates() -> None:
         assert forbidden not in response_schema
     assert "attachment" in request_schema
     assert "attachment" in response_schema
+
+
+def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
+    _patch_question_submit_dependencies(monkeypatch)
+    observed = []
+    prepared = _prepared_question_attachment()
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: prepared,
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda attachment, settings_obj: observed.append(dict(attachment)) or "2x = 4",
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: _attachment_summary(),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this image",
+            "subject": "math",
+            "attachment": {"uploadId": "upload-1"},
+        },
+    )
+    assert response.status_code == 201
+    assert observed == [prepared["attachment"]]
+    assert observed[0]["object_key"] == "private/student-1/image.png"
+    assert "object_key" not in str(response.json()).lower()
+
+
+def test_transient_ocr_failure_releases_reservation_with_safe_error(monkeypatch) -> None:
+    _patch_question_submit_dependencies(monkeypatch)
+    effects = []
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: _prepared_question_attachment(),
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OcrAttachmentFailure("provider-payload-canary", terminal=False)
+        ),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "release_question_attachment_reservation",
+        lambda *args, **kwargs: effects.append("released"),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "invalidate_question_attachment",
+        lambda *args, **kwargs: effects.append("invalidated"),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: effects.append("committed"),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this image",
+            "subject": "math",
+            "attachment": {"uploadId": "upload-1"},
+        },
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "upload_service_unavailable"
+    assert "provider-payload-canary" not in str(response.json())
+    assert effects == ["released"]
+
+
+def test_terminal_ocr_failure_invalidates_without_question_write(monkeypatch) -> None:
+    _patch_question_submit_dependencies(monkeypatch)
+    effects = []
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: _prepared_question_attachment(),
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OcrAttachmentFailure("invalid-object-provider-canary", terminal=True)
+        ),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "invalidate_question_attachment",
+        lambda *args, **kwargs: effects.append("invalidated"),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: effects.append("committed"),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this image",
+            "subject": "math",
+            "attachment": {"uploadId": "upload-1"},
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "upload_invalid"
+    assert "provider-canary" not in str(response.json())
+    assert effects == ["invalidated"]
+
+
+def test_unresolved_attachment_fails_before_counter_ocr_or_question(monkeypatch) -> None:
+    _patch_question_submit_dependencies(monkeypatch)
+    effects = []
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        ),
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *args: effects.append("counter"),
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda *args, **kwargs: effects.append("ocr"),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: effects.append("commit"),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this image",
+            "subject": "math",
+            "attachment": {"attachmentId": "foreign-or-missing"},
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "upload_not_found"
+    assert effects == []
 
 
 def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):

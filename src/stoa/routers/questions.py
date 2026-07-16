@@ -122,8 +122,8 @@ def _build_question_content(
 
     metadata["source"] = "question_image"
     attachment = prepared_attachment["attachment"]
-    extracted = ocr_service.extract_text_from_s3(
-        settings.s3_images_bucket, attachment["object_key"]
+    extracted = ocr_service.extract_text_from_attachment(
+        attachment, settings_obj=settings
     )
     ocr_text = extracted.strip()
     metadata["text_length"] = len(ocr_text)
@@ -259,8 +259,26 @@ async def submit_question(
         raise
 
     try:
-        content, ocr_metadata, ocr_text = _build_question_content(
+        ai_content, ocr_metadata, ocr_text = _build_question_content(
             body, settings, prepared_attachment
+        )
+    except ocr_service.OcrAttachmentFailure as error:
+        if prepared_attachment is not None:
+            if error.terminal:
+                attachment_service.invalidate_question_attachment(
+                    prepared_attachment, actor
+                )
+            else:
+                attachment_service.release_question_attachment_reservation(
+                    prepared_attachment, actor
+                )
+        _raise_attachment(
+            AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_INVALID
+                if error.terminal
+                else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            ),
+            correlation_id,
         )
     except Exception:
         if prepared_attachment is not None:
@@ -273,6 +291,7 @@ async def submit_question(
         )
 
     now = datetime.now(timezone.utc).isoformat()
+    public_content = body.corrected_text.strip() if body.corrected_text else body.content
     usage_ledger_service.record_question_usage_event(
         student_id=student_id,
         question_id=question_id,
@@ -289,7 +308,7 @@ async def submit_question(
         "question_id": question_id,
         "student_id": student_id,
         "subject": subject,
-        "content": content,
+        "content": public_content,
         "original_content": body.content,
         "corrected_text": body.corrected_text,
         "attachment_id": (
@@ -332,7 +351,7 @@ async def submit_question(
     # Call AI synchronously (Lambda function has up to 30s; Haiku is fast)
     try:
         ai_resp = ai_service.get_ai_answer(
-            content=content,
+            content=ai_content,
             subject=subject,
             grade=grade,
             language=language,
