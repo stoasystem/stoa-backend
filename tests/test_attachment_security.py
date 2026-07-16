@@ -2255,6 +2255,7 @@ class _CleanupRepository:
         self.uploads = {item["upload_id"]: dict(item) for item in uploads}
         self.durable = durable or set()
         self.next_cursor = None
+        self.fail_progress_once: str | None = None
 
     def list_upload_cleanup_candidates(self, now_epoch, *, limit, exclusive_start_key=None):
         eligible = [
@@ -2357,6 +2358,9 @@ class _CleanupRepository:
     def _progress(self, upload_id, version, field):
         item = self.uploads[upload_id]
         if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        if self.fail_progress_once == field:
+            self.fail_progress_once = None
             return False
         item[field] = True
         item["version"] += 1
@@ -2638,6 +2642,62 @@ def test_cleanup_delete_failure_stays_unusable_retryable_and_redacted() -> None:
     )
     assert retried.deleted == 1
     assert repository.uploads["retry"]["status"] == "cleanup_complete"
+
+
+def test_cleanup_repository_split_after_exact_delete_retries_without_reviving_upload() -> None:
+    upload = _cleanup_upload("delete-split", "invalid", 1)
+    upload.update(
+        immutable_object_key="objects/private/delete-split",
+        immutable_version_id="immutable-delete-split-version",
+    )
+    repository = _CleanupRepository([upload])
+    repository.fail_progress_once = "cleanup_staging_deleted"
+    s3 = _CleanupS3()
+    first = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert first.retryable == 1
+    assert repository.uploads["delete-split"]["status"] == "cleanup_pending"
+    assert repository.uploads["delete-split"]["cleanup_multipart_aborted"] is True
+    second = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert second.deleted == 1
+    assert repository.uploads["delete-split"]["status"] == "cleanup_complete"
+    assert s3.deleted.count(
+        (
+            "private-bucket",
+            upload["immutable_object_key"],
+            upload["immutable_version_id"],
+        )
+    ) == 1
+
+
+def test_active_operation_lease_is_not_cleanup_eligible() -> None:
+    active = _cleanup_upload("active-issuing", "issuing", 1)
+    active.update(
+        operation_kind="staging_issuance",
+        operation_fence="active-fence",
+        operation_lease_expires_at=2_000_000_000,
+    )
+    active.pop("staging_version_id")
+    repository = _CleanupRepository([active])
+    s3 = _CleanupS3()
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.scanned == result.claimed == result.deleted == 0
+    assert repository.uploads["active-issuing"]["status"] == "issuing"
+    assert s3.deleted == [] and s3.aborted == []
 
 
 def test_cleanup_rejects_invalid_cursor_without_touching_local_fakes() -> None:
