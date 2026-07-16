@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 import hashlib
+import threading
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -483,6 +484,121 @@ def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
             )
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
+    assert len(s3.uploads) == 1
+
+
+def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() -> None:
+    entered, release = threading.Event(), threading.Event()
+
+    class BlockingS3(_ChunkS3):
+        def upload_part(self, **kwargs):
+            entered.set()
+            assert release.wait(2)
+            return super().upload_part(**kwargs)
+
+    repository, s3 = _ChunkRepository(), BlockingS3()
+    outcomes = []
+
+    def worker(value: bytes) -> None:
+        try:
+            outcomes.append(
+                asyncio.run(
+                    put_upload_chunk(
+                        "upload-1",
+                        1,
+                        _chunks(value),
+                        _student_actor(),
+                        s3=s3,
+                        settings=Settings(s3_images_bucket="bucket"),
+                        repository=repository,
+                    )
+                )
+            )
+        except AttachmentDecisionError as error:
+            outcomes.append(error.code)
+
+    first = threading.Thread(target=worker, args=(b"abc",))
+    first.start()
+    assert entered.wait(2)
+    second = threading.Thread(target=worker, args=(b"xyz",))
+    second.start()
+    second.join(2)
+    release.set()
+    first.join(2)
+    assert AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT in outcomes
+    assert len(s3.uploads) == 1
+
+
+def test_provider_success_ledger_failure_replay_adopts_matching_listed_part() -> None:
+    class Repository(_ChunkRepository):
+        def __init__(self):
+            super().__init__()
+            self.fail_completion_once = True
+
+        def claim_upload_part(self, upload_id, part_number, checksum, length, owner, now):
+            if not self.part:
+                return super().claim_upload_part(
+                    upload_id, part_number, checksum, length, owner, now
+                )
+            if self.part["checksum_sha256"] != checksum:
+                raise attachment_repo.AttachmentRepositoryConflict("chunk_conflict")
+            self.part.update(
+                lease_owner=owner,
+                lease_expires_at=now + 120,
+                attempt=2,
+                status="uploading",
+            )
+            return dict(self.part)
+
+        def complete_upload_part(self, upload_id, part_number, owner, **provider):
+            if self.fail_completion_once:
+                self.fail_completion_once = False
+                return False
+            return super().complete_upload_part(
+                upload_id, part_number, owner, **provider
+            )
+
+    class ReconcileS3(_ChunkS3):
+        def upload_part(self, **kwargs):
+            result = super().upload_part(**kwargs)
+            self.provider_part = {
+                "PartNumber": kwargs["PartNumber"],
+                "Size": kwargs["ContentLength"],
+                "ETag": result["ETag"],
+                "ChecksumSHA256": result["ChecksumSHA256"],
+            }
+            return result
+
+        def list_parts(self, **kwargs):
+            return {"Parts": [self.provider_part]}
+
+    repository, s3 = Repository(), ReconcileS3()
+    with pytest.raises(AttachmentDecisionError) as first:
+        asyncio.run(
+            put_upload_chunk(
+                "upload-1",
+                1,
+                _chunks(b"abc"),
+                _student_actor(),
+                s3=s3,
+                settings=Settings(s3_images_bucket="bucket"),
+                repository=repository,
+            )
+        )
+    assert first.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    replay = asyncio.run(
+        put_upload_chunk(
+            "upload-1",
+            1,
+            _chunks(b"abc"),
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="bucket"),
+            repository=repository,
+        )
+    )
+    assert replay["status"] == "accepted"
+    assert repository.part["status"] == "completed"
     assert len(s3.uploads) == 1
 
 
