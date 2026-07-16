@@ -43,6 +43,7 @@ from stoa.services.attachment_service import (
     release_resource_attachments,
     storage_limit_for_entitlement,
 )
+from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.db.repositories import attachment_repo
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services import ai_service
@@ -520,9 +521,7 @@ class _QuestionAttachmentRepository(_MessageAttachmentRepository):
         item["version"] = version + 1
         return True
 
-    def release_question_upload_reservation(
-        self, upload_id, owner_id, version, now_epoch
-    ):
+    def release_question_upload_reservation(self, upload_id, owner_id, version, now_epoch):
         item = self.uploads.get(upload_id)
         if (
             not item
@@ -538,9 +537,7 @@ class _QuestionAttachmentRepository(_MessageAttachmentRepository):
 
 
 def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic() -> None:
-    repository = _QuestionAttachmentRepository(
-        uploads={"upload-1": _validated_question_upload()}
-    )
+    repository = _QuestionAttachmentRepository(uploads={"upload-1": _validated_question_upload()})
     prepared = reserve_question_attachment(
         AttachmentReference(uploadId="upload-1"),
         _student_actor(),
@@ -619,15 +616,11 @@ def test_question_saved_image_reuse_has_no_storage_charge() -> None:
 def test_question_missing_foreign_reused_and_non_image_fail_before_effects() -> None:
     cases = [
         _QuestionAttachmentRepository(),
-        _QuestionAttachmentRepository(
-            uploads={"upload-1": _validated_question_upload("foreign")}
-        ),
+        _QuestionAttachmentRepository(uploads={"upload-1": _validated_question_upload("foreign")}),
         _QuestionAttachmentRepository(
             uploads={"upload-1": {**_validated_question_upload(), "status": "consumed"}}
         ),
-        _QuestionAttachmentRepository(
-            attachments={"attachment-saved": _saved_attachment()}
-        ),
+        _QuestionAttachmentRepository(attachments={"attachment-saved": _saved_attachment()}),
     ]
     references = [
         AttachmentReference(uploadId="upload-1"),
@@ -648,9 +641,7 @@ def test_question_missing_foreign_reused_and_non_image_fail_before_effects() -> 
 
 
 def test_question_transient_reservation_release_preserves_original_expiry() -> None:
-    repository = _QuestionAttachmentRepository(
-        uploads={"upload-1": _validated_question_upload()}
-    )
+    repository = _QuestionAttachmentRepository(uploads={"upload-1": _validated_question_upload()})
     prepared = reserve_question_attachment(
         AttachmentReference(uploadId="upload-1"),
         _student_actor(),
@@ -709,9 +700,7 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
         AttachmentReference(uploadId="upload-1"),
         AttachmentReference(attachmentId="attachment-saved"),
     ]
-    prepared = prepare_message_attachments(
-        references, _student_actor(), repository=repository
-    )
+    prepared = prepare_message_attachments(references, _student_actor(), repository=repository)
     summaries = bind_message_attachments(
         message={
             "PK": "CONV#conv-1",
@@ -764,10 +753,7 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
         repository=repository,
     )
     assert all(
-        not (
-            "Update" in operation
-            and operation["Update"]["Key"]["PK"].startswith("STORAGE#")
-        )
+        not ("Update" in operation and operation["Update"]["Key"]["PK"].startswith("STORAGE#"))
         for operation in repository.transactions[0]
     )
 
@@ -804,7 +790,7 @@ def test_bounded_plain_and_allowlisted_ooxml_extraction() -> None:
     assert extract_pptx_text(pptx) == "first\nsecond"
     xlsx = _archive(
         {
-            "xl/sharedStrings.xml": '<sst><si><t>shared</t></si></sst>',
+            "xl/sharedStrings.xml": "<sst><si><t>shared</t></si></sst>",
             "xl/worksheets/sheet1.xml": (
                 '<worksheet><c t="s"><v>0</v></c><c><f>2+2</f><v>4</v></c>'
                 "<c><v>plain</v></c></worksheet>"
@@ -1055,11 +1041,178 @@ def test_student_purge_releases_all_references_idempotently() -> None:
     repository = _RetentionRepository()
     s3 = _PrivateS3()
     settings = Settings(s3_images_bucket="private-bucket")
-    result = purge_student_attachments(
-        "student-1", s3=s3, settings=settings, repository=repository
-    )
+    result = purge_student_attachments("student-1", s3=s3, settings=settings, repository=repository)
     assert result == {"released": 2, "deleted": 1}
     assert len(s3.deleted) == 1
     assert purge_student_attachments(
         "student-1", s3=s3, settings=settings, repository=repository
     ) == {"released": 0, "deleted": 0}
+
+
+class _CleanupRepository:
+    def __init__(self, uploads: list[dict], durable: set[str] | None = None) -> None:
+        self.uploads = {item["upload_id"]: dict(item) for item in uploads}
+        self.durable = durable or set()
+        self.next_cursor = None
+
+    def list_upload_cleanup_candidates(self, now_epoch, *, limit, exclusive_start_key=None):
+        eligible = [
+            dict(item)
+            for item in self.uploads.values()
+            if item["status"] in {"invalid", "expired", "cleanup_pending"}
+            or (
+                item["status"] in {"pending_upload", "validating", "validated"}
+                and item["expires_at"] <= now_epoch
+            )
+        ]
+        return eligible[:limit], self.next_cursor
+
+    def claim_upload_cleanup(self, upload_id, version, now_epoch, reason):
+        item = self.uploads.get(upload_id)
+        if (
+            not item
+            or item["version"] != version
+            or item["status"] in {"consuming", "consumed", "cleanup_complete", "cleanup_blocked"}
+            or (
+                item["status"] not in {"invalid", "expired", "cleanup_pending"}
+                and item["expires_at"] > now_epoch
+            )
+        ):
+            return None
+        item["status"] = "cleanup_pending"
+        item["cleanup_reason"] = reason
+        item["version"] += 1
+        return dict(item)
+
+    def get_upload_intent(self, upload_id):
+        item = self.uploads.get(upload_id)
+        return dict(item) if item else None
+
+    def scan_durable_upload_references(
+        self, upload_id, object_key, *, limit, exclusive_start_key=None
+    ):
+        return upload_id in self.durable, None
+
+    def advance_upload_cleanup_reference_scan(self, upload_id, version, cursor):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item["cleanup_reference_cursor"] = cursor
+        item["version"] += 1
+        return True
+
+    def block_upload_cleanup(self, upload_id, version):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item["status"] = "cleanup_blocked"
+        item["version"] += 1
+        return True
+
+    def complete_upload_cleanup(self, upload_id, version, cleaned_at):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item["status"] = "cleanup_complete"
+        item["version"] += 1
+        item["cleaned_at"] = cleaned_at
+        item.pop("object_key", None)
+        return True
+
+
+class _CleanupS3:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.deleted: list[tuple[str, str]] = []
+
+    def delete_object(self, Bucket, Key):
+        if self.fail:
+            raise RuntimeError("provider payload key-canary")
+        self.deleted.append((Bucket, Key))
+
+
+def _cleanup_upload(upload_id: str, status: str, expires_at: int) -> dict:
+    return {
+        "upload_id": upload_id,
+        "owner_id": "student-content-canary",
+        "object_key": f"uploads/private/{upload_id}-key-canary.png",
+        "status": status,
+        "version": 1,
+        "expires_at": expires_at,
+    }
+
+
+def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploads() -> None:
+    repository = _CleanupRepository(
+        [
+            _cleanup_upload("expired", "validated", 1),
+            _cleanup_upload("invalid", "invalid", 2_000_000_000),
+            _cleanup_upload("durable", "expired", 1),
+            _cleanup_upload("active", "validated", 2_000_000_000),
+            _cleanup_upload("consuming", "consuming", 1),
+            _cleanup_upload("consumed", "consumed", 1),
+        ],
+        durable={"durable"},
+    )
+    s3 = _CleanupS3()
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        batch_limit=3,
+        page_limit=9,
+        repository=repository,
+    )
+    assert result.scanned == result.claimed == 3
+    assert result.deleted == 2 and result.protected == 1
+    assert {key for _, key in s3.deleted} == {
+        "uploads/private/expired-key-canary.png",
+        "uploads/private/invalid-key-canary.png",
+    }
+    repeated = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert repeated.deleted == 0
+    assert len(s3.deleted) == 2
+    assert repository.uploads["active"]["status"] == "validated"
+    assert repository.uploads["consuming"]["status"] == "consuming"
+    assert repository.uploads["consumed"]["status"] == "consumed"
+
+
+def test_cleanup_delete_failure_stays_unusable_retryable_and_redacted() -> None:
+    repository = _CleanupRepository([_cleanup_upload("retry", "invalid", 1)])
+    failed = cleanup_expired_uploads(
+        s3=_CleanupS3(fail=True),
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert failed.retryable == 1
+    assert repository.uploads["retry"]["status"] == "cleanup_pending"
+    serialized = str(failed.public_dict())
+    assert "retry-key-canary" not in serialized
+    assert "student-content-canary" not in serialized
+    s3 = _CleanupS3()
+    retried = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert retried.deleted == 1
+    assert repository.uploads["retry"]["status"] == "cleanup_complete"
+
+
+def test_cleanup_rejects_invalid_cursor_without_touching_local_fakes() -> None:
+    repository = _CleanupRepository([_cleanup_upload("invalid-cursor", "invalid", 1)])
+    result = cleanup_expired_uploads(
+        s3=_CleanupS3(),
+        settings_obj=Settings(),
+        continuation_token="raw-object-key-canary",
+        repository=repository,
+    )
+    assert result.invalid_continuation == 1
+    assert repository.uploads["invalid-cursor"]["status"] == "invalid"

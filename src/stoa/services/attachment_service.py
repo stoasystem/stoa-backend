@@ -16,7 +16,12 @@ from stoa.config import (
     Settings,
 )
 from stoa.db.repositories import attachment_repo
-from stoa.models.attachment import AttachmentReference, AttachmentStatus, AttachmentSummary, UploadIntentRequest
+from stoa.models.attachment import (
+    AttachmentReference,
+    AttachmentStatus,
+    AttachmentSummary,
+    UploadIntentRequest,
+)
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
@@ -30,6 +35,76 @@ from stoa.services.document_extraction_service import (
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
     return PAID_STORAGE_BYTES if effective_plan in {"standard", "premium"} else FREE_STORAGE_BYTES
+
+
+def cleanup_upload_intent(
+    candidate: dict[str, Any],
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime,
+    reference_scan_limit: int,
+    repository: Any = attachment_repo,
+) -> str:
+    """Safely advance one terminal/expired upload toward idempotent deletion."""
+    status = str(candidate.get("status") or "")
+    now_epoch = int(now.timestamp())
+    reason = (
+        "invalid"
+        if status == "invalid"
+        else "expired"
+        if status in {"expired", "validated", "validating"}
+        else "abandoned"
+    )
+    try:
+        claimed = repository.claim_upload_cleanup(
+            str(candidate.get("upload_id") or ""),
+            int(candidate.get("version", 0)),
+            now_epoch,
+            str(candidate.get("cleanup_reason") or reason),
+        )
+        if not claimed:
+            return "skipped"
+        current = repository.get_upload_intent(str(claimed["upload_id"]))
+        if (
+            not current
+            or current.get("status") != "cleanup_pending"
+            or int(current.get("version", -1)) != int(claimed.get("version", -2))
+        ):
+            return "skipped"
+        version = int(current["version"])
+        if current.get("durable_attachment_id"):
+            repository.block_upload_cleanup(str(current["upload_id"]), version)
+            return "protected"
+        object_key = str(current.get("object_key") or "")
+        found, next_cursor = repository.scan_durable_upload_references(
+            str(current["upload_id"]),
+            object_key,
+            limit=reference_scan_limit,
+            exclusive_start_key=current.get("cleanup_reference_cursor"),
+        )
+        if found:
+            repository.block_upload_cleanup(str(current["upload_id"]), version)
+            return "protected"
+        if next_cursor:
+            if repository.advance_upload_cleanup_reference_scan(
+                str(current["upload_id"]), version, next_cursor
+            ):
+                return "deferred"
+            return "skipped"
+        if object_key:
+            try:
+                s3.delete_object(Bucket=settings.s3_images_bucket, Key=object_key)
+            except Exception:
+                # cleanup_pending remains unusable and can be safely retried.
+                return "retryable"
+        if not repository.complete_upload_cleanup(
+            str(current["upload_id"]), version, now.isoformat()
+        ):
+            return "retryable"
+    except attachment_repo.AttachmentRepositoryConflict:
+        return "retryable"
+    return "deleted"
 
 
 def create_upload_intent(
@@ -129,7 +204,10 @@ def prepare_message_attachments(
     for reference in references:
         if reference.upload_id is not None:
             item = resolve_owned_upload(reference.upload_id, actor, now=now, repository=repository)
-            if item.get("status") != "validated" or item.get("expected_kind") != "conversation_attachment":
+            if (
+                item.get("status") != "validated"
+                or item.get("expected_kind") != "conversation_attachment"
+            ):
                 raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
             prepared.append(("upload", item))
         else:
@@ -162,10 +240,9 @@ def reserve_question_attachment(
             or upload.get("detected_type") not in {"image/jpeg", "image/png"}
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-        if (
-            repository.get_storage_usage(actor.user_id) + int(upload["content_length"])
-            > storage_limit_for_entitlement(effective_plan)
-        ):
+        if repository.get_storage_usage(actor.user_id) + int(
+            upload["content_length"]
+        ) > storage_limit_for_entitlement(effective_plan):
             raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
         version = int(upload.get("version", 0))
         if not repository.reserve_upload_for_question(
@@ -247,9 +324,7 @@ def invalidate_question_attachment(
             AttachmentErrorCode.UPLOAD_INVALID.value,
         )
         return
-    repository.invalidate_attachment(
-        prepared["attachment"]["attachment_id"], actor.user_id
-    )
+    repository.invalidate_attachment(prepared["attachment"]["attachment_id"], actor.user_id)
 
 
 def commit_question_with_attachment(
@@ -265,9 +340,7 @@ def commit_question_with_attachment(
     now = (now or datetime.now(UTC)).astimezone(UTC)
     attachment = prepared["attachment"]
     association = {
-        **repository.question_association_key(
-            attachment["attachment_id"], question["question_id"]
-        ),
+        **repository.question_association_key(attachment["attachment_id"], question["question_id"]),
         "attachment_id": attachment["attachment_id"],
         "owner_id": actor.user_id,
         "student_id": actor.user_id,
@@ -305,12 +378,9 @@ def ensure_message_attachment_capacity(
     *,
     repository: Any = attachment_repo,
 ) -> None:
-    fresh_bytes = sum(
-        int(item["content_length"]) for kind, item in prepared if kind == "upload"
-    )
-    if (
-        repository.get_storage_usage(owner_id) + fresh_bytes
-        > storage_limit_for_entitlement(effective_plan)
+    fresh_bytes = sum(int(item["content_length"]) for kind, item in prepared if kind == "upload")
+    if repository.get_storage_usage(owner_id) + fresh_bytes > storage_limit_for_entitlement(
+        effective_plan
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
 
@@ -375,7 +445,9 @@ def bind_message_attachments(
         summaries.append(_attachment_summary(attachment))
     message["attachment_ids"] = attachment_ids
     limit = storage_limit_for_entitlement(effective_plan)
-    ensure_message_attachment_capacity(prepared, actor.user_id, effective_plan, repository=repository)
+    ensure_message_attachment_capacity(
+        prepared, actor.user_id, effective_plan, repository=repository
+    )
     try:
         repository.transact(
             repository.build_message_attachment_transaction(
@@ -444,9 +516,7 @@ def release_resource_attachments(
     now = (now or datetime.now(UTC)).astimezone(UTC)
     items = repository.list_owner_attachment_items(owner_id)
     attachments = {
-        item["attachment_id"]: item
-        for item in items
-        if item.get("entity_type") == "attachment"
+        item["attachment_id"]: item for item in items if item.get("entity_type") == "attachment"
     }
     associations = [
         item

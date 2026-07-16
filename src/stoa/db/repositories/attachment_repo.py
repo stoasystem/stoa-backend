@@ -59,6 +59,182 @@ def get_upload_intent(upload_id: str, *, table: Any | None = None) -> dict[str, 
     return response.get("Item")
 
 
+def list_upload_cleanup_candidates(
+    now_epoch: int,
+    *,
+    limit: int,
+    exclusive_start_key: dict[str, Any] | None = None,
+    table: Any | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Return one bounded page of terminal or expired unconsumed upload intents."""
+    scan: dict[str, Any] = {
+        "Limit": limit,
+        "FilterExpression": (
+            "begins_with(PK,:upload) AND SK=:meta AND ("
+            "#status IN (:invalid,:expired,:cleanup_pending) OR ("
+            "#status IN (:pending,:validating,:validated) AND expires_at<=:now))"
+        ),
+        "ExpressionAttributeNames": {"#status": "status"},
+        "ExpressionAttributeValues": {
+            ":upload": "UPLOAD#",
+            ":meta": "META",
+            ":invalid": "invalid",
+            ":expired": "expired",
+            ":cleanup_pending": "cleanup_pending",
+            ":pending": "pending_upload",
+            ":validating": "validating",
+            ":validated": "validated",
+            ":now": now_epoch,
+        },
+    }
+    if exclusive_start_key:
+        scan["ExclusiveStartKey"] = exclusive_start_key
+    response = (table or get_table()).scan(**scan)
+    return list(response.get("Items", [])), response.get("LastEvaluatedKey")
+
+
+def claim_upload_cleanup(
+    upload_id: str,
+    version: int,
+    now_epoch: int,
+    reason: str,
+    *,
+    table: Any | None = None,
+) -> dict[str, Any] | None:
+    """Conditionally make one eligible intent non-consumable for cleanup."""
+    try:
+        response = (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=(
+                "SET #status=:cleanup_pending, #version=:next, cleanup_reason=:reason"
+            ),
+            ConditionExpression=(
+                "#version=:version AND ("
+                "#status IN (:invalid,:expired,:cleanup_pending) OR ("
+                "#status IN (:pending,:validating,:validated) AND expires_at<=:now))"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":version": version,
+                ":next": version + 1,
+                ":invalid": "invalid",
+                ":expired": "expired",
+                ":cleanup_pending": "cleanup_pending",
+                ":pending": "pending_upload",
+                ":validating": "validating",
+                ":validated": "validated",
+                ":now": now_epoch,
+                ":reason": reason,
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return None
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return response.get("Attributes")
+
+
+def scan_durable_upload_references(
+    upload_id: str,
+    object_key: str,
+    *,
+    limit: int,
+    exclusive_start_key: dict[str, Any] | None = None,
+    table: Any | None = None,
+) -> tuple[bool, dict[str, Any] | None]:
+    """Scan one bounded page for a durable attachment referencing upload bytes."""
+    scan: dict[str, Any] = {
+        "Limit": limit,
+        "FilterExpression": (
+            "begins_with(PK,:attachment) AND SK=:meta AND "
+            "(source_upload_id=:upload_id OR object_key=:object_key)"
+        ),
+        "ExpressionAttributeValues": {
+            ":attachment": "ATTACHMENT#",
+            ":meta": "META",
+            ":upload_id": upload_id,
+            ":object_key": object_key,
+        },
+    }
+    if exclusive_start_key:
+        scan["ExclusiveStartKey"] = exclusive_start_key
+    response = (table or get_table()).scan(**scan)
+    return bool(response.get("Items")), response.get("LastEvaluatedKey")
+
+
+def advance_upload_cleanup_reference_scan(
+    upload_id: str,
+    version: int,
+    cursor: dict[str, Any],
+    *,
+    table: Any | None = None,
+) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        "SET cleanup_reference_cursor=:cursor, #version=:next",
+        {":cursor": cursor, ":next": version + 1},
+        table=table,
+    )
+
+
+def block_upload_cleanup(upload_id: str, version: int, *, table: Any | None = None) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        "SET #status=:blocked, #version=:next REMOVE cleanup_reference_cursor",
+        {":blocked": "cleanup_blocked", ":next": version + 1},
+        table=table,
+    )
+
+
+def complete_upload_cleanup(
+    upload_id: str,
+    version: int,
+    cleaned_at: str,
+    *,
+    table: Any | None = None,
+) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        (
+            "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at "
+            "REMOVE object_key, etag, cleanup_reference_cursor"
+        ),
+        {":complete": "cleanup_complete", ":next": version + 1, ":cleaned_at": cleaned_at},
+        table=table,
+    )
+
+
+def _cleanup_update(
+    upload_id: str,
+    version: int,
+    update_expression: str,
+    values: dict[str, Any],
+    *,
+    table: Any | None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=update_expression,
+            ConditionExpression="#status=:pending AND #version=:version",
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                **values,
+                ":pending": "cleanup_pending",
+                ":version": version,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
 def get_attachment(attachment_id: str, *, table: Any | None = None) -> dict[str, Any] | None:
     response = (table or get_table()).get_item(
         Key=attachment_key(attachment_id), ConsistentRead=True
@@ -74,7 +250,9 @@ def get_attachments(
     target = table or get_table()
     if hasattr(target, "batch_get_item"):
         response = target.batch_get_item(
-            RequestItems={target.name: {"Keys": [attachment_key(value) for value in attachment_ids]}}
+            RequestItems={
+                target.name: {"Keys": [attachment_key(value) for value in attachment_ids]}
+            }
         )
         items = response.get("Responses", {}).get(target.name, [])
     elif hasattr(target, "meta") and hasattr(target.meta, "client"):
@@ -83,7 +261,10 @@ def get_attachments(
             RequestItems={
                 target.name: {
                     "Keys": [
-                        {key: serializer.serialize(value) for key, value in attachment_key(item).items()}
+                        {
+                            key: serializer.serialize(value)
+                            for key, value in attachment_key(item).items()
+                        }
                         for item in attachment_ids
                     ]
                 }
@@ -123,10 +304,11 @@ def build_message_attachment_transaction(
                 {
                     "Update": {
                         "Key": upload_key(upload["upload_id"]),
-                        "UpdateExpression": "SET #s=:consumed, #v=#v+:one",
+                        "UpdateExpression": (
+                            "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                        ),
                         "ConditionExpression": (
-                            "#owner=:owner AND #s=:validated AND #v=:version "
-                            "AND expires_at>:now"
+                            "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
                         ),
                         "ExpressionAttributeNames": {
                             "#owner": "owner_id",
@@ -140,6 +322,7 @@ def build_message_attachment_transaction(
                             ":version": int(upload["version"]),
                             ":one": 1,
                             ":now": int(upload["consume_epoch"]),
+                            ":attachment_id": attachment["attachment_id"],
                         },
                     }
                 },
@@ -305,10 +488,11 @@ def build_question_attachment_transaction(
                 {
                     "Update": {
                         "Key": upload_key(upload["upload_id"]),
-                        "UpdateExpression": "SET #s=:consumed, #v=#v+:one",
+                        "UpdateExpression": (
+                            "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                        ),
                         "ConditionExpression": (
-                            "#owner=:owner AND #s=:consuming AND #v=:version "
-                            "AND expires_at>:now"
+                            "#owner=:owner AND #s=:consuming AND #v=:version AND expires_at>:now"
                         ),
                         "ExpressionAttributeNames": {
                             "#owner": "owner_id",
@@ -322,6 +506,7 @@ def build_question_attachment_transaction(
                             ":version": int(upload["version"]),
                             ":one": 1,
                             ":now": int(upload["consume_epoch"]),
+                            ":attachment_id": attachment["attachment_id"],
                         },
                     }
                 },
@@ -358,8 +543,7 @@ def build_question_attachment_transaction(
                     "Key": attachment_key(attachment["attachment_id"]),
                     "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
                     "ConditionExpression": (
-                        "owner_id=:owner AND #status=:active AND "
-                        "detected_type IN (:jpeg,:png)"
+                        "owner_id=:owner AND #status=:active AND detected_type IN (:jpeg,:png)"
                     ),
                     "ExpressionAttributeNames": {"#status": "status"},
                     "ExpressionAttributeValues": {
@@ -396,9 +580,7 @@ def get_storage_usage(owner_id: str, *, table: Any | None = None) -> int:
     return int((response.get("Item") or {}).get("used_bytes", 0))
 
 
-def list_owner_attachment_items(
-    owner_id: str, *, table: Any | None = None
-) -> list[dict[str, Any]]:
+def list_owner_attachment_items(owner_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
     from boto3.dynamodb.conditions import Key
 
     response = (table or get_table()).query(
@@ -603,7 +785,9 @@ def build_first_attachment_transaction(
         {
             "Update": {
                 "Key": upload_key(upload["upload_id"]),
-                "UpdateExpression": "SET #s=:consumed, #v=#v+:one",
+                "UpdateExpression": (
+                    "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                ),
                 "ConditionExpression": "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now",
                 "ExpressionAttributeNames": {"#owner": "owner_id", "#s": "status", "#v": "version"},
                 "ExpressionAttributeValues": {
@@ -613,6 +797,7 @@ def build_first_attachment_transaction(
                     ":version": upload["version"],
                     ":one": 1,
                     ":now": upload.get("consume_epoch", 0),
+                    ":attachment_id": attachment["attachment_id"],
                 },
             }
         },
