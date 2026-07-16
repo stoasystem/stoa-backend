@@ -194,9 +194,9 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-10` — Add replayable conversation commands, atomic chat quota idempotency, and private-safe AI/conversation telemetry.
 
-**Wave 8** *(ready; Plans 473-08 through 473-10 complete)*
+**Wave 8** *(execution complete; independent verification pending)*
 
-- [ ] `473-11` — Re-run all privacy and authorization gates and regenerate final source-bound evidence and validation artifacts.
+- [x] `473-11` — Re-run all privacy and authorization gates and regenerate final source-bound evidence and validation artifacts.
 
 **Cross-cutting constraints:**
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-10-PLAN.md; next 473-11
-last_updated: "2026-07-16T16:12:04.382Z"
-last_activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and private telemetry are green
+stopped_at: Completed 473-11-PLAN.md; independent Phase 473 verification pending
+last_updated: "2026-07-16T18:15:00Z"
+last_activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local evidence gates are green
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 33
-  completed_plans: 32
-  percent: 97
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 10 of 11 complete; next Plan 11
-Status: Phase 473 gap closure in progress
-Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and private telemetry are green
+Plan: 11 of 11 execution plans complete; independent verification pending
+Status: Phase 473 gap closure execution complete; not independently verified
+Last activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local evidence gates are green
 
 ## Accumulated Context
 
@@ -36,6 +36,7 @@ Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and priv
 - Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
 - Conversation sends now use an exact versioned fingerprint, atomic command/chat-quota claim, deterministic effects, and a fenced expiring AI lease; regular and SSE retries replay one original result.
 - AI, title, conversation, replay, and OCR-fed question logs now use closed category/class/size/count/correlation telemetry with cross-service private-canary coverage.
+- Final evidence is bound to tested source `060f07f187441bc9cb31ac9c1286ea6165d5bfa0`: 301 Phase 473 tests, 636 inherited authorization tests, and the 1303-test full suite pass; deterministic inventory, Ruff, diff-check, manifest, and private denylist gates pass. External S3, deployed cleanup/IaC, and production log capture remain NOT RUN.
 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
@@ -80,7 +81,7 @@ Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and priv
 
 ### Pending Todos
 
-- Execute Phase 473 Plan 11 with `--gaps-only` before advancing to Phase 474.
+- Run the independent Phase 473 verifier; do not mark the phase complete from executor evidence alone.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -94,14 +95,14 @@ Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and priv
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 473 --gaps-only`; do not mark Phase 473 complete or approve external rollout until verification reruns as passed.
+- Run the orchestrator-owned Phase 473 independent verifier; do not approve external rollout from local executor evidence.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-16T16:12:04.376Z
-**Stopped At:** Completed 473-10-PLAN.md; next 473-11
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-11-PLAN.md
+**Last Date:** 2026-07-16T18:15:00Z
+**Stopped At:** Completed 473-11-PLAN.md; independent Phase 473 verification pending
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
 
 ## Performance Metrics
 
@@ -139,6 +140,7 @@ Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and priv
 | Phase 473 P08 | 22 min | 2 tasks | 12 files |
 | Phase 473 P09 | 8 min | 2 tasks | 5 files |
 | Phase 473 P10 | 21 min | 2 tasks | 10 files |
+| Phase 473 P11 | 11 min | 2 tasks | 3 evidence files plus summary/tracking |
 
 ## Decisions
 
