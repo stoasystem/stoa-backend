@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-12-PLAN.md
-last_updated: "2026-07-16T20:31:00.586Z"
+stopped_at: Completed 473-13-PLAN.md
+last_updated: "2026-07-16T21:10:18.950Z"
 last_activity: 2026-07-16 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 36
-  completed_plans: 34
-  percent: 94
+  completed_plans: 35
+  percent: 97
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 13 of 14
+Plan: 14 of 14
 Status: Ready to execute
 Last activity: 2026-07-16 -- Phase 473 execution started
 
@@ -103,8 +103,8 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-16T20:31:00.580Z
-**Stopped At:** Completed 473-12-PLAN.md
+**Last Date:** 2026-07-16T21:10:18.944Z
+**Stopped At:** Completed 473-13-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -145,8 +145,13 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 | Phase 473 P10 | 21 min | 2 tasks | 10 files |
 | Phase 473 P11 | 11 min | 2 tasks | 3 evidence files plus summary/tracking |
 | Phase 473 P12 | 14 min | 2 tasks | 3 files |
+| Phase 473 P13 | 36 min | 2 tasks | 6 files |
 
 ## Decisions
+
+- [Phase 473]: Command-derived fresh attachment IDs are immutable inputs with exact pre-effect cardinality checks; bound IDs use a separate output accumulator. — Lost and synchronized regular/SSE retries rebuild one identical durable attachment and association key set without consuming IDs for saved reuse.
+- [Phase 473]: Typed conditional conflicts remain concealed while dependency, malformed response, and unknown provider-success persistence outcomes use one retryable upload_service_unavailable contract. — The public gateway preserves resource concealment without exposing repository/provider diagnostics through raw 500 responses.
+- [Phase 473]: Validation and extraction bind one exact-version provider Body and close that same object in finally; close failure never replaces the stable primary outcome. — Deterministic connection release prevents pool exhaustion while preserving validation, parser, checksum, and dependency semantics.
 
 - [Phase 473]: Conversation send identity is a domain-separated length-prefixed SHA-256 over exact UTF-8 content and ordered typed opaque attachment identities. — Exact replay survives consumed uploads while changed content, type, or order conflicts before attachment lookup.
 - [Phase 473]: Message command creation, one quota-operation row, and the daily chat counter share one conditional transaction; deterministic messages and a fenced AI lease converge later effects. — Lost responses and synchronized regular/SSE duplicates cannot double-charge or create duplicate durable results.
