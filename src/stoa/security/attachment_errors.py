@@ -15,6 +15,7 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_TYPE_NOT_SUPPORTED = "upload_type_not_supported"
     UPLOAD_CONTENT_MISMATCH = "upload_content_mismatch"
     UPLOAD_INVALID = "upload_invalid"
+    UPLOAD_CHUNK_CONFLICT = "upload_chunk_conflict"
     STORAGE_QUOTA_EXCEEDED = "storage_quota_exceeded"
     UPLOAD_SERVICE_UNAVAILABLE = "upload_service_unavailable"
 
@@ -54,6 +55,11 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = 
     ),
     AttachmentErrorCode.UPLOAD_INVALID: AttachmentErrorContract(
         422, "This file may be damaged. Select another file.", AttachmentClientAction.SELECT_FILE
+    ),
+    AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT: AttachmentErrorContract(
+        409,
+        "This upload chunk conflicts with an earlier chunk. Select the file again.",
+        AttachmentClientAction.SELECT_FILE,
     ),
     AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED: AttachmentErrorContract(
         409,

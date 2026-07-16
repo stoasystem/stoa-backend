@@ -20,6 +20,10 @@ def upload_key(upload_id: str) -> dict[str, str]:
     return {"PK": f"UPLOAD#{upload_id}", "SK": "META"}
 
 
+def upload_part_key(upload_id: str, part_number: int) -> dict[str, str]:
+    return {"PK": f"UPLOAD#{upload_id}", "SK": f"PART#{part_number:06d}"}
+
+
 def attachment_key(attachment_id: str) -> dict[str, str]:
     return {"PK": f"ATTACHMENT#{attachment_id}", "SK": "META"}
 
@@ -52,6 +56,247 @@ def create_upload_intent(item: dict[str, Any], *, table: Any | None = None) -> N
         )
     except ClientError as exc:
         _translate(exc)
+
+
+def mark_upload_issued(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    staging_object_key: str,
+    multipart_upload_id: str,
+    table: Any | None = None,
+) -> bool:
+    return _transition(
+        upload_id,
+        owner_id,
+        "issuing",
+        "pending_upload",
+        version,
+        None,
+        attributes={
+            "staging_object_key": staging_object_key,
+            "multipart_upload_id": multipart_upload_id,
+        },
+        table=table,
+    )
+
+
+def mark_upload_issuance_failed(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    cleanup_pending: bool = False,
+    table: Any | None = None,
+) -> bool:
+    return _transition(
+        upload_id,
+        owner_id,
+        "issuing",
+        "cleanup_pending" if cleanup_pending else "invalid",
+        version,
+        None,
+        attributes={"validation_failure": "service_unavailable"},
+        table=table,
+    )
+
+
+def get_upload_part(
+    upload_id: str, part_number: int, *, table: Any | None = None
+) -> dict[str, Any] | None:
+    response = (table or get_table()).get_item(
+        Key=upload_part_key(upload_id, part_number), ConsistentRead=True
+    )
+    return response.get("Item")
+
+
+def claim_upload_part(
+    upload_id: str,
+    part_number: int,
+    checksum_sha256: str,
+    length: int,
+    lease_owner: str,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Claim before provider mutation; one expired takeover is the only retry fence."""
+    target = table or get_table()
+    item = {
+        **upload_part_key(upload_id, part_number),
+        "upload_id": upload_id,
+        "part_number": part_number,
+        "status": "uploading",
+        "checksum_sha256": checksum_sha256,
+        "content_length": length,
+        "lease_owner": lease_owner,
+        "lease_expires_at": now_epoch + 120,
+        "attempt": 1,
+    }
+    try:
+        target.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+        return item
+    except ClientError as exc:
+        if not _conditional(exc):
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+    current = get_upload_part(upload_id, part_number, table=target)
+    if not current:
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if (
+        current.get("checksum_sha256") != checksum_sha256
+        or int(current.get("content_length", -1)) != length
+    ):
+        raise AttachmentRepositoryConflict("chunk_conflict")
+    if current.get("status") == "completed" or int(
+        current.get("lease_expires_at", 0)
+    ) > now_epoch:
+        return current
+    if int(current.get("attempt", 1)) >= 2:
+        raise AttachmentRepositoryConflict("lease_exhausted")
+    try:
+        response = target.update_item(
+            Key=upload_part_key(upload_id, part_number),
+            UpdateExpression=(
+                "SET lease_owner=:owner, lease_expires_at=:expiry, attempt=:attempt"
+            ),
+            ConditionExpression=(
+                "#status=:uploading AND checksum_sha256=:checksum AND "
+                "content_length=:length AND lease_expires_at<=:now AND attempt=:previous"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":uploading": "uploading",
+                ":checksum": checksum_sha256,
+                ":length": length,
+                ":now": now_epoch,
+                ":previous": 1,
+                ":owner": lease_owner,
+                ":expiry": now_epoch + 120,
+                ":attempt": 2,
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return get_upload_part(upload_id, part_number, table=target) or current
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return response.get("Attributes") or {**current, "lease_owner": lease_owner, "attempt": 2}
+
+
+def complete_upload_part(
+    upload_id: str,
+    part_number: int,
+    lease_owner: str,
+    *,
+    provider_etag: str,
+    provider_checksum: str,
+    table: Any | None = None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=upload_part_key(upload_id, part_number),
+            UpdateExpression=(
+                "SET #status=:completed, provider_etag=:etag, "
+                "provider_checksum=:provider_checksum REMOVE lease_expires_at"
+            ),
+            ConditionExpression="#status=:uploading AND lease_owner=:owner",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":uploading": "uploading",
+                ":completed": "completed",
+                ":owner": lease_owner,
+                ":etag": provider_etag,
+                ":provider_checksum": provider_checksum,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def list_upload_parts(
+    upload_id: str, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    from boto3.dynamodb.conditions import Key
+
+    response = (table or get_table()).query(
+        KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}")
+        & Key("SK").begins_with("PART#"),
+        ConsistentRead=True,
+    )
+    return sorted(response.get("Items", []), key=lambda item: int(item["part_number"]))
+
+
+def begin_upload_assembly(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> bool:
+    return _transition(
+        upload_id,
+        owner_id,
+        "pending_upload",
+        "assembling",
+        version,
+        now_epoch,
+        table=table,
+    )
+
+
+def mark_staging_completed(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    staging_version_id: str,
+    staging_etag: str,
+    table: Any | None = None,
+) -> bool:
+    return _transition(
+        upload_id,
+        owner_id,
+        "assembling",
+        "validating",
+        version,
+        None,
+        attributes={
+            "staging_version_id": staging_version_id,
+            "staging_etag": staging_etag,
+        },
+        table=table,
+    )
+
+
+def mark_upload_terminal(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    failure_category: str,
+    *,
+    table: Any | None = None,
+) -> bool:
+    item = get_upload_intent(upload_id, table=table)
+    if not item:
+        return False
+    return _transition(
+        upload_id,
+        owner_id,
+        str(item.get("status")),
+        "cleanup_pending",
+        version,
+        None,
+        attributes={"validation_failure": failure_category},
+        table=table,
+    )
 
 
 def get_upload_intent(upload_id: str, *, table: Any | None = None) -> dict[str, Any] | None:

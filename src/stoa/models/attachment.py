@@ -22,7 +22,9 @@ class UploadPurpose(StrEnum):
 
 
 class UploadStatus(StrEnum):
+    ISSUING = "issuing"
     PENDING_UPLOAD = "pending_upload"
+    ASSEMBLING = "assembling"
     VALIDATING = "validating"
     VALIDATED = "validated"
     CONSUMING = "consuming"
@@ -45,10 +47,9 @@ class UploadIntentRequest(_AttachmentModel):
 
 class UploadIntentResponse(_AttachmentModel):
     upload_id: OpaqueId = Field(alias="uploadId")
-    url: str = Field(min_length=1)
-    fields: dict[str, str]
     expires_at: datetime = Field(alias="expiresAt")
     max_bytes: int = Field(alias="maxBytes", gt=0)
+    chunk_bytes: int = Field(alias="chunkBytes", gt=0)
     accepted_types: list[str] = Field(alias="acceptedTypes", min_length=1)
     status: UploadStatus = UploadStatus.PENDING_UPLOAD
 
@@ -62,7 +63,19 @@ class AttachmentSummary(_AttachmentModel):
     created_at: datetime = Field(alias="createdAt")
 
 
-class FinalizeUploadResponse(_AttachmentModel):
+class UploadChunkResponse(_AttachmentModel):
+    upload_id: OpaqueId = Field(alias="uploadId")
+    part_number: int = Field(alias="partNumber", ge=1)
+    size_bytes: int = Field(alias="sizeBytes", gt=0)
+    checksum_sha256: str = Field(alias="checksumSha256", pattern=r"^[0-9a-f]{64}$")
+    status: str = Field(pattern=r"^accepted$")
+
+
+class CompleteUploadRequest(_AttachmentModel):
+    part_count: int = Field(alias="partCount", ge=1, le=10)
+
+
+class CompleteUploadResponse(_AttachmentModel):
     upload_id: OpaqueId = Field(alias="uploadId")
     status: UploadStatus
     attachment: AttachmentSummary | None = None

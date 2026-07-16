@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -32,9 +33,10 @@ from stoa.security.attachment_errors import (
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services.attachment_service import (
     bind_message_attachments,
+    complete_upload,
     create_upload_intent,
     extract_message_attachment_context,
-    finalize_upload,
+    put_upload_chunk,
     prepare_message_attachments,
     purge_student_attachments,
     reserve_question_attachment,
@@ -99,6 +101,8 @@ def test_effective_entitlement_contract_includes_attachment_storage(
 
 def test_attachment_contract_models_use_only_opaque_public_coordinates() -> None:
     forbidden = {
+        "url",
+        "fields",
         "s3_key",
         "object_key",
         "bucket",
@@ -308,14 +312,29 @@ class _IntentRepository:
         assert self.item is None
         self.item = item
 
+    def mark_upload_issued(self, upload_id, owner_id, version, **coordinates) -> bool:
+        assert self.item and self.item["status"] == "issuing"
+        self.item.update(coordinates)
+        self.item["status"] = "pending_upload"
+        self.item["version"] = version + 1
+        return True
 
-class _PostS3:
+    def mark_upload_issuance_failed(self, *args, **kwargs) -> bool:
+        if self.item:
+            self.item["status"] = "cleanup_pending" if kwargs.get("cleanup_pending") else "invalid"
+        return True
+
+
+class _MultipartS3:
     def __init__(self) -> None:
         self.call: dict | None = None
 
-    def generate_presigned_post(self, **kwargs):
+    def create_multipart_upload(self, **kwargs):
         self.call = kwargs
-        return {"url": "https://upload.invalid", "fields": {"key": kwargs["Key"]}}
+        return {"UploadId": "private-provider-upload-id"}
+
+    def abort_multipart_upload(self, **kwargs):
+        self.aborted = kwargs
 
 
 def _student_actor(user_id: str = "student-1") -> Actor:
@@ -324,8 +343,8 @@ def _student_actor(user_id: str = "student-1") -> Actor:
     )
 
 
-def test_intent_is_owner_bound_opaque_and_post_policy_is_exact() -> None:
-    repository, s3 = _IntentRepository(), _PostS3()
+def test_gateway_issuance_is_owner_bound_opaque_and_multipart_private() -> None:
+    repository, s3 = _IntentRepository(), _MultipartS3()
     result = create_upload_intent(
         UploadIntentRequest(
             purpose="question_image", filename="work.png", contentType="image/png", sizeBytes=10
@@ -338,18 +357,23 @@ def test_intent_is_owner_bound_opaque_and_post_policy_is_exact() -> None:
     )
     assert set(result) == {
         "uploadId",
-        "url",
-        "fields",
         "expiresAt",
         "maxBytes",
+        "chunkBytes",
         "acceptedTypes",
         "status",
     }
     assert repository.item and repository.item["owner_id"] == "student-1"
     assert repository.item["expires_at"] == 1767227400
-    assert "object_key" in repository.item and "object_key" not in str(result)
-    assert s3.call["ExpiresIn"] == 1800
-    assert ["content-length-range", 1, IMAGE_MAX_BYTES] in s3.call["Conditions"]
+    assert repository.item["status"] == "pending_upload"
+    assert "staging_object_key" in repository.item
+    assert repository.item["multipart_upload_id"] == "private-provider-upload-id"
+    assert result["chunkBytes"] == 5 * 1024 * 1024
+    assert all(
+        value not in str(result)
+        for value in (repository.item["staging_object_key"], "private-provider-upload-id", "bucket")
+    )
+    assert s3.call["ChecksumAlgorithm"] == "SHA256"
 
 
 def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
@@ -358,95 +382,174 @@ def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
     assert storage_limit_for_entitlement("premium") == PAID_STORAGE_BYTES
 
 
-class _FinalizeRepository:
-    def __init__(self, item: dict | None) -> None:
-        self.item = item
-        self.events: list[str] = []
-
-    def get_upload_intent(self, upload_id: str):
-        return self.item
-
-    def begin_validation(self, *args) -> bool:
-        self.events.append("begin")
-        return True
-
-    def mark_validated(self, *args) -> bool:
-        self.events.append("validated")
-        return True
-
-    def mark_invalid(self, *args) -> bool:
-        self.events.append("invalid")
-        return True
-
-    def release_validation(self, *args) -> bool:
-        self.events.append("released")
-        return True
-
-
-class _Body:
-    def __init__(self, data: bytes):
-        self.data = data
-
-    def read(self, limit: int) -> bytes:
-        return self.data[:limit]
-
-
-class _FinalizeS3:
-    def __init__(self, data: bytes):
-        self.data = data
-        self.calls: list[str] = []
-
-    def head_object(self, **kwargs):
-        self.calls.append("head")
-        return {"ContentLength": len(self.data), "ContentType": "image/png", "ETag": "etag"}
-
-    def get_object(self, **kwargs):
-        self.calls.append("get")
-        return {"Body": _Body(self.data), "ETag": "etag"}
-
-
-def _pending_upload(owner: str = "student-1") -> dict:
+def _pending_upload(owner: str = "student-1", expected_size: int = 3) -> dict:
     return {
         "upload_id": "upload-1",
         "owner_id": owner,
-        "object_key": "uploads/private/object-canary.png",
+        "staging_object_key": "staging/private/object-canary.png",
+        "multipart_upload_id": "provider-upload-canary",
         "original_filename": "work.png",
         "declared_type": "image/png",
         "max_bytes": IMAGE_MAX_BYTES,
+        "expected_size": expected_size,
+        "part_count": 1,
         "status": "pending_upload",
-        "version": 1,
+        "version": 2,
         "expires_at": 2_000_000_000,
     }
 
 
-def test_finalize_heads_reads_validates_then_transitions() -> None:
-    repository = _FinalizeRepository(_pending_upload())
-    s3 = _FinalizeS3(_image("PNG"))
-    result = finalize_upload(
-        "upload-1",
-        _student_actor(),
-        s3=s3,
-        settings=Settings(s3_images_bucket="bucket"),
-        repository=repository,
-    )
-    assert result["status"] == "validated"
-    assert s3.calls == ["head", "get"]
-    assert repository.events == ["begin", "validated"]
+class _ChunkRepository:
+    def __init__(self, item=None):
+        self.item = item or _pending_upload()
+        self.part = None
+
+    def get_upload_intent(self, upload_id):
+        return self.item
+
+    def claim_upload_part(self, upload_id, part_number, checksum, length, owner, now):
+        if self.part and self.part["checksum_sha256"] != checksum:
+            raise attachment_repo.AttachmentRepositoryConflict("chunk_conflict")
+        if not self.part:
+            self.part = {
+                "status": "uploading",
+                "part_number": part_number,
+                "checksum_sha256": checksum,
+                "content_length": length,
+                "lease_owner": owner,
+                "attempt": 1,
+            }
+        return dict(self.part)
+
+    def get_upload_part(self, upload_id, part_number):
+        return dict(self.part) if self.part else None
+
+    def complete_upload_part(self, upload_id, part_number, owner, **provider):
+        assert self.part and self.part["lease_owner"] == owner
+        self.part.update(provider)
+        self.part["status"] = "completed"
+        return True
 
 
-def test_foreign_finalize_is_hidden_before_s3_read() -> None:
-    repository = _FinalizeRepository(_pending_upload("foreign-student-canary"))
-    s3 = _FinalizeS3(_image("PNG"))
-    with pytest.raises(AttachmentDecisionError) as error:
-        finalize_upload(
+class _ChunkS3:
+    def __init__(self):
+        self.uploads = []
+
+    def upload_part(self, **kwargs):
+        self.uploads.append(kwargs)
+        return {"ETag": "private-etag", "ChecksumSHA256": kwargs["ChecksumSHA256"]}
+
+
+async def _chunks(*values: bytes):
+    for value in values:
+        yield value
+
+
+def test_chunk_claim_precedes_provider_write_and_receipt_is_safe() -> None:
+    repository, s3 = _ChunkRepository(), _ChunkS3()
+    result = asyncio.run(
+        put_upload_chunk(
             "upload-1",
+            1,
+            _chunks(b"a", b"bc"),
             _student_actor(),
             s3=s3,
             settings=Settings(s3_images_bucket="bucket"),
             repository=repository,
         )
-    assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
-    assert s3.calls == []
+    )
+    assert result["status"] == "accepted"
+    assert repository.part["status"] == "completed"
+    assert len(s3.uploads) == 1
+    assert all(value not in str(result) for value in ("private-etag", "provider-upload-canary", "bucket"))
+
+
+def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
+    repository, s3 = _ChunkRepository(), _ChunkS3()
+    asyncio.run(
+        put_upload_chunk(
+            "upload-1", 1, _chunks(b"abc"), _student_actor(), s3=s3,
+            settings=Settings(s3_images_bucket="bucket"), repository=repository,
+        )
+    )
+    repository.part["status"] = "uploading"
+    with pytest.raises(AttachmentDecisionError) as error:
+        asyncio.run(
+            put_upload_chunk(
+                "upload-1", 1, _chunks(b"xyz"), _student_actor(), s3=s3,
+                settings=Settings(s3_images_bucket="bucket"), repository=repository,
+            )
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
+    assert len(s3.uploads) == 1
+
+
+def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
+    class Repository(_ChunkRepository):
+        def __init__(self):
+            super().__init__()
+            self.part = {
+                "status": "completed",
+                "part_number": 1,
+                "provider_etag": "server-private-etag",
+            }
+
+        def list_upload_parts(self, upload_id):
+            return [dict(self.part)]
+
+        def begin_upload_assembly(self, upload_id, owner_id, version, now):
+            self.item["status"] = "assembling"
+            return True
+
+        def mark_staging_completed(self, upload_id, owner_id, version, **values):
+            self.item.update(values)
+            self.item["status"] = "validating"
+            return True
+
+    class S3:
+        def __init__(self):
+            self.complete = None
+
+        def complete_multipart_upload(self, **kwargs):
+            self.complete = kwargs
+            return {"VersionId": "private-version", "ETag": "private-final-etag"}
+
+    repository, s3 = Repository(), S3()
+    result = complete_upload(
+        "upload-1",
+        1,
+        _student_actor(),
+        s3=s3,
+        settings=Settings(s3_images_bucket="bucket"),
+        repository=repository,
+    )
+    assert result == {"uploadId": "upload-1", "status": "validating", "attachment": None}
+    assert s3.complete["MultipartUpload"]["Parts"] == [
+        {"PartNumber": 1, "ETag": "server-private-etag"}
+    ]
+
+
+def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
+    class FailingS3(_MultipartS3):
+        def create_multipart_upload(self, **kwargs):
+            raise RuntimeError("provider-name-and-coordinate-canary")
+
+    repository = _IntentRepository()
+    with pytest.raises(AttachmentDecisionError) as error:
+        create_upload_intent(
+            UploadIntentRequest(
+                purpose="question_image",
+                filename="work.png",
+                contentType="image/png",
+                sizeBytes=10,
+            ),
+            _student_actor(),
+            s3=FailingS3(),
+            settings=Settings(s3_images_bucket="bucket"),
+            repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item and repository.item["status"] == "invalid"
 
 
 class _MessageAttachmentRepository:

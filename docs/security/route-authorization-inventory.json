@@ -3884,7 +3884,7 @@
     "family": "files",
     "identifiers": [],
     "method": "POST",
-    "path": "/files/presign",
+    "path": "/files/intents",
     "sensitive": false
   },
   {
@@ -3902,7 +3902,7 @@
       "upload_id"
     ],
     "method": "POST",
-    "path": "/files/{upload_id}/finalize",
+    "path": "/files/{upload_id}/complete",
     "sensitive": true
   },
   {
@@ -4482,6 +4482,24 @@
     ],
     "method": "POST",
     "path": "/teachers/questions/{question_id}/takeover",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "upload_id"
+    ],
+    "method": "PUT",
+    "path": "/files/{upload_id}/chunks/{part_number}",
     "sensitive": true
   },
   {

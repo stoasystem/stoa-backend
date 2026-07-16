@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 from datetime import UTC, datetime
+import hashlib
 from pathlib import PurePath
+from tempfile import SpooledTemporaryFile
 from typing import Any
 from uuid import uuid4
 
@@ -25,12 +29,15 @@ from stoa.models.attachment import (
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
-from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 from stoa.services.document_extraction_service import (
     MAX_EXTRACTED_CHARACTERS,
     DocumentExtractionFailure,
     extract_attachment_text,
 )
+
+
+UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024
+UPLOAD_SPOOL_MEMORY_BYTES = 1024 * 1024
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
@@ -131,43 +138,320 @@ def create_upload_intent(
     if request.size_bytes > max_bytes:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
     upload_id = str(uuid4())
-    object_key = f"uploads/{uuid4().hex}/{upload_id}.{extension}"
+    staging_object_key = f"staging/{uuid4().hex}/{upload_id}.{extension}"
     expires_epoch = int(now.timestamp()) + UPLOAD_INTENT_TTL_SECONDS
+    part_count = (request.size_bytes + UPLOAD_CHUNK_BYTES - 1) // UPLOAD_CHUNK_BYTES
     item = {
         "upload_id": upload_id,
         "owner_id": actor.user_id,
-        "object_key": object_key,
         "original_filename": PurePath(request.filename).name,
         "declared_type": request.content_type,
         "expected_kind": request.purpose.value,
         "expected_size": request.size_bytes,
         "max_bytes": max_bytes,
-        "status": "pending_upload",
+        "part_count": part_count,
+        "status": "issuing",
         "version": 1,
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
-    repository.create_upload_intent(item)
-    post = s3.generate_presigned_post(
-        Bucket=settings.s3_images_bucket,
-        Key=object_key,
-        Fields={"Content-Type": request.content_type},
-        Conditions=[
-            {"key": object_key},
-            {"Content-Type": request.content_type},
-            ["content-length-range", 1, max_bytes],
-        ],
-        ExpiresIn=UPLOAD_INTENT_TTL_SECONDS,
-    )
+    multipart_upload_id: str | None = None
+    try:
+        repository.create_upload_intent(item)
+        created = s3.create_multipart_upload(
+            Bucket=settings.s3_images_bucket,
+            Key=staging_object_key,
+            ContentType=request.content_type,
+            ServerSideEncryption="AES256",
+            Metadata={"upload-id": upload_id},
+            ChecksumAlgorithm="SHA256",
+        )
+        multipart_upload_id = str(created["UploadId"])
+        if not repository.mark_upload_issued(
+            upload_id,
+            actor.user_id,
+            1,
+            staging_object_key=staging_object_key,
+            multipart_upload_id=multipart_upload_id,
+        ):
+            raise RuntimeError("issuance transition failed")
+    except Exception:
+        if multipart_upload_id:
+            try:
+                s3.abort_multipart_upload(
+                    Bucket=settings.s3_images_bucket,
+                    Key=staging_object_key,
+                    UploadId=multipart_upload_id,
+                )
+            except Exception:
+                pass
+        try:
+            repository.mark_upload_issuance_failed(
+                upload_id,
+                actor.user_id,
+                1,
+                cleanup_pending=bool(multipart_upload_id),
+            )
+        except Exception:
+            pass
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
     return {
         "uploadId": upload_id,
-        "url": post["url"],
-        "fields": post["fields"],
         "expiresAt": datetime.fromtimestamp(expires_epoch, UTC),
         "maxBytes": max_bytes,
+        "chunkBytes": UPLOAD_CHUNK_BYTES,
         "acceptedTypes": list(allowed),
         "status": "pending_upload",
     }
+
+
+async def put_upload_chunk(
+    upload_id: str,
+    part_number: int,
+    chunks: Any,
+    actor: Actor,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, Any]:
+    """Buffer one bounded part, claim its digest, then perform the provider mutation."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
+    if item.get("status") != "pending_upload":
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    expected_parts = int(item["part_count"])
+    if not 1 <= part_number <= expected_parts:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    expected_length = (
+        UPLOAD_CHUNK_BYTES
+        if part_number < expected_parts
+        else int(item["expected_size"]) - UPLOAD_CHUNK_BYTES * (expected_parts - 1)
+    )
+    digest = hashlib.sha256()
+    length = 0
+    with SpooledTemporaryFile(max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b") as spool:
+        async for value in chunks:
+            if not value:
+                continue
+            remaining = expected_length + 1 - length
+            if remaining <= 0:
+                break
+            bounded = value[:remaining]
+            spool.write(bounded)
+            digest.update(bounded)
+            length += len(bounded)
+            if len(value) > remaining:
+                length += 1
+                break
+        if length > expected_length:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+        if length != expected_length:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+        checksum = digest.hexdigest()
+        lease_owner = uuid4().hex
+        try:
+            claim = repository.claim_upload_part(
+                upload_id,
+                part_number,
+                checksum,
+                length,
+                lease_owner,
+                int(now.timestamp()),
+            )
+        except attachment_repo.AttachmentRepositoryConflict as exc:
+            if exc.category == "chunk_conflict":
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT) from None
+            if exc.category in {"lease_exhausted"}:
+                _terminal_abort(item, actor, s3=s3, settings=settings, repository=repository)
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+        if claim.get("status") == "completed":
+            return _safe_part_receipt(upload_id, part_number, length, checksum)
+        if claim.get("lease_owner") != lease_owner:
+            for _ in range(20):
+                await asyncio.sleep(0.05)
+                current = repository.get_upload_part(upload_id, part_number)
+                if current and current.get("status") == "completed":
+                    return _safe_part_receipt(upload_id, part_number, length, checksum)
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+        if int(claim.get("attempt", 1)) > 1:
+            adopted = _reconcile_provider_part(
+                item,
+                part_number,
+                length,
+                checksum,
+                lease_owner,
+                s3=s3,
+                settings=settings,
+                repository=repository,
+            )
+            if adopted:
+                return _safe_part_receipt(upload_id, part_number, length, checksum)
+        spool.seek(0)
+        provider_checksum = base64.b64encode(bytes.fromhex(checksum)).decode("ascii")
+        try:
+            result = s3.upload_part(
+                Bucket=settings.s3_images_bucket,
+                Key=item["staging_object_key"],
+                UploadId=item["multipart_upload_id"],
+                PartNumber=part_number,
+                Body=spool,
+                ContentLength=length,
+                ChecksumSHA256=provider_checksum,
+            )
+        except Exception:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+        if not repository.complete_upload_part(
+            upload_id,
+            part_number,
+            lease_owner,
+            provider_etag=str(result.get("ETag") or ""),
+            provider_checksum=str(result.get("ChecksumSHA256") or provider_checksum),
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return _safe_part_receipt(upload_id, part_number, length, checksum)
+
+
+def _safe_part_receipt(
+    upload_id: str, part_number: int, length: int, checksum: str
+) -> dict[str, Any]:
+    return {
+        "uploadId": upload_id,
+        "partNumber": part_number,
+        "sizeBytes": length,
+        "checksumSha256": checksum,
+        "status": "accepted",
+    }
+
+
+def _reconcile_provider_part(
+    item: dict[str, Any],
+    part_number: int,
+    length: int,
+    checksum: str,
+    lease_owner: str,
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any,
+) -> bool:
+    try:
+        response = s3.list_parts(
+            Bucket=settings.s3_images_bucket,
+            Key=item["staging_object_key"],
+            UploadId=item["multipart_upload_id"],
+        )
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    for provider_part in response.get("Parts", []):
+        if int(provider_part.get("PartNumber", 0)) != part_number:
+            continue
+        encoded = str(provider_part.get("ChecksumSHA256") or "")
+        try:
+            provider_hex = base64.b64decode(encoded).hex()
+        except Exception:
+            provider_hex = ""
+        if int(provider_part.get("Size", -1)) != length or provider_hex != checksum:
+            _terminal_abort(item, None, s3=s3, settings=settings, repository=repository)
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        if not repository.complete_upload_part(
+            item["upload_id"],
+            part_number,
+            lease_owner,
+            provider_etag=str(provider_part.get("ETag") or ""),
+            provider_checksum=encoded,
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        return True
+    return False
+
+
+def _terminal_abort(
+    item: dict[str, Any],
+    actor: Actor | None,
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any,
+) -> None:
+    try:
+        repository.mark_upload_terminal(
+            item["upload_id"],
+            item["owner_id"] if actor is None else actor.user_id,
+            int(item["version"]),
+            "multipart_reconciliation_failed",
+        )
+    except Exception:
+        pass
+    try:
+        s3.abort_multipart_upload(
+            Bucket=settings.s3_images_bucket,
+            Key=item["staging_object_key"],
+            UploadId=item["multipart_upload_id"],
+        )
+    except Exception:
+        pass
+
+
+def complete_upload(
+    upload_id: str,
+    part_count: int,
+    actor: Actor,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, Any]:
+    """Assemble only server-ledger ETags; validation/promotion follows this transition."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
+    if item.get("status") == "validating":
+        return {"uploadId": upload_id, "status": "validating", "attachment": None}
+    if item.get("status") != "pending_upload" or part_count != int(item["part_count"]):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    parts = repository.list_upload_parts(upload_id)
+    if [int(part.get("part_number", 0)) for part in parts] != list(range(1, part_count + 1)):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    if any(part.get("status") != "completed" for part in parts):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    version = int(item["version"])
+    if not repository.begin_upload_assembly(
+        upload_id, actor.user_id, version, int(now.timestamp())
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    try:
+        result = s3.complete_multipart_upload(
+            Bucket=settings.s3_images_bucket,
+            Key=item["staging_object_key"],
+            UploadId=item["multipart_upload_id"],
+            MultipartUpload={
+                "Parts": [
+                    {"PartNumber": int(part["part_number"]), "ETag": part["provider_etag"]}
+                    for part in parts
+                ]
+            },
+        )
+        if not repository.mark_staging_completed(
+            upload_id,
+            actor.user_id,
+            version + 1,
+            staging_version_id=str(result.get("VersionId") or ""),
+            staging_etag=str(result.get("ETag") or ""),
+        ):
+            raise RuntimeError("staging completion transition failed")
+    except Exception:
+        _terminal_abort(
+            {**item, "version": version + 1},
+            actor,
+            s3=s3,
+            settings=settings,
+            repository=repository,
+        )
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    return {"uploadId": upload_id, "status": "validating", "attachment": None}
 
 
 def resolve_owned_upload(
@@ -670,66 +954,3 @@ def _attachment_summary(item: dict[str, Any]) -> AttachmentSummary:
         status=AttachmentStatus.ACTIVE,
         createdAt=item["created_at"],
     )
-
-
-def finalize_upload(
-    upload_id: str,
-    actor: Actor,
-    *,
-    s3: Any,
-    settings: Settings,
-    now: datetime | None = None,
-    repository: Any = attachment_repo,
-) -> dict[str, Any]:
-    now = now or datetime.now(UTC)
-    item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
-    version = int(item.get("version", 0))
-    if item.get("status") == "validated":
-        return {"uploadId": upload_id, "status": "validated", "attachment": None}
-    if item.get("status") != "pending_upload" or not repository.begin_validation(
-        upload_id, actor.user_id, version, int(now.timestamp())
-    ):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    validating_version = version + 1
-    try:
-        head = s3.head_object(Bucket=settings.s3_images_bucket, Key=item["object_key"])
-        length = int(head.get("ContentLength", -1))
-        content_type = str(head.get("ContentType") or "")
-        if length < 0 or length > int(item["max_bytes"]):
-            raise ValidationFailure(AttachmentErrorCode.UPLOAD_TOO_LARGE)
-        if content_type != item["declared_type"]:
-            raise ValidationFailure(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
-        response = s3.get_object(Bucket=settings.s3_images_bucket, Key=item["object_key"])
-        body = response["Body"].read(int(item["max_bytes"]) + 1)
-        if len(body) != length:
-            raise ValidationFailure(
-                AttachmentErrorCode.UPLOAD_TOO_LARGE
-                if len(body) > int(item["max_bytes"])
-                else AttachmentErrorCode.UPLOAD_INVALID
-            )
-        detected = validate_uploaded_file(body, item["original_filename"], content_type)
-        etag = str(head.get("ETag") or "")
-        response_etag = str(response.get("ETag") or etag)
-        if etag and response_etag != etag:
-            raise ValidationFailure(AttachmentErrorCode.UPLOAD_INVALID)
-        attributes = {
-            "detected_type": detected.media_type,
-            "content_length": detected.size_bytes,
-            "etag": etag,
-            "image_width": detected.width,
-            "image_height": detected.height,
-            "validated_at": now.isoformat(),
-        }
-        if not repository.mark_validated(upload_id, actor.user_id, validating_version, attributes):
-            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-        return {"uploadId": upload_id, "status": "validated", "attachment": None}
-    except ValidationFailure as exc:
-        repository.mark_invalid(upload_id, actor.user_id, validating_version, exc.code.value)
-        raise AttachmentDecisionError(exc.code) from None
-    except AttachmentDecisionError:
-        raise
-    except Exception:
-        repository.release_validation(
-            upload_id, actor.user_id, validating_version, int(now.timestamp())
-        )
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
