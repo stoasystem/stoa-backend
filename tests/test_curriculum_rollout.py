@@ -212,7 +212,7 @@ def test_curriculum_preview_requires_teacher_or_admin(monkeypatch):
     assert [item["id"] for item in allowed.json()["lessons"]] == ["lesson-forces-1"]
 
 
-def test_curriculum_lesson_hides_answer_key_from_student(monkeypatch):
+def test_curriculum_lesson_is_answer_free_for_every_reader(monkeypatch):
     _install_practice_content(monkeypatch)
 
     student = _client({"sub": "student-1", "role": "student"}).get(
@@ -224,8 +224,28 @@ def test_curriculum_lesson_hides_answer_key_from_student(monkeypatch):
 
     assert student.status_code == 200
     assert "answerKey" not in student.json()["exercises"][0]
+    assert "explanation" not in student.json()["exercises"][0]
+    assert "explanation" not in student.json()
     assert teacher.status_code == 200
-    assert teacher.json()["exercises"][0]["answerKey"] == "x = 5"
+    assert teacher.json() == student.json()
+
+
+def test_curriculum_exercise_include_answers_is_ignored(monkeypatch):
+    _install_practice_content(monkeypatch)
+
+    baseline = _client({"sub": "student-1", "role": "student"}).get(
+        "/practice/curriculum/exercises?lessonId=lesson-linear-1"
+    )
+    requested = _client({"sub": "student-1", "role": "student"}).get(
+        "/practice/curriculum/exercises?lessonId=lesson-linear-1&includeAnswers=true"
+    )
+
+    assert baseline.status_code == 200
+    assert requested.status_code == 200
+    assert requested.json() == baseline.json()
+    serialized = requested.text
+    assert "x = 5" not in serialized
+    assert "Subtract 4 from both sides" not in serialized
 
 
 def test_curriculum_progress_uses_existing_practice_records(monkeypatch):

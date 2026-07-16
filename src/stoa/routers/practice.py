@@ -36,6 +36,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import curriculum_analytics_service, curriculum_service, entitlement_service, usage_ledger_service
+from stoa.services import practice_projection_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -219,42 +220,6 @@ def _lesson_status(lesson_id: str, completed_ids: set[str],
     return "available"
 
 
-def _build_challenge(raw: dict) -> dict:
-    return {
-        "id": raw["challenge_id"],
-        "lessonId": raw["lesson_id"],
-        "unitId": raw.get("unit_id", ""),
-        "subjectId": raw["subject_id"],
-        "gradeLevel": raw.get("grade_level", ""),
-        "topicId": raw["topic_id"],
-        "topic": raw.get("topic_title", ""),
-        "type": raw.get("type", "text_input"),
-        "prompt": raw["prompt"],
-        "options": raw.get("options"),
-        "correctAnswer": raw["correct_answer"],
-        "hint": raw.get("hint"),
-        "explanation": raw.get("explanation"),
-        "correctFeedback": raw.get("correct_feedback"),
-        "incorrectFeedback": raw.get("incorrect_feedback"),
-    }
-
-
-def _build_lesson(raw: dict, challenges: list[dict], status: str = "available") -> dict:
-    return {
-        "id": raw["lesson_id"],
-        "unitId": raw.get("unit_id", ""),
-        "subjectId": raw["subject_id"],
-        "gradeLevel": raw.get("grade_level", ""),
-        "topicId": raw["topic_id"],
-        "title": raw["title"],
-        "topic": raw.get("topic_title", ""),
-        "difficulty": raw.get("difficulty", "practice"),
-        "status": status,
-        "estimatedMinutes": raw.get("estimated_minutes", 10),
-        "challenges": challenges,
-    }
-
-
 def _build_unit(raw: dict, lessons: list[dict]) -> dict:
     return {
         "id": raw["unit_id"],
@@ -389,9 +354,9 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     if not recommended_raw:
         raise HTTPException(status_code=404, detail="No lessons available")
 
-    challenges = [_build_challenge(c)
+    challenges = [practice_projection_service.build_challenge_preview(c)
                   for c in practice_repo.get_challenges(recommended_raw["lesson_id"])]
-    recommended = _build_lesson(recommended_raw, challenges,
+    recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
                                 _lesson_status(recommended_raw["lesson_id"], completed_ids,
                                                topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")))
 
@@ -407,7 +372,6 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "subject": m.get("subject_id", ""),
             "prompt": m.get("prompt", ""),
             "studentAnswer": m.get("student_answer", ""),
-            "correctAnswer": m.get("correct_answer", ""),
             "reviewedAt": None,
         })
 
@@ -464,17 +428,12 @@ async def get_curriculum_catalog(
 async def get_curriculum_lesson(
     lesson_id: str,
     include_preview: bool = Query(default=False, alias="includePreview"),
-    include_answers: bool = Query(default=False, alias="includeAnswers"),
     user: Actor = Depends(_catalog_access),
 ):
     _enforce_curriculum_preview_access(user, include_preview, None)
-    include_answer_keys = include_answers and curriculum_service.can_view_answer_keys(
-        _actor_projection(user)
-    )
     lesson = curriculum_service.get_lesson_detail(
         lesson_id,
         include_preview=include_preview,
-        include_answer_keys=include_answer_keys,
     )
     if not lesson:
         raise HTTPException(status_code=404, detail="Curriculum lesson not found")
@@ -489,13 +448,9 @@ async def list_curriculum_exercises(
     difficulty: str | None = Query(default=None),
     rollout_state: str | None = Query(default=None, alias="rolloutState"),
     include_preview: bool = Query(default=False, alias="includePreview"),
-    include_answers: bool = Query(default=False, alias="includeAnswers"),
     user: Actor = Depends(_catalog_access),
 ):
     _enforce_curriculum_preview_access(user, include_preview, rollout_state)
-    include_answer_keys = include_answers and curriculum_service.can_view_answer_keys(
-        _actor_projection(user)
-    )
     return curriculum_service.list_exercises(
         lesson_id=lesson_id,
         subject_id=subject_id,
@@ -503,7 +458,6 @@ async def list_curriculum_exercises(
         difficulty=difficulty,
         rollout_state=rollout_state,
         include_preview=include_preview,
-        include_answer_keys=include_answer_keys,
     )
 
 
@@ -631,10 +585,12 @@ async def get_path(
         unit_lessons_raw = [lesson for lesson in all_lessons if lesson.get("unit_id") == unit_raw["unit_id"]]
         unit_lessons = []
         for lesson in unit_lessons_raw:
-            challenges = [_build_challenge(c)
+            challenges = [practice_projection_service.build_challenge_preview(c)
                           for c in practice_repo.get_challenges(lesson["lesson_id"])]
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
-            unit_lessons.append(_build_lesson(lesson, challenges, st))
+            unit_lessons.append(
+                practice_projection_service.build_lesson_preview(lesson, challenges, st)
+            )
         path_units.append(_build_unit(unit_raw, unit_lessons))
 
     return {
@@ -666,8 +622,11 @@ async def get_lesson(
         None,
     )
     st = _lesson_status(lesson_id, completed_ids, current_id)
-    challenges = [_build_challenge(c) for c in practice_repo.get_challenges(lesson_id)]
-    return _build_lesson(lesson, challenges, st)
+    challenges = [
+        practice_projection_service.build_challenge_preview(c)
+        for c in practice_repo.get_challenges(lesson_id)
+    ]
+    return practice_projection_service.build_lesson_preview(lesson, challenges, st)
 
 
 @router.post("/lessons/{lesson_id}/complete")
@@ -801,7 +760,6 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
             "topic": ch.get("topic_title", ""),
             "prompt": ch["prompt"],
             "yourAnswer": attempt.get("student_answer", ""),
-            "correctAnswer": ch["correct_answer"],
             "createdAt": attempt.get("created_at", ""),
         })
     return {"items": mistakes}

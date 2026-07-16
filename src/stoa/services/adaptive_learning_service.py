@@ -1416,7 +1416,7 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
             "topicIds": [exercise.get("topic_id")] if exercise.get("topic_id") else [],
             "lessonId": exercise.get("lesson_id"),
             "exerciseId": exercise.get("challenge_id"),
-            "items": [curriculum_service._build_exercise(exercise, include_answer_key=False)],  # noqa: SLF001
+            "items": [curriculum_service._build_exercise(exercise)],  # noqa: SLF001
             "answerKey": [{"exerciseId": source_id, "answer": exercise.get("answer_key") or exercise.get("correct_answer")}],
             "rationale": "Assigned from reviewed curriculum exercise.",
         }

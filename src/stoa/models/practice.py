@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
 
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -24,7 +24,11 @@ class PracticeChallengePreview(_PracticeContract):
     lesson_id: NonEmptyText = Field(alias="lessonId")
     prompt: NonEmptyText
     type: NonEmptyText
-    choices: list[str] | None = None
+    choices: list[str] | None = Field(
+        default=None,
+        alias="options",
+        validation_alias=AliasChoices("options", "choices"),
+    )
     hint_available: bool = Field(alias="hintAvailable")
     unit_id: str | None = Field(default=None, alias="unitId")
     subject_id: str | None = Field(default=None, alias="subjectId")
@@ -32,6 +36,66 @@ class PracticeChallengePreview(_PracticeContract):
     topic_id: str | None = Field(default=None, alias="topicId")
     topic: str | None = None
     difficulty: str | None = None
+
+
+class PracticeLessonPreview(_PracticeContract):
+    """Answer-free lesson projection shared by overview, path, and lesson reads."""
+
+    lesson_id: NonEmptyText = Field(alias="id")
+    unit_id: str = Field(default="", alias="unitId")
+    subject_id: NonEmptyText = Field(alias="subjectId")
+    grade_level: str = Field(default="", alias="gradeLevel")
+    topic_id: NonEmptyText = Field(alias="topicId")
+    title: NonEmptyText
+    topic: str = ""
+    difficulty: str = "practice"
+    status: str = "available"
+    estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=0)
+    challenges: list[PracticeChallengePreview]
+
+
+class PracticeExercisePreview(_PracticeContract):
+    """Answer-free curriculum exercise projection."""
+
+    exercise_id: NonEmptyText = Field(alias="id")
+    lesson_id: NonEmptyText = Field(alias="lessonId")
+    subject_id: NonEmptyText = Field(alias="subjectId")
+    topic_id: NonEmptyText = Field(alias="topicId")
+    type: NonEmptyText
+    prompt: NonEmptyText
+    choices: list[str] | None = None
+    difficulty: str = "practice"
+    estimated_minutes: int = Field(default=5, alias="estimatedMinutes", ge=0)
+    skills: list[str] = Field(default_factory=list)
+    rollout_state: str = Field(default="active", alias="rolloutState")
+    source: str = "practice_backfill"
+
+
+class CurriculumLessonPreview(_PracticeContract):
+    """Student curriculum lesson detail without explanations or answer derivatives."""
+
+    lesson_id: NonEmptyText = Field(alias="id")
+    subject_id: NonEmptyText = Field(alias="subjectId")
+    grade_level: str = Field(default="", alias="gradeLevel")
+    unit_id: str = Field(default="", alias="unitId")
+    topic_id: NonEmptyText = Field(alias="topicId")
+    title: NonEmptyText
+    objective: str = ""
+    difficulty: str = "practice"
+    estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=0)
+    rollout_state: str = Field(default="active", alias="rolloutState")
+    exercise_count: int = Field(default=0, alias="exerciseCount", ge=0)
+    source: str = "practice_backfill"
+    prerequisite_lesson_ids: list[str] = Field(
+        default_factory=list, alias="prerequisiteLessonIds"
+    )
+    exercises: list[PracticeExercisePreview]
+    next_step: str = Field(default="", alias="nextStep")
+
+
+class CurriculumExerciseListPreview(_PracticeContract):
+    items: list[PracticeExercisePreview]
+    count: int = Field(ge=0)
 
 
 class PracticeHintResponse(_PracticeContract):

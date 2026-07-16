@@ -2,6 +2,7 @@ from collections.abc import Mapping, Sequence
 
 import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from stoa.models.practice import (
@@ -10,6 +11,8 @@ from stoa.models.practice import (
     PracticeHintResponse,
     PrivilegedPracticeAnswer,
 )
+from stoa.routers import practice
+from actor_helpers import install_actor_overrides
 
 
 FORBIDDEN_PREVIEW_KEYS = {
@@ -38,7 +41,7 @@ def _preview(**overrides) -> PracticeChallengePreview:
         "lessonId": "lesson-1",
         "prompt": "Solve x + 4 = 9.",
         "type": "text_input",
-        "choices": None,
+        "options": None,
         "hintAvailable": True,
     }
     payload.update(overrides)
@@ -171,3 +174,92 @@ def test_recursive_preview_fixture_accepts_nested_answer_free_content() -> None:
     assert_recursive_preview_is_answer_free(
         {"lessons": [{"challenges": [_preview().model_dump(by_alias=True)]}]}
     )
+
+
+def test_every_practice_preview_route_recursively_omits_answer_canaries(monkeypatch) -> None:
+    topic = {
+        "topic_id": "topic-1",
+        "subject_id": "math",
+        "title": "Algebra",
+        "order": 1,
+    }
+    unit = {
+        "unit_id": "unit-1",
+        "subject_id": "math",
+        "topic_id": "topic-1",
+        "title": "Equations",
+        "order": 1,
+    }
+    lesson = {
+        "lesson_id": "lesson-1",
+        "unit_id": "unit-1",
+        "subject_id": "math",
+        "topic_id": "topic-1",
+        "title": "Solve equations",
+        "explanation": "LESSON-EXPLANATION-CANARY",
+        "examples": [{"answerKey": "NESTED-ANSWER-CANARY"}],
+        "order": 1,
+    }
+    challenge = {
+        "challenge_id": "challenge-1",
+        "lesson_id": "lesson-1",
+        "unit_id": "unit-1",
+        "subject_id": "math",
+        "topic_id": "topic-1",
+        "prompt": "Solve x + 4 = 9",
+        "options": ["x = 4", "x = 5"],
+        "correct_answer": "STANDARD-ANSWER-CANARY",
+        "explanation": "EXPLANATION-CANARY",
+        "correct_feedback": "CORRECT-FEEDBACK-CANARY",
+        "incorrect_feedback": "INCORRECT-FEEDBACK-CANARY",
+        "hint": "HINT-CANARY",
+        "hint_approved": False,
+    }
+    subject = {"subject_id": "math", "name": "Math", "order": 1}
+    monkeypatch.setattr(practice.practice_repo, "get_subjects", lambda: [subject])
+    monkeypatch.setattr(practice.practice_repo, "get_topics", lambda *_args, **_kwargs: [topic])
+    monkeypatch.setattr(practice.practice_repo, "get_topic", lambda _id: topic)
+    monkeypatch.setattr(practice.practice_repo, "get_units", lambda _id: [unit])
+    monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda **_kwargs: [lesson])
+    monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda _id: lesson)
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda _id: [challenge])
+    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda *_args: [])
+    monkeypatch.setattr(practice.practice_repo, "get_mistakes", lambda _id: [])
+
+    app = FastAPI()
+    app.include_router(practice.router, prefix="/practice")
+    install_actor_overrides(app, {"sub": "student-1", "role": "student"})
+    client = TestClient(app)
+
+    responses = [
+        client.get("/practice/overview"),
+        client.get("/practice/math/topic-1/roadmap"),
+        client.get("/practice/math/topic-1/path"),
+        client.get("/practice/lessons/lesson-1"),
+    ]
+    for response in responses:
+        assert response.status_code == 200, response.text
+        assert_recursive_preview_is_answer_free(response.json())
+        serialized = response.text
+        assert "STANDARD-ANSWER-CANARY" not in serialized
+        assert "EXPLANATION-CANARY" not in serialized
+        assert "FEEDBACK-CANARY" not in serialized
+
+    lesson_body = responses[-1].json()
+    assert lesson_body["challenges"][0]["options"] == ["x = 4", "x = 5"]
+    assert lesson_body["challenges"][0]["hintAvailable"] is False
+
+
+def test_student_preview_openapi_has_no_answer_toggle_or_result_fields() -> None:
+    app = FastAPI()
+    app.include_router(practice.router, prefix="/practice")
+    schema = app.openapi()
+    for path in (
+        "/practice/curriculum/lessons/{lesson_id}",
+        "/practice/curriculum/exercises",
+    ):
+        parameters = schema["paths"][path]["get"].get("parameters", [])
+        assert "includeAnswers" not in {item["name"] for item in parameters}
+    preview_properties = PracticeChallengePreview.model_json_schema(by_alias=True)["properties"]
+    assert not FORBIDDEN_PREVIEW_KEYS.intersection(preview_properties)
+    assert "attemptId" not in preview_properties

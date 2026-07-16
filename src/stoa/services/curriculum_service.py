@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from stoa.db.repositories import practice_repo
+from stoa.services import practice_projection_service
 
 SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
 VISIBLE_STATES = {"active"}
@@ -57,26 +58,16 @@ def get_lesson_detail(
     lesson_id: str,
     *,
     include_preview: bool = False,
-    include_answer_keys: bool = False,
 ) -> dict[str, Any] | None:
     lesson = practice_repo.get_lesson(lesson_id)
     if not lesson or not _is_visible(lesson, include_preview):
         return None
 
     exercises = [
-        _build_exercise(exercise, include_answer_key=include_answer_keys)
+        practice_projection_service.build_exercise_preview(exercise)
         for exercise in _active_exercises_for_lesson(lesson_id, include_preview)
     ]
-    detail = _build_lesson(lesson, exercise_count=len(exercises))
-    detail.update({
-        "objective": lesson.get("objective", lesson.get("description", "")),
-        "explanation": lesson.get("explanation", ""),
-        "examples": lesson.get("examples", []),
-        "prerequisiteLessonIds": lesson.get("prerequisite_lesson_ids", []),
-        "exercises": exercises,
-        "nextStep": lesson.get("next_step", ""),
-    })
-    return detail
+    return practice_projection_service.build_curriculum_lesson_preview(lesson, exercises)
 
 
 def list_exercises(
@@ -87,11 +78,10 @@ def list_exercises(
     difficulty: str | None = None,
     rollout_state: str | None = None,
     include_preview: bool = False,
-    include_answer_keys: bool = False,
 ) -> dict[str, Any]:
     raw_items = practice_repo.get_all_challenges(lesson_id=lesson_id, subject_id=subject_id, topic_id=topic_id)
     items = [
-        _build_exercise(item, include_answer_key=include_answer_keys)
+        practice_projection_service.build_exercise_preview(item)
         for item in sorted(raw_items, key=lambda challenge: (challenge.get("lesson_id", ""), _as_int(challenge.get("order", 0))))
         if _matches_state(item, rollout_state, include_preview)
         and (difficulty is None or str(item.get("difficulty", "")).lower() == difficulty.lower())
@@ -202,25 +192,9 @@ def _build_lesson(raw: dict[str, Any], *, exercise_count: int) -> dict[str, Any]
     }
 
 
-def _build_exercise(raw: dict[str, Any], *, include_answer_key: bool) -> dict[str, Any]:
-    item = {
-        "id": raw["challenge_id"],
-        "lessonId": raw["lesson_id"],
-        "subjectId": _normal_subject_id(raw["subject_id"]),
-        "topicId": raw["topic_id"],
-        "type": raw.get("type", "text_input"),
-        "prompt": raw["prompt"],
-        "choices": raw.get("options"),
-        "difficulty": raw.get("difficulty", "practice"),
-        "estimatedMinutes": _as_int(raw.get("estimated_minutes", 5)),
-        "skills": raw.get("skills", []),
-        "rolloutState": _content_state(raw),
-        "source": raw.get("source", "practice_backfill"),
-        "explanation": raw.get("explanation"),
-    }
-    if include_answer_key:
-        item["answerKey"] = raw.get("answer_key", raw.get("correct_answer"))
-    return item
+def _build_exercise(raw: dict[str, Any]) -> dict[str, Any]:
+    """Compatibility wrapper; student curriculum projections are always answer-free."""
+    return practice_projection_service.build_exercise_preview(raw)
 
 
 def _subject_matches(raw: dict[str, Any], subject_id: str | None, grade_level: str | None) -> bool:
