@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: planning
-stopped_at: Phase 473 gap closure planned — 4 plans ready
-last_updated: "2026-07-16T13:03:29.953Z"
-last_activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to execute
+status: executing
+stopped_at: Completed 473-08-PLAN.md; next 473-09
+last_updated: "2026-07-16T15:37:55.000Z"
+last_activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-byte promotion are green
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 33
-  completed_plans: 29
+  completed_plans: 30
   percent: 10
 ---
 
@@ -24,12 +24,16 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (student-content-privacy-and-practice-integrity) — GAP CLOSURE PLANNED
-Plan: 7 of 11
-Status: Ready to execute gap closure
-Last activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to execute
+Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
+Plan: 8 of 11 complete; next Plan 09
+Status: Phase 473 gap closure in progress
+Last activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-byte promotion are green
 
 ## Accumulated Context
+
+- Phase 473 upload APIs now accept only authenticated opaque intents and exact bounded chunks; public responses contain no provider URL, key, multipart ID, ETag, VersionId, or provider name.
+- Multipart part writes require a checksum/length-bound uploading claim and active fence before provider mutation; same-byte lost responses reconcile from matching server-listed parts while different bytes conflict first.
+- Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
@@ -93,9 +97,9 @@ Last activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to
 
 ## Session
 
-**Last Date:** 2026-07-16T12:02:00.000Z
-**Stopped At:** Phase 473 gap closure planned — 4 plans ready
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-08-PLAN.md
+**Last Date:** 2026-07-16T15:37:55.000Z
+**Stopped At:** Completed 473-08-PLAN.md; next 473-09
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-09-PLAN.md
 
 ## Performance Metrics
 
@@ -130,8 +134,13 @@ Last activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to
 | Phase 473 P04 | 14 min | 2 tasks | 9 files |
 | Phase 473 P06 | 20 min | 2 tasks | 11 files |
 | Phase 473 P07 | 16 min | 2 tasks | 7 files |
+| Phase 473 P08 | 22 min | 2 tasks | 12 files |
 
 ## Decisions
+
+- [Phase 473]: Client upload contracts expose only opaque intent/chunk state while staging keys, multipart IDs, ETags, versions, and provider identity remain server-only. — Direct storage capability disclosure is removed rather than reclassified.
+- [Phase 473]: A checksum/length-bound uploading claim and fenced lease precede every provider part write; matching replays may adopt only server-listed matching evidence. — Lost responses converge without blind overwrite, and different bytes fail before mutation.
+- [Phase 473]: Validation, SHA-256, and promotion share one bounded spool, and durable consumers use the promoted immutable key, VersionId, ETag, length, and checksum tuple. — Same-key replacement or newer versions cannot change OCR, extraction, association, or deletion targets.
 
 - [Phase 473]: Cleanup claims only terminal or past-expiry unconsumed upload states, then consistently rechecks the claimed version before any provider delete. — Active, consuming, consumed, raced, and restored resources cannot enter deletion.
 - [Phase 473]: Durable-reference discovery is bounded and resumable, and provider failure retains a non-consumable cleanup tombstone. — Cleanup retries are idempotent without deleting durable/reused history or reviving validated uploads.

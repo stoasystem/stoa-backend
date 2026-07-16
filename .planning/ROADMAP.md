@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | Gap closure planned — 7/11 plans complete, 4 pending | Phase 472 |
+| 473 | Student Content Privacy And Practice Integrity | Gap closure in progress — 8/11 plans complete, 3 pending | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -184,9 +184,9 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Wave 5** *(gap closure; blocked on Wave 4 completion)*
 
-- [ ] `473-08` — Replace direct S3 POST disclosure with an authenticated chunk gateway and promote exact validated bytes to server-only immutable storage.
+- [x] `473-08` — Replace direct S3 POST disclosure with an authenticated chunk gateway and promote exact validated bytes to server-only immutable storage.
 
-**Wave 6** *(blocked on Plan 473-08)*
+**Wave 6** *(Plan 473-08 complete)*
 
 - [ ] `473-09` — Map transaction cancellation operations to stable quota, dependency, and concealed-resource outcomes with zero-effect races.
 
