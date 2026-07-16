@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -120,7 +122,10 @@ def test_practice_hint_body_cannot_select_another_student(monkeypatch):
     challenge = {
         "challenge_id": "challenge-1",
         "prompt": "Solve",
-        "hint": "Try again",
+        "hint": "Use an inverse operation.",
+        "hint_approved": True,
+        "correct_answer": "x = 5",
+        "explanation": "Subtract four from both sides.",
     }
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id: challenge)
     monkeypatch.setattr(
@@ -143,3 +148,157 @@ def test_practice_hint_body_cannot_select_another_student(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert response.json() == {
+        "challengeId": "challenge-1",
+        "hintAvailable": True,
+        "hint": "Use an inverse operation.",
+    }
+
+
+def _challenge() -> dict:
+    return {
+        "challenge_id": "challenge-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "topic_id": "algebra",
+        "prompt": "Solve x + 4 = 9",
+        "correct_answer": "x = 5",
+        "explanation": "Subtract four from both sides.",
+        "correct_feedback": "Correct.",
+        "incorrect_feedback": "Review inverse operations.",
+    }
+
+
+def _install_answer_dependencies(monkeypatch, challenge: dict | None = None) -> dict:
+    item = challenge or _challenge()
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id: item)
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda _id: [item])
+    monkeypatch.setattr(
+        practice.curriculum_analytics_service,
+        "record_practice_attempt",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(practice, "_record_practice_usage", lambda **_kwargs: None)
+    return item
+
+
+def test_answer_is_revealed_only_after_every_attempt_is_persisted(monkeypatch):
+    _install_answer_dependencies(monkeypatch)
+    writes = []
+
+    def put_attempt(student_id, challenge_id, submitted_answer, correct, **metadata):
+        writes.append((student_id, challenge_id, submitted_answer, correct, metadata))
+        return {
+            "attempt_id": "attempt-1",
+            "student_id": student_id,
+            "challenge_id": challenge_id,
+            "student_answer": submitted_answer,
+            "correct": correct,
+            **metadata,
+        }
+
+    monkeypatch.setattr(practice.practice_repo, "put_attempt", put_attempt)
+
+    incorrect = _client().post(
+        "/practice/challenges/challenge-1/answer", json={"answer": "x = 4"}
+    )
+    correct = _client().post(
+        "/practice/challenges/challenge-1/answer", json={"answer": "x = 5"}
+    )
+
+    assert incorrect.status_code == 200
+    assert incorrect.json()["standardAnswer"] == "x = 5"
+    assert incorrect.json()["explanation"] == "Subtract four from both sides."
+    assert correct.status_code == 200
+    assert correct.json()["standardAnswer"] == "x = 5"
+    assert [write[3] for write in writes] == [False, True]
+    assert [write[2] for write in writes] == ["x = 4", "x = 5"]
+
+
+def test_attempt_write_failure_returns_no_answer_or_provider_detail(monkeypatch, caplog):
+    _install_answer_dependencies(monkeypatch)
+
+    def fail_write(*_args, **_kwargs):
+        raise RuntimeError("STANDARD-ANSWER-CANARY EXPLANATION-CANARY provider-detail")
+
+    monkeypatch.setattr(practice.practice_repo, "put_attempt", fail_write)
+
+    with caplog.at_level(logging.WARNING):
+        response = _client().post(
+            "/practice/challenges/challenge-1/answer", json={"answer": "x = 4"}
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "practice_attempt_unavailable"
+    assert "x = 5" not in response.text
+    assert "CANARY" not in response.text
+    assert "CANARY" not in caplog.text
+    assert "provider-detail" not in caplog.text
+
+
+def test_attempt_result_is_owner_scoped_and_unknown_matches_foreign(monkeypatch):
+    challenge = _install_answer_dependencies(monkeypatch)
+    attempt = {
+        "attempt_id": "attempt-1",
+        "student_id": "student-1",
+        "challenge_id": challenge["challenge_id"],
+        "lesson_id": challenge["lesson_id"],
+        "student_answer": "x = 4",
+        "correct": False,
+    }
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_attempt",
+        lambda student_id, attempt_id: (
+            attempt if student_id == "student-1" and attempt_id == "attempt-1" else None
+        ),
+    )
+
+    owner = _client(_actor("student-1")).get(
+        "/practice/attempts/attempt-1/result"
+    )
+    foreign = _client(_actor("student-2")).get(
+        "/practice/attempts/attempt-1/result"
+    )
+    random = _client(_actor("student-2")).get(
+        "/practice/attempts/random/result"
+    )
+
+    assert owner.status_code == 200
+    assert owner.json()["attemptId"] == "attempt-1"
+    assert foreign.status_code == random.status_code == 404
+    assert foreign.json()["detail"]["code"] == random.json()["detail"]["code"]
+    assert foreign.json()["detail"]["message"] == random.json()["detail"]["message"]
+
+
+def test_hint_requires_approval_and_rejects_answer_or_explanation_canaries(monkeypatch):
+    from stoa.services import rate_limit
+
+    monkeypatch.setattr(
+        rate_limit,
+        "check_and_record_hint",
+        lambda *_args, **_kwargs: {"counterValue": 1},
+    )
+    monkeypatch.setattr(practice, "_record_practice_usage", lambda **_kwargs: None)
+    monkeypatch.setattr(practice, "_hint_limit_for_student", lambda _id: 5)
+
+    cases = [
+        {**_challenge(), "hint": "Use an inverse operation.", "hint_approved": False},
+        {**_challenge(), "hint": "The answer is x = 5.", "hint_approved": True},
+        {
+            **_challenge(),
+            "hint": "Subtract four from both sides.",
+            "hint_approved": True,
+        },
+    ]
+    for challenge in cases:
+        monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id, item=challenge: item)
+        response = _client().post(
+            "/practice/hints", json={"challengeId": "challenge-1"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {
+            "challengeId": "challenge-1",
+            "hintAvailable": False,
+            "hint": None,
+        }

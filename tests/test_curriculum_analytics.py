@@ -39,7 +39,18 @@ def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
     attempts = []
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
     monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [dict(challenge)])
-    monkeypatch.setattr(practice.practice_repo, "record_attempt", lambda *args, **kwargs: attempts.append((args, kwargs)))
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "put_attempt",
+        lambda *args, **kwargs: (
+            attempts.append((args, kwargs))
+            or {
+                "attempt_id": "attempt-1",
+                "correct": args[3],
+                "challenge_id": args[1],
+            }
+        ),
+    )
     client = TestClient(_app_for_user({"sub": "student-1", "role": "student"}))
 
     response = client.post("/practice/challenges/exercise-1/answer", json={"answer": "x = 3"})
@@ -95,7 +106,15 @@ def test_practice_answer_records_usage_ledger_without_raw_answer(monkeypatch):
     }
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
     monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [dict(challenge)])
-    monkeypatch.setattr(practice.practice_repo, "record_attempt", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "put_attempt",
+        lambda *args, **kwargs: {
+            "attempt_id": "attempt-1",
+            "correct": args[3],
+            "challenge_id": args[1],
+        },
+    )
     monkeypatch.setattr(
         practice.usage_ledger_service,
         "record_usage_event",
@@ -152,6 +171,9 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
         "subject_id": "math",
         "topic_id": "algebra",
         "hint": "Try subtracting 1.",
+        "hint_approved": True,
+        "correct_answer": "x = 1",
+        "explanation": "Subtract one from both sides.",
     }
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
     monkeypatch.setattr(

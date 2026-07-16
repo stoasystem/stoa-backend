@@ -98,9 +98,14 @@ class CurriculumExerciseListPreview(_PracticeContract):
     count: int = Field(ge=0)
 
 
+class PracticeAnswerSubmission(_PracticeContract):
+    answer: str | list[str]
+
+
 class PracticeHintResponse(_PracticeContract):
     challenge_id: NonEmptyText = Field(alias="challengeId")
-    hint: NonEmptyText
+    hint_available: bool = Field(alias="hintAvailable")
+    hint: NonEmptyText | None = None
 
 
 class PracticeAttemptResult(_PracticeContract):

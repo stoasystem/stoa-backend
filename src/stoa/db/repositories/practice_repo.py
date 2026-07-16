@@ -1,4 +1,8 @@
 """DynamoDB access patterns for practice content and student progress."""
+from datetime import datetime, timezone
+from typing import Any
+import uuid
+
 from boto3.dynamodb.conditions import Key, Attr
 from stoa.db.dynamodb import get_table
 
@@ -145,34 +149,101 @@ def mark_lesson_completed(user_id: str, lesson: dict) -> None:
     })
 
 
-def record_attempt(user_id: str, challenge_id: str, correct: bool,
-                   subject_id: str = "", lesson_id: str = "", topic_id: str = "",
-                   attempt_id: str | None = None) -> None:
-    """Record a wrong answer for the mistakes review feature."""
-    if correct:
-        return
-    from datetime import datetime, timezone
-    import uuid
+def put_attempt(
+    student_id: str,
+    challenge_id: str,
+    submitted_answer: Any,
+    correct: bool,
+    *,
+    subject_id: str = "",
+    lesson_id: str = "",
+    topic_id: str = "",
+    attempt_id: str | None = None,
+    created_at: str | None = None,
+) -> dict:
+    """Immutably record every answer and return its durable owner receipt."""
     table = get_table()
     attempt_key = attempt_id or str(uuid.uuid4())
-    table.put_item(Item={
-        "PK": f"MISTAKES#{user_id}",
+    item = {
+        "PK": f"ATTEMPTS#{student_id}",
         "SK": f"ATTEMPT#{attempt_key}",
-        "user_id": user_id,
+        "attempt_id": attempt_key,
+        "student_id": student_id,
+        "user_id": student_id,
         "challenge_id": challenge_id,
         "subject_id": subject_id,
         "topic_id": topic_id,
         "lesson_id": lesson_id,
-        "correct": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+        "student_answer": submitted_answer,
+        "submitted_answer": submitted_answer,
+        "correct": bool(correct),
+        "created_at": created_at or datetime.now(timezone.utc).isoformat(),
+    }
+    table.put_item(
+        Item=item,
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+    return item
+
+
+def get_attempt(student_id: str, attempt_id: str) -> dict | None:
+    """Load one attempt through its owner-scoped primary key."""
+    table = get_table()
+    response = table.get_item(
+        Key={"PK": f"ATTEMPTS#{student_id}", "SK": f"ATTEMPT#{attempt_id}"}
+    )
+    return response.get("Item")
+
+
+def list_student_attempts(student_id: str, *, correct: bool | None = None) -> list[dict]:
+    table = get_table()
+    response = table.query(
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
+        )
+    )
+    items = response.get("Items", [])
+    if correct is not None:
+        items = [item for item in items if bool(item.get("correct")) is correct]
+    return items
+
+
+def record_attempt(
+    user_id: str,
+    challenge_id: str,
+    correct: bool,
+    subject_id: str = "",
+    lesson_id: str = "",
+    topic_id: str = "",
+    attempt_id: str | None = None,
+    student_answer: Any = "",
+) -> dict:
+    """Compatibility wrapper for callers migrating to the all-attempt contract."""
+    return put_attempt(
+        user_id,
+        challenge_id,
+        student_answer,
+        correct,
+        subject_id=subject_id,
+        lesson_id=lesson_id,
+        topic_id=topic_id,
+        attempt_id=attempt_id,
+    )
 
 
 def get_mistakes(user_id: str) -> list[dict]:
+    attempts = list_student_attempts(user_id, correct=False)
     table = get_table()
-    resp = table.query(
+    legacy = table.query(
         KeyConditionExpression=(
             Key("PK").eq(f"MISTAKES#{user_id}") & Key("SK").begins_with("ATTEMPT#")
         )
+    ).get("Items", [])
+    known_attempt_ids = {item.get("attempt_id") for item in attempts}
+    attempts.extend(
+        item
+        for item in legacy
+        if (item.get("attempt_id") or str(item.get("SK", "")).removeprefix("ATTEMPT#"))
+        not in known_attempt_ids
     )
-    return resp.get("Items", [])
+    return attempts

@@ -18,9 +18,12 @@ from actor_helpers import install_actor_overrides
 FORBIDDEN_PREVIEW_KEYS = {
     "correctAnswer",
     "answerKey",
+    "standardAnswer",
     "explanation",
+    "feedback",
     "correctFeedback",
     "incorrectFeedback",
+    "hint",
 }
 
 
@@ -97,18 +100,75 @@ def test_preview_serialization_is_structurally_answer_free() -> None:
 def test_hint_schema_carries_only_approved_directional_hint() -> None:
     hint = PracticeHintResponse(
         challengeId="challenge-1",
+        hintAvailable=True,
         hint="Use the inverse operation on both sides.",
     )
     assert hint.model_dump(by_alias=True) == {
         "challengeId": "challenge-1",
+        "hintAvailable": True,
         "hint": "Use the inverse operation on both sides.",
     }
     with pytest.raises(ValidationError):
         PracticeHintResponse(
             challengeId="challenge-1",
+            hintAvailable=True,
             hint="Try an inverse operation.",
             standardAnswer="x = 5",
         )
+
+
+def test_unavailable_hint_contains_no_answer_bearing_fallback() -> None:
+    unavailable = PracticeHintResponse(
+        challengeId="challenge-1",
+        hintAvailable=False,
+        hint=None,
+    )
+    assert unavailable.model_dump(by_alias=True) == {
+        "challengeId": "challenge-1",
+        "hintAvailable": False,
+        "hint": None,
+    }
+
+
+def test_attempt_repository_records_correct_and_incorrect_answers_immutably(monkeypatch) -> None:
+    from stoa.db.repositories import practice_repo
+
+    class Table:
+        def __init__(self):
+            self.puts = []
+
+        def put_item(self, **kwargs):
+            self.puts.append(kwargs)
+
+    table = Table()
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+
+    correct = practice_repo.put_attempt(
+        "student-1",
+        "challenge-1",
+        "x = 5",
+        True,
+        attempt_id="attempt-correct",
+        created_at="2026-07-16T00:00:00+00:00",
+    )
+    incorrect = practice_repo.put_attempt(
+        "student-1",
+        "challenge-1",
+        "x = 4",
+        False,
+        attempt_id="attempt-incorrect",
+        created_at="2026-07-16T00:01:00+00:00",
+    )
+
+    assert correct["student_answer"] == "x = 5"
+    assert correct["correct"] is True
+    assert incorrect["student_answer"] == "x = 4"
+    assert incorrect["correct"] is False
+    assert all(
+        put["ConditionExpression"]
+        == "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+        for put in table.puts
+    )
 
 
 @pytest.mark.parametrize("missing", ["attemptId", "standardAnswer", "explanation", "feedback"])

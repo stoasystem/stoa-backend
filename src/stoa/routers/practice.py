@@ -27,6 +27,11 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor
+from stoa.models.practice import (
+    PracticeAnswerSubmission,
+    PracticeAttemptResult,
+    PracticeHintResponse,
+)
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
@@ -153,6 +158,24 @@ async def _authorized_challenge_update(
     )
 
 
+async def _authorized_attempt_read(
+    attempt_id: str,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+) -> AuthorizedResource:
+    return await _authorize_practice_item(
+        actor=actor,
+        facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+        item_id=attempt_id,
+        item=practice_repo.get_attempt(actor.user_id, attempt_id),
+        action=AuthorizationAction.READ,
+    )
+
+
 async def _authorized_body_challenge_update(
     body: dict,
     actor: Actor = Depends(get_actor),
@@ -180,6 +203,10 @@ async def _challenge_metadata_resolver(resource_id: str):
     return practice_repo.get_challenge(resource_id)
 
 
+async def _attempt_metadata_resolver(resource_id: str):
+    return {"attempt_id": resource_id}
+
+
 _authorized_lesson_read.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
     AuthorizationAction.READ, _lesson_metadata_resolver
 )
@@ -191,6 +218,9 @@ _authorized_challenge_update.authorization_specs = _practice_item_specs(  # type
 )
 _authorized_body_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
     AuthorizationAction.UPDATE, _challenge_metadata_resolver
+)
+_authorized_attempt_read.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
+    AuthorizationAction.READ, _attempt_metadata_resolver
 )
 
 
@@ -670,16 +700,31 @@ async def complete_lesson(
     }
 
 
-@router.post("/challenges/{challenge_id}/answer")
+def _next_challenge_id(challenge_id: str, lesson_id: str) -> str | None:
+    challenge_ids = [
+        challenge["challenge_id"] for challenge in practice_repo.get_challenges(lesson_id)
+    ]
+    try:
+        index = challenge_ids.index(challenge_id)
+    except ValueError:
+        return None
+    return challenge_ids[index + 1] if index + 1 < len(challenge_ids) else None
+
+
+@router.post(
+    "/challenges/{challenge_id}/answer",
+    response_model=PracticeAttemptResult,
+)
 async def submit_answer(
     challenge_id: str,
-    body: dict,
+    body: PracticeAnswerSubmission,
     actor: Actor = Depends(_practice_update),
     authorized_challenge: AuthorizedResource = Depends(_authorized_challenge_update),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     challenge = dict(authorized_challenge.value)
 
-    student_answer = body.get("answer", "")
+    student_answer = body.answer
     correct_answer = challenge.get("correct_answer", "")
 
     # Normalise for comparison
@@ -689,6 +734,28 @@ async def submit_answer(
         return str(v).strip().lower()
 
     correct = _norm(student_answer) == _norm(correct_answer)
+
+    try:
+        recorded_attempt = practice_repo.put_attempt(
+            actor.user_id,
+            challenge_id,
+            student_answer,
+            correct,
+            subject_id=challenge.get("subject_id", ""),
+            topic_id=challenge.get("topic_id", ""),
+            lesson_id=challenge.get("lesson_id", ""),
+        )
+    except Exception as error:  # noqa: BLE001
+        logger.warning("Practice attempt persistence failed")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "practice_attempt_unavailable",
+                "message": "Your answer could not be recorded. Please try again.",
+                "correlationId": correlation_id,
+            },
+        ) from error
+
     curriculum_analytics_service.record_practice_attempt(
         student_id=actor.user_id,
         challenge=challenge,
@@ -697,21 +764,9 @@ async def submit_answer(
 
     # Find challenges in the same lesson for next_challenge_id
     lesson_id = challenge.get("lesson_id", "")
-    all_challenges = practice_repo.get_challenges(lesson_id)
-    challenge_ids = [c["challenge_id"] for c in all_challenges]
-    try:
-        idx = challenge_ids.index(challenge_id)
-        next_challenge_id = challenge_ids[idx + 1] if idx + 1 < len(challenge_ids) else None
-    except ValueError:
-        next_challenge_id = None
+    next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
 
     user_id = actor.user_id
-    practice_repo.record_attempt(
-        user_id, challenge_id, correct,
-        subject_id=challenge.get("subject_id", ""),
-        topic_id=challenge.get("topic_id", ""),
-        lesson_id=lesson_id,
-    )
     _record_practice_usage(
         student_id=user_id,
         action=usage_ledger_service.PRACTICE_ANSWER_ACTION,
@@ -726,22 +781,32 @@ async def submit_answer(
         },
     )
 
-    feedback = (
-        challenge.get("correct_feedback") if correct
-        else challenge.get("incorrect_feedback")
-    ) or ("Richtig!" if correct else "Leider falsch. Schau dir den Hinweis an.")
+    return practice_projection_service.build_attempt_result(
+        recorded_attempt,
+        challenge,
+        next_challenge_id=next_challenge_id,
+    )
 
-    return {
-        "challengeId": challenge_id,
-        "correct": correct,
-        "feedback": feedback,
-        "explanation": challenge.get("explanation") if correct else None,
-        "hint": challenge.get("hint") if not correct else None,
-        "nextChallengeId": next_challenge_id,
-        "attemptsRemaining": 2,
-        "canAskLearningAssistant": not correct,
-        "canAskTeacher": False,
-    }
+
+@router.get(
+    "/attempts/{attempt_id}/result",
+    response_model=PracticeAttemptResult,
+)
+async def get_attempt_result(
+    attempt_id: str,
+    authorized_attempt: AuthorizedResource = Depends(_authorized_attempt_read),
+):
+    attempt = dict(authorized_attempt.value)
+    challenge = practice_repo.get_challenge(attempt.get("challenge_id", ""))
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Practice attempt not found")
+    return practice_projection_service.build_attempt_result(
+        attempt,
+        challenge,
+        next_challenge_id=_next_challenge_id(
+            attempt["challenge_id"], attempt.get("lesson_id", "")
+        ),
+    )
 
 
 @router.get("/mistakes")
@@ -765,7 +830,7 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
     return {"items": mistakes}
 
 
-@router.post("/hints")
+@router.post("/hints", response_model=PracticeHintResponse)
 async def get_hint(
     body: dict,
     actor: Actor = Depends(_practice_update),
@@ -781,20 +846,7 @@ async def get_hint(
         limit=_hint_limit_for_student(actor.user_id),
     )
 
-    hint = challenge.get("hint", "")
-    if not hint:
-        # Generate hint with Bedrock using the dedicated hint function
-        try:
-            from stoa.services.ai_service import get_hint_answer
-            hint = get_hint_answer(
-                prompt=challenge["prompt"],
-                subject=challenge.get("subject_id", "Mathematik"),
-                grade=challenge.get("grade_level", "6. Klasse"),
-            )
-        except Exception:
-            pass
-        if not hint:
-            hint = "Schau dir die Grundregeln für dieses Thema noch einmal an."
+    hint = practice_projection_service.approved_directional_hint(challenge)
 
     _record_practice_usage(
         student_id=actor.user_id,
@@ -806,15 +858,15 @@ async def get_hint(
             "lesson_id": challenge.get("lesson_id"),
             "subject": challenge.get("subject_id"),
             "topic_id": challenge.get("topic_id"),
-            "status": "returned",
+            "status": "returned" if hint else "unavailable",
         },
     )
 
-    return {
-        "title": "Hinweis",
-        "hint": hint,
-        "nextStep": "Versuche die Aufgabe mit dem Hinweis nochmals zu lösen.",
-    }
+    return PracticeHintResponse(
+        challengeId=challenge_id,
+        hintAvailable=hint is not None,
+        hint=hint,
+    )
 
 
 @router.post("/teacher-help")
