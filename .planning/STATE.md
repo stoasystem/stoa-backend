@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v9.0
-milestone_name: Product Reality, Authorization And Core Journey Completion
+milestone_name: milestone
 status: executing
-stopped_at: Completed 473-09-PLAN.md; next 473-10
-last_updated: "2026-07-16T15:49:49.000Z"
-last_activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellation taxonomy is green
+stopped_at: Completed 473-10-PLAN.md; next 473-11
+last_updated: "2026-07-16T16:12:04.382Z"
+last_activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and private telemetry are green
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 33
-  completed_plans: 31
-  percent: 10
+  completed_plans: 32
+  percent: 97
 ---
 
 # Project State
@@ -25,15 +25,17 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 9 of 11 complete; next Plan 10
+Plan: 10 of 11 complete; next Plan 11
 Status: Phase 473 gap closure in progress
-Last activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellation taxonomy is green
+Last activity: 2026-07-16 -- Plan 473-10 completed; conversation replay and private telemetry are green
 
 ## Accumulated Context
 
 - Phase 473 upload APIs now accept only authenticated opaque intents and exact bounded chunks; public responses contain no provider URL, key, multipart ID, ETag, VersionId, or provider name.
 - Multipart part writes require a checksum/length-bound uploading claim and active fence before provider mutation; same-byte lost responses reconcile from matching server-listed parts while different bytes conflict first.
 - Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
+- Conversation sends now use an exact versioned fingerprint, atomic command/chat-quota claim, deterministic effects, and a fenced expiring AI lease; regular and SSE retries replay one original result.
+- AI, title, conversation, replay, and OCR-fed question logs now use closed category/class/size/count/correlation telemetry with cross-service private-canary coverage.
 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
@@ -78,7 +80,7 @@ Last activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellat
 
 ### Pending Todos
 
-- Execute Phase 473 Plans 10-11 with `--gaps-only` before advancing to Phase 474.
+- Execute Phase 473 Plan 11 with `--gaps-only` before advancing to Phase 474.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -97,9 +99,9 @@ Last activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellat
 
 ## Session
 
-**Last Date:** 2026-07-16T15:49:49.000Z
-**Stopped At:** Completed 473-09-PLAN.md; next 473-10
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-10-PLAN.md
+**Last Date:** 2026-07-16T16:12:04.376Z
+**Stopped At:** Completed 473-10-PLAN.md; next 473-11
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-11-PLAN.md
 
 ## Performance Metrics
 
@@ -136,8 +138,13 @@ Last activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellat
 | Phase 473 P07 | 16 min | 2 tasks | 7 files |
 | Phase 473 P08 | 22 min | 2 tasks | 12 files |
 | Phase 473 P09 | 8 min | 2 tasks | 5 files |
+| Phase 473 P10 | 21 min | 2 tasks | 10 files |
 
 ## Decisions
+
+- [Phase 473]: Conversation send identity is a domain-separated length-prefixed SHA-256 over exact UTF-8 content and ordered typed opaque attachment identities. — Exact replay survives consumed uploads while changed content, type, or order conflicts before attachment lookup.
+- [Phase 473]: Message command creation, one quota-operation row, and the daily chat counter share one conditional transaction; deterministic messages and a fenced AI lease converge later effects. — Lost responses and synchronized regular/SSE duplicates cannot double-charge or create duplicate durable results.
+- [Phase 473]: Private AI/content telemetry is limited to closed categories, exception class names, numeric sizes/counts, and server-owned correlation IDs. — Student, OCR, extracted, model, title, exception, coordinate, and provider values never become diagnostics.
 
 - [Phase 473]: Client upload contracts expose only opaque intent/chunk state while staging keys, multipart IDs, ETags, versions, and provider identity remain server-only. — Direct storage capability disclosure is removed rather than reclassified.
 - [Phase 473]: A checksum/length-bound uploading claim and fenced lease precede every provider part write; matching replays may adopt only server-listed matching evidence. — Lost responses converge without blind overwrite, and different bytes fail before mutation.

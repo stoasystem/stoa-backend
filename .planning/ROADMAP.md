@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | Gap closure in progress — 8/11 plans complete, 3 pending | Phase 472 |
+| 473 | Student Content Privacy And Practice Integrity | Gap closure in progress — 10/11 plans complete, 1 pending | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -190,11 +190,11 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-09` — Map transaction cancellation operations to stable quota, dependency, and concealed-resource outcomes with zero-effect races.
 
-**Wave 7** *(Plan 473-09 complete)*
+**Wave 7** *(complete)*
 
-- [ ] `473-10` — Add replayable conversation commands, atomic chat quota idempotency, and private-safe AI/conversation telemetry.
+- [x] `473-10` — Add replayable conversation commands, atomic chat quota idempotency, and private-safe AI/conversation telemetry.
 
-**Wave 8** *(blocked on Plans 473-08 through 473-10)*
+**Wave 8** *(ready; Plans 473-08 through 473-10 complete)*
 
 - [ ] `473-11` — Re-run all privacy and authorization gates and regenerate final source-bound evidence and validation artifacts.
 
