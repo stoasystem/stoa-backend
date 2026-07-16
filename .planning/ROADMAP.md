@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | 14/14 plans executed; verification found new V9PRIV-02 gaps | Phase 472 |
+| 473 | Student Content Privacy And Practice Integrity | 14/17 plans complete; verified gap plans 15-17 ready | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -43,7 +43,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 ## Phases
 
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (verification gaps found 2026-07-16)
+- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (14/17 plans complete; gap closure planned 2026-07-17)
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
@@ -209,6 +209,18 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 **Wave 11** *(final evidence; blocked on Wave 10 completion)*
 
 - [x] `473-14` — Lock the remediated source, run all retained gates, and publish complete redacted evidence bound to one immutable tested SHA.
+
+**Wave 12** *(gap closure; blocked on Wave 11 completion)*
+
+- [ ] `473-15` — Reject malformed provider success coordinates, preserve recovery fences, and isolate cleanup candidates.
+
+**Wave 13** *(gap closure; blocked on Wave 12 completion)*
+
+- [ ] `473-16` — Close every provider response body and normalize conversation repository transport failures.
+
+**Wave 14** *(final evidence; blocked on Wave 13 completion)*
+
+- [ ] `473-17` — Lock the remediated source and regenerate exhaustive redacted evidence for the remaining gaps.
 
 **Cross-cutting constraints:**
 

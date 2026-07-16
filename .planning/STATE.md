@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Phase 473 verification found CR-009 and WR-009 through WR-011 gaps; gap planning required
-last_updated: "2026-07-16T21:38:00Z"
-last_activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
+stopped_at: Phase 473 gap plans 15-17 verified and ready for execution
+last_updated: "2026-07-16T22:36:14Z"
+last_activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verification
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 36
+  total_plans: 39
   completed_plans: 36
-  percent: 100
+  percent: 92
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 14 of 14 execution plans complete; new verification gaps require planning
-Status: Independent verification found gaps; V9PRIV-02 remains pending
-Last activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
+Plan: 14 of 17 execution plans complete; Plans 15-17 ready
+Status: Gap plans verified; V9PRIV-02 remains pending until execution and independent re-verification
+Last activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verification
 
 ## Accumulated Context
 
@@ -81,10 +81,11 @@ Last activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9P
 - Expired, invalid, and abandoned unconsumed upload cleanup now uses bounded versioned claims, consistent rechecks, resumable durable-reference scans, non-consumable retry tombstones, and coordinate-free summaries.
 - The full suite reports 1232 passing tests, but verification found one critical mutable-object TOCTOU gap and five stable-error/redaction/replay gaps; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN.
 - Plans 473-08 through 473-11 close those gaps through an authenticated chunk gateway, server-only immutable promotion, category-stable transaction outcomes, replayable conversation commands, private-safe telemetry, and one final source-bound evidence gate.
+- Plans 473-15 through 473-17 now cover CR-009 and WR-009 through WR-011 with strict provider-coordinate invariants, per-candidate cleanup isolation, provider-body ownership, conversation transport normalization, and a final immutable source-bound evidence gate.
 
 ### Pending Todos
 
-- Plan CR-009 and WR-009 through WR-011; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
+- Execute Plans 473-15 through 473-17; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -98,14 +99,14 @@ Last activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9P
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 473 --gaps` to reject empty provider success coordinates, isolate cleanup candidates, close every returned Body, normalize conversation transport failures, and refresh evidence.
+- Run `$gsd-execute-phase 473 --gaps-only` to reject malformed provider success coordinates, isolate cleanup candidates, close every returned Body, normalize conversation transport failures, and refresh evidence.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-16T21:38:00Z
-**Stopped At:** Phase 473 verification found CR-009 and WR-009 through WR-011 gaps; gap planning required
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
+**Last Date:** 2026-07-16T22:36:14Z
+**Stopped At:** Phase 473 gap plans 15-17 verified and ready for execution
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-15-PLAN.md
 
 ## Performance Metrics
 
