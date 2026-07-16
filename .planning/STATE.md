@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-02-PLAN.md
-last_updated: "2026-07-16T10:34:54.054Z"
+stopped_at: Completed 473-05-PLAN.md
+last_updated: "2026-07-16T10:54:50.375Z"
 last_activity: 2026-07-16 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 24
-  percent: 83
+  completed_plans: 25
+  percent: 86
 ---
 
 # Project State
@@ -89,8 +89,8 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-16T10:34:54.048Z
-**Stopped At:** Completed 473-02-PLAN.md
+**Last Date:** 2026-07-16T10:54:07.581Z
+**Stopped At:** Completed 473-05-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -121,6 +121,7 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 | Phase 472 P22 | 13 min | 3 tasks | 3 files |
 | Phase 473 P01 | 9 min | 2 tasks | 7 files |
 | Phase 473 P02 | 12 min | 3 tasks | 13 files |
+| Phase 473 P05 | 17 min | 2 tasks | 12 files |
 
 ## Decisions
 
@@ -144,3 +145,6 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 - [Phase 472]: Public password recovery never consults the local email profile before provider normalization. — Account existence, role, lifecycle, and delivery metadata cannot select or alter the public initiation/reset projection.
 - [Phase 472]: Final closure evidence is bound to tested source SHA, exact deterministic artifact digests, and the unmodified full-suite delta. — Local success must not absorb Phase 474/475 ownership or unavailable external checks.
 - [Phase 472]: Multi-target bulk, recovery, handoff, and governance commands share one whole-command release invariant. — Every target must allow and persist redacted evidence before the first business effect, independent of input order.
+- [Phase 473]: Student practice and curriculum previews use shared answer-free allowlists; includeAnswers never selects a student answer contract. — Prevents legacy and nested answer-derived response leaks.
+- [Phase 473]: Every correct or incorrect practice answer persists an immutable owner attempt before result serialization. — A failed write cannot reveal the standard answer or explanation.
+- [Phase 473]: Pre-submit hints require explicit approval and normalized answer/explanation guards. — Unsafe legacy or generated hints remain unavailable before submission.
