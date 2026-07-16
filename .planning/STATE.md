@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: executing
-stopped_at: Completed 473-07-PLAN.md
+status: gaps_found
+stopped_at: Phase 473 verification gaps found
 last_updated: "2026-07-16T12:02:00.000Z"
-last_activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy evidence gate
+last_activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/100)
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
   completed_plans: 29
-  percent: 100
+  percent: 10
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (student-content-privacy-and-practice-integrity) — COMPLETE
+Phase: 473 (student-content-privacy-and-practice-integrity) — GAPS FOUND
 Plan: 7 of 7
-Status: Complete
-Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy evidence gate
+Status: Verification gaps found
+Last activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/100)
 
 ## Accumulated Context
 
@@ -67,13 +67,13 @@ Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy ev
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
 - Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
 - All six final review findings pass together in 321 source-bound adversarial/positive controls; the extended Phase 472 gate passes 610 tests, while the full suite retains exactly 23 Phase 474-owned Settings fixture failures.
-- Phase 473 closes student upload ownership, content validation, durable attachment history/reuse, question OCR isolation, answer-free previews, attempt-gated results, and scoped privileged answer reads under one 230-test combined gate.
+- Phase 473 implemented student upload ownership, durable attachment history/reuse, question OCR isolation, answer-free previews, attempt-gated results, and scoped privileged answer reads, but independent verification scored 68/100 (2/3 requirements and 15/22 decisions fully verified).
 - Expired, invalid, and abandoned unconsumed upload cleanup now uses bounded versioned claims, consistent rechecks, resumable durable-reference scans, non-consumable retry tombstones, and coordinate-free summaries.
-- The source-bound Phase 473 gate reports 1232 full-suite tests with zero failures/errors/skips; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN for Phases 479–480.
+- The full suite reports 1232 passing tests, but verification found one critical mutable-object TOCTOU gap and five stable-error/redaction/replay gaps; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN.
 
 ### Pending Todos
 
-- Begin Phase 474 deterministic verification work while preserving the completed Phase 472 authorization and Phase 473 privacy boundaries.
+- Close the Phase 473 verification gaps from `473-VERIFICATION.md` before advancing to Phase 474.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -87,14 +87,14 @@ Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy ev
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 474`; do not approve external rollout from local tests or unavailable provider/IaC evidence.
+- Run `$gsd-plan-phase 473 --gaps`; do not mark Phase 473 complete or approve external rollout while the immutable-byte, redaction, stable-error, and replay gaps remain open.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
 **Last Date:** 2026-07-16T12:02:00.000Z
-**Stopped At:** Completed 473-07-PLAN.md
-**Resume File:** None
+**Stopped At:** Phase 473 verification gaps found
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
 
 ## Performance Metrics
 
@@ -134,7 +134,7 @@ Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy ev
 
 - [Phase 473]: Cleanup claims only terminal or past-expiry unconsumed upload states, then consistently rechecks the claimed version before any provider delete. — Active, consuming, consumed, raced, and restored resources cannot enter deletion.
 - [Phase 473]: Durable-reference discovery is bounded and resumable, and provider failure retains a non-consumable cleanup tombstone. — Cleanup retries are idempotent without deleting durable/reused history or reviving validated uploads.
-- [Phase 473]: Final closure evidence binds exact local commands, tested source/test digests, and deterministic route/OpenAPI artifacts while real S3 and schedule/IaC checks remain NOT RUN. — Local proof cannot be mistaken for external rollout verification.
+- [Phase 473]: Local evidence binds commands and deterministic artifacts while real S3 and schedule/IaC checks remain NOT RUN; independent verification found that the evidence overclaims immutable-byte and redaction guarantees. — Gap closure must regenerate evidence from the remediated source.
 
 - [Phase 473]: Curriculum answers use a dedicated READ purpose; admins receive only that narrow automatic read and teachers require one fresh current assignment matched against server-loaded challenge scope. — Answer access cannot broaden support or curriculum mutation authority.
 - [Phase 473]: Missing, stale, disabled, unrelated, and wrong-scope teacher answer requests remain indistinguishable and only the explicit privileged route serializes pre-attempt answers. — Student previews and legacy includeAnswers input remain structurally answer-free.
@@ -142,13 +142,13 @@ Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy ev
 - [Phase 473]: Conversation message persistence, fresh upload consumption, durable attachment creation, associations, and one aggregate new-byte charge share one conditional transaction. — Missing, foreign, invalid, duplicated, or over-quota member lists cannot leave partial history or storage effects.
 - [Phase 473]: Saved attachment reuse increments only the durable reference count and adds a logical association. — Reuse preserves immutable bytes and leaves 5 GiB/15 GiB storage usage unchanged.
 - [Phase 473]: Last-reference release creates a non-reusable deletion-pending tombstone before object deletion and quota finalization. — Provider or transaction retries cannot double-decrement usage or delete bytes still referenced elsewhere.
-- [Phase 473]: Passive document extraction is bounded, category-failing, silently prompt-sanitized, and AI-only. — Public history and logs retain safe attachment summaries without keys, provider coordinates, raw OCR, or extracted content.
+- [Phase 473]: Passive document extraction is bounded and public history retains safe attachment summaries; independent verification found broader AI/conversation logging paths that still expose content or provider exceptions. — Gap closure must enforce and test category-only logging end to end.
 
 - [Phase 473]: Upload ownership is established only by the verified student Actor and a private intent record. — Client fields never establish owner or storage coordinates.
-- [Phase 473]: Only verified immutable bytes may transition an upload intent to validated. — HEAD metadata and bounded bytes are authoritative across the direct-upload trust boundary.
+- [Phase 473]: Finalize validates HEAD metadata and bounded bytes, but later OCR/extraction reads are not bound to the recorded ETag or an immutable version. — Gap closure must pin every use to immutable validated bytes.
 - [Phase 473]: First durable attachment transactions charge exact content length once; reuse has no storage mutation. — Quota remains authoritative without double-charging logical associations.
-- [Phase 473]: Public attachment contracts expose only opaque upload/attachment IDs and safe metadata; storage coordinates and extracted content are structurally absent. — Prevents client-selected storage coordinates and private extraction data from entering public schemas.
-- [Phase 473]: Only `upload_service_unavailable` is retryable, with bounded idempotent semantics; every attachment error has one stable client action. — Keeps recovery behavior exhaustive without unsafe mutation retries or provider-detail leakage.
+- [Phase 473]: Durable public attachment summaries expose opaque IDs and safe metadata, but presigned POST fields still reveal the generated storage key. — Gap closure must either remove that coordinate or explicitly narrow the contract/evidence.
+- [Phase 473]: The attachment error registry is closed, but presign failures and transaction cancellations do not yet preserve the required stable dependency/quota semantics. — Gap closure must map every failure path to the structured contract.
 - [Phase 473]: Answer-bearing practice results require a non-empty durable attempt receipt, while previews and hints use separate `extra="forbid"` allowlists. — Makes successful persistence the structural gate for answer reveal and prevents preview schema drift.
 
 - [Phase 472]: Canonical authorization correlation IDs are generated server-side and never reuse an inbound header. — Prevents client-selected audit correlation and replay confusion.
@@ -169,4 +169,4 @@ Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy ev
 - [Phase 473]: Pre-submit hints require explicit approval and normalized answer/explanation guards. — Unsafe legacy or generated hints remain unavailable before submission.
 - [Phase 473]: Question idempotency binds the original opaque upload or saved-attachment identity, never a bucket or object key. — A different attachment under the same key is rejected before quota, OCR, or attachment mutation.
 - [Phase 473]: Fresh question image reservation precedes OCR and commits consumption, attachment, association, byte charge, and question in one transaction. — Foreign, missing, invalid, reused, raced, or failed attachment commands cannot leave partial attachment/question state.
-- [Phase 473]: OCR accepts only a resolved internal active JPEG/PNG attachment and public questions retain only safe summary metadata. — Object coordinates, provider payloads, and raw OCR never cross the public question boundary.
+- [Phase 473]: OCR accepts only a resolved internal active JPEG/PNG attachment and public questions retain safe summary metadata, but the provider read is not version/ETag-bound. — Ownership is enforced while immutable-byte integrity remains a verification gap.
