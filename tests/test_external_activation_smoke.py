@@ -13,6 +13,8 @@ def _settings(**overrides) -> Settings:
         values.update(
             authorization_audit_active_key_id="test-production-v1",
             authorization_audit_active_key="test-production-authorization-audit-key-32-bytes",
+            cognito_allowed_issuers=["https://identity.test"],
+            cognito_access_client_ids=["test-access-client"],
         )
     return Settings(**values)
 
