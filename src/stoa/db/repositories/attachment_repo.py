@@ -147,11 +147,16 @@ def build_message_attachment_transaction(
     for attachment in reused:
         operations.append(
             {
-                "ConditionCheck": {
+                "Update": {
                     "Key": attachment_key(attachment["attachment_id"]),
+                    "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
                     "ConditionExpression": "owner_id=:owner AND #status=:active",
                     "ExpressionAttributeNames": {"#status": "status"},
-                    "ExpressionAttributeValues": {":owner": owner_id, ":active": "active"},
+                    "ExpressionAttributeValues": {
+                        ":owner": owner_id,
+                        ":active": "active",
+                        ":one": 1,
+                    },
                 }
             }
         )
@@ -192,6 +197,104 @@ def build_message_attachment_transaction(
 def get_storage_usage(owner_id: str, *, table: Any | None = None) -> int:
     response = (table or get_table()).get_item(Key=storage_key(owner_id), ConsistentRead=True)
     return int((response.get("Item") or {}).get("used_bytes", 0))
+
+
+def list_owner_attachment_items(
+    owner_id: str, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    from boto3.dynamodb.conditions import Key
+
+    response = (table or get_table()).query(
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=Key("student_id").eq(owner_id),
+    )
+    return [
+        item
+        for item in response.get("Items", [])
+        if item.get("entity_type") in {"attachment", "attachment_association"}
+    ]
+
+
+def build_release_reference_transaction(
+    *, attachment: dict[str, Any], association: dict[str, Any], last_reference: bool
+) -> list[dict[str, Any]]:
+    delete_association = {
+        "Delete": {
+            "Key": {"PK": association["PK"], "SK": association["SK"]},
+            "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
+        }
+    }
+    if not last_reference:
+        return [
+            delete_association,
+            {
+                "Update": {
+                    "Key": attachment_key(attachment["attachment_id"]),
+                    "UpdateExpression": "SET ref_count=ref_count-:one",
+                    "ConditionExpression": (
+                        "owner_id=:owner AND #status=:active AND ref_count>:one"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":owner": attachment["owner_id"],
+                        ":active": "active",
+                        ":one": 1,
+                    },
+                }
+            },
+        ]
+    return [
+        delete_association,
+        {
+            "Update": {
+                "Key": attachment_key(attachment["attachment_id"]),
+                "UpdateExpression": (
+                    "SET #status=:pending, deletion_resource_type=:resource_type, "
+                    "deletion_resource_id=:resource_id"
+                ),
+                "ConditionExpression": (
+                    "owner_id=:owner AND #status=:active AND "
+                    "(attribute_not_exists(ref_count) OR ref_count=:one)"
+                ),
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":owner": attachment["owner_id"],
+                    ":active": "active",
+                    ":pending": "deletion_pending",
+                    ":one": 1,
+                    ":resource_type": association["resource_type"],
+                    ":resource_id": association["resource_id"],
+                },
+            }
+        },
+    ]
+
+
+def build_finalize_deletion_transaction(
+    attachment: dict[str, Any], now_iso: str
+) -> list[dict[str, Any]]:
+    size = int(attachment["content_length"])
+    return [
+        {
+            "Delete": {
+                "Key": attachment_key(attachment["attachment_id"]),
+                "ConditionExpression": "owner_id=:owner AND #status=:pending",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":owner": attachment["owner_id"],
+                    ":pending": "deletion_pending",
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": storage_key(attachment["owner_id"]),
+                "UpdateExpression": "SET used_bytes=used_bytes-:size, updated_at=:updated",
+                "ConditionExpression": "used_bytes>=:size",
+                "ExpressionAttributeValues": {":size": size, ":updated": now_iso},
+            }
+        },
+    ]
 
 
 def begin_validation(

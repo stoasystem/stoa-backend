@@ -106,6 +106,11 @@ def _chat_limit_for_student(student_id: str) -> int:
     return int(limits.get("dailyChatMessageLimit") or settings.daily_chat_message_limit)
 
 
+def _attachment_plan_for_student(student_id: str) -> str:
+    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
+    return str(entitlement.get("effectivePlan") or "free")
+
+
 # ── Request / Response models ──────────────────────────────────────────────────
 
 class CreateConversationRequest(BaseModel):
@@ -367,20 +372,30 @@ async def send_message(
 
     try:
         prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
+        effective_plan = "free"
+        if body.attachmentIds:
+            effective_plan = _attachment_plan_for_student(student_id)
+            attachment_service.ensure_message_attachment_capacity(
+                prepared, student_id, effective_plan
+            )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
-    student_msg, assistant_msg = _send_message_impl(
-        conv_id=conv_id,
-        student_id=student_id,
-        subject=conv.get("subject", "math"),
-        grade=conv.get("grade", ""),
-        content=body.content,
-        actor=actor,
-        prepared_attachments=prepared,
-        table=table,
-    )
+    try:
+        student_msg, assistant_msg = _send_message_impl(
+            conv_id=conv_id,
+            student_id=student_id,
+            subject=conv.get("subject", "math"),
+            grade=conv.get("grade", ""),
+            content=body.content,
+            actor=actor,
+            prepared_attachments=prepared,
+            effective_plan=effective_plan,
+            table=table,
+        )
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
     _record_chat_usage(
         student_id=student_id,
         conv_id=conv_id,
@@ -418,20 +433,30 @@ async def stream_message(
 
     try:
         prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
+        effective_plan = "free"
+        if body.attachmentIds:
+            effective_plan = _attachment_plan_for_student(student_id)
+            attachment_service.ensure_message_attachment_capacity(
+                prepared, student_id, effective_plan
+            )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
-    student_msg, assistant_msg = _send_message_impl(
-        conv_id=conv_id,
-        student_id=student_id,
-        subject=conv.get("subject", "math"),
-        grade=conv.get("grade", ""),
-        content=body.content,
-        actor=actor,
-        prepared_attachments=prepared,
-        table=table,
-    )
+    try:
+        student_msg, assistant_msg = _send_message_impl(
+            conv_id=conv_id,
+            student_id=student_id,
+            subject=conv.get("subject", "math"),
+            grade=conv.get("grade", ""),
+            content=body.content,
+            actor=actor,
+            prepared_attachments=prepared,
+            effective_plan=effective_plan,
+            table=table,
+        )
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
     _record_chat_usage(
         student_id=student_id,
         conv_id=conv_id,
@@ -485,6 +510,7 @@ def _send_message_impl(
     table,
     actor: Actor,
     prepared_attachments: list[tuple[str, dict]] | None = None,
+    effective_plan: str | None = None,
 ) -> tuple[ChatMessage, ChatMessage]:
     """Persist student message, call Bedrock, persist AI reply. Returns both messages."""
     now = _now()
@@ -515,9 +541,7 @@ def _send_message_impl(
         "content": content,
         "created_at": now,
     }
-    effective_plan = entitlement_service.resolve_student_entitlement(
-        student_id, settings=settings
-    ).get("effectivePlan", "free")
+    effective_plan = effective_plan or _attachment_plan_for_student(student_id)
     attachments = attachment_service.bind_message_attachments(
         message=student_item,
         conversation_id=conv_id,
@@ -525,6 +549,13 @@ def _send_message_impl(
         prepared=prepared_attachments or [],
         effective_plan=str(effective_plan),
     )
+    attachment_context = ""
+    if prepared_attachments:
+        attachment_context = attachment_service.extract_message_attachment_context(
+            prepared_attachments,
+            s3=boto3.client("s3", region_name=settings.aws_region),
+            settings=settings,
+        )
 
     # Call Bedrock AI with full conversation history for multi-turn context
     try:
@@ -534,6 +565,7 @@ def _send_message_impl(
             grade=grade,
             language="de",
             history=prior_messages,
+            attachment_context=attachment_context,
         )
         # Format AI response as human-readable text
         steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(ai_result.get("steps", [])))

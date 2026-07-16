@@ -21,6 +21,11 @@ from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentE
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
+from stoa.services.document_extraction_service import (
+    MAX_EXTRACTED_CHARACTERS,
+    DocumentExtractionFailure,
+    extract_attachment_text,
+)
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
@@ -139,6 +144,23 @@ def prepare_message_attachments(
     return prepared
 
 
+def ensure_message_attachment_capacity(
+    prepared: list[tuple[str, dict[str, Any]]],
+    owner_id: str,
+    effective_plan: str,
+    *,
+    repository: Any = attachment_repo,
+) -> None:
+    fresh_bytes = sum(
+        int(item["content_length"]) for kind, item in prepared if kind == "upload"
+    )
+    if (
+        repository.get_storage_usage(owner_id) + fresh_bytes
+        > storage_limit_for_entitlement(effective_plan)
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+
+
 def bind_message_attachments(
     *,
     message: dict[str, Any],
@@ -172,6 +194,7 @@ def bind_message_attachments(
                 "created_at": now.isoformat(),
                 "source_upload_id": item["upload_id"],
                 "etag": item.get("etag"),
+                "ref_count": 1,
             }
             item = {**item, "consume_epoch": int(now.timestamp())}
             fresh.append((item, attachment))
@@ -187,6 +210,8 @@ def bind_message_attachments(
                 ),
                 "attachment_id": attachment_id,
                 "owner_id": actor.user_id,
+                "student_id": actor.user_id,
+                "entity_type": "attachment_association",
                 "resource_type": "conversation",
                 "resource_id": conversation_id,
                 "message_id": message["message_id"],
@@ -195,10 +220,8 @@ def bind_message_attachments(
         )
         summaries.append(_attachment_summary(attachment))
     message["attachment_ids"] = attachment_ids
-    fresh_bytes = sum(int(attachment["content_length"]) for _, attachment in fresh)
     limit = storage_limit_for_entitlement(effective_plan)
-    if repository.get_storage_usage(actor.user_id) + fresh_bytes > limit:
-        raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+    ensure_message_attachment_capacity(prepared, actor.user_id, effective_plan, repository=repository)
     try:
         repository.transact(
             repository.build_message_attachment_transaction(
@@ -219,6 +242,188 @@ def bind_message_attachments(
         )
         raise AttachmentDecisionError(code) from None
     return summaries
+
+
+def extract_message_attachment_context(
+    prepared: list[tuple[str, dict[str, Any]]],
+    *,
+    s3: Any,
+    settings: Settings,
+) -> str:
+    """Read immutable private bytes and return bounded model-only document context."""
+    parts: list[str] = []
+    total = 0
+    for _, item in prepared:
+        length = int(item["content_length"])
+        try:
+            response = s3.get_object(Bucket=settings.s3_images_bucket, Key=item["object_key"])
+            data = response["Body"].read(length + 1)
+            if len(data) != length:
+                raise DocumentExtractionFailure("immutable_bytes_changed")
+            value = extract_attachment_text(data, str(item["detected_type"])).strip()
+        except DocumentExtractionFailure as error:
+            value = f"[attachment:{error.category}]"
+        except Exception:
+            value = "[attachment:service_unavailable]"
+        if not value:
+            continue
+        remaining = MAX_EXTRACTED_CHARACTERS - total
+        if remaining <= 0:
+            break
+        value = value[:remaining]
+        parts.append(value)
+        total += len(value)
+    return "\n\n".join(parts)
+
+
+def release_resource_attachments(
+    owner_id: str,
+    resource_type: str,
+    resource_id: str,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, int]:
+    """Release references and retain a retryable tombstone for last-byte deletion."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    items = repository.list_owner_attachment_items(owner_id)
+    attachments = {
+        item["attachment_id"]: item
+        for item in items
+        if item.get("entity_type") == "attachment"
+    }
+    associations = [
+        item
+        for item in items
+        if item.get("entity_type") == "attachment_association"
+        and item.get("resource_type") == resource_type
+        and item.get("resource_id") == resource_id
+    ]
+    released = deleted = 0
+    for association in associations:
+        attachment = attachments.get(association.get("attachment_id"))
+        if not attachment or attachment.get("status") != "active":
+            continue
+        last = int(attachment.get("ref_count", 1)) == 1
+        try:
+            repository.transact(
+                repository.build_release_reference_transaction(
+                    attachment=attachment,
+                    association=association,
+                    last_reference=last,
+                )
+            )
+        except attachment_repo.AttachmentRepositoryConflict:
+            continue
+        released += 1
+        if last:
+            pending = {
+                **attachment,
+                "status": "deletion_pending",
+                "deletion_resource_type": resource_type,
+                "deletion_resource_id": resource_id,
+            }
+            if _finish_pending_deletion(
+                pending, s3=s3, settings=settings, now=now, repository=repository
+            ):
+                deleted += 1
+        else:
+            attachment["ref_count"] = int(attachment.get("ref_count", 1)) - 1
+    for attachment in attachments.values():
+        if (
+            attachment.get("status") == "deletion_pending"
+            and attachment.get("deletion_resource_type") == resource_type
+            and attachment.get("deletion_resource_id") == resource_id
+            and _finish_pending_deletion(
+                attachment, s3=s3, settings=settings, now=now, repository=repository
+            )
+        ):
+            deleted += 1
+    return {"released": released, "deleted": deleted}
+
+
+def purge_student_attachments(
+    student_id: str,
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any = attachment_repo,
+) -> dict[str, int]:
+    """Account-closure hook: idempotently release every remaining owner association."""
+    items = repository.list_owner_attachment_items(student_id)
+    resources = {
+        (str(item["resource_type"]), str(item["resource_id"]))
+        for item in items
+        if item.get("entity_type") == "attachment_association"
+    }
+    released = deleted = 0
+    for resource_type, resource_id in sorted(resources):
+        result = release_resource_attachments(
+            student_id,
+            resource_type,
+            resource_id,
+            s3=s3,
+            settings=settings,
+            repository=repository,
+        )
+        released += result["released"]
+        deleted += result["deleted"]
+    for attachment in repository.list_owner_attachment_items(student_id):
+        if (
+            attachment.get("entity_type") == "attachment"
+            and attachment.get("status") == "deletion_pending"
+            and _finish_pending_deletion(
+                attachment,
+                s3=s3,
+                settings=settings,
+                now=datetime.now(UTC),
+                repository=repository,
+            )
+        ):
+            deleted += 1
+    return {"released": released, "deleted": deleted}
+
+
+def release_conversation_attachments(
+    owner_id: str,
+    conversation_id: str,
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any = attachment_repo,
+) -> dict[str, int]:
+    """Conversation-deletion integration hook."""
+    return release_resource_attachments(
+        owner_id,
+        "conversation",
+        conversation_id,
+        s3=s3,
+        settings=settings,
+        repository=repository,
+    )
+
+
+def _finish_pending_deletion(
+    attachment: dict[str, Any],
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime,
+    repository: Any,
+) -> bool:
+    try:
+        s3.delete_object(Bucket=settings.s3_images_bucket, Key=attachment["object_key"])
+        repository.transact(
+            repository.build_finalize_deletion_transaction(attachment, now.isoformat())
+        )
+    except attachment_repo.AttachmentRepositoryConflict:
+        return False
+    except Exception:
+        # The deletion-pending tombstone preserves retryability and prevents reuse.
+        return False
+    return True
 
 
 def list_attachment_summaries(

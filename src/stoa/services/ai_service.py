@@ -82,6 +82,11 @@ def _sanitise_input(text: str) -> str:
     return cleaned
 
 
+def _sanitise_attachment_context(text: str) -> str:
+    """Treat extracted documents as untrusted prompt input without logging their content."""
+    return _INJECTION_RE.sub("[removed]", text[:200_000]).strip()
+
+
 # ── Output validation ──────────────────────────────────────────────────────────
 
 def _validate_output(parsed: dict, raw_text: str) -> dict:
@@ -143,7 +148,9 @@ def _parse_ai_response(text: str) -> dict:
 
 # ── History formatting ─────────────────────────────────────────────────────────
 
-def _build_messages(content: str, history: list[dict] | None) -> list[dict]:
+def _build_messages(
+    content: str, history: list[dict] | None, attachment_context: str = ""
+) -> list[dict]:
     """Build the Anthropic messages array from sanitised history + current turn.
 
     Only student/assistant turns are included; teacher, system, and note
@@ -164,7 +171,12 @@ def _build_messages(content: str, history: list[dict] | None) -> list[dict]:
             messages.append({"role": role, "content": m.get("content", "")})
 
     # Append the current (sanitised) message
-    messages.append({"role": "user", "content": content})
+    current = content
+    if attachment_context:
+        safe_attachment_context = _sanitise_attachment_context(attachment_context)
+        current += "\n\n<student_attachment_context>\n" + safe_attachment_context
+        current += "\n</student_attachment_context>"
+    messages.append({"role": "user", "content": current})
 
     # Anthropic API requires alternating user/assistant turns.
     # Merge consecutive same-role messages.
@@ -186,6 +198,7 @@ def get_ai_answer(
     grade: str,
     language: str = "de",
     history: list[dict] | None = None,
+    attachment_context: str = "",
 ) -> dict:
     """Invoke Bedrock Claude with a controlled educational prompt.
 
@@ -206,7 +219,7 @@ def get_ai_answer(
         grade=grade,
         language=language,
     )
-    messages = _build_messages(safe_content, history)
+    messages = _build_messages(safe_content, history, attachment_context)
 
     client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
     body = json.dumps({

@@ -362,6 +362,12 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         },
     )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "ensure_message_attachment_capacity",
+        lambda *_args, **_kwargs: None,
+    )
     monkeypatch.setattr(conversations, "_record_chat_usage", lambda **_kwargs: None)
     monkeypatch.setattr(
         conversations,
@@ -438,3 +444,50 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     ]
     assert "provider-canary" not in response.text
     assert "raw extracted canary" not in response.text
+
+
+def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch) -> None:
+    events = []
+    stored = []
+
+    class Table:
+        def put_item(self, Item):
+            stored.append(Item)
+
+        def update_item(self, **_kwargs):
+            return {}
+
+    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations, "_generate_title", lambda *_: None)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "bind_message_attachments",
+        lambda **_kwargs: events.append("bind") or [_attachment_summary()],
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "extract_message_attachment_context",
+        lambda *_args, **_kwargs: events.append("extract") or "internal extracted canary",
+    )
+    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+
+    def ai_answer(**kwargs):
+        events.append("ai")
+        assert kwargs["attachment_context"] == "internal extracted canary"
+        return {"steps": ["safe step"], "answer": "safe reply", "hints": []}
+
+    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", ai_answer)
+    student, assistant = conversations._send_message_impl(
+        conv_id="conv-1",
+        student_id="student-1",
+        subject="math",
+        grade="Sek1",
+        content="use my file",
+        table=Table(),
+        actor=_actor(),
+        prepared_attachments=[("attachment", {"attachment_id": "attachment-1"})],
+        effective_plan="free",
+    )
+    assert events == ["bind", "extract", "ai"]
+    assert student.attachments == [_attachment_summary()]
+    assert "internal extracted canary" not in str(stored) + student.model_dump_json() + assistant.model_dump_json()
