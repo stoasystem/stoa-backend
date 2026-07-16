@@ -656,7 +656,9 @@ def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
     assert "object_key" not in str(response.json()).lower()
 
 
-def test_transient_ocr_failure_releases_reservation_with_safe_error(monkeypatch) -> None:
+def test_transient_ocr_failure_releases_reservation_with_safe_error(
+    monkeypatch, caplog
+) -> None:
     _patch_question_submit_dependencies(monkeypatch)
     effects = []
     monkeypatch.setattr(
@@ -697,6 +699,9 @@ def test_transient_ocr_failure_releases_reservation_with_safe_error(monkeypatch)
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "upload_service_unavailable"
     assert "provider-payload-canary" not in str(response.json())
+    assert "provider-payload-canary" not in caplog.text
+    assert "event_category=question_ocr_failed" in caplog.text
+    assert "exception_class=OcrAttachmentFailure" in caplog.text
     assert effects == ["released"]
 
 

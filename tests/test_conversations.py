@@ -361,7 +361,9 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
     }
 
 
-def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(monkeypatch) -> None:
+def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(
+    monkeypatch, caplog
+) -> None:
     body = conversations.SendMessageRequest.model_validate(
         {
             "content": "exact bytes",
@@ -390,6 +392,32 @@ def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(monkeypatc
     assert result.studentMessage.id == "student-original"
     assert result.assistantMessage.id == "assistant-original"
     assert effects == []
+    assert "exact bytes" not in caplog.text
+    assert "original answer" not in caplog.text
+
+
+def test_title_failure_telemetry_excludes_title_input_and_provider_details(
+    monkeypatch, caplog
+) -> None:
+    canaries = (
+        "TITLE-INPUT-PRIVATE-CANARY",
+        "TITLE-PROVIDER-EXCEPTION-CANARY",
+        "private-model-identifier",
+    )
+    monkeypatch.setattr(
+        conversations.boto3,
+        "client",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError(" ".join(canaries[1:]))
+        ),
+    )
+    assert conversations._generate_title(
+        canaries[0], "math", correlation_id="server-title-correlation"
+    ) is None
+    assert "event_category=title_generation_failed" in caplog.text
+    assert "exception_class=RuntimeError" in caplog.text
+    for canary in canaries:
+        assert canary not in caplog.text
 
 
 def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
@@ -584,7 +612,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     assert "raw extracted canary" not in response.text
 
 
-def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch) -> None:
+def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch, caplog) -> None:
     events = []
     stored = []
 
@@ -632,6 +660,7 @@ def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch)
         "internal extracted canary"
         not in str(stored) + student.model_dump_json() + assistant.model_dump_json()
     )
+    assert "internal extracted canary" not in caplog.text
 
 
 def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_effect(

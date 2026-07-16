@@ -38,6 +38,7 @@ from stoa.security.identity import Actor
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
+from stoa.security.private_telemetry import emit_private_event
 from stoa.security.route_authorization import (
     CONVERSATION_CONTENT_READ,
     STUDENT_SELF,
@@ -254,7 +255,9 @@ class TeacherAvailabilityResponse(BaseModel):
     responseTime: str | None = None
 
 
-def _generate_title(first_message: str, subject: str) -> str | None:
+def _generate_title(
+    first_message: str, subject: str, *, correlation_id: str | None = None
+) -> str | None:
     """Call Bedrock to generate a short conversation title (max 6 words)."""
     try:
         import json as _json
@@ -283,7 +286,13 @@ def _generate_title(first_message: str, subject: str) -> str | None:
         title = result["content"][0]["text"].strip().strip('"').strip("'")
         return title[:80] if title else None
     except Exception as exc:
-        logger.warning("Title generation failed: %s", exc)
+        emit_private_event(
+            "title_generation_failed",
+            exception=exc,
+            input_size=len(first_message),
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
         return None
 
 
@@ -549,6 +558,11 @@ def _wait_for_message_command(
         if command and (result := _completed_command_response(command)) is not None:
             return result
         time.sleep(_MESSAGE_POLL_SECONDS)
+    emit_private_event(
+        "message_replay_wait_exhausted",
+        correlation_id=str((command or {}).get("command_id") or "message-command"),
+        level=logging.WARNING,
+    )
     raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
 
 
@@ -769,6 +783,7 @@ def _execute_message_command(
             language="de",
             history=prior_messages,
             attachment_context=attachment_context,
+            correlation_id=command_id,
         )
         steps = "\n".join(
             f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
@@ -779,8 +794,15 @@ def _execute_message_command(
         ai_content = f"{steps}\n\n{answer}{hint}".strip() or (
             answer or "Entschuldigung, ich konnte keine Antwort generieren."
         )
-    except Exception:
-        logger.error("conversation_ai_failed exception_class=%s command_id=%s", "Exception", command_id)
+    except Exception as exc:
+        emit_private_event(
+            "conversation_ai_failed",
+            exception=exc,
+            input_size=len(body.content),
+            attachment_count=len(prepared),
+            correlation_id=command_id,
+            level=logging.ERROR,
+        )
         ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
 
     assistant_created_at = _now()
@@ -905,7 +927,14 @@ def _send_message_impl(
         if not ai_content:
             ai_content = answer_text or "Entschuldigung, ich konnte keine Antwort generieren."
     except Exception as ai_err:
-        logger.error("Bedrock AI call failed: %s: %s", type(ai_err).__name__, ai_err)
+        emit_private_event(
+            "conversation_ai_failed",
+            exception=ai_err,
+            input_size=len(content),
+            attachment_count=len(prepared_attachments or []),
+            correlation_id=student_msg_id,
+            level=logging.ERROR,
+        )
         err_str = str(ai_err)
         if "use case details" in err_str or "ResourceNotFound" in type(ai_err).__name__:
             # Bedrock access not yet approved — use a structured placeholder

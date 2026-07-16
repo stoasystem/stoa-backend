@@ -1,4 +1,5 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -13,6 +14,7 @@ from stoa.security.authorization import AuthorizationPurpose, AuthorizationSpec
 from stoa.security.identity import Actor
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
+from stoa.security.private_telemetry import emit_private_event
 from stoa.security.route_authorization import (
     QUESTION_CONTENT_READ,
     STUDENT_SELF,
@@ -263,6 +265,13 @@ async def submit_question(
             body, settings, prepared_attachment
         )
     except ocr_service.OcrAttachmentFailure as error:
+        emit_private_event(
+            "question_ocr_failed",
+            exception=error,
+            attachment_count=1,
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
         if prepared_attachment is not None:
             if error.terminal:
                 attachment_service.invalidate_question_attachment(
@@ -355,6 +364,7 @@ async def submit_question(
             subject=subject,
             grade=grade,
             language=language,
+            correlation_id=correlation_id,
         )
         topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
             subject=subject,
@@ -373,7 +383,15 @@ async def submit_question(
         item["ai_response"] = ai_resp
         item["knowledge_points"] = ai_resp.get("knowledge_points", [])
         item["topic_seeds"] = topic_seeds
-    except Exception:
+    except Exception as exc:
+        emit_private_event(
+            "question_ai_failed",
+            exception=exc,
+            input_size=len(ai_content),
+            attachment_count=1 if prepared_attachment is not None else 0,
+            correlation_id=correlation_id,
+            level=logging.ERROR,
+        )
         # AI call failed — leave as PENDING; client can poll
         pass
 

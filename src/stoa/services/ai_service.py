@@ -13,6 +13,7 @@ import re
 import boto3
 
 from stoa.config import settings
+from stoa.security.private_telemetry import emit_private_event
 from stoa.services import learning_profile_service
 
 logger = logging.getLogger(__name__)
@@ -67,15 +68,25 @@ _MAX_HISTORY_TURNS = 6
 
 # ── Input sanitisation ─────────────────────────────────────────────────────────
 
-def _sanitise_input(text: str) -> str:
+def _sanitise_input(text: str, *, correlation_id: str | None = None) -> str:
     """Strip injection attempts and enforce length cap."""
     cleaned = text.strip()
     if len(cleaned) > _MAX_INPUT_CHARS:
         cleaned = cleaned[:_MAX_INPUT_CHARS]
-        logger.warning("Student message truncated to %d chars", _MAX_INPUT_CHARS)
+        emit_private_event(
+            "prompt_input_truncated",
+            input_size=len(text),
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
 
     if _INJECTION_RE.search(cleaned):
-        logger.warning("Potential prompt injection detected, neutralising: %r", cleaned[:120])
+        emit_private_event(
+            "prompt_injection_neutralized",
+            input_size=len(cleaned),
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
         # Replace the offending portion so the model only sees the innocent remainder
         cleaned = _INJECTION_RE.sub("[removed]", cleaned).strip()
 
@@ -114,7 +125,12 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
         parsed["answer"] = raw_text  # fall back to raw text
 
     if issues:
-        logger.warning("Output policy issues: %s", issues)
+        emit_private_event(
+            "model_output_policy_issue",
+            output_size=len(raw_text),
+            issue_count=len(issues),
+            level=logging.WARNING,
+        )
 
     return parsed
 
@@ -142,7 +158,9 @@ def _parse_ai_response(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    logger.warning("Could not parse AI response as JSON, using raw text: %r", text[:200])
+    emit_private_event(
+        "model_output_parse_failed", output_size=len(text), level=logging.WARNING
+    )
     return {"steps": [], "answer": text, "hints": [], "similar_exercises": [], "suggest_teacher": False}
 
 
@@ -199,6 +217,7 @@ def get_ai_answer(
     language: str = "de",
     history: list[dict] | None = None,
     attachment_context: str = "",
+    correlation_id: str | None = None,
 ) -> dict:
     """Invoke Bedrock Claude with a controlled educational prompt.
 
@@ -211,7 +230,7 @@ def get_ai_answer(
                   each with keys ``role`` and ``content``.  The most recent
                   _MAX_HISTORY_TURNS pairs will be included.
     """
-    safe_content = _sanitise_input(content)
+    safe_content = _sanitise_input(content, correlation_id=correlation_id)
     normalized_subject = learning_profile_service.normalize_subject(subject)
     system_prompt = SYSTEM_PROMPT.format(
         subject=normalized_subject,
@@ -230,22 +249,34 @@ def get_ai_answer(
         "messages": messages,
     })
 
-    logger.info(
-        "Calling Bedrock model=%s turns=%d",
-        settings.bedrock_model_id, len(messages),
+    emit_private_event(
+        "ai_request_started",
+        input_size=len(safe_content),
+        attachment_count=1 if attachment_context else 0,
+        correlation_id=correlation_id,
     )
     response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
     result = json.loads(response["body"].read())
     raw_text = result["content"][0]["text"]
-    logger.info("Bedrock response received, length=%d", len(raw_text))
+    emit_private_event(
+        "ai_response_received",
+        output_size=len(raw_text),
+        correlation_id=correlation_id,
+    )
 
     parsed = _parse_ai_response(raw_text)
     return _validate_output(parsed, raw_text)
 
 
-def get_hint_answer(prompt: str, subject: str = "Mathematik", grade: str = "6. Klasse") -> str:
+def get_hint_answer(
+    prompt: str,
+    subject: str = "Mathematik",
+    grade: str = "6. Klasse",
+    *,
+    correlation_id: str | None = None,
+) -> str:
     """Generate a short 1-2 sentence hint for a practice challenge."""
-    safe_prompt = _sanitise_input(prompt)
+    safe_prompt = _sanitise_input(prompt, correlation_id=correlation_id)
     system = (
         "You are a helpful Swiss maths teacher. "
         "Give a concise hint (1-2 sentences, in German) that guides the student "
@@ -264,5 +295,11 @@ def get_hint_answer(prompt: str, subject: str = "Mathematik", grade: str = "6. K
         result = json.loads(response["body"].read())
         return result["content"][0]["text"].strip()
     except Exception as exc:
-        logger.error("Bedrock hint generation failed: %s", exc)
+        emit_private_event(
+            "hint_generation_failed",
+            exception=exc,
+            input_size=len(prompt),
+            correlation_id=correlation_id,
+            level=logging.ERROR,
+        )
         return ""
