@@ -28,6 +28,8 @@ from stoa.security.attachment_errors import (
     attachment_http_response,
     safe_attachment_error_body,
 )
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.services.attachment_service import create_upload_intent, storage_limit_for_entitlement
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 
@@ -49,8 +51,17 @@ def test_upload_contract_constants_are_locked() -> None:
     assert PAID_STORAGE_BYTES == 16106127360
 
 
-@pytest.mark.parametrize("tier,expected", [("free", FREE_STORAGE_BYTES), ("standard", PAID_STORAGE_BYTES), ("premium", PAID_STORAGE_BYTES)])
-def test_effective_entitlement_contract_includes_attachment_storage(tier: str, expected: int) -> None:
+@pytest.mark.parametrize(
+    "tier,expected",
+    [
+        ("free", FREE_STORAGE_BYTES),
+        ("standard", PAID_STORAGE_BYTES),
+        ("premium", PAID_STORAGE_BYTES),
+    ],
+)
+def test_effective_entitlement_contract_includes_attachment_storage(
+    tier: str, expected: int
+) -> None:
     result = resolve_student_entitlement(
         "student-1",
         settings=Settings(),
@@ -60,7 +71,15 @@ def test_effective_entitlement_contract_includes_attachment_storage(tier: str, e
 
 
 def test_attachment_contract_models_use_only_opaque_public_coordinates() -> None:
-    forbidden = {"s3_key", "object_key", "bucket", "ocr", "extracted_content", "student_id", "owner_id"}
+    forbidden = {
+        "s3_key",
+        "object_key",
+        "bucket",
+        "ocr",
+        "extracted_content",
+        "student_id",
+        "owner_id",
+    }
     for model in (UploadIntentResponse, AttachmentSummary, AttachmentReference):
         schema = str(model.model_json_schema(by_alias=True)).lower()
         assert all(field not in schema for field in forbidden)
@@ -74,7 +93,12 @@ def test_attachment_contract_models_use_only_opaque_public_coordinates() -> None
         createdAt=datetime.now(timezone.utc),
     )
     assert set(summary.model_dump(by_alias=True)) == {
-        "attachmentId", "filename", "mediaType", "sizeBytes", "status", "createdAt"
+        "attachmentId",
+        "filename",
+        "mediaType",
+        "sizeBytes",
+        "status",
+        "createdAt",
     }
 
 
@@ -106,7 +130,9 @@ def test_attachment_error_registry_is_exhaustive_and_retry_is_bounded() -> None:
     outage = ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE]
     assert outage.idempotent_only is True
     assert outage.max_attempts == 2
-    assert {contract.client_action for contract in ATTACHMENT_ERROR_REGISTRY.values()} <= set(AttachmentClientAction)
+    assert {contract.client_action for contract in ATTACHMENT_ERROR_REGISTRY.values()} <= set(
+        AttachmentClientAction
+    )
 
 
 def test_missing_and_foreign_errors_are_identical_and_redacted() -> None:
@@ -153,6 +179,7 @@ def test_attachment_reference_requires_exactly_one_opaque_id() -> None:
 
 def _image(fmt: str, size: tuple[int, int] = (8, 8)) -> bytes:
     from PIL import Image
+
     output = BytesIO()
     Image.new("RGB", size, "white").save(output, format=fmt)
     return output.getvalue()
@@ -160,6 +187,7 @@ def _image(fmt: str, size: tuple[int, int] = (8, 8)) -> bytes:
 
 def _pdf() -> bytes:
     from pypdf import PdfWriter
+
     output = BytesIO()
     writer = PdfWriter()
     writer.add_blank_page(width=10, height=10)
@@ -181,9 +209,24 @@ def _ooxml(root: str) -> bytes:
         ("x.jpg", "image/jpeg", _image("JPEG"), "image/jpeg"),
         ("x.png", "image/png", _image("PNG"), "image/png"),
         ("x.pdf", "application/pdf", _pdf(), "application/pdf"),
-        ("x.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", _ooxml("word"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-        ("x.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", _ooxml("ppt"), "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
-        ("x.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", _ooxml("xl"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        (
+            "x.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _ooxml("word"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ),
+        (
+            "x.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            _ooxml("ppt"),
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ),
+        (
+            "x.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ooxml("xl"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
         ("x.txt", "text/plain", b"safe text", "text/plain"),
         ("x.md", "text/markdown", b"# safe", "text/markdown"),
     ],
@@ -228,3 +271,61 @@ def test_validate_rejects_ooxml_traversal_and_compression_ratio() -> None:
 
 
 MIME_BY_EXTENSION_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+class _IntentRepository:
+    def __init__(self) -> None:
+        self.item: dict | None = None
+
+    def create_upload_intent(self, item: dict) -> None:
+        assert self.item is None
+        self.item = item
+
+
+class _PostS3:
+    def __init__(self) -> None:
+        self.call: dict | None = None
+
+    def generate_presigned_post(self, **kwargs):
+        self.call = kwargs
+        return {"url": "https://upload.invalid", "fields": {"key": kwargs["Key"]}}
+
+
+def _student_actor(user_id: str = "student-1") -> Actor:
+    return Actor(
+        user_id, "issuer", "subject", CanonicalRole.STUDENT, AccountStatus.ACTIVE, "student"
+    )
+
+
+def test_intent_is_owner_bound_opaque_and_post_policy_is_exact() -> None:
+    repository, s3 = _IntentRepository(), _PostS3()
+    result = create_upload_intent(
+        UploadIntentRequest(
+            purpose="question_image", filename="work.png", contentType="image/png", sizeBytes=10
+        ),
+        _student_actor(),
+        s3=s3,
+        settings=Settings(s3_images_bucket="bucket"),
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert set(result) == {
+        "uploadId",
+        "url",
+        "fields",
+        "expiresAt",
+        "maxBytes",
+        "acceptedTypes",
+        "status",
+    }
+    assert repository.item and repository.item["owner_id"] == "student-1"
+    assert repository.item["expires_at"] == 1767227400
+    assert "object_key" in repository.item and "object_key" not in str(result)
+    assert s3.call["ExpiresIn"] == 1800
+    assert ["content-length-range", 1, IMAGE_MAX_BYTES] in s3.call["Conditions"]
+
+
+def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
+    assert storage_limit_for_entitlement("free") == FREE_STORAGE_BYTES
+    assert storage_limit_for_entitlement("standard") == PAID_STORAGE_BYTES
+    assert storage_limit_for_entitlement("premium") == PAID_STORAGE_BYTES
