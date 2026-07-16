@@ -1,86 +1,94 @@
-# Phase 473 student content privacy and practice integrity evidence
+# Phase 473 final privacy and practice-integrity evidence
 
-Evidence window: 2026-07-16T11:54:27Z–2026-07-16T11:56:38Z UTC  
-Tested source SHA: `671612b017bc392f587a8c6dd8d3e9bb09ddffc6`  
-Environment: local offline test process in `/Users/zhdeng/stoa-backend`  
-Safety statement: **no production mutation, AWS call, provider call, network access, live S3 upload/delete, external schedule invocation, identity change, billing effect, or student-data mutation was performed.** Provider, table, object, content, and actor effects used deterministic local fakes only.
+`testedSourceSha`: `060f07f187441bc9cb31ac9c1286ea6165d5bfa0`
 
-## Source-bound artifacts
+Evidence window: 2026-07-16T18:10:01Z–2026-07-16T18:11:43Z UTC. Environment: local offline test process in `/Users/zhdeng/stoa-backend`. The tested source was a clean committed tree containing Plans 473-08 through 473-10 and the checked authorization inventory. HEAD and cleanliness were checked before and after every blocking gate.
 
-| Artifact | SHA-256 | Result |
+No production mutation, AWS/network/provider call, live object upload/delete, deployed scheduler invocation, identity/billing effect, or student-data mutation was performed. Provider, table, object, content, actor, concurrency, and failure effects were deterministic local fakes only.
+
+## Immutable source and artifact gate
+
+The authorization inventory was generated twice before the candidate lock, byte-compared, compared with the checked JSON, and checked with the generator. The checked artifact was already current, so commit `060f07f` locked the complete implementation plus checked inventory as the immutable test candidate. No implementation, test, generator, or inventory file changed after that commit.
+
+| Artifact | SHA-256 | Bytes / result |
 | --- | --- | --- |
-| `docs/security/route-authorization-inventory.json` | `2d072ad391724100647b1d7a9862660730a0b358268cf37b65481fba727253b3` | 222 registered operations; two generations were byte-identical, matched the checked file, and `--check` passed |
-| `tests/test_files.py` | `2e81ef2f716e618e604eb5a50da78330907caadfa832aef486a95efcb494a432` | opaque presign/finalize and concealed missing/foreign route contracts |
-| `tests/test_attachment_security.py` | `0b5bdaf362d4b48dc61081538f28fa2961fb0cc29a895084d17199878bd86158` | validation, lifecycle, quota, reuse, OCR, retention, cleanup, and redaction controls |
-| `tests/test_questions.py` | `a482dda3240e9e123c0bcbceb95309691d8adf638a41baf0983edc5ab672538e` | owner-resolved OCR, atomic association, idempotency, and safe response controls |
-| `tests/test_conversations.py` | `90e1c278178bfb46f08111ab00545d0d524536212792fb49dd0eed3b89ee7d92` | regular/stream/history attachment parity and safe summary controls |
-| `tests/test_practice.py` | `416c2f183c01e3070479aa595e32b0e403d59fe4ce925d9e12740967a2cce0ad` | write-before-result, owner result, and safe hint controls |
-| `tests/test_practice_privacy.py` | `08abcdfa6ed50bcbc55cd406679aabb641c61e92f5f773db483c1e0478732b47` | recursive preview, result, privileged answer, schema, and scope controls |
-| `tests/test_curriculum_rollout.py` | `c1d6d818534172bc58dac4c418e6aedddd60008127dcb8ebf62d51fa0a1380b3` | answer-free lesson/exercise and ignored answer-toggle controls |
-| `tests/test_route_authorization_inventory.py` | `2fd3ddc98ef9e8b9bc2eab883c75b780da03ca5eefd7aaf67a735a604d7bcaa1` | executable runtime/OpenAPI/checked inventory equivalence |
-| `tests/test_student_authorization_matrix.py` | `1fcb2450294a01b57689773023a53b279904843e2a67aec8c66ab9e65c289c38` | assigned/wrong/stale teacher, admin, student, and parent answer matrix |
+| `docs/security/route-authorization-inventory.json` | `9a3be6b628af5b08cc2ea918a7f775221d1c3f272b603fffd61f982008413b03` | 106,534 bytes; both generations and checked JSON identical; `--check` PASS |
+| `scripts/generate_route_authorization_inventory.py` | `b4e2201940b44f1f48f0633f46e91c98dc8df60916a8c0871277e4e5c4abb0ff` | deterministic generation/check entry point |
+| `tests/test_files.py` | `10aa4b0bf86b91339273a21aa13dffd7a127b2b40b7d62b3c5efd5568cc309ee` | opaque gateway and safe route failures |
+| `tests/test_attachment_security.py` | `3d8555557f0783b5b950fa2f099c891f5e38af74684a7e8a75a3ffa4dd372906` | immutable bytes, transaction, cleanup, replay, telemetry controls |
+| `tests/test_questions.py` | `031f3627c1a0c30fafd9c0c0bd4bd0ba26f4d7f08e907b2de1267a8877fb5a4a` | owner OCR, atomic association, stable errors |
+| `tests/test_conversations.py` | `ced9ad56a526674759f2b229c220e5a101d5c5ca09643735255f902fefeb806b` | exact/concurrent replay and private telemetry |
+| `tests/test_practice.py` | `416c2f183c01e3070479aa595e32b0e403d59fe4ce925d9e12740967a2cce0ad` | write-before-result and safe hints |
+| `tests/test_practice_privacy.py` | `08abcdfa6ed50bcbc55cd406679aabb641c61e92f5f773db483c1e0478732b47` | previews, attempts, privileged answer scope |
+| `tests/test_curriculum_rollout.py` | `c1d6d818534172bc58dac4c418e6aedddd60008127dcb8ebf62d51fa0a1380b3` | answer-free curriculum projections |
+| `tests/test_route_authorization_inventory.py` | `2fd3ddc98ef9e8b9bc2eab883c75b780da03ca5eefd7aaf67a735a604d7bcaa1` | runtime/OpenAPI/checked equivalence |
+| `tests/test_student_authorization_matrix.py` | `1fcb2450294a01b57689773023a53b279904843e2a67aec8c66ab9e65c289c38` | student/parent/teacher/admin authorization controls |
+| Full-suite captured output | `0783200d9747f62b6253eaa1ff357c0f8e7618e49146d23a782896e214bd3655` | 1,303 passed |
 
-The tested source commit contains the bounded cleanup implementation and all test digests above. Evidence-document and tracking changes are intentionally outside that tested production source SHA.
-
-## Exact commands and observed results
+## Exact blocking observations
 
 | UTC | Exact command | Result |
 | --- | --- | --- |
-| 2026-07-16T11:54:27Z | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py tests/test_questions.py tests/test_conversations.py tests/test_practice.py tests/test_practice_privacy.py tests/test_curriculum_rollout.py tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | PASS — 230 passed in 2.37s; no skip or xfail |
-| 2026-07-16T11:54:39Z | `.venv/bin/python scripts/generate_route_authorization_inventory.py --output /tmp/phase473-route-inventory-1.json; .venv/bin/python scripts/generate_route_authorization_inventory.py --output /tmp/phase473-route-inventory-2.json; cmp /tmp/phase473-route-inventory-1.json /tmp/phase473-route-inventory-2.json; cmp /tmp/phase473-route-inventory-1.json docs/security/route-authorization-inventory.json; .venv/bin/python scripts/generate_route_authorization_inventory.py --check; shasum -a 256 docs/security/route-authorization-inventory.json` | PASS — both generated files and the checked file were byte-identical; digest recorded above |
-| 2026-07-16T11:55:04Z | `.venv/bin/python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 635 passed in 8.21s |
-| 2026-07-16T11:56:05Z | `.venv/bin/python -m pytest -p no:terminal --junitxml=/tmp/phase473-full.xml` | OBSERVED GREEN — complete JUnit XML reports 1232 tests, 0 failures, 0 errors, 0 skipped, aggregate test time 32.517s |
-| after evidence creation | `rg -n -f /tmp/phase473-private-canaries.txt docs/security/phase-473-evidence.md` | PASS when the command returns no matches; the private denylist values remain only in local test fixtures and the temporary file |
+| 18:10:01–18:10:06 | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py tests/test_questions.py tests/test_conversations.py tests/test_practice.py tests/test_practice_privacy.py tests/test_curriculum_rollout.py tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | PASS — 301 passed in 4.22s |
+| 18:10:15–18:10:24 | `.venv/bin/python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 636 passed in 8.62s |
+| 18:10:31–18:11:06 | `.venv/bin/python -m pytest -q` | PASS — 1,303 passed in 34.01s; zero failures |
+| 18:11:40–18:11:43 | `.venv/bin/ruff check` over every Python file modified by Plans 08–10; `git diff --check`; generate inventory twice; compare both with checked JSON; generator `--check` | PASS — zero Ruff findings, clean diff, byte-stable inventory |
+| after local gates | Fixed-string denylist built from 47 private fixture categories and applied to captured test output plus both generated and checked inventories | PASS — zero matches |
 
-## Requirements and audit findings
+## Review finding closure matrix
 
-| Item | Local closure evidence | Positive and zero-effect controls |
+| Finding | Result | Executable positive and adversarial evidence |
 | --- | --- | --- |
-| V9PRIV-01 / SEC-003 | Opaque owner upload or saved-attachment references replace caller-selected storage coordinates; fresh question reservation precedes OCR and the final question/attachment/consumption/byte charge is conditional and atomic | own validated image succeeds; missing, foreign, expired, invalid, non-image, reused, raced, and mismatched-idempotency inputs stop before counter/OCR/question effects |
-| V9PRIV-02 / SEC-005 | Exact POST bounds plus authoritative HEAD/bounded-byte validation cover supported formats, size, MIME, magic, image, archive, encryption, and UTF-8 controls; terminal and expired unconsumed uploads enter bounded conditional cleanup | supported boundary fixtures pass; malformed/oversize/mismatch fixtures become unusable; provider failures expose only stable codes; cleanup retries never restore validated state |
-| V9PRIV-03 / BUG-001 | Typed preview allowlists cover overview, path, lesson, catalog, exercise, and mistake preview; answer-bearing result construction requires a durable owner attempt | correct and incorrect attempts persist before reveal; failed writes reveal nothing; assigned teacher/global admin positives pass while anonymous, student, parent, unassigned, stale, disabled, and wrong-scope teacher controls are concealed |
+| CR-001 | PASS locally | `test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version`, `test_same_key_newer_version_cannot_change_extraction_bytes`, version-bound OCR/extraction/cleanup tests prove the promoted tuple is immutable and replacement/newer versions cannot alter downstream bytes. |
+| WR-001 | PASS locally | `test_gateway_intent_returns_only_opaque_contract`, `test_gateway_issuance_is_owner_bound_opaque_and_multipart_private`, legacy-route absence and generated-contract tests prove the gateway returns no URL, key, path, multipart ID, ETag, VersionId, or provider coordinate. |
+| WR-002 | PASS locally | `test_ai_private_telemetry_excludes_input_output_and_provider_canaries`, title-failure, OCR-fed, extraction, malformed-output, answer/hint, exception, and replay caplog controls prove category/class/size/count/correlation-only telemetry. |
+| WR-003 | PASS locally | `test_transaction_operation_index_classification_is_closed_and_redacted`, cancellation dependency matrices, quota-race and conversation cancellation tests prove quota-only visibility, concealed resource conflicts, retryable dependency mapping, and zero partial effects. |
+| WR-004 | PASS locally | `test_issuance_dependency_failure_has_exact_safe_503` and `test_issuance_failure_is_service_unavailable_and_terminal` prove repository/provider issuance failures yield safe `upload_service_unavailable` and leave no consumable orphan. |
+| WR-005 | PASS locally | required-key/fingerprint fixtures, `test_stage_a_completed_replay_bypasses_consumed_upload_resolution`, mismatch/new-foreign zero-effect controls, synchronized regular/SSE duplicate convergence, command/quota claim, and AI lease fencing prove one original result and one effect set. |
 
-## D-01 through D-22 decision matrix
+## Requirement proof
 
-| Decisions | Passing evidence in the combined command |
-| --- | --- |
-| D-01–D-05 | Supported JPEG/PNG and conversation document fixtures plus unsupported, MIME/magic mismatch, size, dimension, unsafe archive, encrypted, binary-text, and corruption controls in `test_attachment_security.py`; exact constrained route contracts in `test_files.py` |
-| D-06–D-08 | 1800-second intent contract, owner/expiry/version transitions, authoritative finalize, permanent content invalidation, and transient question reservation release retaining original expiry |
-| D-09 | bounded conditional cleanup covers expired, invalid, abandoned, retry, reordered, invalid-cursor, active, consuming, consumed, and durable-reference states; only eligible unconsumed bytes are deleted by fake S3 |
-| D-10 | reference-counted conversation history and account purge retain durable bytes until the last explicit resource reference is released |
-| D-11 | authoritative free/paid storage limits, preflight plus transactional quota condition, and no automatic history deletion |
-| D-12 | saved attachment reuse creates a new association/reference without a storage update or duplicate object |
-| D-13–D-14 | verified Actor owns every intent/resource; client owner/storage fields fail schema validation; missing and foreign resources have identical safe outcomes before provider effects |
-| D-15–D-16 | `upload_expired` and the exhaustive stable attachment error/action registry cover size, unsupported type, mismatch/corruption, quota, and temporary service recovery |
-| D-17 | public schemas, error bodies, question/history responses, captured logs, and this evidence exclude raw storage coordinates, extracted/OCR content, provider payloads, tokens, and raw actor identifiers |
-| D-18–D-20 | every correct/incorrect answer is immutable before result construction; preview families are recursively answer-free; only owner attempt-result and explicit privileged schemas contain answer material |
-| D-21 | exact current assignment coordinates authorize a teacher; admin receives only the narrow curriculum-answer read; neither path grants curriculum mutation |
-| D-22 | anonymous, student, parent, unassigned, stale, disabled, unrelated, and wrong-scope teachers cannot access the privileged answer contract |
-
-## Generated route and OpenAPI contract
-
-The 222-row inventory is generated from the registered FastAPI dependency graph. Runtime, OpenAPI `x-stoa-authorization`, and checked JSON are asserted equivalent. It includes executable metadata for nested `uploadId`/`attachmentId` commands and path-bound `attempt_id`/`challenge_id` result and privileged-answer resources. Mutation tests fail closed for missing or incompatible authorization metadata.
-
-## Privacy canaries
-
-Local fixtures seed distinct storage-coordinate, file/document content, OCR content, submitted-answer, provider-diagnostic, token, and raw-student identifier values. The combined tests assert that these values may reach only the intended private fake/provider boundary and never public bodies, logs, generated inventory, or answer-free schemas. A separate temporary-file denylist scan verifies this evidence document without copying the private values into it.
-
-## Full-suite delta and ownership boundaries
-
-The supplied pre-plan baseline was 1229 passing tests. This plan adds three cleanup tests; the source-bound full-suite JUnit observation is 1232 tests with zero failures, errors, or skips. Historical Phase 474 evidence recorded 23 strict production-Settings fixture failures, but those failures are not present in this checkout and were not weakened, edited, reassigned, or represented as Phase 473 work.
-
-- Phase 475 retains broader question quota/ledger/question convergence, attempt analytics consistency, assignment-write consistency, parent binding repair, and concurrency remediation.
-- Phase 476 retains checkout/provider/local billing idempotency and paid-entitlement recovery.
-- Phase 478 retains web/mobile upload, history, practice-result, retry, and offline journey implementation.
-- Phase 479 retains authoritative IaC, S3 lifecycle/schedule ownership, and deployed cleanup scheduling.
-- Phase 480 retains production log-redaction captures, pagination/load evidence, alarms, staged deployment, and rollback.
-
-## External evidence gate
-
-| Manual item | Status | Result / limitation |
+| Requirement | Result | Evidence |
 | --- | --- | --- |
-| Real presigned S3 POST boundary uploads | NOT RUN — no separately approved non-production bucket or credentials | local fake policy and authoritative finalize tests pass; no live bucket-policy or provider behavior is inferred |
-| Scheduled cleanup Lambda/EventBridge/IaC invocation | NOT RUN — authoritative IaC and schedule evidence are Phase 479 owned and unavailable here | local handler/service tests pass with fake S3/table only; no deployed schedule is claimed |
-| Production log-redaction/provider capture | NOT RUN — production access/mutation not approved and Phase 480 owned | local captured-log and response redaction tests pass only |
+| V9PRIV-01 | PASS locally, retained | Verified student Actor owns opaque intents/attachments; missing/foreign/reused/wrong-type states stop before OCR, parsing, association, quota, question, message, or AI effects. Fresh question association remains atomic and OCR receives only the server-resolved immutable tuple. |
+| V9PRIV-02 | PASS locally, restored | Exact gateway chunk/aggregate limits, supported type/size/container validation, bounded spool promotion, immutable version/checksum reads, stable error categories, non-consumable cleanup, and opaque public contracts pass positive, boundary, replacement, dependency, quota, and lifecycle negatives. |
+| V9PRIV-03 | PASS locally, retained | Student overview/path/lesson/catalog/exercise/mistake projections are answer-free; both correct and incorrect attempts persist before reveal; result reads are owner-scoped; assigned `teacher` and narrow admin answer-read positives pass while anonymous/student/parent/unassigned/stale/wrong-scope teacher negatives remain concealed. |
 
-These NOT RUN rows are release limitations, not passing external evidence.
+## D-01 through D-22 executable decision matrix
+
+| Decision | Result | Executable evidence |
+| --- | --- | --- |
+| D-01 | PASS | JPEG/PNG-only question image acceptance and non-image rejection before OCR. |
+| D-02 | PASS | 10 MiB and 4096-pixel image bounds, oversize/dimension/sentinel negatives. |
+| D-03 | PASS | JPEG/PNG/PDF/DOCX/PPTX/XLSX/TXT/MD conversation allowlist; legacy/unknown type negatives. |
+| D-04 | PASS | 50 MiB document boundary succeeds through bounded spool; max-plus-one fails at sentinel. |
+| D-05 | PASS | Extension, declared MIME, magic, image, PDF, OOXML, archive, encryption, and UTF-8 controls fail closed. |
+| D-06 | PASS | Intent expiry remains 1,800 seconds and is conditionally enforced. |
+| D-07 | PASS | Question identity binding plus versioned exact conversation fingerprint; lost/concurrent regular and SSE replay returns one original result with one effect set. |
+| D-08 | PASS | Terminal content failures invalidate; dependency failures are safe/retryable without reviving invalid state. |
+| D-09 | PASS | Bounded idempotent cleanup excludes active/consuming/consumed/durable rows and preserves non-consumable tombstones on failure. |
+| D-10 | PASS | Durable conversation associations/reference counts persist until explicit release/purge. |
+| D-11 | PASS | 5 GiB/15 GiB limits, transaction-authoritative quota race, no auto-deletion, and one chat quota operation per command. |
+| D-12 | PASS | Saved attachment reuse increments one logical reference without duplicate bytes/storage charge. |
+| D-13 | PASS | Actor is authoritative; public owner/bucket/key/path fields are absent or rejected. |
+| D-14 | PASS | Missing and foreign opaque resources return equivalent concealed errors before provider/business effects. |
+| D-15 | PASS | Owner-visible expired upload yields stable `upload_expired` reselect guidance. |
+| D-16 | PASS | Oversize/type/mismatch/invalid/quota/dependency/checksum/idempotency/in-progress outcomes retain distinct stable codes and safe actions. |
+| D-17 | PASS locally | Public bodies, SSE, generated inventory, stored safe results, and captured local logs exclude coordinates, provider/content payloads, OCR/student/model/other-user material, and exception text. |
+| D-18 | PASS | Answer result construction requires successful immutable attempt persistence. |
+| D-19 | PASS | Only approved directional answer-free hints are available before submission. |
+| D-20 | PASS | Preview and result allowlists are structurally separate; all student preview families recursively omit answers/explanations/feedback. |
+| D-21 | PASS | Current exact-scope assigned `teacher` and narrow admin answer reads pass; curriculum mutation remains denied. |
+| D-22 | PASS | Anonymous, student, parent, and unassigned/stale/disabled/wrong-scope `teacher` controls are concealed. |
+
+Canonical role vocabulary remains exactly `student|parent|teacher|admin`; one account has one role. Public failures remain stable structured `code`, safe `message`, and server correlation fields.
+
+## External evidence boundaries
+
+| External item | Status | Boundary |
+| --- | --- | --- |
+| Real S3 chunk, version, promotion, overwrite, and immutable read behavior | **NOT RUN** | No separately approved non-production bucket/credentials. Local deterministic fakes do not prove deployed provider policy. |
+| Deployed cleanup scheduler/EventBridge/Lambda/IaC, retry, and alarm behavior | **NOT RUN** | Authoritative deployment/IaC evidence is unavailable and remains Phase 479-owned. |
+| Production/deployed log-redaction capture | **NOT RUN** | Production access and provider execution were not approved; local caplog evidence only. |
+
+These rows are limitations, not passes. This document and the accompanying validation/manifest intentionally contain no SHA for the commit that later contains them.

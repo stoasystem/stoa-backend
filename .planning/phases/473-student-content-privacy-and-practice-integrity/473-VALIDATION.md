@@ -1,87 +1,60 @@
 ---
 phase: 473
 slug: student-content-privacy-and-practice-integrity
-status: complete
+status: local_gates_complete
 nyquist_compliant: true
-wave_0_complete: true
-created: 2026-07-16
+testedSourceSha: 060f07f187441bc9cb31ac9c1286ea6165d5bfa0
+updated: 2026-07-16
 ---
 
-# Phase 473 — Validation Strategy
+# Phase 473 — Final validation observations
 
-> Per-phase validation contract for feedback sampling during execution.
+All local observations below derive from the clean immutable `testedSourceSha` above. This document does not mark the phase independently verified or complete; the orchestrator verifier owns that decision.
 
----
+## Blocking gate observations
 
-## Test Infrastructure
+| Gate | Exact scope | Observation |
+| --- | --- | --- |
+| Phase 473 combined matrix | `test_files`, `test_attachment_security`, `test_questions`, `test_conversations`, `test_practice`, `test_practice_privacy`, `test_curriculum_rollout`, route inventory, student authorization matrix | PASS — 301 passed in 4.22s, 2026-07-16T18:10:01Z–18:10:06Z |
+| Phase 472 authorization regression | Established 21-module command from Plan 11 | PASS — 636 passed in 8.62s, 18:10:15Z–18:10:24Z |
+| Full suite | `.venv/bin/python -m pytest -q` | PASS — 1,303 passed in 34.01s, 18:10:31Z–18:11:06Z |
+| Static | Ruff on every Python file changed by Plans 08–10; `git diff --check` | PASS — zero findings |
+| Inventory | Generate twice, byte-compare both and checked JSON, generator `--check` | PASS — SHA-256 `9a3be6b628af5b08cc2ea918a7f775221d1c3f272b603fffd61f982008413b03`, 106,534 bytes |
+| Privacy denylist | 47 private fixture categories against captured output and generated/checked inventories | PASS — zero matches |
 
-| Property | Value |
-|----------|-------|
-| **Framework** | pytest 8.x with FastAPI TestClient, moto/fakes and monkeypatch |
-| **Config file** | `pyproject.toml` |
-| **Quick run command** | `.venv/bin/python -m pytest -q tests/test_attachment_security.py tests/test_practice_privacy.py` |
-| **Full phase command** | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py tests/test_questions.py tests/test_conversations.py tests/test_practice.py tests/test_practice_privacy.py tests/test_curriculum_rollout.py tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` |
-| **Estimated runtime** | ~45–90 seconds |
+## Gap-closure task observations
 
----
+| Task | Requirement/finding | Result | Representative executable controls |
+| --- | --- | --- | --- |
+| 473-08-01 | WR-001, WR-004, D-13–D-17 | PASS | opaque gateway schema/OpenAPI, missing/foreign equivalence, issuance dependency failure, chunk fence/replay/split recovery |
+| 473-08-02 | CR-001, V9PRIV-01/02, D-01–D-12 | PASS | bounded 50 MiB spool, sentinel reject, exact immutable promotion, same-key/new-version, OCR/extraction/release/purge/cleanup version controls |
+| 473-09-01 | WR-003, D-14/D-16/D-17 | PASS | operation-index category mapping, malformed/missing/throttle/conflict dependency categories, diagnostic denylist |
+| 473-09-02 | WR-003, V9PRIV-01/02 | PASS | question/message fresh/reuse quota/dependency cancellation zero-effect matrices and exact public errors |
+| 473-10-01 | WR-005, D-07/D-11/D-12/D-16 | PASS | exact fingerprint, Stage A replay, mismatch-before-lookup, synchronized JSON/SSE duplicates, command/quota claim, AI lease fencing |
+| 473-10-02 | WR-002, D-17 | PASS | student/OCR/extracted/model/title/exception/coordinate/provider/other-user caplog canaries across AI, question, conversation, and replay |
+| 473-11-01 | V9PRIV-01/02/03, all six findings | PASS | fixed-SHA 301/636/1,303 gates, static checks, deterministic inventory, privacy denylist |
+| 473-11-02 | final source-bound evidence | PASS pending docs commit identity | evidence and validation use only `testedSourceSha`; manifest binds their final digests; resulting docs commit is recorded later only in 473-11-SUMMARY |
 
-## Sampling Rate
+## Requirement and decision observations
 
-- **After every task commit:** Run the task's focused pytest command.
-- **After every plan wave:** Run all Phase 473 test modules touched through that wave.
-- **Before `$gsd-verify-work`:** Run the full phase command plus the Phase 472 authorization regression subset.
-- **Max feedback latency:** 120 seconds for focused commands.
+- **V9PRIV-01 retained:** owner/foreign/reuse/OCR atomic positives and zero-effect negatives pass on immutable coordinates.
+- **V9PRIV-02 restored locally:** exact chunks, supported type/size/container validation, immutable promotion/reads, stable errors, safe cleanup, opaque contracts, and dependency/race negatives pass.
+- **V9PRIV-03 retained:** answer-free previews, durable attempt-before-reveal, owner results, exact assigned-`teacher` and narrow admin positives, and all unauthorized negatives pass.
+- **CR-001 and WR-001 through WR-005:** all PASS locally through the finding matrix in `docs/security/phase-473-evidence.md`.
+- **D-01 through D-22:** every decision has a fresh executable PASS row in the evidence matrix. D-07 exact/concurrent replay, D-16 distinct stable codes/actions, and D-17 local response/log/evidence privacy are explicitly covered.
 
----
+## Artifact digests
 
-## Per-Task Verification Map
+- Full-suite captured output: `0783200d9747f62b6253eaa1ff357c0f8e7618e49146d23a782896e214bd3655`.
+- Focused test source digests and the generator digest are recorded in `docs/security/phase-473-evidence.md`.
+- The final evidence and validation digests/byte sizes are recorded in `docs/security/phase-473-evidence-manifest.json` after both documents are finalized.
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 473-01-01 | 01 | 1 | V9PRIV-01/02 | T-UPLOAD-ID | Opaque owner-scoped contracts and redacted errors | contract | `.venv/bin/python -m pytest -q tests/test_attachment_security.py -k 'contract or error or redaction'` | ✅ | ✅ green |
-| 473-01-02 | 01 | 1 | V9PRIV-03 | T-ANSWER-PREVIEW | Preview/result schemas are structurally separate | contract | `.venv/bin/python -m pytest -q tests/test_practice_privacy.py -k 'schema or preview or result'` | ✅ | ✅ green |
-| 473-02-01 | 02 | 2 | V9PRIV-02 | T-UPLOAD-TYPE | Bytes/type/size/dimension/container checks fail closed | unit | `.venv/bin/python -m pytest -q tests/test_attachment_security.py -k 'validate or mime or magic or size or dimension or archive'` | ✅ | ✅ green |
-| 473-02-02 | 02 | 2 | V9PRIV-01/02 | T-UPLOAD-RACE | Intent ownership, expiry, quota and consumption are conditional | repository | `.venv/bin/python -m pytest -q tests/test_attachment_security.py -k 'intent or quota or consume or transaction'` | ✅ | ✅ green |
-| 473-02-03 | 02 | 2 | V9PRIV-02 | T-UPLOAD-PROVIDER | Presign/finalize errors are stable and provider-redacted | route | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py -k 'presign or finalize or unavailable or expired'` | ✅ | ✅ green |
-| 473-03-01 | 03 | 3 | V9PRIV-01/02 | T-ATTACHMENT-REUSE | Conversation history binds owner attachments and reuses bytes once | integration | `.venv/bin/python -m pytest -q tests/test_conversations.py tests/test_attachment_security.py -k 'attachment or reuse or quota or history'` | ✅ | ✅ green |
-| 473-04-01 | 04 | 3 | V9PRIV-01 | T-OCR-FOREIGN | Only validated owner attachment reaches OCR | integration | `.venv/bin/python -m pytest -q tests/test_questions.py tests/test_attachment_security.py -k 'ocr or attachment or foreign or idempot'` | ✅ | ✅ green |
-| 473-05-01 | 05 | 2 | V9PRIV-03 | T-ANSWER-PREVIEW | All student preview families omit answer-derived fields | snapshot | `.venv/bin/python -m pytest -q tests/test_practice.py tests/test_practice_privacy.py -k 'overview or path or lesson or catalog or preview'` | ✅ | ✅ green |
-| 473-05-02 | 05 | 2 | V9PRIV-03 | T-ANSWER-WRITE | Answer appears only after durable attempt write | repository/route | `.venv/bin/python -m pytest -q tests/test_practice_privacy.py -k 'attempt or result or write or failure'` | ✅ | ✅ green |
-| 473-06-01 | 06 | 3 | V9PRIV-03 | T-ANSWER-SCOPE | Assigned teacher and admin scopes are exact | authorization matrix | `.venv/bin/python -m pytest -q tests/test_practice_privacy.py tests/test_student_authorization_matrix.py -k 'answer or teacher or admin or assignment'` | ✅ | ✅ green |
-| 473-07-01 | 07 | 4 | V9PRIV-01/02 | T-UPLOAD-CLEANUP | Expired/invalid objects stay unusable and cleanup is idempotent | job | `.venv/bin/python -m pytest -q tests/test_attachment_security.py -k 'cleanup or expired or invalid'` | ✅ | ✅ green — 6 passed, 47 deselected |
-| 473-07-02 | 07 | 4 | V9PRIV-01/02/03 | ALL | Combined route/OpenAPI/privacy gate passes | integration | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py tests/test_questions.py tests/test_conversations.py tests/test_practice.py tests/test_practice_privacy.py tests/test_curriculum_rollout.py tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | ✅ | ✅ green — 230 passed |
+## Manual/external observations
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+| Behavior | Status | Reason |
+| --- | --- | --- |
+| Real S3 chunk/version/promotion/overwrite behavior | **NOT RUN** | No approved non-production storage environment or credentials. |
+| Deployed cleanup schedule/EventBridge/Lambda/IaC and alarms | **NOT RUN** | Authoritative deployment evidence is unavailable and out of this plan's mutation scope. |
+| Production/deployed log capture | **NOT RUN** | Production access/provider execution not approved; local caplog proof only. |
 
----
-
-## Wave 0 Requirements
-
-- [x] `tests/test_attachment_security.py` — upload formats, ownership, state machine, quota, transaction, redaction and cleanup fixtures.
-- [x] `tests/test_practice_privacy.py` — recursive preview leak checks, attempt-result ordering and privileged answer scope fixtures.
-- [x] Extended fake S3/table/Actor helpers without ambient AWS or network access.
-- [x] Added valid JPEG/PNG/PDF/OOXML/text fixtures plus malformed, oversized, mismatch, traversal and decompression-bomb controls.
-
----
-
-## Manual-Only Verifications
-
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| S3 presigned POST rejects an over-limit real upload | V9PRIV-02 | Requires an approved non-production bucket and credentials | Create 10 MiB/50 MiB boundary uploads and one byte-over upload; record redacted status only. If approval/config is absent, mark NOT RUN. |
-| Cleanup handler deletes expired objects on schedule | V9PRIV-02 | Schedule/IaC is outside this repository and owned by Phase 479 | Invoke handler locally with fake S3 for automated proof; record external schedule as NOT RUN until authoritative IaC is imported. |
-
----
-
-## Validation Sign-Off
-
-- [x] All planned tasks have focused automated commands or explicit Wave 0 dependencies.
-- [x] Sampling continuity has no three consecutive tasks without automated verification.
-- [x] Wave 0 covers all new fixture modules.
-- [x] No watch-mode flags are used.
-- [x] Focused feedback latency target is under 120 seconds.
-- [x] `nyquist_compliant: true` is set.
-
-**Execution observation (2026-07-16 UTC):** combined gate 230 passed; inherited Phase 472 gate 635 passed; deterministic route inventory generated twice and checked; full-suite JUnit reports 1232 tests with zero failures/errors/skips. Real S3 POST and external cleanup schedule/IaC remain NOT RUN.
-
-**Approval:** local automated validation complete; external checks remain explicitly NOT RUN
+No external result is inferred from local fakes. Final independent phase verification/completion remains an orchestrator responsibility.
