@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
@@ -234,7 +235,9 @@ def transact(operations: list[dict[str, Any]], *, table: Any | None = None) -> N
         if hasattr(target, "transact_write_items"):
             target.transact_write_items(TransactItems=operations)
         else:
-            target.meta.client.transact_write_items(TransactItems=operations)
+            target.meta.client.transact_write_items(
+                TransactItems=_serialize_transactions(operations, target.name)
+            )
     except ClientError as exc:
         if _conditional(exc):
             raise AttachmentRepositoryConflict() from None
@@ -246,6 +249,38 @@ def _conditional(exc: ClientError) -> bool:
         "ConditionalCheckFailedException",
         "TransactionCanceledException",
     }
+
+
+def _serialize_transactions(
+    operations: list[dict[str, Any]], table_name: str
+) -> list[dict[str, Any]]:
+    serializer = TypeSerializer()
+    result: list[dict[str, Any]] = []
+    for operation in operations:
+        operation_name, value = next(iter(operation.items()))
+        encoded: dict[str, Any] = {"TableName": table_name}
+        if "Key" in value:
+            encoded["Key"] = {key: serializer.serialize(item) for key, item in value["Key"].items()}
+        if "Item" in value:
+            encoded["Item"] = {
+                key: serializer.serialize(item)
+                for key, item in value["Item"].items()
+                if item is not None
+            }
+        for key in (
+            "UpdateExpression",
+            "ConditionExpression",
+            "ExpressionAttributeNames",
+        ):
+            if key in value:
+                encoded[key] = value[key]
+        if "ExpressionAttributeValues" in value:
+            encoded["ExpressionAttributeValues"] = {
+                key: serializer.serialize(item)
+                for key, item in value["ExpressionAttributeValues"].items()
+            }
+        result.append({operation_name: encoded})
+    return result
 
 
 def _translate(exc: ClientError) -> None:
