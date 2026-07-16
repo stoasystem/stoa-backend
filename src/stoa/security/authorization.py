@@ -46,6 +46,7 @@ class ResourceType(StrEnum):
     NOTIFICATION_DIGEST = "notification_digest"
     NOTIFICATION_PUSH_TOKEN = "notification_push_token"
     OPERATOR_RESOURCE = "operator_resource"
+    UPLOAD = "upload"
 
 
 class AuthorizationAction(StrEnum):
@@ -130,9 +131,9 @@ class ParentAuthorizationFacts:
             return False
         if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
             return False
-        return _active_account(self.parent_account, parent_id, CanonicalRole.PARENT) and _active_account(
-            self.student_account, student_id, CanonicalRole.STUDENT
-        )
+        return _active_account(
+            self.parent_account, parent_id, CanonicalRole.PARENT
+        ) and _active_account(self.student_account, student_id, CanonicalRole.STUDENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,7 +161,10 @@ class TeacherAuthorizationFacts:
         assignment = self.assignment
         if not assignment or assignment.get("status") != "active":
             return False
-        if assignment.get("teacher_id") != actor_id or assignment.get("student_id") != resource.student_id:
+        if (
+            assignment.get("teacher_id") != actor_id
+            or assignment.get("student_id") != resource.student_id
+        ):
             return False
         if _expired(assignment.get("expires_at"), now):
             return False
@@ -224,9 +228,8 @@ class TeacherAuthorizationFacts:
             if actor_id in _string_set(question.get("previous_dispatch_teacher_ids")):
                 return False
             if dispatch_status == "dispatched":
-                return (
-                    question.get("dispatched_teacher_id") == actor_id
-                    and not _expired(question.get("dispatch_deadline_at"), now)
+                return question.get("dispatched_teacher_id") == actor_id and not _expired(
+                    question.get("dispatch_deadline_at"), now
                 )
             return dispatch_status in {"", "unassigned", "pending"}
 
@@ -242,9 +245,7 @@ class TeacherAuthorizationFacts:
             if question.get("status") not in {"teacher_active", "resolved"}:
                 return False
         else:
-            current_teacher = question.get("teacher_id") or question.get(
-                "dispatched_teacher_id"
-            )
+            current_teacher = question.get("teacher_id") or question.get("dispatched_teacher_id")
             if current_teacher != actor_id:
                 return False
             if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
@@ -255,7 +256,10 @@ class TeacherAuthorizationFacts:
                 return False
         if self.session:
             session = self.session
-            if session.get("teacher_id") != actor_id or session.get("student_id") != resource.student_id:
+            if (
+                session.get("teacher_id") != actor_id
+                or session.get("student_id") != resource.student_id
+            ):
                 return False
             if session.get("resolved_at") and action is not AuthorizationAction.READ:
                 return False
@@ -274,15 +278,20 @@ class BreakGlassEvidence:
     def valid(self, now: datetime) -> bool:
         bounded = self.issued_at <= now < self.expires_at
         short_lived = self.expires_at - self.issued_at <= timedelta(minutes=15)
-        return bounded and short_lived and all(
-            value.strip()
-            for value in (
-                self.incident_id,
-                self.reason,
-                self.notification_reference,
-                self.review_reference,
+        return (
+            bounded
+            and short_lived
+            and all(
+                value.strip()
+                for value in (
+                    self.incident_id,
+                    self.reason,
+                    self.notification_reference,
+                    self.review_reference,
+                )
             )
-        ) and self.expires_at > now
+            and self.expires_at > now
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,7 +343,8 @@ def requires_durable_evidence(
 ) -> bool:
     """Classify allows whose effects must wait for durable evidence."""
     owner_self = (
-        purpose in {
+        purpose
+        in {
             AuthorizationPurpose.SELF_SERVICE,
             AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
         }
@@ -376,9 +386,7 @@ async def record_authorization_decision(
             student_id=resource.student_id,
             owner_id=resource.owner_id,
             scope_discriminator="|".join(
-                value
-                for value in (resource.question_id, resource.session_id)
-                if value
+                value for value in (resource.question_id, resource.session_id) if value
             ),
             action=action.value,
             purpose=purpose.value,
@@ -445,8 +453,12 @@ class CurrentAuthorizationFactRepository:
 
             return AuthorizationFacts(
                 parent=ParentAuthorizationFacts(
-                    forward=user_repo.get_parent_student_binding(actor.user_id, resource.student_id),
-                    reverse=user_repo.get_student_parent_binding(resource.student_id, actor.user_id),
+                    forward=user_repo.get_parent_student_binding(
+                        actor.user_id, resource.student_id
+                    ),
+                    reverse=user_repo.get_student_parent_binding(
+                        resource.student_id, actor.user_id
+                    ),
                     parent_account=user_repo.get_user(actor.user_id),
                     student_account=user_repo.get_user(resource.student_id),
                 )
@@ -506,7 +518,8 @@ class AuthorizationPolicy:
         if actor.can_authorize:
             if (
                 purpose is AuthorizationPurpose.NOTIFICATION_SELF_SERVICE
-                and resource.resource_type in {
+                and resource.resource_type
+                in {
                     ResourceType.NOTIFICATION_COLLECTION,
                     ResourceType.NOTIFICATION_EVENT,
                     ResourceType.NOTIFICATION_PREFERENCE,
@@ -542,13 +555,19 @@ class AuthorizationPolicy:
                     )
                 )
             elif actor.role is CanonicalRole.STUDENT:
-                allowed = actor.user_id == resource.student_id and purpose is AuthorizationPurpose.SELF_SERVICE
+                allowed = (
+                    actor.user_id == resource.student_id
+                    and purpose is AuthorizationPurpose.SELF_SERVICE
+                )
             elif actor.role is CanonicalRole.PARENT and authorized_resource.facts.parent:
-                allowed = purpose is AuthorizationPurpose.PARENT_OVERSIGHT and authorized_resource.facts.parent.matches(
-                    actor.user_id, resource.student_id
+                allowed = (
+                    purpose is AuthorizationPurpose.PARENT_OVERSIGHT
+                    and authorized_resource.facts.parent.matches(actor.user_id, resource.student_id)
                 )
             elif actor.role is CanonicalRole.TEACHER and authorized_resource.facts.teacher:
-                allowed = authorized_resource.facts.teacher.permits(actor.user_id, resource, action, purpose, now)
+                allowed = authorized_resource.facts.teacher.permits(
+                    actor.user_id, resource, action, purpose, now
+                )
             elif actor.role is CanonicalRole.ADMIN:
                 allowed, evidence = self._admin_permits(
                     actor, authorized_resource, action, purpose, now
@@ -685,7 +704,9 @@ async def authorize_and_resolve(
         loaded = await spec.resolver(resource_id)
         if loaded is None:
             missing = ResourceRef(spec.resource_type, resource_id, resource_id)
-            decision = PolicyDecision(False, SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id=correlation_id)
+            decision = PolicyDecision(
+                False, SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id=correlation_id
+            )
             await record_authorization_decision(
                 actor=actor,
                 resource=missing,
@@ -882,7 +903,9 @@ def evaluate_matrix_case(
     )
     return AuthorizationPolicy(clock=lambda: datetime(2026, 7, 15, tzinfo=UTC)).evaluate(
         principal,
-        AuthorizedResource(ref, {"resource_id": ref.resource_id}, AuthorizationFacts(parent, teacher)),
+        AuthorizedResource(
+            ref, {"resource_id": ref.resource_id}, AuthorizationFacts(parent, teacher)
+        ),
         AuthorizationAction(action),
         AuthorizationPurpose(purpose),
     )

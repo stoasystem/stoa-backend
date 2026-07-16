@@ -1,74 +1,91 @@
+from datetime import UTC, datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user, get_s3_client
+from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
+from stoa.deps import get_actor, get_s3_client
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.routers import files
 
 
-class RecordingS3Client:
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-
-    def generate_presigned_url(self, operation: str, *, Params: dict, ExpiresIn: int) -> str:
-        self.calls.append({"operation": operation, "Params": Params, "ExpiresIn": ExpiresIn})
-        return "https://uploads.example.test/presigned"
-
-
-def _settings() -> Settings:
-    return Settings(
-        cognito_user_pool_id="pool",
-        s3_images_bucket="images-bucket",
-        s3_presign_expiry_seconds=120,
+def _actor(user_id: str = "student-1") -> Actor:
+    return Actor(
+        user_id, "issuer", "subject", CanonicalRole.STUDENT, AccountStatus.ACTIVE, "student"
     )
 
 
-def _client(s3: RecordingS3Client | None = None) -> TestClient:
+def _client(monkeypatch, *, actor: Actor | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(files.router, prefix="/files")
-    app.dependency_overrides[get_settings] = _settings
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "teacher-1", "role": "teacher"}
-    app.dependency_overrides[get_s3_client] = lambda: s3 or RecordingS3Client()
+    app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket="images-bucket")
+    app.dependency_overrides[get_actor] = lambda: actor or _actor()
+    app.dependency_overrides[get_s3_client] = lambda: object()
     return TestClient(app)
 
 
-def test_presign_allows_teacher_certificate_pdf_upload() -> None:
-    s3 = RecordingS3Client()
+def test_presign_returns_only_opaque_post_contract(monkeypatch) -> None:
+    def create(body, actor, **kwargs):
+        assert actor.user_id == "student-1"
+        return {
+            "uploadId": "upload-1",
+            "url": "https://uploads.invalid",
+            "fields": {"key": "private-canary"},
+            "expiresAt": datetime(2026, 1, 1, tzinfo=UTC),
+            "maxBytes": IMAGE_MAX_BYTES,
+            "acceptedTypes": ["image/png"],
+            "status": "pending_upload",
+        }
 
-    response = _client(s3).post(
+    monkeypatch.setattr(files, "create_upload_intent", create)
+    response = _client(monkeypatch).post(
         "/files/presign",
-        json={"filename": "diploma.pdf", "content_type": "application/pdf"},
+        json={
+            "purpose": "question_image",
+            "filename": "work.png",
+            "contentType": "image/png",
+            "sizeBytes": 10,
+        },
     )
-
     assert response.status_code == 200
-    body = response.json()
-    assert body["upload_url"] == "https://uploads.example.test/presigned"
-    assert body["s3_key"].startswith("uploads/teacher-1/")
-    assert body["s3_key"].endswith(".pdf")
-    assert body["expires_in"] == 120
-    assert s3.calls[0]["operation"] == "put_object"
-    assert s3.calls[0]["Params"]["Bucket"] == "images-bucket"
-    assert s3.calls[0]["Params"]["ContentType"] == "application/pdf"
+    assert set(response.json()) == {
+        "uploadId",
+        "url",
+        "fields",
+        "expiresAt",
+        "maxBytes",
+        "acceptedTypes",
+        "status",
+    }
+    assert "s3_key" not in str(response.json()).lower()
 
 
-def test_presign_still_allows_image_uploads() -> None:
-    s3 = RecordingS3Client()
-
-    response = _client(s3).post(
-        "/files/presign",
-        json={"filename": "work.jpeg", "content_type": "image/jpeg"},
+def test_finalize_returns_validated_contract(monkeypatch) -> None:
+    monkeypatch.setattr(
+        files,
+        "finalize_upload",
+        lambda upload_id, actor, **kwargs: {
+            "uploadId": upload_id,
+            "status": "validated",
+            "attachment": None,
+        },
     )
-
+    response = _client(monkeypatch).post("/files/upload-1/finalize")
     assert response.status_code == 200
-    assert response.json()["s3_key"].endswith(".jpeg")
-    assert s3.calls[0]["Params"]["ContentType"] == "image/jpeg"
+    assert response.json() == {"uploadId": "upload-1", "status": "validated", "attachment": None}
 
 
-def test_presign_rejects_extension_content_type_mismatch() -> None:
-    response = _client().post(
-        "/files/presign",
-        json={"filename": "diploma.pdf", "content_type": "image/png"},
-    )
+def test_missing_and_foreign_finalize_have_same_safe_shape(monkeypatch) -> None:
+    def missing(*args, **kwargs):
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_NOT_FOUND,
+            internal_detail="uploads/private-provider-canary",
+        )
 
-    assert response.status_code == 422
-    assert "application/pdf" in str(response.json())
+    monkeypatch.setattr(files, "finalize_upload", missing)
+    response = _client(monkeypatch).post("/files/foreign-upload/finalize")
+    assert response.status_code == 404
+    assert set(response.json()["detail"]) == {"code", "message", "correlationId"}
+    assert "private-provider-canary" not in response.text
+    assert response.headers["X-Correlation-ID"] == response.json()["detail"]["correlationId"]

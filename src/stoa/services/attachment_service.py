@@ -20,6 +20,7 @@ from stoa.models.attachment import UploadIntentRequest
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
+from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
@@ -108,3 +109,66 @@ def resolve_owned_attachment(
     if not item or item.get("owner_id") != actor.user_id or item.get("status") != "active":
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     return item
+
+
+def finalize_upload(
+    upload_id: str,
+    actor: Actor,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, Any]:
+    now = now or datetime.now(UTC)
+    item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
+    version = int(item.get("version", 0))
+    if item.get("status") == "validated":
+        return {"uploadId": upload_id, "status": "validated", "attachment": None}
+    if item.get("status") != "pending_upload" or not repository.begin_validation(
+        upload_id, actor.user_id, version, int(now.timestamp())
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    validating_version = version + 1
+    try:
+        head = s3.head_object(Bucket=settings.s3_images_bucket, Key=item["object_key"])
+        length = int(head.get("ContentLength", -1))
+        content_type = str(head.get("ContentType") or "")
+        if length < 0 or length > int(item["max_bytes"]):
+            raise ValidationFailure(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+        if content_type != item["declared_type"]:
+            raise ValidationFailure(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
+        response = s3.get_object(Bucket=settings.s3_images_bucket, Key=item["object_key"])
+        body = response["Body"].read(int(item["max_bytes"]) + 1)
+        if len(body) != length:
+            raise ValidationFailure(
+                AttachmentErrorCode.UPLOAD_TOO_LARGE
+                if len(body) > int(item["max_bytes"])
+                else AttachmentErrorCode.UPLOAD_INVALID
+            )
+        detected = validate_uploaded_file(body, item["original_filename"], content_type)
+        etag = str(head.get("ETag") or "")
+        response_etag = str(response.get("ETag") or etag)
+        if etag and response_etag != etag:
+            raise ValidationFailure(AttachmentErrorCode.UPLOAD_INVALID)
+        attributes = {
+            "detected_type": detected.media_type,
+            "content_length": detected.size_bytes,
+            "etag": etag,
+            "image_width": detected.width,
+            "image_height": detected.height,
+            "validated_at": now.isoformat(),
+        }
+        if not repository.mark_validated(upload_id, actor.user_id, validating_version, attributes):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        return {"uploadId": upload_id, "status": "validated", "attachment": None}
+    except ValidationFailure as exc:
+        repository.mark_invalid(upload_id, actor.user_id, validating_version, exc.code.value)
+        raise AttachmentDecisionError(exc.code) from None
+    except AttachmentDecisionError:
+        raise
+    except Exception:
+        repository.release_validation(
+            upload_id, actor.user_id, validating_version, int(now.timestamp())
+        )
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None

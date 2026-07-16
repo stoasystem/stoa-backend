@@ -24,12 +24,17 @@ from stoa.models.attachment import (
 from stoa.security.attachment_errors import (
     ATTACHMENT_ERROR_REGISTRY,
     AttachmentClientAction,
+    AttachmentDecisionError,
     AttachmentErrorCode,
     attachment_http_response,
     safe_attachment_error_body,
 )
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services.attachment_service import create_upload_intent, storage_limit_for_entitlement
+from stoa.services.attachment_service import (
+    create_upload_intent,
+    finalize_upload,
+    storage_limit_for_entitlement,
+)
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 
@@ -329,3 +334,94 @@ def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
     assert storage_limit_for_entitlement("free") == FREE_STORAGE_BYTES
     assert storage_limit_for_entitlement("standard") == PAID_STORAGE_BYTES
     assert storage_limit_for_entitlement("premium") == PAID_STORAGE_BYTES
+
+
+class _FinalizeRepository:
+    def __init__(self, item: dict | None) -> None:
+        self.item = item
+        self.events: list[str] = []
+
+    def get_upload_intent(self, upload_id: str):
+        return self.item
+
+    def begin_validation(self, *args) -> bool:
+        self.events.append("begin")
+        return True
+
+    def mark_validated(self, *args) -> bool:
+        self.events.append("validated")
+        return True
+
+    def mark_invalid(self, *args) -> bool:
+        self.events.append("invalid")
+        return True
+
+    def release_validation(self, *args) -> bool:
+        self.events.append("released")
+        return True
+
+
+class _Body:
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def read(self, limit: int) -> bytes:
+        return self.data[:limit]
+
+
+class _FinalizeS3:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.calls: list[str] = []
+
+    def head_object(self, **kwargs):
+        self.calls.append("head")
+        return {"ContentLength": len(self.data), "ContentType": "image/png", "ETag": "etag"}
+
+    def get_object(self, **kwargs):
+        self.calls.append("get")
+        return {"Body": _Body(self.data), "ETag": "etag"}
+
+
+def _pending_upload(owner: str = "student-1") -> dict:
+    return {
+        "upload_id": "upload-1",
+        "owner_id": owner,
+        "object_key": "uploads/private/object-canary.png",
+        "original_filename": "work.png",
+        "declared_type": "image/png",
+        "max_bytes": IMAGE_MAX_BYTES,
+        "status": "pending_upload",
+        "version": 1,
+        "expires_at": 2_000_000_000,
+    }
+
+
+def test_finalize_heads_reads_validates_then_transitions() -> None:
+    repository = _FinalizeRepository(_pending_upload())
+    s3 = _FinalizeS3(_image("PNG"))
+    result = finalize_upload(
+        "upload-1",
+        _student_actor(),
+        s3=s3,
+        settings=Settings(s3_images_bucket="bucket"),
+        repository=repository,
+    )
+    assert result["status"] == "validated"
+    assert s3.calls == ["head", "get"]
+    assert repository.events == ["begin", "validated"]
+
+
+def test_foreign_finalize_is_hidden_before_s3_read() -> None:
+    repository = _FinalizeRepository(_pending_upload("foreign-student-canary"))
+    s3 = _FinalizeS3(_image("PNG"))
+    with pytest.raises(AttachmentDecisionError) as error:
+        finalize_upload(
+            "upload-1",
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="bucket"),
+            repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
+    assert s3.calls == []

@@ -1,84 +1,81 @@
-"""File routes — S3 presigned PUT URL for direct client uploads."""
-import uuid
+"""Opaque, owner-bound file upload routes."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator, model_validator
 
 from stoa.config import Settings, get_settings
-from stoa.deps import get_current_user, get_s3_client
+from stoa.deps import get_actor, get_s3_client
+from stoa.models.attachment import (
+    FinalizeUploadResponse,
+    UploadIntentRequest,
+    UploadIntentResponse,
+)
+from stoa.security.attachment_errors import AttachmentDecisionError
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizationSpec,
+    ResourceType,
+)
+from stoa.security.identity import Actor
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_inventory import explicit_route_classification
+from stoa.services.attachment_service import create_upload_intent, finalize_upload
+
 
 router = APIRouter()
 
-_ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "heic"}
-_ALLOWED_DOCUMENT_EXTENSIONS = {"pdf"}
-_ALLOWED_EXTENSIONS = _ALLOWED_IMAGE_EXTENSIONS | _ALLOWED_DOCUMENT_EXTENSIONS
-_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+async def _upload_inventory_resolver(upload_id: str):
+    return {"student_id": upload_id}
 
 
-class PresignRequest(BaseModel):
-    filename: str
-    content_type: str
-
-    @field_validator("filename")
-    @classmethod
-    def validate_extension(cls, v: str) -> str:
-        ext = v.rsplit(".", 1)[-1].lower() if "." in v else ""
-        if ext not in _ALLOWED_EXTENSIONS:
-            raise ValueError(f"Extension '.{ext}' is not allowed; use: {_ALLOWED_EXTENSIONS}")
-        return v
-
-    @field_validator("content_type")
-    @classmethod
-    def validate_content_type(cls, v: str) -> str:
-        if not v.startswith("image/") and v != "application/pdf":
-            raise ValueError("Only image/* and application/pdf content types are permitted")
-        return v
-
-    @model_validator(mode="after")
-    def validate_extension_matches_content_type(self) -> "PresignRequest":
-        ext = self.filename.rsplit(".", 1)[-1].lower() if "." in self.filename else ""
-        if ext in _ALLOWED_IMAGE_EXTENSIONS and not self.content_type.startswith("image/"):
-            raise ValueError(f"Extension '.{ext}' must use an image/* content type")
-        if ext in _ALLOWED_DOCUMENT_EXTENSIONS and self.content_type != "application/pdf":
-            raise ValueError("Extension '.pdf' must use application/pdf content type")
-        return self
+async def _upload_actor_dependency(actor: Actor = Depends(get_actor)) -> Actor:
+    return actor
 
 
-class PresignResponse(BaseModel):
-    upload_url: str
-    s3_key: str
-    expires_in: int
+_upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.UPLOAD,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _upload_inventory_resolver,
+    ),
+)
 
 
-@router.post("/presign", response_model=PresignResponse)
-@explicit_route_classification("authenticated-global", "Actor-owned generated upload key")
-async def get_presigned_url(
-    body: PresignRequest,
-    user: dict = Depends(get_current_user),
+def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> None:
+    error.correlation_id = correlation_id
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=error.public_body(),
+        headers={"X-Correlation-ID": correlation_id},
+    ) from error
+
+
+@router.post("/presign", response_model=UploadIntentResponse)
+@explicit_route_classification("authenticated-global", "Actor-owned generated upload intent")
+async def presign_upload(
+    body: UploadIntentRequest,
+    actor: Actor = Depends(get_actor),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
-    """Return an S3 presigned PUT URL so the client can upload directly."""
-    user_id = user.get("sub", "unknown")
-    ext = body.filename.rsplit(".", 1)[-1].lower()
-    key = f"uploads/{user_id}/{uuid.uuid4()}.{ext}"
-
     try:
-        url = s3.generate_presigned_url(
-            "put_object",
-            Params={
-                "Bucket": settings.s3_images_bucket,
-                "Key": key,
-                "ContentType": body.content_type,
-            },
-            ExpiresIn=settings.s3_presign_expiry_seconds,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not generate presigned URL: {exc}")
+        return create_upload_intent(body, actor, s3=s3, settings=settings)
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id)
 
-    return PresignResponse(
-        upload_url=url,
-        s3_key=key,
-        expires_in=settings.s3_presign_expiry_seconds,
-    )
+
+@router.post("/{upload_id}/finalize", response_model=FinalizeUploadResponse)
+async def finalize_owned_upload(
+    upload_id: str,
+    actor: Actor = Depends(_upload_actor_dependency),
+    s3=Depends(get_s3_client),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    try:
+        return finalize_upload(upload_id, actor, s3=s3, settings=settings)
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id)

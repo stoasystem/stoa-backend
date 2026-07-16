@@ -3824,6 +3824,24 @@
   {
     "authorization": [
       {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "upload_id"
+    ],
+    "method": "POST",
+    "path": "/files/{upload_id}/finalize",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
         "action": "create",
         "capability": null,
         "purpose": "notification_self_service",

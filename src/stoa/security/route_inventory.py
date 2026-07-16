@@ -124,20 +124,14 @@ def _field_aliases(
     aliases: set[str] = set()
     origin = get_origin(annotation)
     if origin is Annotated:
-        return _field_aliases(
-            get_args(annotation)[0], prefix=prefix, model_path=model_path
-        )
+        return _field_aliases(get_args(annotation)[0], prefix=prefix, model_path=model_path)
     if origin in {Union, UnionType}:
         for argument in get_args(annotation):
-            aliases.update(
-                _field_aliases(argument, prefix=prefix, model_path=model_path)
-            )
+            aliases.update(_field_aliases(argument, prefix=prefix, model_path=model_path))
         return aliases
     if origin is not None:
         for argument in get_args(annotation):
-            aliases.update(
-                _field_aliases(argument, prefix=prefix, model_path=model_path)
-            )
+            aliases.update(_field_aliases(argument, prefix=prefix, model_path=model_path))
         return aliases
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         if annotation in model_path:
@@ -147,18 +141,33 @@ def _field_aliases(
             alias = str(field.alias or name)
             path = f"{prefix}.{alias}" if prefix else alias
             aliases.add(path)
-            aliases.update(
-                _field_aliases(field.annotation, prefix=path, model_path=next_path)
-            )
+            aliases.update(_field_aliases(field.annotation, prefix=path, model_path=next_path))
     return aliases
 
 
 _EXACT_IDENTIFIERS = {
-    "studentid", "childid", "userid", "parentid", "teacherid", "questionid",
-    "conversationid", "sessionid", "assignmentid", "requestid", "reportid",
-    "deliveryid", "jobid", "draftid", "notificationid", "eventid",
-    "tokenreference", "providertokenreference", "pushtoken", "deviceid",
+    "studentid",
+    "childid",
+    "userid",
+    "parentid",
+    "teacherid",
+    "questionid",
+    "conversationid",
+    "sessionid",
+    "assignmentid",
+    "requestid",
+    "reportid",
+    "deliveryid",
+    "jobid",
+    "draftid",
+    "notificationid",
+    "eventid",
+    "tokenreference",
+    "providertokenreference",
+    "pushtoken",
+    "deviceid",
     "applicationid",
+    "uploadid",
 }
 
 
@@ -247,8 +256,7 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
         safe_public = safe_public or bool(getattr(call, "safe_public", False))
         capability = getattr(call, "required_capability", None)
         specs.extend(
-            _inventory_spec(spec, capability)
-            for spec in getattr(call, "authorization_specs", ())
+            _inventory_spec(spec, capability) for spec in getattr(call, "authorization_specs", ())
         )
         classifier = getattr(call, "admin_policy_classifier", None)
         if classifier is not None:
@@ -269,48 +277,69 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
         classification = "safe-public" if safe_public else "authorized"
     else:
         if not isinstance(marker, ExplicitRouteClassification):
-            raise ValueError("route has no executable authorization or explicit public/global classification")
+            raise ValueError(
+                "route has no executable authorization or explicit public/global classification"
+            )
         classification = marker.access
-    unique = {(item.resource_type, item.action, item.purpose, item.capability): item for item in specs}
-    return classification, tuple(sorted(unique.values(), key=lambda item: (
-        item.resource_type, item.action, item.purpose, item.capability or ""
-    )))
+    unique = {
+        (item.resource_type, item.action, item.purpose, item.capability): item for item in specs
+    }
+    return classification, tuple(
+        sorted(
+            unique.values(),
+            key=lambda item: (item.resource_type, item.action, item.purpose, item.capability or ""),
+        )
+    )
 
 
 _NOTIFICATION_IDS = {
-    "notificationid", "eventid", "tokenreference", "providertokenreference",
-    "pushtoken", "deviceid",
+    "notificationid",
+    "eventid",
+    "tokenreference",
+    "providertokenreference",
+    "pushtoken",
+    "deviceid",
 }
 
 _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
-    "studentid": frozenset({
-        ResourceType.STUDENT.value,
-        ResourceType.QUESTION.value,
-        ResourceType.CONVERSATION.value,
-        ResourceType.PRACTICE.value,
-        ResourceType.ADAPTIVE_PROFILE.value,
-        ResourceType.REPORT.value,
-        ResourceType.TEACHER_ASSIGNMENT.value,
-        ResourceType.PARENT_BINDING.value,
-        ResourceType.TEACHER_HELP_REQUEST.value,
-        ResourceType.AI_TEACHER_DRAFT.value,
-    }),
+    "studentid": frozenset(
+        {
+            ResourceType.STUDENT.value,
+            ResourceType.QUESTION.value,
+            ResourceType.CONVERSATION.value,
+            ResourceType.PRACTICE.value,
+            ResourceType.ADAPTIVE_PROFILE.value,
+            ResourceType.REPORT.value,
+            ResourceType.TEACHER_ASSIGNMENT.value,
+            ResourceType.PARENT_BINDING.value,
+            ResourceType.TEACHER_HELP_REQUEST.value,
+            ResourceType.AI_TEACHER_DRAFT.value,
+        }
+    ),
     "childid": frozenset({ResourceType.STUDENT.value, ResourceType.PARENT_BINDING.value}),
     "parentid": frozenset({ResourceType.PARENT_BINDING.value}),
-    "questionid": frozenset({
-        ResourceType.QUESTION.value,
-        ResourceType.CONVERSATION.value,
-        ResourceType.TEACHER_HELP_REQUEST.value,
-        ResourceType.AI_TEACHER_DRAFT.value,
-    }),
-    "conversationid": frozenset({ResourceType.CONVERSATION.value, ResourceType.TEACHER_HELP_REQUEST.value}),
-    "sessionid": frozenset({
-        ResourceType.QUESTION.value,
-        ResourceType.CONVERSATION.value,
-        ResourceType.PRACTICE.value,
-        ResourceType.ADAPTIVE_PROFILE.value,
-    }),
-    "assignmentid": frozenset({ResourceType.TEACHER_ASSIGNMENT.value, ResourceType.ADAPTIVE_PROFILE.value}),
+    "questionid": frozenset(
+        {
+            ResourceType.QUESTION.value,
+            ResourceType.CONVERSATION.value,
+            ResourceType.TEACHER_HELP_REQUEST.value,
+            ResourceType.AI_TEACHER_DRAFT.value,
+        }
+    ),
+    "conversationid": frozenset(
+        {ResourceType.CONVERSATION.value, ResourceType.TEACHER_HELP_REQUEST.value}
+    ),
+    "sessionid": frozenset(
+        {
+            ResourceType.QUESTION.value,
+            ResourceType.CONVERSATION.value,
+            ResourceType.PRACTICE.value,
+            ResourceType.ADAPTIVE_PROFILE.value,
+        }
+    ),
+    "assignmentid": frozenset(
+        {ResourceType.TEACHER_ASSIGNMENT.value, ResourceType.ADAPTIVE_PROFILE.value}
+    ),
     "requestid": frozenset({ResourceType.TEACHER_HELP_REQUEST.value}),
     "reportid": frozenset({ResourceType.REPORT.value}),
     "draftid": frozenset({ResourceType.AI_TEACHER_DRAFT.value}),
@@ -321,9 +350,10 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
     "pushtoken": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
     "deviceid": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
     "applicationid": frozenset({ResourceType.OPERATOR_RESOURCE.value}),
+    "uploadid": frozenset({ResourceType.UPLOAD.value}),
 }
 
-_SELF_ONLY_IDENTIFIERS = frozenset({"userid"})
+_SELF_ONLY_IDENTIFIERS = frozenset({"userid", "uploadid"})
 
 
 def _normalized_identifier(value: str) -> str:
@@ -368,7 +398,9 @@ def _validate_explicit_declaration(
         return None
     if marker.identifier_scope != "self-only":
         return "authenticated-global identifiers require self-only scope"
-    if any(_normalized_identifier(value) not in _SELF_ONLY_IDENTIFIERS for value in item.identifiers):
+    if any(
+        _normalized_identifier(value) not in _SELF_ONLY_IDENTIFIERS for value in item.identifiers
+    ):
         return "authenticated-global identifiers must be Actor-self command fields"
     return None
 
@@ -407,7 +439,8 @@ def _validate_identifier_policy(
         return "sensitive identifiers have no executable authorization spec"
     if normalized & _NOTIFICATION_IDS:
         valid = any(
-            spec.resource_type in {
+            spec.resource_type
+            in {
                 ResourceType.NOTIFICATION_EVENT.value,
                 ResourceType.NOTIFICATION_PUSH_TOKEN.value,
                 ResourceType.NOTIFICATION_COLLECTION.value,
@@ -429,22 +462,33 @@ def _validate_identifier_policy(
 def inventory_application(app: FastAPI) -> tuple[RouteInventoryItem, ...]:
     failures = validate_application_inventory(app)
     if failures:
-        detail = "; ".join(f"{failure.method} {failure.path}: {failure.reason}" for failure in failures)
+        detail = "; ".join(
+            f"{failure.method} {failure.path}: {failure.reason}" for failure in failures
+        )
         raise ValueError(detail)
     items: list[RouteInventoryItem] = []
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
         identifiers = _route_identifiers(route)
-        target_projection = _target_projection(getattr(route.endpoint, "admin_target_provider", None))
+        target_projection = _target_projection(
+            getattr(route.endpoint, "admin_target_provider", None)
+        )
         for method in sorted(route.methods):
             classification, specs = _classify_route(route, method)
-            items.append(RouteInventoryItem(
-                method, route.path, _family(route.path), classification, identifiers,
-                specs, classification not in {"public", "safe-public"}
-                and bool(identifiers or specs or classification == "admin-capability"),
-                target_projection,
-            ))
+            items.append(
+                RouteInventoryItem(
+                    method,
+                    route.path,
+                    _family(route.path),
+                    classification,
+                    identifiers,
+                    specs,
+                    classification not in {"public", "safe-public"}
+                    and bool(identifiers or specs or classification == "admin-capability"),
+                    target_projection,
+                )
+            )
     return tuple(sorted(items, key=lambda item: (item.method, item.path)))
 
 
@@ -456,7 +500,9 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
         endpoint_metadata = getattr(route.endpoint, "authorization_specs", ())
         graph_calls = {dependant.call for dependant in _walk_dependants(route.dependant)}
         if endpoint_metadata and route.endpoint not in graph_calls - {route.dependant.call}:
-            failures.append(InventoryFailure("*", route.path, "metadata is not attached to a dependency"))
+            failures.append(
+                InventoryFailure("*", route.path, "metadata is not attached to a dependency")
+            )
         identifiers = _route_identifiers(route)
         body_aliases = _route_body_aliases(route)
         provider = getattr(route.endpoint, "admin_target_provider", None)
@@ -464,8 +510,13 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
             try:
                 classification, specs = _classify_route(route, method)
                 item = RouteInventoryItem(
-                    method, route.path, _family(route.path), classification, identifiers,
-                    specs, classification not in {"public", "safe-public"}
+                    method,
+                    route.path,
+                    _family(route.path),
+                    classification,
+                    identifiers,
+                    specs,
+                    classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                     _target_projection(provider),
                 )
@@ -477,7 +528,8 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     )
                     target_names = {_normalized_identifier(value) for value in policy.target_keys}
                     observed = {
-                        alias for alias in body_aliases
+                        alias
+                        for alias in body_aliases
                         if _normalized_identifier(alias.rsplit(".", 1)[-1]) in target_names
                     }
                     if observed and provider is None:
@@ -485,18 +537,27 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     if provider is not None:
                         declared = set(provider.target_paths)
                         if observed != declared:
-                            raise ValueError("typed provider target paths do not exactly match policy/body targets")
-                        if provider.cardinality in {"collection", "resolver_collection"} and provider.maximum is None:
+                            raise ValueError(
+                                "typed provider target paths do not exactly match policy/body targets"
+                            )
+                        if (
+                            provider.cardinality in {"collection", "resolver_collection"}
+                            and provider.maximum is None
+                        ):
                             raise ValueError("typed collection provider lacks a declared maximum")
                         if declared & set(provider.reference_only):
-                            raise ValueError("evidence-only field is promoted as an authorization target")
+                            raise ValueError(
+                                "evidence-only field is promoted as an authorization target"
+                            )
                 marker = getattr(route.endpoint, "stoa_route_classification", None)
                 reason = _validate_identifier_policy(item, marker)
                 if reason:
                     failures.append(InventoryFailure(method, route.path, reason))
             except (KeyError, TypeError, ValueError) as error:
                 failures.append(InventoryFailure(method, route.path, str(error)))
-    return tuple(sorted(failures, key=lambda failure: (failure.method, failure.path, failure.reason)))
+    return tuple(
+        sorted(failures, key=lambda failure: (failure.method, failure.path, failure.reason))
+    )
 
 
 def inventory_projection(app: FastAPI) -> list[dict[str, Any]]:
@@ -509,7 +570,9 @@ def install_authorization_openapi(app: FastAPI) -> None:
     def custom_openapi() -> dict[str, Any]:
         if app.openapi_schema is not None:
             return app.openapi_schema
-        schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+        schema = get_openapi(
+            title=app.title, version=app.version, description=app.description, routes=app.routes
+        )
         for item in inventory_application(app):
             operation = schema["paths"][item.path][item.method.lower()]
             extension = {
