@@ -323,3 +323,18 @@ def test_student_preview_openapi_has_no_answer_toggle_or_result_fields() -> None
     preview_properties = PracticeChallengePreview.model_json_schema(by_alias=True)["properties"]
     assert not FORBIDDEN_PREVIEW_KEYS.intersection(preview_properties)
     assert "attemptId" not in preview_properties
+
+
+def test_attempt_result_identifier_has_executable_practice_authorization() -> None:
+    from stoa.main import app
+    from stoa.security.route_inventory import inventory_application
+
+    item = next(
+        item
+        for item in inventory_application(app)
+        if item.path == "/practice/attempts/{attempt_id}/result"
+    )
+    assert item.identifiers == ("attempt_id",)
+    assert item.classification == "authorized"
+    assert item.authorization_spec is not None
+    assert item.authorization_spec.resource_type == "practice"

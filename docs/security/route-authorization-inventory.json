@@ -1425,6 +1425,24 @@
         "resource_type": "practice"
       }
     ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [
+      "attempt_id"
+    ],
+    "method": "GET",
+    "path": "/practice/attempts/{attempt_id}/result",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
     "classification": "safe-public",
     "family": "practice",
     "identifiers": [],
