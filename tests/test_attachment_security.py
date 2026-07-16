@@ -6,6 +6,7 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
+from botocore.exceptions import ClientError
 from pydantic import ValidationError
 
 from stoa.config import (
@@ -464,23 +465,35 @@ def test_chunk_claim_precedes_provider_write_and_receipt_is_safe() -> None:
     assert result["status"] == "accepted"
     assert repository.part["status"] == "completed"
     assert len(s3.uploads) == 1
-    assert all(value not in str(result) for value in ("private-etag", "provider-upload-canary", "bucket"))
+    assert all(
+        value not in str(result) for value in ("private-etag", "provider-upload-canary", "bucket")
+    )
 
 
 def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
     repository, s3 = _ChunkRepository(), _ChunkS3()
     asyncio.run(
         put_upload_chunk(
-            "upload-1", 1, _chunks(b"abc"), _student_actor(), s3=s3,
-            settings=Settings(s3_images_bucket="bucket"), repository=repository,
+            "upload-1",
+            1,
+            _chunks(b"abc"),
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="bucket"),
+            repository=repository,
         )
     )
     repository.part["status"] = "uploading"
     with pytest.raises(AttachmentDecisionError) as error:
         asyncio.run(
             put_upload_chunk(
-                "upload-1", 1, _chunks(b"xyz"), _student_actor(), s3=s3,
-                settings=Settings(s3_images_bucket="bucket"), repository=repository,
+                "upload-1",
+                1,
+                _chunks(b"xyz"),
+                _student_actor(),
+                s3=s3,
+                settings=Settings(s3_images_bucket="bucket"),
+                repository=repository,
             )
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
@@ -554,9 +567,7 @@ def test_provider_success_ledger_failure_replay_adopts_matching_listed_part() ->
             if self.fail_completion_once:
                 self.fail_completion_once = False
                 return False
-            return super().complete_upload_part(
-                upload_id, part_number, owner, **provider
-            )
+            return super().complete_upload_part(upload_id, part_number, owner, **provider)
 
     class ReconcileS3(_ChunkS3):
         def upload_part(self, **kwargs):
@@ -926,6 +937,13 @@ def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic
     assert summary.media_type == "image/png"
     assert len(repository.transactions) == 1
     operations = repository.transactions[0]
+    assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.UPLOAD_CONSUME,
+        attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
+        attachment_repo.TransactionOperationKind.STORAGE_QUOTA_UPDATE,
+        attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
+        attachment_repo.TransactionOperationKind.QUESTION_PUT,
+    ]
     assert operations[-1]["Put"]["Item"] is question
     assert any(
         operation.get("Update", {}).get("Key", {}).get("PK") == "UPLOAD#upload-1"
@@ -1106,6 +1124,15 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     )
     assert len(repository.transactions) == 1
     operations = repository.transactions[0]
+    assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.MESSAGE_PUT,
+        attachment_repo.TransactionOperationKind.UPLOAD_CONSUME,
+        attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
+        attachment_repo.TransactionOperationKind.ATTACHMENT_REF,
+        attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
+        attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
+        attachment_repo.TransactionOperationKind.STORAGE_QUOTA_UPDATE,
+    ]
     assert sum("Update" in operation for operation in operations) == 3
     storage_updates = [
         operation["Update"]
@@ -1122,6 +1149,175 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     public = str([summary.model_dump(by_alias=True) for summary in summaries])
     assert "provider-coordinate" not in public
     assert "private-version" not in public
+
+
+def _transaction_cancel_error(
+    codes: list[str], *, include_private_diagnostics: bool = True
+) -> ClientError:
+    reasons = []
+    for index, code in enumerate(codes):
+        reason = {"Code": code}
+        if include_private_diagnostics:
+            reason.update(
+                {
+                    "Message": f"provider-message-private-canary-{index}",
+                    "Item": {
+                        "PK": {"S": "UPLOAD#private-key-canary"},
+                        "owner_id": {"S": "foreign-owner-private-canary"},
+                        "immutable_object_key": {"S": "provider/private-coordinate"},
+                    },
+                }
+            )
+        reasons.append(reason)
+    return ClientError(
+        {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "Amazon DynamoDB private-provider-canary",
+            },
+            "CancellationReasons": reasons,
+        },
+        "TransactWriteItems",
+    )
+
+
+class _CancellationClient:
+    def __init__(self, error: ClientError) -> None:
+        self.error = error
+        self.items = None
+
+    def transact_write_items(self, *, TransactItems):
+        self.items = TransactItems
+        raise self.error
+
+
+class _HighLevelCancellationTable:
+    name = "private-table-name-canary"
+
+    def __init__(self, error: ClientError) -> None:
+        self.client = _CancellationClient(error)
+
+    def transact_write_items(self, *, TransactItems):
+        return self.client.transact_write_items(TransactItems=TransactItems)
+
+
+class _LowLevelCancellationTable:
+    name = "private-table-name-canary"
+
+    def __init__(self, error: ClientError) -> None:
+        self.client = _CancellationClient(error)
+        self.meta = type("Meta", (), {"client": self.client})()
+
+
+def _cancellation_table(error: ClientError, *, low_level: bool):
+    if low_level:
+        return _LowLevelCancellationTable(error)
+    return _HighLevelCancellationTable(error)
+
+
+@pytest.mark.parametrize("low_level", [False, True])
+@pytest.mark.parametrize(
+    "failed_kind,expected",
+    [
+        *[
+            (kind, attachment_repo.AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT)
+            for kind in attachment_repo.TransactionOperationKind
+            if kind is not attachment_repo.TransactionOperationKind.STORAGE_QUOTA_UPDATE
+        ],
+        (
+            attachment_repo.TransactionOperationKind.STORAGE_QUOTA_UPDATE,
+            attachment_repo.AttachmentTransactionOutcome.QUOTA_EXCEEDED,
+        ),
+    ],
+)
+def test_transaction_operation_index_classification_is_closed_and_redacted(
+    low_level, failed_kind, expected
+) -> None:
+    operations = [
+        attachment_repo.TransactionOperation(kind, {"Put": {"Item": {"PK": kind.value}}})
+        for kind in attachment_repo.TransactionOperationKind
+    ]
+    failed_index = [operation.kind for operation in operations].index(failed_kind)
+    codes = ["None"] * len(operations)
+    codes[failed_index] = "ConditionalCheckFailed"
+    table = _cancellation_table(_transaction_cancel_error(codes), low_level=low_level)
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as error:
+        attachment_repo.transact(operations, table=table)
+    assert error.value.outcome is expected
+    rendered = str(error.value)
+    for canary in (
+        "provider-message-private-canary",
+        "private-key-canary",
+        "foreign-owner-private-canary",
+        "provider/private-coordinate",
+        "Amazon DynamoDB",
+        "private-table-name-canary",
+    ):
+        assert canary not in rendered
+
+
+@pytest.mark.parametrize(
+    "response,expected",
+    [
+        (
+            {"codes": ["TransactionConflict"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"codes": ["ProvisionedThroughputExceeded"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"codes": ["ThrottlingError"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"codes": []},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"missing": True},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+    ],
+)
+def test_transaction_cancellation_dependency_categories_are_retryable(response, expected) -> None:
+    operation = attachment_repo.TransactionOperation(
+        attachment_repo.TransactionOperationKind.MESSAGE_PUT,
+        {"Put": {"Item": {"PK": "MESSAGE#opaque"}}},
+    )
+    if response.get("missing"):
+        error = ClientError(
+            {"Error": {"Code": "TransactionCanceledException", "Message": "private"}},
+            "TransactWriteItems",
+        )
+    else:
+        error = _transaction_cancel_error(response["codes"])
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as captured:
+        attachment_repo.transact([operation], table=_cancellation_table(error, low_level=False))
+    assert captured.value.outcome is expected
+
+
+def test_generic_transaction_client_error_is_retryable_and_redacted() -> None:
+    error = ClientError(
+        {
+            "Error": {
+                "Code": "InternalServerError",
+                "Message": "raw-provider-reason-private-canary",
+            }
+        },
+        "TransactWriteItems",
+    )
+    operation = attachment_repo.TransactionOperation(
+        attachment_repo.TransactionOperationKind.QUESTION_PUT,
+        {"Put": {"Item": {"PK": "QUESTION#opaque"}}},
+    )
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as captured:
+        attachment_repo.transact([operation], table=_cancellation_table(error, low_level=False))
+    assert (
+        captured.value.outcome is attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+    )
+    assert "raw-provider-reason-private-canary" not in str(captured.value)
 
 
 def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:

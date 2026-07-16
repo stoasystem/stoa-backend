@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
@@ -14,6 +15,46 @@ from stoa.db.dynamodb import get_table
 @dataclass(frozen=True, slots=True)
 class AttachmentRepositoryConflict(Exception):
     category: str = "conditional_conflict"
+
+
+class AttachmentTransactionOutcome(StrEnum):
+    """Closed, provider-independent result of an attachment transaction."""
+
+    CONCEALED_RESOURCE_CONFLICT = "concealed_resource_conflict"
+    QUOTA_EXCEEDED = "quota_exceeded"
+    RETRYABLE_DEPENDENCY = "retryable_dependency"
+
+
+class TransactionOperationKind(StrEnum):
+    """Semantic transaction positions; never derived from provider diagnostics."""
+
+    MESSAGE_PUT = "message_put"
+    UPLOAD_CONSUME = "upload_consume"
+    ATTACHMENT_PUT = "attachment_put"
+    ATTACHMENT_REF = "attachment_ref"
+    ASSOCIATION_PUT = "association_put"
+    STORAGE_QUOTA_UPDATE = "storage_quota_update"
+    QUESTION_PUT = "question_put"
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionOperation:
+    kind: TransactionOperationKind
+    item: dict[str, Any]
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.item
+
+    def __getitem__(self, key: str) -> Any:
+        return self.item[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.item.get(key, default)
+
+
+@dataclass(frozen=True, slots=True)
+class AttachmentTransactionError(Exception):
+    outcome: AttachmentTransactionOutcome
 
 
 def upload_key(upload_id: str) -> dict[str, str]:
@@ -151,18 +192,14 @@ def claim_upload_part(
         or int(current.get("content_length", -1)) != length
     ):
         raise AttachmentRepositoryConflict("chunk_conflict")
-    if current.get("status") == "completed" or int(
-        current.get("lease_expires_at", 0)
-    ) > now_epoch:
+    if current.get("status") == "completed" or int(current.get("lease_expires_at", 0)) > now_epoch:
         return current
     if int(current.get("attempt", 1)) >= 2:
         raise AttachmentRepositoryConflict("lease_exhausted")
     try:
         response = target.update_item(
             Key=upload_part_key(upload_id, part_number),
-            UpdateExpression=(
-                "SET lease_owner=:owner, lease_expires_at=:expiry, attempt=:attempt"
-            ),
+            UpdateExpression=("SET lease_owner=:owner, lease_expires_at=:expiry, attempt=:attempt"),
             ConditionExpression=(
                 "#status=:uploading AND checksum_sha256=:checksum AND "
                 "content_length=:length AND lease_expires_at<=:now AND attempt=:previous"
@@ -220,14 +257,11 @@ def complete_upload_part(
     return True
 
 
-def list_upload_parts(
-    upload_id: str, *, table: Any | None = None
-) -> list[dict[str, Any]]:
+def list_upload_parts(upload_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
     from boto3.dynamodb.conditions import Key
 
     response = (table or get_table()).query(
-        KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}")
-        & Key("SK").begins_with("PART#"),
+        KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}") & Key("SK").begins_with("PART#"),
         ConsistentRead=True,
     )
     return sorted(response.get("Items", []), key=lambda item: int(item["part_number"]))
@@ -538,97 +572,115 @@ def build_message_attachment_transaction(
     owner_id: str,
     limit_bytes: int,
     now_iso: str,
-) -> list[dict[str, Any]]:
-    operations: list[dict[str, Any]] = [
-        {
-            "Put": {
-                "Item": message,
-                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-            }
-        }
+) -> list[TransactionOperation]:
+    operations: list[TransactionOperation] = [
+        TransactionOperation(
+            TransactionOperationKind.MESSAGE_PUT,
+            {
+                "Put": {
+                    "Item": message,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        )
     ]
     for upload, attachment in fresh:
         operations.extend(
             [
-                {
-                    "Update": {
-                        "Key": upload_key(upload["upload_id"]),
-                        "UpdateExpression": (
-                            "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
-                        ),
-                        "ConditionExpression": (
-                            "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
-                        ),
-                        "ExpressionAttributeNames": {
-                            "#owner": "owner_id",
-                            "#s": "status",
-                            "#v": "version",
-                        },
-                        "ExpressionAttributeValues": {
-                            ":owner": owner_id,
-                            ":validated": "validated",
-                            ":consumed": "consumed",
-                            ":version": int(upload["version"]),
-                            ":one": 1,
-                            ":now": int(upload["consume_epoch"]),
-                            ":attachment_id": attachment["attachment_id"],
-                        },
-                    }
-                },
-                {
-                    "Put": {
-                        "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
-                        "ConditionExpression": "attribute_not_exists(PK)",
-                    }
-                },
+                TransactionOperation(
+                    TransactionOperationKind.UPLOAD_CONSUME,
+                    {
+                        "Update": {
+                            "Key": upload_key(upload["upload_id"]),
+                            "UpdateExpression": (
+                                "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                            ),
+                            "ConditionExpression": (
+                                "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
+                            ),
+                            "ExpressionAttributeNames": {
+                                "#owner": "owner_id",
+                                "#s": "status",
+                                "#v": "version",
+                            },
+                            "ExpressionAttributeValues": {
+                                ":owner": owner_id,
+                                ":validated": "validated",
+                                ":consumed": "consumed",
+                                ":version": int(upload["version"]),
+                                ":one": 1,
+                                ":now": int(upload["consume_epoch"]),
+                                ":attachment_id": attachment["attachment_id"],
+                            },
+                        }
+                    },
+                ),
+                TransactionOperation(
+                    TransactionOperationKind.ATTACHMENT_PUT,
+                    {
+                        "Put": {
+                            "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        }
+                    },
+                ),
             ]
         )
     for attachment in reused:
         operations.append(
-            {
-                "Update": {
-                    "Key": attachment_key(attachment["attachment_id"]),
-                    "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
-                    "ConditionExpression": "owner_id=:owner AND #status=:active",
-                    "ExpressionAttributeNames": {"#status": "status"},
-                    "ExpressionAttributeValues": {
-                        ":owner": owner_id,
-                        ":active": "active",
-                        ":one": 1,
-                    },
-                }
-            }
+            TransactionOperation(
+                TransactionOperationKind.ATTACHMENT_REF,
+                {
+                    "Update": {
+                        "Key": attachment_key(attachment["attachment_id"]),
+                        "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
+                        "ConditionExpression": "owner_id=:owner AND #status=:active",
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":owner": owner_id,
+                            ":active": "active",
+                            ":one": 1,
+                        },
+                    }
+                },
+            )
         )
     operations.extend(
-        {
-            "Put": {
-                "Item": association,
-                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-            }
-        }
+        TransactionOperation(
+            TransactionOperationKind.ASSOCIATION_PUT,
+            {
+                "Put": {
+                    "Item": association,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        )
         for association in associations
     )
     fresh_bytes = sum(int(attachment["content_length"]) for _, attachment in fresh)
     if fresh_bytes:
         operations.append(
-            {
-                "Update": {
-                    "Key": storage_key(owner_id),
-                    "UpdateExpression": (
-                        "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
-                        "limit_bytes=:limit, updated_at=:updated"
-                    ),
-                    "ConditionExpression": (
-                        "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
-                    ),
-                    "ExpressionAttributeValues": {
-                        ":zero": 0,
-                        ":size": fresh_bytes,
-                        ":limit": limit_bytes,
-                        ":updated": now_iso,
-                    },
-                }
-            }
+            TransactionOperation(
+                TransactionOperationKind.STORAGE_QUOTA_UPDATE,
+                {
+                    "Update": {
+                        "Key": storage_key(owner_id),
+                        "UpdateExpression": (
+                            "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
+                            "limit_bytes=:limit, updated_at=:updated"
+                        ),
+                        "ConditionExpression": (
+                            "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":zero": 0,
+                            ":size": fresh_bytes,
+                            ":limit": limit_bytes,
+                            ":updated": now_iso,
+                        },
+                    }
+                },
+            )
         )
     return operations
 
@@ -727,98 +779,116 @@ def build_question_attachment_transaction(
     owner_id: str,
     limit_bytes: int,
     now_iso: str,
-) -> list[dict[str, Any]]:
+) -> list[TransactionOperation]:
     """Commit a question and its attachment association as one conditional unit."""
-    operations: list[dict[str, Any]] = []
+    operations: list[TransactionOperation] = []
     if prepared["kind"] == "upload":
         upload = prepared["record"]
         operations.extend(
             [
-                {
-                    "Update": {
-                        "Key": upload_key(upload["upload_id"]),
-                        "UpdateExpression": (
-                            "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
-                        ),
-                        "ConditionExpression": (
-                            "#owner=:owner AND #s=:consuming AND #v=:version AND expires_at>:now"
-                        ),
-                        "ExpressionAttributeNames": {
-                            "#owner": "owner_id",
-                            "#s": "status",
-                            "#v": "version",
-                        },
-                        "ExpressionAttributeValues": {
-                            ":owner": owner_id,
-                            ":consuming": "consuming",
-                            ":consumed": "consumed",
-                            ":version": int(upload["version"]),
-                            ":one": 1,
-                            ":now": int(upload["consume_epoch"]),
-                            ":attachment_id": attachment["attachment_id"],
-                        },
-                    }
-                },
-                {
-                    "Put": {
-                        "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
-                        "ConditionExpression": "attribute_not_exists(PK)",
-                    }
-                },
-                {
-                    "Update": {
-                        "Key": storage_key(owner_id),
-                        "UpdateExpression": (
-                            "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
-                            "limit_bytes=:limit, updated_at=:updated"
-                        ),
-                        "ConditionExpression": (
-                            "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
-                        ),
-                        "ExpressionAttributeValues": {
-                            ":zero": 0,
-                            ":size": int(attachment["content_length"]),
-                            ":limit": limit_bytes,
-                            ":updated": now_iso,
-                        },
-                    }
-                },
+                TransactionOperation(
+                    TransactionOperationKind.UPLOAD_CONSUME,
+                    {
+                        "Update": {
+                            "Key": upload_key(upload["upload_id"]),
+                            "UpdateExpression": (
+                                "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                            ),
+                            "ConditionExpression": (
+                                "#owner=:owner AND #s=:consuming AND #v=:version AND expires_at>:now"
+                            ),
+                            "ExpressionAttributeNames": {
+                                "#owner": "owner_id",
+                                "#s": "status",
+                                "#v": "version",
+                            },
+                            "ExpressionAttributeValues": {
+                                ":owner": owner_id,
+                                ":consuming": "consuming",
+                                ":consumed": "consumed",
+                                ":version": int(upload["version"]),
+                                ":one": 1,
+                                ":now": int(upload["consume_epoch"]),
+                                ":attachment_id": attachment["attachment_id"],
+                            },
+                        }
+                    },
+                ),
+                TransactionOperation(
+                    TransactionOperationKind.ATTACHMENT_PUT,
+                    {
+                        "Put": {
+                            "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        }
+                    },
+                ),
+                TransactionOperation(
+                    TransactionOperationKind.STORAGE_QUOTA_UPDATE,
+                    {
+                        "Update": {
+                            "Key": storage_key(owner_id),
+                            "UpdateExpression": (
+                                "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
+                                "limit_bytes=:limit, updated_at=:updated"
+                            ),
+                            "ConditionExpression": (
+                                "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
+                            ),
+                            "ExpressionAttributeValues": {
+                                ":zero": 0,
+                                ":size": int(attachment["content_length"]),
+                                ":limit": limit_bytes,
+                                ":updated": now_iso,
+                            },
+                        }
+                    },
+                ),
             ]
         )
     else:
         operations.append(
-            {
-                "Update": {
-                    "Key": attachment_key(attachment["attachment_id"]),
-                    "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
-                    "ConditionExpression": (
-                        "owner_id=:owner AND #status=:active AND detected_type IN (:jpeg,:png)"
-                    ),
-                    "ExpressionAttributeNames": {"#status": "status"},
-                    "ExpressionAttributeValues": {
-                        ":owner": owner_id,
-                        ":active": "active",
-                        ":one": 1,
-                        ":jpeg": "image/jpeg",
-                        ":png": "image/png",
-                    },
-                }
-            }
+            TransactionOperation(
+                TransactionOperationKind.ATTACHMENT_REF,
+                {
+                    "Update": {
+                        "Key": attachment_key(attachment["attachment_id"]),
+                        "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
+                        "ConditionExpression": (
+                            "owner_id=:owner AND #status=:active AND detected_type IN (:jpeg,:png)"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":owner": owner_id,
+                            ":active": "active",
+                            ":one": 1,
+                            ":jpeg": "image/jpeg",
+                            ":png": "image/png",
+                        },
+                    }
+                },
+            )
         )
     operations.extend(
         [
-            {
-                "Put": {
-                    "Item": association,
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
-            {
-                "Put": {
-                    "Item": question,
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
+            TransactionOperation(
+                TransactionOperationKind.ASSOCIATION_PUT,
+                {
+                    "Put": {
+                        "Item": association,
+                        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                    }
+                },
+            ),
+            TransactionOperation(
+                TransactionOperationKind.QUESTION_PUT,
+                {
+                    "Put": {
+                        "Item": question,
+                        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                    }
+                },
+            ),
         ]
     )
     return operations
@@ -964,12 +1034,9 @@ def clear_staging_coordinates(
         (table or get_table()).update_item(
             Key=upload_key(upload_id),
             UpdateExpression=(
-                "REMOVE staging_object_key, staging_version_id, staging_etag, "
-                "multipart_upload_id"
+                "REMOVE staging_object_key, staging_version_id, staging_etag, multipart_upload_id"
             ),
-            ConditionExpression=(
-                "owner_id=:owner AND #status=:validated AND #version=:version"
-            ),
+            ConditionExpression=("owner_id=:owner AND #status=:validated AND #version=:version"),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
                 ":owner": owner_id,
@@ -1133,19 +1200,77 @@ def build_reuse_transaction(
     ]
 
 
-def transact(operations: list[dict[str, Any]], *, table: Any | None = None) -> None:
+def transact(
+    operations: list[dict[str, Any]] | list[TransactionOperation],
+    *,
+    table: Any | None = None,
+) -> None:
     target = table or get_table()
+    described = bool(operations) and isinstance(operations[0], TransactionOperation)
+    transact_items = [operation.item for operation in operations] if described else operations
     try:
         if hasattr(target, "transact_write_items"):
-            target.transact_write_items(TransactItems=operations)
+            target.transact_write_items(TransactItems=transact_items)
         else:
             target.meta.client.transact_write_items(
-                TransactItems=_serialize_transactions(operations, target.name)
+                TransactItems=_serialize_transactions(transact_items, target.name)
             )
     except ClientError as exc:
+        if described:
+            raise AttachmentTransactionError(
+                _attachment_transaction_outcome(
+                    exc,
+                    operations,  # type: ignore[arg-type]
+                )
+            ) from None
         if _conditional(exc):
             raise AttachmentRepositoryConflict() from None
         raise AttachmentRepositoryConflict("dependency_failure") from None
+
+
+def _attachment_transaction_outcome(
+    exc: ClientError, operations: list[TransactionOperation]
+) -> AttachmentTransactionOutcome:
+    """Classify from error code and ordered reason codes only.
+
+    Provider messages, items, keys, and exception text intentionally never cross
+    this function's boundary.
+    """
+    error_code = exc.response.get("Error", {}).get("Code")
+    if error_code == "ConditionalCheckFailedException":
+        return AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
+    if error_code != "TransactionCanceledException":
+        return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+
+    reasons = exc.response.get("CancellationReasons")
+    if not isinstance(reasons, list) or len(reasons) != len(operations):
+        return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+
+    conditional_kinds: list[TransactionOperationKind] = []
+    for operation, reason in zip(operations, reasons, strict=True):
+        if not isinstance(reason, dict):
+            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+        code = reason.get("Code")
+        if not isinstance(code, str):
+            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+        if code == "None":
+            continue
+        if code == "ConditionalCheckFailed":
+            conditional_kinds.append(operation.kind)
+            continue
+        if code in {
+            "TransactionConflict",
+            "ProvisionedThroughputExceeded",
+            "ThrottlingError",
+        }:
+            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+        return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+
+    if any(kind is not TransactionOperationKind.STORAGE_QUOTA_UPDATE for kind in conditional_kinds):
+        return AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
+    if conditional_kinds:
+        return AttachmentTransactionOutcome.QUOTA_EXCEEDED
+    return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
 
 
 def _conditional(exc: ClientError) -> bool:
