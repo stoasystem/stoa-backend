@@ -200,7 +200,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Wave 9** *(gap closure; blocked on Wave 8 completion)*
 
-- [ ] `473-12` — Make upload provider mutations crash-recoverable and delete every exact unreferenced staging and immutable target before cleanup completion.
+- [x] `473-12` — Make upload provider mutations crash-recoverable and delete every exact unreferenced staging and immutable target before cleanup completion.
 
 **Wave 10** *(gap closure; blocked on Wave 9 completion)*
 
