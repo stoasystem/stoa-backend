@@ -161,6 +161,33 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 2. Atomic upload-to-question association with foreign/reused/missing object refusal.
 3. Separate practice preview/result schemas and update all student-facing curriculum routes/clients.
 
+**Execution plans:**
+
+**Wave 1**
+
+- [ ] `473-01` — Define closed upload/attachment/error and answer preview/result contracts with Wave 0 fixtures.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] `473-02` — Implement constrained upload intents, authoritative validation, quota accounting, and lifecycle rules.
+- [ ] `473-05` — Remove answers from every student preview and persist attempts before answer-bearing results.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] `473-03` — Persist conversation attachments, enable owner reuse, bounded extraction, and reference-aware retention.
+- [ ] `473-04` — Replace raw question object keys with atomic owner-validated attachment/OCR association.
+- [ ] `473-06` — Add assignment-scoped teacher and global admin answer-read contracts without mutation authority.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] `473-07` — Add expired-upload cleanup and run the combined privacy/practice security evidence gate.
+
+**Cross-cutting constraints:**
+
+- Public responses, logs, and errors expose opaque IDs and safe categories only—never object keys, provider coordinates, raw OCR, extracted text, or parser/provider exceptions.
+- Upload consumption, attachment association, reference changes, quota accounting, and attempt recording are conditional, atomic, and retry-idempotent.
+- Student preview contracts stay answer-free; answer-bearing results require a successfully recorded attempt, while teacher/admin answer reads use a separate scoped contract.
+
 **Success criteria:**
 
 1. A student can upload a supported bounded file and use it once in their own question.
