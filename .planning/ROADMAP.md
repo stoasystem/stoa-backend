@@ -186,11 +186,11 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-08` — Replace direct S3 POST disclosure with an authenticated chunk gateway and promote exact validated bytes to server-only immutable storage.
 
-**Wave 6** *(Plan 473-08 complete)*
+**Wave 6** *(complete)*
 
-- [ ] `473-09` — Map transaction cancellation operations to stable quota, dependency, and concealed-resource outcomes with zero-effect races.
+- [x] `473-09` — Map transaction cancellation operations to stable quota, dependency, and concealed-resource outcomes with zero-effect races.
 
-**Wave 7** *(blocked on Plan 473-09)*
+**Wave 7** *(Plan 473-09 complete)*
 
 - [ ] `473-10` — Add replayable conversation commands, atomic chat quota idempotency, and private-safe AI/conversation telemetry.
 

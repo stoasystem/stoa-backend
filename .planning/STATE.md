@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-08-PLAN.md; next 473-09
-last_updated: "2026-07-16T15:37:55.000Z"
-last_activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-byte promotion are green
+stopped_at: Completed 473-09-PLAN.md; next 473-10
+last_updated: "2026-07-16T15:49:49.000Z"
+last_activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellation taxonomy is green
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 33
-  completed_plans: 30
+  completed_plans: 31
   percent: 10
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 8 of 11 complete; next Plan 09
+Plan: 9 of 11 complete; next Plan 10
 Status: Phase 473 gap closure in progress
-Last activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-byte promotion are green
+Last activity: 2026-07-16 -- Plan 473-09 completed; stable transaction cancellation taxonomy is green
 
 ## Accumulated Context
 
@@ -78,7 +78,7 @@ Last activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-
 
 ### Pending Todos
 
-- Execute Phase 473 Plans 08-11 with `--gaps-only` before advancing to Phase 474.
+- Execute Phase 473 Plans 10-11 with `--gaps-only` before advancing to Phase 474.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -97,9 +97,9 @@ Last activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-
 
 ## Session
 
-**Last Date:** 2026-07-16T15:37:55.000Z
-**Stopped At:** Completed 473-08-PLAN.md; next 473-09
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-09-PLAN.md
+**Last Date:** 2026-07-16T15:49:49.000Z
+**Stopped At:** Completed 473-09-PLAN.md; next 473-10
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-10-PLAN.md
 
 ## Performance Metrics
 
@@ -135,12 +135,14 @@ Last activity: 2026-07-16 -- Plan 473-08 completed; opaque chunks and immutable-
 | Phase 473 P06 | 20 min | 2 tasks | 11 files |
 | Phase 473 P07 | 16 min | 2 tasks | 7 files |
 | Phase 473 P08 | 22 min | 2 tasks | 12 files |
+| Phase 473 P09 | 8 min | 2 tasks | 5 files |
 
 ## Decisions
 
 - [Phase 473]: Client upload contracts expose only opaque intent/chunk state while staging keys, multipart IDs, ETags, versions, and provider identity remain server-only. — Direct storage capability disclosure is removed rather than reclassified.
 - [Phase 473]: A checksum/length-bound uploading claim and fenced lease precede every provider part write; matching replays may adopt only server-listed matching evidence. — Lost responses converge without blind overwrite, and different bytes fail before mutation.
 - [Phase 473]: Validation, SHA-256, and promotion share one bounded spool, and durable consumers use the promoted immutable key, VersionId, ETag, length, and checksum tuple. — Same-key replacement or newer versions cannot change OCR, extraction, association, or deletion targets.
+- [Phase 473]: Only the named storage-quota transaction condition is externally distinguishable; every resource condition remains concealed and every conflict, throttle, malformed cancellation, or dependency failure becomes one redacted retryable outcome. — Stable recovery guidance cannot become an ownership, status, key, or provider diagnostic oracle.
 
 - [Phase 473]: Cleanup claims only terminal or past-expiry unconsumed upload states, then consistently rechecks the claimed version before any provider delete. — Active, consuming, consumed, raced, and restored resources cannot enter deletion.
 - [Phase 473]: Durable-reference discovery is bounded and resumable, and provider failure retains a non-consumable cleanup tombstone. — Cleanup retries are idempotent without deleting durable/reused history or reviving validated uploads.
