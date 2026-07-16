@@ -12,6 +12,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOCAL_REPORTS_BUCKET_PLACEHOLDER = "stoa-reports"
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
+UPLOAD_INTENT_TTL_SECONDS = 1800
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+DOCUMENT_MAX_BYTES = 50 * 1024 * 1024
+IMAGE_MAX_EDGE = 4096
+FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
+PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
 DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
 AUDIT_KEY_MINIMUM_BYTES = 32
 _AUDIT_PLACEHOLDER_MARKERS = (
@@ -132,6 +138,12 @@ class Settings(BaseSettings):
     s3_images_bucket: str = "stoa-images"
     s3_reports_bucket: str = LOCAL_REPORTS_BUCKET_PLACEHOLDER
     s3_presign_expiry_seconds: int = 300
+    upload_intent_ttl_seconds: int = UPLOAD_INTENT_TTL_SECONDS
+    image_max_bytes: int = IMAGE_MAX_BYTES
+    document_max_bytes: int = DOCUMENT_MAX_BYTES
+    image_max_edge: int = IMAGE_MAX_EDGE
+    free_attachment_storage_bytes: int = FREE_STORAGE_BYTES
+    paid_attachment_storage_bytes: int = PAID_STORAGE_BYTES
     immutable_audit_storage_mode: str = "disabled"
     immutable_audit_storage_cdk_managed: bool = False
     immutable_audit_storage_resource: str = ""

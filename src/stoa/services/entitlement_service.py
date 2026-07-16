@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from stoa.config import Settings
+from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
@@ -61,6 +61,7 @@ def resolve_student_entitlement(
             "dailyAiQuestionLimit": question_limit,
             "dailyChatMessageLimit": chat_limit,
             "dailyHintLimit": hint_limit,
+            "attachmentStorageBytes": attachment_storage_limit(effective_plan, settings),
         },
         "billingState": decision["billing_state"],
         "period": period,
@@ -248,6 +249,14 @@ def _daily_hint_limit(plan: str, settings: Settings) -> int:
         SubscriptionTier.STANDARD.value: settings.standard_tier_daily_hint_limit,
         SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_hint_limit,
     }.get(plan, settings.free_tier_daily_hint_limit)
+
+
+def attachment_storage_limit(plan: str, settings: Settings) -> int:
+    """Return the authoritative attachment-storage allowance for an effective plan."""
+    normalized = _normalize_tier(plan)
+    if normalized == SubscriptionTier.FREE.value:
+        return settings.free_attachment_storage_bytes or FREE_STORAGE_BYTES
+    return settings.paid_attachment_storage_bytes or PAID_STORAGE_BYTES
 
 
 def _normalize_tier(value: Any) -> str:
