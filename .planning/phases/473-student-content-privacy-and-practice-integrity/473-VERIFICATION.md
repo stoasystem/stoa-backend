@@ -1,136 +1,198 @@
 ---
 phase: 473-student-content-privacy-and-practice-integrity
-verified_at: 2026-07-16
+verified: 2026-07-16T18:29:15Z
 status: gaps_found
-score: 68
+score: 4/5 must-haves verified
 requirements:
   passed: 2
   total: 3
-decisions:
-  passed: 15
+decision_coverage:
+  honored: 22
   total: 22
+  not_honored: []
+gaps:
+  - id: CR-007
+    severity: blocker
+    requirement: V9PRIV-02
+  - id: WR-007
+    severity: warning
+    requirement: V9PRIV-02
 ---
 
-# Phase 473 Independent Verification
+# Phase 473: Student Content Privacy And Practice Integrity Verification Report
+
+**Phase Goal:** Ensure student uploads and exercise previews cannot expose another user's content or answers.
+**Verified:** 2026-07-16T18:29:15Z
+**Status:** `gaps_found`
 
 ## Verdict
 
-**Status: `gaps_found`. Score: 68/100.** The current code materially closes cross-student identifier authorization and practice-answer preview leakage, and the fresh local suites are green. It does not, however, achieve the complete Phase 473 upload-integrity and privacy contract. A finalized S3 object remains replaceable through the still-valid presigned POST, while later OCR and document reads are not bound to the validated ETag or an immutable object version. Five additional stable-error, redaction, and replay gaps identified by the phase code review also remain present in current source.
+Phase 473 is not ready to close. The gap plans successfully close the prior CR-001 and WR-001 through WR-005 findings at their original sites, and the independent 301-test phase matrix plus 1,303-test full suite pass. However, actual-code tracing confirms the fresh review's CR-007: expired validated uploads can be marked `cleanup_complete` while their promoted immutable object is never deleted, and crash windows can leave completed staging or promoted objects without durable recovery coordinates. This violates D-09 and blocks V9PRIV-02.
 
-The score is the directly auditable locked-decision score: **15 of 22 D-decisions fully verified**. Artifact existence and passing tests do not raise the score where required negative coverage is absent or the call chain contradicts the claimed invariant.
+WR-007 independently leaves some post-issuance repository outages as unstructured 500 responses rather than the required stable `upload_service_unavailable` response. WR-006 and WR-008 are real robustness defects but are not independently phase-goal blockers.
 
-## Fresh automated verification
+## Goal Achievement
 
-| Verification | Fresh result | Adjudication |
-| --- | ---: | --- |
-| Exact Phase 473 combined command from `473-VALIDATION.md` | **230 passed in 3.54s** | Confirms current positive/fake-provider matrix, but contains no post-finalize object replacement, presign dependency-failure, transaction-reason, content-log, or conversation replay negative test. |
-| Full repository suite, `.venv/bin/python -m pytest -q` | **1232 passed in 36.25s** | Reproduces the documented full-suite baseline on current HEAD `a31f25b3ca7714777312d478d7eb4a58bbb19c35`. It does not close source-proven gaps. |
-| Inherited authorization regression | Prior phase evidence reported **635 passed**, and those tests are included in the fresh full suite | The task prompt mentions 389; no 389-test Phase 472 command or result exists in the supplied Phase 473 validation/evidence. The canonical Phase 473 evidence records 635, so this verification does not invent a 389-test observation. |
-| Real S3 presigned POST boundary | **NOT RUN** | No approved non-production bucket/credentials. |
-| Deployed cleanup schedule/IaC | **NOT RUN** | Phase 479-owned external evidence is unavailable. |
-| Production/provider log capture | **NOT RUN** | Local source already proves unsafe logging paths; Phase 480 production capture remains unavailable. |
+### Observable Truths
 
-## Requirements traceability
+The ROADMAP success criteria are the authoritative must-haves.
 
-| Requirement | Status | Actual-code finding |
-| --- | --- | --- |
-| **V9PRIV-01** | **Passed locally** | Public question input uses opaque owner-scoped upload/attachment references; owner/state/type reservation occurs before OCR; fresh consumption, durable attachment, association, quota charge, and question put are conditionally transacted. Missing/foreign/non-image/expired resources stop before OCR. The immutable-byte defect below weakens the content-integrity premise but does not restore the original cross-owner key primitive. |
-| **V9PRIV-02** | **Failed** | Extension/MIME/magic/container/size validation exists at finalize, but the bytes later used are not immutable or ETag/version constrained. Stable dependency and transaction outcome mapping is also incomplete. Thus post-upload validation and stable-error requirements are not achieved end to end. |
-| **V9PRIV-03** | **Passed locally** | Student preview/overview/path/lesson/catalog projections are typed answer-free allowlists; correct and incorrect attempts are persisted before result construction; owner attempt reads and scoped teacher/admin privileged reads are distinct and fail closed. |
+| # | Truth | Status | Evidence |
+|---|---|---|---|
+| 1 | A student can upload a supported bounded file and use it once in their own question. | ✓ VERIFIED | Opaque intent/chunk/complete routes, owner resolution, immutable promotion, OCR version binding, and atomic question association are implemented; positive/negative controls pass in the 301-test matrix. |
+| 2 | Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors and safely cleaned up. | ✗ FAILED | Denial and validation behavior is strong, but `cleanup_upload_intent` deletes only staging coordinates before marking completion; the immutable tuple is scanned but never deleted. Post-issuance repository outages also escape stable translation in several gateway paths. |
+| 3 | Student preview/overview/path/lesson responses contain no correct answer or answer-derived explanation before submission. | ✓ VERIFIED | Typed allowlist projections and recursive route/OpenAPI tests pass; attempt results are constructed only after immutable attempt persistence. |
+| 4 | Assigned teachers and admins retain a separate explicit answer-bearing read contract. | ✓ VERIFIED | Dedicated curriculum-answer resource/purpose and route enforce current teacher scope and narrow admin read while mutation remains denied. |
+| 5 | Question responses hide storage coordinates and raw OCR text. | ✓ VERIFIED | Public request/response schemas use opaque attachment summaries; OCR receives an internal immutable version and public/log canary controls pass locally. |
 
-The roadmap goal is therefore only partially achieved: cross-student opaque-ID ownership and early-answer prevention are sound in the inspected paths, but upload content approved at finalize is not necessarily the content later processed.
+**Score:** 4/5 truths verified.
 
-## Must-have audit
+### Required Artifacts
 
-All named plan artifacts exist. The important executable links were independently traced as follows:
+| Artifact | Status | Details |
+|---|---|---|
+| `src/stoa/models/attachment.py` and `src/stoa/security/attachment_errors.py` | ✓ SUBSTANTIVE + WIRED | Closed opaque upload/attachment schemas and exhaustive stable error/action registry are imported by routes/services. |
+| `src/stoa/services/file_validation_service.py` | ✓ SUBSTANTIVE + WIRED | Bounded seekable validation enforces image/document type, size, magic/container and integrity constraints. |
+| `src/stoa/db/repositories/attachment_repo.py` | ⚠ SUBSTANTIVE + WIRED, DEFECTIVE CLEANUP | Lifecycle, transaction and command primitives are wired, but cleanup eligibility omits `issuing`/`assembling`, and completion removes only staging fields. |
+| `src/stoa/services/attachment_service.py` | ✗ BLOCKING DEFECT | Immutable validation/promotion and consumers are wired, but cleanup never deletes an unbound immutable version and provider-success/repository-write crash recovery is incomplete. |
+| `src/stoa/jobs/upload_cleanup.py` | ⚠ WIRED TO INCOMPLETE SERVICE | Bounded and idempotent orchestration exists, but cannot recover or delete all bytes created by the new gateway. |
+| `src/stoa/services/practice_projection_service.py`, practice models/repository/routes | ✓ SUBSTANTIVE + WIRED | Answer-free previews, durable attempts, result reads and scoped privileged answers are connected end to end. |
+| Evidence, validation, manifest and route inventory | ⚠ EXISTS, STALE CLAIM | Digests and tested SHA are reproducible, but D-09/V9PRIV-02 PASS claims are contradicted by CR-007 and must be regenerated after repair. |
 
-- **473-01:** typed attachment/practice contracts and exhaustive attachment error registry exist; preview/result schemas are structurally separate. The D-17 redaction truth fails because returned POST fields and logs still disclose prohibited values.
-- **473-02:** intent and signed POST share server-generated type/size/key/expiry; finalize performs HEAD, bounded read, validation, and a conditional state transition. The key link stops at finalize: later reads do not enforce the stored ETag/version, so the validated-byte invariant is false.
-- **473-03:** regular and streaming sends share attachment preparation/binding and safe history summaries; bounded extraction remains internal to the response model. The logging and replay portions of the truth fail, and extraction reads mutable key-only bytes.
-- **473-04:** question requests are keyless, reservation precedes OCR, association is transactional, and question idempotency compares opaque attachment identity. OCR nevertheless receives only bucket/key and cannot prove it processed the finalized bytes.
-- **473-05:** preview routes use allowlist projections; result construction follows the durable attempt receipt. Failed-write and foreign-attempt controls are present.
-- **473-06:** dedicated curriculum-answer resource/purpose, current assignment facts, scoped teacher access, narrow admin read, and mutation-negative controls are present.
-- **473-07:** cleanup uses a conditional non-consumable claim, bounded reference scan, retry tombstone, and safe summary. The evidence artifact exists but overclaims D-17 and immutable validation; its recorded tested SHA (`671612b...`) also differs from current HEAD, while this verification's fresh runs cover current HEAD.
+### Key Link Verification
 
-## Locked decision matrix
+| From | To | Status | Details |
+|---|---|---|---|
+| Chunk gateway | private multipart ledger | ✓ WIRED | Conditional checksum/length claim precedes provider part writes; replay/fencing tests pass. |
+| Completed staging version | bounded validation and immutable promotion | ✓ WIRED | One exact staging version is read into one spool and that same stream is promoted. |
+| Immutable tuple | OCR/extraction/question/conversation | ✓ WIRED | Consumers require key + VersionId + checksum/length; prior CR-001 is closed. |
+| Expired validated intent | provider deletion | ✗ NOT WIRED | Cleanup scans immutable references but deletes only staging key/version, then marks the row complete. |
+| Gateway dependency failures | stable public error adapter | ⚠ PARTIAL | Issuance is translated, but initial lookup, replay polling, part listing and assembly claim can raise raw repository failures. |
+| Student preview | answer-free projection | ✓ WIRED | All student route families use typed projections without answer switches. |
+| Attempt persistence | answer-bearing result | ✓ WIRED | Result creation follows successful immutable attempt write; foreign/random reads are concealed. |
+| Privileged answer route | current assignment policy | ✓ WIRED | Server-loaded challenge scope feeds central policy; teacher mutation remains separate. |
 
-| Decisions | Result | Evidence/adjudication |
-| --- | --- | --- |
-| D-01, D-02, D-03, D-05 | **Gap** | Validators enforce these at finalize, but a same-key replacement can bypass format, image-dimension, magic/container, and integrity approval before OCR/extraction. |
-| D-04 | **Pass** | Signed and server-side document byte ceilings remain enforced; the known replacement attack is same-length and does not defeat the 50 MiB ceiling. |
-| D-06 | **Pass** | Intent TTL is 1800 seconds. |
-| D-07 | **Gap** | Question idempotency exists, but conversation message submission has no client idempotency key/fingerprint or original-result replay. |
-| D-08 | **Pass** | Transient question/provider failures release within original expiry; terminal validation/object failures invalidate. |
-| D-09 | **Pass** | Expired/invalid/abandoned intents become unusable before bounded retry-safe cleanup; cleanup failure does not restore usability. |
-| D-10 | **Pass** | Durable conversation associations/reference counts preserve history until explicit release/purge. |
-| D-11 | **Pass** | 5 GiB/15 GiB limits and transactional byte conditions block new bytes without automatic history deletion. Error taxonomy under a quota race is separately deficient under D-16. |
-| D-12 | **Pass** | Active owner attachment reuse adds an association/reference and no storage bytes. |
-| D-13 | **Pass** | Verified Actor is authoritative; public models reject owner/bucket/key fields. |
-| D-14 | **Pass** | Missing and foreign upload/attachment lookups use the same concealed external error. |
-| D-15 | **Pass** | Owner-visible expiry maps to `upload_expired` and reselect action. |
-| D-16 | **Gap** | Transaction cancellations collapse to not-found; quota and retryable dependency semantics are lost. Presign repository/signing failures can bypass `upload_service_unavailable`. |
-| D-17 | **Gap** | `post["fields"]` returns the generated raw key; AI/conversation logs interpolate student/model text and raw provider exceptions. Existing tests assert field names or narrow attachment logs, not actual-value absence across these paths. |
-| D-18 | **Pass** | Result construction follows successful immutable attempt persistence; failed writes return answer-free failure. |
-| D-19 | **Pass** | Only explicitly approved directional hints pass answer/explanation guards; full explanations are result-only. |
-| D-20 | **Pass** | Preview and attempt-result contracts are distinct; student route families recursively omit forbidden answer-derived keys. |
-| D-21 | **Pass** | Active assigned teachers are scoped by server-loaded curriculum coordinates; admin automatic access is narrow to answer READ; mutation remains separate. |
-| D-22 | **Pass** | Anonymous, student, parent, unassigned/stale/disabled/wrong-scope teachers are denied the privileged answer contract. |
+## Requirements Coverage
 
-## Code-review finding adjudication
+| Requirement | Status | Adjudication |
+|---|---|---|
+| V9PRIV-01 | ✓ SATISFIED LOCALLY | Actor-owned opaque resources, immutable OCR inputs and atomic question association are implemented with zero-effect negative tests. |
+| V9PRIV-02 | ✗ BLOCKED | Validation/type/size/lifecycle/error primitives exist, but safe failure cleanup is false for promoted immutable bytes and stable gateway dependency errors are incomplete. |
+| V9PRIV-03 | ✓ SATISFIED LOCALLY | Student previews are structurally answer-free; durable attempts gate results; scoped teacher/admin reads are separate. |
 
-### CR-001 — Open, critical: validated S3 object replacement / TOCTOU
+**Coverage:** 2/3 requirements satisfied.
 
-`finalize_upload` stores an ETag after HEAD/GET comparison (`attachment_service.py:695-723`), but `extract_message_attachment_context` later calls `get_object` with only bucket/key and checks only length (`attachment_service.py:483-489`). OCR likewise sends only bucket/name to Rekognition (`ocr_service.py:47-53`). The presigned POST remains valid for 1800 seconds and targets that same key (`attachment_service.py:151-160`). A client can replace finalized bytes with different same-length bytes and bypass validation. No current test performs this overwrite or asserts zero OCR/extraction/association/AI effects.
+## Decision Adjudication
 
-**Required remediation:** enable/version the object store and persist `VersionId`, then use that version for every GET/OCR operation; or copy validated bytes to a new server-only immutable key and expire/delete the writable staging key. At minimum, enforce stored ETag with `IfMatch` on every byte read and use an OCR path that verifies immutable identity. Add post-finalize replacement tests for conversation extraction and question OCR with zero-effect sentinels.
+| Decisions | Status | Evidence |
+|---|---|---|
+| D-01–D-06 | ✓ VERIFIED | Locked formats, MIME/magic/container checks, 10/50 MiB limits, 4096 edge and 1,800-second expiry are implemented and tested. |
+| D-07 | ⚠ VERIFIED WITH WR-006 DEBT | Exact conversation replay and one effect set are tested, but deterministic fresh attachment IDs passed by the command executor are overwritten in the callee. |
+| D-08 | ✓ VERIFIED | Terminal validation failures invalidate; retryable dependency states do not revive invalid uploads. |
+| D-09 | ✗ FAILED | Unbound promoted immutable bytes are not deleted; `issuing`/`assembling` crash states are not cleanup candidates. |
+| D-10–D-15 | ✓ VERIFIED | Durable history, 5/15 GiB quota, no auto-deletion, saved reuse, Actor ownership, concealment and owner-visible expiry are present. |
+| D-16 | ✗ FAILED IN PART | Stable categories exist, but post-issuance repository outages can bypass them and produce unstructured 500 responses. |
+| D-17 | ✓ VERIFIED LOCALLY | Opaque APIs, version-bound consumers and private telemetry pass local canary tests; deployed-log capture remains later-phase evidence. |
+| D-18–D-20 | ✓ VERIFIED | Attempt-before-reveal, directional hints and structurally separate preview/result contracts are enforced. |
+| D-21–D-22 | ✓ VERIFIED | Assigned `teacher` and narrow admin positives pass; all unauthorized roles/scopes remain concealed. |
 
-### WR-001 — Open: raw key in presigned POST fields
+### Decision Coverage
 
-The service returns `post["fields"]` unchanged (`attachment_service.py:162-165`); the fake accurately places the generated key in `fields["key"]`. Tests check that schema names such as `object_key` are absent rather than checking that the generated key value is absent.
+The GSD translation-coverage handler reports **22/22 decisions honored by shipped artifacts**. Semantic verification still finds D-09 failed and D-16 partially failed; translation coverage is a non-blocking presence heuristic, not proof of correctness.
 
-**Required remediation:** either proxy upload/provider-abstraction so the durable coordinate is not disclosed, or explicitly redefine the randomized staging key as a short-lived upload capability and remove the stronger no-key claim. In either case, never make it the durable read key and assert actual generated-key canaries across responses/logs/evidence.
+## Fresh Finding Re-adjudication
 
-### WR-002 — Open: content/provider diagnostics logged verbatim
+| Finding | Verdict | Impact |
+|---|---|---|
+| CR-001 | ✓ CLOSED | Exact validated bytes are promoted from one bounded spool and every durable consumer is version/checksum-bound. |
+| WR-001 | ✓ CLOSED | Public upload contracts expose no provider URL, fields, key, bucket, multipart ID, ETag or version. |
+| WR-002 | ✓ CLOSED LOCALLY | Closed telemetry excludes content/provider diagnostics in exercised AI/question/conversation paths. |
+| WR-003 | ✓ CLOSED | Semantic transaction indices map quota, concealed resource and retryable dependency outcomes without raw cancellation diagnostics. |
+| WR-004 | ✓ CLOSED AT ISSUANCE | Issuance failure is terminal/cleanup-safe and returns stable 503. WR-007 is a later-stage gateway gap. |
+| WR-005 | ✓ SUBSTANTIALLY CLOSED | Stage A replay, atomic command/quota claim, deterministic messages and fenced AI completion converge duplicates. |
+| CR-007 | ✗ BLOCKER CONFIRMED | Promoted immutable versions can survive expiry while cleanup reports complete; provider/database split windows lack durable recovery coordinates. |
+| WR-006 | ⚠ WARNING CONFIRMED | `bind_message_attachments` shadows the supplied deterministic attachment-ID list with an empty output list, so fresh IDs become random. |
+| WR-007 | ⚠ WARNING, REQUIREMENT IMPACT | Several gateway repository calls occur outside translation boundaries; route catches only `AttachmentDecisionError`. |
+| WR-008 | ⚠ WARNING CONFIRMED | Exact-version provider bodies are read but not closed on success or failure paths, risking connection-pool exhaustion. |
 
-`ai_service._sanitise_input` logs the first 120 characters (`ai_service.py:77-80`), malformed model output logs the first 200 characters (`ai_service.py:145-146`), Bedrock hint failures log raw exceptions (`ai_service.py:266-267`), and title failures do the same (`conversations.py:271-272`). OCR-derived text can enter the sanitization path.
+## Behavioral Verification
 
-**Required remediation:** log only category, exception class, lengths, and correlation/event IDs. Add `caplog` tests with unique OCR/student/model/provider canaries for injection, malformed JSON, Bedrock failure, and title failure.
+| Check | Result | Detail |
+|---|---|---|
+| Phase 473 matrix | ✓ 301 passed | Independent run: 301 passed in 4.29s. |
+| Full repository suite | ✓ 1,303 passed | Independent run: 1,303 passed in 34.70s. |
+| Phase 472 regression | ✓ 636 passed | Fresh source-bound Plan 11 observation; command and digest recorded in evidence. |
+| Schema drift | ✓ none | Orchestrator gate reports no schema drift. |
+| Codebase drift | ✓ non-actionable | Orchestrator gate reports no actionable drift. |
+| Test adequacy for cleanup | ✗ insufficient | Cleanup fixture contains staging coordinates only and asserts only staging deletion, so it cannot detect CR-007. |
 
-### WR-003 — Open: transaction cancellation taxonomy
+Passing suites do not override the blocking source-proven lifecycle defect.
 
-`attachment_repo.transact` classifies every `TransactionCanceledException` as the same generic conflict (`attachment_repo.py:856-875`). Service adapters then commonly return `upload_not_found`, including quota-condition races and retryable dependency cancellations.
+## Test Quality Audit
 
-**Required remediation:** map redacted cancellation reason categories by known operation index (without retaining messages), or separate distinguishable quota/dependency outcomes. Test quota-race => `storage_quota_exceeded`, retryable dependency/conflict => `upload_service_unavailable`, and zero mutations in both cases.
+| Test area | Active | Skipped | Circular | Assertion level | Verdict |
+|---|---:|---:|---:|---|---|
+| Upload/gateway/attachment security | active | 0 | 0 | Behavioral/state/effect | Strong except cleanup fixture omits immutable tuple and crash boundaries. |
+| Question OCR and association | active | 0 | 0 | Behavioral/zero-effect | Sufficient for V9PRIV-01. |
+| Conversation replay/telemetry | active | 0 | 0 | Behavioral/concurrency/canary | Strong, but lacks exact deterministic fresh attachment-ID assertion. |
+| Practice privacy and privileged answer | active | 0 | 0 | Recursive schema + behavioral authorization | Sufficient for V9PRIV-03. |
 
-### WR-004 — Open: presign dependency failures bypass stable errors
+No disabled requirement tests or circular expected-value generators were found. The critical quality problem is a missing negative fixture, not a skipped or circular test.
 
-The intent is persisted before unguarded `generate_presigned_post` (`attachment_service.py:150-161`). Repository/signing/credential failure is not translated to `AttachmentDecisionError`, and may leave a usable orphaned pending intent.
+## Anti-Patterns
 
-**Required remediation:** generate/validate issuance before durable persistence where feasible, or terminally invalidate/cleanup an intent on issuance failure; translate repository/signing failures to redacted 503 `upload_service_unavailable`. Add route-level failure injection for both dependencies and assert no usable orphan.
+No task TODO/FIXME/HACK or empty implementation was found in the requirement-linked production files. `conversations.py` retains an explicit “AI system is being set up” fallback; complete product-journey behavior is Phase 478-owned and it does not change this phase's privacy verdict.
 
-### WR-005 — Open: conversation replay is not idempotent
+## Human Verification
 
-`SendMessageRequest` has no idempotency field (`conversations.py:125-138`), and `_send_message_impl` creates new message IDs for every request (`conversations.py:542-556`). A lost response followed by retry either fails for a consumed upload or duplicates a saved-attachment message/reference and AI call.
+N/A for Phase 473 closure — this is a backend contract/foundation phase and the blocking defects are programmatically demonstrable.
 
-**Required remediation:** require a bounded client idempotency key, store a fingerprint of content plus ordered attachment identities, return the original result for exact replay, and reject mismatched reuse. Add lost-response and concurrent duplicate tests proving one message, one association/ref increment, one byte charge, and one AI invocation.
+External real-provider observations remain deferred evidence, not human acceptance gates for this phase:
 
-## Human verification and external debt
+| Deferred item | Owning phase | Reason |
+|---|---|---|
+| Real versioned S3 chunk/promotion/overwrite behavior | Phase 479 | Infrastructure defines/imports authoritative S3 policies, lifecycle and deployed resources. |
+| Deployed cleanup scheduler/EventBridge/Lambda/IaC | Phase 479 | Deployment and scheduling are infrastructure acceptance. |
+| Production/deployed log-redaction capture | Phase 480 | Observability and deployed-log evidence are explicitly Phase 480 scope. |
 
-These are honest external limitations, not substitutes for the code fixes above:
+## Gaps Summary
 
-1. **Real S3 POST and immutable-version behavior — NOT RUN.** After CR-001 remediation, exercise boundary and one-byte-over uploads in an approved non-production versioned bucket; overwrite/replay the staging capability and verify immutable reads reject or remain pinned.
-2. **Deployed cleanup schedule/IaC — NOT RUN.** Verify EventBridge/Lambda ownership, bounded invocation, retry, alarms, and no deletion of active/consumed/durable objects when Phase 479 infrastructure is available.
-3. **Production log-redaction capture — NOT RUN.** After WR-002 remediation, verify provider and application logs contain only approved metadata in a non-production deployed environment.
+### Critical gap: crash-safe immutable upload cleanup
 
-## Exit remediation order
+- Persist fenced staging and immutable-promotion operation coordinates before provider mutations.
+- Make expired or lease-stale `issuing`, `assembling`, and promotion states cleanup-eligible.
+- Abort recorded multipart uploads and delete every exact unreferenced staging and immutable VersionId before `cleanup_complete`.
+- Add restart tests at each provider-success/repository-write boundary and a validated-unbound fixture containing both tuples.
 
-1. Close CR-001 with version-bound or server-copied immutable bytes and adversarial replacement tests.
-2. Decide and enforce the staging-key disclosure contract; remove false no-key evidence claims.
-3. Redact all content/provider log paths and add cross-service canary coverage.
-4. Implement transaction and presign dependency error taxonomy with orphan cleanup.
-5. Add conversation request idempotency and replay/concurrency coverage.
-6. Re-run the 230-test phase gate, inherited authorization gate, full suite, deterministic inventory, and evidence denylist on one source SHA; update `phase-473-evidence.md` to match the repaired code and external NOT RUN status.
+### Required robustness follow-ups
 
-## Verification conclusion
+- Preserve deterministic fresh attachment IDs and assert exact durable keys after lost-response retry.
+- Normalize repository/provider dependency failures across every gateway stage to the stable redacted 503 contract.
+- Close exact-version object bodies in `finally` and test success/error closure.
+- Regenerate evidence, validation and manifest after the source fixes; remove the current overclaim that D-09/V9PRIV-02 pass.
 
-Phase 473 has strong local authorization and practice-integrity foundations, but **cannot be marked passed** while the validated object can be replaced before use and while D-16/D-17/D-07 guarantees are contradicted by current source. The correct status is `gaps_found`.
+## Recommended Fix Plans
+
+### 473-12-PLAN.md: Crash-safe immutable cleanup and recovery
+
+1. Persist fenced provider-operation coordinates and cleanup leases before staging completion and immutable promotion.
+2. Extend candidate/claim/finalize cleanup to all stale states and both exact object tuples.
+3. Add restart/split-failure/validated-unbound/durable-reference tests and rerun the full lifecycle matrix.
+
+### 473-13-PLAN.md: Gateway and replay robustness
+
+1. Repair deterministic attachment-ID plumbing and add exact-key replay assertions.
+2. Add exhaustive gateway dependency translation and provider-body closure.
+3. Run route-level error injection, resource-closure tests, full regression, then regenerate source-bound evidence.
+
+## Verification Metadata
+
+**Verification approach:** Goal-backward against ROADMAP success criteria, with actual-code lifecycle tracing.
+**Must-haves source:** ROADMAP success criteria (authoritative over PLAN frontmatter).
+**Automated checks:** 301 focused and 1,303 full tests passed; one blocking source-proven lifecycle check failed.
+**Human checks required:** 0.
+**Report path:** `.planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md`.
+
+---
+*Verified: 2026-07-16T18:29:15Z*
+*Verifier: Codex GSD verifier subagent*

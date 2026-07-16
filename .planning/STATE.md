@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v9.0
-milestone_name: milestone
+milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-11-PLAN.md; independent Phase 473 verification pending
-last_updated: "2026-07-16T18:15:00Z"
-last_activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local evidence gates are green
+stopped_at: Phase 473 verification found CR-007 and WR-007 gaps; gap planning required
+last_updated: "2026-07-16T18:30:00Z"
+last_activity: 2026-07-16 -- Phase 473 independently verified at 4/5 must-haves; V9PRIV-02 remains pending
 progress:
   total_phases: 10
   completed_phases: 1
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 11 of 11 execution plans complete; independent verification pending
-Status: Phase 473 gap closure execution complete; not independently verified
-Last activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local evidence gates are green
+Plan: 11 of 11 execution plans complete; new verification gaps require planning
+Status: Phase 473 verification found gaps; V9PRIV-02 remains pending
+Last activity: 2026-07-16 -- Phase 473 independently verified at 4/5 must-haves; V9PRIV-02 remains pending
 
 ## Accumulated Context
 
@@ -81,7 +81,7 @@ Last activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local eviden
 
 ### Pending Todos
 
-- Run the independent Phase 473 verifier; do not mark the phase complete from executor evidence alone.
+- Plan the newly verified CR-007 and WR-006 through WR-008 gaps; do not mark Phase 473 complete until V9PRIV-02 passes.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -95,13 +95,13 @@ Last activity: 2026-07-16 -- Plan 473-11 completed; final fixed-SHA local eviden
 
 ## Operator Next Steps
 
-- Run the orchestrator-owned Phase 473 independent verifier; do not approve external rollout from local executor evidence.
+- Run `$gsd-plan-phase 473 --gaps` to close crash-safe immutable cleanup, gateway error normalization, deterministic attachment IDs, and provider-body closure.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-16T18:15:00Z
-**Stopped At:** Completed 473-11-PLAN.md; independent Phase 473 verification pending
+**Last Date:** 2026-07-16T18:30:00Z
+**Stopped At:** Phase 473 verification found CR-007 and WR-007 gaps; gap planning required
 **Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
 
 ## Performance Metrics
