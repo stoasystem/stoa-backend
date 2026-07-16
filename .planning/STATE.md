@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-05-PLAN.md
-last_updated: "2026-07-16T10:54:50.375Z"
-last_activity: 2026-07-16 -- Phase 473 execution started
+stopped_at: Completed 473-03-PLAN.md
+last_updated: "2026-07-16T11:14:57.096Z"
+last_activity: 2026-07-16 -- Completed Phase 473 Plan 03 durable conversation attachments
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 25
-  percent: 86
+  completed_plans: 26
+  percent: 90
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
-Last activity: 2026-07-16 -- Phase 473 execution started
+Last activity: 2026-07-16 -- Completed Plan 473-03 durable conversation attachments
 
 ## Accumulated Context
 
@@ -89,8 +89,8 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-16T10:54:07.581Z
-**Stopped At:** Completed 473-05-PLAN.md
+**Last Date:** 2026-07-16T11:14:57.090Z
+**Stopped At:** Completed 473-03-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -122,8 +122,14 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 | Phase 473 P01 | 9 min | 2 tasks | 7 files |
 | Phase 473 P02 | 12 min | 3 tasks | 13 files |
 | Phase 473 P05 | 17 min | 2 tasks | 12 files |
+| Phase 473 P03 | 18 min | 2 tasks | 11 files |
 
 ## Decisions
+
+- [Phase 473]: Conversation message persistence, fresh upload consumption, durable attachment creation, associations, and one aggregate new-byte charge share one conditional transaction. — Missing, foreign, invalid, duplicated, or over-quota member lists cannot leave partial history or storage effects.
+- [Phase 473]: Saved attachment reuse increments only the durable reference count and adds a logical association. — Reuse preserves immutable bytes and leaves 5 GiB/15 GiB storage usage unchanged.
+- [Phase 473]: Last-reference release creates a non-reusable deletion-pending tombstone before object deletion and quota finalization. — Provider or transaction retries cannot double-decrement usage or delete bytes still referenced elsewhere.
+- [Phase 473]: Passive document extraction is bounded, category-failing, silently prompt-sanitized, and AI-only. — Public history and logs retain safe attachment summaries without keys, provider coordinates, raw OCR, or extracted content.
 
 - [Phase 473]: Upload ownership is established only by the verified student Actor and a private intent record. — Client fields never establish owner or storage coordinates.
 - [Phase 473]: Only verified immutable bytes may transition an upload intent to validated. — HEAD metadata and bounded bytes are authoritative across the direct-upload trust boundary.
