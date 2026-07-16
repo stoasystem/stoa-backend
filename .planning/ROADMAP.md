@@ -198,6 +198,18 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-11` — Re-run all privacy and authorization gates and regenerate final source-bound evidence and validation artifacts.
 
+**Wave 9** *(gap closure; blocked on Wave 8 completion)*
+
+- [ ] `473-12` — Make upload provider mutations crash-recoverable and delete every exact unreferenced staging and immutable target before cleanup completion.
+
+**Wave 10** *(gap closure; blocked on Wave 9 completion)*
+
+- [ ] `473-13` — Close deterministic attachment identity, structured gateway dependency error, and provider-body lifetime gaps with adversarial tests.
+
+**Wave 11** *(final evidence; blocked on Wave 10 completion)*
+
+- [ ] `473-14` — Lock the remediated source, run all retained gates, and publish complete redacted evidence bound to one immutable tested SHA.
+
 **Cross-cutting constraints:**
 
 - Public responses, logs, and errors expose opaque IDs and safe categories only—never object keys, provider coordinates, raw OCR, extracted text, or parser/provider exceptions.
