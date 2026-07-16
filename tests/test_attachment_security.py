@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
+import hashlib
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -44,6 +45,7 @@ from stoa.services.attachment_service import (
     commit_question_with_attachment,
     release_resource_attachments,
     storage_limit_for_entitlement,
+    _validate_and_promote_completed,
 )
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.db.repositories import attachment_repo
@@ -485,9 +487,11 @@ def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
 
 
 def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
+    data = _image("PNG")
+
     class Repository(_ChunkRepository):
         def __init__(self):
-            super().__init__()
+            super().__init__(_pending_upload(expected_size=len(data)))
             self.part = {
                 "status": "completed",
                 "part_number": 1,
@@ -506,13 +510,38 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
             self.item["status"] = "validating"
             return True
 
+        def mark_validated(self, upload_id, owner_id, version, values):
+            self.item.update(values)
+            self.item["status"] = "validated"
+            self.item["version"] = version + 1
+            return True
+
+        def clear_staging_coordinates(self, *args):
+            return True
+
     class S3:
         def __init__(self):
             self.complete = None
+            self.completions = 0
 
         def complete_multipart_upload(self, **kwargs):
-            self.complete = kwargs
-            return {"VersionId": "private-version", "ETag": "private-final-etag"}
+            self.completions += 1
+            if self.completions == 1:
+                self.complete = kwargs
+                return {"VersionId": "staging-version", "ETag": "staging-etag"}
+            return {"VersionId": "immutable-version", "ETag": "immutable-final-etag"}
+
+        def get_object(self, **kwargs):
+            return {"Body": _ReadBody(data)}
+
+        def create_multipart_upload(self, **kwargs):
+            return {"UploadId": "immutable-private-upload"}
+
+        def upload_part(self, **kwargs):
+            return {"ETag": "immutable-part-etag"}
+
+        def delete_object(self, **kwargs):
+            self.deleted = kwargs
 
     repository, s3 = Repository(), S3()
     result = complete_upload(
@@ -523,10 +552,123 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
         settings=Settings(s3_images_bucket="bucket"),
         repository=repository,
     )
-    assert result == {"uploadId": "upload-1", "status": "validating", "attachment": None}
+    assert result == {"uploadId": "upload-1", "status": "validated", "attachment": None}
     assert s3.complete["MultipartUpload"]["Parts"] == [
         {"PartNumber": 1, "ETag": "server-private-etag"}
     ]
+
+
+class _GeneratedBody:
+    def __init__(self, size: int, byte: bytes = b"a") -> None:
+        self.remaining = size
+        self.byte = byte
+        self.total_read = 0
+
+    def read(self, limit: int) -> bytes:
+        amount = min(limit, self.remaining)
+        self.remaining -= amount
+        self.total_read += amount
+        return self.byte * amount
+
+
+class _PromotionRepository:
+    def __init__(self) -> None:
+        self.validated = None
+        self.invalid = None
+
+    def mark_validated(self, upload_id, owner_id, version, attributes):
+        self.validated = dict(attributes)
+        return True
+
+    def clear_staging_coordinates(self, *args):
+        return True
+
+    def mark_invalid(self, upload_id, owner_id, version, category):
+        self.invalid = category
+        return True
+
+
+class _PromotionS3:
+    def __init__(self, body: _GeneratedBody) -> None:
+        self.body = body
+        self.get_call = None
+        self.part_lengths = []
+        self.deleted = []
+
+    def get_object(self, **kwargs):
+        self.get_call = kwargs
+        return {"Body": self.body}
+
+    def create_multipart_upload(self, **kwargs):
+        return {"UploadId": "server-only-promotion-id"}
+
+    def upload_part(self, **kwargs):
+        self.part_lengths.append(kwargs["ContentLength"])
+        return {"ETag": f"part-{kwargs['PartNumber']}"}
+
+    def complete_multipart_upload(self, **kwargs):
+        return {"VersionId": "immutable-version-exact", "ETag": "immutable-etag-exact"}
+
+    def delete_object(self, **kwargs):
+        self.deleted.append(kwargs)
+
+    def abort_multipart_upload(self, **kwargs):
+        self.aborted = kwargs
+
+
+def _validating_document(size: int, max_bytes: int = DOCUMENT_MAX_BYTES) -> dict:
+    return {
+        "upload_id": "upload-spool",
+        "owner_id": "student-1",
+        "status": "validating",
+        "version": 4,
+        "staging_object_key": "staging/private/document.txt",
+        "staging_version_id": "staging-version-exact",
+        "original_filename": "document.txt",
+        "declared_type": "text/plain",
+        "expected_size": size,
+        "max_bytes": max_bytes,
+    }
+
+
+def test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version() -> None:
+    body = _GeneratedBody(DOCUMENT_MAX_BYTES)
+    s3, repository = _PromotionS3(body), _PromotionRepository()
+    result = _validate_and_promote_completed(
+        _validating_document(DOCUMENT_MAX_BYTES),
+        _student_actor(),
+        s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result["status"] == "validated"
+    assert body.total_read == DOCUMENT_MAX_BYTES
+    assert s3.get_call["VersionId"] == "staging-version-exact"
+    assert s3.part_lengths == [5 * 1024 * 1024] * 10
+    expected_digest = hashlib.sha256()
+    for _ in range(50):
+        expected_digest.update(b"a" * (1024 * 1024))
+    assert repository.validated["content_sha256"] == expected_digest.hexdigest()
+    assert repository.validated["immutable_version_id"] == "immutable-version-exact"
+
+
+def test_max_plus_one_is_rejected_after_exact_sentinel_read_and_no_promotion() -> None:
+    body = _GeneratedBody(1025)
+    s3, repository = _PromotionS3(body), _PromotionRepository()
+    with pytest.raises(AttachmentDecisionError) as error:
+        _validate_and_promote_completed(
+            _validating_document(1024, max_bytes=1024),
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_TOO_LARGE
+    assert body.total_read == 1025
+    assert s3.part_lengths == []
+    assert repository.invalid == "upload_too_large"
 
 
 def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
@@ -581,7 +723,10 @@ def _validated_upload(owner="student-1") -> dict:
     return {
         "upload_id": "upload-1",
         "owner_id": owner,
-        "object_key": "uploads/private/provider-coordinate-canary.pdf",
+        "immutable_object_key": "objects/private/provider-coordinate-canary.pdf",
+        "immutable_version_id": "immutable-version-1",
+        "immutable_etag": "immutable-etag-1",
+        "content_sha256": "0" * 64,
         "original_filename": "notes.pdf",
         "detected_type": "application/pdf",
         "content_length": 321,
@@ -589,14 +734,13 @@ def _validated_upload(owner="student-1") -> dict:
         "expected_kind": "conversation_attachment",
         "version": 3,
         "expires_at": 2_000_000_000,
-        "etag": "private-version-canary",
     }
 
 
 def _validated_question_upload(owner="student-1") -> dict:
     return {
         **_validated_upload(owner),
-        "object_key": "uploads/private/question-coordinate-canary.png",
+        "immutable_object_key": "objects/private/question-coordinate-canary.png",
         "original_filename": "work.png",
         "detected_type": "image/png",
         "content_length": 123,
@@ -767,7 +911,10 @@ def _saved_attachment(owner="student-1") -> dict:
     return {
         "attachment_id": "attachment-saved",
         "owner_id": owner,
-        "object_key": "uploads/private/saved-provider-coordinate.pdf",
+        "immutable_object_key": "objects/private/saved-provider-coordinate.pdf",
+        "immutable_version_id": "immutable-version-saved",
+        "immutable_etag": "immutable-etag-saved",
+        "content_sha256": "0" * 64,
         "original_filename": "saved.pdf",
         "detected_type": "application/pdf",
         "content_length": 777,
@@ -792,6 +939,29 @@ def test_prepare_message_attachments_conceals_missing_foreign_and_invalid_as_no_
             )
         assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
         assert repository.transactions == []
+
+
+def test_association_rejects_legacy_key_only_records_before_effects() -> None:
+    legacy = {
+        **_validated_upload(),
+        "object_key": "legacy/client-writable-key",
+    }
+    for field in (
+        "immutable_object_key",
+        "immutable_version_id",
+        "immutable_etag",
+        "content_sha256",
+    ):
+        legacy.pop(field, None)
+    repository = _MessageAttachmentRepository(uploads={"upload-1": legacy})
+    with pytest.raises(AttachmentDecisionError) as error:
+        prepare_message_attachments(
+            [AttachmentReference(uploadId="upload-1")],
+            _student_actor(),
+            repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
+    assert repository.transactions == []
 
 
 def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> None:
@@ -943,9 +1113,12 @@ def test_extraction_rejects_active_external_encrypted_and_over_limit_content() -
 class _ReadBody:
     def __init__(self, data: bytes) -> None:
         self.data = data
+        self.offset = 0
 
     def read(self, limit: int) -> bytes:
-        return self.data[:limit]
+        value = self.data[self.offset : self.offset + limit]
+        self.offset += len(value)
+        return value
 
 
 class _PrivateS3:
@@ -953,34 +1126,74 @@ class _PrivateS3:
         self.objects = objects or {}
         self.deleted = []
 
-    def get_object(self, Bucket, Key):
+    def get_object(self, Bucket, Key, VersionId):
         return {"Body": _ReadBody(self.objects[Key])}
 
-    def delete_object(self, Bucket, Key):
-        self.deleted.append((Bucket, Key))
+    def delete_object(self, Bucket, Key, VersionId):
+        self.deleted.append((Bucket, Key, VersionId))
 
 
 def test_ai_attachment_context_is_bounded_and_category_safe() -> None:
     text = b"internal extracted canary"
     item = {
         **_saved_attachment(),
-        "object_key": "uploads/private/context-canary.txt",
+        "immutable_object_key": "objects/private/context-canary.txt",
+        "immutable_version_id": "context-version",
+        "immutable_etag": "context-etag",
+        "content_sha256": hashlib.sha256(text).hexdigest(),
         "detected_type": "text/plain",
         "content_length": len(text),
     }
     context = extract_message_attachment_context(
         [("attachment", item)],
-        s3=_PrivateS3({item["object_key"]: text}),
+        s3=_PrivateS3({item["immutable_object_key"]: text}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
     assert context == text.decode()
     assert "context-canary" not in context
     broken = extract_message_attachment_context(
         [("attachment", {**item, "content_length": len(text) + 1})],
-        s3=_PrivateS3({item["object_key"]: text}),
+        s3=_PrivateS3({item["immutable_object_key"]: text}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
     assert broken == "[attachment:immutable_bytes_changed]"
+
+
+def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
+    old = b"validated immutable text"
+    newer = b"different newer content!"
+    assert len(old) == len(newer)
+    item = {
+        **_saved_attachment(),
+        "immutable_object_key": "objects/shared-key.txt",
+        "immutable_version_id": "version-old",
+        "immutable_etag": "etag-old",
+        "content_sha256": hashlib.sha256(old).hexdigest(),
+        "detected_type": "text/plain",
+        "content_length": len(old),
+    }
+
+    class VersionedS3:
+        def __init__(self):
+            self.calls = []
+            self.objects = {
+                ("objects/shared-key.txt", "version-old"): old,
+                ("objects/shared-key.txt", "version-new"): newer,
+            }
+
+        def get_object(self, Bucket, Key, VersionId):
+            self.calls.append((Key, VersionId))
+            return {"Body": _ReadBody(self.objects[(Key, VersionId)])}
+
+    s3 = VersionedS3()
+    context = extract_message_attachment_context(
+        [("attachment", item)],
+        s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket"),
+    )
+    assert context == old.decode()
+    assert newer.decode() not in context
+    assert s3.calls == [("objects/shared-key.txt", "version-old")]
 
 
 def test_ai_prompt_uses_silent_bounded_attachment_sanitization(caplog) -> None:
@@ -1025,7 +1238,7 @@ def test_private_ocr_boundary_uses_resolved_attachment_and_safe_categories() -> 
     attachment = {
         **_saved_attachment(),
         "detected_type": "image/png",
-        "object_key": "uploads/private/ocr-coordinate-canary.png",
+        "immutable_object_key": "objects/private/ocr-coordinate-canary.png",
     }
     client = _OcrClient()
     result = extract_text_from_attachment(
@@ -1036,7 +1249,8 @@ def test_private_ocr_boundary_uses_resolved_attachment_and_safe_categories() -> 
     assert result == "first\nlater"
     assert client.calls[0]["Image"]["S3Object"] == {
         "Bucket": "private-images",
-        "Name": "uploads/private/ocr-coordinate-canary.png",
+        "Name": "objects/private/ocr-coordinate-canary.png",
+        "Version": "immutable-version-saved",
     }
     for code, terminal in (
         ("ThrottlingException", False),
@@ -1133,6 +1347,10 @@ def test_reference_release_preserves_multi_reference_then_deletes_last_once() ->
     )
     assert second == {"released": 1, "deleted": 1}
     assert len(s3.deleted) == 1
+    assert s3.deleted[0][1:] == (
+        "objects/private/saved-provider-coordinate.pdf",
+        "immutable-version-saved",
+    )
     assert repository.list_owner_attachment_items("student-1") == []
     assert purge_student_attachments(
         "student-1", s3=s3, settings=settings, repository=repository
@@ -1192,7 +1410,7 @@ class _CleanupRepository:
         return dict(item) if item else None
 
     def scan_durable_upload_references(
-        self, upload_id, object_key, *, limit, exclusive_start_key=None
+        self, upload_id, immutable_key="", immutable_version="", *, limit, exclusive_start_key=None
     ):
         return upload_id in self.durable, None
 
@@ -1219,26 +1437,27 @@ class _CleanupRepository:
         item["status"] = "cleanup_complete"
         item["version"] += 1
         item["cleaned_at"] = cleaned_at
-        item.pop("object_key", None)
+        item.pop("staging_object_key", None)
         return True
 
 
 class _CleanupS3:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
-        self.deleted: list[tuple[str, str]] = []
+        self.deleted: list[tuple[str, str, str]] = []
 
-    def delete_object(self, Bucket, Key):
+    def delete_object(self, Bucket, Key, VersionId):
         if self.fail:
             raise RuntimeError("provider payload key-canary")
-        self.deleted.append((Bucket, Key))
+        self.deleted.append((Bucket, Key, VersionId))
 
 
 def _cleanup_upload(upload_id: str, status: str, expires_at: int) -> dict:
     return {
         "upload_id": upload_id,
         "owner_id": "student-content-canary",
-        "object_key": f"uploads/private/{upload_id}-key-canary.png",
+        "staging_object_key": f"staging/private/{upload_id}-key-canary.png",
+        "staging_version_id": f"{upload_id}-version-canary",
         "status": status,
         "version": 1,
         "expires_at": expires_at,
@@ -1268,9 +1487,9 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
     )
     assert result.scanned == result.claimed == 3
     assert result.deleted == 2 and result.protected == 1
-    assert {key for _, key in s3.deleted} == {
-        "uploads/private/expired-key-canary.png",
-        "uploads/private/invalid-key-canary.png",
+    assert {(key, version) for _, key, version in s3.deleted} == {
+        ("staging/private/expired-key-canary.png", "expired-version-canary"),
+        ("staging/private/invalid-key-canary.png", "invalid-version-canary"),
     }
     repeated = cleanup_expired_uploads(
         s3=s3,

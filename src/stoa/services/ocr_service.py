@@ -37,7 +37,10 @@ def extract_text_from_attachment(
     if (
         attachment.get("status") != "active"
         or attachment.get("detected_type") not in {"image/jpeg", "image/png"}
-        or not attachment.get("object_key")
+        or not attachment.get("immutable_object_key")
+        or not attachment.get("immutable_version_id")
+        or not attachment.get("immutable_etag")
+        or not attachment.get("content_sha256")
     ):
         raise OcrAttachmentFailure("invalid_attachment", terminal=True)
     rekognition = client or boto3.client(
@@ -48,7 +51,8 @@ def extract_text_from_attachment(
             Image={
                 "S3Object": {
                     "Bucket": settings_obj.s3_images_bucket,
-                    "Name": attachment["object_key"],
+                    "Name": attachment["immutable_object_key"],
+                    "Version": attachment["immutable_version_id"],
                 }
             }
         )

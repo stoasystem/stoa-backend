@@ -58,7 +58,10 @@ def _prepared_question_attachment() -> dict:
         "attachment": {
             "attachment_id": "attachment-1",
             "owner_id": "student-1",
-            "object_key": "private/student-1/image.png",
+            "immutable_object_key": "objects/private/student-1/image.png",
+            "immutable_version_id": "image-version-1",
+            "immutable_etag": "image-etag-1",
+            "content_sha256": "0" * 64,
             "original_filename": "work.png",
             "detected_type": "image/png",
             "content_length": 123,
@@ -572,7 +575,7 @@ def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
     )
     assert response.status_code == 201
     assert observed == [prepared["attachment"]]
-    assert observed[0]["object_key"] == "private/student-1/image.png"
+    assert observed[0]["immutable_version_id"] == "image-version-1"
     assert "object_key" not in str(response.json()).lower()
 
 

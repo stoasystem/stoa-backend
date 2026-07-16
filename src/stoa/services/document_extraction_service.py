@@ -35,7 +35,7 @@ class DocumentExtractionFailure(Exception):
         super().__init__(category)
 
 
-def extract_attachment_text(data: bytes, media_type: str) -> str:
+def extract_attachment_text(data, media_type: str) -> str:
     if media_type == "application/pdf":
         return extract_pdf_text(data)
     if media_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -51,9 +51,11 @@ def extract_attachment_text(data: bytes, media_type: str) -> str:
     raise DocumentExtractionFailure("unsupported_document")
 
 
-def extract_pdf_text(data: bytes) -> str:
+def extract_pdf_text(data) -> str:
     try:
-        reader = PdfReader(BytesIO(data), strict=True)
+        stream = BytesIO(data) if isinstance(data, bytes) else data
+        stream.seek(0)
+        reader = PdfReader(stream, strict=True)
         if reader.is_encrypted:
             raise DocumentExtractionFailure("encrypted_document")
         if len(reader.pages) > MAX_PDF_PAGES:
@@ -70,7 +72,7 @@ def extract_pdf_text(data: bytes) -> str:
         raise DocumentExtractionFailure("invalid_document") from None
 
 
-def extract_docx_text(data: bytes) -> str:
+def extract_docx_text(data) -> str:
     try:
         with _passive_archive(data) as archive:
             return _xml_text(archive, "word/document.xml", {"t"})
@@ -80,7 +82,7 @@ def extract_docx_text(data: bytes) -> str:
         raise DocumentExtractionFailure("invalid_document") from None
 
 
-def extract_pptx_text(data: bytes) -> str:
+def extract_pptx_text(data) -> str:
     try:
         with _passive_archive(data) as archive:
             slides = sorted(
@@ -100,7 +102,7 @@ def extract_pptx_text(data: bytes) -> str:
         raise DocumentExtractionFailure("invalid_document") from None
 
 
-def extract_xlsx_text(data: bytes) -> str:
+def extract_xlsx_text(data) -> str:
     try:
         with _passive_archive(data) as archive:
             shared = _xml_values(archive, "xl/sharedStrings.xml", {"t"}, required=False)
@@ -151,9 +153,23 @@ def extract_xlsx_text(data: bytes) -> str:
         raise DocumentExtractionFailure("invalid_document") from None
 
 
-def extract_plain_text(data: bytes) -> str:
+def extract_plain_text(data) -> str:
     try:
-        text = data.decode("utf-8", errors="strict")
+        if isinstance(data, bytes):
+            text = data.decode("utf-8", errors="strict")
+        else:
+            decoder = __import__("codecs").getincrementaldecoder("utf-8")("strict")
+            values: list[str] = []
+            length = 0
+            data.seek(0)
+            while chunk := data.read(1024 * 1024):
+                value = decoder.decode(chunk)
+                length += len(value)
+                if length > MAX_EXTRACTED_CHARACTERS:
+                    raise DocumentExtractionFailure("document_limit_exceeded")
+                values.append(value)
+            values.append(decoder.decode(b"", final=True))
+            text = "".join(values)
     except UnicodeDecodeError:
         raise DocumentExtractionFailure("invalid_document") from None
     if len(text) > MAX_EXTRACTED_CHARACTERS:
@@ -161,9 +177,11 @@ def extract_plain_text(data: bytes) -> str:
     return text
 
 
-def _passive_archive(data: bytes) -> ZipFile:
+def _passive_archive(data) -> ZipFile:
     try:
-        archive = ZipFile(BytesIO(data))
+        stream = BytesIO(data) if isinstance(data, bytes) else data
+        stream.seek(0)
+        archive = ZipFile(stream)
     except BadZipFile:
         raise DocumentExtractionFailure("invalid_document") from None
     lowered = [name.lower() for name in archive.namelist()]

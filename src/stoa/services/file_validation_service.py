@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import codecs
 from io import BytesIO
 from pathlib import PurePosixPath
 import warnings
@@ -49,7 +50,11 @@ def _fail(code: AttachmentErrorCode) -> None:
     raise ValidationFailure(code)
 
 
-def validate_uploaded_file(data: bytes, filename: str, declared_mime: str) -> DetectedFile:
+def validate_uploaded_file(data, filename: str, declared_mime: str) -> DetectedFile:
+    stream = BytesIO(data) if isinstance(data, bytes) else data
+    stream.seek(0, 2)
+    size = stream.tell()
+    stream.seek(0)
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     allowed = MIME_BY_EXTENSION.get(ext)
     if allowed is None:
@@ -57,22 +62,27 @@ def validate_uploaded_file(data: bytes, filename: str, declared_mime: str) -> De
     if declared_mime not in allowed:
         _fail(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
     limit = IMAGE_MAX_BYTES if ext in {"jpg", "jpeg", "png"} else DOCUMENT_MAX_BYTES
-    if len(data) > limit:
+    if size > limit:
         _fail(AttachmentErrorCode.UPLOAD_TOO_LARGE)
     if ext in {"jpg", "jpeg", "png"}:
-        return validate_image(data, ext)
+        return validate_image(stream, ext, size)
     if ext == "pdf":
-        return validate_pdf(data)
+        return validate_pdf(stream, size)
     if ext in _OOXML_ROOTS:
-        return validate_ooxml(data, ext)
-    return validate_text(data, "text/markdown" if ext == "md" and declared_mime == "text/markdown" else "text/plain")
+        return validate_ooxml(stream, ext, size)
+    return validate_text(
+        stream,
+        "text/markdown" if ext == "md" and declared_mime == "text/markdown" else "text/plain",
+        size,
+    )
 
 
-def validate_image(data: bytes, extension: str) -> DetectedFile:
+def validate_image(stream, extension: str, size: int) -> DetectedFile:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(BytesIO(data), formats=("JPEG", "PNG")) as image:
+            stream.seek(0)
+            with Image.open(stream, formats=("JPEG", "PNG")) as image:
                 expected = "JPEG" if extension in {"jpg", "jpeg"} else "PNG"
                 if image.format != expected:
                     _fail(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
@@ -84,14 +94,17 @@ def validate_image(data: bytes, extension: str) -> DetectedFile:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError):
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    return DetectedFile("image/jpeg" if extension in {"jpg", "jpeg"} else "image/png", len(data), width, height)
+    stream.seek(0)
+    return DetectedFile("image/jpeg" if extension in {"jpg", "jpeg"} else "image/png", size, width, height)
 
 
-def validate_pdf(data: bytes) -> DetectedFile:
-    if not data.startswith(b"%PDF-"):
+def validate_pdf(stream, size: int) -> DetectedFile:
+    stream.seek(0)
+    if stream.read(5) != b"%PDF-":
         _fail(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
     try:
-        reader = PdfReader(BytesIO(data), strict=True)
+        stream.seek(0)
+        reader = PdfReader(stream, strict=True)
         if reader.is_encrypted or len(reader.pages) > 500:
             _fail(AttachmentErrorCode.UPLOAD_INVALID)
         for page in reader.pages:
@@ -100,13 +113,15 @@ def validate_pdf(data: bytes) -> DetectedFile:
         raise
     except Exception:
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    return DetectedFile("application/pdf", len(data))
+    stream.seek(0)
+    return DetectedFile("application/pdf", size)
 
 
-def validate_ooxml(data: bytes, extension: str) -> DetectedFile:
+def validate_ooxml(stream, extension: str, size: int) -> DetectedFile:
     root = _OOXML_ROOTS[extension]
     try:
-        with ZipFile(BytesIO(data)) as archive:
+        stream.seek(0)
+        with ZipFile(stream) as archive:
             infos = archive.infolist()
             names = {info.filename for info in infos}
             if len(infos) > _MAX_ARCHIVE_MEMBERS or "[Content_Types].xml" not in names:
@@ -130,17 +145,27 @@ def validate_ooxml(data: bytes, extension: str) -> DetectedFile:
         raise
     except (BadZipFile, OSError, RuntimeError, ValueError):
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    return DetectedFile(MIME_BY_EXTENSION[extension][0], len(data))
+    stream.seek(0)
+    return DetectedFile(MIME_BY_EXTENSION[extension][0], size)
 
 
-def validate_text(data: bytes, media_type: str = "text/plain") -> DetectedFile:
+def validate_text(stream, media_type: str = "text/plain", size: int = 0) -> DetectedFile:
+    decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    controls = characters = 0
     try:
-        text = data.decode("utf-8", errors="strict")
+        stream.seek(0)
+        while chunk := stream.read(1024 * 1024):
+            text = decoder.decode(chunk)
+            characters += len(text)
+            if "\x00" in text:
+                _fail(AttachmentErrorCode.UPLOAD_INVALID)
+            controls += sum(ord(char) < 32 and char not in "\n\r\t" for char in text)
+        tail = decoder.decode(b"", final=True)
+        characters += len(tail)
+        controls += sum(ord(char) < 32 and char not in "\n\r\t" for char in tail)
     except UnicodeDecodeError:
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    if "\x00" in text:
+    if controls > max(2, characters // 100):
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    controls = sum(ord(char) < 32 and char not in "\n\r\t" for char in text)
-    if controls > max(2, len(text) // 100):
-        _fail(AttachmentErrorCode.UPLOAD_INVALID)
-    return DetectedFile(media_type, len(data))
+    stream.seek(0)
+    return DetectedFile(media_type, size)

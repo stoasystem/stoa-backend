@@ -382,7 +382,8 @@ def claim_upload_cleanup(
 
 def scan_durable_upload_references(
     upload_id: str,
-    object_key: str,
+    immutable_object_key: str = "",
+    immutable_version_id: str = "",
     *,
     limit: int,
     exclusive_start_key: dict[str, Any] | None = None,
@@ -393,13 +394,15 @@ def scan_durable_upload_references(
         "Limit": limit,
         "FilterExpression": (
             "begins_with(PK,:attachment) AND SK=:meta AND "
-            "(source_upload_id=:upload_id OR object_key=:object_key)"
+            "(source_upload_id=:upload_id OR "
+            "(immutable_object_key=:immutable_key AND immutable_version_id=:immutable_version))"
         ),
         "ExpressionAttributeValues": {
             ":attachment": "ATTACHMENT#",
             ":meta": "META",
             ":upload_id": upload_id,
-            ":object_key": object_key,
+            ":immutable_key": immutable_object_key,
+            ":immutable_version": immutable_version_id,
         },
     }
     if exclusive_start_key:
@@ -446,7 +449,8 @@ def complete_upload_cleanup(
         version,
         (
             "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at "
-            "REMOVE object_key, etag, cleanup_reference_cursor"
+            "REMOVE staging_object_key, staging_version_id, staging_etag, "
+            "multipart_upload_id, cleanup_reference_cursor"
         ),
         {":complete": "cleanup_complete", ":next": version + 1, ":cleaned_at": cleaned_at},
         table=table,
@@ -947,6 +951,37 @@ def mark_validated(
         attributes=detected,
         table=table,
     )
+
+
+def clear_staging_coordinates(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    table: Any | None = None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=(
+                "REMOVE staging_object_key, staging_version_id, staging_etag, "
+                "multipart_upload_id"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:validated AND #version=:version"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":validated": "validated",
+                ":version": version,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def mark_invalid(
