@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-06-PLAN.md
-last_updated: "2026-07-16T11:44:47.344Z"
-last_activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admin answer access
+stopped_at: Completed 473-07-PLAN.md
+last_updated: "2026-07-16T12:02:00.000Z"
+last_activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy evidence gate
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 28
-  percent: 97
+  completed_plans: 29
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
+Phase: 473 (student-content-privacy-and-practice-integrity) — COMPLETE
 Plan: 7 of 7
-Status: Ready to execute
-Last activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admin answer access
+Status: Complete
+Last activity: 2026-07-16 -- Completed Phase 473 cleanup and combined privacy evidence gate
 
 ## Accumulated Context
 
@@ -67,10 +67,13 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admi
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
 - Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
 - All six final review findings pass together in 321 source-bound adversarial/positive controls; the extended Phase 472 gate passes 610 tests, while the full suite retains exactly 23 Phase 474-owned Settings fixture failures.
+- Phase 473 closes student upload ownership, content validation, durable attachment history/reuse, question OCR isolation, answer-free previews, attempt-gated results, and scoped privileged answer reads under one 230-test combined gate.
+- Expired, invalid, and abandoned unconsumed upload cleanup now uses bounded versioned claims, consistent rechecks, resumable durable-reference scans, non-consumable retry tombstones, and coordinate-free summaries.
+- The source-bound Phase 473 gate reports 1232 full-suite tests with zero failures/errors/skips; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN for Phases 479–480.
 
 ### Pending Todos
 
-- Execute Phase 473 from the seven checked plans, preserving the completed Phase 472 authorization boundary.
+- Begin Phase 474 deterministic verification work while preserving the completed Phase 472 authorization and Phase 473 privacy boundaries.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -84,13 +87,13 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admi
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 473`; do not approve external rollout from local tests or unavailable Cognito evidence.
+- Run `$gsd-execute-phase 474`; do not approve external rollout from local tests or unavailable provider/IaC evidence.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-16T11:44:47.339Z
-**Stopped At:** Completed 473-06-PLAN.md
+**Last Date:** 2026-07-16T12:02:00.000Z
+**Stopped At:** Completed 473-07-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -125,8 +128,13 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admi
 | Phase 473 P03 | 18 min | 2 tasks | 11 files |
 | Phase 473 P04 | 14 min | 2 tasks | 9 files |
 | Phase 473 P06 | 20 min | 2 tasks | 11 files |
+| Phase 473 P07 | 16 min | 2 tasks | 7 files |
 
 ## Decisions
+
+- [Phase 473]: Cleanup claims only terminal or past-expiry unconsumed upload states, then consistently rechecks the claimed version before any provider delete. — Active, consuming, consumed, raced, and restored resources cannot enter deletion.
+- [Phase 473]: Durable-reference discovery is bounded and resumable, and provider failure retains a non-consumable cleanup tombstone. — Cleanup retries are idempotent without deleting durable/reused history or reviving validated uploads.
+- [Phase 473]: Final closure evidence binds exact local commands, tested source/test digests, and deterministic route/OpenAPI artifacts while real S3 and schedule/IaC checks remain NOT RUN. — Local proof cannot be mistaken for external rollout verification.
 
 - [Phase 473]: Curriculum answers use a dedicated READ purpose; admins receive only that narrow automatic read and teachers require one fresh current assignment matched against server-loaded challenge scope. — Answer access cannot broaden support or curriculum mutation authority.
 - [Phase 473]: Missing, stale, disabled, unrelated, and wrong-scope teacher answer requests remain indistinguishable and only the explicit privileged route serializes pre-attempt answers. — Student previews and legacy includeAnswers input remain structurally answer-free.
