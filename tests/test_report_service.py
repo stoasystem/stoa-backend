@@ -63,6 +63,18 @@ class FakeSESClient:
             raise self.error
 
 
+def _production_settings(**overrides) -> Settings:
+    values = {
+        "environment": "production",
+        "cognito_allowed_issuers": ["https://identity.test"],
+        "cognito_access_client_ids": ["test-access-client"],
+        "authorization_audit_active_key_id": "test-production-v1",
+        "authorization_audit_active_key": "test-production-authorization-audit-key-32-bytes",
+        **overrides,
+    }
+    return Settings(**values)
+
+
 def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, mistakes=None, conversations=None):
     monkeypatch.setattr(
         report_service,
@@ -102,22 +114,21 @@ def test_report_artifacts_bucket_allows_local_placeholder_in_development():
 
 
 def test_report_artifacts_bucket_rejects_production_placeholder():
-    settings = Settings(environment="production", s3_reports_bucket="stoa-reports")
+    settings = _production_settings(s3_reports_bucket="stoa-reports")
 
     with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
         _ = settings.report_artifacts_bucket
 
 
 def test_report_artifacts_bucket_rejects_blank_production_value():
-    settings = Settings(environment="production", s3_reports_bucket=" ")
+    settings = _production_settings(s3_reports_bucket=" ")
 
     with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
         _ = settings.report_artifacts_bucket
 
 
 def test_report_artifacts_bucket_returns_trimmed_cdk_value_in_production():
-    settings = Settings(
-        environment="production",
+    settings = _production_settings(
         s3_reports_bucket=" stoa-reports-562923011260 ",
     )
 

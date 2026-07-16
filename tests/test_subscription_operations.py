@@ -99,7 +99,15 @@ class FakeTable:
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(cognito_user_pool_id="pool", s3_images_bucket="images", **overrides)
+    values = {"cognito_user_pool_id": "pool", "s3_images_bucket": "images", **overrides}
+    if overrides.get("environment") == "production":
+        values.update(
+            cognito_allowed_issuers=["https://identity.test"],
+            cognito_access_client_ids=["test-access-client"],
+            authorization_audit_active_key_id="test-production-v1",
+            authorization_audit_active_key="test-production-authorization-audit-key-32-bytes",
+        )
+    return Settings(**values)
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
