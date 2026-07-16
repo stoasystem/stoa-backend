@@ -1,6 +1,6 @@
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import threading
 from io import BytesIO
@@ -666,11 +666,9 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
         def get_object(self, **kwargs):
             return {"Body": _ReadBody(data)}
 
-        def create_multipart_upload(self, **kwargs):
-            return {"UploadId": "immutable-private-upload"}
-
-        def upload_part(self, **kwargs):
-            return {"ETag": "immutable-part-etag"}
+        def put_object(self, **kwargs):
+            assert kwargs["ContentLength"] == len(data)
+            return {"VersionId": "immutable-version", "ETag": "immutable-final-etag"}
 
         def delete_object(self, **kwargs):
             self.deleted = kwargs
@@ -724,21 +722,15 @@ class _PromotionS3:
     def __init__(self, body: _GeneratedBody) -> None:
         self.body = body
         self.get_call = None
-        self.part_lengths = []
+        self.put_lengths = []
         self.deleted = []
 
     def get_object(self, **kwargs):
         self.get_call = kwargs
         return {"Body": self.body}
 
-    def create_multipart_upload(self, **kwargs):
-        return {"UploadId": "server-only-promotion-id"}
-
-    def upload_part(self, **kwargs):
-        self.part_lengths.append(kwargs["ContentLength"])
-        return {"ETag": f"part-{kwargs['PartNumber']}"}
-
-    def complete_multipart_upload(self, **kwargs):
+    def put_object(self, **kwargs):
+        self.put_lengths.append(kwargs["ContentLength"])
         return {"VersionId": "immutable-version-exact", "ETag": "immutable-etag-exact"}
 
     def delete_object(self, **kwargs):
@@ -777,7 +769,7 @@ def test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version() -> 
     assert result["status"] == "validated"
     assert body.total_read == DOCUMENT_MAX_BYTES
     assert s3.get_call["VersionId"] == "staging-version-exact"
-    assert s3.part_lengths == [5 * 1024 * 1024] * 10
+    assert s3.put_lengths == [DOCUMENT_MAX_BYTES]
     expected_digest = hashlib.sha256()
     for _ in range(50):
         expected_digest.update(b"a" * (1024 * 1024))
@@ -799,7 +791,7 @@ def test_max_plus_one_is_rejected_after_exact_sentinel_read_and_no_promotion() -
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_TOO_LARGE
     assert body.total_read == 1025
-    assert s3.part_lengths == []
+    assert s3.put_lengths == []
     assert repository.invalid == "upload_too_large"
 
 
@@ -823,7 +815,261 @@ def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
             repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert repository.item and repository.item["status"] == "invalid"
+    assert repository.item and repository.item["status"] == "cleanup_pending"
+    assert repository.item["operation_kind"] == "staging_issuance"
+    assert repository.item["staging_object_key"]
+
+
+class _CrashLifecycleRepository:
+    def __init__(self, item: dict | None = None) -> None:
+        self.item = dict(item) if item else None
+        self.part = {
+            "status": "completed",
+            "part_number": 1,
+            "provider_etag": "server-etag",
+            "provider_checksum": "server-checksum",
+            "content_length": 0,
+        }
+        self.fail_staging_record_once = False
+        self.fail_immutable_record_once = False
+        self.takeovers = 0
+
+    def prepare_staging_issuance(self, item):
+        self.item = dict(item)
+
+    create_upload_intent = prepare_staging_issuance
+
+    def mark_upload_issuance_failed(self, upload_id, owner_id, version, **kwargs):
+        assert self.item and self.item["version"] == version
+        self.item["status"] = "cleanup_pending"
+        self.item["version"] += 1
+        return True
+
+    def get_upload_intent(self, upload_id):
+        return dict(self.item) if self.item else None
+
+    def list_upload_parts(self, upload_id):
+        return [dict(self.part)]
+
+    def claim_staging_assembly(self, upload_id, owner_id, version, now, **operation):
+        assert self.item and self.item["status"] == "pending_upload"
+        assert self.item["version"] == version
+        self.item.update(operation)
+        self.item.update(
+            status="assembling",
+            version=version + 1,
+            operation_kind="staging_assembly",
+            operation_lease_expires_at=now + 120,
+            operation_takeover_count=0,
+        )
+        return True
+
+    def recover_staging_completion(self, upload_id, owner_id, version, **values):
+        if self.fail_staging_record_once:
+            self.fail_staging_record_once = False
+            return False
+        if (
+            not self.item
+            or self.item["status"] != "assembling"
+            or self.item["version"] != version
+            or self.item["operation_fence"] != values["operation_fence"]
+        ):
+            return False
+        self.item.update(values)
+        self.item.pop("operation_fence", None)
+        self.item.pop("operation_lease_expires_at", None)
+        self.item["status"] = "validating"
+        self.item["version"] += 1
+        return True
+
+    def claim_stale_upload_operation(
+        self, upload_id, owner_id, version, operation_kind, previous_fence, new_fence, now
+    ):
+        if (
+            not self.item
+            or self.item["version"] != version
+            or self.item.get("operation_kind") != operation_kind
+            or self.item.get("operation_fence") != previous_fence
+            or self.item.get("operation_lease_expires_at", 0) > now
+            or self.item.get("operation_takeover_count", 0) >= 2
+        ):
+            return None
+        self.item["operation_fence"] = new_fence
+        self.item["operation_lease_expires_at"] = now + 120
+        self.item["operation_takeover_count"] = self.item.get("operation_takeover_count", 0) + 1
+        self.item["version"] += 1
+        self.takeovers += 1
+        return dict(self.item)
+
+    def begin_immutable_promotion(self, upload_id, owner_id, version, now, **operation):
+        assert self.item and self.item["status"] == "validating"
+        assert self.item["version"] == version
+        self.item.update(operation)
+        self.item.update(
+            status="promoting",
+            version=version + 1,
+            operation_kind="immutable_promotion",
+            operation_lease_expires_at=now + 120,
+        )
+        return True
+
+    def record_immutable_version(self, upload_id, owner_id, version, **values):
+        if self.fail_immutable_record_once:
+            self.fail_immutable_record_once = False
+            return False
+        if (
+            not self.item
+            or self.item["status"] != "promoting"
+            or self.item["version"] != version
+            or self.item["operation_fence"] != values["operation_fence"]
+        ):
+            return False
+        self.item.update(values)
+        self.item.pop("operation_fence", None)
+        self.item.pop("operation_lease_expires_at", None)
+        self.item["status"] = "validated"
+        self.item["version"] += 1
+        return True
+
+    def clear_staging_coordinates(self, *args):
+        return True
+
+    def mark_invalid(self, upload_id, owner_id, version, category):
+        self.item["status"] = "invalid"
+        return True
+
+
+class _CrashLifecycleS3:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.versions: dict[str, dict] = {}
+        self.complete_calls = 0
+        self.put_calls = 0
+
+    def complete_multipart_upload(self, **kwargs):
+        self.complete_calls += 1
+        value = {
+            "Key": kwargs["Key"],
+            "VersionId": "staging-version-recovered",
+            "ETag": "staging-etag-recovered",
+            "ContentLength": len(self.data),
+            "Metadata": {"upload-id": "upload-1"},
+        }
+        self.versions[kwargs["Key"]] = value
+        return {"VersionId": value["VersionId"], "ETag": value["ETag"]}
+
+    def list_object_versions(self, **kwargs):
+        value = self.versions.get(kwargs["Prefix"])
+        return {"Versions": [value] if value else []}
+
+    def head_object(self, **kwargs):
+        return dict(self.versions[kwargs["Key"]])
+
+    def get_object(self, **kwargs):
+        return {"Body": _ReadBody(self.data)}
+
+    def put_object(self, **kwargs):
+        self.put_calls += 1
+        value = {
+            "Key": kwargs["Key"],
+            "VersionId": "immutable-version-recovered",
+            "ETag": "immutable-etag-recovered",
+            "ContentLength": kwargs["ContentLength"],
+            "Metadata": dict(kwargs["Metadata"]),
+        }
+        self.versions[kwargs["Key"]] = value
+        return {"VersionId": value["VersionId"], "ETag": value["ETag"]}
+
+    def delete_object(self, **kwargs):
+        return {}
+
+
+def test_issuing_lost_response_retains_exact_durable_cleanup_coordinate() -> None:
+    repository = _CrashLifecycleRepository()
+
+    class LostResponseS3:
+        def create_multipart_upload(self, **kwargs):
+            self.created = dict(kwargs)
+            raise RuntimeError("provider-success-response-lost")
+
+    s3 = LostResponseS3()
+    with pytest.raises(AttachmentDecisionError) as error:
+        create_upload_intent(
+            UploadIntentRequest(
+                purpose="question_image",
+                filename="work.png",
+                contentType="image/png",
+                sizeBytes=10,
+            ),
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "cleanup_pending"
+    assert repository.item["staging_object_key"] == s3.created["Key"]
+    assert repository.item["operation_kind"] == "staging_issuance"
+
+
+def test_assembling_provider_success_repository_split_recovers_after_restart() -> None:
+    data = _image("PNG")
+    repository = _CrashLifecycleRepository(_pending_upload(expected_size=len(data)))
+    repository.part["content_length"] = len(data)
+    repository.fail_staging_record_once = True
+    s3 = _CrashLifecycleS3(data)
+    started = datetime(2026, 7, 16, tzinfo=timezone.utc)
+    with pytest.raises(AttachmentDecisionError) as error:
+        complete_upload(
+            "upload-1", 1, _student_actor(), s3=s3,
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=started, repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "assembling"
+    recovered = complete_upload(
+        "upload-1", 1, _student_actor(), s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket"),
+        now=started + timedelta(seconds=121), repository=repository,
+    )
+    assert recovered["status"] == "validated"
+    assert s3.complete_calls == 1
+    assert repository.item["staging_version_id"] == "staging-version-recovered"
+    assert repository.takeovers == 1
+
+
+def test_promotion_provider_success_repository_split_recovers_exact_version() -> None:
+    data = _image("PNG")
+    item = {
+        **_pending_upload(expected_size=len(data)),
+        "status": "validating",
+        "version": 4,
+        "staging_version_id": "staging-version-exact",
+    }
+    repository = _CrashLifecycleRepository(item)
+    repository.fail_immutable_record_once = True
+    s3 = _CrashLifecycleS3(data)
+    started = datetime(2026, 7, 16, tzinfo=timezone.utc)
+    with pytest.raises(AttachmentDecisionError) as error:
+        _validate_and_promote_completed(
+            repository.item, _student_actor(), s3=s3,
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=started, repository=repository,
+        )
+    assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "promoting"
+    immutable_key = repository.item["immutable_object_key"]
+    recovered = complete_upload(
+        "upload-1", 1, _student_actor(), s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket"),
+        now=started + timedelta(seconds=121), repository=repository,
+    )
+    assert recovered["status"] == "validated"
+    assert repository.item["immutable_version_id"] == "immutable-version-recovered"
+    assert s3.put_calls == 1
+    assert repository.item["immutable_object_key"] == immutable_key
+    assert repository.takeovers == 1
 
 
 class _MessageAttachmentRepository:
@@ -2019,6 +2265,10 @@ class _CleanupRepository:
                 item["status"] in {"pending_upload", "validating", "validated"}
                 and item["expires_at"] <= now_epoch
             )
+            or (
+                item["status"] in {"issuing", "assembling", "promoting"}
+                and item.get("operation_lease_expires_at", 0) <= now_epoch
+            )
         ]
         return eligible[:limit], self.next_cursor
 
@@ -2030,7 +2280,8 @@ class _CleanupRepository:
             or item["status"] in {"consuming", "consumed", "cleanup_complete", "cleanup_blocked"}
             or (
                 item["status"] not in {"invalid", "expired", "cleanup_pending"}
-                and item["expires_at"] > now_epoch
+                and item.get("expires_at", 0) > now_epoch
+                and item.get("operation_lease_expires_at", 0) > now_epoch
             )
         ):
             return None
@@ -2046,7 +2297,10 @@ class _CleanupRepository:
     def scan_durable_upload_references(
         self, upload_id, immutable_key="", immutable_version="", *, limit, exclusive_start_key=None
     ):
-        return upload_id in self.durable, None
+        return (
+            upload_id in self.durable
+            or f"{immutable_key}@{immutable_version}" in self.durable
+        ), None
 
     def advance_upload_cleanup_reference_scan(self, upload_id, version, cursor):
         item = self.uploads[upload_id]
@@ -2068,10 +2322,71 @@ class _CleanupRepository:
         item = self.uploads[upload_id]
         if item["status"] != "cleanup_pending" or item["version"] != version:
             return False
+        if not all(
+            item.get(field)
+            for field in (
+                "cleanup_multipart_aborted",
+                "cleanup_staging_deleted",
+                "cleanup_immutable_deleted",
+            )
+        ):
+            return False
         item["status"] = "cleanup_complete"
         item["version"] += 1
         item["cleaned_at"] = cleaned_at
-        item.pop("staging_object_key", None)
+        for field in (
+            "staging_object_key",
+            "staging_version_id",
+            "staging_etag",
+            "multipart_upload_id",
+            "immutable_object_key",
+            "immutable_version_id",
+            "immutable_etag",
+            "operation_kind",
+            "operation_fence",
+            "operation_lease_expires_at",
+            "operation_takeover_count",
+            "cleanup_reference_cursor",
+            "cleanup_multipart_aborted",
+            "cleanup_staging_deleted",
+            "cleanup_immutable_deleted",
+        ):
+            item.pop(field, None)
+        return True
+
+    def _progress(self, upload_id, version, field):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item[field] = True
+        item["version"] += 1
+        return True
+
+    def mark_cleanup_multipart_aborted(self, upload_id, version):
+        return self._progress(upload_id, version, "cleanup_multipart_aborted")
+
+    def mark_cleanup_staging_deleted(self, upload_id, version):
+        return self._progress(upload_id, version, "cleanup_staging_deleted")
+
+    def mark_cleanup_immutable_deleted(self, upload_id, version):
+        return self._progress(upload_id, version, "cleanup_immutable_deleted")
+
+    def record_cleanup_staging_version(self, upload_id, version, version_id, etag):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item["staging_version_id"] = version_id
+        item["staging_etag"] = etag
+        item["version"] += 1
+        return True
+
+    def record_cleanup_immutable_version(self, upload_id, version, version_id, etag):
+        item = self.uploads[upload_id]
+        if item["status"] != "cleanup_pending" or item["version"] != version:
+            return False
+        item["immutable_version_id"] = version_id
+        item["immutable_etag"] = etag
+        item["version"] += 1
         return True
 
 
@@ -2079,11 +2394,31 @@ class _CleanupS3:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
         self.deleted: list[tuple[str, str, str]] = []
+        self.aborted: list[tuple[str, str, str]] = []
+        self.multipart_uploads: list[dict] = []
+        self.versions: dict[str, list[dict]] = {}
 
     def delete_object(self, Bucket, Key, VersionId):
         if self.fail:
             raise RuntimeError("provider payload key-canary")
         self.deleted.append((Bucket, Key, VersionId))
+
+    def abort_multipart_upload(self, Bucket, Key, UploadId):
+        if self.fail:
+            raise RuntimeError("provider payload key-canary")
+        self.aborted.append((Bucket, Key, UploadId))
+
+    def list_multipart_uploads(self, **kwargs):
+        return {"Uploads": list(self.multipart_uploads), "IsTruncated": False}
+
+    def list_object_versions(self, **kwargs):
+        return {"Versions": list(self.versions.get(kwargs["Prefix"], []))}
+
+    def head_object(self, **kwargs):
+        for value in self.versions.get(kwargs["Key"], []):
+            if value["VersionId"] == kwargs["VersionId"]:
+                return dict(value)
+        raise RuntimeError("missing")
 
 
 def _cleanup_upload(upload_id: str, status: str, expires_at: int) -> dict:
@@ -2136,6 +2471,149 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
     assert repository.uploads["active"]["status"] == "validated"
     assert repository.uploads["consuming"]["status"] == "consuming"
     assert repository.uploads["consumed"]["status"] == "consumed"
+
+
+def test_validated_cleanup_deletes_staging_and_immutable_exact_versions_before_complete() -> None:
+    upload = _cleanup_upload("both", "validated", 1)
+    upload.update(
+        immutable_object_key="objects/private/both-key",
+        immutable_version_id="immutable-version-old",
+        immutable_etag="immutable-etag-old",
+        content_sha256="a" * 64,
+        content_length=3,
+    )
+    repository = _CleanupRepository([upload])
+    s3 = _CleanupS3()
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.deleted == 1
+    assert {(key, version) for _, key, version in s3.deleted} == {
+        (upload["staging_object_key"], upload["staging_version_id"]),
+        (upload["immutable_object_key"], upload["immutable_version_id"]),
+    }
+    assert repository.uploads["both"]["status"] == "cleanup_complete"
+    assert not any(
+        name in repository.uploads["both"]
+        for name in (
+            "staging_object_key",
+            "staging_version_id",
+            "multipart_upload_id",
+            "immutable_object_key",
+            "immutable_version_id",
+            "operation_fence",
+            "operation_lease_expires_at",
+        )
+    )
+
+
+def test_stale_operation_cleanup_recovers_exact_targets_and_preserves_unrelated() -> None:
+    issuing = _cleanup_upload("issuing", "issuing", 2_000_000_000)
+    issuing.update(
+        operation_kind="staging_issuance",
+        operation_fence="issuance-fence",
+        operation_lease_expires_at=1,
+    )
+    issuing.pop("staging_version_id")
+    assembling = _cleanup_upload("assembling", "assembling", 2_000_000_000)
+    assembling.update(
+        operation_kind="staging_assembly",
+        operation_fence="assembly-fence",
+        operation_lease_expires_at=1,
+        expected_size=3,
+        multipart_upload_id="completed-upload",
+    )
+    assembling.pop("staging_version_id")
+    promoting = _cleanup_upload("promoting", "promoting", 2_000_000_000)
+    promoting.update(
+        operation_kind="immutable_promotion",
+        operation_fence="promotion-fence",
+        operation_lease_expires_at=1,
+        immutable_object_key="objects/private/promotion-key",
+        content_sha256="b" * 64,
+        content_length=3,
+    )
+    repository = _CleanupRepository([issuing, assembling, promoting])
+    s3 = _CleanupS3()
+    s3.multipart_uploads = [
+        {"Key": issuing["staging_object_key"], "UploadId": "exact-unfinished"},
+        {"Key": issuing["staging_object_key"] + "-other", "UploadId": "unrelated"},
+    ]
+    s3.versions[assembling["staging_object_key"]] = [
+        {
+            "Key": assembling["staging_object_key"],
+            "VersionId": "staging-recovered",
+            "ETag": "staging-etag",
+            "ContentLength": 3,
+            "Metadata": {"upload-id": "assembling"},
+        },
+        {
+            "Key": assembling["staging_object_key"],
+            "VersionId": "staging-newer-unrelated",
+            "ETag": "newer",
+            "ContentLength": 4,
+            "Metadata": {"upload-id": "other"},
+        },
+    ]
+    s3.versions[promoting["immutable_object_key"]] = [
+        {
+            "Key": promoting["immutable_object_key"],
+            "VersionId": "immutable-recovered",
+            "ETag": "immutable-etag",
+            "ContentLength": 3,
+            "Metadata": {"content-sha256": "b" * 64},
+        },
+        {
+            "Key": promoting["immutable_object_key"],
+            "VersionId": "immutable-newer-unrelated",
+            "ETag": "newer",
+            "ContentLength": 3,
+            "Metadata": {"content-sha256": "c" * 64},
+        },
+    ]
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.deleted == 3
+    assert [(key, upload_id) for _, key, upload_id in s3.aborted] == [
+        (issuing["staging_object_key"], "exact-unfinished"),
+        (assembling["staging_object_key"], "completed-upload"),
+    ]
+    assert {(key, version) for _, key, version in s3.deleted} == {
+        (assembling["staging_object_key"], "staging-recovered"),
+        (promoting["staging_object_key"], promoting["staging_version_id"]),
+        (promoting["immutable_object_key"], "immutable-recovered"),
+    }
+    assert "staging-newer-unrelated" not in str(s3.deleted)
+    assert "immutable-newer-unrelated" not in str(s3.deleted)
+    assert "unrelated" not in str(s3.aborted)
+
+
+def test_exact_immutable_durable_reference_blocks_all_cleanup_provider_mutations() -> None:
+    upload = _cleanup_upload("tuple-protected", "validated", 1)
+    upload.update(
+        immutable_object_key="objects/private/protected",
+        immutable_version_id="protected-version",
+    )
+    repository = _CleanupRepository(
+        [upload], durable={"objects/private/protected@protected-version"}
+    )
+    s3 = _CleanupS3()
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.protected == 1
+    assert s3.deleted == [] and s3.aborted == []
+    assert repository.uploads["tuple-protected"]["status"] == "cleanup_blocked"
 
 
 def test_cleanup_delete_failure_stays_unusable_retryable_and_redacted() -> None:

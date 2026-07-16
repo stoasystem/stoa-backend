@@ -39,6 +39,7 @@ from stoa.services.document_extraction_service import (
 
 UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024
 UPLOAD_SPOOL_MEMORY_BYTES = 1024 * 1024
+UPLOAD_OPERATION_LEASE_SECONDS = 120
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
@@ -105,24 +106,90 @@ def cleanup_upload_intent(
         staging_key = str(current.get("staging_object_key") or "")
         staging_version = str(current.get("staging_version_id") or "")
         multipart_id = str(current.get("multipart_upload_id") or "")
-        if multipart_id and staging_key and not staging_version:
+        operation_kind = str(current.get("operation_kind") or "")
+
+        if not current.get("cleanup_multipart_aborted"):
             try:
-                s3.abort_multipart_upload(
-                    Bucket=settings.s3_images_bucket,
-                    Key=staging_key,
-                    UploadId=multipart_id,
-                )
-            except Exception:
+                if multipart_id and staging_key and not staging_version:
+                    _abort_multipart_exact(s3, settings, staging_key, multipart_id)
+                elif staging_key and operation_kind == "staging_issuance":
+                    _abort_all_exact_key_multiparts(s3, settings, staging_key)
+            except Exception as exc:
+                if not _provider_target_absent(exc):
+                    return "retryable"
+            if not repository.mark_cleanup_multipart_aborted(str(current["upload_id"]), version):
                 return "retryable"
-        if staging_key and staging_version:
-            try:
-                s3.delete_object(
-                    Bucket=settings.s3_images_bucket,
-                    Key=staging_key,
-                    VersionId=staging_version,
-                )
-            except Exception:
+            version += 1
+            current["cleanup_multipart_aborted"] = True
+
+        if not staging_version and staging_key and operation_kind == "staging_assembly":
+            recovered = _matching_exact_version(
+                s3,
+                settings,
+                staging_key,
+                expected_length=int(current.get("expected_size", -1)),
+                metadata_name="upload-id",
+                metadata_value=str(current["upload_id"]),
+            )
+            if recovered:
+                staging_version, staging_etag = recovered
+                if not repository.record_cleanup_staging_version(
+                    str(current["upload_id"]), version, staging_version, staging_etag
+                ):
+                    return "retryable"
+                version += 1
+                current["staging_version_id"] = staging_version
+
+        if not current.get("cleanup_staging_deleted"):
+            if staging_key and staging_version:
+                try:
+                    s3.delete_object(
+                        Bucket=settings.s3_images_bucket,
+                        Key=staging_key,
+                        VersionId=staging_version,
+                    )
+                except Exception as exc:
+                    if not _provider_target_absent(exc):
+                        return "retryable"
+            if not repository.mark_cleanup_staging_deleted(str(current["upload_id"]), version):
                 return "retryable"
+            version += 1
+            current["cleanup_staging_deleted"] = True
+
+        if not immutable_version and immutable_key and operation_kind == "immutable_promotion":
+            recovered = _matching_exact_version(
+                s3,
+                settings,
+                immutable_key,
+                expected_length=int(current.get("content_length", -1)),
+                metadata_name="content-sha256",
+                metadata_value=str(current.get("content_sha256") or ""),
+            )
+            if recovered:
+                immutable_version, immutable_etag = recovered
+                if not repository.record_cleanup_immutable_version(
+                    str(current["upload_id"]), version, immutable_version, immutable_etag
+                ):
+                    return "retryable"
+                version += 1
+                current["immutable_version_id"] = immutable_version
+
+        if not current.get("cleanup_immutable_deleted"):
+            if immutable_key and immutable_version:
+                try:
+                    s3.delete_object(
+                        Bucket=settings.s3_images_bucket,
+                        Key=immutable_key,
+                        VersionId=immutable_version,
+                    )
+                except Exception as exc:
+                    if not _provider_target_absent(exc):
+                        return "retryable"
+            if not repository.mark_cleanup_immutable_deleted(str(current["upload_id"]), version):
+                return "retryable"
+            version += 1
+            current["cleanup_immutable_deleted"] = True
+
         if not repository.complete_upload_cleanup(
             str(current["upload_id"]), version, now.isoformat()
         ):
@@ -130,6 +197,60 @@ def cleanup_upload_intent(
     except attachment_repo.AttachmentRepositoryConflict:
         return "retryable"
     return "deleted"
+
+
+def _provider_target_absent(exc: Exception) -> bool:
+    response = getattr(exc, "response", {})
+    code = str((response.get("Error") or {}).get("Code") or "")
+    return code in {"404", "NoSuchKey", "NoSuchUpload", "NoSuchVersion", "NotFound"}
+
+
+def _abort_multipart_exact(
+    s3: Any, settings: Settings, key: str, multipart_upload_id: str
+) -> None:
+    s3.abort_multipart_upload(
+        Bucket=settings.s3_images_bucket, Key=key, UploadId=multipart_upload_id
+    )
+
+
+def _abort_all_exact_key_multiparts(s3: Any, settings: Settings, key: str) -> None:
+    request: dict[str, Any] = {
+        "Bucket": settings.s3_images_bucket,
+        "Prefix": key,
+        "MaxUploads": 1000,
+    }
+    for _ in range(10):
+        response = s3.list_multipart_uploads(**request)
+        for upload in response.get("Uploads", []):
+            if upload.get("Key") == key and upload.get("UploadId"):
+                _abort_multipart_exact(s3, settings, key, str(upload["UploadId"]))
+        if not response.get("IsTruncated"):
+            return
+        request["KeyMarker"] = response.get("NextKeyMarker")
+        request["UploadIdMarker"] = response.get("NextUploadIdMarker")
+    raise RuntimeError("bounded multipart recovery exhausted")
+
+
+def _matching_exact_version(
+    s3: Any,
+    settings: Settings,
+    key: str,
+    *,
+    expected_length: int,
+    metadata_name: str,
+    metadata_value: str,
+) -> tuple[str, str] | None:
+    for version in _exact_object_versions(s3, settings, key):
+        version_id = str(version.get("VersionId") or "")
+        head = s3.head_object(
+            Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+        )
+        if (
+            int(head.get("ContentLength", -1)) == expected_length
+            and str((head.get("Metadata") or {}).get(metadata_name) or "") == metadata_value
+        ):
+            return version_id, str(head.get("ETag") or version.get("ETag") or "")
+    return None
 
 
 def create_upload_intent(
@@ -157,6 +278,7 @@ def create_upload_intent(
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
     upload_id = str(uuid4())
     staging_object_key = f"staging/{uuid4().hex}/{upload_id}.{extension}"
+    operation_fence = uuid4().hex
     expires_epoch = int(now.timestamp()) + UPLOAD_INTENT_TTL_SECONDS
     part_count = (request.size_bytes + UPLOAD_CHUNK_BYTES - 1) // UPLOAD_CHUNK_BYTES
     item = {
@@ -168,14 +290,20 @@ def create_upload_intent(
         "expected_size": request.size_bytes,
         "max_bytes": max_bytes,
         "part_count": part_count,
+        "staging_object_key": staging_object_key,
         "status": "issuing",
         "version": 1,
+        "operation_kind": "staging_issuance",
+        "operation_fence": operation_fence,
+        "operation_lease_expires_at": int(now.timestamp()) + UPLOAD_OPERATION_LEASE_SECONDS,
+        "operation_takeover_count": 0,
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
     multipart_upload_id: str | None = None
     try:
-        repository.create_upload_intent(item)
+        prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)
+        prepare(item)
         created = s3.create_multipart_upload(
             Bucket=settings.s3_images_bucket,
             Key=staging_object_key,
@@ -185,13 +313,25 @@ def create_upload_intent(
             ChecksumAlgorithm="SHA256",
         )
         multipart_upload_id = str(created["UploadId"])
-        if not repository.mark_upload_issued(
-            upload_id,
-            actor.user_id,
-            1,
-            staging_object_key=staging_object_key,
-            multipart_upload_id=multipart_upload_id,
-        ):
+        record = getattr(repository, "record_staging_multipart", None)
+        recorded = (
+            record(
+                upload_id,
+                actor.user_id,
+                1,
+                operation_fence=operation_fence,
+                multipart_upload_id=multipart_upload_id,
+            )
+            if record
+            else repository.mark_upload_issued(
+                upload_id,
+                actor.user_id,
+                1,
+                staging_object_key=staging_object_key,
+                multipart_upload_id=multipart_upload_id,
+            )
+        )
+        if not recorded:
             raise RuntimeError("issuance transition failed")
     except Exception:
         if multipart_upload_id:
@@ -208,7 +348,7 @@ def create_upload_intent(
                 upload_id,
                 actor.user_id,
                 1,
-                cleanup_pending=bool(multipart_upload_id),
+                cleanup_pending=True,
             )
         except Exception:
             pass
@@ -428,6 +568,14 @@ def complete_upload(
     item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
     if item.get("status") == "validated":
         return {"uploadId": upload_id, "status": "validated", "attachment": None}
+    if item.get("status") == "assembling":
+        item = _recover_staging_assembly(
+            item, actor, s3=s3, settings=settings, now=now, repository=repository
+        )
+    if item.get("status") == "promoting":
+        return _recover_immutable_promotion(
+            item, actor, s3=s3, settings=settings, now=now, repository=repository
+        )
     if item.get("status") == "validating":
         return _validate_and_promote_completed(
             item,
@@ -445,9 +593,26 @@ def complete_upload(
     if any(part.get("status") != "completed" for part in parts):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
     version = int(item["version"])
-    if not repository.begin_upload_assembly(
-        upload_id, actor.user_id, version, int(now.timestamp())
-    ):
+    operation_fence = uuid4().hex
+    ledger_digest = _part_ledger_digest(parts)
+    claim = getattr(repository, "claim_staging_assembly", None)
+    claimed = (
+        claim(
+            upload_id,
+            actor.user_id,
+            version,
+            int(now.timestamp()),
+            operation_fence=operation_fence,
+            multipart_upload_id=str(item["multipart_upload_id"]),
+            ordered_part_count=part_count,
+            part_ledger_digest=ledger_digest,
+        )
+        if claim
+        else repository.begin_upload_assembly(
+            upload_id, actor.user_id, version, int(now.timestamp())
+        )
+    )
+    if not claimed:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
         result = s3.complete_multipart_upload(
@@ -461,22 +626,30 @@ def complete_upload(
                 ]
             },
         )
-        if not repository.mark_staging_completed(
-            upload_id,
-            actor.user_id,
-            version + 1,
-            staging_version_id=str(result.get("VersionId") or ""),
-            staging_etag=str(result.get("ETag") or ""),
-        ):
+        recover = getattr(repository, "recover_staging_completion", None)
+        persisted = (
+            recover(
+                upload_id,
+                actor.user_id,
+                version + 1,
+                operation_fence=operation_fence,
+                staging_version_id=str(result.get("VersionId") or ""),
+                staging_etag=str(result.get("ETag") or ""),
+            )
+            if recover
+            else repository.mark_staging_completed(
+                upload_id,
+                actor.user_id,
+                version + 1,
+                staging_version_id=str(result.get("VersionId") or ""),
+                staging_etag=str(result.get("ETag") or ""),
+            )
+        )
+        if not persisted:
             raise RuntimeError("staging completion transition failed")
     except Exception:
-        _terminal_abort(
-            {**item, "version": version + 1},
-            actor,
-            s3=s3,
-            settings=settings,
-            repository=repository,
-        )
+        # The assembling row retains the exact key, multipart ID, fence and lease.
+        # A restart reconciles the exact completed version or aborts it during cleanup.
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
     completed = {
         **item,
@@ -495,6 +668,153 @@ def complete_upload(
     )
 
 
+def _part_ledger_digest(parts: list[dict[str, Any]]) -> str:
+    canonical = "\n".join(
+        ":".join(
+            (
+                str(int(part["part_number"])),
+                str(part.get("provider_etag") or ""),
+                str(part.get("provider_checksum") or ""),
+                str(int(part.get("content_length", 0))),
+            )
+        )
+        for part in parts
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _exact_object_versions(s3: Any, settings: Settings, key: str) -> list[dict[str, Any]]:
+    response = s3.list_object_versions(
+        Bucket=settings.s3_images_bucket, Prefix=key, MaxKeys=1000
+    )
+    return [value for value in response.get("Versions", []) if value.get("Key") == key]
+
+
+def _recover_staging_assembly(
+    item: dict[str, Any],
+    actor: Actor,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime,
+    repository: Any,
+) -> dict[str, Any]:
+    if int(item.get("operation_lease_expires_at", 0)) > int(now.timestamp()):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    key = str(item.get("staging_object_key") or "")
+    fence = str(item.get("operation_fence") or "")
+    if not key or not fence:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    item = _claim_recovery_fence(
+        item, actor, now=now, repository=repository, operation_kind="staging_assembly"
+    )
+    fence = str(item["operation_fence"])
+    try:
+        for version in _exact_object_versions(s3, settings, key):
+            version_id = str(version.get("VersionId") or "")
+            head = s3.head_object(
+                Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+            )
+            metadata = head.get("Metadata") or {}
+            if (
+                int(head.get("ContentLength", -1)) == int(item.get("expected_size", -2))
+                and metadata.get("upload-id") == item.get("upload_id")
+            ):
+                etag = str(head.get("ETag") or version.get("ETag") or "")
+                if repository.recover_staging_completion(
+                    item["upload_id"],
+                    actor.user_id,
+                    int(item["version"]),
+                    operation_fence=fence,
+                    staging_version_id=version_id,
+                    staging_etag=etag,
+                ):
+                    return {
+                        **item,
+                        "status": "validating",
+                        "version": int(item["version"]) + 1,
+                        "staging_version_id": version_id,
+                        "staging_etag": etag,
+                    }
+                break
+    except AttachmentDecisionError:
+        raise
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+
+def _recover_immutable_promotion(
+    item: dict[str, Any],
+    actor: Actor,
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime,
+    repository: Any,
+) -> dict[str, Any]:
+    if int(item.get("operation_lease_expires_at", 0)) > int(now.timestamp()):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    key = str(item.get("immutable_object_key") or "")
+    fence = str(item.get("operation_fence") or "")
+    expected_checksum = str(item.get("content_sha256") or "")
+    item = _claim_recovery_fence(
+        item, actor, now=now, repository=repository, operation_kind="immutable_promotion"
+    )
+    fence = str(item["operation_fence"])
+    try:
+        for version in _exact_object_versions(s3, settings, key):
+            version_id = str(version.get("VersionId") or "")
+            head = s3.head_object(
+                Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+            )
+            metadata = head.get("Metadata") or {}
+            if (
+                int(head.get("ContentLength", -1)) == int(item.get("content_length", -2))
+                and metadata.get("content-sha256") == expected_checksum
+            ):
+                etag = str(head.get("ETag") or version.get("ETag") or "")
+                if repository.record_immutable_version(
+                    item["upload_id"],
+                    actor.user_id,
+                    int(item["version"]),
+                    operation_fence=fence,
+                    immutable_version_id=version_id,
+                    immutable_etag=etag,
+                    validated_at=now.isoformat(),
+                ):
+                    return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
+                break
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+
+def _claim_recovery_fence(
+    item: dict[str, Any],
+    actor: Actor,
+    *,
+    now: datetime,
+    repository: Any,
+    operation_kind: str,
+) -> dict[str, Any]:
+    claim = getattr(repository, "claim_stale_upload_operation", None)
+    if not claim:
+        return item
+    recovered = claim(
+        str(item["upload_id"]),
+        actor.user_id,
+        int(item["version"]),
+        operation_kind,
+        str(item.get("operation_fence") or ""),
+        uuid4().hex,
+        int(now.timestamp()),
+    )
+    if not recovered:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return recovered
+
+
 def _validate_and_promote_completed(
     item: dict[str, Any],
     actor: Actor,
@@ -508,12 +828,11 @@ def _validate_and_promote_completed(
     if not staging_version or not item.get("staging_object_key"):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     immutable_key = f"objects/{uuid4().hex}"
-    immutable_upload_id: str | None = None
     immutable_version: str | None = None
-    immutable_etag: str | None = None
     digest = hashlib.sha256()
     length = 0
     validating_version = int(item["version"])
+    promotion_started = False
     try:
         response = s3.get_object(
             Bucket=settings.s3_images_bucket,
@@ -540,58 +859,69 @@ def _validate_and_promote_completed(
                 spool, item["original_filename"], item["declared_type"]
             )
             spool.seek(0)
-            created = s3.create_multipart_upload(
+            operation_fence = uuid4().hex
+            begin = getattr(repository, "begin_immutable_promotion", None)
+            if begin and not begin(
+                item["upload_id"],
+                actor.user_id,
+                validating_version,
+                int(now.timestamp()),
+                operation_fence=operation_fence,
+                immutable_object_key=immutable_key,
+                content_sha256=checksum,
+                content_length=detected.size_bytes,
+                detected_type=detected.media_type,
+                image_width=detected.width,
+                image_height=detected.height,
+            ):
+                raise RuntimeError("immutable promotion claim failed")
+            promotion_started = bool(begin)
+            promoted = s3.put_object(
                 Bucket=settings.s3_images_bucket,
                 Key=immutable_key,
                 ContentType=detected.media_type,
                 ServerSideEncryption="AES256",
+                Body=spool,
+                ContentLength=detected.size_bytes,
+                ChecksumSHA256=base64.b64encode(bytes.fromhex(checksum)).decode("ascii"),
                 Metadata={"content-sha256": checksum},
-                ChecksumAlgorithm="SHA256",
-            )
-            immutable_upload_id = str(created["UploadId"])
-            promoted_parts: list[dict[str, Any]] = []
-            part_number = 1
-            while chunk := spool.read(UPLOAD_CHUNK_BYTES):
-                encoded = base64.b64encode(hashlib.sha256(chunk).digest()).decode("ascii")
-                uploaded = s3.upload_part(
-                    Bucket=settings.s3_images_bucket,
-                    Key=immutable_key,
-                    UploadId=immutable_upload_id,
-                    PartNumber=part_number,
-                    Body=chunk,
-                    ContentLength=len(chunk),
-                    ChecksumSHA256=encoded,
-                )
-                promoted_parts.append(
-                    {"PartNumber": part_number, "ETag": str(uploaded.get("ETag") or "")}
-                )
-                part_number += 1
-            promoted = s3.complete_multipart_upload(
-                Bucket=settings.s3_images_bucket,
-                Key=immutable_key,
-                UploadId=immutable_upload_id,
-                MultipartUpload={"Parts": promoted_parts},
             )
             immutable_version = str(promoted.get("VersionId") or "")
             immutable_etag = str(promoted.get("ETag") or "")
             if not immutable_version or not immutable_etag:
                 raise RuntimeError("immutable version metadata unavailable")
-            attributes = {
-                "detected_type": detected.media_type,
-                "content_length": detected.size_bytes,
-                "content_sha256": checksum,
-                "immutable_object_key": immutable_key,
-                "immutable_version_id": immutable_version,
-                "immutable_etag": immutable_etag,
-                "image_width": detected.width,
-                "image_height": detected.height,
-                "validated_at": now.isoformat(),
-            }
-            if not repository.mark_validated(
-                item["upload_id"], actor.user_id, validating_version, attributes
-            ):
+            record = getattr(repository, "record_immutable_version", None)
+            persisted = (
+                record(
+                    item["upload_id"],
+                    actor.user_id,
+                    validating_version + 1,
+                    operation_fence=operation_fence,
+                    immutable_version_id=immutable_version,
+                    immutable_etag=immutable_etag,
+                    validated_at=now.isoformat(),
+                )
+                if record
+                else repository.mark_validated(
+                    item["upload_id"],
+                    actor.user_id,
+                    validating_version,
+                    {
+                        "detected_type": detected.media_type,
+                        "content_length": detected.size_bytes,
+                        "content_sha256": checksum,
+                        "immutable_object_key": immutable_key,
+                        "immutable_version_id": immutable_version,
+                        "immutable_etag": immutable_etag,
+                        "image_width": detected.width,
+                        "image_height": detected.height,
+                        "validated_at": now.isoformat(),
+                    },
+                )
+            )
+            if not persisted:
                 raise RuntimeError("immutable tuple persistence failed")
-        validated_version = validating_version + 1
+        validated_version = validating_version + (2 if promotion_started else 1)
         try:
             s3.delete_object(
                 Bucket=settings.s3_images_bucket,
@@ -606,9 +936,10 @@ def _validate_and_promote_completed(
             pass
         return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
     except ValidationFailure as exc:
-        repository.mark_invalid(
-            item["upload_id"], actor.user_id, validating_version, exc.code.value
-        )
+        if not promotion_started:
+            repository.mark_invalid(
+                item["upload_id"], actor.user_id, validating_version, exc.code.value
+            )
         _delete_exact_if_present(
             s3,
             settings,
@@ -619,16 +950,9 @@ def _validate_and_promote_completed(
     except AttachmentDecisionError:
         raise
     except Exception:
-        if immutable_upload_id and not immutable_version:
-            try:
-                s3.abort_multipart_upload(
-                    Bucket=settings.s3_images_bucket,
-                    Key=immutable_key,
-                    UploadId=immutable_upload_id,
-                )
-            except Exception:
-                pass
-        if immutable_version:
+        # Once promotion starts, its exact key/checksum/length/fence remain durable.
+        # Never erase a possibly successful provider write before restart recovery.
+        if immutable_version and not promotion_started:
             _delete_exact_if_present(s3, settings, immutable_key, immutable_version)
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
 

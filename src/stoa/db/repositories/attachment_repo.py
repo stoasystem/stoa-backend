@@ -240,6 +240,37 @@ def create_upload_intent(item: dict[str, Any], *, table: Any | None = None) -> N
         _translate(exc)
 
 
+def prepare_staging_issuance(item: dict[str, Any], *, table: Any | None = None) -> None:
+    """Persist the never-reused staging coordinate before provider mutation."""
+    required = {
+        "staging_object_key",
+        "operation_kind",
+        "operation_fence",
+        "operation_lease_expires_at",
+    }
+    if item.get("status") != "issuing" or not required.issubset(item):
+        raise AttachmentRepositoryConflict("invalid_operation_state")
+    create_upload_intent(item, table=table)
+
+
+def record_staging_multipart(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    operation_fence: str,
+    multipart_upload_id: str,
+    table: Any | None = None,
+) -> bool:
+    return _fenced_transition(
+        upload_id, owner_id, "issuing", "pending_upload", version, operation_fence,
+        attributes={"multipart_upload_id": multipart_upload_id},
+        remove_operation=True, table=table,
+    )
+
+
+# Compatibility alias for callers outside the upload gateway. New code must persist
+# the staging key through prepare_staging_issuance before provider mutation.
 def mark_upload_issued(
     upload_id: str,
     owner_id: str,
@@ -249,17 +280,15 @@ def mark_upload_issued(
     multipart_upload_id: str,
     table: Any | None = None,
 ) -> bool:
-    return _transition(
+    item = get_upload_intent(upload_id, table=table)
+    if not item or item.get("staging_object_key") != staging_object_key:
+        return False
+    return record_staging_multipart(
         upload_id,
         owner_id,
-        "issuing",
-        "pending_upload",
         version,
-        None,
-        attributes={
-            "staging_object_key": staging_object_key,
-            "multipart_upload_id": multipart_upload_id,
-        },
+        operation_fence=str(item.get("operation_fence") or ""),
+        multipart_upload_id=multipart_upload_id,
         table=table,
     )
 
@@ -408,12 +437,16 @@ def list_upload_parts(upload_id: str, *, table: Any | None = None) -> list[dict[
     return sorted(response.get("Items", []), key=lambda item: int(item["part_number"]))
 
 
-def begin_upload_assembly(
+def claim_staging_assembly(
     upload_id: str,
     owner_id: str,
     version: int,
     now_epoch: int,
     *,
+    operation_fence: str,
+    multipart_upload_id: str,
+    ordered_part_count: int,
+    part_ledger_digest: str,
     table: Any | None = None,
 ) -> bool:
     return _transition(
@@ -423,8 +456,106 @@ def begin_upload_assembly(
         "assembling",
         version,
         now_epoch,
+        attributes={
+            "operation_kind": "staging_assembly",
+            "operation_fence": operation_fence,
+            "operation_lease_expires_at": now_epoch + 120,
+            "multipart_upload_id": multipart_upload_id,
+            "assembly_part_count": ordered_part_count,
+            "assembly_ledger_digest": part_ledger_digest,
+            "operation_takeover_count": 0,
+        },
         table=table,
     )
+
+
+def begin_upload_assembly(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> bool:
+    item = get_upload_intent(upload_id, table=table)
+    if not item:
+        return False
+    return claim_staging_assembly(
+        upload_id, owner_id, version, now_epoch,
+        operation_fence=str(item.get("operation_fence") or "legacy"),
+        multipart_upload_id=str(item.get("multipart_upload_id") or ""),
+        ordered_part_count=int(item.get("part_count", 0)),
+        part_ledger_digest=str(item.get("assembly_ledger_digest") or "legacy"),
+        table=table,
+    )
+
+
+def recover_staging_completion(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    operation_fence: str,
+    staging_version_id: str,
+    staging_etag: str,
+    table: Any | None = None,
+) -> bool:
+    return _fenced_transition(
+        upload_id, owner_id, "assembling", "validating", version, operation_fence,
+        attributes={
+            "staging_version_id": staging_version_id,
+            "staging_etag": staging_etag,
+        },
+        remove_operation=True, table=table,
+    )
+
+
+def claim_stale_upload_operation(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    operation_kind: str,
+    previous_fence: str,
+    new_fence: str,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> dict[str, Any] | None:
+    """Bounded lease takeover that fences every pre-restart worker."""
+    try:
+        response = (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=(
+                "SET operation_fence=:new_fence, operation_lease_expires_at=:lease, "
+                "operation_takeover_count=if_not_exists(operation_takeover_count,:zero)+:one, "
+                "#version=:next"
+            ),
+            ConditionExpression=(
+                "#owner=:owner AND #version=:version AND operation_kind=:kind AND "
+                "operation_fence=:previous_fence AND operation_lease_expires_at<=:now AND "
+                "(attribute_not_exists(operation_takeover_count) OR operation_takeover_count<:max)"
+            ),
+            ExpressionAttributeNames={"#owner": "owner_id", "#version": "version"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":version": version,
+                ":next": version + 1,
+                ":kind": operation_kind,
+                ":previous_fence": previous_fence,
+                ":new_fence": new_fence,
+                ":now": now_epoch,
+                ":lease": now_epoch + 120,
+                ":zero": 0,
+                ":one": 1,
+                ":max": 2,
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return None
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return response.get("Attributes")
 
 
 def mark_staging_completed(
@@ -436,17 +567,14 @@ def mark_staging_completed(
     staging_etag: str,
     table: Any | None = None,
 ) -> bool:
-    return _transition(
-        upload_id,
-        owner_id,
-        "assembling",
-        "validating",
-        version,
-        None,
-        attributes={
-            "staging_version_id": staging_version_id,
-            "staging_etag": staging_etag,
-        },
+    item = get_upload_intent(upload_id, table=table)
+    if not item:
+        return False
+    return recover_staging_completion(
+        upload_id, owner_id, version,
+        operation_fence=str(item.get("operation_fence") or ""),
+        staging_version_id=staging_version_id,
+        staging_etag=staging_etag,
         table=table,
     )
 
@@ -492,7 +620,9 @@ def list_upload_cleanup_candidates(
         "FilterExpression": (
             "begins_with(PK,:upload) AND SK=:meta AND ("
             "#status IN (:invalid,:expired,:cleanup_pending) OR ("
-            "#status IN (:pending,:validating,:validated) AND expires_at<=:now))"
+            "#status IN (:pending,:validating,:validated) AND expires_at<=:now) OR ("
+            "#status IN (:issuing,:assembling,:promoting) AND "
+            "operation_lease_expires_at<=:now))"
         ),
         "ExpressionAttributeNames": {"#status": "status"},
         "ExpressionAttributeValues": {
@@ -504,6 +634,9 @@ def list_upload_cleanup_candidates(
             ":pending": "pending_upload",
             ":validating": "validating",
             ":validated": "validated",
+            ":issuing": "issuing",
+            ":assembling": "assembling",
+            ":promoting": "promoting",
             ":now": now_epoch,
         },
     }
@@ -531,7 +664,9 @@ def claim_upload_cleanup(
             ConditionExpression=(
                 "#version=:version AND ("
                 "#status IN (:invalid,:expired,:cleanup_pending) OR ("
-                "#status IN (:pending,:validating,:validated) AND expires_at<=:now))"
+                "#status IN (:pending,:validating,:validated) AND expires_at<=:now) OR ("
+                "#status IN (:issuing,:assembling,:promoting) AND "
+                "operation_lease_expires_at<=:now))"
             ),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
@@ -543,6 +678,9 @@ def claim_upload_cleanup(
                 ":pending": "pending_upload",
                 ":validating": "validating",
                 ":validated": "validated",
+                ":issuing": "issuing",
+                ":assembling": "assembling",
+                ":promoting": "promoting",
                 ":now": now_epoch,
                 ":reason": reason,
             },
@@ -619,15 +757,90 @@ def complete_upload_cleanup(
     *,
     table: Any | None = None,
 ) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=(
+                "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at "
+                "REMOVE staging_object_key, staging_version_id, staging_etag, "
+                "multipart_upload_id, immutable_object_key, immutable_version_id, "
+                "immutable_etag, operation_kind, operation_fence, "
+                "operation_lease_expires_at, operation_takeover_count, "
+                "cleanup_reference_cursor, cleanup_multipart_aborted, "
+                "cleanup_staging_deleted, cleanup_immutable_deleted"
+            ),
+            ConditionExpression=(
+                "#status=:pending AND #version=:version AND "
+                "cleanup_multipart_aborted=:true AND cleanup_staging_deleted=:true AND "
+                "cleanup_immutable_deleted=:true"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":pending": "cleanup_pending",
+                ":complete": "cleanup_complete",
+                ":version": version,
+                ":next": version + 1,
+                ":cleaned_at": cleaned_at,
+                ":true": True,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def mark_cleanup_multipart_aborted(
+    upload_id: str, version: int, *, table: Any | None = None
+) -> bool:
+    return _cleanup_progress(upload_id, version, "cleanup_multipart_aborted", table=table)
+
+
+def mark_cleanup_staging_deleted(
+    upload_id: str, version: int, *, table: Any | None = None
+) -> bool:
+    return _cleanup_progress(upload_id, version, "cleanup_staging_deleted", table=table)
+
+
+def mark_cleanup_immutable_deleted(
+    upload_id: str, version: int, *, table: Any | None = None
+) -> bool:
+    return _cleanup_progress(upload_id, version, "cleanup_immutable_deleted", table=table)
+
+
+def record_cleanup_staging_version(
+    upload_id: str, version: int, version_id: str, etag: str, *, table: Any | None = None
+) -> bool:
     return _cleanup_update(
         upload_id,
         version,
-        (
-            "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at "
-            "REMOVE staging_object_key, staging_version_id, staging_etag, "
-            "multipart_upload_id, cleanup_reference_cursor"
-        ),
-        {":complete": "cleanup_complete", ":next": version + 1, ":cleaned_at": cleaned_at},
+        "SET staging_version_id=:target, staging_etag=:etag, #version=:next",
+        {":target": version_id, ":etag": etag, ":next": version + 1},
+        table=table,
+    )
+
+
+def record_cleanup_immutable_version(
+    upload_id: str, version: int, version_id: str, etag: str, *, table: Any | None = None
+) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        "SET immutable_version_id=:target, immutable_etag=:etag, #version=:next",
+        {":target": version_id, ":etag": etag, ":next": version + 1},
+        table=table,
+    )
+
+
+def _cleanup_progress(
+    upload_id: str, version: int, field: str, *, table: Any | None
+) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        f"SET {field}=:true, #version=:next",
+        {":true": True, ":next": version + 1},
         table=table,
     )
 
@@ -1362,6 +1575,73 @@ def mark_validated(
     )
 
 
+def begin_immutable_promotion(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    now_epoch: int,
+    *,
+    operation_fence: str,
+    immutable_object_key: str,
+    content_sha256: str,
+    content_length: int,
+    detected_type: str,
+    image_width: int | None,
+    image_height: int | None,
+    table: Any | None = None,
+) -> bool:
+    """Fence and persist the exact immutable target before PutObject."""
+    return _transition(
+        upload_id,
+        owner_id,
+        "validating",
+        "promoting",
+        version,
+        now_epoch,
+        attributes={
+            "operation_kind": "immutable_promotion",
+            "operation_fence": operation_fence,
+            "operation_lease_expires_at": now_epoch + 120,
+            "operation_takeover_count": 0,
+            "immutable_object_key": immutable_object_key,
+            "content_sha256": content_sha256,
+            "content_length": content_length,
+            "detected_type": detected_type,
+            "image_width": image_width,
+            "image_height": image_height,
+        },
+        table=table,
+    )
+
+
+def record_immutable_version(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    *,
+    operation_fence: str,
+    immutable_version_id: str,
+    immutable_etag: str,
+    validated_at: str,
+    table: Any | None = None,
+) -> bool:
+    return _fenced_transition(
+        upload_id,
+        owner_id,
+        "promoting",
+        "validated",
+        version,
+        operation_fence,
+        attributes={
+            "immutable_version_id": immutable_version_id,
+            "immutable_etag": immutable_etag,
+            "validated_at": validated_at,
+        },
+        remove_operation=True,
+        table=table,
+    )
+
+
 def clear_staging_coordinates(
     upload_id: str,
     owner_id: str,
@@ -1448,6 +1728,59 @@ def _transition(
             Key=upload_key(upload_id),
             UpdateExpression=update,
             ConditionExpression=condition,
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def _fenced_transition(
+    upload_id: str,
+    owner_id: str,
+    source: str,
+    target: str,
+    version: int,
+    operation_fence: str,
+    *,
+    attributes: dict[str, Any] | None = None,
+    remove_operation: bool = False,
+    table: Any | None = None,
+) -> bool:
+    names = {
+        "#owner": "owner_id",
+        "#status": "status",
+        "#version": "version",
+        "#fence": "operation_fence",
+    }
+    values: dict[str, Any] = {
+        ":owner": owner_id,
+        ":source": source,
+        ":target": target,
+        ":version": version,
+        ":next": version + 1,
+        ":fence": operation_fence,
+    }
+    update = "SET #status=:target, #version=:next"
+    for index, (name, value) in enumerate((attributes or {}).items()):
+        names[f"#a{index}"] = name
+        values[f":a{index}"] = value
+        update += f", #a{index}=:a{index}"
+    if remove_operation:
+        update += (
+            " REMOVE operation_kind, operation_fence, operation_lease_expires_at, "
+            "operation_takeover_count"
+        )
+    try:
+        (table or get_table()).update_item(
+            Key=upload_key(upload_id),
+            UpdateExpression=update,
+            ConditionExpression=(
+                "#owner=:owner AND #status=:source AND #version=:version AND #fence=:fence"
+            ),
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
         )
