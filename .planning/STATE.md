@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: gaps_found
-stopped_at: Phase 473 verification gaps found
-last_updated: "2026-07-16T12:02:00.000Z"
-last_activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/100)
+status: planning
+stopped_at: Phase 473 gap closure planned — 4 plans ready
+last_updated: "2026-07-16T13:03:29.953Z"
+last_activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to execute
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 29
+  total_plans: 33
   completed_plans: 29
   percent: 10
 ---
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (student-content-privacy-and-practice-integrity) — GAPS FOUND
-Plan: 7 of 7
-Status: Verification gaps found
-Last activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/100)
+Phase: 473 (student-content-privacy-and-practice-integrity) — GAP CLOSURE PLANNED
+Plan: 7 of 11
+Status: Ready to execute gap closure
+Last activity: 2026-07-16 -- Phase 473 gap closure planned; Plans 08-11 ready to execute
 
 ## Accumulated Context
 
@@ -70,10 +70,11 @@ Last activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/
 - Phase 473 implemented student upload ownership, durable attachment history/reuse, question OCR isolation, answer-free previews, attempt-gated results, and scoped privileged answer reads, but independent verification scored 68/100 (2/3 requirements and 15/22 decisions fully verified).
 - Expired, invalid, and abandoned unconsumed upload cleanup now uses bounded versioned claims, consistent rechecks, resumable durable-reference scans, non-consumable retry tombstones, and coordinate-free summaries.
 - The full suite reports 1232 passing tests, but verification found one critical mutable-object TOCTOU gap and five stable-error/redaction/replay gaps; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN.
+- Plans 473-08 through 473-11 close those gaps through an authenticated chunk gateway, server-only immutable promotion, category-stable transaction outcomes, replayable conversation commands, private-safe telemetry, and one final source-bound evidence gate.
 
 ### Pending Todos
 
-- Close the Phase 473 verification gaps from `473-VERIFICATION.md` before advancing to Phase 474.
+- Execute Phase 473 Plans 08-11 with `--gaps-only` before advancing to Phase 474.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -87,14 +88,14 @@ Last activity: 2026-07-16 -- Phase 473 verification found 6 open gaps (score 68/
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 473 --gaps`; do not mark Phase 473 complete or approve external rollout while the immutable-byte, redaction, stable-error, and replay gaps remain open.
+- Run `$gsd-execute-phase 473 --gaps-only`; do not mark Phase 473 complete or approve external rollout until verification reruns as passed.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
 **Last Date:** 2026-07-16T12:02:00.000Z
-**Stopped At:** Phase 473 verification gaps found
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
+**Stopped At:** Phase 473 gap closure planned — 4 plans ready
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-08-PLAN.md
 
 ## Performance Metrics
 

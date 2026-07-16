@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | Gaps found — 7/7 plans executed, verification 68/100 | Phase 472 |
+| 473 | Student Content Privacy And Practice Integrity | Gap closure planned — 7/11 plans complete, 4 pending | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -182,11 +182,29 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-07` — Add expired-upload cleanup and run the combined privacy/practice security evidence gate.
 
+**Wave 5** *(gap closure; blocked on Wave 4 completion)*
+
+- [ ] `473-08` — Replace direct S3 POST disclosure with an authenticated chunk gateway and promote exact validated bytes to server-only immutable storage.
+
+**Wave 6** *(blocked on Plan 473-08)*
+
+- [ ] `473-09` — Map transaction cancellation operations to stable quota, dependency, and concealed-resource outcomes with zero-effect races.
+
+**Wave 7** *(blocked on Plan 473-09)*
+
+- [ ] `473-10` — Add replayable conversation commands, atomic chat quota idempotency, and private-safe AI/conversation telemetry.
+
+**Wave 8** *(blocked on Plans 473-08 through 473-10)*
+
+- [ ] `473-11` — Re-run all privacy and authorization gates and regenerate final source-bound evidence and validation artifacts.
+
 **Cross-cutting constraints:**
 
 - Public responses, logs, and errors expose opaque IDs and safe categories only—never object keys, provider coordinates, raw OCR, extracted text, or parser/provider exceptions.
 - Upload consumption, attachment association, reference changes, quota accounting, and attempt recording are conditional, atomic, and retry-idempotent.
 - Student preview contracts stay answer-free; answer-bearing results require a successfully recorded attempt, while teacher/admin answer reads use a separate scoped contract.
+- Client upload responses expose only opaque application identifiers; provider multipart coordinates and ETags remain server-only, and all downstream reads/deletes bind to the immutable validated version.
+- Exact conversation retries converge before attachment resolution, while new foreign or missing references create zero command, quota, association, provider, or AI effects.
 
 **Success criteria:**
 
