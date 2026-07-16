@@ -48,6 +48,7 @@ class ResourceType(StrEnum):
     OPERATOR_RESOURCE = "operator_resource"
     UPLOAD = "upload"
     ATTACHMENT = "attachment"
+    CURRICULUM_ANSWER = "curriculum_answer"
 
 
 class AuthorizationAction(StrEnum):
@@ -92,6 +93,7 @@ class AuthorizationPurpose(StrEnum):
     REPORT_RECOVERY = "report_recovery"
     SUPPORT_HANDOFF = "support_handoff"
     AUDIT_GOVERNANCE = "audit_governance"
+    CURRICULUM_ANSWER_READ = "curriculum_answer_read"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +108,11 @@ class ResourceRef:
     session_id: str | None = None
     relationship_known: bool = False
     safe_support_metadata: bool = False
+    course_id: str | None = None
+    class_id: str | None = None
+    lesson_id: str | None = None
+    subject_id: str | None = None
+    grade_level: str | None = None
 
     def __post_init__(self) -> None:
         if not self.resource_id.strip() or not self.student_id.strip():
@@ -268,6 +275,40 @@ class TeacherAuthorizationFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class CurriculumAnswerAuthorizationFacts:
+    """Fresh teacher account and curriculum-scope assignment evidence."""
+
+    assignment: Mapping[str, object] | None = None
+    teacher_account: Mapping[str, object] | None = None
+
+    def permits(
+        self,
+        actor_id: str,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        now: datetime,
+    ) -> bool:
+        if not _active_account(self.teacher_account, actor_id, CanonicalRole.TEACHER):
+            return False
+        assignment = self.assignment
+        if not assignment or assignment.get("status") != "active":
+            return False
+        if assignment.get("teacher_id") != actor_id or _expired(
+            assignment.get("expires_at"), now
+        ):
+            return False
+        if (
+            resource.resource_type.value
+            not in _string_set(assignment.get("resource_types"))
+            or action.value not in _string_set(assignment.get("actions"))
+            or purpose.value not in _string_set(assignment.get("purposes"))
+        ):
+            return False
+        return _curriculum_scope_matches(assignment, resource)
+
+
+@dataclass(frozen=True, slots=True)
 class BreakGlassEvidence:
     incident_id: str
     reason: str
@@ -300,6 +341,7 @@ class AuthorizationFacts:
     parent: ParentAuthorizationFacts | None = None
     teacher: TeacherAuthorizationFacts | None = None
     break_glass: BreakGlassEvidence | None = None
+    curriculum_answer: CurriculumAnswerAuthorizationFacts | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -467,6 +509,16 @@ class CurrentAuthorizationFactRepository:
         if actor.role is CanonicalRole.TEACHER:
             from stoa.db.repositories import question_repo, user_repo
 
+            if resource.resource_type is ResourceType.CURRICULUM_ANSWER:
+                return AuthorizationFacts(
+                    curriculum_answer=CurriculumAnswerAuthorizationFacts(
+                        assignment=question_repo.get_teacher_curriculum_assignment(
+                            actor.user_id
+                        ),
+                        teacher_account=user_repo.get_user(actor.user_id),
+                    )
+                )
+
             question = resource_value if resource.resource_type is ResourceType.QUESTION else None
             if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
                 question = question_repo.get_question(resource.question_id)
@@ -569,6 +621,13 @@ class AuthorizationPolicy:
                 allowed = authorized_resource.facts.teacher.permits(
                     actor.user_id, resource, action, purpose, now
                 )
+            elif (
+                actor.role is CanonicalRole.TEACHER
+                and authorized_resource.facts.curriculum_answer
+            ):
+                allowed = authorized_resource.facts.curriculum_answer.permits(
+                    actor.user_id, resource, action, purpose, now
+                )
             elif actor.role is CanonicalRole.ADMIN:
                 allowed, evidence = self._admin_permits(
                     actor, authorized_resource, action, purpose, now
@@ -603,6 +662,12 @@ class AuthorizationPolicy:
         now: datetime,
     ) -> tuple[bool, str | None]:
         ref = resource.ref
+        if (
+            ref.resource_type is ResourceType.CURRICULUM_ANSWER
+            and action is AuthorizationAction.READ
+            and purpose is AuthorizationPurpose.CURRICULUM_ANSWER_READ
+        ):
+            return True, "role:admin:curriculum_answer_read"
         if purpose is AuthorizationPurpose.INCIDENT_BREAK_GLASS:
             evidence = resource.facts.break_glass
             forbidden = {
@@ -796,6 +861,9 @@ def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> 
                 and assignment.get("student_id") == resource.ref.student_id
             )
         )
+    if actor.role is CanonicalRole.TEACHER and resource.facts.curriculum_answer:
+        assignment = resource.facts.curriculum_answer.assignment or {}
+        return assignment.get("teacher_id") == actor.user_id
     return False
 
 
@@ -834,6 +902,41 @@ def _string_set(value: object) -> set[str]:
     if not isinstance(value, (list, tuple, set, frozenset)):
         return set()
     return {str(item) for item in value}
+
+
+def _curriculum_scope_matches(
+    assignment: Mapping[str, object], resource: ResourceRef
+) -> bool:
+    """Match only authoritative challenge coordinates, never request fields.
+
+    An assignment may scope on one or more dimensions. Every declared dimension
+    must match, and at least one dimension must be declared.
+    """
+    nested = assignment.get("curriculum_scope")
+    scope = nested if isinstance(nested, Mapping) else assignment
+    coordinates = {
+        "course_id": resource.course_id,
+        "class_id": resource.class_id,
+        "lesson_id": resource.lesson_id,
+        "subject_id": resource.subject_id,
+        "grade_level": resource.grade_level,
+    }
+    matched = False
+    for field_name, requested in coordinates.items():
+        declared = scope.get(field_name)
+        if declared in (None, "", [], (), set(), frozenset()):
+            continue
+        if requested in (None, ""):
+            return False
+        allowed = (
+            {str(item) for item in declared}
+            if isinstance(declared, (list, tuple, set, frozenset))
+            else {str(declared)}
+        )
+        if str(requested) not in allowed:
+            return False
+        matched = True
+    return matched
 
 
 def _matching_grant(

@@ -8,6 +8,7 @@ from inspect import isawaitable
 from fastapi import Depends, HTTPException, Query
 
 from stoa.db.repositories import notification_repo, question_repo, user_repo
+from stoa.db.repositories import practice_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
@@ -266,6 +267,64 @@ def authorized_question_dependency(
     dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
         _metadata_spec(ResourceType.QUESTION, action, purpose, resolve)
         for purpose in purposes.values()
+    )
+    return dependency
+
+
+def authorized_curriculum_answer_dependency():
+    """Load one challenge once and authorize the narrow privileged answer read."""
+
+    async def resolve(challenge_id: str):
+        item = practice_repo.get_challenge(challenge_id)
+        if not item:
+            return None
+        return AuthorizedResource(
+            ResourceRef(
+                ResourceType.CURRICULUM_ANSWER,
+                challenge_id,
+                challenge_id,
+                course_id=str(item.get("course_id") or "") or None,
+                class_id=str(item.get("class_id") or "") or None,
+                lesson_id=str(item.get("lesson_id") or "") or None,
+                subject_id=str(item.get("subject_id") or "") or None,
+                grade_level=str(item.get("grade_level") or "") or None,
+            ),
+            item,
+        )
+
+    async def dependency(
+        challenge_id: str,
+        actor: Actor = Depends(get_actor),
+        facts: CurrentAuthorizationFactRepository = Depends(
+            get_authorization_fact_repository
+        ),
+        correlation_id: str = Depends(get_request_correlation_id),
+        audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+    ) -> AuthorizedResource:
+        try:
+            return await authorize_and_resolve(
+                actor=actor,
+                resource_id=challenge_id,
+                spec=AuthorizationSpec(
+                    ResourceType.CURRICULUM_ANSWER,
+                    AuthorizationAction.READ,
+                    AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+                    resolve,
+                ),
+                fact_repository=facts,
+                correlation_id=correlation_id,
+                audit_sink=audit_sink,
+            )
+        except SecurityDecisionError as error:
+            _raise_http(error)
+
+    dependency.authorization_specs = (  # type: ignore[attr-defined]
+        _metadata_spec(
+            ResourceType.CURRICULUM_ANSWER,
+            AuthorizationAction.READ,
+            AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+            resolve,
+        ),
     )
     return dependency
 

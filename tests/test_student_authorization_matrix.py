@@ -14,6 +14,7 @@ from stoa.security.authorization import (
     AuthorizationSpec,
     AuthorizedResource,
     BreakGlassEvidence,
+    CurriculumAnswerAuthorizationFacts,
     ParentAuthorizationFacts,
     ResourceRef,
     ResourceType,
@@ -358,6 +359,155 @@ def test_teacher_separate_assignment_requires_exact_resource_action_and_purpose_
         ).allowed
         is False
     )
+
+
+def _curriculum_answer_resource(*, subject_id="math", grade_level="secondary"):
+    return AuthorizedResource(
+        ResourceRef(
+            ResourceType.CURRICULUM_ANSWER,
+            "challenge-1",
+            "challenge-1",
+            lesson_id="lesson-1",
+            subject_id=subject_id,
+            grade_level=grade_level,
+        ),
+        {"challenge_id": "challenge-1"},
+    )
+
+
+def _curriculum_assignment(**overrides):
+    assignment = {
+        "teacher_id": "teacher-1",
+        "status": "active",
+        "subject_id": "math",
+        "grade_level": "secondary",
+        "resource_types": ["curriculum_answer"],
+        "actions": ["read"],
+        "purposes": ["curriculum_answer_read"],
+    }
+    assignment.update(overrides)
+    return assignment
+
+
+def test_assigned_teacher_and_active_admin_read_only_curriculum_answers():
+    resource = _curriculum_answer_resource()
+    facts = AuthorizationFacts(
+        curriculum_answer=CurriculumAnswerAuthorizationFacts(
+            assignment=_curriculum_assignment(),
+            teacher_account={
+                "user_id": "teacher-1",
+                "role": "teacher",
+                "account_status": "active",
+            },
+        )
+    )
+    teacher_resource = AuthorizedResource(resource.ref, resource.value, facts)
+    policy = AuthorizationPolicy()
+    assert policy.evaluate(
+        _actor(CanonicalRole.TEACHER, "teacher-1"),
+        teacher_resource,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    ).allowed
+    assert policy.evaluate(
+        _admin(),
+        resource,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    ).allowed
+    for action in (
+        AuthorizationAction.CREATE,
+        AuthorizationAction.UPDATE,
+        AuthorizationAction.DELETE,
+        AuthorizationAction.CURRICULUM_MUTATION,
+    ):
+        assert not policy.evaluate(
+            _actor(CanonicalRole.TEACHER, "teacher-1"),
+            teacher_resource,
+            action,
+            AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+        ).allowed
+        assert not policy.evaluate(
+            _admin(), resource, action, AuthorizationPurpose.CURRICULUM_ANSWER_READ
+        ).allowed
+
+
+@pytest.mark.parametrize(
+    "assignment,teacher_status",
+    [
+        (None, "active"),
+        (_curriculum_assignment(status="revoked"), "active"),
+        (_curriculum_assignment(expires_at="2020-01-01T00:00:00Z"), "active"),
+        (_curriculum_assignment(subject_id="physics"), "active"),
+        (_curriculum_assignment(resource_types=["practice"]), "active"),
+        (_curriculum_assignment(actions=["update"]), "active"),
+        (_curriculum_assignment(purposes=["curriculum_operations"]), "active"),
+        (_curriculum_assignment(), "disabled"),
+    ],
+)
+def test_unassigned_stale_wrong_scope_or_disabled_teacher_denies_curriculum_answer(
+    assignment, teacher_status
+):
+    resource = _curriculum_answer_resource()
+    facts = AuthorizationFacts(
+        curriculum_answer=CurriculumAnswerAuthorizationFacts(
+            assignment=assignment,
+            teacher_account={
+                "user_id": "teacher-1",
+                "role": "teacher",
+                "account_status": teacher_status,
+            },
+        )
+    )
+    decision = AuthorizationPolicy().evaluate(
+        _actor(CanonicalRole.TEACHER, "teacher-1"),
+        AuthorizedResource(resource.ref, resource.value, facts),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    )
+    assert not decision.allowed
+
+
+@pytest.mark.parametrize("role", [CanonicalRole.STUDENT, CanonicalRole.PARENT])
+def test_student_and_parent_never_receive_privileged_curriculum_answer(role):
+    decision = AuthorizationPolicy().evaluate(
+        _actor(role, f"{role.value}-1"),
+        _curriculum_answer_resource(),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    )
+    assert not decision.allowed
+    assert decision.result_code is SecurityErrorCode.RESOURCE_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_curriculum_assignment_repository_outage_fails_closed():
+    effects = []
+
+    async def resolver(_resource_id):
+        return _curriculum_answer_resource()
+
+    class OutageFacts:
+        async def facts_for(self, *_args):
+            raise TimeoutError("assignment repository canary")
+
+    with pytest.raises(SecurityDecisionError) as caught:
+        await authorize_and_resolve(
+            actor=_actor(CanonicalRole.TEACHER, "teacher-1"),
+            resource_id="challenge-1",
+            spec=AuthorizationSpec(
+                ResourceType.CURRICULUM_ANSWER,
+                AuthorizationAction.READ,
+                AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+                resolver,
+            ),
+            fact_repository=OutageFacts(),
+            audit_sink=MemoryAuthorizationAuditSink(),
+            correlation_id="answer-outage",
+        )
+    assert caught.value.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
+    assert "canary" not in repr(caught.value.public_body())
+    assert effects == []
 
 
 def _admin_resource(*, support_metadata=False, break_glass=None):

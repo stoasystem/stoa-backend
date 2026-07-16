@@ -4001,7 +4001,9 @@
     ],
     "classification": "authorized",
     "family": "practice",
-    "identifiers": [],
+    "identifiers": [
+      "challenge_id"
+    ],
     "method": "POST",
     "path": "/practice/challenges/{challenge_id}/answer",
     "sensitive": true

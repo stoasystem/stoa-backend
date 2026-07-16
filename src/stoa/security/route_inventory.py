@@ -170,6 +170,7 @@ _EXACT_IDENTIFIERS = {
     "uploadid",
     "attachmentid",
     "attemptid",
+    "challengeid",
 }
 
 
@@ -355,6 +356,9 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
     "uploadid": frozenset({ResourceType.UPLOAD.value}),
     "attachmentid": frozenset({ResourceType.ATTACHMENT.value}),
     "attemptid": frozenset({ResourceType.PRACTICE.value}),
+    "challengeid": frozenset(
+        {ResourceType.PRACTICE.value, ResourceType.CURRICULUM_ANSWER.value}
+    ),
 }
 
 _SELF_ONLY_IDENTIFIERS = frozenset({"userid", "uploadid", "attachmentid"})

@@ -48,6 +48,24 @@ def get_teacher_assignment(teacher_id: str, student_id: str) -> dict | None:
     return response.get("Item")
 
 
+def get_teacher_curriculum_assignment(teacher_id: str) -> dict | None:
+    """Read the current teacher curriculum-scope projection consistently.
+
+    Phase 475 owns assignment write consistency. This read deliberately uses one
+    current projection and fails closed when it is absent or unavailable.
+    """
+    if not teacher_id:
+        return None
+    response = get_table().get_item(
+        Key={
+            "PK": f"TEACHER_ASSIGNMENT#{teacher_id}",
+            "SK": "CURRICULUM#CURRENT",
+        },
+        ConsistentRead=True,
+    )
+    return response.get("Item")
+
+
 def list_by_student(student_id: str, limit: int = 20, last_key: dict | None = None) -> dict:
     table = get_table()
     kwargs = {

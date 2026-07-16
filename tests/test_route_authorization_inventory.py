@@ -44,6 +44,32 @@ REAL_NESTED_IDENTIFIER_ROUTES = {
 }
 
 
+def test_curriculum_answer_resource_and_identifier_are_inventory_compatible():
+    from stoa.security.route_inventory import inventory_application
+
+    from stoa.security.route_authorization import authorized_curriculum_answer_dependency
+
+    app = FastAPI()
+
+    @app.get(
+        "/practice/curriculum/challenges/{challenge_id}/answer",
+        dependencies=[Depends(authorized_curriculum_answer_dependency())],
+    )
+    def answer(challenge_id: str):
+        return {"challengeId": challenge_id}
+
+    item = next(
+        item
+        for item in inventory_application(app)
+        if item.path == "/practice/curriculum/challenges/{challenge_id}/answer"
+    )
+    assert item.identifiers == ("challenge_id",)
+    assert item.classification == "authorized"
+    assert {(spec.resource_type, spec.action, spec.purpose) for spec in item.authorization_specs} == {
+        ("curriculum_answer", "read", "curriculum_answer_read")
+    }
+
+
 async def _resolver(resource_id: str):
     return {"student_id": resource_id}
 
