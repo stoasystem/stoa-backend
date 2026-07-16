@@ -116,6 +116,7 @@ completed: 2026-07-16
 ## Issues Encountered
 
 - The first combined Phase 473 run failed only because the checked authorization inventory had not yet been regenerated; runtime behavior and focused privacy tests were already green. Regeneration resolved the mismatch.
+- The standard tracking helpers counted 5/7 summaries correctly but rewrote the curated milestone name/progress and collapsed the Phase 473 roadmap row columns; the exact existing milestone metadata and roadmap shape were restored while retaining the new counts, Plan 6 position, metrics, decisions, and session record.
 
 ## User Setup Required
 

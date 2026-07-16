@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-03-PLAN.md
-last_updated: "2026-07-16T11:14:57.096Z"
-last_activity: 2026-07-16 -- Completed Phase 473 Plan 03 durable conversation attachments
+stopped_at: Completed 473-04-PLAN.md
+last_updated: "2026-07-16T11:30:41.308Z"
+last_activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachment OCR privacy
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 26
-  percent: 90
+  completed_plans: 27
+  percent: 93
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 4 of 7
+Plan: 6 of 7
 Status: Ready to execute
-Last activity: 2026-07-16 -- Completed Plan 473-03 durable conversation attachments
+Last activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachment OCR privacy
 
 ## Accumulated Context
 
@@ -89,8 +89,8 @@ Last activity: 2026-07-16 -- Completed Plan 473-03 durable conversation attachme
 
 ## Session
 
-**Last Date:** 2026-07-16T11:14:57.090Z
-**Stopped At:** Completed 473-03-PLAN.md
+**Last Date:** 2026-07-16T11:30:41.303Z
+**Stopped At:** Completed 473-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -123,6 +123,7 @@ Last activity: 2026-07-16 -- Completed Plan 473-03 durable conversation attachme
 | Phase 473 P02 | 12 min | 3 tasks | 13 files |
 | Phase 473 P05 | 17 min | 2 tasks | 12 files |
 | Phase 473 P03 | 18 min | 2 tasks | 11 files |
+| Phase 473 P04 | 14 min | 2 tasks | 9 files |
 
 ## Decisions
 
@@ -154,3 +155,6 @@ Last activity: 2026-07-16 -- Completed Plan 473-03 durable conversation attachme
 - [Phase 473]: Student practice and curriculum previews use shared answer-free allowlists; includeAnswers never selects a student answer contract. — Prevents legacy and nested answer-derived response leaks.
 - [Phase 473]: Every correct or incorrect practice answer persists an immutable owner attempt before result serialization. — A failed write cannot reveal the standard answer or explanation.
 - [Phase 473]: Pre-submit hints require explicit approval and normalized answer/explanation guards. — Unsafe legacy or generated hints remain unavailable before submission.
+- [Phase 473]: Question idempotency binds the original opaque upload or saved-attachment identity, never a bucket or object key. — A different attachment under the same key is rejected before quota, OCR, or attachment mutation.
+- [Phase 473]: Fresh question image reservation precedes OCR and commits consumption, attachment, association, byte charge, and question in one transaction. — Foreign, missing, invalid, reused, raced, or failed attachment commands cannot leave partial attachment/question state.
+- [Phase 473]: OCR accepts only a resolved internal active JPEG/PNG attachment and public questions retain only safe summary metadata. — Object coordinates, provider payloads, and raw OCR never cross the public question boundary.
