@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-01-PLAN.md
-last_updated: "2026-07-16T10:12:14.914Z"
+stopped_at: Completed 473-02-PLAN.md
+last_updated: "2026-07-16T10:34:54.054Z"
 last_activity: 2026-07-16 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 23
-  percent: 10
+  completed_plans: 24
+  percent: 83
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-07-16 -- Phase 473 execution started
 
@@ -89,8 +89,8 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-16T10:12:14.908Z
-**Stopped At:** Completed 473-01-PLAN.md
+**Last Date:** 2026-07-16T10:34:54.048Z
+**Stopped At:** Completed 473-02-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -120,9 +120,13 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 | Phase 472 P20 | 2 min | 2 tasks | 7 files |
 | Phase 472 P22 | 13 min | 3 tasks | 3 files |
 | Phase 473 P01 | 9 min | 2 tasks | 7 files |
+| Phase 473 P02 | 12 min | 3 tasks | 13 files |
 
 ## Decisions
 
+- [Phase 473]: Upload ownership is established only by the verified student Actor and a private intent record. — Client fields never establish owner or storage coordinates.
+- [Phase 473]: Only verified immutable bytes may transition an upload intent to validated. — HEAD metadata and bounded bytes are authoritative across the direct-upload trust boundary.
+- [Phase 473]: First durable attachment transactions charge exact content length once; reuse has no storage mutation. — Quota remains authoritative without double-charging logical associations.
 - [Phase 473]: Public attachment contracts expose only opaque upload/attachment IDs and safe metadata; storage coordinates and extracted content are structurally absent. — Prevents client-selected storage coordinates and private extraction data from entering public schemas.
 - [Phase 473]: Only `upload_service_unavailable` is retryable, with bounded idempotent semantics; every attachment error has one stable client action. — Keeps recovery behavior exhaustive without unsafe mutation retries or provider-detail leakage.
 - [Phase 473]: Answer-bearing practice results require a non-empty durable attempt receipt, while previews and hints use separate `extra="forbid"` allowlists. — Makes successful persistence the structural gate for answer reveal and prevents preview schema drift.
