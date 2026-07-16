@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "testedSourceSha": "060f07f187441bc9cb31ac9c1286ea6165d5bfa0",
+  "testedSourceSha": "b3964d52eb483f4e80a4bca0366bbbcd79468059",
   "artifacts": [
     {
       "path": "docs/security/phase-473-evidence.md",
-      "sha256": "0c4bf4d30682c05d15b0c10b1361c09175310acd0adc74978e36d15a7f4e6673",
-      "bytes": 11742
+      "sha256": "6a9e845e96dbc76496a55290fccd434ff46a5eba3158783425d30e3e58aeb562",
+      "bytes": 11579
     },
     {
       "path": ".planning/phases/473-student-content-privacy-and-practice-integrity/473-VALIDATION.md",
-      "sha256": "e02db480f8b41396720f458fb0177e4b7f1ec904aab74805e2fad3d67a760993",
-      "bytes": 5029
+      "sha256": "c89b44192cd5aba698585a34a19c8b4b98d77012730ff360bf973fe5f3c4e4c1",
+      "bytes": 6651
     }
   ]
 }
