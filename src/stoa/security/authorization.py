@@ -47,6 +47,7 @@ class ResourceType(StrEnum):
     NOTIFICATION_PUSH_TOKEN = "notification_push_token"
     OPERATOR_RESOURCE = "operator_resource"
     UPLOAD = "upload"
+    ATTACHMENT = "attachment"
 
 
 class AuthorizationAction(StrEnum):

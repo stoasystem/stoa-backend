@@ -168,6 +168,7 @@ _EXACT_IDENTIFIERS = {
     "deviceid",
     "applicationid",
     "uploadid",
+    "attachmentid",
     "attemptid",
 }
 
@@ -352,10 +353,11 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
     "deviceid": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),
     "applicationid": frozenset({ResourceType.OPERATOR_RESOURCE.value}),
     "uploadid": frozenset({ResourceType.UPLOAD.value}),
+    "attachmentid": frozenset({ResourceType.ATTACHMENT.value}),
     "attemptid": frozenset({ResourceType.PRACTICE.value}),
 }
 
-_SELF_ONLY_IDENTIFIERS = frozenset({"userid", "uploadid"})
+_SELF_ONLY_IDENTIFIERS = frozenset({"userid", "uploadid", "attachmentid"})
 
 
 def _normalized_identifier(value: str) -> str:

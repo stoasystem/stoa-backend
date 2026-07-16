@@ -3801,15 +3801,30 @@
   {
     "authorization": [
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      },
+      {
         "action": "respond",
         "capability": null,
         "purpose": "self_service",
         "resource_type": "conversation"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
       }
     ],
     "classification": "authorized",
     "family": "conversations",
-    "identifiers": [],
+    "identifiers": [
+      "attachmentId",
+      "uploadId"
+    ],
     "method": "POST",
     "path": "/conversations/{conv_id}/messages",
     "sensitive": true
@@ -3817,15 +3832,30 @@
   {
     "authorization": [
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      },
+      {
         "action": "respond",
         "capability": null,
         "purpose": "self_service",
         "resource_type": "conversation"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
       }
     ],
     "classification": "authorized",
     "family": "conversations",
-    "identifiers": [],
+    "identifiers": [
+      "attachmentId",
+      "uploadId"
+    ],
     "method": "POST",
     "path": "/conversations/{conv_id}/messages/stream",
     "sensitive": true

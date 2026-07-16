@@ -11,6 +11,7 @@ Implements the frontend chat API contract:
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import boto3
@@ -135,6 +136,53 @@ class SendMessageRequest(BaseModel):
         if len(identities) != len(set(identities)):
             raise ValueError("attachment references must be unique")
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedMessageAttachments:
+    actor: Actor
+    items: list[tuple[str, dict]]
+    effective_plan: str
+
+
+async def _message_attachment_dependency(
+    body: SendMessageRequest,
+    actor: Actor = Depends(get_actor),
+    correlation_id: str = Depends(get_request_correlation_id),
+) -> PreparedMessageAttachments:
+    try:
+        prepared = attachment_service.prepare_message_attachments(
+            body.attachmentIds or [], actor
+        )
+        effective_plan = "free"
+        if body.attachmentIds:
+            effective_plan = _attachment_plan_for_student(actor.user_id)
+            attachment_service.ensure_message_attachment_capacity(
+                prepared, actor.user_id, effective_plan
+            )
+        return PreparedMessageAttachments(actor, prepared, effective_plan)
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
+
+
+async def _attachment_inventory_resolver(resource_id: str):
+    return {"student_id": resource_id}
+
+
+_message_attachment_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.UPLOAD,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _attachment_inventory_resolver,
+    ),
+    AuthorizationSpec(
+        ResourceType.ATTACHMENT,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.SELF_SERVICE,
+        _attachment_inventory_resolver,
+    ),
+)
 
 
 class ChatMessage(BaseModel):
@@ -363,23 +411,18 @@ async def send_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
-    actor: Actor = Depends(get_actor),
+    attachment_command: PreparedMessageAttachments = Depends(
+        _message_attachment_dependency
+    ),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
     conv = authorized.value
 
-    try:
-        prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
-        effective_plan = "free"
-        if body.attachmentIds:
-            effective_plan = _attachment_plan_for_student(student_id)
-            attachment_service.ensure_message_attachment_capacity(
-                prepared, student_id, effective_plan
-            )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    actor = attachment_command.actor
+    prepared = attachment_command.items
+    effective_plan = attachment_command.effective_plan
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     try:
@@ -418,7 +461,9 @@ async def stream_message(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
-    actor: Actor = Depends(get_actor),
+    attachment_command: PreparedMessageAttachments = Depends(
+        _message_attachment_dependency
+    ),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Send a message and stream the AI reply as Server-Sent Events.
@@ -431,16 +476,9 @@ async def stream_message(
     student_id = authorized.ref.student_id
     conv = authorized.value
 
-    try:
-        prepared = attachment_service.prepare_message_attachments(body.attachmentIds or [], actor)
-        effective_plan = "free"
-        if body.attachmentIds:
-            effective_plan = _attachment_plan_for_student(student_id)
-            attachment_service.ensure_message_attachment_capacity(
-                prepared, student_id, effective_plan
-            )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    actor = attachment_command.actor
+    prepared = attachment_command.items
+    effective_plan = attachment_command.effective_plan
     usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
     table = get_table()
     try:
