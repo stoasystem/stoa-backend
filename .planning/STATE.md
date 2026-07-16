@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Executing 473-12-PLAN.md
-last_updated: "2026-07-16T20:16:09.859Z"
+stopped_at: Completed 473-12-PLAN.md
+last_updated: "2026-07-16T20:31:00.586Z"
 last_activity: 2026-07-16 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 36
-  completed_plans: 33
-  percent: 92
+  completed_plans: 34
+  percent: 94
 ---
 
 # Project State
@@ -25,12 +25,15 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 12 of 14
-Status: Executing Phase 473
+Plan: 13 of 14
+Status: Ready to execute
 Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Accumulated Context
 
+- Phase 473 staging assembly and immutable promotion now persist exact pre-mutation coordinates behind expiring operation fences; bounded takeovers change both fence and row version so stale workers cannot record success.
+- Upload cleanup persists exact multipart, staging-version, and immutable-version progress independently and cannot reach `cleanup_complete` until every marker is durable.
+- Recovery and cleanup select only exact never-reused keys and exact VersionIds; durable references and mismatching/newer versions block destructive cleanup.
 - Phase 473 upload APIs now accept only authenticated opaque intents and exact bounded chunks; public responses contain no provider URL, key, multipart ID, ETag, VersionId, or provider name.
 - Multipart part writes require a checksum/length-bound uploading claim and active fence before provider mutation; same-byte lost responses reconcile from matching server-listed parts while different bytes conflict first.
 - Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
@@ -100,9 +103,9 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-16T18:30:00Z
-**Stopped At:** Phase 473 gap plans 12-14 verified and ready to execute
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
+**Last Date:** 2026-07-16T20:31:00.580Z
+**Stopped At:** Completed 473-12-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -141,6 +144,7 @@ Last activity: 2026-07-16 -- Phase 473 execution started
 | Phase 473 P09 | 8 min | 2 tasks | 5 files |
 | Phase 473 P10 | 21 min | 2 tasks | 10 files |
 | Phase 473 P11 | 11 min | 2 tasks | 3 evidence files plus summary/tracking |
+| Phase 473 P12 | 14 min | 2 tasks | 3 files |
 
 ## Decisions
 
