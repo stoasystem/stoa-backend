@@ -2,6 +2,7 @@ import json
 import asyncio
 import subprocess
 import sys
+import threading
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -485,6 +486,145 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert effects == []
+
+
+def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
+    monkeypatch,
+) -> None:
+    body = conversations.SendMessageRequest.model_validate(
+        {
+            "content": "concurrent exact content",
+            "idempotencyKey": "concurrent-key",
+            "attachmentIds": [{"attachmentId": "saved-1"}],
+        }
+    )
+    fingerprint = conversations.message_request_fingerprint(body)
+    command_state = {}
+    effects = {
+        "claim": 0, "bind": 0, "usage": 0, "extract": 0, "ai": 0, "complete": 0
+    }
+    lock = threading.Lock()
+    claim_barrier = threading.Barrier(2)
+    summary = _attachment_summary()
+
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
+    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: [("attachment", {"attachment_id": "saved-1"})],
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "ensure_message_attachment_capacity",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def claim(**kwargs):
+        claim_barrier.wait()
+        with lock:
+            effects["claim"] += 1
+            if command_state:
+                return False, 0
+            command_state.update(kwargs["command"])
+            command_state["counter_value"] = 1
+            return True, 1
+
+    def bind(**_kwargs):
+        with lock:
+            effects["bind"] += 1
+            command_state["status"] = "message_committed"
+        return [summary]
+
+    def get_command(*_args, **_kwargs):
+        with lock:
+            return dict(command_state) if command_state else None
+
+    def claim_ai(**kwargs):
+        with lock:
+            if command_state.get("status") != "message_committed":
+                return False, int(command_state.get("attempt", 0))
+            command_state.update(
+                status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1
+            )
+            return True, 1
+
+    def complete(**kwargs):
+        with lock:
+            effects["complete"] += 1
+            command_state.update(status="completed", result_json=kwargs["result_json"])
+        return True
+
+    monkeypatch.setattr(conversations.attachment_repo, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", get_command)
+    monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "extract_message_attachment_context",
+        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1) or "",
+    )
+    monkeypatch.setattr(
+        conversations,
+        "_record_chat_usage",
+        lambda **_kwargs: effects.__setitem__("usage", effects["usage"] + 1),
+    )
+    monkeypatch.setattr(
+        conversations.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
+        or {"steps": ["one"], "answer": "safe", "hints": []},
+    )
+    results = []
+    failures = []
+
+    def run():
+        try:
+            results.append(
+                conversations._execute_message_command(
+                    conv_id="conv-1",
+                    student_id="student-1",
+                    subject="math",
+                    grade="Sek1",
+                    body=body,
+                    command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
+                )
+            )
+        except Exception as exc:  # pragma: no cover - assertion reports details
+            failures.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert failures == []
+    assert len(results) == 2
+    assert results[0].model_dump() == results[1].model_dump()
+    assert effects == {
+        "claim": 2, "bind": 1, "usage": 1, "extract": 1, "ai": 1, "complete": 1
+    }
+
+
+def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatch) -> None:
+    sleeps = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: {"status": "ai_running", "fingerprint": "f" * 64},
+    )
+    monkeypatch.setattr(conversations.time, "sleep", lambda value: sleeps.append(value))
+    with pytest.raises(AttachmentDecisionError) as captured:
+        conversations._wait_for_message_command(
+            "conv-1", "bounded-key", "f" * 64, table=object()
+        )
+    assert captured.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
+    assert sleeps == [0.05] * 20
 
 
 def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkeypatch) -> None:

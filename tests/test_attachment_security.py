@@ -1537,6 +1537,100 @@ def test_message_command_claim_groups_command_quota_operation_and_counter() -> N
     assert operations[2]["Update"]["ExpressionAttributeValues"][":next"] == 5
 
 
+class _LeaseTable:
+    def __init__(self, command):
+        self.command = dict(command)
+
+    def get_item(self, **_kwargs):
+        return {"Item": dict(self.command)}
+
+    def update_item(self, **kwargs):
+        values = kwargs["ExpressionAttributeValues"]
+        expression = kwargs["UpdateExpression"]
+        valid = self.command.get("owner_id") == values[":owner"]
+        if "leaseOwner=:lease_owner" in expression:
+            valid = valid and (
+                self.command.get("status") == "message_committed"
+                or (
+                    self.command.get("status") == "ai_running"
+                    and int(self.command.get("expiresAt", 0)) <= values[":now"]
+                    and int(self.command.get("attempt", 0)) < values[":max_attempts"]
+                )
+            )
+            if valid:
+                self.command.update(
+                    status="ai_running",
+                    leaseOwner=values[":lease_owner"],
+                    claimedAt=values[":claimed"],
+                    expiresAt=values[":expires"],
+                    attempt=values[":attempt"],
+                )
+        elif expression.startswith("SET claimedAt"):
+            valid = (
+                valid
+                and self.command.get("status") == "ai_running"
+                and self.command.get("leaseOwner") == values[":lease_owner"]
+                and int(self.command.get("expiresAt", 0)) > values[":now"]
+            )
+            if valid:
+                self.command.update(claimedAt=values[":now"], expiresAt=values[":expires"])
+        else:
+            valid = valid and self.command.get("attempt", 0) >= values[":max"]
+            if valid:
+                self.command.update(status="terminal_failed")
+        if not valid:
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException", "Message": "private"}},
+                "UpdateItem",
+            )
+        return {}
+
+
+def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> None:
+    table = _LeaseTable(
+        {
+            "owner_id": "student-1",
+            "status": "message_committed",
+            "attempt": 0,
+        }
+    )
+    assert attachment_repo.claim_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-a", now_epoch=100, expires_at=220, table=table,
+    ) == (True, 1)
+    assert attachment_repo.claim_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-b", now_epoch=150, expires_at=270, table=table,
+    ) == (False, 1)
+    assert attachment_repo.renew_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-a", now_epoch=160, expires_at=280, table=table,
+    ) is True
+    assert attachment_repo.renew_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="stale-owner", now_epoch=170, expires_at=290, table=table,
+    ) is False
+    assert attachment_repo.claim_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-b", now_epoch=281, expires_at=401, table=table,
+    ) == (True, 2)
+    table.command["expiresAt"] = 400
+    assert attachment_repo.claim_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-c", now_epoch=401, expires_at=521, table=table,
+    ) == (True, 3)
+    table.command["expiresAt"] = 520
+    assert attachment_repo.claim_message_ai_lease(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        lease_owner="owner-d", now_epoch=521, expires_at=641, table=table,
+    ) == (False, 3)
+    assert attachment_repo.mark_message_command_terminal(
+        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
+        now_iso="2026-07-16T00:00:00Z", table=table,
+    ) is True
+    assert table.command["status"] == "terminal_failed"
+
+
 def _archive(parts: dict[str, str | bytes]) -> bytes:
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
