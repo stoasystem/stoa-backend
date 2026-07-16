@@ -1,5 +1,6 @@
 import json
 import asyncio
+import hashlib
 import subprocess
 import sys
 import threading
@@ -13,10 +14,12 @@ from datetime import datetime, timezone
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.config import Settings
 from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.services.document_extraction_service import DocumentExtractionFailure
 
 
 def _actor(role=CanonicalRole.STUDENT, user_id="student-1", grants=()):
@@ -506,6 +509,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     lock = threading.Lock()
     claim_barrier = threading.Barrier(2)
     summary = _attachment_summary()
+    deterministic_attachment_ids = []
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
@@ -516,7 +520,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
-        lambda *_args, **_kwargs: [("attachment", {"attachment_id": "saved-1"})],
+        lambda *_args, **_kwargs: [("upload", {"upload_id": "fresh-upload-1"})],
     )
     monkeypatch.setattr(
         conversations.attachment_service,
@@ -534,9 +538,12 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
             command_state["counter_value"] = 1
             return True, 1
 
-    def bind(**_kwargs):
+    def bind(**kwargs):
         with lock:
             effects["bind"] += 1
+            deterministic_attachment_ids.append(
+                tuple(kwargs["deterministic_attachment_ids"])
+            )
             command_state["status"] = "message_committed"
         return [summary]
 
@@ -609,6 +616,93 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     assert effects == {
         "claim": 2, "bind": 1, "usage": 1, "extract": 1, "ai": 1, "complete": 1
     }
+    expected_attachment_id = str(
+        conversations.uuid5(
+            conversations.UUID(command_state["command_id"]), "attachment:0"
+        )
+    )
+    assert deterministic_attachment_ids == [(expected_attachment_id,)]
+
+
+class _ConversationBodySpy:
+    def __init__(
+        self,
+        data: bytes,
+        *,
+        read_exception: Exception | None = None,
+        close_exception: Exception | None = None,
+    ) -> None:
+        self.data = data
+        self.offset = 0
+        self.read_exception = read_exception
+        self.close_exception = close_exception
+        self.close_count = 0
+
+    def read(self, limit: int) -> bytes:
+        if self.read_exception is not None:
+            raise self.read_exception
+        value = self.data[self.offset : self.offset + limit]
+        self.offset += len(value)
+        return value
+
+    def close(self) -> None:
+        self.close_count += 1
+        if self.close_exception is not None:
+            raise self.close_exception
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("success", "private text"),
+        ("checksum", "[attachment:immutable_bytes_changed]"),
+        ("parser", "[attachment:parser_failure]"),
+        ("read_exception", "[attachment:service_unavailable]"),
+        ("close_exception", "private text"),
+    ],
+)
+def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
+    monkeypatch, case: str, expected: str
+) -> None:
+    data = b"private text"
+    body = _ConversationBodySpy(
+        data,
+        read_exception=(RuntimeError("read-provider-canary") if case == "read_exception" else None),
+        close_exception=(RuntimeError("close-provider-canary") if case == "close_exception" else None),
+    )
+
+    class S3:
+        def get_object(self, **kwargs):
+            assert kwargs["VersionId"] == "immutable-version"
+            return {"Body": body}
+
+    if case == "parser":
+        monkeypatch.setattr(
+            conversations.attachment_service,
+            "extract_attachment_text",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                DocumentExtractionFailure("parser_failure")
+            ),
+        )
+    checksum = hashlib.sha256(data).hexdigest()
+    if case == "checksum":
+        checksum = "0" * 64
+    item = {
+        "immutable_object_key": "private-key-canary",
+        "immutable_version_id": "immutable-version",
+        "immutable_etag": "immutable-etag",
+        "content_sha256": checksum,
+        "content_length": len(data),
+        "detected_type": "text/plain",
+    }
+    result = conversations.attachment_service.extract_message_attachment_context(
+        [("attachment", item)],
+        s3=S3(),
+        settings=Settings(s3_images_bucket="private-bucket"),
+    )
+    assert result == expected
+    assert body.close_count == 1
+    assert "provider-canary" not in result
 
 
 def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatch) -> None:

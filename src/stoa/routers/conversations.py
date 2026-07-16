@@ -703,7 +703,7 @@ def _execute_message_command(
                 prepared=prepared,
                 effective_plan=effective_plan,
                 command=command,
-                attachment_ids=deterministic_attachment_ids,
+                deterministic_attachment_ids=deterministic_attachment_ids,
             )
         except AttachmentDecisionError:
             raced = attachment_repo.get_message_command(

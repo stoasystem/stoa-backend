@@ -11,7 +11,10 @@ from stoa.models.attachment import (
     UploadIntentRequest,
     UploadIntentResponse,
 )
-from stoa.security.attachment_errors import AttachmentDecisionError
+from stoa.security.attachment_errors import (
+    AttachmentDecisionError,
+    AttachmentErrorCode,
+)
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -51,10 +54,13 @@ _upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
 
 def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> None:
     error.correlation_id = correlation_id
+    headers = {"X-Correlation-ID": correlation_id}
+    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
+        headers["Retry-After"] = "30"
     raise HTTPException(
         status_code=error.status_code,
         detail=error.public_body(),
-        headers={"X-Correlation-ID": correlation_id},
+        headers=headers,
     ) from error
 
 

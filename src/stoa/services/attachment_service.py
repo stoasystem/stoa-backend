@@ -42,6 +42,47 @@ UPLOAD_SPOOL_MEMORY_BYTES = 1024 * 1024
 UPLOAD_OPERATION_LEASE_SECONDS = 120
 
 
+def _gateway_call(
+    operation, *, conflict_code=AttachmentErrorCode.UPLOAD_NOT_FOUND
+):
+    """Keep repository/provider diagnostics behind one closed upload boundary."""
+    try:
+        return operation()
+    except AttachmentDecisionError:
+        raise
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        if exc.category == "dependency_failure":
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            ) from None
+        if exc.category == "chunk_conflict":
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
+            ) from None
+        raise AttachmentDecisionError(conflict_code) from None
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+
+
+def _provider_mapping(operation) -> dict[str, Any]:
+    response = _gateway_call(operation)
+    if not isinstance(response, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return response
+
+
+def _close_provider_body(body: Any) -> None:
+    """Release one provider response body without replacing the primary outcome."""
+    close = getattr(body, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception:
+        # Provider cleanup is best-effort and must not replace the stable decision.
+        pass
+
+
 def storage_limit_for_entitlement(effective_plan: str) -> int:
     return PAID_STORAGE_BYTES if effective_plan in {"standard", "premium"} else FREE_STORAGE_BYTES
 
@@ -220,8 +261,15 @@ def _abort_all_exact_key_multiparts(s3: Any, settings: Settings, key: str) -> No
         "MaxUploads": 1000,
     }
     for _ in range(10):
-        response = s3.list_multipart_uploads(**request)
-        for upload in response.get("Uploads", []):
+        response = _provider_mapping(lambda: s3.list_multipart_uploads(**request))
+        uploads = response.get("Uploads", [])
+        if not isinstance(uploads, list) or any(
+            not isinstance(upload, dict) for upload in uploads
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        for upload in uploads:
             if upload.get("Key") == key and upload.get("UploadId"):
                 _abort_multipart_exact(s3, settings, key, str(upload["UploadId"]))
         if not response.get("IsTruncated"):
@@ -242,8 +290,10 @@ def _matching_exact_version(
 ) -> tuple[str, str] | None:
     for version in _exact_object_versions(s3, settings, key):
         version_id = str(version.get("VersionId") or "")
-        head = s3.head_object(
-            Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+        head = _provider_mapping(
+            lambda: s3.head_object(
+                Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+            )
         )
         if (
             int(head.get("ContentLength", -1)) == expected_length
@@ -424,12 +474,24 @@ async def put_upload_chunk(
             if exc.category in {"lease_exhausted"}:
                 _terminal_abort(item, actor, s3=s3, settings=settings, repository=repository)
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+        except AttachmentDecisionError:
+            raise
+        except Exception:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+        if not isinstance(claim, dict):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         if claim.get("status") == "completed":
             return _safe_part_receipt(upload_id, part_number, length, checksum)
         if claim.get("lease_owner") != lease_owner:
             for _ in range(20):
                 await asyncio.sleep(0.05)
-                current = repository.get_upload_part(upload_id, part_number)
+                current = _gateway_call(
+                    lambda: repository.get_upload_part(upload_id, part_number)
+                )
+                if current is not None and not isinstance(current, dict):
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                    )
                 if current and current.get("status") == "completed":
                     return _safe_part_receipt(upload_id, part_number, length, checksum)
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
@@ -449,8 +511,8 @@ async def put_upload_chunk(
                 return _safe_part_receipt(upload_id, part_number, length, checksum)
         spool.seek(0)
         provider_checksum = base64.b64encode(bytes.fromhex(checksum)).decode("ascii")
-        try:
-            result = s3.upload_part(
+        result = _provider_mapping(
+            lambda: s3.upload_part(
                 Bucket=settings.s3_images_bucket,
                 Key=item["staging_object_key"],
                 UploadId=item["multipart_upload_id"],
@@ -459,14 +521,15 @@ async def put_upload_chunk(
                 ContentLength=length,
                 ChecksumSHA256=provider_checksum,
             )
-        except Exception:
-            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
-        if not repository.complete_upload_part(
-            upload_id,
-            part_number,
-            lease_owner,
-            provider_etag=str(result.get("ETag") or ""),
-            provider_checksum=str(result.get("ChecksumSHA256") or provider_checksum),
+        )
+        if not _gateway_call(
+            lambda: repository.complete_upload_part(
+                upload_id,
+                part_number,
+                lease_owner,
+                provider_etag=str(result.get("ETag") or ""),
+                provider_checksum=str(result.get("ChecksumSHA256") or provider_checksum),
+            )
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     return _safe_part_receipt(upload_id, part_number, length, checksum)
@@ -495,15 +558,19 @@ def _reconcile_provider_part(
     settings: Settings,
     repository: Any,
 ) -> bool:
-    try:
-        response = s3.list_parts(
+    response = _provider_mapping(
+        lambda: s3.list_parts(
             Bucket=settings.s3_images_bucket,
             Key=item["staging_object_key"],
             UploadId=item["multipart_upload_id"],
         )
-    except Exception:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
-    for provider_part in response.get("Parts", []):
+    )
+    provider_parts = response.get("Parts", [])
+    if not isinstance(provider_parts, list):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    for provider_part in provider_parts:
+        if not isinstance(provider_part, dict):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         if int(provider_part.get("PartNumber", 0)) != part_number:
             continue
         encoded = str(provider_part.get("ChecksumSHA256") or "")
@@ -514,12 +581,14 @@ def _reconcile_provider_part(
         if int(provider_part.get("Size", -1)) != length or provider_hex != checksum:
             _terminal_abort(item, None, s3=s3, settings=settings, repository=repository)
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        if not repository.complete_upload_part(
-            item["upload_id"],
-            part_number,
-            lease_owner,
-            provider_etag=str(provider_part.get("ETag") or ""),
-            provider_checksum=encoded,
+        if not _gateway_call(
+            lambda: repository.complete_upload_part(
+                item["upload_id"],
+                part_number,
+                lease_owner,
+                provider_etag=str(provider_part.get("ETag") or ""),
+                provider_checksum=encoded,
+            )
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         return True
@@ -587,7 +656,9 @@ def complete_upload(
         )
     if item.get("status") != "pending_upload" or part_count != int(item["part_count"]):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    parts = repository.list_upload_parts(upload_id)
+    parts = _gateway_call(lambda: repository.list_upload_parts(upload_id))
+    if not isinstance(parts, list) or any(not isinstance(part, dict) for part in parts):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     if [int(part.get("part_number", 0)) for part in parts] != list(range(1, part_count + 1)):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
     if any(part.get("status") != "completed" for part in parts):
@@ -596,26 +667,28 @@ def complete_upload(
     operation_fence = uuid4().hex
     ledger_digest = _part_ledger_digest(parts)
     claim = getattr(repository, "claim_staging_assembly", None)
-    claimed = (
-        claim(
-            upload_id,
-            actor.user_id,
-            version,
-            int(now.timestamp()),
-            operation_fence=operation_fence,
-            multipart_upload_id=str(item["multipart_upload_id"]),
-            ordered_part_count=part_count,
-            part_ledger_digest=ledger_digest,
-        )
-        if claim
-        else repository.begin_upload_assembly(
-            upload_id, actor.user_id, version, int(now.timestamp())
+    claimed = _gateway_call(
+        lambda: (
+            claim(
+                upload_id,
+                actor.user_id,
+                version,
+                int(now.timestamp()),
+                operation_fence=operation_fence,
+                multipart_upload_id=str(item["multipart_upload_id"]),
+                ordered_part_count=part_count,
+                part_ledger_digest=ledger_digest,
+            )
+            if claim
+            else repository.begin_upload_assembly(
+                upload_id, actor.user_id, version, int(now.timestamp())
+            )
         )
     )
     if not claimed:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
-        result = s3.complete_multipart_upload(
+        result = _provider_mapping(lambda: s3.complete_multipart_upload(
             Bucket=settings.s3_images_bucket,
             Key=item["staging_object_key"],
             UploadId=item["multipart_upload_id"],
@@ -625,9 +698,9 @@ def complete_upload(
                     for part in parts
                 ]
             },
-        )
+        ))
         recover = getattr(repository, "recover_staging_completion", None)
-        persisted = (
+        persisted = _gateway_call(lambda: (
             recover(
                 upload_id,
                 actor.user_id,
@@ -644,9 +717,15 @@ def complete_upload(
                 staging_version_id=str(result.get("VersionId") or ""),
                 staging_etag=str(result.get("ETag") or ""),
             )
-        )
+        ))
         if not persisted:
-            raise RuntimeError("staging completion transition failed")
+            # Provider completion succeeded, so a false persistence result is an
+            # unknown split outcome that callers must retry through recovery.
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+    except AttachmentDecisionError:
+        raise
     except Exception:
         # The assembling row retains the exact key, multipart ID, fence and lease.
         # A restart reconciles the exact completed version or aborts it during cleanup.
@@ -684,10 +763,15 @@ def _part_ledger_digest(parts: list[dict[str, Any]]) -> str:
 
 
 def _exact_object_versions(s3: Any, settings: Settings, key: str) -> list[dict[str, Any]]:
-    response = s3.list_object_versions(
-        Bucket=settings.s3_images_bucket, Prefix=key, MaxKeys=1000
+    response = _provider_mapping(
+        lambda: s3.list_object_versions(
+            Bucket=settings.s3_images_bucket, Prefix=key, MaxKeys=1000
+        )
     )
-    return [value for value in response.get("Versions", []) if value.get("Key") == key]
+    versions = response.get("Versions", [])
+    if not isinstance(versions, list) or any(not isinstance(value, dict) for value in versions):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return [value for value in versions if value.get("Key") == key]
 
 
 def _recover_staging_assembly(
@@ -712,8 +796,10 @@ def _recover_staging_assembly(
     try:
         for version in _exact_object_versions(s3, settings, key):
             version_id = str(version.get("VersionId") or "")
-            head = s3.head_object(
-                Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+            head = _provider_mapping(
+                lambda: s3.head_object(
+                    Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+                )
             )
             metadata = head.get("Metadata") or {}
             if (
@@ -721,13 +807,15 @@ def _recover_staging_assembly(
                 and metadata.get("upload-id") == item.get("upload_id")
             ):
                 etag = str(head.get("ETag") or version.get("ETag") or "")
-                if repository.recover_staging_completion(
-                    item["upload_id"],
-                    actor.user_id,
-                    int(item["version"]),
-                    operation_fence=fence,
-                    staging_version_id=version_id,
-                    staging_etag=etag,
+                if _gateway_call(
+                    lambda: repository.recover_staging_completion(
+                        item["upload_id"],
+                        actor.user_id,
+                        int(item["version"]),
+                        operation_fence=fence,
+                        staging_version_id=version_id,
+                        staging_etag=etag,
+                    )
                 ):
                     return {
                         **item,
@@ -736,7 +824,9 @@ def _recover_staging_assembly(
                         "staging_version_id": version_id,
                         "staging_etag": etag,
                     }
-                break
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
     except AttachmentDecisionError:
         raise
     except Exception:
@@ -765,8 +855,10 @@ def _recover_immutable_promotion(
     try:
         for version in _exact_object_versions(s3, settings, key):
             version_id = str(version.get("VersionId") or "")
-            head = s3.head_object(
-                Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+            head = _provider_mapping(
+                lambda: s3.head_object(
+                    Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+                )
             )
             metadata = head.get("Metadata") or {}
             if (
@@ -774,17 +866,23 @@ def _recover_immutable_promotion(
                 and metadata.get("content-sha256") == expected_checksum
             ):
                 etag = str(head.get("ETag") or version.get("ETag") or "")
-                if repository.record_immutable_version(
-                    item["upload_id"],
-                    actor.user_id,
-                    int(item["version"]),
-                    operation_fence=fence,
-                    immutable_version_id=version_id,
-                    immutable_etag=etag,
-                    validated_at=now.isoformat(),
+                if _gateway_call(
+                    lambda: repository.record_immutable_version(
+                        item["upload_id"],
+                        actor.user_id,
+                        int(item["version"]),
+                        operation_fence=fence,
+                        immutable_version_id=version_id,
+                        immutable_etag=etag,
+                        validated_at=now.isoformat(),
+                    )
                 ):
                     return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
-                break
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+    except AttachmentDecisionError:
+        raise
     except Exception:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
     raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
@@ -801,17 +899,19 @@ def _claim_recovery_fence(
     claim = getattr(repository, "claim_stale_upload_operation", None)
     if not claim:
         return item
-    recovered = claim(
-        str(item["upload_id"]),
-        actor.user_id,
-        int(item["version"]),
-        operation_kind,
-        str(item.get("operation_fence") or ""),
-        uuid4().hex,
-        int(now.timestamp()),
+    recovered = _gateway_call(
+        lambda: claim(
+            str(item["upload_id"]),
+            actor.user_id,
+            int(item["version"]),
+            operation_kind,
+            str(item.get("operation_fence") or ""),
+            uuid4().hex,
+            int(now.timestamp()),
+        )
     )
     if not recovered:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     return recovered
 
 
@@ -834,93 +934,120 @@ def _validate_and_promote_completed(
     validating_version = int(item["version"])
     promotion_started = False
     try:
-        response = s3.get_object(
-            Bucket=settings.s3_images_bucket,
-            Key=item["staging_object_key"],
-            VersionId=staging_version,
-        )
-        with SpooledTemporaryFile(max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b") as spool:
-            body = response["Body"]
-            maximum = int(item["max_bytes"])
-            while True:
-                chunk = body.read(min(UPLOAD_SPOOL_MEMORY_BYTES, maximum + 1 - length))
-                if not chunk:
-                    break
-                spool.write(chunk)
-                digest.update(chunk)
-                length += len(chunk)
-                if length > maximum:
-                    raise ValidationFailure(AttachmentErrorCode.UPLOAD_TOO_LARGE)
-            if length != int(item["expected_size"]):
-                raise ValidationFailure(AttachmentErrorCode.UPLOAD_INVALID)
-            checksum = digest.hexdigest()
-            spool.seek(0)
-            detected = validate_uploaded_file(
-                spool, item["original_filename"], item["declared_type"]
-            )
-            spool.seek(0)
-            operation_fence = uuid4().hex
-            begin = getattr(repository, "begin_immutable_promotion", None)
-            if begin and not begin(
-                item["upload_id"],
-                actor.user_id,
-                validating_version,
-                int(now.timestamp()),
-                operation_fence=operation_fence,
-                immutable_object_key=immutable_key,
-                content_sha256=checksum,
-                content_length=detected.size_bytes,
-                detected_type=detected.media_type,
-                image_width=detected.width,
-                image_height=detected.height,
-            ):
-                raise RuntimeError("immutable promotion claim failed")
-            promotion_started = bool(begin)
-            promoted = s3.put_object(
+        response = _provider_mapping(
+            lambda: s3.get_object(
                 Bucket=settings.s3_images_bucket,
-                Key=immutable_key,
-                ContentType=detected.media_type,
-                ServerSideEncryption="AES256",
-                Body=spool,
-                ContentLength=detected.size_bytes,
-                ChecksumSHA256=base64.b64encode(bytes.fromhex(checksum)).decode("ascii"),
-                Metadata={"content-sha256": checksum},
+                Key=item["staging_object_key"],
+                VersionId=staging_version,
             )
-            immutable_version = str(promoted.get("VersionId") or "")
-            immutable_etag = str(promoted.get("ETag") or "")
-            if not immutable_version or not immutable_etag:
-                raise RuntimeError("immutable version metadata unavailable")
-            record = getattr(repository, "record_immutable_version", None)
-            persisted = (
-                record(
-                    item["upload_id"],
-                    actor.user_id,
-                    validating_version + 1,
-                    operation_fence=operation_fence,
-                    immutable_version_id=immutable_version,
-                    immutable_etag=immutable_etag,
-                    validated_at=now.isoformat(),
-                )
-                if record
-                else repository.mark_validated(
-                    item["upload_id"],
-                    actor.user_id,
-                    validating_version,
-                    {
-                        "detected_type": detected.media_type,
-                        "content_length": detected.size_bytes,
-                        "content_sha256": checksum,
-                        "immutable_object_key": immutable_key,
-                        "immutable_version_id": immutable_version,
-                        "immutable_etag": immutable_etag,
-                        "image_width": detected.width,
-                        "image_height": detected.height,
-                        "validated_at": now.isoformat(),
-                    },
-                )
+        )
+        body = response.get("Body")
+        if body is None or not callable(getattr(body, "read", None)):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             )
-            if not persisted:
-                raise RuntimeError("immutable tuple persistence failed")
+        try:
+            with SpooledTemporaryFile(
+                max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
+            ) as spool:
+                maximum = int(item["max_bytes"])
+                while True:
+                    chunk = body.read(
+                        min(UPLOAD_SPOOL_MEMORY_BYTES, maximum + 1 - length)
+                    )
+                    if not chunk:
+                        break
+                    spool.write(chunk)
+                    digest.update(chunk)
+                    length += len(chunk)
+                    if length > maximum:
+                        raise ValidationFailure(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+                if length != int(item["expected_size"]):
+                    raise ValidationFailure(AttachmentErrorCode.UPLOAD_INVALID)
+                checksum = digest.hexdigest()
+                spool.seek(0)
+                detected = validate_uploaded_file(
+                    spool, item["original_filename"], item["declared_type"]
+                )
+                spool.seek(0)
+                operation_fence = uuid4().hex
+                begin = getattr(repository, "begin_immutable_promotion", None)
+                if begin and not _gateway_call(
+                    lambda: begin(
+                        item["upload_id"],
+                        actor.user_id,
+                        validating_version,
+                        int(now.timestamp()),
+                        operation_fence=operation_fence,
+                        immutable_object_key=immutable_key,
+                        content_sha256=checksum,
+                        content_length=detected.size_bytes,
+                        detected_type=detected.media_type,
+                        image_width=detected.width,
+                        image_height=detected.height,
+                    )
+                ):
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_NOT_FOUND
+                    )
+                promotion_started = bool(begin)
+                promoted = _provider_mapping(
+                    lambda: s3.put_object(
+                        Bucket=settings.s3_images_bucket,
+                        Key=immutable_key,
+                        ContentType=detected.media_type,
+                        ServerSideEncryption="AES256",
+                        Body=spool,
+                        ContentLength=detected.size_bytes,
+                        ChecksumSHA256=base64.b64encode(
+                            bytes.fromhex(checksum)
+                        ).decode("ascii"),
+                        Metadata={"content-sha256": checksum},
+                    )
+                )
+                immutable_version = str(promoted.get("VersionId") or "")
+                immutable_etag = str(promoted.get("ETag") or "")
+                if not immutable_version or not immutable_etag:
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                    )
+                record = getattr(repository, "record_immutable_version", None)
+                persisted = _gateway_call(
+                    lambda: (
+                        record(
+                            item["upload_id"],
+                            actor.user_id,
+                            validating_version + 1,
+                            operation_fence=operation_fence,
+                            immutable_version_id=immutable_version,
+                            immutable_etag=immutable_etag,
+                            validated_at=now.isoformat(),
+                        )
+                        if record
+                        else repository.mark_validated(
+                            item["upload_id"],
+                            actor.user_id,
+                            validating_version,
+                            {
+                                "detected_type": detected.media_type,
+                                "content_length": detected.size_bytes,
+                                "content_sha256": checksum,
+                                "immutable_object_key": immutable_key,
+                                "immutable_version_id": immutable_version,
+                                "immutable_etag": immutable_etag,
+                                "image_width": detected.width,
+                                "image_height": detected.height,
+                                "validated_at": now.isoformat(),
+                            },
+                        )
+                    )
+                )
+                if not persisted:
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                    )
+        finally:
+            _close_provider_body(body)
         validated_version = validating_version + (2 if promotion_started else 1)
         try:
             s3.delete_object(
@@ -936,9 +1063,15 @@ def _validate_and_promote_completed(
             pass
         return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
     except ValidationFailure as exc:
+        failure_code = exc.code
         if not promotion_started:
-            repository.mark_invalid(
-                item["upload_id"], actor.user_id, validating_version, exc.code.value
+            _gateway_call(
+                lambda: repository.mark_invalid(
+                    item["upload_id"],
+                    actor.user_id,
+                    validating_version,
+                    failure_code.value,
+                )
             )
         _delete_exact_if_present(
             s3,
@@ -946,7 +1079,7 @@ def _validate_and_promote_completed(
             item.get("staging_object_key"),
             staging_version,
         )
-        raise AttachmentDecisionError(exc.code) from None
+        raise AttachmentDecisionError(failure_code) from None
     except AttachmentDecisionError:
         raise
     except Exception:
@@ -978,7 +1111,9 @@ def _delete_exact_if_present(
 def resolve_owned_upload(
     upload_id: str, actor: Actor, *, now: datetime | None = None, repository: Any = attachment_repo
 ) -> dict[str, Any]:
-    item = repository.get_upload_intent(upload_id)
+    item = _gateway_call(lambda: repository.get_upload_intent(upload_id))
+    if item is not None and not isinstance(item, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     if not item or item.get("owner_id") != actor.user_id:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     now_epoch = int((now or datetime.now(UTC)).timestamp())
@@ -990,7 +1125,9 @@ def resolve_owned_upload(
 def resolve_owned_attachment(
     attachment_id: str, actor: Actor, *, repository: Any = attachment_repo
 ) -> dict[str, Any]:
-    item = repository.get_attachment(attachment_id)
+    item = _gateway_call(lambda: repository.get_attachment(attachment_id))
+    if item is not None and not isinstance(item, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     if not item or item.get("owner_id") != actor.user_id or item.get("status") != "active":
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     _require_immutable_record(item)
@@ -1200,7 +1337,8 @@ def ensure_message_attachment_capacity(
     repository: Any = attachment_repo,
 ) -> None:
     fresh_bytes = sum(int(item["content_length"]) for kind, item in prepared if kind == "upload")
-    if repository.get_storage_usage(owner_id) + fresh_bytes > storage_limit_for_entitlement(
+    used_bytes = _gateway_call(lambda: repository.get_storage_usage(owner_id))
+    if used_bytes + fresh_bytes > storage_limit_for_entitlement(
         effective_plan
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
@@ -1216,19 +1354,32 @@ def bind_message_attachments(
     now: datetime | None = None,
     repository: Any = attachment_repo,
     command: dict[str, Any] | None = None,
-    attachment_ids: list[str] | None = None,
+    deterministic_attachment_ids: list[str] | None = None,
 ) -> list[AttachmentSummary]:
     """Atomically persist a message and every fresh/reused attachment reference."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
+    fresh_count = sum(kind == "upload" for kind, _ in prepared)
+    if deterministic_attachment_ids is not None:
+        if len(deterministic_attachment_ids) != fresh_count or any(
+            not isinstance(value, str) or not value.strip()
+            for value in deterministic_attachment_ids
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
     fresh: list[tuple[dict[str, Any], dict[str, Any]]] = []
     reused: list[dict[str, Any]] = []
     summaries: list[AttachmentSummary] = []
     associations: list[dict[str, Any]] = []
-    attachment_ids: list[str] = []
-    deterministic_ids = iter(attachment_ids or [])
+    bound_attachment_ids: list[str] = []
+    deterministic_ids = iter(deterministic_attachment_ids or [])
     for kind, item in prepared:
         if kind == "upload":
-            attachment_id = next(deterministic_ids, str(uuid4()))
+            attachment_id = (
+                next(deterministic_ids)
+                if deterministic_attachment_ids is not None
+                else str(uuid4())
+            )
             attachment = {
                 "attachment_id": attachment_id,
                 "owner_id": actor.user_id,
@@ -1252,7 +1403,7 @@ def bind_message_attachments(
             attachment = item
             attachment_id = str(item["attachment_id"])
             reused.append(item)
-        attachment_ids.append(attachment_id)
+        bound_attachment_ids.append(attachment_id)
         associations.append(
             {
                 **repository.association_key(
@@ -1269,7 +1420,7 @@ def bind_message_attachments(
             }
         )
         summaries.append(_attachment_summary(attachment))
-    message["attachment_ids"] = attachment_ids
+    message["attachment_ids"] = bound_attachment_ids
     limit = storage_limit_for_entitlement(effective_plan)
     ensure_message_attachment_capacity(
         prepared, actor.user_id, effective_plan, repository=repository
@@ -1325,29 +1476,44 @@ def extract_message_attachment_context(
             continue
         length = int(item["content_length"])
         try:
-            response = s3.get_object(
-                Bucket=settings.s3_images_bucket,
-                Key=item["immutable_object_key"],
-                VersionId=item["immutable_version_id"],
+            response = _provider_mapping(
+                lambda: s3.get_object(
+                    Bucket=settings.s3_images_bucket,
+                    Key=item["immutable_object_key"],
+                    VersionId=item["immutable_version_id"],
+                )
             )
+            body = response.get("Body")
+            if body is None or not callable(getattr(body, "read", None)):
+                raise DocumentExtractionFailure("service_unavailable")
             digest = hashlib.sha256()
             measured = 0
-            with SpooledTemporaryFile(max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b") as spool:
-                while True:
-                    chunk = response["Body"].read(
-                        min(UPLOAD_SPOOL_MEMORY_BYTES, length + 1 - measured)
-                    )
-                    if not chunk:
-                        break
-                    spool.write(chunk)
-                    digest.update(chunk)
-                    measured += len(chunk)
-                    if measured > length:
-                        break
-                if measured != length or digest.hexdigest() != item["content_sha256"]:
-                    raise DocumentExtractionFailure("immutable_bytes_changed")
-                spool.seek(0)
-                value = extract_attachment_text(spool, str(item["detected_type"])).strip()
+            try:
+                with SpooledTemporaryFile(
+                    max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
+                ) as spool:
+                    while True:
+                        chunk = body.read(
+                            min(UPLOAD_SPOOL_MEMORY_BYTES, length + 1 - measured)
+                        )
+                        if not chunk:
+                            break
+                        spool.write(chunk)
+                        digest.update(chunk)
+                        measured += len(chunk)
+                        if measured > length:
+                            break
+                    if (
+                        measured != length
+                        or digest.hexdigest() != item["content_sha256"]
+                    ):
+                        raise DocumentExtractionFailure("immutable_bytes_changed")
+                    spool.seek(0)
+                    value = extract_attachment_text(
+                        spool, str(item["detected_type"])
+                    ).strip()
+            finally:
+                _close_provider_body(body)
         except DocumentExtractionFailure as error:
             value = f"[attachment:{error.category}]"
         except Exception:

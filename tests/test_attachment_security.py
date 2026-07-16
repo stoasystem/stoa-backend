@@ -1751,6 +1751,152 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
     )
 
 
+def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> None:
+    first = _validated_upload()
+    second = {**_validated_upload(), "upload_id": "upload-2"}
+    saved = _saved_attachment()
+    repository = _MessageAttachmentRepository(
+        uploads={"upload-1": first, "upload-2": second},
+        attachments={"attachment-saved": saved},
+    )
+    message = {
+        "PK": "CONV#conv-deterministic",
+        "SK": "MSG#message-deterministic",
+        "message_id": "message-deterministic",
+    }
+    expected = ["command-derived-fresh-0", "command-derived-fresh-1"]
+    summaries = bind_message_attachments(
+        message=message,
+        conversation_id="conv-deterministic",
+        actor=_student_actor(),
+        prepared=[("upload", first), ("attachment", saved), ("upload", second)],
+        effective_plan="free",
+        deterministic_attachment_ids=expected,
+        repository=repository,
+    )
+    assert message["attachment_ids"] == [
+        expected[0],
+        "attachment-saved",
+        expected[1],
+    ]
+    assert [summary.attachment_id for summary in summaries] == message["attachment_ids"]
+    operations = repository.transactions[0]
+    put_items = [
+        operation.item["Put"]["Item"]
+        for operation in operations
+        if operation.kind
+        in {
+            attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
+            attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
+        }
+    ]
+    assert {
+        item["PK"] for item in put_items if item.get("entity_type") == "attachment"
+    } == {f"ATTACHMENT#{value}" for value in expected}
+    assert {
+        (item["PK"], item["SK"])
+        for item in put_items
+        if item.get("entity_type") == "attachment_association"
+    } == {
+        tuple(
+            attachment_repo.association_key(
+                value,
+                "conversation",
+                "conv-deterministic",
+                "message-deterministic",
+            ).values()
+        )
+        for value in message["attachment_ids"]
+    }
+
+
+@pytest.mark.parametrize(
+    "supplied",
+    [[], ["one", "two"], [""], ["   "], [None]],
+)
+def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
+    supplied,
+) -> None:
+    repository = _MessageAttachmentRepository(uploads={"upload-1": _validated_upload()})
+    message = {
+        "PK": "CONV#conv-cardinality",
+        "SK": "MSG#message-cardinality",
+        "message_id": "message-cardinality",
+    }
+    values = supplied if supplied != [None] else [None]
+    with pytest.raises(AttachmentDecisionError) as captured:
+        bind_message_attachments(
+            message=message,
+            conversation_id="conv-cardinality",
+            actor=_student_actor(),
+            prepared=[("upload", repository.uploads["upload-1"])],
+            effective_plan="free",
+            deterministic_attachment_ids=values,
+            repository=repository,
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.transactions == []
+    assert "attachment_ids" not in message
+
+
+def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
+    saved = _saved_attachment()
+    repository = _MessageAttachmentRepository(
+        uploads={"upload-1": _validated_upload()},
+        attachments={"attachment-saved": saved},
+    )
+    message = {"PK": "CONV#c", "SK": "MSG#m", "message_id": "m"}
+    bind_message_attachments(
+        message=message,
+        conversation_id="c",
+        actor=_student_actor(),
+        prepared=[("attachment", saved), ("upload", repository.uploads["upload-1"])],
+        effective_plan="free",
+        deterministic_attachment_ids=["only-fresh-id"],
+        repository=repository,
+    )
+    assert message["attachment_ids"] == ["attachment-saved", "only-fresh-id"]
+
+
+def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_keys() -> None:
+    class LostResponseRepository(_MessageAttachmentRepository):
+        def transact(self, operations):
+            self.transactions.append(operations)
+            raise attachment_repo.AttachmentTransactionError(
+                attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+            )
+
+    repository = LostResponseRepository(uploads={"upload-1": _validated_upload()})
+    fixed_now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+    for _ in range(2):
+        with pytest.raises(AttachmentDecisionError) as captured:
+            bind_message_attachments(
+                message={"PK": "CONV#c", "SK": "MSG#m", "message_id": "m"},
+                conversation_id="c",
+                actor=_student_actor(),
+                prepared=[("upload", repository.uploads["upload-1"])],
+                effective_plan="free",
+                deterministic_attachment_ids=["command-derived-exact"],
+                now=fixed_now,
+                repository=repository,
+            )
+        assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    rendered = [
+        [
+            (operation.kind, deepcopy(operation.item))
+            for operation in transaction
+            if operation.kind
+            in {
+                attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
+                attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
+            }
+        ]
+        for transaction in repository.transactions
+    ]
+    assert rendered[0] == rendered[1]
+    assert "ATTACHMENT#command-derived-exact" in str(rendered[0])
+
+
 def test_message_command_claim_groups_command_quota_operation_and_counter() -> None:
     command = {
         "command_id": "opaque-command",
