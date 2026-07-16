@@ -9,6 +9,11 @@ def put_question(item: dict) -> None:
     table.put_item(Item={"PK": f"QUESTION#{item['question_id']}", "SK": "META", **item})
 
 
+def question_item(item: dict) -> dict:
+    """Build the canonical question transaction item without persisting it."""
+    return {"PK": f"QUESTION#{item['question_id']}", "SK": "META", **item}
+
+
 def get_question(question_id: str) -> dict | None:
     table = get_table()
     resp = table.get_item(

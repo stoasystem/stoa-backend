@@ -3,6 +3,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
+from stoa.models.attachment import AttachmentReference, AttachmentSummary
+
 
 class QuestionStatus(str, Enum):
     PENDING = "pending"
@@ -25,7 +27,7 @@ class SubmitQuestionRequest(BaseModel):
 
     content: str = Field(..., min_length=5, max_length=2000)
     subject: str = Field(..., pattern="^(math|physics|german|english)$")
-    image_s3_key: Optional[str] = None
+    attachment: AttachmentReference | None = None
     corrected_text: Optional[str] = Field(default=None, min_length=5, max_length=2000)
     idempotency_key: Optional[str] = Field(default=None, alias="idempotencyKey", min_length=8, max_length=200)
 
@@ -43,8 +45,8 @@ class QuestionResponse(BaseModel):
     student_id: str
     subject: str
     content: str
-    image_s3_key: Optional[str] = None
     has_image: bool = False
+    attachment: AttachmentSummary | None = None
     ocr_metadata: QuestionOcrMetadata = Field(default_factory=QuestionOcrMetadata)
     status: QuestionStatus
     ai_response: Optional[AIResponse]

@@ -37,6 +37,9 @@ from stoa.services.attachment_service import (
     finalize_upload,
     prepare_message_attachments,
     purge_student_attachments,
+    reserve_question_attachment,
+    release_question_attachment_reservation,
+    commit_question_with_attachment,
     release_resource_attachments,
     storage_limit_for_entitlement,
 )
@@ -483,6 +486,186 @@ def _validated_upload(owner="student-1") -> dict:
         "expires_at": 2_000_000_000,
         "etag": "private-version-canary",
     }
+
+
+def _validated_question_upload(owner="student-1") -> dict:
+    return {
+        **_validated_upload(owner),
+        "object_key": "uploads/private/question-coordinate-canary.png",
+        "original_filename": "work.png",
+        "detected_type": "image/png",
+        "content_length": 123,
+        "expected_kind": "question_image",
+    }
+
+
+class _QuestionAttachmentRepository(_MessageAttachmentRepository):
+    question_association_key = staticmethod(attachment_repo.question_association_key)
+    build_question_attachment_transaction = staticmethod(
+        attachment_repo.build_question_attachment_transaction
+    )
+
+    def reserve_upload_for_question(self, upload_id, owner_id, version, now_epoch):
+        item = self.uploads.get(upload_id)
+        if (
+            not item
+            or item.get("owner_id") != owner_id
+            or item.get("status") != "validated"
+            or int(item.get("version", 0)) != version
+            or int(item.get("expires_at", 0)) <= now_epoch
+        ):
+            return False
+        item["status"] = "consuming"
+        item["version"] = version + 1
+        return True
+
+    def release_question_upload_reservation(
+        self, upload_id, owner_id, version, now_epoch
+    ):
+        item = self.uploads.get(upload_id)
+        if (
+            not item
+            or item.get("owner_id") != owner_id
+            or item.get("status") != "consuming"
+            or int(item.get("version", 0)) != version
+            or int(item.get("expires_at", 0)) <= now_epoch
+        ):
+            return False
+        item["status"] = "validated"
+        item["version"] = version + 1
+        return True
+
+
+def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic() -> None:
+    repository = _QuestionAttachmentRepository(
+        uploads={"upload-1": _validated_question_upload()}
+    )
+    prepared = reserve_question_attachment(
+        AttachmentReference(uploadId="upload-1"),
+        _student_actor(),
+        effective_plan="free",
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert repository.uploads["upload-1"]["status"] == "consuming"
+    question = {
+        "PK": "QUESTION#question-1",
+        "SK": "META",
+        "question_id": "question-1",
+        "student_id": "student-1",
+    }
+    summary = commit_question_with_attachment(
+        question=question,
+        prepared=prepared,
+        actor=_student_actor(),
+        effective_plan="free",
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert summary.media_type == "image/png"
+    assert len(repository.transactions) == 1
+    operations = repository.transactions[0]
+    assert operations[-1]["Put"]["Item"] is question
+    assert any(
+        operation.get("Update", {}).get("Key", {}).get("PK") == "UPLOAD#upload-1"
+        and ":consuming" in operation["Update"]["ExpressionAttributeValues"]
+        for operation in operations
+    )
+    assert any(
+        operation.get("Update", {}).get("Key", {}).get("PK") == "STORAGE#student-1"
+        for operation in operations
+    )
+
+
+def test_question_saved_image_reuse_has_no_storage_charge() -> None:
+    saved = {
+        **_saved_attachment(),
+        "detected_type": "image/jpeg",
+        "original_filename": "saved.jpg",
+    }
+    repository = _QuestionAttachmentRepository(
+        attachments={"attachment-saved": saved}, used_bytes=FREE_STORAGE_BYTES
+    )
+    prepared = reserve_question_attachment(
+        AttachmentReference(attachmentId="attachment-saved"),
+        _student_actor(),
+        effective_plan="free",
+        repository=repository,
+    )
+    commit_question_with_attachment(
+        question={
+            "PK": "QUESTION#question-2",
+            "SK": "META",
+            "question_id": "question-2",
+            "student_id": "student-1",
+        },
+        prepared=prepared,
+        actor=_student_actor(),
+        effective_plan="free",
+        repository=repository,
+    )
+    operations = repository.transactions[0]
+    assert not any(
+        operation.get("Update", {}).get("Key", {}).get("PK", "").startswith("STORAGE#")
+        for operation in operations
+    )
+    assert any(
+        "ref_count" in operation.get("Update", {}).get("UpdateExpression", "")
+        for operation in operations
+    )
+
+
+def test_question_missing_foreign_reused_and_non_image_fail_before_effects() -> None:
+    cases = [
+        _QuestionAttachmentRepository(),
+        _QuestionAttachmentRepository(
+            uploads={"upload-1": _validated_question_upload("foreign")}
+        ),
+        _QuestionAttachmentRepository(
+            uploads={"upload-1": {**_validated_question_upload(), "status": "consumed"}}
+        ),
+        _QuestionAttachmentRepository(
+            attachments={"attachment-saved": _saved_attachment()}
+        ),
+    ]
+    references = [
+        AttachmentReference(uploadId="upload-1"),
+        AttachmentReference(uploadId="upload-1"),
+        AttachmentReference(uploadId="upload-1"),
+        AttachmentReference(attachmentId="attachment-saved"),
+    ]
+    for repository, reference in zip(cases, references, strict=True):
+        with pytest.raises(AttachmentDecisionError) as error:
+            reserve_question_attachment(
+                reference,
+                _student_actor(),
+                effective_plan="free",
+                repository=repository,
+            )
+        assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
+        assert repository.transactions == []
+
+
+def test_question_transient_reservation_release_preserves_original_expiry() -> None:
+    repository = _QuestionAttachmentRepository(
+        uploads={"upload-1": _validated_question_upload()}
+    )
+    prepared = reserve_question_attachment(
+        AttachmentReference(uploadId="upload-1"),
+        _student_actor(),
+        effective_plan="free",
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    expires_at = repository.uploads["upload-1"]["expires_at"]
+    release_question_attachment_reservation(
+        prepared,
+        _student_actor(),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert repository.uploads["upload-1"]["status"] == "validated"
+    assert repository.uploads["upload-1"]["expires_at"] == expires_at
 
 
 def _saved_attachment(owner="student-1") -> dict:

@@ -144,6 +144,160 @@ def prepare_message_attachments(
     return prepared
 
 
+def reserve_question_attachment(
+    reference: AttachmentReference,
+    actor: Actor,
+    *,
+    effective_plan: str,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, Any]:
+    """Resolve an owner image and exclusively reserve fresh uploads before OCR."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    if reference.upload_id is not None:
+        upload = resolve_owned_upload(reference.upload_id, actor, now=now, repository=repository)
+        if (
+            upload.get("status") != "validated"
+            or upload.get("expected_kind") != "question_image"
+            or upload.get("detected_type") not in {"image/jpeg", "image/png"}
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        if (
+            repository.get_storage_usage(actor.user_id) + int(upload["content_length"])
+            > storage_limit_for_entitlement(effective_plan)
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+        version = int(upload.get("version", 0))
+        if not repository.reserve_upload_for_question(
+            str(reference.upload_id), actor.user_id, version, int(now.timestamp())
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        attachment_id = str(uuid4())
+        attachment = {
+            "attachment_id": attachment_id,
+            "owner_id": actor.user_id,
+            "student_id": actor.user_id,
+            "entity_type": "attachment",
+            "object_key": upload["object_key"],
+            "original_filename": upload["original_filename"],
+            "detected_type": upload["detected_type"],
+            "content_length": int(upload["content_length"]),
+            "status": "active",
+            "created_at": now.isoformat(),
+            "source_upload_id": upload["upload_id"],
+            "etag": upload.get("etag"),
+            "ref_count": 1,
+        }
+        return {
+            "kind": "upload",
+            "identity": reference.identity,
+            "record": {
+                **upload,
+                "status": "consuming",
+                "version": version + 1,
+                "consume_epoch": int(now.timestamp()),
+            },
+            "attachment": attachment,
+        }
+
+    attachment = resolve_owned_attachment(
+        str(reference.attachment_id), actor, repository=repository
+    )
+    if attachment.get("detected_type") not in {"image/jpeg", "image/png"}:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return {
+        "kind": "attachment",
+        "identity": reference.identity,
+        "record": attachment,
+        "attachment": attachment,
+    }
+
+
+def release_question_attachment_reservation(
+    prepared: dict[str, Any],
+    actor: Actor,
+    *,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> None:
+    if prepared["kind"] != "upload":
+        return
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    upload = prepared["record"]
+    repository.release_question_upload_reservation(
+        upload["upload_id"],
+        actor.user_id,
+        int(upload["version"]),
+        int(now.timestamp()),
+    )
+
+
+def invalidate_question_attachment(
+    prepared: dict[str, Any],
+    actor: Actor,
+    *,
+    repository: Any = attachment_repo,
+) -> None:
+    if prepared["kind"] == "upload":
+        upload = prepared["record"]
+        repository.invalidate_question_upload_reservation(
+            upload["upload_id"],
+            actor.user_id,
+            int(upload["version"]),
+            AttachmentErrorCode.UPLOAD_INVALID.value,
+        )
+        return
+    repository.invalidate_attachment(
+        prepared["attachment"]["attachment_id"], actor.user_id
+    )
+
+
+def commit_question_with_attachment(
+    *,
+    question: dict[str, Any],
+    prepared: dict[str, Any],
+    actor: Actor,
+    effective_plan: str,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> AttachmentSummary:
+    """Atomically commit question, association, consumption and first-byte charge."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    attachment = prepared["attachment"]
+    association = {
+        **repository.question_association_key(
+            attachment["attachment_id"], question["question_id"]
+        ),
+        "attachment_id": attachment["attachment_id"],
+        "owner_id": actor.user_id,
+        "student_id": actor.user_id,
+        "entity_type": "attachment_association",
+        "resource_type": "question",
+        "resource_id": question["question_id"],
+        "created_at": now.isoformat(),
+    }
+    try:
+        repository.transact(
+            repository.build_question_attachment_transaction(
+                question=question,
+                prepared=prepared,
+                attachment=attachment,
+                association=association,
+                owner_id=actor.user_id,
+                limit_bytes=storage_limit_for_entitlement(effective_plan),
+                now_iso=now.isoformat(),
+            )
+        )
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        code = (
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            if exc.category == "dependency_failure"
+            else AttachmentErrorCode.UPLOAD_NOT_FOUND
+        )
+        raise AttachmentDecisionError(code) from None
+    return _attachment_summary(attachment)
+
+
 def ensure_message_attachment_capacity(
     prepared: list[tuple[str, dict[str, Any]]],
     owner_id: str,

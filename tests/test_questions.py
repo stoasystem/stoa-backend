@@ -42,6 +42,41 @@ def _client_error(code: str) -> ClientError:
     return ClientError({"Error": {"Code": code, "Message": code}}, "UpdateItem")
 
 
+def _prepared_question_attachment() -> dict:
+    return {
+        "kind": "upload",
+        "identity": ("upload", "upload-1"),
+        "record": {
+            "upload_id": "upload-1",
+            "owner_id": "student-1",
+            "status": "consuming",
+            "version": 2,
+            "expires_at": 2_000_000_000,
+        },
+        "attachment": {
+            "attachment_id": "attachment-1",
+            "owner_id": "student-1",
+            "object_key": "private/student-1/image.png",
+            "original_filename": "work.png",
+            "detected_type": "image/png",
+            "content_length": 123,
+            "status": "active",
+            "created_at": "2026-07-16T00:00:00+00:00",
+        },
+    }
+
+
+def _attachment_summary() -> dict:
+    return {
+        "attachmentId": "attachment-1",
+        "filename": "work.png",
+        "mediaType": "image/png",
+        "sizeBytes": 123,
+        "status": "active",
+        "createdAt": "2026-07-16T00:00:00Z",
+    }
+
+
 def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch):
     stored = {}
     usage_calls = []
@@ -70,7 +105,21 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         "extract_text_from_s3",
         lambda bucket, key: "raw OCR text from image",
     )
-    monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: _prepared_question_attachment(),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: stored.update(kwargs["question"]) or _attachment_summary(),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "release_question_attachment_reservation",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
     monkeypatch.setattr(
@@ -85,20 +134,21 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
             "content": "Please solve the image",
             "corrected_text": "Solve 2x + 4 = 10",
             "subject": "math",
-            "image_s3_key": "private/student-1/image.png",
+            "attachment": {"uploadId": "upload-1"},
         },
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["content"] == "Solve 2x + 4 = 10"
-    assert body["image_s3_key"] is None
     assert body["has_image"] is True
+    assert body["attachment"] == _attachment_summary()
     assert body["ocr_metadata"]["status"] == "succeeded"
     assert body["ocr_metadata"]["correction_applied"] is True
     assert body["ocr_metadata"]["text_length"] == len("raw OCR text from image")
     assert "private/student-1/image.png" not in str(body)
-    assert stored["image_s3_key"] == "private/student-1/image.png"
+    assert stored["attachment_id"] == "attachment-1"
+    assert stored["attachment_source_identity"] == "upload:upload-1"
     assert stored["ocr_text"] == "raw OCR text from image"
     assert stored["original_content"] == "Please solve the image"
     assert stored["corrected_text"] == "Solve 2x + 4 = 10"
@@ -123,7 +173,21 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
     )
     monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
     monkeypatch.setattr(questions.ocr_service, "extract_text_from_s3", lambda bucket, key: "Equation from image")
-    monkeypatch.setattr(questions.question_repo, "put_question", lambda item: None)
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: _prepared_question_attachment(),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "commit_question_with_attachment",
+        lambda **kwargs: _attachment_summary(),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "release_question_attachment_reservation",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {})
     monkeypatch.setattr(
@@ -137,14 +201,13 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         json={
             "content": "Please solve",
             "subject": "math",
-            "image_s3_key": "private/student-1/image.png",
+            "attachment": {"uploadId": "upload-1"},
         },
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["content"] == "Please solve\n\n[Image text: Equation from image]"
-    assert body["image_s3_key"] is None
     assert body["ocr_metadata"]["correction_applied"] is False
 
 
@@ -157,7 +220,7 @@ def test_get_question_hides_private_image_key(monkeypatch):
             "student_id": "student-1",
             "subject": "math",
             "content": "Question content",
-            "image_s3_key": "private/student-1/image.png",
+            "attachment_id": "attachment-1",
             "has_image": True,
             "ocr_metadata": {"status": "succeeded", "source": "rekognition_s3", "text_length": 12, "correction_applied": False},
             "status": "pending",
@@ -170,11 +233,17 @@ def test_get_question_hides_private_image_key(monkeypatch):
             "resolved_at": None,
         },
     )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "list_attachment_summaries",
+        lambda attachment_ids: {"attachment-1": _attachment_summary()},
+    )
 
     response = _client().get("/questions/question-1")
 
     assert response.status_code == 200
-    assert response.json()["image_s3_key"] is None
+    assert "image_s3_key" not in response.json()
+    assert response.json()["attachment"] == _attachment_summary()
     assert "private/student-1/image.png" not in str(response.json())
 
 
@@ -408,6 +477,90 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
     assert response.status_code == 409
     assert "different question submission" in response.json()["detail"]
     assert usage_calls == []
+
+
+def test_question_contract_has_no_client_storage_coordinates() -> None:
+    schema = _client().app.openapi()
+    request_schema = str(
+        schema["components"]["schemas"]["SubmitQuestionRequest"]
+    ).lower()
+    response_schema = str(schema["components"]["schemas"]["QuestionResponse"]).lower()
+    for forbidden in ("image_s3_key", "s3key", "objectkey", "bucket"):
+        assert forbidden not in request_schema
+        assert forbidden not in response_schema
+    assert "attachment" in request_schema
+    assert "attachment" in response_schema
+
+
+def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
+    effects = []
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "subscription_tier": "free",
+            "grade": "Sek1",
+            "language": "de",
+        },
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, settings, student_profile=None: {
+            "effectivePlan": "free",
+            "limits": {"dailyAiQuestionLimit": 2},
+        },
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "get_question_usage_event",
+        lambda **kwargs: {"question_id": "question-existing"},
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda question_id: {
+            "question_id": question_id,
+            "student_id": "student-1",
+            "subject": "math",
+            "content": "Please solve this equation",
+            "original_content": "Please solve this equation",
+            "corrected_text": None,
+            "attachment_source_identity": "upload:upload-original",
+            "attachment_id": "attachment-original",
+            "has_image": True,
+            "status": "pending",
+            "ai_response": None,
+            "teacher_id": None,
+            "teacher_response": None,
+            "knowledge_points": [],
+            "student_feedback": None,
+            "created_at": "2026-07-16T00:00:00Z",
+            "resolved_at": None,
+        },
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *args, **kwargs: effects.append("reserve"),
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "record_daily_question_usage",
+        lambda *args: effects.append("counter"),
+    )
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve this equation",
+            "subject": "math",
+            "idempotencyKey": "question-submit-attachment",
+            "attachment": {"uploadId": "upload-different"},
+        },
+    )
+    assert response.status_code == 409
+    assert effects == []
 
 
 def test_request_teacher_records_support_visible_usage_event(monkeypatch):

@@ -9,7 +9,10 @@ from stoa.config import Settings, get_settings
 from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
+from stoa.security.authorization import AuthorizationPurpose, AuthorizationSpec
 from stoa.security.identity import Actor
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     QUESTION_CONTENT_READ,
     STUDENT_SELF,
@@ -33,6 +36,7 @@ from stoa.services import (
     ocr_service,
     teacher_dispatch_service,
     usage_ledger_service,
+    attachment_service,
 )
 
 router = APIRouter()
@@ -77,8 +81,16 @@ def _check_daily_limit(
 
 def _question_response(item: dict[str, Any]) -> QuestionResponse:
     public_item = dict(item)
-    public_item["image_s3_key"] = None
-    public_item["has_image"] = bool(item.get("image_s3_key") or item.get("has_image"))
+    public_item.pop("image_s3_key", None)
+    attachment_id = item.get("attachment_id")
+    public_item["has_image"] = bool(
+        attachment_id or item.get("image_s3_key") or item.get("has_image")
+    )
+    if attachment_id and not public_item.get("attachment"):
+        summary = attachment_service.list_attachment_summaries([str(attachment_id)]).get(
+            str(attachment_id)
+        )
+        public_item["attachment"] = summary
     public_item["ocr_metadata"] = item.get("ocr_metadata") or {
         "status": "not_requested",
         "source": None,
@@ -89,7 +101,11 @@ def _question_response(item: dict[str, Any]) -> QuestionResponse:
     return QuestionResponse(**public_item)
 
 
-def _build_question_content(body: SubmitQuestionRequest, settings: Settings) -> tuple[str, dict[str, Any], str | None]:
+def _build_question_content(
+    body: SubmitQuestionRequest,
+    settings: Settings,
+    prepared_attachment: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any], str | None]:
     corrected = body.corrected_text.strip() if body.corrected_text else None
     content = corrected or body.content
     ocr_text: str | None = None
@@ -101,20 +117,19 @@ def _build_question_content(body: SubmitQuestionRequest, settings: Settings) -> 
         "failure_class": None,
     }
 
-    if not body.image_s3_key:
+    if prepared_attachment is None:
         return content, metadata, ocr_text
 
-    metadata["source"] = "rekognition_s3"
-    try:
-        extracted = ocr_service.extract_text_from_s3(settings.s3_images_bucket, body.image_s3_key)
-        ocr_text = extracted.strip()
-        metadata["text_length"] = len(ocr_text)
-        metadata["status"] = "succeeded" if ocr_text else "no_text"
-        if ocr_text and corrected is None:
-            content = f"{body.content}\n\n[Image text: {ocr_text}]" if body.content else ocr_text
-    except Exception as exc:
-        metadata["status"] = "failed"
-        metadata["failure_class"] = type(exc).__name__
+    metadata["source"] = "question_image"
+    attachment = prepared_attachment["attachment"]
+    extracted = ocr_service.extract_text_from_s3(
+        settings.s3_images_bucket, attachment["object_key"]
+    )
+    ocr_text = extracted.strip()
+    metadata["text_length"] = len(ocr_text)
+    metadata["status"] = "succeeded" if ocr_text else "no_text"
+    if ocr_text and corrected is None:
+        content = f"{body.content}\n\n[Image text: {ocr_text}]" if body.content else ocr_text
     return content, metadata, ocr_text
 
 
@@ -124,15 +139,63 @@ def _question_retry_matches(existing_question: dict[str, Any], body: SubmitQuest
         existing_question.get("subject") == subject
         and (existing_question.get("original_content") or existing_question.get("content")) == body.content
         and (existing_question.get("corrected_text") or None) == (body.corrected_text or None)
-        and (existing_question.get("image_s3_key") or None) == (body.image_s3_key or None)
+        and (existing_question.get("attachment_source_identity") or None)
+        == (_attachment_identity(body) or None)
     )
+
+
+def _attachment_identity(body: SubmitQuestionRequest) -> str | None:
+    if body.attachment is None:
+        return None
+    kind, value = body.attachment.identity
+    return f"{kind}:{value}"
+
+
+def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> None:
+    error.correlation_id = correlation_id
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=error.public_body(),
+        headers={"X-Correlation-ID": correlation_id},
+    ) from error
+
+
+async def _question_attachment_inventory_resolver(resource_id: str):
+    return {"student_id": resource_id}
+
+
+_question_create_actor_dependency = student_create_actor_dependency(ResourceType.QUESTION)
+
+
+async def _question_create_dependency(
+    actor: Actor = Depends(_question_create_actor_dependency),
+) -> Actor:
+    return actor
+
+
+_question_create_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    *getattr(_question_create_actor_dependency, "authorization_specs", ()),
+    AuthorizationSpec(
+        ResourceType.UPLOAD,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _question_attachment_inventory_resolver,
+    ),
+    AuthorizationSpec(
+        ResourceType.ATTACHMENT,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.SELF_SERVICE,
+        _question_attachment_inventory_resolver,
+    ),
+)
 
 
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_question(
     body: SubmitQuestionRequest,
-    actor: Actor = Depends(student_create_actor_dependency(ResourceType.QUESTION)),
+    actor: Actor = Depends(_question_create_dependency),
     settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Submit a question; run OCR if an image is provided, then call AI."""
     student_id = actor.user_id
@@ -173,9 +236,41 @@ async def submit_question(
                 detail="Question submission is already recorded; retry later",
             )
 
-    usage_counter = _check_daily_limit(student_id, subscription_tier, settings, entitlement=entitlement)
+    prepared_attachment: dict[str, Any] | None = None
+    if body.attachment is not None:
+        try:
+            prepared_attachment = attachment_service.reserve_question_attachment(
+                body.attachment,
+                actor,
+                effective_plan=str(entitlement.get("effectivePlan") or subscription_tier),
+            )
+        except AttachmentDecisionError as error:
+            _raise_attachment(error, correlation_id)
 
-    content, ocr_metadata, ocr_text = _build_question_content(body, settings)
+    try:
+        usage_counter = _check_daily_limit(
+            student_id, subscription_tier, settings, entitlement=entitlement
+        )
+    except Exception:
+        if prepared_attachment is not None:
+            attachment_service.release_question_attachment_reservation(
+                prepared_attachment, actor
+            )
+        raise
+
+    try:
+        content, ocr_metadata, ocr_text = _build_question_content(
+            body, settings, prepared_attachment
+        )
+    except Exception:
+        if prepared_attachment is not None:
+            attachment_service.release_question_attachment_reservation(
+                prepared_attachment, actor
+            )
+        _raise_attachment(
+            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE),
+            correlation_id,
+        )
 
     now = datetime.now(timezone.utc).isoformat()
     usage_ledger_service.record_question_usage_event(
@@ -197,8 +292,13 @@ async def submit_question(
         "content": content,
         "original_content": body.content,
         "corrected_text": body.corrected_text,
-        "image_s3_key": body.image_s3_key,
-        "has_image": bool(body.image_s3_key),
+        "attachment_id": (
+            prepared_attachment["attachment"]["attachment_id"]
+            if prepared_attachment is not None
+            else None
+        ),
+        "attachment_source_identity": _attachment_identity(body),
+        "has_image": prepared_attachment is not None,
         "ocr_text": ocr_text,
         "ocr_metadata": ocr_metadata,
         "status": QuestionStatus.PENDING.value,
@@ -212,7 +312,22 @@ async def submit_question(
         "created_at": now,
         "resolved_at": None,
     }
-    question_repo.put_question(item)
+    if prepared_attachment is None:
+        question_repo.put_question(item)
+    else:
+        try:
+            summary = attachment_service.commit_question_with_attachment(
+                question=question_repo.question_item(item),
+                prepared=prepared_attachment,
+                actor=actor,
+                effective_plan=str(entitlement.get("effectivePlan") or subscription_tier),
+            )
+            item["attachment"] = summary
+        except AttachmentDecisionError as error:
+            attachment_service.release_question_attachment_reservation(
+                prepared_attachment, actor
+            )
+            _raise_attachment(error, correlation_id)
 
     # Call AI synchronously (Lambda function has up to 30s; Haiku is fast)
     try:

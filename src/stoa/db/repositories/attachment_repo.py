@@ -37,6 +37,13 @@ def association_key(
     }
 
 
+def question_association_key(attachment_id: str, question_id: str) -> dict[str, str]:
+    return {
+        "PK": f"ATTACHMENT#{attachment_id}",
+        "SK": f"REF#QUESTION#{question_id}",
+    }
+
+
 def create_upload_intent(item: dict[str, Any], *, table: Any | None = None) -> None:
     try:
         (table or get_table()).put_item(
@@ -191,6 +198,196 @@ def build_message_attachment_transaction(
                 }
             }
         )
+    return operations
+
+
+def reserve_upload_for_question(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> bool:
+    """Conditionally reserve one validated upload before any OCR/provider effect."""
+    return _transition(
+        upload_id,
+        owner_id,
+        "validated",
+        "consuming",
+        version,
+        now_epoch,
+        table=table,
+    )
+
+
+def release_question_upload_reservation(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    now_epoch: int,
+    *,
+    table: Any | None = None,
+) -> bool:
+    """Release a transient question reservation within the original expiry."""
+    return _transition(
+        upload_id,
+        owner_id,
+        "consuming",
+        "validated",
+        version,
+        now_epoch,
+        table=table,
+    )
+
+
+def invalidate_question_upload_reservation(
+    upload_id: str,
+    owner_id: str,
+    version: int,
+    failure_category: str,
+    *,
+    table: Any | None = None,
+) -> bool:
+    return _transition(
+        upload_id,
+        owner_id,
+        "consuming",
+        "invalid",
+        version,
+        None,
+        attributes={"validation_failure": failure_category},
+        table=table,
+    )
+
+
+def invalidate_attachment(
+    attachment_id: str,
+    owner_id: str,
+    *,
+    table: Any | None = None,
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key=attachment_key(attachment_id),
+            UpdateExpression="SET #status=:invalid",
+            ConditionExpression="owner_id=:owner AND #status=:active",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":active": "active",
+                ":invalid": "invalid",
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def build_question_attachment_transaction(
+    *,
+    question: dict[str, Any],
+    prepared: dict[str, Any],
+    attachment: dict[str, Any],
+    association: dict[str, Any],
+    owner_id: str,
+    limit_bytes: int,
+    now_iso: str,
+) -> list[dict[str, Any]]:
+    """Commit a question and its attachment association as one conditional unit."""
+    operations: list[dict[str, Any]] = []
+    if prepared["kind"] == "upload":
+        upload = prepared["record"]
+        operations.extend(
+            [
+                {
+                    "Update": {
+                        "Key": upload_key(upload["upload_id"]),
+                        "UpdateExpression": "SET #s=:consumed, #v=#v+:one",
+                        "ConditionExpression": (
+                            "#owner=:owner AND #s=:consuming AND #v=:version "
+                            "AND expires_at>:now"
+                        ),
+                        "ExpressionAttributeNames": {
+                            "#owner": "owner_id",
+                            "#s": "status",
+                            "#v": "version",
+                        },
+                        "ExpressionAttributeValues": {
+                            ":owner": owner_id,
+                            ":consuming": "consuming",
+                            ":consumed": "consumed",
+                            ":version": int(upload["version"]),
+                            ":one": 1,
+                            ":now": int(upload["consume_epoch"]),
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "Item": {**attachment_key(attachment["attachment_id"]), **attachment},
+                        "ConditionExpression": "attribute_not_exists(PK)",
+                    }
+                },
+                {
+                    "Update": {
+                        "Key": storage_key(owner_id),
+                        "UpdateExpression": (
+                            "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
+                            "limit_bytes=:limit, updated_at=:updated"
+                        ),
+                        "ConditionExpression": (
+                            "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":zero": 0,
+                            ":size": int(attachment["content_length"]),
+                            ":limit": limit_bytes,
+                            ":updated": now_iso,
+                        },
+                    }
+                },
+            ]
+        )
+    else:
+        operations.append(
+            {
+                "Update": {
+                    "Key": attachment_key(attachment["attachment_id"]),
+                    "UpdateExpression": "SET ref_count=if_not_exists(ref_count,:one)+:one",
+                    "ConditionExpression": (
+                        "owner_id=:owner AND #status=:active AND "
+                        "detected_type IN (:jpeg,:png)"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":owner": owner_id,
+                        ":active": "active",
+                        ":one": 1,
+                        ":jpeg": "image/jpeg",
+                        ":png": "image/png",
+                    },
+                }
+            }
+        )
+    operations.extend(
+        [
+            {
+                "Put": {
+                    "Item": association,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+            {
+                "Put": {
+                    "Item": question,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ]
+    )
     return operations
 
 
