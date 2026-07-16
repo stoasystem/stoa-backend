@@ -433,6 +433,62 @@ def test_assigned_teacher_and_active_admin_read_only_curriculum_answers():
 
 
 @pytest.mark.parametrize(
+    "scope",
+    [
+        {"course_id": "course-2"},
+        {"class_id": "class-2"},
+        {"lesson_id": "lesson-2"},
+        {"subject_id": "physics"},
+        {"grade_level": "primary"},
+    ],
+)
+def test_teacher_curriculum_scope_uses_only_exact_challenge_coordinates(scope):
+    ref = ResourceRef(
+        ResourceType.CURRICULUM_ANSWER,
+        "challenge-1",
+        "challenge-1",
+        course_id="course-1",
+        class_id="class-1",
+        lesson_id="lesson-1",
+        subject_id="math",
+        grade_level="secondary",
+    )
+    assignment = _curriculum_assignment(
+        curriculum_scope={"course_id": "course-1", "class_id": "class-1"}
+    )
+    facts = CurriculumAnswerAuthorizationFacts(
+        assignment=assignment,
+        teacher_account={
+            "user_id": "teacher-1",
+            "role": "teacher",
+            "account_status": "active",
+        },
+    )
+    policy = AuthorizationPolicy()
+    assert policy.evaluate(
+        _actor(CanonicalRole.TEACHER, "teacher-1"),
+        AuthorizedResource(ref, {"challenge_id": "challenge-1"}, AuthorizationFacts(
+            curriculum_answer=facts
+        )),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    ).allowed
+    wrong_assignment = _curriculum_assignment(curriculum_scope=scope)
+    wrong = CurriculumAnswerAuthorizationFacts(
+        assignment=wrong_assignment,
+        teacher_account=facts.teacher_account,
+    )
+    assert not policy.evaluate(
+        _actor(CanonicalRole.TEACHER, "teacher-1"),
+        AuthorizedResource(ref, {"challenge_id": "challenge-1"}, AuthorizationFacts(
+            curriculum_answer=wrong
+        )),
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+    ).allowed
+
+
+@pytest.mark.parametrize(
     "assignment,teacher_status",
     [
         (None, "active"),
@@ -466,6 +522,7 @@ def test_unassigned_stale_wrong_scope_or_disabled_teacher_denies_curriculum_answ
         AuthorizationPurpose.CURRICULUM_ANSWER_READ,
     )
     assert not decision.allowed
+    assert decision.result_code is SecurityErrorCode.RESOURCE_NOT_FOUND
 
 
 @pytest.mark.parametrize("role", [CanonicalRole.STUDENT, CanonicalRole.PARENT])

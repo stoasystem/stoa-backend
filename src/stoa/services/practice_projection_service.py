@@ -11,6 +11,7 @@ from stoa.models.practice import (
     PracticeChallengePreview,
     PracticeExercisePreview,
     PracticeLessonPreview,
+    PrivilegedPracticeAnswer,
 )
 
 
@@ -129,6 +130,24 @@ def build_attempt_result(
         nextChallengeId=next_challenge_id,
         retryAllowed=not correct,
         attemptsRemaining=0 if correct else 2,
+    )
+
+
+def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeAnswer:
+    """Project only the explicit teacher/admin pre-attempt answer contract."""
+    standard_answer = challenge.get("correct_answer", challenge.get("answer_key"))
+    return PrivilegedPracticeAnswer(
+        challengeId=challenge["challenge_id"],
+        standardAnswer=str(standard_answer or "No standard answer is available."),
+        explanation=str(
+            challenge.get("explanation")
+            or "Compare the solution method with the standard answer."
+        ),
+        correctFeedback=str(challenge.get("correct_feedback") or "Correct."),
+        incorrectFeedback=str(
+            challenge.get("incorrect_feedback")
+            or "Review the explanation and try again."
+        ),
     )
 
 

@@ -12,6 +12,16 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.routers import practice
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationFacts,
+    AuthorizationPurpose,
+    CurriculumAnswerAuthorizationFacts,
+    ResourceRef,
+    ResourceType,
+    operator_capability_decision,
+)
+from stoa.security.route_authorization import get_authorization_fact_repository
 from actor_helpers import install_actor_overrides
 
 
@@ -338,3 +348,205 @@ def test_attempt_result_identifier_has_executable_practice_authorization() -> No
     assert item.classification == "authorized"
     assert item.authorization_spec is not None
     assert item.authorization_spec.resource_type == "practice"
+
+
+def _privileged_answer_client(
+    monkeypatch,
+    *,
+    role: str,
+    assignment: dict | None = None,
+    account_status: str = "active",
+    challenge: dict | None = None,
+):
+    challenge = challenge or {
+        "challenge_id": "challenge-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "grade_level": "secondary",
+        "prompt": "Solve x + 4 = 9.",
+        "correct_answer": "x = 5",
+        "explanation": "Subtract four from both sides.",
+        "correct_feedback": "Correct.",
+        "incorrect_feedback": "Use the inverse operation.",
+    }
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_challenge",
+        lambda challenge_id: dict(challenge)
+        if challenge_id == challenge["challenge_id"]
+        else None,
+    )
+    app = FastAPI()
+    app.include_router(practice.router, prefix="/practice")
+    actor = install_actor_overrides(
+        app,
+        {"sub": f"{role}-1", "role": role, "accountStatus": account_status},
+    )
+
+    class Facts:
+        async def facts_for(self, *_args):
+            if role != "teacher":
+                return AuthorizationFacts()
+            return AuthorizationFacts(
+                curriculum_answer=CurriculumAnswerAuthorizationFacts(
+                    assignment=assignment,
+                    teacher_account={
+                        "user_id": actor.user_id,
+                        "role": "teacher",
+                        "account_status": account_status,
+                    },
+                )
+            )
+
+    app.dependency_overrides[get_authorization_fact_repository] = Facts
+    return TestClient(app), actor
+
+
+def _answer_assignment(**overrides):
+    assignment = {
+        "teacher_id": "teacher-1",
+        "status": "active",
+        "subject_id": "math",
+        "grade_level": "secondary",
+        "resource_types": ["curriculum_answer"],
+        "actions": ["read"],
+        "purposes": ["curriculum_answer_read"],
+    }
+    assignment.update(overrides)
+    return assignment
+
+
+def test_explicit_privileged_answer_route_allows_scoped_teacher_and_admin(monkeypatch):
+    teacher, _ = _privileged_answer_client(
+        monkeypatch, role="teacher", assignment=_answer_assignment()
+    )
+    admin, _ = _privileged_answer_client(monkeypatch, role="admin")
+
+    expected = {
+        "challengeId": "challenge-1",
+        "standardAnswer": "x = 5",
+        "explanation": "Subtract four from both sides.",
+        "correctFeedback": "Correct.",
+        "incorrectFeedback": "Use the inverse operation.",
+    }
+    assert teacher.get(
+        "/practice/curriculum/challenges/challenge-1/answer"
+    ).json() == expected
+    assert admin.get(
+        "/practice/curriculum/challenges/challenge-1/answer"
+    ).json() == expected
+
+
+def test_anonymous_actor_cannot_use_privileged_answer_route(monkeypatch):
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_challenge",
+        lambda _challenge_id: {
+            "challenge_id": "challenge-1",
+            "lesson_id": "lesson-1",
+            "subject_id": "math",
+            "correct_answer": "answer-canary",
+        },
+    )
+    app = FastAPI()
+    app.include_router(practice.router, prefix="/practice")
+    response = TestClient(app).get(
+        "/practice/curriculum/challenges/challenge-1/answer"
+    )
+    assert response.status_code == 401
+    assert "answer-canary" not in response.text
+
+
+@pytest.mark.parametrize(
+    "role,assignment,account_status",
+    [
+        ("teacher", None, "active"),
+        ("teacher", _answer_assignment(status="revoked"), "active"),
+        ("teacher", _answer_assignment(subject_id="physics"), "active"),
+        ("teacher", _answer_assignment(), "disabled"),
+        ("student", None, "active"),
+        ("parent", None, "active"),
+    ],
+)
+def test_privileged_answer_route_hides_unassigned_stale_wrong_scope_and_roles(
+    monkeypatch, role, assignment, account_status
+):
+    client, _ = _privileged_answer_client(
+        monkeypatch,
+        role=role,
+        assignment=assignment,
+        account_status=account_status,
+    )
+    hidden = client.get(
+        "/practice/curriculum/challenges/challenge-1/answer"
+    )
+    random = client.get(
+        "/practice/curriculum/challenges/random-challenge/answer"
+    )
+    assert hidden.status_code == random.status_code == 404
+    assert hidden.json()["detail"]["code"] == random.json()["detail"]["code"]
+    assert hidden.json()["detail"]["message"] == random.json()["detail"]["message"]
+    assert "x = 5" not in hidden.text
+    assert "Subtract four" not in hidden.text
+
+
+def test_answer_dependency_loads_challenge_once_and_never_grants_mutation(monkeypatch):
+    challenge = {
+        "challenge_id": "challenge-1",
+        "lesson_id": "lesson-1",
+        "subject_id": "math",
+        "grade_level": "secondary",
+        "correct_answer": "x = 5",
+        "explanation": "Subtract four.",
+    }
+    loads = []
+
+    def load(challenge_id):
+        loads.append(challenge_id)
+        return dict(challenge)
+
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", load)
+    client, actor = _privileged_answer_client(
+        monkeypatch,
+        role="teacher",
+        assignment=_answer_assignment(),
+        challenge=challenge,
+    )
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", load)
+    response = client.get(
+        "/practice/curriculum/challenges/challenge-1/answer"
+    )
+    assert response.status_code == 200
+    assert loads == ["challenge-1"]
+
+    mutation = operator_capability_decision(
+        actor,
+        capability="curriculum_editor",
+        resource=ResourceRef(
+            ResourceType.OPERATOR_RESOURCE,
+            "lesson-1",
+            "lesson-1",
+            relationship_known=True,
+        ),
+        action=AuthorizationAction.CURRICULUM_MUTATION,
+        purpose=AuthorizationPurpose.CURRICULUM_OPERATIONS,
+    )
+    assert not mutation.allowed
+
+
+def test_privileged_answer_openapi_is_explicit_and_preview_has_no_toggle():
+    app = FastAPI()
+    app.include_router(practice.router, prefix="/practice")
+    operation = app.openapi()["paths"][
+        "/practice/curriculum/challenges/{challenge_id}/answer"
+    ]["get"]
+    schema_ref = operation["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]["$ref"]
+    assert schema_ref.endswith("/PrivilegedPracticeAnswer")
+    for path in (
+        "/practice/curriculum/lessons/{lesson_id}",
+        "/practice/curriculum/exercises",
+    ):
+        parameters = app.openapi()["paths"][path]["get"].get("parameters", [])
+        assert "includeAnswers" not in {item["name"] for item in parameters}

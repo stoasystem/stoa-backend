@@ -862,8 +862,9 @@ def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> 
             )
         )
     if actor.role is CanonicalRole.TEACHER and resource.facts.curriculum_answer:
-        assignment = resource.facts.curriculum_answer.assignment or {}
-        return assignment.get("teacher_id") == actor.user_id
+        # Answer scope is intentionally non-enumerable: stale, wrong-scope, and
+        # missing assignment states share the same hidden-resource projection.
+        return False
     return False
 
 

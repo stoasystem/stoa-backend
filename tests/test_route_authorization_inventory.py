@@ -70,6 +70,22 @@ def test_curriculum_answer_resource_and_identifier_are_inventory_compatible():
     }
 
 
+def test_registered_curriculum_answer_route_uses_executable_narrow_policy():
+    from stoa.main import app
+    from stoa.security.route_inventory import inventory_application
+
+    item = next(
+        item
+        for item in inventory_application(app)
+        if item.path == "/practice/curriculum/challenges/{challenge_id}/answer"
+    )
+    assert item.identifiers == ("challenge_id",)
+    assert item.classification == "authorized"
+    assert [(spec.resource_type, spec.action, spec.purpose) for spec in item.authorization_specs] == [
+        ("curriculum_answer", "read", "curriculum_answer_read")
+    ]
+
+
 async def _resolver(resource_id: str):
     return {"student_id": resource_id}
 

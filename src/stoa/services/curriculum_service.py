@@ -119,10 +119,6 @@ def can_preview(user: dict[str, Any]) -> bool:
     return str(user.get("role", "")).lower() in PREVIEW_ROLES
 
 
-def can_view_answer_keys(user: dict[str, Any]) -> bool:
-    return can_preview(user)
-
-
 def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     units: list[dict[str, Any]] = []
     for topic in topics:

@@ -31,11 +31,13 @@ from stoa.models.practice import (
     PracticeAnswerSubmission,
     PracticeAttemptResult,
     PracticeHintResponse,
+    PrivilegedPracticeAnswer,
 )
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
     authorized_student_dependency,
+    authorized_curriculum_answer_dependency,
     get_authorization_fact_repository,
     safe_public_dependency,
     student_actor_dependency,
@@ -54,6 +56,7 @@ _practice_progress = authorized_student_dependency(
     purposes=STUDENT_CONTENT_READ,
     query_alias="studentId",
 )
+_curriculum_answer_read = authorized_curriculum_answer_dependency()
 
 
 async def _authorize_practice_item(
@@ -488,6 +491,20 @@ async def list_curriculum_exercises(
         difficulty=difficulty,
         rollout_state=rollout_state,
         include_preview=include_preview,
+    )
+
+
+@router.get(
+    "/curriculum/challenges/{challenge_id}/answer",
+    response_model=PrivilegedPracticeAnswer,
+)
+async def get_privileged_curriculum_answer(
+    challenge_id: str,
+    authorized_challenge: AuthorizedResource = Depends(_curriculum_answer_read),
+):
+    """Return the already-resolved challenge through the narrow answer policy."""
+    return practice_projection_service.build_privileged_answer(
+        authorized_challenge.value
     )
 
 

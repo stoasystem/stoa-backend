@@ -1455,6 +1455,24 @@
       {
         "action": "read",
         "capability": null,
+        "purpose": "curriculum_answer_read",
+        "resource_type": "curriculum_answer"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [
+      "challenge_id"
+    ],
+    "method": "GET",
+    "path": "/practice/curriculum/challenges/{challenge_id}/answer",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
         "purpose": "self_service",
         "resource_type": "practice"
       }
