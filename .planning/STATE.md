@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
 status: executing
-stopped_at: Completed 473-04-PLAN.md
-last_updated: "2026-07-16T11:30:41.308Z"
-last_activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachment OCR privacy
+stopped_at: Completed 473-06-PLAN.md
+last_updated: "2026-07-16T11:44:47.344Z"
+last_activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admin answer access
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 29
-  completed_plans: 27
-  percent: 93
+  completed_plans: 28
+  percent: 97
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
-Last activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachment OCR privacy
+Last activity: 2026-07-16 -- Completed Phase 473 Plan 06 scoped teacher and admin answer access
 
 ## Accumulated Context
 
@@ -89,8 +89,8 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachm
 
 ## Session
 
-**Last Date:** 2026-07-16T11:30:41.303Z
-**Stopped At:** Completed 473-04-PLAN.md
+**Last Date:** 2026-07-16T11:44:47.339Z
+**Stopped At:** Completed 473-06-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -124,8 +124,12 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 04 atomic question attachm
 | Phase 473 P05 | 17 min | 2 tasks | 12 files |
 | Phase 473 P03 | 18 min | 2 tasks | 11 files |
 | Phase 473 P04 | 14 min | 2 tasks | 9 files |
+| Phase 473 P06 | 20 min | 2 tasks | 11 files |
 
 ## Decisions
+
+- [Phase 473]: Curriculum answers use a dedicated READ purpose; admins receive only that narrow automatic read and teachers require one fresh current assignment matched against server-loaded challenge scope. — Answer access cannot broaden support or curriculum mutation authority.
+- [Phase 473]: Missing, stale, disabled, unrelated, and wrong-scope teacher answer requests remain indistinguishable and only the explicit privileged route serializes pre-attempt answers. — Student previews and legacy includeAnswers input remain structurally answer-free.
 
 - [Phase 473]: Conversation message persistence, fresh upload consumption, durable attachment creation, associations, and one aggregate new-byte charge share one conditional transaction. — Missing, foreign, invalid, duplicated, or over-quota member lists cannot leave partial history or storage effects.
 - [Phase 473]: Saved attachment reuse increments only the durable reference count and adds a logical association. — Reuse preserves immutable bytes and leaves 5 GiB/15 GiB storage usage unchanged.
