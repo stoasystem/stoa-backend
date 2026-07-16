@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: planning
-stopped_at: Phase 473 planned — 7 plans ready
-last_updated: "2026-07-16T01:09:52.262Z"
-last_activity: 2026-07-16 - Phase 473 planning complete; 7 plans ready to execute
+status: executing
+stopped_at: Completed 473-01-PLAN.md
+last_updated: "2026-07-16T10:12:14.914Z"
+last_activity: 2026-07-16 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 29
+  completed_plans: 23
   percent: 10
 ---
 
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473
-Plan: 0 of 7
+Phase: 473 (student-content-privacy-and-practice-integrity) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-07-16 - Phase 473 planning complete; 7 plans ready to execute
+Last activity: 2026-07-16 -- Phase 473 execution started
 
 ## Accumulated Context
 
@@ -89,9 +89,9 @@ Last activity: 2026-07-16 - Phase 473 planning complete; 7 plans ready to execut
 
 ## Session
 
-**Last Date:** 2026-07-16T00:29:21.935Z
-**Stopped At:** Phase 473 planned — 7 plans ready
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-01-PLAN.md
+**Last Date:** 2026-07-16T10:12:14.908Z
+**Stopped At:** Completed 473-01-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -119,8 +119,13 @@ Last activity: 2026-07-16 - Phase 473 planning complete; 7 plans ready to execut
 | Phase 472 P21 | 7 min | 2 tasks | 5 files |
 | Phase 472 P20 | 2 min | 2 tasks | 7 files |
 | Phase 472 P22 | 13 min | 3 tasks | 3 files |
+| Phase 473 P01 | 9 min | 2 tasks | 7 files |
 
 ## Decisions
+
+- [Phase 473]: Public attachment contracts expose only opaque upload/attachment IDs and safe metadata; storage coordinates and extracted content are structurally absent. — Prevents client-selected storage coordinates and private extraction data from entering public schemas.
+- [Phase 473]: Only `upload_service_unavailable` is retryable, with bounded idempotent semantics; every attachment error has one stable client action. — Keeps recovery behavior exhaustive without unsafe mutation retries or provider-detail leakage.
+- [Phase 473]: Answer-bearing practice results require a non-empty durable attempt receipt, while previews and hints use separate `extra="forbid"` allowlists. — Makes successful persistence the structural gate for answer reveal and prevents preview schema drift.
 
 - [Phase 472]: Canonical authorization correlation IDs are generated server-side and never reuse an inbound header. — Prevents client-selected audit correlation and replay confusion.
 - [Phase 472]: Audit rows and partition keys use keyed actor/resource fingerprints. — Raw student, owner, target, email, and key material must never persist.

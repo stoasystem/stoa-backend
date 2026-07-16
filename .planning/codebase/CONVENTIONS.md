@@ -38,6 +38,7 @@ date: 2026-07-15
 - Unknown provider failures become generic dependency failures; provider codes, payloads, tokens, and internal diagnostics must not appear in public responses or evidence.
 - Non-critical AI/AWS side effects may still catch broad exceptions and continue. Tests must assert side effects and logs so these branches do not hide regressions.
 - API responses often use camelCase for client compatibility while Python internals and request payload adapters commonly use snake_case.
+- New privacy-sensitive public models use `ConfigDict(extra="forbid", populate_by_name=True)` with explicit camel-case aliases. Attachment responses expose opaque IDs and safe metadata only; practice previews and answer-bearing results are distinct allowlist schemas.
 
 ## Mobile TypeScript And Expo Style
 
