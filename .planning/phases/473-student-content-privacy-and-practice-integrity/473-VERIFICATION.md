@@ -1,20 +1,26 @@
 ---
 phase: 473-student-content-privacy-and-practice-integrity
-verified: 2026-07-16T18:29:15Z
+verified: 2026-07-16T21:37:06Z
 status: gaps_found
 score: 4/5 must-haves verified
 requirements:
   passed: 2
   total: 3
 decision_coverage:
-  honored: 22
+  honored: 20
   total: 22
-  not_honored: []
+  not_honored: [D-09, D-16]
 gaps:
-  - id: CR-007
+  - id: CR-009
     severity: blocker
     requirement: V9PRIV-02
-  - id: WR-007
+  - id: WR-009
+    severity: warning
+    requirement: V9PRIV-02
+  - id: WR-010
+    severity: warning
+    requirement: V9PRIV-02
+  - id: WR-011
     severity: warning
     requirement: V9PRIV-02
 ---
@@ -22,63 +28,81 @@ gaps:
 # Phase 473: Student Content Privacy And Practice Integrity Verification Report
 
 **Phase Goal:** Ensure student uploads and exercise previews cannot expose another user's content or answers.
-**Verified:** 2026-07-16T18:29:15Z
+**Verified:** 2026-07-16T21:37:06Z
 **Status:** `gaps_found`
 
 ## Verdict
 
-Phase 473 is not ready to close. The gap plans successfully close the prior CR-001 and WR-001 through WR-005 findings at their original sites, and the independent 301-test phase matrix plus 1,303-test full suite pass. However, actual-code tracing confirms the fresh review's CR-007: expired validated uploads can be marked `cleanup_complete` while their promoted immutable object is never deleted, and crash windows can leave completed staging or promoted objects without durable recovery coordinates. This violates D-09 and blocks V9PRIV-02.
+Phase 473 is not ready to close. The independently observed full suite (1,344 passed), Phase 472 regression (636 passed), schema/codebase-drift checks, and evidence-manifest integrity are valid observations, and the original CR-001 plus WR-001 through WR-006 defects are closed. Actual-code tracing nevertheless confirms the fresh review's CR-009 and WR-009 through WR-011. The passing suite does not exercise these malformed-success, batch-isolation, malformed-body-ownership, or repository-transport paths.
 
-WR-007 independently leaves some post-issuance repository outages as unstructured 500 responses rather than the required stable `upload_service_unavailable` response. WR-006 and WR-008 are real robustness defects but are not independently phase-goal blockers.
+CR-009 is a release blocker. Empty provider `UploadId`/`VersionId` values are accepted as successful coordinates and the repository removes the durable operation fence. A completed staging object can consequently become unaddressable to cleanup while the row can still advance toward `cleanup_complete`. This recreates CR-007's forbidden retention/truth outcome, violates D-09, and blocks V9PRIV-02. WR-011 separately leaves conversation Stage-A, polling, transaction, and lost-response reread transport failures outside the stable structured-error boundary required by D-16/V9PRIV-02.
+
+Real S3 behavior, deployed scheduler/IaC, and production-log capture remain honestly **NOT RUN**. They belong to Phases 479/480 and do not by themselves block this local verification; the status is `gaps_found` because locally inspectable source paths are defective.
 
 ## Goal Achievement
 
 ### Observable Truths
 
-The ROADMAP success criteria are the authoritative must-haves.
-
-| # | Truth | Status | Evidence |
+| # | ROADMAP observable truth | Status | Evidence |
 |---|---|---|---|
-| 1 | A student can upload a supported bounded file and use it once in their own question. | ✓ VERIFIED | Opaque intent/chunk/complete routes, owner resolution, immutable promotion, OCR version binding, and atomic question association are implemented; positive/negative controls pass in the 301-test matrix. |
-| 2 | Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors and safely cleaned up. | ✗ FAILED | Denial and validation behavior is strong, but `cleanup_upload_intent` deletes only staging coordinates before marking completion; the immutable tuple is scanned but never deleted. Post-issuance repository outages also escape stable translation in several gateway paths. |
-| 3 | Student preview/overview/path/lesson responses contain no correct answer or answer-derived explanation before submission. | ✓ VERIFIED | Typed allowlist projections and recursive route/OpenAPI tests pass; attempt results are constructed only after immutable attempt persistence. |
-| 4 | Assigned teachers and admins retain a separate explicit answer-bearing read contract. | ✓ VERIFIED | Dedicated curriculum-answer resource/purpose and route enforce current teacher scope and narrow admin read while mutation remains denied. |
-| 5 | Question responses hide storage coordinates and raw OCR text. | ✓ VERIFIED | Public request/response schemas use opaque attachment summaries; OCR receives an internal immutable version and public/log canary controls pass locally. |
+| 1 | A student can upload a supported bounded file and use it once in their own question. | ✓ VERIFIED LOCALLY | Opaque owner-scoped upload, immutable validation/OCR, and atomic question association are implemented; V9PRIV-01 controls pass. |
+| 2 | Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors. | ✗ FAILED | Empty provider success coordinates are persisted as success, and connected conversation repository transport failures can escape as raw/unstructured 500s. Cleanup can lose the exact target needed to remove abandoned bytes. |
+| 3 | Student preview/overview/path/lesson responses contain no answer or answer-derived explanation before submission. | ✓ VERIFIED LOCALLY | Typed answer-free projections and recursive route controls pass; results follow durable attempt recording. |
+| 4 | Assigned teachers and admins retain a separate explicit answer-bearing read contract. | ✓ VERIFIED LOCALLY | Assignment-scoped `teacher` and global admin reads remain separate from student contracts and teacher mutation authority. |
+| 5 | Question responses hide object keys and raw OCR text. | ✓ VERIFIED LOCALLY | Public models and privacy deny controls remain opaque; no reviewed change reintroduced coordinates or OCR material. |
 
 **Score:** 4/5 truths verified.
 
-### Required Artifacts
+## Fresh Finding Adjudication
 
-| Artifact | Status | Details |
+### CR-009 — Empty provider success coordinates erase the recovery fence (BLOCKER, confirmed)
+
+- `create_upload_intent` converts `created["UploadId"]` to `str` without requiring a non-empty value (`attachment_service.py:357-385`).
+- multipart completion converts missing/empty `VersionId` and `ETag` to `""` and sends them to the success transition (`attachment_service.py:691-739`).
+- `record_staging_multipart` and `recover_staging_completion` accept those empty values and call `_fenced_transition(..., remove_operation=True)` (`attachment_repo.py:256-269,493-510`).
+- With empty `VersionId`, validation rejects the row only after the `staging_assembly` operation identity has been removed. Cleanup therefore cannot recover the exact completed version, may persist `cleanup_staging_deleted`, and can later report completion without deleting the provider object.
+
+The existing malformed-provider tests cover non-mapping responses, not `{}`, empty `UploadId`, empty `VersionId`, or the chosen ETag invariant. CR-007 is closed only for well-formed coordinates; its must-have invariant is not globally closed.
+
+### WR-009 — One stale-recovery lookup failure aborts the cleanup batch (confirmed)
+
+`_matching_exact_version` lets `_provider_mapping` raise `AttachmentDecisionError` on list/head failures (`attachment_service.py:282-303`), while `cleanup_upload_intent` catches only `AttachmentRepositoryConflict` (`attachment_service.py:238-240`). The scheduled job has no per-candidate exception boundary (`upload_cleanup.py:57-79`). One transient or malformed candidate can therefore stop all later candidates and prevent a bounded retryable summary. This weakens D-09's asynchronous deletion guarantee.
+
+### WR-010 — Closable non-readable provider bodies are not closed (confirmed)
+
+Both validation and conversation extraction validate `body.read` before entering the `try/finally` that owns `close` (`attachment_service.py:944-949,1486-1491`). A non-`None`, closable body with a missing/non-callable or raising `read` attribute exits before `_close_provider_body`. The regular readable-body matrix therefore does not close WR-008 on every returned-body exit. This is resource-safety debt under V9PRIV-02; it does not independently demonstrate forbidden-content disclosure, so D-17 remains locally satisfied.
+
+### WR-011 — Conversation replay exposes repository transport failures (confirmed)
+
+- Stage-A calls `get_message_command` directly (`conversations.py:147-163`).
+- replay polling calls it directly (`conversations.py:550-560`).
+- the lost-response reread also calls it outside a dependency translator (`conversations.py:698-716`).
+- `attachment_repo.transact` catches only `ClientError` (`attachment_repo.py:1875-1900`), and `bind_message_attachments` catches only `AttachmentTransactionError`.
+
+Endpoint/transport exceptions and other repository failures can bypass `upload_service_unavailable`, skip same-fingerprint convergence, and surface as an unstructured 500. The current lost-response test injects an already-normalized transaction error, so it does not prove the actual transport path. D-16 and V9PRIV-02 remain incomplete.
+
+## Prior Finding Re-adjudication
+
+| Finding | Status | Independent adjudication |
 |---|---|---|
-| `src/stoa/models/attachment.py` and `src/stoa/security/attachment_errors.py` | ✓ SUBSTANTIVE + WIRED | Closed opaque upload/attachment schemas and exhaustive stable error/action registry are imported by routes/services. |
-| `src/stoa/services/file_validation_service.py` | ✓ SUBSTANTIVE + WIRED | Bounded seekable validation enforces image/document type, size, magic/container and integrity constraints. |
-| `src/stoa/db/repositories/attachment_repo.py` | ⚠ SUBSTANTIVE + WIRED, DEFECTIVE CLEANUP | Lifecycle, transaction and command primitives are wired, but cleanup eligibility omits `issuing`/`assembling`, and completion removes only staging fields. |
-| `src/stoa/services/attachment_service.py` | ✗ BLOCKING DEFECT | Immutable validation/promotion and consumers are wired, but cleanup never deletes an unbound immutable version and provider-success/repository-write crash recovery is incomplete. |
-| `src/stoa/jobs/upload_cleanup.py` | ⚠ WIRED TO INCOMPLETE SERVICE | Bounded and idempotent orchestration exists, but cannot recover or delete all bytes created by the new gateway. |
-| `src/stoa/services/practice_projection_service.py`, practice models/repository/routes | ✓ SUBSTANTIVE + WIRED | Answer-free previews, durable attempts, result reads and scoped privileged answers are connected end to end. |
-| Evidence, validation, manifest and route inventory | ⚠ EXISTS, STALE CLAIM | Digests and tested SHA are reproducible, but D-09/V9PRIV-02 PASS claims are contradicted by CR-007 and must be regenerated after repair. |
-
-### Key Link Verification
-
-| From | To | Status | Details |
-|---|---|---|---|
-| Chunk gateway | private multipart ledger | ✓ WIRED | Conditional checksum/length claim precedes provider part writes; replay/fencing tests pass. |
-| Completed staging version | bounded validation and immutable promotion | ✓ WIRED | One exact staging version is read into one spool and that same stream is promoted. |
-| Immutable tuple | OCR/extraction/question/conversation | ✓ WIRED | Consumers require key + VersionId + checksum/length; prior CR-001 is closed. |
-| Expired validated intent | provider deletion | ✗ NOT WIRED | Cleanup scans immutable references but deletes only staging key/version, then marks the row complete. |
-| Gateway dependency failures | stable public error adapter | ⚠ PARTIAL | Issuance is translated, but initial lookup, replay polling, part listing and assembly claim can raise raw repository failures. |
-| Student preview | answer-free projection | ✓ WIRED | All student route families use typed projections without answer switches. |
-| Attempt persistence | answer-bearing result | ✓ WIRED | Result creation follows successful immutable attempt write; foreign/random reads are concealed. |
-| Privileged answer route | current assignment policy | ✓ WIRED | Server-loaded challenge scope feeds central policy; teacher mutation remains separate. |
+| CR-001 | ✓ CLOSED | Validation reads an exact staging `VersionId`; the same bounded spool is promoted; immutable consumers verify version/checksum/length. |
+| WR-001 | ✓ CLOSED | Public request/response models expose only opaque application IDs and safe attachment metadata. |
+| WR-002 | ✓ CLOSED LOCALLY | Reviewed paths use allowlisted private telemetry and safe categories; deployed production capture remains Phase 480-owned. |
+| WR-003 | ✓ CLOSED for classified `ClientError` cancellation outcomes | Ordered operation semantics distinguish quota, concealed resource, and retryable dependency outcomes. WR-011 is a separate unclassified transport path. |
+| WR-004 | ⚠ PARTIAL | Exception and missing-key issuance failures are stable, but CR-009 accepts an empty success coordinate. |
+| WR-005 | ✓ CLOSED for modeled command races | Deterministic command/message/attachment IDs and tested regular/SSE replay converge. WR-011 covers unmodeled transport failures. |
+| CR-007 | ⚠ REOPENED BY CR-009 | Exact recorded staging/immutable versions are cleaned correctly, but an empty success coordinate discards the record required to discover the exact target. |
+| WR-006 | ✓ CLOSED | Command-derived fresh attachment IDs and durable keys remain exact across replay; reuse consumes no fresh ID. |
+| WR-007 | ⚠ PARTIAL | File gateway stages are normalized; cleanup and conversation replay still contain unclassified connected dependency exits (WR-009/WR-011). |
+| WR-008 | ⚠ PARTIAL | Readable bodies close on tested exits; closable non-readable bodies escape before ownership is established (WR-010). |
 
 ## Requirements Coverage
 
 | Requirement | Status | Adjudication |
 |---|---|---|
-| V9PRIV-01 | ✓ SATISFIED LOCALLY | Actor-owned opaque resources, immutable OCR inputs and atomic question association are implemented with zero-effect negative tests. |
-| V9PRIV-02 | ✗ BLOCKED | Validation/type/size/lifecycle/error primitives exist, but safe failure cleanup is false for promoted immutable bytes and stable gateway dependency errors are incomplete. |
-| V9PRIV-03 | ✓ SATISFIED LOCALLY | Student previews are structurally answer-free; durable attempts gate results; scoped teacher/admin reads are separate. |
+| V9PRIV-01 | ✓ SATISFIED LOCALLY | Actor-owned opaque uploads, immutable OCR coordinates, and atomic conditional question association remain implemented and tested. |
+| V9PRIV-02 | ✗ BLOCKED | CR-009 permits false-success coordinates and unsafe cleanup truth; WR-009/010/011 leave cleanup isolation, resource ownership, and stable dependency handling incomplete. |
+| V9PRIV-03 | ✓ SATISFIED LOCALLY | Student previews remain structurally answer-free; attempts gate result disclosure; privileged reads remain separate and scoped. |
 
 **Coverage:** 2/3 requirements satisfied.
 
@@ -86,113 +110,48 @@ The ROADMAP success criteria are the authoritative must-haves.
 
 | Decisions | Status | Evidence |
 |---|---|---|
-| D-01–D-06 | ✓ VERIFIED | Locked formats, MIME/magic/container checks, 10/50 MiB limits, 4096 edge and 1,800-second expiry are implemented and tested. |
-| D-07 | ⚠ VERIFIED WITH WR-006 DEBT | Exact conversation replay and one effect set are tested, but deterministic fresh attachment IDs passed by the command executor are overwritten in the callee. |
-| D-08 | ✓ VERIFIED | Terminal validation failures invalidate; retryable dependency states do not revive invalid uploads. |
-| D-09 | ✗ FAILED | Unbound promoted immutable bytes are not deleted; `issuing`/`assembling` crash states are not cleanup candidates. |
-| D-10–D-15 | ✓ VERIFIED | Durable history, 5/15 GiB quota, no auto-deletion, saved reuse, Actor ownership, concealment and owner-visible expiry are present. |
-| D-16 | ✗ FAILED IN PART | Stable categories exist, but post-issuance repository outages can bypass them and produce unstructured 500 responses. |
-| D-17 | ✓ VERIFIED LOCALLY | Opaque APIs, version-bound consumers and private telemetry pass local canary tests; deployed-log capture remains later-phase evidence. |
-| D-18–D-20 | ✓ VERIFIED | Attempt-before-reveal, directional hints and structurally separate preview/result contracts are enforced. |
-| D-21–D-22 | ✓ VERIFIED | Assigned `teacher` and narrow admin positives pass; all unauthorized roles/scopes remain concealed. |
+| D-01–D-08 | ✓ HONORED | Supported formats, bounded validation, 30-minute intent expiry, atomic consumption/replay, and terminal-vs-retryable states remain implemented and exercised. |
+| D-09 | ✗ NOT HONORED | CR-009 can discard the only exact recovery coordinate; WR-009 can starve later cleanup candidates. Asynchronous deletion and cleanup truth are not guaranteed. |
+| D-10–D-15 | ✓ HONORED | Durable history, 5/15 GiB quotas, reuse without double charge, Actor authority, concealment, and `upload_expired` remain intact. |
+| D-16 | ✗ NOT HONORED | WR-011 permits unstructured conversation dependency failures; empty provider success responses are not consistently rejected as the stable temporary-service outcome. |
+| D-17 | ✓ HONORED LOCALLY, WITH WR-010 DEBT | Public/log/evidence deny controls remain coordinate/content-safe. The malformed-body resource leak must still be fixed; deployed log capture remains Phase 480-owned. |
+| D-18–D-22 | ✓ HONORED | Recorded-attempt gating, directional hints, separate answer contracts, assigned `teacher`/admin reads, and denied role/scope matrix remain verified. |
 
-### Decision Coverage
+**Coverage:** 20/22 decisions honored; D-09 and D-16 are not honored.
 
-The GSD translation-coverage handler reports **22/22 decisions honored by shipped artifacts**. Semantic verification still finds D-09 failed and D-16 partially failed; translation coverage is a non-blocking presence heuristic, not proof of correctness.
+## Evidence Integrity And Boundaries
 
-## Fresh Finding Re-adjudication
+The source-lock mechanics are reproducible: candidate `b3964d52eb483f4e80a4bca0366bbbcd79468059`, its evidence-parent relation, exact post-source evidence diff, manifest hashes/byte counts, route inventory, privacy denylist, and clean-tree observations are internally consistent. They prove what the selected tests observed, not the absence of untested source defects.
 
-| Finding | Verdict | Impact |
+Consequently, `docs/security/phase-473-evidence.md`, its manifest, and `473-VALIDATION.md` are structurally valid but substantively stale where they claim CR-007, WR-007, WR-008, D-09, D-16, and V9PRIV-02 are fully closed. They must be regenerated from a new immutable candidate after repair.
+
+| External observation | Status | Phase ownership / impact |
 |---|---|---|
-| CR-001 | ✓ CLOSED | Exact validated bytes are promoted from one bounded spool and every durable consumer is version/checksum-bound. |
-| WR-001 | ✓ CLOSED | Public upload contracts expose no provider URL, fields, key, bucket, multipart ID, ETag or version. |
-| WR-002 | ✓ CLOSED LOCALLY | Closed telemetry excludes content/provider diagnostics in exercised AI/question/conversation paths. |
-| WR-003 | ✓ CLOSED | Semantic transaction indices map quota, concealed resource and retryable dependency outcomes without raw cancellation diagnostics. |
-| WR-004 | ✓ CLOSED AT ISSUANCE | Issuance failure is terminal/cleanup-safe and returns stable 503. WR-007 is a later-stage gateway gap. |
-| WR-005 | ✓ SUBSTANTIALLY CLOSED | Stage A replay, atomic command/quota claim, deterministic messages and fenced AI completion converge duplicates. |
-| CR-007 | ✗ BLOCKER CONFIRMED | Promoted immutable versions can survive expiry while cleanup reports complete; provider/database split windows lack durable recovery coordinates. |
-| WR-006 | ⚠ WARNING CONFIRMED | `bind_message_attachments` shadows the supplied deterministic attachment-ID list with an empty output list, so fresh IDs become random. |
-| WR-007 | ⚠ WARNING, REQUIREMENT IMPACT | Several gateway repository calls occur outside translation boundaries; route catches only `AttachmentDecisionError`. |
-| WR-008 | ⚠ WARNING CONFIRMED | Exact-version provider bodies are read but not closed on success or failure paths, risking connection-pool exhaustion. |
+| Real S3 multipart/version/promotion/recovery | **NOT RUN** | Phase 479 infrastructure evidence; honest deferred boundary, not this local failure's cause. |
+| Deployed cleanup scheduler/IaC/retries/alarms | **NOT RUN** | Phase 479; local cleanup semantics still must be correct first. |
+| Production/deployed log capture | **NOT RUN** | Phase 480 observability/privacy evidence; local deny controls remain useful but not production proof. |
 
-## Behavioral Verification
+## Required Gap Plans
 
-| Check | Result | Detail |
-|---|---|---|
-| Phase 473 matrix | ✓ 301 passed | Independent run: 301 passed in 4.29s. |
-| Full repository suite | ✓ 1,303 passed | Independent run: 1,303 passed in 34.70s. |
-| Phase 472 regression | ✓ 636 passed | Fresh source-bound Plan 11 observation; command and digest recorded in evidence. |
-| Schema drift | ✓ none | Orchestrator gate reports no schema drift. |
-| Codebase drift | ✓ non-actionable | Orchestrator gate reports no actionable drift. |
-| Test adequacy for cleanup | ✗ insufficient | Cleanup fixture contains staging coordinates only and asserts only staging deletion, so it cannot detect CR-007. |
+### Plan 473-15 — Provider-coordinate invariants and isolated cleanup recovery
 
-Passing suites do not override the blocking source-proven lifecycle defect.
+1. Require non-empty `UploadId`, staging `VersionId`, and the chosen required ETag invariant before any transition removes an operation fence.
+2. Add repository defense-in-depth rejecting empty multipart/version coordinates.
+3. Preserve the `staging_issuance`/`staging_assembly` operation on malformed success so restart and exact-key cleanup remain possible.
+4. Normalize expected provider/repository lookup failures to a coordinate-free `retryable` outcome and isolate each scheduled candidate.
+5. Add `{}`, empty/missing-coordinate, first-candidate-fails/later-candidate-converges, restart, and no-false-`cleanup_complete` tests.
 
-## Test Quality Audit
+### Plan 473-16 — Provider-body ownership and conversation transport convergence
 
-| Test area | Active | Skipped | Circular | Assertion level | Verdict |
-|---|---:|---:|---:|---|---|
-| Upload/gateway/attachment security | active | 0 | 0 | Behavioral/state/effect | Strong except cleanup fixture omits immutable tuple and crash boundaries. |
-| Question OCR and association | active | 0 | 0 | Behavioral/zero-effect | Sufficient for V9PRIV-01. |
-| Conversation replay/telemetry | active | 0 | 0 | Behavioral/concurrency/canary | Strong, but lacks exact deterministic fresh attachment-ID assertion. |
-| Practice privacy and privileged answer | active | 0 | 0 | Recursive schema + behavioral authorization | Sufficient for V9PRIV-03. |
+1. Establish `try/finally` ownership immediately after receiving any non-`None` provider body; validate `read` inside it and close exactly once.
+2. Normalize Stage-A, transaction, replay-poll, and lost-response repository transport failures to stable structured outcomes without exception/provider diagnostics.
+3. Preserve same-fingerprint reread/convergence when the transaction committed but its response was lost.
+4. Add route-level generic transport injections and closable non-readable/read-property-failure spies with response/log privacy canaries.
 
-No disabled requirement tests or circular expected-value generators were found. The critical quality problem is a missing negative fixture, not a skipped or circular test.
+### Plan 473-17 — Re-lock source and republish evidence
 
-## Anti-Patterns
+After 473-15/16, lock a clean candidate, rerun the Phase 473 matrix, exact Phase 472 regression, full suite, Ruff, inventory, manifest, and privacy denylist, then regenerate evidence/validation/manifest without inferring any external NOT RUN result.
 
-No task TODO/FIXME/HACK or empty implementation was found in the requirement-linked production files. `conversations.py` retains an explicit “AI system is being set up” fallback; complete product-journey behavior is Phase 478-owned and it does not change this phase's privacy verdict.
+## Final Determination
 
-## Human Verification
-
-N/A for Phase 473 closure — this is a backend contract/foundation phase and the blocking defects are programmatically demonstrable.
-
-External real-provider observations remain deferred evidence, not human acceptance gates for this phase:
-
-| Deferred item | Owning phase | Reason |
-|---|---|---|
-| Real versioned S3 chunk/promotion/overwrite behavior | Phase 479 | Infrastructure defines/imports authoritative S3 policies, lifecycle and deployed resources. |
-| Deployed cleanup scheduler/EventBridge/Lambda/IaC | Phase 479 | Deployment and scheduling are infrastructure acceptance. |
-| Production/deployed log-redaction capture | Phase 480 | Observability and deployed-log evidence are explicitly Phase 480 scope. |
-
-## Gaps Summary
-
-### Critical gap: crash-safe immutable upload cleanup
-
-- Persist fenced staging and immutable-promotion operation coordinates before provider mutations.
-- Make expired or lease-stale `issuing`, `assembling`, and promotion states cleanup-eligible.
-- Abort recorded multipart uploads and delete every exact unreferenced staging and immutable VersionId before `cleanup_complete`.
-- Add restart tests at each provider-success/repository-write boundary and a validated-unbound fixture containing both tuples.
-
-### Required robustness follow-ups
-
-- Preserve deterministic fresh attachment IDs and assert exact durable keys after lost-response retry.
-- Normalize repository/provider dependency failures across every gateway stage to the stable redacted 503 contract.
-- Close exact-version object bodies in `finally` and test success/error closure.
-- Regenerate evidence, validation and manifest after the source fixes; remove the current overclaim that D-09/V9PRIV-02 pass.
-
-## Recommended Fix Plans
-
-### 473-12-PLAN.md: Crash-safe immutable cleanup and recovery
-
-1. Persist fenced provider-operation coordinates and cleanup leases before staging completion and immutable promotion.
-2. Extend candidate/claim/finalize cleanup to all stale states and both exact object tuples.
-3. Add restart/split-failure/validated-unbound/durable-reference tests and rerun the full lifecycle matrix.
-
-### 473-13-PLAN.md: Gateway and replay robustness
-
-1. Repair deterministic attachment-ID plumbing and add exact-key replay assertions.
-2. Add exhaustive gateway dependency translation and provider-body closure.
-3. Run route-level error injection, resource-closure tests, full regression, then regenerate source-bound evidence.
-
-## Verification Metadata
-
-**Verification approach:** Goal-backward against ROADMAP success criteria, with actual-code lifecycle tracing.
-**Must-haves source:** ROADMAP success criteria (authoritative over PLAN frontmatter).
-**Automated checks:** 301 focused and 1,303 full tests passed; one blocking source-proven lifecycle check failed.
-**Human checks required:** 0.
-**Report path:** `.planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md`.
-
----
-*Verified: 2026-07-16T18:29:15Z*
-*Verifier: Codex GSD verifier subagent*
+`gaps_found` — keep Phase 473 incomplete and route to `$gsd-plan-phase 473 --gaps`. Do not advance to Phase 474 based on the current evidence set.

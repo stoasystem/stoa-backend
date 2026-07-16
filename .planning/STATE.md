@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: verifying
-stopped_at: Completed 473-14-PLAN.md
-last_updated: "2026-07-16T21:24:06.645Z"
-last_activity: 2026-07-16 -- Completed Phase 473 Plan 14; ready for independent verification
+status: executing
+stopped_at: Phase 473 verification found CR-009 and WR-009 through WR-011 gaps; gap planning required
+last_updated: "2026-07-16T21:38:00Z"
+last_activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 1
   total_plans: 36
   completed_plans: 36
-  percent: 20
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (Student Content Privacy And Practice Integrity) — READY FOR VERIFICATION
-Plan: 14 of 14
-Status: Phase complete — ready for verification
-Last activity: 2026-07-16 -- Completed Phase 473 Plan 14; ready for independent verification
+Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
+Plan: 14 of 14 execution plans complete; new verification gaps require planning
+Status: Independent verification found gaps; V9PRIV-02 remains pending
+Last activity: 2026-07-16 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
 
 ## Accumulated Context
 
@@ -84,7 +84,7 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 14; ready for independent 
 
 ### Pending Todos
 
-- Execute Plans 473-12 through 473-14; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
+- Plan CR-009 and WR-009 through WR-011; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -98,14 +98,14 @@ Last activity: 2026-07-16 -- Completed Phase 473 Plan 14; ready for independent 
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 473 --gaps-only` to close crash-safe immutable cleanup, gateway error normalization, deterministic attachment IDs, provider-body closure, and final evidence.
+- Run `$gsd-plan-phase 473 --gaps` to reject empty provider success coordinates, isolate cleanup candidates, close every returned Body, normalize conversation transport failures, and refresh evidence.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-16T21:23:46.778Z
-**Stopped At:** Completed 473-14-PLAN.md
-**Resume File:** None
+**Last Date:** 2026-07-16T21:38:00Z
+**Stopped At:** Phase 473 verification found CR-009 and WR-009 through WR-011 gaps; gap planning required
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
 
 ## Performance Metrics
 
