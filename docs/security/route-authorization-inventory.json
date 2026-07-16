@@ -4057,15 +4057,30 @@
   {
     "authorization": [
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      },
+      {
         "action": "create",
         "capability": null,
         "purpose": "self_service",
         "resource_type": "question"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
       }
     ],
     "classification": "authorized",
     "family": "questions",
-    "identifiers": [],
+    "identifiers": [
+      "attachmentId",
+      "uploadId"
+    ],
     "method": "POST",
     "path": "/questions",
     "sensitive": true
