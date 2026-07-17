@@ -75,8 +75,9 @@ def test_report_source_registry_closes_rows_writers_providers_and_branches() -> 
     assert providers == {"s3_put_object", "s3_delete_object", "ses_send_email", "crm_send"}
     assert {"summary", "student_name", "parent_email", "teacher_note", "reason", "before", "after"} <= private_fields
     assert {"report_records", "report_artifacts", "support_recovery_feed"} <= set(
-        account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
+        account_deletion_service.BRANCH_HANDLERS
     )
+    assert len(account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS) == 17
 
 
 def test_object_intent_is_owner_partitioned_and_fenced_before_provider() -> None:
@@ -268,15 +269,16 @@ def test_report_branches_restart_and_require_two_later_clean_epochs(monkeypatch:
         page_type((_report_row(),), {"PK": f"REPORT#{REPORT_ID}", "SK": "SUMMARY"}, 0),
         page_type((), None, 0),
         page_type((), None, 0),
+        page_type((), None, 0),
     ]
     monkeypatch.setattr(report_repo, "scan_report_private_rows", lambda *_args, **_kwargs: pages.pop(0))
     monkeypatch.setattr(report_repo, "scrub_report_private_row", lambda *_args, **_kwargs: None)
     previous: dict[str, Any] = {}
     results = []
-    for _ in range(3):
+    for _ in range(4):
         result = branch(command={"user_id": STUDENT_ID, "generation": 7}, previous=previous)
         results.append(result)
         previous = result.persisted(NOW)
-    assert [item.epoch for item in results] == [0, 1, 2]
+    assert [item.epoch for item in results] == [0, 0, 1, 2]
     assert results[-1].quiescent is True
     assert asdict(results[-1])["debt_counts"] == {}

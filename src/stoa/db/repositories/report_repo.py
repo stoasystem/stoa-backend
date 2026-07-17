@@ -1,10 +1,156 @@
 """DynamoDB access patterns for the WeeklyReport entity."""
 import base64
+from dataclasses import dataclass
+from hashlib import sha256
 import json
+from typing import Any, Mapping
 
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
+
+
+REPORT_PRIVATE_ROW_REGISTRY = {
+    "report_summary": ("REPORT#", "SUMMARY"),
+    "edit_draft": ("REPORT#", "EDIT_DRAFT#"),
+    "artifact_edit_draft": ("REPORT#", "ARTIFACT_EDIT_DRAFT#"),
+    "artifact_rollback_preview": ("REPORT#", "ARTIFACT_ROLLBACK_PREVIEW#"),
+    "report_audit": ("REPORT#", "AUDIT#"),
+    "recovery_summary": ("REPORT_RECOVERY_JOB#", "SUMMARY"),
+    "recovery_target": ("REPORT_RECOVERY_JOB#", "TARGET#"),
+    "recovery_audit": ("REPORT_RECOVERY_JOB#", "AUDIT#"),
+    "retention_manifest": ("AUDIT_RETENTION#", "IMMUTABLE_MANIFEST"),
+    "retention_audit": ("AUDIT_RETENTION#", "AUDIT#"),
+    "support_audit": ("SUPPORT_HANDOFF#", "AUDIT#"),
+    "support_delivery": ("SUPPORT_HANDOFF_DELIVERY#", "SUMMARY"),
+    "support_delivery_audit": ("SUPPORT_HANDOFF_DELIVERY#", "AUDIT#"),
+    "support_crm_message": ("SUPPORT_HANDOFF_DELIVERY#", "CRM_MESSAGE#"),
+    "support_delivery_feed": ("SUPPORT_HANDOFF_DELIVERY_FEED", "SUMMARY#"),
+    "support_crm_feed": ("SUPPORT_CRM_MESSAGE_FEED", "MESSAGE#"),
+    "report_object_intent": ("USER#", "REPORT_OBJECT#"),
+    "report_email_intent": ("USER#", "REPORT_EMAIL#"),
+}
+
+REPORT_WRITER_REGISTRY = frozenset(
+    {
+        "put_report",
+        "try_claim_report_generation",
+        "update_report_status",
+        "try_apply_report_edit",
+        "put_report_edit_draft",
+        "mark_report_edit_draft_applied",
+        "put_report_artifact_edit_draft",
+        "mark_report_artifact_edit_draft_applied",
+        "put_report_artifact_rollback_preview",
+        "mark_report_artifact_rollback_preview_applied",
+        "try_apply_report_artifact_edit",
+        "put_report_audit_event",
+        "put_recovery_job",
+        "try_claim_recovery_job",
+        "update_recovery_job_status",
+        "try_claim_recovery_job_target",
+        "update_recovery_job_target",
+        "put_recovery_job_audit_event",
+        "put_audit_retention_manifest",
+        "put_audit_retention_audit_event",
+        "put_support_handoff_audit_event",
+        "put_support_handoff_delivery_record",
+        "update_support_handoff_delivery_status",
+        "put_support_handoff_delivery_audit_event",
+        "put_support_crm_message_event",
+    }
+)
+
+REPORT_PROVIDER_REGISTRY = frozenset(
+    {"s3_put_object", "s3_delete_object", "ses_send_email", "crm_send"}
+)
+
+REPORT_PRIVATE_FIELDS = frozenset(
+    {
+        "summary",
+        "strengths",
+        "weak_topics",
+        "weak_knowledge_points",
+        "recommendations",
+        "recommendation_items",
+        "teacher_note",
+        "student_name",
+        "parent_email",
+        "admin_note",
+        "editor_summary",
+        "status_note",
+        "reason",
+        "proposed_fields",
+        "diff",
+        "before",
+        "after",
+        "error_message",
+        "detail",
+        "metadata",
+        "filters",
+        "student_id",
+        "parent_id",
+        "actor",
+        "created_by",
+        "applied_by",
+        "requested_by",
+        "recipient",
+        "subject",
+        "body",
+        "payload_summary",
+        "provider_details",
+        "json_s3_key",
+        "html_s3_key",
+        "s3_key",
+        "source_json_s3_key",
+        "source_html_s3_key",
+        "target_json_s3_key",
+        "target_html_s3_key",
+        "object_key",
+        "body_sha256",
+        "etag",
+        "version_id",
+    }
+)
+
+REPORT_TOMBSTONE_ALLOWLIST = frozenset(
+    {
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "report_id",
+        "job_id",
+        "target_id",
+        "manifest_id",
+        "package_id",
+        "delivery_id",
+        "message_id",
+        "event_id",
+        "operation_id",
+        "artifact_kind",
+        "status",
+        "state",
+        "owner_deletion_generation",
+        "privacy_deleted",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "accepted_at",
+        "provider_acceptance",
+        "policy_authority",
+        "policy_scope",
+        "hold_expires_at",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ReportPrivatePage:
+    items: tuple[dict[str, Any], ...]
+    cursor: dict[str, str] | None = None
+    unresolved: int = 0
 
 
 def put_report(item: dict) -> None:
@@ -1469,3 +1615,439 @@ def list_reports_for_parent(
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
     return table.query(**kwargs)
+
+
+def _required_private_string(value: object, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise account_deletion_repo.AccountDeletionConflict(f"{name} is required")
+    return value.strip()
+
+
+def _validated_report_cursor(value: Mapping[str, Any]) -> dict[str, str]:
+    if set(value) != {"PK", "SK"}:
+        raise account_deletion_repo.AccountDeletionConflict("invalid report cursor")
+    return {
+        "PK": _required_private_string(value.get("PK"), "cursor PK"),
+        "SK": _required_private_string(value.get("SK"), "cursor SK"),
+    }
+
+
+def register_report_object_intent(
+    *,
+    owner_id: str,
+    generation: int,
+    operation_id: str,
+    artifact_kind: str,
+    report_id: str | None,
+    object_key: str,
+    body: bytes,
+    now_iso: str,
+    table: Any | None = None,
+    manifest_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist exact object identity before a private provider write."""
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation <= 0:
+        raise account_deletion_repo.AccountDeletionConflict("invalid report generation")
+    if not isinstance(body, bytes):
+        raise account_deletion_repo.AccountDeletionConflict("report object body must be bytes")
+    owner = _required_private_string(owner_id, "owner_id")
+    operation = _required_private_string(operation_id, "operation_id")
+    kind = _required_private_string(artifact_kind, "artifact_kind")
+    item = {
+        "PK": f"USER#{owner}",
+        "SK": f"REPORT_OBJECT#{operation}#{kind}",
+        "entity_type": "report_object_intent",
+        "schema_version": "report-object-intent.v1",
+        "owner_id": owner,
+        "account_fence_generation": generation,
+        "operation_id": operation,
+        "artifact_kind": kind,
+        "report_id": report_id,
+        "manifest_id": manifest_id,
+        "object_key": _required_private_string(object_key, "object_key"),
+        "body_sha256": sha256(body).hexdigest(),
+        "body_length": len(body),
+        "state": "registered",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    target = table or get_table()
+    hook = getattr(target, "register_report_object_intent", None)
+    if callable(hook):
+        persisted = hook(dict(item))
+        return dict(persisted or item)
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.active_fence_condition(owner, generation),
+            {
+                "Put": {
+                    "Item": item,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ],
+        table=target,
+    )
+    return item
+
+
+def parse_report_object_ack(response: Mapping[str, Any]) -> dict[str, str]:
+    version_id = _required_private_string(response.get("VersionId"), "VersionId")
+    raw_etag = _required_private_string(response.get("ETag"), "ETag")
+    etag = raw_etag.strip('"')
+    if not etag or etag != raw_etag.strip().strip('"'):
+        raise account_deletion_repo.AccountDeletionConflict("invalid report object ETag")
+    return {"version_id": version_id, "etag": etag}
+
+
+def record_report_object_coordinate(
+    intent: Mapping[str, Any],
+    coordinate: Mapping[str, str],
+    *,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Link only an exact registered intent while its owner remains active."""
+    owner = _required_private_string(intent.get("owner_id"), "owner_id")
+    generation = intent.get("account_fence_generation")
+    if isinstance(generation, bool) or not isinstance(generation, int):
+        raise account_deletion_repo.AccountDeletionConflict("invalid object generation")
+    version_id = _required_private_string(coordinate.get("version_id"), "version_id")
+    etag = _required_private_string(coordinate.get("etag"), "etag")
+    updated = {
+        **intent,
+        "version_id": version_id,
+        "etag": etag,
+        "state": "linked",
+        "updated_at": now_iso,
+    }
+    target = table or get_table()
+    hook = getattr(target, "record_report_object_coordinate", None)
+    if callable(hook):
+        persisted = hook(dict(intent), dict(coordinate), now_iso)
+        return dict(persisted or updated)
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.active_fence_condition(owner, generation),
+            {
+                "Update": {
+                    "Key": {"PK": str(intent["PK"]), "SK": str(intent["SK"])},
+                    "UpdateExpression": (
+                        "SET #state=:linked, version_id=:version, etag=:etag, updated_at=:now"
+                    ),
+                    "ConditionExpression": (
+                        "#state=:registered AND account_fence_generation=:generation "
+                        "AND body_sha256=:checksum AND object_key=:object_key"
+                    ),
+                    "ExpressionAttributeNames": {"#state": "state"},
+                    "ExpressionAttributeValues": {
+                        ":linked": "linked",
+                        ":registered": "registered",
+                        ":generation": generation,
+                        ":checksum": intent["body_sha256"],
+                        ":object_key": intent["object_key"],
+                        ":version": version_id,
+                        ":etag": etag,
+                        ":now": now_iso,
+                    },
+                }
+            },
+        ],
+        table=target,
+    )
+    return updated
+
+
+def reconcile_report_object_version(
+    *,
+    s3_client: Any,
+    bucket: str,
+    object_key: str,
+    operation_id: str,
+    body_sha256: str,
+    body_length: int,
+    maximum_pages: int = 100,
+) -> dict[str, str]:
+    """Recover one commit-then-raise S3 write from exact metadata and bytes."""
+    request: dict[str, Any] = {"Bucket": bucket, "Prefix": object_key}
+    seen: set[tuple[str, str]] = set()
+    for _ in range(maximum_pages):
+        page = s3_client.list_object_versions(**request)
+        if not isinstance(page, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict("malformed object version page")
+        for raw in page.get("Versions", []):
+            if not isinstance(raw, Mapping) or raw.get("Key") != object_key:
+                continue
+            version_id = _required_private_string(raw.get("VersionId"), "VersionId")
+            head = s3_client.head_object(Bucket=bucket, Key=object_key, VersionId=version_id)
+            metadata = head.get("Metadata") if isinstance(head, Mapping) else None
+            if not isinstance(metadata, Mapping):
+                continue
+            if (
+                metadata.get("operation-id") == operation_id
+                and metadata.get("body-sha256") == body_sha256
+                and head.get("ContentLength") == body_length
+            ):
+                parsed = parse_report_object_ack(head)
+                if parsed["version_id"] != version_id:
+                    raise account_deletion_repo.AccountDeletionConflict("object version mismatch")
+                return parsed
+        if page.get("IsTruncated") is not True:
+            break
+        key_marker = _required_private_string(page.get("NextKeyMarker"), "NextKeyMarker")
+        version_marker = _required_private_string(
+            page.get("NextVersionIdMarker"), "NextVersionIdMarker"
+        )
+        marker = (key_marker, version_marker)
+        if marker in seen:
+            raise account_deletion_repo.AccountDeletionConflict("repeating object version marker")
+        seen.add(marker)
+        request["KeyMarker"] = key_marker
+        request["VersionIdMarker"] = version_marker
+    raise account_deletion_repo.AccountDeletionConflict("report object response unresolved")
+
+
+def register_report_email_intent(
+    *,
+    owner_id: str,
+    generation: int,
+    operation_id: str,
+    report_id: str,
+    recipient: str,
+    subject: str,
+    body: str,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    owner = _required_private_string(owner_id, "owner_id")
+    operation = _required_private_string(operation_id, "operation_id")
+    recipient_value = _required_private_string(recipient, "recipient")
+    subject_value = _required_private_string(subject, "subject")
+    body_value = _required_private_string(body, "body")
+    item = {
+        "PK": f"USER#{owner}",
+        "SK": f"REPORT_EMAIL#{operation}",
+        "entity_type": "report_email_intent",
+        "schema_version": "report-email-intent.v1",
+        "owner_id": owner,
+        "account_fence_generation": generation,
+        "operation_id": operation,
+        "report_id": _required_private_string(report_id, "report_id"),
+        "recipient_digest": sha256(recipient_value.encode()).hexdigest(),
+        "content_digest": sha256(
+            (subject_value + "\0" + body_value).encode()
+        ).hexdigest(),
+        "state": "registered",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    target = table or get_table()
+    hook = getattr(target, "register_report_email_intent", None)
+    if callable(hook):
+        persisted = hook(dict(item))
+        return dict(persisted or item)
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.active_fence_condition(owner, generation),
+            {
+                "Put": {
+                    "Item": item,
+                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                }
+            },
+        ],
+        table=target,
+    )
+    return item
+
+
+def claim_report_email_intent(
+    intent: Mapping[str, Any], *, lease_id: str, table: Any | None = None
+) -> dict[str, Any]:
+    owner = _required_private_string(intent.get("owner_id"), "owner_id")
+    generation = intent.get("account_fence_generation")
+    if isinstance(generation, bool) or not isinstance(generation, int):
+        raise account_deletion_repo.AccountDeletionConflict("invalid email generation")
+    target = table or get_table()
+    hook = getattr(target, "claim_report_email_intent", None)
+    key = {"PK": str(intent["PK"]), "SK": str(intent["SK"])}
+    if callable(hook):
+        claimed = hook(key, generation, lease_id)
+        if not isinstance(claimed, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict("email claim unavailable")
+        return dict(claimed)
+    account_deletion_repo.require_active_account_fence(owner, generation, table=target)
+    response = target.update_item(
+        Key=key,
+        UpdateExpression="SET #state=:claimed, lease_id=:lease",
+        ConditionExpression="#state=:registered AND account_fence_generation=:generation",
+        ExpressionAttributeNames={"#state": "state"},
+        ExpressionAttributeValues={
+            ":claimed": "claimed",
+            ":registered": "registered",
+            ":generation": generation,
+            ":lease": lease_id,
+        },
+        ReturnValues="ALL_NEW",
+    )
+    account_deletion_repo.require_active_account_fence(owner, generation, table=target)
+    attributes = response.get("Attributes") if isinstance(response, Mapping) else None
+    return dict(attributes) if isinstance(attributes, Mapping) else {**intent, "state": "claimed"}
+
+
+def classify_report_delivery_outcome(
+    *, response: Mapping[str, Any] | None, error: Exception | None
+) -> str:
+    if error is not None:
+        return "provider_acceptance_unknown"
+    if not isinstance(response, Mapping) or not isinstance(response.get("MessageId"), str):
+        raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
+    if not response["MessageId"].strip():
+        raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
+    return "accepted"
+
+
+def scan_report_private_rows(
+    owner_id: str,
+    *,
+    table: Any | None = None,
+    cursor: Mapping[str, Any] | None = None,
+    maximum_pages: int = 20,
+    page_limit: int = 100,
+) -> ReportPrivatePage:
+    """Strong base-table scan for report and denormalized support copies."""
+    if maximum_pages <= 0 or page_limit <= 0:
+        raise account_deletion_repo.AccountDeletionConflict("invalid report scan bound")
+    target = table or get_table()
+    current = _validated_report_cursor(cursor) if cursor is not None else None
+    seen = {(current["PK"], current["SK"])} if current else set()
+    rows: list[dict[str, Any]] = []
+    unresolved = 0
+    for _ in range(maximum_pages):
+        request: dict[str, Any] = {"ConsistentRead": True, "Limit": page_limit}
+        if current:
+            request["ExclusiveStartKey"] = current
+        page = target.scan(**request)
+        if not isinstance(page, Mapping) or not isinstance(page.get("Items", []), list):
+            raise account_deletion_repo.AccountDeletionConflict("malformed report page")
+        for raw in page.get("Items", []):
+            if not isinstance(raw, Mapping):
+                raise account_deletion_repo.AccountDeletionConflict("malformed report row")
+            item = dict(raw)
+            pk = str(item.get("PK") or "")
+            sk = str(item.get("SK") or "")
+            registered = any(
+                (pk == prefix or pk.startswith(prefix)) and sk.startswith(sk_prefix)
+                for prefix, sk_prefix in REPORT_PRIVATE_ROW_REGISTRY.values()
+            )
+            if not registered or item.get("privacy_deleted") is True:
+                continue
+            if item.get("student_id") == owner_id or item.get("owner_id") == owner_id:
+                rows.append(item)
+            elif pk.startswith(("SUPPORT_", "AUDIT_RETENTION#", "REPORT_RECOVERY_JOB#")):
+                unresolved += 1
+        raw_cursor = page.get("LastEvaluatedKey")
+        if raw_cursor is None:
+            return ReportPrivatePage(tuple(rows), None, unresolved)
+        next_cursor = _validated_report_cursor(raw_cursor)
+        marker = (next_cursor["PK"], next_cursor["SK"])
+        if marker in seen:
+            raise account_deletion_repo.AccountDeletionConflict("repeating report cursor")
+        seen.add(marker)
+        current = next_cursor
+    return ReportPrivatePage(tuple(rows), current, unresolved)
+
+
+def scrub_report_private_row(
+    item: Mapping[str, Any],
+    *,
+    owner_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    if item.get("student_id") not in {None, owner_id} and item.get("owner_id") != owner_id:
+        raise account_deletion_repo.AccountDeletionConflict("report owner mismatch")
+    tombstone = {
+        key: value
+        for key, value in item.items()
+        if key in REPORT_TOMBSTONE_ALLOWLIST and key not in REPORT_PRIVATE_FIELDS
+    }
+    tombstone.update(
+        {
+            "PK": _required_private_string(item.get("PK"), "PK"),
+            "SK": _required_private_string(item.get("SK"), "SK"),
+            "privacy_deleted": True,
+            "owner_deletion_generation": generation,
+            "deleted_at": now_iso,
+            "updated_at": now_iso,
+        }
+    )
+    if not set(tombstone) <= REPORT_TOMBSTONE_ALLOWLIST:
+        raise account_deletion_repo.AccountDeletionConflict("report tombstone allowlist violation")
+    target = table or get_table()
+    hook = getattr(target, "scrub_report_private_row", None)
+    if callable(hook):
+        hook(dict(item), tombstone, owner_id, generation)
+        return tombstone
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.deletion_fence_condition(owner_id, generation),
+            {
+                "Put": {
+                    "Item": tombstone,
+                    "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
+                }
+            },
+        ],
+        table=target,
+    )
+    return tombstone
+
+
+def prove_report_object_version_absent(
+    *,
+    s3_client: Any,
+    bucket: str,
+    object_key: str,
+    version_id: str,
+    maximum_pages: int = 100,
+) -> bool:
+    request: dict[str, Any] = {"Bucket": bucket, "Prefix": object_key}
+    seen: set[tuple[str, str]] = set()
+    for _ in range(maximum_pages):
+        page = s3_client.list_object_versions(**request)
+        if not isinstance(page, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict("malformed absence page")
+        candidates = [*page.get("Versions", []), *page.get("DeleteMarkers", [])]
+        for raw in candidates:
+            if (
+                isinstance(raw, Mapping)
+                and raw.get("Key") == object_key
+                and raw.get("VersionId") == version_id
+            ):
+                return False
+        if page.get("IsTruncated") is not True:
+            return True
+        marker = (
+            _required_private_string(page.get("NextKeyMarker"), "NextKeyMarker"),
+            _required_private_string(page.get("NextVersionIdMarker"), "NextVersionIdMarker"),
+        )
+        if marker in seen:
+            raise account_deletion_repo.AccountDeletionConflict("repeating absence marker")
+        seen.add(marker)
+        request["KeyMarker"], request["VersionIdMarker"] = marker
+    raise account_deletion_repo.AccountDeletionConflict("absence scan bound exceeded")
+
+
+def classify_report_retention(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    if manifest.get("legal_hold_active") is True:
+        return {
+            "status": "legal_retention_blocked",
+            "quiescent": False,
+            "purged_count": 0,
+            "policy_authority": manifest.get("policy_authority"),
+            "policy_scope": manifest.get("policy_scope"),
+            "hold_expires_at": manifest.get("hold_expires_at"),
+        }
+    return {"status": "purgeable", "quiescent": False, "purged_count": 0}

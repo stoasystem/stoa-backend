@@ -1,14 +1,16 @@
 """Private S3 artifact helpers for weekly reports."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 import json
 import re
 from typing import Any
+from uuid import uuid4
 
 import boto3
 
 from stoa.config import settings
+from stoa.db.repositories import account_deletion_repo, report_repo
 
 REPORT_ARTIFACT_PREFIX = "weekly-reports"
 REPORT_JSON_CONTENT_TYPE = "application/json"
@@ -93,6 +95,71 @@ def write_report_artifacts(
         except Exception:
             pass
         raise
+
+
+def write_fenced_report_artifacts(
+    keys: ReportArtifactKeys,
+    json_artifact: dict[str, Any],
+    html_artifact: str,
+    *,
+    owner_id: str,
+    generation: int,
+    report_id: str,
+    operation_id: str | None = None,
+    s3_client: Any | None = None,
+    table: Any | None = None,
+) -> dict[str, dict[str, str]]:
+    """Write exact versioned artifacts only through durable owner intents."""
+    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    bucket = settings.report_artifacts_bucket
+    operation = operation_id or uuid4().hex
+    now_iso = datetime.now(UTC).isoformat()
+    bodies = (
+        ("json", keys.json_key, json.dumps(json_artifact, separators=(",", ":"), ensure_ascii=False).encode(), REPORT_JSON_CONTENT_TYPE),
+        ("html", keys.html_key, html_artifact.encode(), REPORT_HTML_CONTENT_TYPE),
+    )
+    coordinates: dict[str, dict[str, str]] = {}
+    for kind, key, body, content_type in bodies:
+        intent = report_repo.register_report_object_intent(
+            owner_id=owner_id,
+            generation=generation,
+            operation_id=operation,
+            artifact_kind=kind,
+            report_id=report_id,
+            object_key=key,
+            body=body,
+            now_iso=now_iso,
+            table=table,
+        )
+        account_deletion_repo.require_active_account_fence(
+            owner_id, generation, table=table
+        )
+        try:
+            response = s3.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=body,
+                ContentType=content_type,
+                Metadata={
+                    "operation-id": operation,
+                    "body-sha256": str(intent["body_sha256"]),
+                },
+            )
+            coordinate = report_repo.parse_report_object_ack(response)
+        except Exception:
+            coordinate = report_repo.reconcile_report_object_version(
+                s3_client=s3,
+                bucket=bucket,
+                object_key=key,
+                operation_id=operation,
+                body_sha256=str(intent["body_sha256"]),
+                body_length=int(intent["body_length"]),
+            )
+        report_repo.record_report_object_coordinate(
+            intent, coordinate, now_iso=datetime.now(UTC).isoformat(), table=table
+        )
+        coordinates[kind] = coordinate
+    return coordinates
 
 
 def delete_report_artifacts(keys: ReportArtifactKeys, *, s3_client: Any | None = None) -> None:

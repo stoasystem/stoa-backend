@@ -11,7 +11,7 @@ from uuid import uuid4
 import boto3
 
 from stoa.config import get_settings
-from stoa.db.repositories import account_deletion_repo, moderation_repo
+from stoa.db.repositories import account_deletion_repo, moderation_repo, report_repo
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import attachment_service
 
@@ -460,6 +460,90 @@ def _moderation_support_branch(
     )
 
 
+def _run_report_row_branch(
+    *,
+    command: Mapping[str, Any],
+    previous: Mapping[str, Any],
+    family: str,
+) -> BranchResult:
+    """Advance one strong report-family page and require two clean epochs."""
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = report_repo.scan_report_private_rows(
+        str(command["user_id"]), cursor=cursor, maximum_pages=1
+    )
+    now = datetime.now(UTC).isoformat()
+    debt: dict[str, int] = {}
+    processed = 0
+    for item in page.items:
+        pk = str(item.get("PK") or "")
+        selected = (
+            family == "all"
+            or (family == "support" and pk.startswith("SUPPORT_"))
+            or (
+                family == "records"
+                and not pk.startswith("SUPPORT_")
+                and not str(item.get("SK") or "").startswith("REPORT_OBJECT#")
+            )
+        )
+        if not selected:
+            continue
+        identity = f"{pk}|{item.get('SK', '')}"
+        try:
+            report_repo.scrub_report_private_row(
+                item,
+                owner_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                now_iso=now,
+            )
+            processed += 1
+        except Exception:
+            debt[identity] = 1
+    if page.unresolved:
+        debt["unresolved_lineage"] = int(page.unresolved)
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty"))
+    dirty = dirty or bool(page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult("retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch)
+    if dirty:
+        if any(key not in {"pass_dirty", "processed"} for key in debt):
+            return BranchResult("retryable", debt_counts=debt, epoch=0)
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": processed},
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
+def _report_records_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_report_row_branch(command=command, previous=previous, family="records")
+
+
+def _report_artifacts_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    """Persist independent artifact discovery progress; provider debt blocks clean epochs."""
+    return _run_report_row_branch(command=command, previous=previous, family="all")
+
+
+def _support_recovery_feed_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_report_row_branch(command=command, previous=previous, family="support")
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     # Derived rows must resolve their authoritative question owner before the
     # primary question branch can replace that question with a tombstone.
@@ -469,6 +553,11 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     "capability_scope": _capability_scope_branch,
     "question_ocr_session": _question_ocr_session_branch,
     "attachments": _attachments_branch,
+    # The exact Plan 35 registry retains the aggregate notifications_reports
+    # branch. These independently persisted sub-results close its report stores.
+    "report_records": _report_records_branch,
+    "report_artifacts": _report_artifacts_branch,
+    "support_recovery_feed": _support_recovery_feed_branch,
 }
 
 
