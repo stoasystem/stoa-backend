@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-30-PLAN.md
-last_updated: "2026-07-17T23:15:14.377Z"
-last_activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing, and purge
+stopped_at: Completed 473-31-PLAN.md
+last_updated: "2026-07-17T23:34:37.136Z"
+last_activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and delivery deletion closure
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 50
-  percent: 88
+  completed_plans: 51
+  percent: 89
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 30 of 35
+Plan: 31 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing, and purge
+Last activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and delivery deletion closure
 
 ## Accumulated Context
 
+- Report generation, artifact edits, and recovery delivery now use owner-partitioned exact object/email intents behind the permanent account fence; exact VersionId absence and explicit legal-retention debt govern report purge quiescence.
 - Moderation summaries and events now derive one authoritative student/generation from the strong question read, every writer loses to the permanent account fence, owner-bound notification handoff is mandatory, and strong paginated scrubbing requires two later zero epochs.
 - Phase 473 staging assembly and immutable promotion now persist exact pre-mutation coordinates behind expiring operation fences; bounded takeovers change both fence and row version so stale workers cannot record success.
 - Upload cleanup persists exact multipart, staging-version, and immutable-version progress independently and cannot reach `cleanup_complete` until every marker is durable.
@@ -107,8 +108,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing
 
 ## Session
 
-**Last Date:** 2026-07-17T23:14:30.061Z
-**Stopped At:** Completed 473-30-PLAN.md
+**Last Date:** 2026-07-17T23:34:37.130Z
+**Stopped At:** Completed 473-31-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -165,6 +166,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing
 | Phase 473 P23 | 15 min | 3 tasks | 7 files |
 | Phase 473 P29 | 33 min | 3 tasks | 27 files |
 | Phase 473 P30 | 13 min | 3 tasks | 6 files |
+| Phase 473 P31 | 13 min | 3 tasks | 13 files |
 
 ## Decisions
 
@@ -258,3 +260,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing
 - [Phase 473]: Authoritative moderation ownership comes from the strongly read question; reporter, actor, and assignee identities never substitute for the student owner. — Every summary, event, writer fence, purge selector, and notification handoff uses one student lineage.
 - [Phase 473]: Moderation summary and event rows use one strong base-table discovery pass with separately persisted family continuation coordinates. — This avoids GSI absence fiction while malformed or divergent restart state fails closed.
 - [Phase 473]: Moderation tombstones retain only opaque row identities, lifecycle facts, timestamps, and privacy generation. — No content hashes, notes, contexts, changes, reporter identities, or actor pseudonyms survive account deletion.
+- [Phase 473]: Report provider effects use owner-partitioned durable intents. — Each intent binds the exact permanent-fence generation, object key, body SHA-256, and length before mutation.
+- [Phase 473]: Provider ambiguity never authorizes a blind retry. — Lost S3 responses require complete version-page metadata reconciliation; SES ambiguity becomes provider_acceptance_unknown.
+- [Phase 473]: Legal-held report material remains blocking policy debt. — legal_retention_blocked rows have zero purge count and prevent branch quiescence without restoring access.
