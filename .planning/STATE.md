@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v9.0
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 473-17-PLAN.md
-last_updated: "2026-07-17T09:11:02.560Z"
-last_activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
+milestone_name: Product Reality, Authorization And Core Journey Completion
+status: executing
+stopped_at: Phase 473 verification found four blockers and two warnings; gap planning required
+last_updated: "2026-07-17T09:34:18Z"
+last_activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 1
   total_plans: 39
   completed_plans: 39
-  percent: 20
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 17 of 17
-Status: Phase complete — ready for verification
-Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
+Plan: 17 of 17 execution plans complete; independent verification found new gaps
+Status: Verification gaps found; V9PRIV-02 remains pending
+Last activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
 
 ## Accumulated Context
 
@@ -82,10 +82,11 @@ Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 - The full suite reports 1232 passing tests, but verification found one critical mutable-object TOCTOU gap and five stable-error/redaction/replay gaps; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN.
 - Plans 473-08 through 473-11 close those gaps through an authenticated chunk gateway, server-only immutable promotion, category-stable transaction outcomes, replayable conversation commands, private-safe telemetry, and one final source-bound evidence gate.
 - Plans 473-15 through 473-17 now cover CR-009 and WR-009 through WR-011 with strict provider-coordinate invariants, per-candidate cleanup isolation, provider-body ownership, conversation transport normalization, and a final immutable source-bound evidence gate.
+- Post-execution verification confirmed those targeted fixes but reproduced four adjacent blockers: malformed UploadPart/ListParts ETags, swallowed completion transport failures, partial BatchGetItem replay, and first-page-only attachment deletion; deterministic bind errors and OOXML external relationships remain warnings.
 
 ### Pending Todos
 
-- Execute Plans 473-15 through 473-17; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
+- Plan the four blockers and two warnings from the latest Phase 473 verification; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -99,14 +100,14 @@ Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 473 --gaps-only` to reject malformed provider success coordinates, isolate cleanup candidates, close every returned Body, normalize conversation transport failures, and refresh evidence.
+- Run `$gsd-plan-phase 473 --gaps` to close multipart ETag, completion transport, exact attachment replay, exhaustive deletion, bind-error, and OOXML relationship gaps.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-17T09:11:02.555Z
-**Stopped At:** Completed 473-17-PLAN.md
-**Resume File:** None
+**Last Date:** 2026-07-17T09:34:18Z
+**Stopped At:** Phase 473 verification found four blockers and two warnings; gap planning required
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
 
 ## Performance Metrics
 
