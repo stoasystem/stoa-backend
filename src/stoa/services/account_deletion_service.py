@@ -475,6 +475,7 @@ def _run_report_row_branch(
     now = datetime.now(UTC).isoformat()
     debt: dict[str, int] = {}
     processed = 0
+    selected_rows = 0
     for item in page.items:
         pk = str(item.get("PK") or "")
         selected = (
@@ -488,6 +489,7 @@ def _run_report_row_branch(
         )
         if not selected:
             continue
+        selected_rows += 1
         identity = f"{pk}|{item.get('SK', '')}"
         try:
             report_repo.scrub_report_private_row(
@@ -503,7 +505,7 @@ def _run_report_row_branch(
         debt["unresolved_lineage"] = int(page.unresolved)
     prior_debt = previous.get("debt_counts")
     dirty = bool(isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty"))
-    dirty = dirty or bool(page.items) or bool(debt)
+    dirty = dirty or bool(selected_rows) or bool(debt)
     epoch = int(previous.get("epoch") or 0)
     debt.update({"pass_dirty": int(dirty), "processed": processed})
     if page.cursor is not None:
@@ -534,8 +536,69 @@ def _report_records_branch(
 def _report_artifacts_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    """Persist independent artifact discovery progress; provider debt blocks clean epochs."""
-    return _run_report_row_branch(command=command, previous=previous, family="all")
+    """Delete exact report versions; legal holds and ambiguity remain debt."""
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = report_repo.scan_report_private_rows(
+        str(command["user_id"]), cursor=cursor, maximum_pages=1
+    )
+    s3 = boto3.client("s3", region_name=get_settings().aws_region)
+    bucket = get_settings().report_artifacts_bucket
+    debt: dict[str, int] = {}
+    processed = 0
+    selected = 0
+    now = datetime.now(UTC).isoformat()
+    for item in page.items:
+        if not str(item.get("SK") or "").startswith("REPORT_OBJECT#"):
+            continue
+        selected += 1
+        identity = f"{item.get('PK', '')}|{item.get('SK', '')}"
+        try:
+            candidate = dict(item)
+            if not candidate.get("version_id"):
+                coordinate = report_repo.reconcile_report_object_version(
+                    s3_client=s3,
+                    bucket=bucket,
+                    object_key=str(candidate["object_key"]),
+                    operation_id=str(candidate["operation_id"]),
+                    body_sha256=str(candidate["body_sha256"]),
+                    body_length=int(candidate["body_length"]),
+                )
+                candidate.update(coordinate)
+            result = report_repo.purge_report_object_intent(
+                candidate,
+                owner_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                bucket=bucket,
+                s3_client=s3,
+                now_iso=now,
+            )
+            if result["status"] == "purged":
+                processed += 1
+            else:
+                debt[str(result["status"])] = debt.get(str(result["status"]), 0) + 1
+        except Exception:
+            debt[identity] = 1
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty"))
+    dirty = dirty or bool(selected) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult("retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch)
+    if dirty:
+        if any(key not in {"pass_dirty", "processed"} for key in debt):
+            return BranchResult("retryable", debt_counts=debt, epoch=0)
+        return BranchResult(
+            "retryable", debt_counts={"pass_dirty": 0, "processed": processed}, epoch=0
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
 
 
 def _support_recovery_feed_branch(

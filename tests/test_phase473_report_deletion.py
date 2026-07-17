@@ -260,6 +260,100 @@ def test_exact_version_absence_requires_all_pages_and_held_artifact_blocks() -> 
     assert held["purged_count"] == 0
 
 
+def test_exact_object_purge_never_removes_coordinates_before_absence() -> None:
+    purge = _contract("purge_report_object_intent")
+    deletes: list[dict[str, Any]] = []
+    tombstones: list[dict[str, Any]] = []
+
+    class _S3:
+        def delete_object(self, **kwargs: Any) -> dict[str, Any]:
+            deletes.append(kwargs)
+            return {"DeleteMarker": True}
+
+        def list_object_versions(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Versions": [], "DeleteMarkers": [], "IsTruncated": False}
+
+    class _Table:
+        def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Item": {"status": "deletion_pending", "generation": 7}}
+
+        def scrub_report_private_row(self, _original: dict[str, Any], tombstone: dict[str, Any], *_args: Any) -> None:
+            tombstones.append(tombstone)
+
+    intent = {
+        "PK": f"USER#{STUDENT_ID}",
+        "SK": "REPORT_OBJECT#operation-1#json",
+        "entity_type": "report_object_intent",
+        "owner_id": STUDENT_ID,
+        "account_fence_generation": 7,
+        "operation_id": "operation-1",
+        "artifact_kind": "json",
+        "report_id": REPORT_ID,
+        "object_key": "weekly-reports/private/report.json",
+        "body_sha256": "a" * 64,
+        "body_length": 20,
+        "version_id": "v1",
+        "etag": "abc",
+        "state": "linked",
+        "created_at": NOW,
+    }
+    result = purge(
+        intent,
+        owner_id=STUDENT_ID,
+        generation=7,
+        bucket="private",
+        s3_client=_S3(),
+        table=_Table(),
+        now_iso=NOW,
+    )
+    assert result == {"status": "purged", "quiescent": True, "purged_count": 1}
+    assert deletes == [
+        {
+            "Bucket": "private",
+            "Key": "weekly-reports/private/report.json",
+            "VersionId": "v1",
+        }
+    ]
+    assert tombstones and "object_key" not in tombstones[0]
+
+
+def test_legal_hold_minimizes_row_and_blocks_provider_delete() -> None:
+    purge = _contract("purge_report_object_intent")
+
+    class _S3:
+        def delete_object(self, **_kwargs: Any) -> dict[str, Any]:
+            pytest.fail("held object must not be deleted")
+
+    held = {
+        "PK": f"USER#{STUDENT_ID}",
+        "SK": "REPORT_OBJECT#held#immutable_manifest",
+        "entity_type": "report_object_intent",
+        "owner_id": STUDENT_ID,
+        "account_fence_generation": 7,
+        "operation_id": "held",
+        "artifact_kind": "immutable_manifest",
+        "manifest_id": "manifest-1",
+        "object_key": "weekly-reports/private/manifest.json",
+        "version_id": "v-held",
+        "legal_hold_active": True,
+        "policy_authority": "statute",
+        "policy_scope": "minimum-evidence",
+        "hold_expires_at": "2028-01-01",
+    }
+    result = purge(
+        held,
+        owner_id=STUDENT_ID,
+        generation=7,
+        bucket="private",
+        s3_client=_S3(),
+        table=object(),
+        now_iso=NOW,
+    )
+    assert result["status"] == "legal_retention_blocked"
+    assert result["quiescent"] is False
+    assert result["purged_count"] == 0
+
+
 def test_report_branches_restart_and_require_two_later_clean_epochs(monkeypatch: pytest.MonkeyPatch) -> None:
     branch = getattr(account_deletion_service, "_report_records_branch", None)
     if branch is None:

@@ -2051,3 +2051,46 @@ def classify_report_retention(manifest: Mapping[str, Any]) -> dict[str, Any]:
             "hold_expires_at": manifest.get("hold_expires_at"),
         }
     return {"status": "purgeable", "quiescent": False, "purged_count": 0}
+
+
+def purge_report_object_intent(
+    intent: Mapping[str, Any],
+    *,
+    owner_id: str,
+    generation: int,
+    bucket: str,
+    s3_client: Any,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Delete one exact purgeable version and retain coordinates until absence."""
+    if intent.get("owner_id") != owner_id:
+        raise account_deletion_repo.AccountDeletionConflict("report object owner mismatch")
+    if intent.get("account_fence_generation") != generation:
+        raise account_deletion_repo.AccountDeletionConflict("report object generation mismatch")
+    retention = classify_report_retention(intent)
+    if retention["status"] == "legal_retention_blocked":
+        # The access fence remains permanent. Exact provider coordinates stay as
+        # policy debt and never enter an absence or purge count.
+        return retention
+    account_deletion_repo.require_deletion_account_fence(
+        owner_id, generation, table=table
+    )
+    key = _required_private_string(intent.get("object_key"), "object_key")
+    version_id = _required_private_string(intent.get("version_id"), "version_id")
+    s3_client.delete_object(Bucket=bucket, Key=key, VersionId=version_id)
+    if not prove_report_object_version_absent(
+        s3_client=s3_client,
+        bucket=bucket,
+        object_key=key,
+        version_id=version_id,
+    ):
+        return {"status": "retryable", "quiescent": False, "purged_count": 0}
+    scrub_report_private_row(
+        intent,
+        owner_id=owner_id,
+        generation=generation,
+        now_iso=now_iso,
+        table=table,
+    )
+    return {"status": "purged", "quiescent": True, "purged_count": 1}
