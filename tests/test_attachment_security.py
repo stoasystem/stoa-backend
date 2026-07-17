@@ -2008,6 +2008,26 @@ def test_generic_transaction_client_error_is_retryable_and_redacted() -> None:
     assert "raw-provider-reason-private-canary" not in str(captured.value)
 
 
+def test_described_transaction_generic_transport_is_retryable_and_redacted() -> None:
+    class TransportTable:
+        def transact_write_items(self, **_kwargs):
+            raise TimeoutError("generic-transaction-provider-table-private-canary")
+
+    operation = attachment_repo.TransactionOperation(
+        attachment_repo.TransactionOperationKind.MESSAGE_PUT,
+        {"Put": {"Item": {"PK": "MESSAGE#opaque"}}},
+    )
+
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as captured:
+        attachment_repo.transact([operation], table=TransportTable())
+
+    assert (
+        captured.value.outcome
+        is attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+    )
+    assert "private-canary" not in str(captured.value)
+
+
 class _OutcomeMessageRepository(_MessageAttachmentRepository):
     def __init__(self, outcome, **kwargs) -> None:
         super().__init__(**kwargs)

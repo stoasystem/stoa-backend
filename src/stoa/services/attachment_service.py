@@ -1472,6 +1472,10 @@ def bind_message_attachments(
         )
     except attachment_repo.AttachmentTransactionError as exc:
         raise AttachmentDecisionError(_transaction_error_code(exc.outcome)) from None
+    except Exception:
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ) from None
     return summaries
 
 

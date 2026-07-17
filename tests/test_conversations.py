@@ -624,6 +624,156 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     assert deterministic_attachment_ids == [(expected_attachment_id,)]
 
 
+def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
+    monkeypatch,
+) -> None:
+    body = conversations.SendMessageRequest.model_validate(
+        {
+            "content": "exact committed content",
+            "idempotencyKey": "committed-lost-response",
+            "attachmentIds": [{"uploadId": "fresh-upload-1"}],
+        }
+    )
+    fingerprint = conversations.message_request_fingerprint(body)
+    command_state: dict = {}
+    stored_student: dict = {}
+    stored_attachments: dict[str, dict] = {}
+    effects = {"claim": 0, "bind": 0, "usage": 0, "extract": 0, "ai": 0, "complete": 0}
+
+    class Table:
+        def get_item(self, **_kwargs):
+            return {"Item": dict(stored_student)} if stored_student else {}
+
+    table = Table()
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(
+        conversations,
+        "_get_messages",
+        lambda *_: [dict(stored_student)] if stored_student else [],
+    )
+    monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: [("upload", {"upload_id": "fresh-upload-1"})],
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "ensure_message_attachment_capacity",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def claim(**kwargs):
+        effects["claim"] += 1
+        command_state.update(kwargs["command"], counter_value=1)
+        return True, 1
+
+    def bind(**kwargs):
+        effects["bind"] += 1
+        attachment_id = kwargs["deterministic_attachment_ids"][0]
+        stored_student.update(kwargs["message"], attachment_ids=[attachment_id])
+        stored_attachments[attachment_id] = {
+            "attachment_id": attachment_id,
+            "original_filename": "notes.txt",
+            "detected_type": "text/plain",
+            "content_length": 12,
+            "created_at": "2026-07-16T00:00:00Z",
+            "status": "active",
+            "immutable_object_key": "private-key-canary",
+            "immutable_version_id": "private-version-canary",
+            "immutable_etag": "private-etag-canary",
+            "content_sha256": hashlib.sha256(b"private text").hexdigest(),
+        }
+        command_state["status"] = "message_committed"
+        raise RuntimeError("committed-response-lost-provider-private-canary")
+
+    def get_command(*_args, **_kwargs):
+        return dict(command_state) if command_state else None
+
+    def claim_ai(**kwargs):
+        command_state.update(
+            status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1
+        )
+        return True, 1
+
+    def complete(**kwargs):
+        effects["complete"] += 1
+        command_state.update(status="completed", result_json=kwargs["result_json"])
+        return True
+
+    monkeypatch.setattr(conversations.attachment_repo, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", get_command)
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_attachments",
+        lambda *_args, **_kwargs: dict(stored_attachments),
+    )
+    monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
+    monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "extract_message_attachment_context",
+        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1)
+        or "",
+    )
+    monkeypatch.setattr(
+        conversations,
+        "_record_chat_usage",
+        lambda **_kwargs: effects.__setitem__("usage", effects["usage"] + 1),
+    )
+    monkeypatch.setattr(
+        conversations.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
+        or {"steps": [], "answer": "original safe answer", "hints": []},
+    )
+
+    with pytest.raises(AttachmentDecisionError) as first:
+        conversations._execute_message_command(
+            conv_id="conv-1",
+            student_id="student-1",
+            subject="math",
+            grade="Sek1",
+            body=body,
+            command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
+        )
+    assert first.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
+
+    second = conversations._execute_message_command(
+        conv_id="conv-1",
+        student_id="student-1",
+        subject="math",
+        grade="Sek1",
+        body=body,
+        command_context={
+            "actor": _actor(),
+            "fingerprint": fingerprint,
+            "existing": dict(command_state),
+        },
+    )
+    replay = conversations._execute_message_command(
+        conv_id="conv-1",
+        student_id="student-1",
+        subject="math",
+        grade="Sek1",
+        body=body,
+        command_context={
+            "actor": _actor(),
+            "fingerprint": fingerprint,
+            "existing": dict(command_state),
+        },
+    )
+
+    assert second.model_dump() == replay.model_dump()
+    assert effects == {"claim": 1, "bind": 1, "usage": 1, "extract": 1, "ai": 1, "complete": 1}
+    assert len(stored_attachments) == 1
+    assert "private-canary" not in second.model_dump_json()
+
+
 class _ConversationBodySpy:
     def __init__(
         self,
@@ -773,6 +923,287 @@ def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatc
         )
     assert captured.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
     assert sleeps == [0.05] * 20
+
+
+def _transport_body() -> conversations.SendMessageRequest:
+    return conversations.SendMessageRequest.model_validate(
+        {"content": "transport-private-canary", "idempotencyKey": "transport-key"}
+    )
+
+
+def _install_transport_happy_path(monkeypatch) -> None:
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "prepare_message_attachments",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "claim_message_command_and_quota",
+        lambda **_kwargs: (True, 1),
+    )
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "bind_message_attachments",
+        lambda **_kwargs: [],
+    )
+    monkeypatch.setattr(conversations, "_record_chat_usage", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "claim_message_ai_lease",
+        lambda **_kwargs: (True, 1),
+    )
+    monkeypatch.setattr(
+        conversations.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: {"steps": [], "answer": "safe", "hints": []},
+    )
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "complete_message_command",
+        lambda **_kwargs: True,
+    )
+
+
+def test_stage_a_transport_is_structured_retry_without_diagnostics(monkeypatch) -> None:
+    body = _transport_body()
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("stage-a-provider-table-private-canary")
+        ),
+    )
+
+    with pytest.raises(HTTPException) as captured:
+        asyncio.run(
+            conversations._message_command_dependency(
+                "conv-1", body, _actor(), "server-correlation"
+            )
+        )
+
+    assert captured.value.status_code == 503
+    assert captured.value.detail == {
+        "code": "upload_service_unavailable",
+        "message": "Uploads are temporarily unavailable. Try again later.",
+        "correlationId": "server-correlation",
+    }
+    assert captured.value.headers == {
+        "X-Correlation-ID": "server-correlation",
+        "Retry-After": "30",
+    }
+    assert "private-canary" not in str(captured.value.detail)
+
+
+def test_regular_sse_stage_a_transport_has_identical_structured_retry(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda *_: {
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "subject": "math",
+            "grade": "Sek1",
+        },
+    )
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("regular-sse-stage-a-provider-private-canary")
+        ),
+    )
+    payload = {
+        "content": "request-private-canary",
+        "idempotencyKey": "regular-sse-transport",
+    }
+    client = _client(conversations.router)
+
+    regular = client.post("/conversations/conv-1/messages", json=payload)
+    streamed = client.post("/conversations/conv-1/messages/stream", json=payload)
+
+    for response in (regular, streamed):
+        assert response.status_code == 503
+        assert set(response.json()["detail"]) == {"code", "message", "correlationId"}
+        assert response.json()["detail"]["code"] == "upload_service_unavailable"
+        assert response.headers["Retry-After"] == "30"
+        assert response.headers["X-Correlation-ID"] == response.json()["detail"][
+            "correlationId"
+        ]
+        assert "private-canary" not in response.text
+    assert regular.json()["detail"]["message"] == streamed.json()["detail"]["message"]
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "command_claim_transport",
+        "attachment_transaction_transport",
+        "race_reread_transport",
+        "ai_lease_transport",
+        "ai_lease_reread_transport",
+        "terminal_transport",
+        "completion_transport",
+        "completion_lost_response_reread_transport",
+    ],
+)
+def test_conversation_repository_transport_stages_are_structured_retry(
+    monkeypatch, stage: str
+) -> None:
+    body = _transport_body()
+    _install_transport_happy_path(monkeypatch)
+    failure = RuntimeError(f"{stage}-provider-table-private-canary")
+
+    if stage == "command_claim_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "claim_message_command_and_quota",
+            lambda **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "attachment_transaction_transport":
+        monkeypatch.setattr(
+            conversations.attachment_service,
+            "bind_message_attachments",
+            lambda **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "race_reread_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "claim_message_command_and_quota",
+            lambda **_kwargs: (False, 0),
+        )
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "get_message_command",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "ai_lease_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "claim_message_ai_lease",
+            lambda **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "ai_lease_reread_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "claim_message_ai_lease",
+            lambda **_kwargs: (False, 1),
+        )
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "get_message_command",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "terminal_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "claim_message_ai_lease",
+            lambda **_kwargs: (False, 3),
+        )
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "get_message_command",
+            lambda *_args, **_kwargs: {
+                "status": "ai_running",
+                "expiresAt": 0,
+                "attempt": 3,
+                "fingerprint": conversations.message_request_fingerprint(body),
+            },
+        )
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "mark_message_command_terminal",
+            lambda **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    elif stage == "completion_transport":
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "complete_message_command",
+            lambda **_kwargs: (_ for _ in ()).throw(failure),
+        )
+    else:
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "complete_message_command",
+            lambda **_kwargs: False,
+        )
+        monkeypatch.setattr(
+            conversations.attachment_repo,
+            "get_message_command",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
+        )
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        conversations._execute_message_command(
+            conv_id="conv-1",
+            student_id="student-1",
+            subject="math",
+            grade="Sek1",
+            body=body,
+            command_context={
+                "actor": _actor(),
+                "fingerprint": conversations.message_request_fingerprint(body),
+                "existing": None,
+            },
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert "private-canary" not in str(captured.value)
+
+
+def test_replay_poll_transport_is_structured_retry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "get_message_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("replay-poll-provider-table-private-canary")
+        ),
+    )
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        conversations._wait_for_message_command(
+            "conv-1", "transport-key", "f" * 64, table=object()
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert "private-canary" not in str(captured.value)
+
+
+def test_resume_stored_message_transport_is_structured_retry(monkeypatch) -> None:
+    body = _transport_body()
+    _install_transport_happy_path(monkeypatch)
+    monkeypatch.setattr(
+        conversations,
+        "_get_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("stored-message-provider-table-private-canary")
+        ),
+    )
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        conversations._execute_message_command(
+            conv_id="conv-1",
+            student_id="student-1",
+            subject="math",
+            grade="Sek1",
+            body=body,
+            command_context={
+                "actor": _actor(),
+                "fingerprint": conversations.message_request_fingerprint(body),
+                "existing": {
+                    "status": "message_committed",
+                    "created_at": "2026-07-16T00:00:00Z",
+                },
+            },
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert "private-canary" not in str(captured.value)
 
 
 def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkeypatch) -> None:

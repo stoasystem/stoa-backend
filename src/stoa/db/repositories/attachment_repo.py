@@ -201,9 +201,12 @@ def claim_message_command_and_quota(
     target = table or get_table()
     expected = 0
     for _ in range(3):
-        counter = target.get_item(
-            Key=chat_quota_key(owner_id, quota_period), ConsistentRead=True
-        ).get("Item") or {}
+        try:
+            counter = target.get_item(
+                Key=chat_quota_key(owner_id, quota_period), ConsistentRead=True
+            ).get("Item") or {}
+        except Exception:
+            raise AttachmentRepositoryConflict("dependency_failure") from None
         expected = int(counter.get("count", 0))
         if expected >= limit:
             return False, expected
@@ -217,7 +220,9 @@ def claim_message_command_and_quota(
         )
         try:
             transact(operations, table=target)
-        except AttachmentTransactionError:
+        except AttachmentTransactionError as exc:
+            if exc.outcome is AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY:
+                raise
             continue
         return True, expected + 1
     return False, expected
@@ -1922,6 +1927,12 @@ def transact(
             ) from None
         if _conditional(exc):
             raise AttachmentRepositoryConflict() from None
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except Exception:
+        if described:
+            raise AttachmentTransactionError(
+                AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+            ) from None
         raise AttachmentRepositoryConflict("dependency_failure") from None
 
 
