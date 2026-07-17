@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-26-PLAN.md (gap-only; next incomplete remains 473-20)
-last_updated: "2026-07-17T15:47:30.346Z"
+stopped_at: Completed 473-20-PLAN.md
+last_updated: "2026-07-17T17:41:31.717Z"
 last_activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 43
+  completed_plans: 44
   percent: 10
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 20 of 35
+Plan: 21 of 35
 Status: Executing gap-closure plans
 Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 
 ## Session
 
-**Last Date:** 2026-07-17T15:47:30.336Z
-**Stopped At:** Completed 473-26-PLAN.md (gap-only; next incomplete remains 473-20)
+**Last Date:** 2026-07-17T17:41:00.462Z
+**Stopped At:** Completed 473-20-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -157,6 +157,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 | Phase 473 P25 | 14 min | 3 tasks | 9 files |
 | Phase 473 P19 | 16 min | 3 tasks | 5 files |
 | Phase 473 P26 | 15 min | 3 tasks | 6 files |
+| Phase 473 P20 | 38 min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -229,3 +230,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 - [Phase 473]: Teacher curriculum-answer reads require both exact current course and exact current class; lesson, subject, and grade can only narrow that already-authorized scope. — Subject or grade overlap must never create pre-attempt answer authority.
 - [Phase 473]: The current curriculum assignment is accepted only from its deterministic teacher key with canonical entity type, positive version, strict read-contract collections, and a fresh active teacher account. — Malformed, stale, or coerced facts must fail closed without broadening the one-role Actor contract.
 - [Phase 473]: The privileged answer dependency validates one direct-resolver identity/version/hash/scope value and passes that same loaded value to the answer projection; admins retain only the narrow READ purpose. — One loaded object prevents authorization/projection TOCTOU and preserves read-only admin access.
+- [Phase 473]: Message command claims persist exact quota, usage, request, attachment, message, and history identities so every retry reuses the same facts across midnight. — Retry-time reconstruction can drift or duplicate durable effects; persisted first-claim facts make replay deterministic.
+- [Phase 473]: Message and attachment effects share one transaction with the usage-ledger event; deterministic pre-bind rejection compensates only that command's quota operation. — Usage cannot become a fallible post-effect, and compensation must never reverse another command's charge.
+- [Phase 473]: Regular and SSE transports project the same validated typed command state, and only a live command may return message_in_progress. — One closed projection prevents transport-specific masking of rejected, terminal, expired, missing, or retryable durable states.
