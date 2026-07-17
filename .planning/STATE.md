@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-15-PLAN.md
-last_updated: "2026-07-17T08:42:54.585Z"
-last_activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
+stopped_at: Completed 473-16-PLAN.md
+last_updated: "2026-07-17T08:58:56.056Z"
+last_activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 39
-  completed_plans: 37
+  completed_plans: 38
   percent: 10
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 16 of 17
+Plan: 17 of 17
 Status: Ready to execute
-Last activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
+Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 
 ## Accumulated Context
 
@@ -104,8 +104,8 @@ Last activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
 
 ## Session
 
-**Last Date:** 2026-07-17T08:41:36.132Z
-**Stopped At:** Completed 473-15-PLAN.md
+**Last Date:** 2026-07-17T08:58:25.916Z
+**Stopped At:** Completed 473-16-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -149,6 +149,7 @@ Last activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
 | Phase 473 P13 | 36 min | 2 tasks | 6 files |
 | Phase 473 P14 | 10 min | 2 tasks | 3 files |
 | Phase 473 P15 | 15 min | 2 tasks | 5 files |
+| Phase 473 P16 | 12 min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -206,3 +207,5 @@ Last activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
 - [Phase 473]: Evidence commits follow one immutable tested source candidate with exactly three narrative/manifest paths. — This keeps test observations source-bound, reproducible, and non-circular.
 - [Phase 473]: Provider success coordinates must be nonblank strings before any lifecycle transition can remove a recovery fence; malformed success retains exact recovery identity. — Coercing malformed provider output could create false durable success and erase the only bounded restart-recovery fence.
 - [Phase 473]: Unexpected candidate-local cleanup failures become coordinate-free retryable outcomes, while failure to list the global candidate page still propagates. — Per-item isolation preserves bounded progress without disguising a global scan failure or exposing private storage coordinates and diagnostics.
+- [Phase 473]: Provider Body ownership begins immediately after a non-None Body is returned; read and close properties are each inspected inside best-effort boundaries so cleanup cannot replace the primary outcome. — Preserves stable validation and extraction semantics while deterministically releasing provider resources.
+- [Phase 473]: Every conversation command repository call crosses one classifier; known semantic outcomes remain distinct while generic transport becomes a redacted bounded retry and ambiguous commits reread the original fingerprinted command. — Preserves concealment and exact replay while preventing raw repository transport failures and duplicate effects.
