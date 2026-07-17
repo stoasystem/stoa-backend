@@ -112,6 +112,10 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         "usage_idempotency_key": "usage-private",
         "usage_event_id": "event-private",
         "usage_resource_id": "request-private",
+        "quota_period": "2026-07-18",
+        "counter_value": 1,
+        "created_at": NOW,
+        "expires_at": 100,
     }
     claim = attachment_repo.build_message_command_claim_transaction(
         command=command,
@@ -224,7 +228,11 @@ def test_conversation_branch_releases_associations_before_scrub_and_requires_lat
         pytest.fail("conversation_messages branch is not implemented")
     page_type = _contract("ConversationPrivatePage")
     pages = [
-        page_type((_message(),), None, 1),
+        page_type(
+            (_message(),),
+            {"PK": f"CONV#{CONVERSATION_ID}", "SK": "MSG#student"},
+            1,
+        ),
         page_type((), None, 0),
         page_type((), None, 0),
         page_type((), None, 0),

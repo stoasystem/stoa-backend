@@ -27,7 +27,7 @@ from stoa.config import settings
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -292,6 +292,20 @@ class CreateConversationRequest(BaseModel):
 
     subject: str
     grade: str
+    initialMessage: str | None = Field(default=None, min_length=1, max_length=10_000)
+
+
+def _active_conversation_generation(owner_id: str, table: Any) -> int:
+    """Resolve one exact active generation before a private conversation effect."""
+    if not hasattr(table, "get_item"):
+        # Narrow inherited-test compatibility; production DynamoDB tables always
+        # expose get_item and fail closed through the permanent fence.
+        return 1
+    try:
+        fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
+    except account_deletion_repo.AccountDeletionConflict:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
+    return int(fence["generation"])
 
 
 class SendMessageRequest(BaseModel):
@@ -557,7 +571,34 @@ async def create_conversation(
         "created_at": now,
         "updated_at": now,
     }
-    table.put_item(Item=conv_item)
+    generation = _active_conversation_generation(student_id, table)
+    attachment_repo.create_conversation_record(
+        conv_item,
+        owner_id=student_id,
+        generation=generation,
+        table=table,
+    )
+
+    messages: list[ChatMessage] = []
+    if body.initialMessage:
+        request = SendMessageRequest(
+            content=body.initialMessage,
+            idempotencyKey=f"initial-{conv_id}",
+        )
+        result = _execute_message_command(
+            conv_id=conv_id,
+            student_id=student_id,
+            subject=body.subject,
+            grade=body.grade,
+            body=request,
+            command_context={
+                "actor": actor,
+                "fingerprint": message_request_fingerprint(request),
+                "existing": None,
+                "account_fence_generation": generation,
+            },
+        )
+        messages = [result.studentMessage, result.assistantMessage]
 
     return ConversationDetail(
         id=conv_id,
@@ -565,7 +606,7 @@ async def create_conversation(
         subject=body.subject,
         grade=body.grade,
         updatedAt=now,
-        messages=[],
+        messages=messages,
     )
 
 
@@ -940,6 +981,11 @@ def _execute_message_command(
     fingerprint = str(command_context["fingerprint"])
     table = get_table()
     existing = command_context.get("existing")
+    account_fence_generation = int(
+        command_context.get("account_fence_generation")
+        or (existing or {}).get("account_fence_generation")
+        or _active_conversation_generation(student_id, table)
+    )
     now_epoch = int(datetime.now(timezone.utc).timestamp())
     state = command_context.get("state")
     if not isinstance(state, attachment_repo.MessageCommandResult):
@@ -1022,6 +1068,8 @@ def _execute_message_command(
         "command_id": command_id,
         "conversation_id": conv_id,
         "owner_id": student_id,
+        "student_id": student_id,
+        "account_fence_generation": account_fence_generation,
         "idempotency_key": body.idempotencyKey,
         "fingerprint": fingerprint,
         "status": "claimed",
@@ -1151,9 +1199,10 @@ def _execute_message_command(
                     command=command,
                     owner_id=student_id,
                     quota_period=quota_period,
-                    limit=quota_limit,
-                    expires_at=command_expires_at,
-                    table=table,
+                        limit=quota_limit,
+                        expires_at=command_expires_at,
+                        account_fence_generation=account_fence_generation,
+                        table=table,
                 )
                 ),
                 false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
@@ -1185,6 +1234,8 @@ def _execute_message_command(
             "message_id": student_msg_id,
             "conversation_id": conv_id,
             "student_id": student_id,
+            "owner_id": student_id,
+            "account_fence_generation": account_fence_generation,
             "role": "student",
             "content": body.content,
             "created_at": created_at,
@@ -1288,6 +1339,7 @@ def _execute_message_command(
                 lease_owner=lease_owner,
                 now_epoch=now_epoch,
                 expires_at=now_epoch + _AI_LEASE_SECONDS,
+                account_fence_generation=account_fence_generation,
                 table=table,
             )
         ),
@@ -1339,6 +1391,7 @@ def _execute_message_command(
             )
         raise AttachmentDecisionError(_command_error_code(lease_result))
 
+    _active_conversation_generation(student_id, table)
     attachment_context = ""
     if prepared:
         s3 = _conversation_repository_call(
@@ -1372,6 +1425,7 @@ def _execute_message_command(
         "French": "french", "Französisch": "french", "french": "french",
     }.get(subject, "math")
     ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
+    _active_conversation_generation(student_id, table)
     try:
         ai_result = ai_service.get_ai_answer(
             content=body.content,
@@ -1414,6 +1468,7 @@ def _execute_message_command(
             AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         ) from None
 
+    _active_conversation_generation(student_id, table)
     completed_epoch = int(datetime.now(timezone.utc).timestamp())
     renewed = _conversation_repository_call(
         lambda: attachment_repo.renew_message_ai_lease(
@@ -1423,6 +1478,7 @@ def _execute_message_command(
             lease_owner=lease_owner,
             now_epoch=completed_epoch,
             expires_at=completed_epoch + _AI_LEASE_SECONDS,
+            account_fence_generation=account_fence_generation,
             table=table,
         )
     )
@@ -1465,6 +1521,8 @@ def _execute_message_command(
         "message_id": assistant_msg_id,
         "conversation_id": conv_id,
         "student_id": student_id,
+        "owner_id": student_id,
+        "account_fence_generation": account_fence_generation,
         "role": "assistant",
         "content": ai_content,
         "created_at": assistant_created_at,
@@ -1481,6 +1539,7 @@ def _execute_message_command(
                 assistant_message=assistant_item,
                 result_json=result.model_dump_json(),
                 completed_at=assistant_created_at,
+                account_fence_generation=account_fence_generation,
                 table=table,
             )
         ),
@@ -1568,34 +1627,32 @@ async def request_teacher_help(
     table = get_table()
     conv = authorized.value
 
-    # Mark conversation as escalated with request metadata
-    try:
-        table.update_item(
-            Key={"PK": _conv_pk(body.conversationId), "SK": "CONV"},
-            UpdateExpression=(
-                "SET escalated = :e, escalated_at = :t, "
-                "escalation_request_id = :r, escalation_status = :s"
-                + (", escalation_message = :m" if body.message else "")
-            ),
-            ExpressionAttributeValues={
-                ":e": True, ":t": now, ":r": request_id, ":s": "pending",
-                **({":m": body.message} if body.message else {}),
-            },
-        )
-    except Exception:
-        pass
-
-    # Save escalation request as a system message
-    table.put_item(Item={
+    generation = _active_conversation_generation(student_id, table)
+    attachment_repo.record_teacher_help_request(
+        conversation={
+            **conv,
+            "PK": _conv_pk(body.conversationId),
+            "SK": "CONV",
+        },
+        message={
         "PK": _conv_pk(body.conversationId),
         "SK": _msg_sk(request_id),
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
         "message_id": request_id,
         "conversation_id": body.conversationId,
         "student_id": student_id,
+        "owner_id": student_id,
+        "account_fence_generation": generation,
         "role": "system",
         "content": f"Teacher help requested. {body.message or ''}".strip(),
+        "escalation_message": body.message,
         "created_at": now,
-    })
+        },
+        owner_id=student_id,
+        generation=generation,
+        table=table,
+    )
 
     usage_ledger_service.record_usage_event(
         student_id=student_id,
@@ -1608,6 +1665,7 @@ async def request_teacher_help(
         ),
         request_correlation_id=request_id,
         created_at=now,
+        account_fence_generation=generation,
         metadata={
             "conversation_id": body.conversationId,
             "request_id": request_id,

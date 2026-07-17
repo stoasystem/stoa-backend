@@ -8,13 +8,48 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
 
 
-def put_usage_event(event: dict[str, Any]) -> bool:
+def put_usage_event(
+    event: dict[str, Any],
+    *,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> bool:
     """Persist one usage ledger event, returning False when it already exists."""
-    table = get_table()
+    target = table or get_table()
+    if account_fence_generation is not None:
+        owner_id = str(event.get("student_id") or "")
+        if not owner_id:
+            raise ValueError("student_id is required for a fenced usage event")
+        event = {
+            **event,
+            "owner_id": owner_id,
+            "account_fence_generation": account_fence_generation,
+        }
+        try:
+            account_deletion_repo.transact(
+                [
+                    account_deletion_repo.active_fence_condition(
+                        owner_id, account_fence_generation
+                    ),
+                    {
+                        "Put": {
+                            "Item": event,
+                            "ConditionExpression": (
+                                "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                            ),
+                        }
+                    },
+                ],
+                table=target,
+            )
+            return True
+        except account_deletion_repo.AccountDeletionConflict:
+            return False
     try:
-        table.put_item(
+        target.put_item(
             Item=event,
             ConditionExpression="attribute_not_exists(PK)",
         )

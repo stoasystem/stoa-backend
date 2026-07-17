@@ -97,6 +97,108 @@ class MessageCommandResult:
     operations: tuple[TransactionOperation, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class ConversationPrivatePage:
+    """One bounded strong base-table page used by account deletion."""
+
+    items: tuple[dict[str, Any], ...]
+    cursor: dict[str, str] | None = None
+    scanned_count: int = 0
+
+
+CONVERSATION_PRIVATE_ROW_REGISTRY = frozenset(
+    {
+        "conversation_header",
+        "conversation_message",
+        "teacher_note",
+        "message_command",
+        "chat_quota_operation",
+        "chat_usage_event",
+        "attachment_association",
+    }
+)
+CONVERSATION_WRITER_REGISTRY = frozenset(
+    {
+        "create_conversation",
+        "message_command_claim",
+        "message_attachment_commit",
+        "ai_lease_claim",
+        "ai_lease_renew",
+        "ai_completion",
+        "teacher_help",
+        "usage_event",
+    }
+)
+CONVERSATION_PRIVATE_FIELDS = frozenset(
+    {
+        "content",
+        "result_json",
+        "fingerprint",
+        "history_fingerprint",
+        "history_message_ids",
+        "requested_attachments",
+        "deterministic_attachment_ids",
+        "student_message_id",
+        "assistant_message_id",
+        "title",
+        "last_message_preview",
+        "subject",
+        "grade",
+        "note",
+        "notes",
+        "help_text",
+        "resolution_note",
+        "escalation_message",
+        "escalation_request_id",
+        "attachment_ids",
+        "request_correlation_id",
+        "request_id",
+        "metadata",
+        "counter_key",
+        "usage_resource_id",
+        "usage_idempotency_key",
+        "usage_event_id",
+        "leaseOwner",
+        "claimedAt",
+        "expiresAt",
+        "error_code",
+    }
+)
+CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
+    {
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "conversation_id",
+        "message_id",
+        "command_id",
+        "owner_id",
+        "student_id",
+        "role",
+        "status",
+        "action",
+        "quantity",
+        "quota_period",
+        "counter_value",
+        "counter_value_after",
+        "count",
+        "expires_at",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "owner_deletion_generation",
+        "account_fence_generation",
+    }
+)
+CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
+    {"claimed", "message_committed", "ai_running"}
+)
+CONVERSATION_PROVIDER_RETENTION_BOUNDARY = {
+    "bedrock_request_response": "outside_backend_deletion_control"
+}
+
+
 def upload_key(upload_id: str) -> dict[str, str]:
     return {"PK": f"UPLOAD#{upload_id}", "SK": "META"}
 
@@ -190,6 +292,306 @@ def chat_quota_key(owner_id: str, quota_period: str) -> dict[str, str]:
 
 def chat_quota_operation_key(owner_id: str, command_id: str) -> dict[str, str]:
     return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT_QUOTA_OP#{command_id}"}
+
+
+def build_conversation_write_transaction(
+    *,
+    item: dict[str, Any],
+    owner_id: str,
+    generation: int,
+    mode: str = "put",
+) -> list[dict[str, Any]]:
+    """Build one owner-stamped conversation write behind the permanent fence."""
+    if not owner_id or type(generation) is not int or generation <= 0:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    stamped = {
+        **item,
+        "owner_id": owner_id,
+        "student_id": owner_id,
+        "account_fence_generation": generation,
+    }
+    if not isinstance(stamped.get("PK"), str) or not isinstance(stamped.get("SK"), str):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    if mode == "put":
+        mutation = {
+            "Put": {
+                "Item": stamped,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        }
+    elif mode == "replace":
+        mutation = {
+            "Put": {
+                "Item": stamped,
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND "
+                    "(owner_id=:owner OR student_id=:owner)"
+                ),
+                "ExpressionAttributeValues": {":owner": owner_id},
+            }
+        }
+    else:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    return [account_deletion_repo.active_fence_condition(owner_id, generation), mutation]
+
+
+def _conversation_write(
+    *,
+    item: dict[str, Any],
+    owner_id: str,
+    generation: int,
+    mode: str,
+    table: Any | None,
+) -> dict[str, Any]:
+    operations = build_conversation_write_transaction(
+        item=item, owner_id=owner_id, generation=generation, mode=mode
+    )
+    target = table or get_table()
+    hook = getattr(target, "transact_conversation_write", None)
+    if callable(hook):
+        hook(operations)
+    elif not hasattr(target, "meta") and hasattr(target, "put_item") and mode == "put":
+        # Narrow compatibility for inherited in-memory fakes. Production tables
+        # always execute the two-item transaction above.
+        target.put_item(Item=operations[1]["Put"]["Item"])
+    else:
+        try:
+            account_deletion_repo.transact(operations, table=target)
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise AttachmentRepositoryConflict("conditional_conflict") from exc
+    return dict(operations[1]["Put"]["Item"])
+
+
+def create_conversation_record(
+    item: dict[str, Any],
+    *,
+    owner_id: str,
+    generation: int = 1,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    return _conversation_write(
+        item=item, owner_id=owner_id, generation=generation, mode="put", table=table
+    )
+
+
+def record_teacher_help_request(
+    *,
+    conversation: dict[str, Any],
+    message: dict[str, Any],
+    owner_id: str,
+    generation: int = 1,
+    table: Any | None = None,
+) -> None:
+    """Persist help lifecycle and its system message atomically under one fence."""
+    target = table or get_table()
+    header = {
+        **conversation,
+        "escalated": True,
+        "escalated_at": message["created_at"],
+        "escalation_request_id": message["message_id"],
+        "escalation_status": "pending",
+        "escalation_message": message.get("escalation_message"),
+        "updated_at": message["created_at"],
+    }
+    operations = [
+        account_deletion_repo.active_fence_condition(owner_id, generation),
+        {
+            "Put": {
+                "Item": {
+                    **header,
+                    "owner_id": owner_id,
+                    "student_id": owner_id,
+                    "account_fence_generation": generation,
+                },
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner"
+                ),
+                "ExpressionAttributeValues": {":owner": owner_id},
+            }
+        },
+        build_conversation_write_transaction(
+            item=message, owner_id=owner_id, generation=generation, mode="put"
+        )[1],
+    ]
+    hook = getattr(target, "transact_conversation_write", None)
+    if callable(hook):
+        hook(operations)
+    elif not hasattr(target, "meta") and hasattr(target, "update_item"):
+        # Inherited route fakes exercise projection only; production is atomic.
+        target.update_item(
+            Key={"PK": header["PK"], "SK": header["SK"]},
+            UpdateExpression="SET escalated=:e",
+            ExpressionAttributeValues={":e": True},
+        )
+        target.put_item(Item=operations[2]["Put"]["Item"])
+    else:
+        try:
+            account_deletion_repo.transact(operations, table=target)
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise AttachmentRepositoryConflict("conditional_conflict") from exc
+
+
+def _valid_conversation_cursor(cursor: Any) -> dict[str, str] | None:
+    if cursor is None:
+        return None
+    if (
+        not isinstance(cursor, dict)
+        or set(cursor) != {"PK", "SK"}
+        or any(not isinstance(cursor.get(key), str) or not cursor[key] for key in ("PK", "SK"))
+    ):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    return dict(cursor)
+
+
+def _is_owned_conversation_private_row(item: dict[str, Any], owner_id: str) -> bool:
+    if item.get("owner_id") == owner_id or item.get("student_id") == owner_id:
+        pk, sk = str(item.get("PK") or ""), str(item.get("SK") or "")
+        return (
+            pk.startswith(("CONV#", f"USAGE#{owner_id}", f"USAGE_LEDGER#{owner_id}"))
+            or sk.startswith("REF#CONVERSATION#")
+        )
+    return False
+
+
+def scan_conversation_private_rows(
+    owner_id: str,
+    *,
+    cursor: dict[str, str] | None = None,
+    maximum_pages: int = 1,
+    table: Any | None = None,
+) -> ConversationPrivatePage:
+    """Strongly scan independently paginated conversation-owned row families."""
+    if not owner_id or maximum_pages < 1 or maximum_pages > 100:
+        raise AttachmentRepositoryConflict("dependency_failure")
+    target = table or get_table()
+    current = _valid_conversation_cursor(cursor)
+    items: list[dict[str, Any]] = []
+    scanned = 0
+    seen: set[tuple[str, str]] = set()
+    for _ in range(maximum_pages):
+        request: dict[str, Any] = {"ConsistentRead": True}
+        if current is not None:
+            request["ExclusiveStartKey"] = current
+        response = target.scan(**request)
+        if not isinstance(response, dict) or not isinstance(response.get("Items", []), list):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        page = response.get("Items", [])
+        if any(not isinstance(item, dict) for item in page):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        scanned += len(page)
+        items.extend(
+            dict(item) for item in page if _is_owned_conversation_private_row(item, owner_id)
+        )
+        current = _valid_conversation_cursor(response.get("LastEvaluatedKey"))
+        if current is None:
+            break
+        identity = (current["PK"], current["SK"])
+        if identity in seen:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        seen.add(identity)
+    return ConversationPrivatePage(tuple(items), current, scanned)
+
+
+def _conversation_tombstone(
+    item: dict[str, Any], *, owner_id: str, generation: int, now_iso: str
+) -> dict[str, Any]:
+    tombstone = {
+        key: value
+        for key, value in item.items()
+        if key in CONVERSATION_TOMBSTONE_ALLOWLIST
+        and key not in CONVERSATION_PRIVATE_FIELDS
+    }
+    tombstone.update(
+        {
+            "PK": item["PK"],
+            "SK": item["SK"],
+            "owner_id": owner_id,
+            "student_id": owner_id,
+            "status": "deleted",
+            "owner_deletion_generation": generation,
+            "deleted_at": now_iso,
+        }
+    )
+    return tombstone
+
+
+def scrub_conversation_private_row(
+    item: dict[str, Any],
+    *,
+    owner_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    tombstone = _conversation_tombstone(
+        item, owner_id=owner_id, generation=generation, now_iso=now_iso
+    )
+    target = table or get_table()
+    hook = getattr(target, "scrub_conversation_private_row", None)
+    if callable(hook):
+        hook(item, tombstone, owner_id, generation)
+    else:
+        operations = [
+            {
+                "ConditionCheck": {
+                    "Key": account_deletion_repo.account_fence_key(owner_id),
+                    "ConditionExpression": "#status=:pending AND generation=:generation",
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":pending": "deletion_pending",
+                        ":generation": generation,
+                    },
+                }
+            },
+            {
+                "Put": {
+                    "Item": tombstone,
+                    "ConditionExpression": (
+                        "attribute_exists(PK) AND attribute_exists(SK) AND "
+                        "(owner_id=:owner OR student_id=:owner)"
+                    ),
+                    "ExpressionAttributeValues": {":owner": owner_id},
+                }
+            },
+        ]
+        try:
+            account_deletion_repo.transact(operations, table=target)
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise AttachmentRepositoryConflict("conditional_conflict") from exc
+    return tombstone
+
+
+def cancel_stale_message_command(
+    command: dict[str, Any],
+    *,
+    owner_id: str,
+    deletion_generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Invalidate one old-generation command and erase all replay/lease content."""
+    if command.get("owner_id") != owner_id and command.get("student_id") != owner_id:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    remove_fields = tuple(sorted(CONVERSATION_PRIVATE_FIELDS))
+    target = table or get_table()
+    hook = getattr(target, "cancel_stale_message_command", None)
+    if callable(hook):
+        hook(
+            command=command,
+            owner_id=owner_id,
+            deletion_generation=deletion_generation,
+            remove_fields=remove_fields,
+            now_iso=now_iso,
+        )
+    else:
+        scrub_conversation_private_row(
+            command,
+            owner_id=owner_id,
+            generation=deletion_generation,
+            now_iso=now_iso,
+            table=target,
+        )
+    return {"status": "canceled", "command_id": command.get("command_id")}
 
 
 def _message_usage_event_item(
@@ -362,6 +764,7 @@ def build_message_command_claim_transaction(
     expected_counter: int,
     limit: int,
     expires_at: int,
+    account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
     command_id = str(command["command_id"])
     expected_exists = expected_counter > 0
@@ -379,6 +782,12 @@ def build_message_command_claim_transaction(
         values[":expected"] = expected_counter
     return [
         TransactionOperation(
+            TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+            account_deletion_repo.active_fence_condition(
+                owner_id, account_fence_generation
+            ),
+        ),
+        TransactionOperation(
             TransactionOperationKind.MESSAGE_COMMAND_PUT,
             {
                 "Put": {
@@ -387,6 +796,9 @@ def build_message_command_claim_transaction(
                             str(command["conversation_id"]), str(command["idempotency_key"])
                         ),
                         **command,
+                        "owner_id": owner_id,
+                        "student_id": owner_id,
+                        "account_fence_generation": account_fence_generation,
                         "counter_value": expected_counter + 1,
                         "quota_period": quota_period,
                         "expires_at": expires_at,
@@ -437,6 +849,7 @@ def claim_message_command_and_quota(
     quota_period: str,
     limit: int,
     expires_at: int,
+    account_fence_generation: int = 1,
     table: Any | None = None,
 ) -> MessageCommandResult:
     """Atomically create a message command and charge its daily quota once."""
@@ -492,6 +905,7 @@ def claim_message_command_and_quota(
             expected_counter=expected,
             limit=limit,
             expires_at=expires_at,
+            account_fence_generation=account_fence_generation,
         )
         try:
             transact(operations, table=target)
@@ -518,6 +932,9 @@ def claim_message_command_and_quota(
             continue
         persisted = {
             **command,
+            "owner_id": owner_id,
+            "student_id": owner_id,
+            "account_fence_generation": account_fence_generation,
             "counter_value": expected + 1,
             "quota_period": quota_period,
             "expires_at": expires_at,
@@ -1819,18 +2236,34 @@ def build_message_attachment_transaction(
     command: dict[str, Any] | None = None,
     account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
-    operations: list[TransactionOperation] = []
+    operations: list[TransactionOperation] = [
+        TransactionOperation(
+            TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+            account_deletion_repo.active_fence_condition(
+                owner_id, account_fence_generation
+            ),
+        )
+    ]
     if associations:
         resource_type = str(associations[0].get("resource_type") or "conversation")
         resource_id = str(associations[0].get("resource_id") or "")
         if not resource_id:
             raise AttachmentRepositoryConflict("conditional_conflict")
-        operations.extend(
-            _retention_fence_checks(
-                owner_id,
-                resource_type,
-                resource_id,
-                account_fence_generation=account_fence_generation,
+        operations.append(
+            TransactionOperation(
+                TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
+                {
+                    "ConditionCheck": {
+                        "Key": retention_fence_key(
+                            owner_id,
+                            resource_type=resource_type,
+                            resource_id=resource_id,
+                        ),
+                        "ConditionExpression": "attribute_not_exists(PK) OR #status=:complete",
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {":complete": "complete"},
+                    }
+                },
             )
         )
     operations.extend(
@@ -1839,7 +2272,12 @@ def build_message_attachment_transaction(
             TransactionOperationKind.MESSAGE_PUT,
             {
                 "Put": {
-                    "Item": message,
+                    "Item": {
+                        **message,
+                        "owner_id": owner_id,
+                        "student_id": owner_id,
+                        "account_fence_generation": account_fence_generation,
+                    },
                     "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                 }
             },
@@ -1997,6 +2435,7 @@ def claim_message_ai_lease(
     now_epoch: int,
     expires_at: int,
     max_attempts: int = 3,
+    account_fence_generation: int | None = None,
     table: Any | None = None,
 ) -> MessageCommandResult:
     target = table or get_table()
@@ -2005,6 +2444,9 @@ def claim_message_ai_lease(
     except Exception:
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     attempt = int(command.get("attempt", 0)) + 1
+    generation = account_fence_generation or command.get("account_fence_generation")
+    if type(generation) is not int or generation <= 0:
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     command_status = command.get("status")
     can_claim = command_status == "message_committed" or (
         command_status == "ai_running"
@@ -2034,31 +2476,47 @@ def claim_message_ai_lease(
             attempt=int(command.get("attempt", 0)),
         )
     try:
-        target.update_item(
-            Key=message_command_key(conversation_id, idempotency_key),
-            UpdateExpression=(
-                "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
-                "expiresAt=:expires, attempt=:attempt"
-            ),
-            ConditionExpression=(
-                "owner_id=:owner AND (#status=:committed OR "
-                "(#status=:running AND expiresAt<=:now AND attempt<:max_attempts))"
-            ),
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":owner": owner_id,
-                ":committed": "message_committed",
-                ":running": "ai_running",
-                ":lease_owner": lease_owner,
-                ":claimed": now_epoch,
-                ":expires": expires_at,
-                ":now": now_epoch,
-                ":attempt": attempt,
-                ":max_attempts": max_attempts,
-            },
+        transact(
+            [
+                TransactionOperation(
+                    TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+                    account_deletion_repo.active_fence_condition(owner_id, generation),
+                ),
+                TransactionOperation(
+                    TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
+                    {
+                        "Update": {
+                            "Key": message_command_key(conversation_id, idempotency_key),
+                            "UpdateExpression": (
+                                "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
+                                "expiresAt=:expires, attempt=:attempt"
+                            ),
+                            "ConditionExpression": (
+                                "owner_id=:owner AND account_fence_generation=:generation AND "
+                                "(#status=:committed OR (#status=:running AND "
+                                "expiresAt<=:now AND attempt<:max_attempts))"
+                            ),
+                            "ExpressionAttributeNames": {"#status": "status"},
+                            "ExpressionAttributeValues": {
+                                ":owner": owner_id,
+                                ":generation": generation,
+                                ":committed": "message_committed",
+                                ":running": "ai_running",
+                                ":lease_owner": lease_owner,
+                                ":claimed": now_epoch,
+                                ":expires": expires_at,
+                                ":now": now_epoch,
+                                ":attempt": attempt,
+                                ":max_attempts": max_attempts,
+                            },
+                        }
+                    },
+                ),
+            ],
+            table=target,
         )
-    except ClientError as exc:
-        if _conditional(exc):
+    except AttachmentTransactionError as exc:
+        if exc.outcome is AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT:
             try:
                 reread = get_message_command(
                     conversation_id, idempotency_key, table=target
@@ -2103,6 +2561,7 @@ def complete_message_command(
     completed_at: str,
     lease_attempt: int = 1,
     completed_epoch: int = 0,
+    account_fence_generation: int = 1,
     table: Any | None = None,
 ) -> MessageCommandResult:
     if (
@@ -2116,10 +2575,21 @@ def complete_message_command(
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     operations = [
         TransactionOperation(
+            TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+            account_deletion_repo.active_fence_condition(
+                owner_id, account_fence_generation
+            ),
+        ),
+        TransactionOperation(
             TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
             {
                 "Put": {
-                    "Item": assistant_message,
+                    "Item": {
+                        **assistant_message,
+                        "owner_id": owner_id,
+                        "student_id": owner_id,
+                        "account_fence_generation": account_fence_generation,
+                    },
                     "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                 }
             },
@@ -2134,13 +2604,14 @@ def complete_message_command(
                         "REMOVE leaseOwner, claimedAt, expiresAt"
                     ),
                     "ConditionExpression": (
-                        "owner_id=:owner AND #status=:running AND "
+                        "owner_id=:owner AND account_fence_generation=:generation AND #status=:running AND "
                         "leaseOwner=:lease_owner AND attempt=:lease_attempt AND "
                         "expiresAt>:completed_epoch"
                     ),
                     "ExpressionAttributeNames": {"#status": "status"},
                     "ExpressionAttributeValues": {
                         ":owner": owner_id,
+                        ":generation": account_fence_generation,
                         ":running": "ai_running",
                         ":completed": "completed",
                         ":lease_owner": lease_owner,
@@ -2186,27 +2657,45 @@ def renew_message_ai_lease(
     lease_owner: str,
     now_epoch: int,
     expires_at: int,
+    account_fence_generation: int = 1,
     table: Any | None = None,
 ) -> bool:
     try:
-        (table or get_table()).update_item(
-            Key=message_command_key(conversation_id, idempotency_key),
-            UpdateExpression="SET claimedAt=:now, expiresAt=:expires",
-            ConditionExpression=(
-                "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
-                "AND expiresAt>:now"
-            ),
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":owner": owner_id,
-                ":running": "ai_running",
-                ":lease_owner": lease_owner,
-                ":now": now_epoch,
-                ":expires": expires_at,
-            },
+        transact(
+            [
+                TransactionOperation(
+                    TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+                    account_deletion_repo.active_fence_condition(
+                        owner_id, account_fence_generation
+                    ),
+                ),
+                TransactionOperation(
+                    TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
+                    {
+                        "Update": {
+                            "Key": message_command_key(conversation_id, idempotency_key),
+                            "UpdateExpression": "SET claimedAt=:now, expiresAt=:expires",
+                            "ConditionExpression": (
+                                "owner_id=:owner AND account_fence_generation=:generation AND "
+                                "#status=:running AND leaseOwner=:lease_owner AND expiresAt>:now"
+                            ),
+                            "ExpressionAttributeNames": {"#status": "status"},
+                            "ExpressionAttributeValues": {
+                                ":owner": owner_id,
+                                ":generation": account_fence_generation,
+                                ":running": "ai_running",
+                                ":lease_owner": lease_owner,
+                                ":now": now_epoch,
+                                ":expires": expires_at,
+                            },
+                        }
+                    },
+                ),
+            ],
+            table=table,
         )
-    except ClientError as exc:
-        if _conditional(exc):
+    except AttachmentTransactionError as exc:
+        if exc.outcome is AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT:
             return False
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True

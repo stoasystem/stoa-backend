@@ -412,6 +412,7 @@ def record_usage_event(
     counter_value: int | None = None,
     request_correlation_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    account_fence_generation: int | None = None,
 ) -> dict[str, Any]:
     """Persist one governed non-question usage event.
 
@@ -432,6 +433,14 @@ def record_usage_event(
         "actor_id": student_id,
         "actor_role": actor_role,
         "student_id": student_id,
+        **(
+            {
+                "owner_id": student_id,
+                "account_fence_generation": account_fence_generation,
+            }
+            if account_fence_generation is not None
+            else {}
+        ),
         "parent_id": event_parent_id,
         "action": action,
         "quantity": int(quantity if quantity is not None else definition.default_quantity),
@@ -457,7 +466,13 @@ def record_usage_event(
         "updated_at": created_at,
         "expires_at": counter_ttl(),
     }
-    created = usage_ledger_repo.put_usage_event(event)
+    created = (
+        usage_ledger_repo.put_usage_event(
+            event, account_fence_generation=account_fence_generation
+        )
+        if account_fence_generation is not None
+        else usage_ledger_repo.put_usage_event(event)
+    )
     return {**event, "idempotency_status": "created" if created else "duplicate"}
 
 
