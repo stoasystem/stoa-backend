@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-31-PLAN.md
-last_updated: "2026-07-17T23:34:37.136Z"
-last_activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and delivery deletion closure
+stopped_at: Completed 473-32-PLAN.md
+last_updated: "2026-07-17T23:49:01.984Z"
+last_activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in-flight AI deletion closure
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 51
-  percent: 89
+  completed_plans: 52
+  percent: 91
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 31 of 35
+Plan: 32 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and delivery deletion closure
+Last activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in-flight AI deletion closure
 
 ## Accumulated Context
 
+- Conversation headers, messages, teacher-help state, commands, chat usage metadata, and attachment associations now share one permanent-fence generation; stale AI returns cannot complete, associations release before scrub, and two later clean strong scans prove quiescence.
 - Report generation, artifact edits, and recovery delivery now use owner-partitioned exact object/email intents behind the permanent account fence; exact VersionId absence and explicit legal-retention debt govern report purge quiescence.
 - Moderation summaries and events now derive one authoritative student/generation from the strong question read, every writer loses to the permanent account fence, owner-bound notification handoff is mandatory, and strong paginated scrubbing requires two later zero epochs.
 - Phase 473 staging assembly and immutable promotion now persist exact pre-mutation coordinates behind expiring operation fences; bounded takeovers change both fence and row version so stale workers cannot record success.
@@ -108,8 +109,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and d
 
 ## Session
 
-**Last Date:** 2026-07-17T23:34:37.130Z
-**Stopped At:** Completed 473-31-PLAN.md
+**Last Date:** 2026-07-17T23:49:01.977Z
+**Stopped At:** Completed 473-32-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -167,6 +168,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and d
 | Phase 473 P29 | 33 min | 3 tasks | 27 files |
 | Phase 473 P30 | 13 min | 3 tasks | 6 files |
 | Phase 473 P31 | 13 min | 3 tasks | 13 files |
+| Phase 473 P32 | 10 min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -263,3 +265,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-31 report rows, artifacts, and d
 - [Phase 473]: Report provider effects use owner-partitioned durable intents. — Each intent binds the exact permanent-fence generation, object key, body SHA-256, and length before mutation.
 - [Phase 473]: Provider ambiguity never authorizes a blind retry. — Lost S3 responses require complete version-page metadata reconciliation; SES ambiguity becomes provider_acceptance_unknown.
 - [Phase 473]: Legal-held report material remains blocking policy debt. — legal_retention_blocked rows have zero purge count and prevent branch quiescence without restoring access.
+- [Phase 473]: Conversation rows, messages, notes, commands, chat operations, usage metadata, and attachment associations form one owner/generation deletion family. — One permanent owner/generation lineage makes private copies exhaustively drainable.
+- [Phase 473]: Initial-message, regular, and SSE sends share the same command implementation and permanent-fence checkpoints. — Transport and creation variants cannot bypass command fencing.
+- [Phase 473]: Bedrock request/response retention is outside backend deletion control; only backend durable copies are claimed scrubbed. — Deletion evidence must not overclaim provider-side erasure.
+- [Phase 473]: Conversation quiescence requires association release, inactive commands, zero debt, and two later clean strong base-table scans. — A first empty or filtered page cannot prove durable absence.
