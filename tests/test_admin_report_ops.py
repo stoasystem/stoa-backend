@@ -16,6 +16,39 @@ from stoa.services import support_destination_service
 from actor_helpers import install_actor_overrides
 
 
+@pytest.fixture(autouse=True)
+def _fenced_artifact_edit_compat(monkeypatch):
+    monkeypatch.setattr(
+        report_artifact_edit_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner: {"status": "active", "generation": 7},
+    )
+    monkeypatch.setattr(
+        report_artifact_edit_service.report_artifact_service,
+        "write_fenced_report_artifacts",
+        lambda keys, json_artifact, html_artifact, **kwargs: report_artifact_edit_service.report_artifact_service.write_report_artifacts(
+            keys, json_artifact, html_artifact, s3_client=kwargs.get("s3_client")
+        ),
+    )
+    monkeypatch.setattr(
+        report_recovery_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner: {"status": "active", "generation": 7},
+    )
+    monkeypatch.setattr(
+        report_recovery_service.notify_service,
+        "send_fenced_weekly_report_email",
+        lambda parent_email, report_html, **kwargs: (
+            report_recovery_service.notify_service.send_weekly_report_email(
+                parent_email,
+                report_html,
+                subject=kwargs.get("subject"),
+            )
+            or "accepted"
+        ),
+    )
+
+
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")

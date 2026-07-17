@@ -8,7 +8,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from stoa.db.repositories import report_repo
+from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import notify_service, report_artifact_service, report_service
 
 
@@ -60,11 +60,18 @@ def resend_report_email(
     attempted_at = _now_iso()
     try:
         html = report_artifact_service.get_report_html(str(html_key))
-        notify_service.send_weekly_report_email(
+        owner_id = str(report.get("student_id") or "")
+        fence = account_deletion_repo.require_active_account_fence(owner_id)
+        delivery_outcome = notify_service.send_fenced_weekly_report_email(
             str(parent_email),
             html,
+            owner_id=owner_id,
+            generation=int(fence["generation"]),
+            report_id=str(report["report_id"]),
             subject=f"STOA weekly report for {report.get('student_name') or 'Student'}",
         )
+        if delivery_outcome != "accepted":
+            raise RuntimeError(delivery_outcome)
     except Exception as exc:
         failed_at = _now_iso()
         fields = {

@@ -6,7 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import report_repo
+from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import report_artifact_service, report_recovery_job_service, report_service
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,8 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
             continue
 
         claim = report_service.build_weekly_report_claim(parent_id, student_id, week_start)
+        fence = account_deletion_repo.require_active_account_fence(student_id)
+        claim["account_fence_generation"] = int(fence["generation"])
         if not report_repo.try_claim_report_generation(claim):
             counts["skipped_existing"] += 1
             continue

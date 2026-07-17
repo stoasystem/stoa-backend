@@ -5,6 +5,31 @@ import pytest
 from stoa.jobs import weekly_reports
 
 
+@pytest.fixture(autouse=True)
+def _active_report_owner(monkeypatch):
+    monkeypatch.setattr(
+        weekly_reports.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner: {"status": "active", "generation": 7},
+    )
+    recovery = weekly_reports.report_recovery_job_service.report_recovery_service
+    monkeypatch.setattr(
+        recovery.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner: {"status": "active", "generation": 7},
+    )
+    monkeypatch.setattr(
+        recovery.notify_service,
+        "send_fenced_weekly_report_email",
+        lambda parent_email, report_html, **kwargs: (
+            recovery.notify_service.send_weekly_report_email(
+                parent_email, report_html, subject=kwargs.get("subject")
+            )
+            or "accepted"
+        ),
+    )
+
+
 class FakeTable:
     def __init__(self, pages):
         self.pages = list(pages)

@@ -9,7 +9,7 @@ from html import escape
 from typing import Any
 from uuid import uuid4
 
-from stoa.db.repositories import report_repo
+from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import report_artifact_service, report_recovery_service
 
 MAX_TEXT_LENGTHS = {
@@ -138,10 +138,16 @@ def apply_artifact_edit_preview(
     )
     html_artifact = _render_html_from_artifact(next_artifact)
     applied_at = _now_iso()
-    report_artifact_service.write_report_artifacts(
+    owner_id = str(report.get("student_id") or "")
+    fence = account_deletion_repo.require_active_account_fence(owner_id)
+    generation = int(fence["generation"])
+    report_artifact_service.write_fenced_report_artifacts(
         version_keys,
         next_artifact,
         html_artifact,
+        owner_id=owner_id,
+        generation=generation,
+        report_id=str(report["report_id"]),
         s3_client=s3_client,
     )
 

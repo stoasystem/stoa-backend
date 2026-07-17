@@ -155,11 +155,46 @@ class ReportPrivatePage:
 
 def put_report(item: dict) -> None:
     table = get_table()
+    owner_id = item.get("student_id")
+    generation = item.get("account_fence_generation")
+    if isinstance(owner_id, str) and type(generation) is int and generation > 0:
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(owner_id, generation),
+                {
+                    "Put": {
+                        "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+                        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                    }
+                },
+            ],
+            table=table,
+        )
+        return
     table.put_item(Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item})
 
 
 def try_claim_report_generation(item: dict) -> bool:
     table = get_table()
+    owner_id = item.get("student_id")
+    generation = item.get("account_fence_generation")
+    if isinstance(owner_id, str) and type(generation) is int and generation > 0:
+        try:
+            account_deletion_repo.transact(
+                [
+                    account_deletion_repo.active_fence_condition(owner_id, generation),
+                    {
+                        "Put": {
+                            "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+                            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                        }
+                    },
+                ],
+                table=table,
+            )
+        except account_deletion_repo.AccountDeletionConflict:
+            return False
+        return True
     try:
         table.put_item(
             Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},

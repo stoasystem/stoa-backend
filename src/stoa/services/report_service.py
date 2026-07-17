@@ -13,7 +13,13 @@ from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    practice_repo,
+    question_repo,
+    report_repo,
+    user_repo,
+)
 from stoa.services import notify_service, report_artifact_service
 
 logger = logging.getLogger(__name__)
@@ -331,16 +337,24 @@ def store_and_send_weekly_report(
     """Store report artifacts and metadata before attempting parent email."""
     timestamp = _now_iso(now)
     report_item = build_weekly_report_record(payload, generated_content, generated_at=timestamp)
+    fence = account_deletion_repo.require_active_account_fence(
+        str(report_item["student_id"])
+    )
+    generation = int(fence["generation"])
+    report_item["account_fence_generation"] = generation
     html_report = render_weekly_report_html(payload, generated_content)
     json_report = build_weekly_report_json_artifact(payload, generated_content, report_item)
 
-    report_artifact_service.write_report_artifacts(
+    report_artifact_service.write_fenced_report_artifacts(
         report_artifact_service.ReportArtifactKeys(
             json_key=report_item["json_s3_key"],
             html_key=report_item["html_s3_key"],
         ),
         json_report,
         html_report,
+        owner_id=str(report_item["student_id"]),
+        generation=generation,
+        report_id=str(report_item["report_id"]),
         s3_client=s3_client,
     )
     report_repo.put_report(report_item)
@@ -354,12 +368,17 @@ def store_and_send_weekly_report(
     )
 
     try:
-        notify_service.send_weekly_report_email(
+        delivery_outcome = notify_service.send_fenced_weekly_report_email(
             report_item["parent_email"],
             html_report,
+            owner_id=str(report_item["student_id"]),
+            generation=generation,
+            report_id=str(report_item["report_id"]),
             subject=f"STOA weekly report for {report_item['student_name']}",
             ses_client=ses_client,
         )
+        if delivery_outcome != "accepted":
+            raise RuntimeError(delivery_outcome)
     except Exception as exc:
         failed_at = _now_iso()
         error_class = type(exc).__name__

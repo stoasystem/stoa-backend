@@ -7,6 +7,35 @@ from stoa.jobs import weekly_reports
 from stoa.services import notify_service, report_service
 
 
+@pytest.fixture(autouse=True)
+def _fenced_report_provider_compat(monkeypatch):
+    monkeypatch.setattr(
+        report_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner: {"status": "active", "generation": 7},
+    )
+    monkeypatch.setattr(
+        report_service.report_artifact_service,
+        "write_fenced_report_artifacts",
+        lambda keys, json_artifact, html_artifact, **kwargs: report_service.report_artifact_service.write_report_artifacts(
+            keys, json_artifact, html_artifact, s3_client=kwargs.get("s3_client")
+        ),
+    )
+    monkeypatch.setattr(
+        report_service.notify_service,
+        "send_fenced_weekly_report_email",
+        lambda parent_email, report_html, **kwargs: (
+            report_service.notify_service.send_weekly_report_email(
+                parent_email,
+                report_html,
+                subject=kwargs.get("subject"),
+                ses_client=kwargs.get("ses_client"),
+            )
+            or "accepted"
+        ),
+    )
+
+
 class FakeDataTable:
     def __init__(self):
         self.scans = []
