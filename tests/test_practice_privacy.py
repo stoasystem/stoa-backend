@@ -360,6 +360,10 @@ def _privileged_answer_client(
 ):
     challenge = challenge or {
         "challenge_id": "challenge-1",
+        "challenge_version": "sha256:" + "a" * 64,
+        "challenge_content_hash": "a" * 64,
+        "course_id": "course-1",
+        "class_id": "class-1",
         "lesson_id": "lesson-1",
         "subject_id": "math",
         "grade_level": "secondary",
@@ -404,10 +408,18 @@ def _privileged_answer_client(
 
 def _answer_assignment(**overrides):
     assignment = {
+        "PK": "TEACHER_ASSIGNMENT#teacher-1",
+        "SK": "CURRICULUM#CURRENT",
+        "entity_type": "teacher_curriculum_assignment",
+        "version": 1,
         "teacher_id": "teacher-1",
         "status": "active",
-        "subject_id": "math",
-        "grade_level": "secondary",
+        "curriculum_scope": {
+            "course_id": "course-1",
+            "class_id": "class-1",
+            "subject_id": "math",
+            "grade_level": "secondary",
+        },
         "resource_types": ["curriculum_answer"],
         "actions": ["read"],
         "purposes": ["curriculum_answer_read"],
@@ -443,6 +455,10 @@ def test_anonymous_actor_cannot_use_privileged_answer_route(monkeypatch):
         "get_challenge",
         lambda _challenge_id: {
             "challenge_id": "challenge-1",
+            "challenge_version": "sha256:" + "a" * 64,
+            "challenge_content_hash": "a" * 64,
+            "course_id": "course-1",
+            "class_id": "class-1",
             "lesson_id": "lesson-1",
             "subject_id": "math",
             "correct_answer": "answer-canary",
@@ -462,7 +478,17 @@ def test_anonymous_actor_cannot_use_privileged_answer_route(monkeypatch):
     [
         ("teacher", None, "active"),
         ("teacher", _answer_assignment(status="revoked"), "active"),
-        ("teacher", _answer_assignment(subject_id="physics"), "active"),
+        (
+            "teacher",
+            _answer_assignment(
+                curriculum_scope={
+                    "course_id": "course-1",
+                    "class_id": "class-1",
+                    "subject_id": "physics",
+                }
+            ),
+            "active",
+        ),
         ("teacher", _answer_assignment(), "disabled"),
         ("student", None, "active"),
         ("parent", None, "active"),
@@ -493,6 +519,10 @@ def test_privileged_answer_route_hides_unassigned_stale_wrong_scope_and_roles(
 def test_answer_dependency_loads_challenge_once_and_never_grants_mutation(monkeypatch):
     challenge = {
         "challenge_id": "challenge-1",
+        "challenge_version": "sha256:" + "a" * 64,
+        "challenge_content_hash": "a" * 64,
+        "course_id": "course-1",
+        "class_id": "class-1",
         "lesson_id": "lesson-1",
         "subject_id": "math",
         "grade_level": "secondary",

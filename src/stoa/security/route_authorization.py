@@ -276,18 +276,19 @@ def authorized_curriculum_answer_dependency():
 
     async def resolve(challenge_id: str):
         item = practice_repo.get_challenge(challenge_id)
-        if not item:
+        if not _valid_loaded_curriculum_answer(item, challenge_id):
             return None
+        assert item is not None
         return AuthorizedResource(
             ResourceRef(
                 ResourceType.CURRICULUM_ANSWER,
                 challenge_id,
                 challenge_id,
-                course_id=str(item.get("course_id") or "") or None,
-                class_id=str(item.get("class_id") or "") or None,
-                lesson_id=str(item.get("lesson_id") or "") or None,
-                subject_id=str(item.get("subject_id") or "") or None,
-                grade_level=str(item.get("grade_level") or "") or None,
+                course_id=item["course_id"],
+                class_id=item["class_id"],
+                lesson_id=item.get("lesson_id"),
+                subject_id=item.get("subject_id"),
+                grade_level=item.get("grade_level"),
             ),
             item,
         )
@@ -327,6 +328,32 @@ def authorized_curriculum_answer_dependency():
         ),
     )
     return dependency
+
+
+def _valid_loaded_curriculum_answer(
+    item: Mapping[str, object] | None, challenge_id: str
+) -> bool:
+    """Validate direct-resolver identity and exact authorization coordinates."""
+    if not isinstance(item, Mapping) or item.get("challenge_id") != challenge_id:
+        return False
+    content_hash = item.get("challenge_content_hash")
+    version = item.get("challenge_version")
+    if (
+        not isinstance(content_hash, str)
+        or len(content_hash) != 64
+        or any(character not in "0123456789abcdef" for character in content_hash)
+        or version != f"sha256:{content_hash}"
+    ):
+        return False
+    for field_name in ("course_id", "class_id"):
+        value = item.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            return False
+    for field_name in ("lesson_id", "subject_id", "grade_level"):
+        value = item.get(field_name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            return False
+    return True
 
 
 def student_create_actor_dependency(resource_type: ResourceType):

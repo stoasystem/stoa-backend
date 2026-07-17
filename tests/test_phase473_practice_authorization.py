@@ -460,15 +460,37 @@ def test_denied_roles_and_scopes_match_missing_resource_contract(
         assert canary not in missing.text
 
 
-def test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load(monkeypatch) -> None:
-    malformed = _challenge(challenge_id="challenge-1", course_id=None)
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"challenge_id": "other-challenge"},
+        {"course_id": None},
+        {"class_id": ""},
+        {"challenge_content_hash": "not-a-hash"},
+        {"challenge_version": "sha256:" + "b" * 64},
+    ],
+    ids=["wrong-id", "missing-course", "missing-class", "bad-hash", "hash-mismatch"],
+)
+def test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load(
+    monkeypatch, overrides
+) -> None:
+    malformed = _challenge(**overrides)
+    requested_id = "challenge-1"
+    malformed["challenge_id"] = requested_id
+    if overrides.get("challenge_id"):
+        malformed["challenge_id"] = overrides["challenge_id"]
     client, _, facts, loads, _ = _client(
         monkeypatch,
         role="teacher",
         assignment=_assignment(),
         challenge=malformed,
     )
-    response = client.get(_answer_path())
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_challenge",
+        lambda challenge_id: loads.append(challenge_id) or dict(malformed),
+    )
+    response = client.get(_answer_path(requested_id))
     assert response.status_code == 404
     assert ANSWER_CANARY not in response.text
     assert loads == ["challenge-1"]
