@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -265,6 +266,38 @@ def _require_provider_coordinate(value: Any) -> str:
     return value
 
 
+def _require_positive_integer(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    return value
+
+
+def _require_canonical_sha256(value: Any) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    return value
+
+
+def _require_provider_sha256(value: Any, *, expected_hex: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (TypeError, ValueError):
+        raise AttachmentRepositoryConflict(
+            "invalid_provider_acknowledgement"
+        ) from None
+    if len(decoded) != 32 or base64.b64encode(decoded).decode("ascii") != value:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    if decoded.hex() != _require_canonical_sha256(expected_hex):
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    return value
+
+
 def record_staging_multipart(
     upload_id: str,
     owner_id: str,
@@ -346,6 +379,12 @@ def claim_upload_part(
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Claim before provider mutation; one expired takeover is the only retry fence."""
+    part_number = _require_positive_integer(part_number)
+    checksum_sha256 = _require_canonical_sha256(checksum_sha256)
+    length = _require_positive_integer(length)
+    lease_owner = _require_provider_coordinate(lease_owner)
+    if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
     target = table or get_table()
     item = {
         **upload_part_key(upload_id, part_number),
@@ -414,8 +453,18 @@ def complete_upload_part(
     *,
     provider_etag: str,
     provider_checksum: str,
+    expected_checksum_sha256: str,
+    content_length: int,
     table: Any | None = None,
 ) -> bool:
+    part_number = _require_positive_integer(part_number)
+    _require_provider_coordinate(lease_owner)
+    provider_etag = _require_provider_coordinate(provider_etag)
+    expected_checksum_sha256 = _require_canonical_sha256(expected_checksum_sha256)
+    provider_checksum = _require_provider_sha256(
+        provider_checksum, expected_hex=expected_checksum_sha256
+    )
+    content_length = _require_positive_integer(content_length)
     try:
         (table or get_table()).update_item(
             Key=upload_part_key(upload_id, part_number),
@@ -423,7 +472,10 @@ def complete_upload_part(
                 "SET #status=:completed, provider_etag=:etag, "
                 "provider_checksum=:provider_checksum REMOVE lease_expires_at"
             ),
-            ConditionExpression="#status=:uploading AND lease_owner=:owner",
+            ConditionExpression=(
+                "#status=:uploading AND lease_owner=:owner AND "
+                "checksum_sha256=:checksum AND content_length=:length"
+            ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":uploading": "uploading",
@@ -431,6 +483,8 @@ def complete_upload_part(
                 ":owner": lease_owner,
                 ":etag": provider_etag,
                 ":provider_checksum": provider_checksum,
+                ":checksum": expected_checksum_sha256,
+                ":length": content_length,
             },
         )
     except ClientError as exc:
@@ -447,7 +501,25 @@ def list_upload_parts(upload_id: str, *, table: Any | None = None) -> list[dict[
         KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}") & Key("SK").begins_with("PART#"),
         ConsistentRead=True,
     )
-    return sorted(response.get("Items", []), key=lambda item: int(item["part_number"]))
+    items = response.get("Items", [])
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    validated: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for item in items:
+        part_number = _require_positive_integer(item.get("part_number"))
+        if part_number in seen:
+            raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+        seen.add(part_number)
+        _require_canonical_sha256(item.get("checksum_sha256"))
+        _require_positive_integer(item.get("content_length"))
+        if item.get("status") == "completed":
+            _require_provider_coordinate(item.get("provider_etag"))
+            _require_provider_sha256(
+                item.get("provider_checksum"), expected_hex=item["checksum_sha256"]
+            )
+        validated.append(item)
+    return sorted(validated, key=lambda item: item["part_number"])
 
 
 def claim_staging_assembly(

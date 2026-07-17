@@ -40,6 +40,8 @@ from stoa.services.document_extraction_service import (
 UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024
 UPLOAD_SPOOL_MEMORY_BYTES = 1024 * 1024
 UPLOAD_OPERATION_LEASE_SECONDS = 120
+PROVIDER_RECONCILIATION_MAX_PAGES = 10
+PROVIDER_RECONCILIATION_MAX_ITEMS = 10_000
 
 
 def _gateway_call(
@@ -75,6 +77,49 @@ def _required_provider_coordinate(response: dict[str, Any], field: str) -> str:
     """Accept only an exact non-blank provider coordinate without coercion."""
     value = response.get(field)
     if not isinstance(value, str) or not value.strip():
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _positive_provider_integer(value: Any) -> int:
+    """Parse an exact positive integer without accepting bools or string coercion."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _canonical_sha256(value: Any) -> str:
+    """Accept only a canonical lowercase SHA-256 hex digest."""
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _provider_sha256(value: Any, *, expected_hex: str | None = None) -> str:
+    """Validate one canonical provider base64 SHA-256 acknowledgement."""
+    if not isinstance(value, str) or not value:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, TypeError):
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ) from None
+    if len(decoded) != hashlib.sha256().digest_size:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    if base64.b64encode(decoded).decode("ascii") != value:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    if expected_hex is not None and decoded.hex() != _canonical_sha256(expected_hex):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _provider_truncation(value: Any) -> bool:
+    if not isinstance(value, bool):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     return value
 
@@ -547,13 +592,19 @@ async def put_upload_chunk(
                 ChecksumSHA256=provider_checksum,
             )
         )
+        provider_etag = _required_provider_coordinate(result, "ETag")
+        acknowledged_checksum = _provider_sha256(
+            result.get("ChecksumSHA256"), expected_hex=checksum
+        )
         if not _gateway_call(
             lambda: repository.complete_upload_part(
                 upload_id,
                 part_number,
                 lease_owner,
-                provider_etag=str(result.get("ETag") or ""),
-                provider_checksum=str(result.get("ChecksumSHA256") or provider_checksum),
+                provider_etag=provider_etag,
+                provider_checksum=acknowledged_checksum,
+                expected_checksum_sha256=checksum,
+                content_length=length,
             )
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
@@ -583,41 +634,73 @@ def _reconcile_provider_part(
     settings: Settings,
     repository: Any,
 ) -> bool:
-    response = _provider_mapping(
-        lambda: s3.list_parts(
-            Bucket=settings.s3_images_bucket,
-            Key=item["staging_object_key"],
-            UploadId=item["multipart_upload_id"],
-        )
-    )
-    provider_parts = response.get("Parts", [])
-    if not isinstance(provider_parts, list):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    for provider_part in provider_parts:
-        if not isinstance(provider_part, dict):
+    request: dict[str, Any] = {
+        "Bucket": settings.s3_images_bucket,
+        "Key": item["staging_object_key"],
+        "UploadId": item["multipart_upload_id"],
+    }
+    seen: dict[int, tuple[int, str, str]] = {}
+    item_count = 0
+    previous_marker = 0
+    for _ in range(PROVIDER_RECONCILIATION_MAX_PAGES):
+        response = _provider_mapping(lambda: s3.list_parts(**request))
+        provider_parts = response.get("Parts", [])
+        if not isinstance(provider_parts, list):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        if int(provider_part.get("PartNumber", 0)) != part_number:
-            continue
-        encoded = str(provider_part.get("ChecksumSHA256") or "")
-        try:
-            provider_hex = base64.b64decode(encoded).hex()
-        except Exception:
-            provider_hex = ""
-        if int(provider_part.get("Size", -1)) != length or provider_hex != checksum:
-            _terminal_abort(item, None, s3=s3, settings=settings, repository=repository)
-            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        if not _gateway_call(
-            lambda: repository.complete_upload_part(
-                item["upload_id"],
-                part_number,
-                lease_owner,
-                provider_etag=str(provider_part.get("ETag") or ""),
-                provider_checksum=encoded,
+        for provider_part in provider_parts:
+            if not isinstance(provider_part, dict):
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            item_count += 1
+            if item_count > PROVIDER_RECONCILIATION_MAX_ITEMS:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            provider_number = _positive_provider_integer(
+                provider_part.get("PartNumber")
             )
-        ):
+            provider_size = _positive_provider_integer(provider_part.get("Size"))
+            provider_etag = _required_provider_coordinate(provider_part, "ETag")
+            encoded = _provider_sha256(provider_part.get("ChecksumSHA256"))
+            fact = (provider_size, provider_etag, encoded)
+            if provider_number in seen:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            seen[provider_number] = fact
+
+        truncated = _provider_truncation(response.get("IsTruncated", False))
+        if not truncated:
+            break
+        marker = _positive_provider_integer(response.get("NextPartNumberMarker"))
+        if marker <= previous_marker:
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        return True
-    return False
+        previous_marker = marker
+        request["PartNumberMarker"] = marker
+    else:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+    match = seen.get(part_number)
+    if match is None:
+        return False
+    provider_size, provider_etag, encoded = match
+    _provider_sha256(encoded, expected_hex=checksum)
+    if provider_size != length:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    if not _gateway_call(
+        lambda: repository.complete_upload_part(
+            item["upload_id"],
+            part_number,
+            lease_owner,
+            provider_etag=provider_etag,
+            provider_checksum=encoded,
+            expected_checksum_sha256=checksum,
+            content_length=length,
+        )
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return True
 
 
 def _terminal_abort(
@@ -629,14 +712,16 @@ def _terminal_abort(
     repository: Any,
 ) -> None:
     try:
-        repository.mark_upload_terminal(
+        transitioned = repository.mark_upload_terminal(
             item["upload_id"],
             item["owner_id"] if actor is None else actor.user_id,
             int(item["version"]),
             "multipart_reconciliation_failed",
         )
     except Exception:
-        pass
+        return
+    if transitioned is not True:
+        return
     try:
         s3.abort_multipart_upload(
             Bucket=settings.s3_images_bucket,

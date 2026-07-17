@@ -120,7 +120,7 @@ class _UploadPartProvider:
         return dict(self.response)
 
 
-def test_part_acknowledgement_commit_then_raise_reconciles_without_second_write() -> None:
+def test_put_upload_chunk_part_acknowledgement_commit_then_raise_reconciles_without_second_write() -> None:
     data = b"abc"
 
     class Repository(_PartRepository):
@@ -178,7 +178,7 @@ def test_part_acknowledgement_commit_then_raise_reconciles_without_second_write(
 
 
 @pytest.mark.parametrize("etag", [None, "", " \t", False, True, 0, 1, [], {}])
-def test_part_acknowledgement_rejects_nonblank_nonstring_etag(etag: Any) -> None:
+def test_put_upload_chunk_part_acknowledgement_rejects_nonblank_nonstring_etag(etag: Any) -> None:
     data = b"abc"
     repository = _PartRepository()
     response = {"ChecksumSHA256": _provider_checksum(data)}
@@ -217,7 +217,7 @@ def test_part_acknowledgement_rejects_nonblank_nonstring_etag(etag: Any) -> None
         {},
     ],
 )
-def test_part_acknowledgement_rejects_missing_malformed_or_unequal_checksum(
+def test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_unequal_checksum(
     checksum: Any,
 ) -> None:
     repository = _PartRepository()
@@ -258,7 +258,7 @@ class _ForbiddenTable:
         (1, '"etag"', "not-base64"),
     ],
 )
-def test_part_acknowledgement_repository_rejects_invalid_invariants_before_write(
+def test_complete_upload_part_acknowledgement_repository_rejects_invalid_invariants_before_write(
     part_number: Any, etag: Any, checksum: Any
 ) -> None:
     with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
@@ -310,7 +310,7 @@ def _reconcile(
     return adopted, repository
 
 
-def test_list_parts_paginates_with_strict_progressing_marker() -> None:
+def test_reconcile_provider_part_list_parts_paginates_with_strict_progressing_marker() -> None:
     provider = _ListPartsProvider(
         [
             {"Parts": [], "IsTruncated": True, "NextPartNumberMarker": 1},
@@ -336,7 +336,7 @@ def test_list_parts_paginates_with_strict_progressing_marker() -> None:
 
 
 @pytest.mark.parametrize("marker", [None, 0, -1, True, "1", "", [], {}])
-def test_list_parts_rejects_invalid_continuation_marker(marker: Any) -> None:
+def test_reconcile_provider_part_list_parts_rejects_invalid_continuation_marker(marker: Any) -> None:
     provider = _ListPartsProvider(
         [{"Parts": [], "IsTruncated": True, "NextPartNumberMarker": marker}]
     )
@@ -362,7 +362,9 @@ def test_list_parts_rejects_invalid_continuation_marker(marker: Any) -> None:
         ("ChecksumSHA256", "not-base64"),
     ],
 )
-def test_list_parts_rejects_malformed_success_scalars(field: str, value: Any) -> None:
+def test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars(
+    field: str, value: Any
+) -> None:
     part = {
         "PartNumber": 1,
         "Size": 3,
@@ -378,7 +380,7 @@ def test_list_parts_rejects_malformed_success_scalars(field: str, value: Any) ->
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
 
 
-def test_list_parts_rejects_duplicate_conflicting_part() -> None:
+def test_reconcile_provider_part_list_parts_rejects_duplicate_conflicting_part() -> None:
     valid = {
         "PartNumber": 1,
         "Size": 3,
