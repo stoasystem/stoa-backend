@@ -10,6 +10,7 @@ from typing import Any
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
+from stoa.config import UPLOAD_INTENT_TTL_SECONDS
 from stoa.db.dynamodb import get_table
 
 
@@ -395,6 +396,7 @@ def claim_upload_part(
         "content_length": length,
         "lease_owner": lease_owner,
         "lease_expires_at": now_epoch + 120,
+        "expires_at": now_epoch + UPLOAD_INTENT_TTL_SECONDS,
         "attempt": 1,
     }
     try:
@@ -712,9 +714,8 @@ def list_upload_cleanup_candidates(
         "FilterExpression": (
             "begins_with(PK,:upload) AND SK=:meta AND ("
             "#status IN (:invalid,:expired,:cleanup_pending) OR ("
-            "#status IN (:pending,:validating,:validated) AND expires_at<=:now) OR ("
-            "#status IN (:issuing,:assembling,:promoting) AND "
-            "operation_lease_expires_at<=:now))"
+            "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
+            "AND expires_at<=:now))"
         ),
         "ExpressionAttributeNames": {"#status": "status"},
         "ExpressionAttributeValues": {
@@ -756,9 +757,8 @@ def claim_upload_cleanup(
             ConditionExpression=(
                 "#version=:version AND ("
                 "#status IN (:invalid,:expired,:cleanup_pending) OR ("
-                "#status IN (:pending,:validating,:validated) AND expires_at<=:now) OR ("
-                "#status IN (:issuing,:assembling,:promoting) AND "
-                "operation_lease_expires_at<=:now))"
+                "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
+                "AND expires_at<=:now))"
             ),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
@@ -859,12 +859,19 @@ def complete_upload_cleanup(
                 "immutable_etag, operation_kind, operation_fence, "
                 "operation_lease_expires_at, operation_takeover_count, "
                 "cleanup_reference_cursor, cleanup_multipart_aborted, "
-                "cleanup_staging_deleted, cleanup_immutable_deleted"
+                "cleanup_staging_deleted, cleanup_immutable_deleted, "
+                "cleanup_multipart_cursor, cleanup_staging_cursor, "
+                "cleanup_immutable_cursor, cleanup_multipart_mutation_attempts, "
+                "cleanup_staging_mutation_attempts, cleanup_immutable_mutation_attempts, "
+                "cleanup_multipart_reconciliation_pages, "
+                "cleanup_staging_reconciliation_pages, "
+                "cleanup_immutable_reconciliation_pages, cleanup_part_cursor, "
+                "cleanup_parts_absent"
             ),
             ConditionExpression=(
                 "#status=:pending AND #version=:version AND "
                 "cleanup_multipart_aborted=:true AND cleanup_staging_deleted=:true AND "
-                "cleanup_immutable_deleted=:true"
+                "cleanup_immutable_deleted=:true AND cleanup_parts_absent=:true"
             ),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
@@ -901,6 +908,135 @@ def mark_cleanup_immutable_deleted(
     return _cleanup_progress(upload_id, version, "cleanup_immutable_deleted", table=table)
 
 
+def defer_cleanup_reconciliation(
+    upload_id: str,
+    version: int,
+    kind: str,
+    cursor: dict[str, str],
+    *,
+    mutation_attempted: bool,
+    pages: int,
+    table: Any | None = None,
+) -> bool:
+    """Persist one bounded provider listing continuation under its cleanup generation."""
+    if kind not in {"multipart", "staging", "immutable"}:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    if (
+        not isinstance(cursor, dict)
+        or not cursor
+        or any(not isinstance(value, str) or not value.strip() for value in cursor.values())
+    ):
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    pages = _require_positive_integer(pages)
+    mutation_increment = 1 if mutation_attempted is True else 0
+    return _cleanup_update(
+        upload_id,
+        version,
+        (
+            f"SET cleanup_{kind}_cursor=:cursor, #version=:next, "
+            f"cleanup_{kind}_mutation_attempts="
+            f"if_not_exists(cleanup_{kind}_mutation_attempts,:zero)+:mutation, "
+            f"cleanup_{kind}_reconciliation_pages="
+            f"if_not_exists(cleanup_{kind}_reconciliation_pages,:zero)+:pages"
+        ),
+        {
+            ":cursor": cursor,
+            ":next": version + 1,
+            ":zero": 0,
+            ":mutation": mutation_increment,
+            ":pages": pages,
+        },
+        table=table,
+    )
+
+
+def scrub_upload_parts(
+    upload_id: str,
+    version: int,
+    *,
+    limit: int,
+    exclusive_start_key: dict[str, Any] | None = None,
+    table: Any | None = None,
+) -> tuple[int, dict[str, Any] | None] | None:
+    """Delete one bounded PART page only while the cleanup generation is current."""
+    from boto3.dynamodb.conditions import Key
+
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 24:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    target = table or get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": Key("PK").eq(f"UPLOAD#{upload_id}")
+        & Key("SK").begins_with("PART#"),
+        "ConsistentRead": True,
+        "Limit": limit,
+    }
+    if exclusive_start_key:
+        request["ExclusiveStartKey"] = exclusive_start_key
+    response = target.query(**request)
+    items = response.get("Items", [])
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if not items:
+        return 0, None
+    operations: list[dict[str, Any]] = [
+        {
+            "ConditionCheck": {
+                "Key": upload_key(upload_id),
+                "ConditionExpression": "#status=:pending AND #version=:version",
+                "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
+                "ExpressionAttributeValues": {
+                    ":pending": "cleanup_pending",
+                    ":version": version,
+                },
+            }
+        }
+    ]
+    for item in items:
+        key = {"PK": item.get("PK"), "SK": item.get("SK")}
+        if (
+            key["PK"] != f"UPLOAD#{upload_id}"
+            or not isinstance(key["SK"], str)
+            or not key["SK"].startswith("PART#")
+        ):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        operations.append({"Delete": {"Key": key}})
+    transact(operations, table=target)
+    cursor = response.get("LastEvaluatedKey")
+    if cursor is not None and not isinstance(cursor, dict):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    return len(items), cursor
+
+
+def advance_cleanup_part_scrub(
+    upload_id: str,
+    version: int,
+    cursor: dict[str, Any] | None,
+    *,
+    table: Any | None = None,
+) -> bool:
+    if cursor is None:
+        expression = "SET #version=:next REMOVE cleanup_part_cursor"
+        values = {":next": version + 1}
+    elif isinstance(cursor, dict) and cursor:
+        expression = "SET cleanup_part_cursor=:cursor, #version=:next"
+        values = {":cursor": cursor, ":next": version + 1}
+    else:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    return _cleanup_update(upload_id, version, expression, values, table=table)
+
+
+def mark_cleanup_parts_absent(
+    upload_id: str, version: int, *, table: Any | None = None
+) -> bool:
+    return _cleanup_update(
+        upload_id,
+        version,
+        "SET cleanup_parts_absent=:true, #version=:next REMOVE cleanup_part_cursor",
+        {":true": True, ":next": version + 1},
+        table=table,
+    )
+
+
 def record_cleanup_staging_version(
     upload_id: str, version: int, version_id: str, etag: str, *, table: Any | None = None
 ) -> bool:
@@ -932,10 +1068,18 @@ def record_cleanup_immutable_version(
 def _cleanup_progress(
     upload_id: str, version: int, field: str, *, table: Any | None
 ) -> bool:
+    kind = {
+        "cleanup_multipart_aborted": "multipart",
+        "cleanup_staging_deleted": "staging",
+        "cleanup_immutable_deleted": "immutable",
+    }[field]
     return _cleanup_update(
         upload_id,
         version,
-        f"SET {field}=:true, #version=:next",
+        (
+            f"SET {field}=:true, #version=:next "
+            f"REMOVE cleanup_{kind}_cursor"
+        ),
         {":true": True, ":next": version + 1},
         table=table,
     )

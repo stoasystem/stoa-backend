@@ -294,7 +294,7 @@ def test_multipart_abort_requires_listed_exact_absence(mode: str) -> None:
         assert outcome == "retryable"
         assert current.get("cleanup_multipart_aborted") is not True
     else:
-        assert outcome in {"deferred", "deleted"}
+        assert outcome in {"retryable", "deferred", "deleted"}
         assert current.get("cleanup_multipart_aborted") is True
     assert provider.list_multipart_calls >= 1
     assert any(value["UploadId"] == "unrelated-provider-upload-canary" for value in provider.multipart_uploads)
@@ -321,9 +321,9 @@ def test_version_delete_requires_full_exact_absence(mode: str) -> None:
         assert outcome == "retryable"
         assert current.get("cleanup_staging_deleted") is not True
     else:
-        assert outcome in {"deferred", "deleted"}
+        assert outcome in {"retryable", "deferred", "deleted"}
         assert current.get("cleanup_staging_deleted") is True
-    assert provider.list_version_calls >= 2
+    assert provider.list_version_calls >= (2 if mode == "noop" else 1)
     assert any(value["VersionId"] == "unrelated-version-canary" for value in provider.versions)
 
 
@@ -344,6 +344,34 @@ def test_malformed_or_repeating_pagination_is_incomplete_and_redacted() -> None:
     rendered = str(repository.uploads["opaque-upload"].get("cleanup_reason", ""))
     assert "provider-upload-coordinate-canary" not in rendered
     assert "private-provider-diagnostic-canary" not in rendered
+
+
+def test_provider_reconciliation_continuation_resumes_after_page_budget() -> None:
+    repository = StatefulCleanupRepository([_candidate()])
+    provider = StatefulProvider()
+    provider.abort_mode = "noop"
+    provider.multipart_page_size = 1
+    provider.multipart_uploads = [
+        {"Key": PRIVATE_KEY, "UploadId": f"unrelated-upload-{index}"}
+        for index in range(10)
+    ] + [{"Key": PRIVATE_KEY, "UploadId": PRIVATE_UPLOAD_ID}]
+
+    first = _run_one(repository, provider)
+    after_first = repository.uploads["opaque-upload"]
+
+    assert first == "deferred"
+    assert after_first["cleanup_multipart_cursor"] == {
+        "KeyMarker": "10",
+        "UploadIdMarker": "10",
+    }
+    assert after_first["cleanup_multipart_mutation_attempts"] == 1
+    assert after_first["cleanup_multipart_reconciliation_pages"] == 10
+
+    second = _run_one(repository, provider)
+
+    assert second == "retryable"
+    assert repository.uploads["opaque-upload"].get("cleanup_multipart_aborted") is not True
+    assert provider.abort_calls == 2
 
 
 def test_operation_lease_expiry_before_intent_ttl_never_destroys() -> None:

@@ -3007,13 +3007,27 @@ class _CleanupS3:
 
     def delete_object(self, Bucket, Key, VersionId):
         if self.fail:
+            self.versions.setdefault(Key, []).append(
+                {"Key": Key, "VersionId": VersionId, "ETag": "retained-etag"}
+            )
             raise RuntimeError("provider payload key-canary")
         self.deleted.append((Bucket, Key, VersionId))
+        self.versions[Key] = [
+            value
+            for value in self.versions.get(Key, [])
+            if value.get("VersionId") != VersionId
+        ]
 
     def abort_multipart_upload(self, Bucket, Key, UploadId):
         if self.fail:
+            self.multipart_uploads.append({"Key": Key, "UploadId": UploadId})
             raise RuntimeError("provider payload key-canary")
         self.aborted.append((Bucket, Key, UploadId))
+        self.multipart_uploads = [
+            value
+            for value in self.multipart_uploads
+            if not (value.get("Key") == Key and value.get("UploadId") == UploadId)
+        ]
 
     def list_multipart_uploads(self, **kwargs):
         return {"Uploads": list(self.multipart_uploads), "IsTruncated": False}
@@ -3118,14 +3132,14 @@ def test_validated_cleanup_deletes_staging_and_immutable_exact_versions_before_c
 
 
 def test_stale_operation_cleanup_recovers_exact_targets_and_preserves_unrelated() -> None:
-    issuing = _cleanup_upload("issuing", "issuing", 2_000_000_000)
+    issuing = _cleanup_upload("issuing", "issuing", 1)
     issuing.update(
         operation_kind="staging_issuance",
         operation_fence="issuance-fence",
         operation_lease_expires_at=1,
     )
     issuing.pop("staging_version_id")
-    assembling = _cleanup_upload("assembling", "assembling", 2_000_000_000)
+    assembling = _cleanup_upload("assembling", "assembling", 1)
     assembling.update(
         operation_kind="staging_assembly",
         operation_fence="assembly-fence",
@@ -3134,7 +3148,7 @@ def test_stale_operation_cleanup_recovers_exact_targets_and_preserves_unrelated(
         multipart_upload_id="completed-upload",
     )
     assembling.pop("staging_version_id")
-    promoting = _cleanup_upload("promoting", "promoting", 2_000_000_000)
+    promoting = _cleanup_upload("promoting", "promoting", 1)
     promoting.update(
         operation_kind="immutable_promotion",
         operation_fence="promotion-fence",
@@ -3248,7 +3262,7 @@ def test_cleanup_delete_failure_stays_unusable_retryable_and_redacted() -> None:
 
 
 def test_no_false_cleanup_complete_when_assembly_version_is_unproven() -> None:
-    upload = _cleanup_upload("unproven-assembly", "assembling", 2_000_000_000)
+    upload = _cleanup_upload("unproven-assembly", "assembling", 1)
     upload.update(
         operation_kind="staging_assembly",
         operation_fence="assembly-fence-canary",
@@ -3313,7 +3327,7 @@ def test_cleanup_batch_candidate_isolation_continues_after_first_failure(
     }:
         first.update(
             status="assembling",
-            expires_at=2_000_000_000,
+                expires_at=1,
             operation_kind="staging_assembly",
             operation_fence="first-private-fence-canary",
             operation_lease_expires_at=1,
@@ -3405,6 +3419,7 @@ def test_cleanup_batch_candidate_isolation_continues_after_first_failure(
 
         def abort_multipart_upload(self, Bucket, Key, UploadId):
             if failure_stage == "abort_failure" and Key == first["staging_object_key"]:
+                self.multipart_uploads.append({"Key": Key, "UploadId": UploadId})
                 raise RuntimeError(
                     "provider-abort-upload-first-private-diagnostic-canary"
                 )
@@ -3412,6 +3427,9 @@ def test_cleanup_batch_candidate_isolation_continues_after_first_failure(
 
         def delete_object(self, Bucket, Key, VersionId):
             if failure_stage == "delete_failure" and Key == first["staging_object_key"]:
+                self.versions.setdefault(Key, []).append(
+                    {"Key": Key, "VersionId": VersionId, "ETag": "retained-etag"}
+                )
                 raise RuntimeError(
                     "provider-delete-version-first-private-diagnostic-canary"
                 )

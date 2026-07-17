@@ -44,6 +44,8 @@ PROVIDER_RECONCILIATION_MAX_PAGES = 10
 PROVIDER_RECONCILIATION_MAX_ITEMS = 10_000
 PROVIDER_VERSION_MAX_PAGES = 10
 PROVIDER_VERSION_MAX_ITEMS = 10_000
+CLEANUP_RECONCILIATION_MAX_PAGES = 10
+CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
 
 
 def _gateway_call(
@@ -157,6 +159,12 @@ def cleanup_upload_intent(
     """Safely advance one terminal/expired upload toward idempotent deletion."""
     status = str(candidate.get("status") or "")
     now_epoch = int(now.timestamp())
+    if status not in {"invalid", "expired", "cleanup_pending"} and int(
+        candidate.get("expires_at", 0)
+    ) > now_epoch:
+        # The short operation lease authorizes takeover/reconciliation only;
+        # it never shortens the owner-visible 30-minute intent lifetime.
+        return "skipped"
     reason = (
         "invalid"
         if status == "invalid"
@@ -208,13 +216,35 @@ def cleanup_upload_intent(
         operation_kind = str(current.get("operation_kind") or "")
 
         if not current.get("cleanup_multipart_aborted"):
-            try:
-                if multipart_id and staging_key and not staging_version:
+            if multipart_id and staging_key and not staging_version:
+                try:
                     _abort_multipart_exact(s3, settings, staging_key, multipart_id)
-                elif staging_key and operation_kind == "staging_issuance":
-                    _abort_all_exact_key_multiparts(s3, settings, staging_key)
-            except Exception as exc:
-                if not _provider_target_absent(exc):
+                except Exception:
+                    # Abort may have committed before its response was lost. Only
+                    # the following exact listing decides whether progress is safe.
+                    pass
+                absent, cursor, pages = _exact_multipart_absence(
+                    s3,
+                    settings,
+                    staging_key,
+                    multipart_id,
+                    cursor=current.get("cleanup_multipart_cursor"),
+                )
+                if cursor:
+                    if not repository.defer_cleanup_reconciliation(
+                        str(current["upload_id"]),
+                        version,
+                        "multipart",
+                        cursor,
+                        mutation_attempted=True,
+                        pages=pages,
+                    ):
+                        return "retryable"
+                    return "deferred"
+                if not absent:
+                    return "retryable"
+            elif staging_key and operation_kind == "staging_issuance":
+                if not _abort_all_exact_key_multiparts(s3, settings, staging_key):
                     return "retryable"
             if not repository.mark_cleanup_multipart_aborted(str(current["upload_id"]), version):
                 return "retryable"
@@ -247,9 +277,29 @@ def cleanup_upload_intent(
                         Key=staging_key,
                         VersionId=staging_version,
                     )
-                except Exception as exc:
-                    if not _provider_target_absent(exc):
+                except Exception:
+                    # A lost delete response is reconciled by exact listing.
+                    pass
+                absent, cursor, pages = _exact_version_absence(
+                    s3,
+                    settings,
+                    staging_key,
+                    staging_version,
+                    cursor=current.get("cleanup_staging_cursor"),
+                )
+                if cursor:
+                    if not repository.defer_cleanup_reconciliation(
+                        str(current["upload_id"]),
+                        version,
+                        "staging",
+                        cursor,
+                        mutation_attempted=True,
+                        pages=pages,
+                    ):
                         return "retryable"
+                    return "deferred"
+                if not absent:
+                    return "retryable"
             if not repository.mark_cleanup_staging_deleted(str(current["upload_id"]), version):
                 return "retryable"
             version += 1
@@ -281,13 +331,58 @@ def cleanup_upload_intent(
                         Key=immutable_key,
                         VersionId=immutable_version,
                     )
-                except Exception as exc:
-                    if not _provider_target_absent(exc):
+                except Exception:
+                    pass
+                absent, cursor, pages = _exact_version_absence(
+                    s3,
+                    settings,
+                    immutable_key,
+                    immutable_version,
+                    cursor=current.get("cleanup_immutable_cursor"),
+                )
+                if cursor:
+                    if not repository.defer_cleanup_reconciliation(
+                        str(current["upload_id"]),
+                        version,
+                        "immutable",
+                        cursor,
+                        mutation_attempted=True,
+                        pages=pages,
+                    ):
                         return "retryable"
+                    return "deferred"
+                if not absent:
+                    return "retryable"
             if not repository.mark_cleanup_immutable_deleted(str(current["upload_id"]), version):
                 return "retryable"
             version += 1
             current["cleanup_immutable_deleted"] = True
+
+        scrub_parts = getattr(repository, "scrub_upload_parts", None)
+        if callable(scrub_parts) and not current.get("cleanup_parts_absent"):
+            scrubbed = scrub_parts(
+                str(current["upload_id"]),
+                version,
+                limit=24,
+                exclusive_start_key=current.get("cleanup_part_cursor"),
+            )
+            if not isinstance(scrubbed, tuple) or len(scrubbed) != 2:
+                return "retryable"
+            removed, part_cursor = scrubbed
+            if isinstance(removed, bool) or not isinstance(removed, int) or removed < 0:
+                return "retryable"
+            if removed:
+                if not repository.advance_cleanup_part_scrub(
+                    str(current["upload_id"]), version, part_cursor
+                ):
+                    return "retryable"
+                return "deferred"
+            if not repository.mark_cleanup_parts_absent(
+                str(current["upload_id"]), version
+            ):
+                return "retryable"
+            version += 1
+            current["cleanup_parts_absent"] = True
 
         if not repository.complete_upload_cleanup(
             str(current["upload_id"]), version, now.isoformat()
@@ -315,32 +410,164 @@ def _abort_multipart_exact(
     )
 
 
-def _abort_all_exact_key_multiparts(s3: Any, settings: Settings, key: str) -> None:
+def _abort_all_exact_key_multiparts(s3: Any, settings: Settings, key: str) -> bool:
+    exact = _exact_key_multipart_ids(s3, settings, key)
+    for multipart_upload_id in exact:
+        try:
+            _abort_multipart_exact(s3, settings, key, multipart_upload_id)
+        except Exception:
+            pass
+    return not _exact_key_multipart_ids(s3, settings, key)
+
+
+def _cleanup_cursor_pair(
+    cursor: Any, first: str, second: str
+) -> tuple[str, str] | None:
+    if cursor is None:
+        return None
+    if not isinstance(cursor, dict) or set(cursor) != {first, second}:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return (
+        _required_provider_coordinate(cursor, first),
+        _required_provider_coordinate(cursor, second),
+    )
+
+
+def _exact_multipart_absence(
+    s3: Any,
+    settings: Settings,
+    key: str,
+    multipart_upload_id: str,
+    *,
+    cursor: Any = None,
+) -> tuple[bool, dict[str, str] | None, int]:
+    """Return absence only after every validated listing page was visited."""
     request: dict[str, Any] = {
         "Bucket": settings.s3_images_bucket,
         "Prefix": key,
         "MaxUploads": 1000,
     }
-    for _ in range(10):
+    previous = _cleanup_cursor_pair(cursor, "KeyMarker", "UploadIdMarker")
+    if previous:
+        request["KeyMarker"], request["UploadIdMarker"] = previous
+    item_count = 0
+    for page in range(1, CLEANUP_RECONCILIATION_MAX_PAGES + 1):
         response = _provider_mapping(lambda: s3.list_multipart_uploads(**request))
         uploads = response.get("Uploads", [])
         if not isinstance(uploads, list) or any(
             not isinstance(upload, dict) for upload in uploads
         ):
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            )
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         for upload in uploads:
-            if upload.get("Key") == key:
-                multipart_upload_id = _required_provider_coordinate(
-                    upload, "UploadId"
-                )
-                _abort_multipart_exact(s3, settings, key, multipart_upload_id)
-        if not response.get("IsTruncated"):
-            return
-        request["KeyMarker"] = response.get("NextKeyMarker")
-        request["UploadIdMarker"] = response.get("NextUploadIdMarker")
-    raise RuntimeError("bounded multipart recovery exhausted")
+            item_count += 1
+            if item_count > CLEANUP_RECONCILIATION_MAX_ITEMS:
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+            listed_key = _required_provider_coordinate(upload, "Key")
+            listed_upload_id = _required_provider_coordinate(upload, "UploadId")
+            if listed_key == key and listed_upload_id == multipart_upload_id:
+                return False, None, page
+        if not _provider_truncation(response.get("IsTruncated", False)):
+            return True, None, page
+        markers = (
+            _required_provider_coordinate(response, "NextKeyMarker"),
+            _required_provider_coordinate(response, "NextUploadIdMarker"),
+        )
+        if markers == previous:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        previous = markers
+        request["KeyMarker"], request["UploadIdMarker"] = markers
+    assert previous is not None
+    return False, {"KeyMarker": previous[0], "UploadIdMarker": previous[1]}, page
+
+
+def _exact_key_multipart_ids(s3: Any, settings: Settings, key: str) -> list[str]:
+    request: dict[str, Any] = {
+        "Bucket": settings.s3_images_bucket,
+        "Prefix": key,
+        "MaxUploads": 1000,
+    }
+    exact: list[str] = []
+    previous: tuple[str, str] | None = None
+    item_count = 0
+    for _ in range(CLEANUP_RECONCILIATION_MAX_PAGES):
+        response = _provider_mapping(lambda: s3.list_multipart_uploads(**request))
+        uploads = response.get("Uploads", [])
+        if not isinstance(uploads, list) or any(
+            not isinstance(upload, dict) for upload in uploads
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        for upload in uploads:
+            item_count += 1
+            if item_count > CLEANUP_RECONCILIATION_MAX_ITEMS:
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+            listed_key = _required_provider_coordinate(upload, "Key")
+            listed_upload_id = _required_provider_coordinate(upload, "UploadId")
+            if listed_key == key:
+                exact.append(listed_upload_id)
+        if not _provider_truncation(response.get("IsTruncated", False)):
+            return exact
+        markers = (
+            _required_provider_coordinate(response, "NextKeyMarker"),
+            _required_provider_coordinate(response, "NextUploadIdMarker"),
+        )
+        if markers == previous:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        previous = markers
+        request["KeyMarker"], request["UploadIdMarker"] = markers
+    raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+
+def _exact_version_absence(
+    s3: Any,
+    settings: Settings,
+    key: str,
+    version_id: str,
+    *,
+    cursor: Any = None,
+) -> tuple[bool, dict[str, str] | None, int]:
+    """Prove one exact version absent across versions and delete markers."""
+    request: dict[str, Any] = {
+        "Bucket": settings.s3_images_bucket,
+        "Prefix": key,
+        "MaxKeys": 1000,
+    }
+    previous = _cleanup_cursor_pair(cursor, "KeyMarker", "VersionIdMarker")
+    if previous:
+        request["KeyMarker"], request["VersionIdMarker"] = previous
+    item_count = 0
+    for page in range(1, CLEANUP_RECONCILIATION_MAX_PAGES + 1):
+        response = _provider_mapping(lambda: s3.list_object_versions(**request))
+        versions = response.get("Versions", [])
+        delete_markers = response.get("DeleteMarkers", [])
+        if (
+            not isinstance(versions, list)
+            or any(not isinstance(value, dict) for value in versions)
+            or not isinstance(delete_markers, list)
+            or any(not isinstance(value, dict) for value in delete_markers)
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        for value in [*versions, *delete_markers]:
+            item_count += 1
+            if item_count > CLEANUP_RECONCILIATION_MAX_ITEMS:
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+            listed_key = _required_provider_coordinate(value, "Key")
+            listed_version = _required_provider_coordinate(value, "VersionId")
+            if listed_key == key and listed_version == version_id:
+                return False, None, page
+        for value in versions:
+            _required_provider_coordinate(value, "ETag")
+        if not _provider_truncation(response.get("IsTruncated", False)):
+            return True, None, page
+        markers = (
+            _required_provider_coordinate(response, "NextKeyMarker"),
+            _required_provider_coordinate(response, "NextVersionIdMarker"),
+        )
+        if markers == previous:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        previous = markers
+        request["KeyMarker"], request["VersionIdMarker"] = markers
+    assert previous is not None
+    return False, {"KeyMarker": previous[0], "VersionIdMarker": previous[1]}, page
 
 
 def _matching_exact_version(
