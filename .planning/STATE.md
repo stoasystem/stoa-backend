@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 473-16-PLAN.md
-last_updated: "2026-07-17T08:58:56.056Z"
+status: verifying
+stopped_at: Completed 473-17-PLAN.md
+last_updated: "2026-07-17T09:11:02.560Z"
 last_activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 39
-  completed_plans: 38
-  percent: 10
+  completed_plans: 39
+  percent: 20
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
 Plan: 17 of 17
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 
 ## Accumulated Context
@@ -104,8 +104,8 @@ Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 
 ## Session
 
-**Last Date:** 2026-07-17T08:58:25.916Z
-**Stopped At:** Completed 473-16-PLAN.md
+**Last Date:** 2026-07-17T09:11:02.555Z
+**Stopped At:** Completed 473-17-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -150,6 +150,7 @@ Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 | Phase 473 P14 | 10 min | 2 tasks | 3 files |
 | Phase 473 P15 | 15 min | 2 tasks | 5 files |
 | Phase 473 P16 | 12 min | 2 tasks | 5 files |
+| Phase 473 P17 | 8 min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -209,3 +210,5 @@ Last activity: 2026-07-17 -- Plan 473-16 completed; Plan 473-17 ready
 - [Phase 473]: Unexpected candidate-local cleanup failures become coordinate-free retryable outcomes, while failure to list the global candidate page still propagates. — Per-item isolation preserves bounded progress without disguising a global scan failure or exposing private storage coordinates and diagnostics.
 - [Phase 473]: Provider Body ownership begins immediately after a non-None Body is returned; read and close properties are each inspected inside best-effort boundaries so cleanup cannot replace the primary outcome. — Preserves stable validation and extraction semantics while deterministically releasing provider resources.
 - [Phase 473]: Every conversation command repository call crosses one classifier; known semantic outcomes remain distinct while generic transport becomes a redacted bounded retry and ambiguous commits reread the original fingerprinted command. — Preserves concealment and exact replay while preventing raw repository transport failures and duplicate effects.
+- [Phase 473]: The clean Plan 473-16 closeout SHA bc61107b920b158201ce4927485986d43aac59c8 is the immutable Phase 473 evidence candidate. — Source, tests, and the checked authorization inventory already reproduced without change, so an artificial empty candidate commit was unnecessary.
+- [Phase 473]: External S3, deployed scheduler/IaC, and production/deployed log observations remain NOT RUN under Phases 479/480. — Local fakes and captured local logs cannot establish provider, deployed infrastructure, or production observability proof.
