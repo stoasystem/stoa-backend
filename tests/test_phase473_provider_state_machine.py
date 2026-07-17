@@ -10,6 +10,7 @@ from io import BytesIO
 from typing import Any
 
 import pytest
+from botocore.exceptions import ClientError
 
 from stoa.config import DOCUMENT_MAX_BYTES, Settings
 from stoa.db.repositories import attachment_repo
@@ -572,16 +573,13 @@ class _PromotionProvider:
     def head_object(self, **kwargs: Any) -> dict[str, Any]:
         self.head_requests.append(dict(kwargs))
         if kwargs["Key"].startswith("objects/"):
+            assert self.put_request is not None
             return {
                 "VersionId": "immutable-version-1",
                 "ETag": '"immutable-etag"',
                 "ContentLength": len(self.data),
                 "ChecksumSHA256": _provider_checksum(self.data),
-                "Metadata": {
-                    "content-sha256": hashlib.sha256(self.data).hexdigest(),
-                    "upload-id": "upload-1",
-                    "purpose": "conversation_attachment",
-                },
+                "Metadata": dict(self.put_request["Metadata"]),
             }
         raise AssertionError("staging absence must be represented explicitly")
 
@@ -626,6 +624,36 @@ def test_immutable_promotion_wrong_returned_checksum_never_records_success() -> 
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.recorded is None
+
+
+def test_immutable_promotion_conditional_conflict_retains_exact_recovery_fence() -> None:
+    repository = _PromotionRepository()
+
+    class ConflictProvider(_PromotionProvider):
+        def put_object(self, **kwargs: Any) -> dict[str, Any]:
+            assert kwargs["IfNoneMatch"] == "*"
+            self.put_request = dict(kwargs)
+            raise ClientError(
+                {"Error": {"Code": "PreconditionFailed", "Message": "private"}},
+                "PutObject",
+            )
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            repository.item,
+            _actor(),
+            s3=ConflictProvider(b"abc"),
+            settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            repository=repository,
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "promoting"
+    assert repository.item["operation_fence"]
+    assert repository.item["immutable_object_key"]
+    assert repository.recorded is None
+    assert "private" not in str(captured.value)
 
 
 def test_immutable_promotion_retains_staging_coordinates_until_exact_absence_is_proved() -> None:

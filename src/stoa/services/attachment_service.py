@@ -42,6 +42,8 @@ UPLOAD_SPOOL_MEMORY_BYTES = 1024 * 1024
 UPLOAD_OPERATION_LEASE_SECONDS = 120
 PROVIDER_RECONCILIATION_MAX_PAGES = 10
 PROVIDER_RECONCILIATION_MAX_ITEMS = 10_000
+PROVIDER_VERSION_MAX_PAGES = 10
+PROVIDER_VERSION_MAX_ITEMS = 10_000
 
 
 def _gateway_call(
@@ -351,6 +353,7 @@ def _matching_exact_version(
     metadata_value: str,
 ) -> tuple[str, str] | None:
     versions = _exact_object_versions(s3, settings, key)
+    matches: list[tuple[str, str]] = []
     for version in versions:
         version_id = _required_provider_coordinate(version, "VersionId")
         head = _provider_mapping(
@@ -358,15 +361,27 @@ def _matching_exact_version(
                 Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
             )
         )
-        if (
-            int(head.get("ContentLength", -1)) == expected_length
-            and str((head.get("Metadata") or {}).get(metadata_name) or "") == metadata_value
-        ):
+        metadata = head.get("Metadata")
+        if not isinstance(metadata, dict):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        content_length = head.get("ContentLength")
+        if isinstance(content_length, bool) or not isinstance(content_length, int):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        if content_length == expected_length and metadata.get(metadata_name) == metadata_value:
             etag_source = head if head.get("ETag") is not None else version
-            return version_id, _required_provider_coordinate(etag_source, "ETag")
-    if versions:
+            matches.append(
+                (version_id, _required_provider_coordinate(etag_source, "ETag"))
+            )
+    if len(matches) == 1:
+        return matches[0]
+    if versions or len(matches) > 1:
         # A never-reused exact key with an unverified version is not proof of
-        # absence. Retain the recovery fence for a later safe reconciliation.
+        # absence, and multiple exact candidates are ambiguous. Retain the
+        # recovery fence for a later safe reconciliation.
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     return None
 
@@ -875,15 +890,107 @@ def _part_ledger_digest(parts: list[dict[str, Any]]) -> str:
 
 
 def _exact_object_versions(s3: Any, settings: Settings, key: str) -> list[dict[str, Any]]:
+    request: dict[str, Any] = {
+        "Bucket": settings.s3_images_bucket,
+        "Prefix": key,
+        "MaxKeys": 1000,
+    }
+    exact: list[dict[str, Any]] = []
+    item_count = 0
+    previous_markers: tuple[str, str] | None = None
+    for _ in range(PROVIDER_VERSION_MAX_PAGES):
+        response = _provider_mapping(lambda: s3.list_object_versions(**request))
+        versions = response.get("Versions", [])
+        delete_markers = response.get("DeleteMarkers", [])
+        if (
+            not isinstance(versions, list)
+            or any(not isinstance(value, dict) for value in versions)
+            or not isinstance(delete_markers, list)
+            or any(not isinstance(value, dict) for value in delete_markers)
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        for value in [*versions, *delete_markers]:
+            item_count += 1
+            if item_count > PROVIDER_VERSION_MAX_ITEMS:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            _required_provider_coordinate(value, "Key")
+            _required_provider_coordinate(value, "VersionId")
+        for value in versions:
+            _required_provider_coordinate(value, "ETag")
+            if value["Key"] == key:
+                exact.append(value)
+        truncated = _provider_truncation(response.get("IsTruncated", False))
+        if not truncated:
+            return exact
+        markers = (
+            _required_provider_coordinate(response, "NextKeyMarker"),
+            _required_provider_coordinate(response, "NextVersionIdMarker"),
+        )
+        if markers == previous_markers:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        previous_markers = markers
+        request["KeyMarker"], request["VersionIdMarker"] = markers
+    raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+
+def _exact_object_digest(
+    s3: Any,
+    settings: Settings,
+    key: str,
+    version_id: str,
+    *,
+    maximum: int,
+) -> tuple[int, str]:
+    """Read one exact version through a bounded stream and return its byte proof."""
     response = _provider_mapping(
-        lambda: s3.list_object_versions(
-            Bucket=settings.s3_images_bucket, Prefix=key, MaxKeys=1000
+        lambda: s3.get_object(
+            Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
         )
     )
-    versions = response.get("Versions", [])
-    if not isinstance(versions, list) or any(not isinstance(value, dict) for value in versions):
+    body = response.get("Body")
+    if body is None:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    return [value for value in versions if value.get("Key") == key]
+    length = 0
+    digest = hashlib.sha256()
+    try:
+        read = getattr(body, "read", None)
+        if not callable(read):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        while True:
+            chunk = read(min(UPLOAD_SPOOL_MEMORY_BYTES, maximum + 1 - length))
+            if not chunk:
+                break
+            if not isinstance(chunk, bytes):
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            length += len(chunk)
+            if length > maximum:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            digest.update(chunk)
+    finally:
+        _close_provider_body(body)
+    return length, digest.hexdigest()
+
+
+def _exact_version_absent(
+    s3: Any, settings: Settings, key: str, version_id: str
+) -> bool:
+    try:
+        s3.head_object(
+            Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+        )
+    except Exception as exc:
+        return _provider_target_absent(exc)
+    return False
 
 
 def _recover_staging_assembly(
@@ -906,40 +1013,36 @@ def _recover_staging_assembly(
     )
     fence = str(item["operation_fence"])
     try:
-        for version in _exact_object_versions(s3, settings, key):
-            version_id = _required_provider_coordinate(version, "VersionId")
-            head = _provider_mapping(
-                lambda: s3.head_object(
-                    Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
+        matched = _matching_exact_version(
+            s3,
+            settings,
+            key,
+            expected_length=_positive_provider_integer(item.get("expected_size")),
+            metadata_name="upload-id",
+            metadata_value=_required_provider_coordinate(item, "upload_id"),
+        )
+        if matched is not None:
+            version_id, etag = matched
+            if _gateway_call(
+                lambda: repository.recover_staging_completion(
+                    item["upload_id"],
+                    actor.user_id,
+                    int(item["version"]),
+                    operation_fence=fence,
+                    staging_version_id=version_id,
+                    staging_etag=etag,
                 )
-            )
-            metadata = head.get("Metadata") or {}
-            if (
-                int(head.get("ContentLength", -1)) == int(item.get("expected_size", -2))
-                and metadata.get("upload-id") == item.get("upload_id")
             ):
-                etag_source = head if head.get("ETag") is not None else version
-                etag = _required_provider_coordinate(etag_source, "ETag")
-                if _gateway_call(
-                    lambda: repository.recover_staging_completion(
-                        item["upload_id"],
-                        actor.user_id,
-                        int(item["version"]),
-                        operation_fence=fence,
-                        staging_version_id=version_id,
-                        staging_etag=etag,
-                    )
-                ):
-                    return {
-                        **item,
-                        "status": "validating",
-                        "version": int(item["version"]) + 1,
-                        "staging_version_id": version_id,
-                        "staging_etag": etag,
-                    }
-                raise AttachmentDecisionError(
-                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-                )
+                return {
+                    **item,
+                    "status": "validating",
+                    "version": int(item["version"]) + 1,
+                    "staging_version_id": version_id,
+                    "staging_etag": etag,
+                }
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
     except AttachmentDecisionError:
         raise
     except Exception:
@@ -966,35 +1069,40 @@ def _recover_immutable_promotion(
     )
     fence = str(item["operation_fence"])
     try:
-        for version in _exact_object_versions(s3, settings, key):
-            version_id = _required_provider_coordinate(version, "VersionId")
-            head = _provider_mapping(
-                lambda: s3.head_object(
-                    Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
-                )
+        expected_length = _positive_provider_integer(item.get("content_length"))
+        expected_checksum = _canonical_sha256(expected_checksum)
+        matched = _matching_exact_version(
+            s3,
+            settings,
+            key,
+            expected_length=expected_length,
+            metadata_name="content-sha256",
+            metadata_value=expected_checksum,
+        )
+        if matched is not None:
+            version_id, etag = matched
+            actual_length, actual_checksum = _exact_object_digest(
+                s3, settings, key, version_id, maximum=expected_length
             )
-            metadata = head.get("Metadata") or {}
-            if (
-                int(head.get("ContentLength", -1)) == int(item.get("content_length", -2))
-                and metadata.get("content-sha256") == expected_checksum
-            ):
-                etag_source = head if head.get("ETag") is not None else version
-                etag = _required_provider_coordinate(etag_source, "ETag")
-                if _gateway_call(
-                    lambda: repository.record_immutable_version(
-                        item["upload_id"],
-                        actor.user_id,
-                        int(item["version"]),
-                        operation_fence=fence,
-                        immutable_version_id=version_id,
-                        immutable_etag=etag,
-                        validated_at=now.isoformat(),
-                    )
-                ):
-                    return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
+            if actual_length != expected_length or actual_checksum != expected_checksum:
                 raise AttachmentDecisionError(
                     AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
                 )
+            if _gateway_call(
+                lambda: repository.record_immutable_version(
+                    item["upload_id"],
+                    actor.user_id,
+                    int(item["version"]),
+                    operation_fence=fence,
+                    immutable_version_id=version_id,
+                    immutable_etag=etag,
+                    validated_at=now.isoformat(),
+                )
+            ):
+                return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
     except AttachmentDecisionError:
         raise
     except Exception:
@@ -1110,6 +1218,17 @@ def _validate_and_promote_completed(
                         AttachmentErrorCode.UPLOAD_NOT_FOUND
                     )
                 promotion_started = bool(begin)
+                provider_checksum = base64.b64encode(
+                    bytes.fromhex(checksum)
+                ).decode("ascii")
+                immutable_metadata = {
+                    "content-sha256": checksum,
+                    "upload-id": str(item["upload_id"]),
+                    "operation-generation": str(validating_version + 1),
+                    "content-length": str(detected.size_bytes),
+                    "detected-type": detected.media_type,
+                    "purpose": str(item.get("expected_kind") or ""),
+                }
                 promoted = _provider_mapping(
                     lambda: s3.put_object(
                         Bucket=settings.s3_images_bucket,
@@ -1118,16 +1237,65 @@ def _validate_and_promote_completed(
                         ServerSideEncryption="AES256",
                         Body=spool,
                         ContentLength=detected.size_bytes,
-                        ChecksumSHA256=base64.b64encode(
-                            bytes.fromhex(checksum)
-                        ).decode("ascii"),
-                        Metadata={"content-sha256": checksum},
+                        ChecksumSHA256=provider_checksum,
+                        Metadata=immutable_metadata,
+                        IfNoneMatch="*",
                     )
                 )
                 immutable_version = _required_provider_coordinate(
                     promoted, "VersionId"
                 )
                 immutable_etag = _required_provider_coordinate(promoted, "ETag")
+                returned_checksum = promoted.get("ChecksumSHA256")
+                if returned_checksum is not None:
+                    _provider_sha256(returned_checksum, expected_hex=checksum)
+                if promotion_started:
+                    head = _provider_mapping(
+                        lambda: s3.head_object(
+                            Bucket=settings.s3_images_bucket,
+                            Key=immutable_key,
+                            VersionId=immutable_version,
+                        )
+                    )
+                    head_version = head.get("VersionId")
+                    if head_version is not None and head_version != immutable_version:
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                        )
+                    if _required_provider_coordinate(head, "ETag") != immutable_etag:
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                        )
+                    head_length = head.get("ContentLength")
+                    if (
+                        isinstance(head_length, bool)
+                        or not isinstance(head_length, int)
+                        or head_length != detected.size_bytes
+                    ):
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                        )
+                    head_checksum = head.get("ChecksumSHA256")
+                    if head_checksum is not None:
+                        _provider_sha256(head_checksum, expected_hex=checksum)
+                    if head.get("Metadata") != immutable_metadata:
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                        )
+                    verified_length, verified_checksum = _exact_object_digest(
+                        s3,
+                        settings,
+                        immutable_key,
+                        immutable_version,
+                        maximum=detected.size_bytes,
+                    )
+                    if (
+                        verified_length != detected.size_bytes
+                        or verified_checksum != checksum
+                    ):
+                        raise AttachmentDecisionError(
+                            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                        )
                 record = getattr(repository, "record_immutable_version", None)
                 persisted = _gateway_call(
                     lambda: (
@@ -1172,9 +1340,12 @@ def _validate_and_promote_completed(
                 Key=item["staging_object_key"],
                 VersionId=staging_version,
             )
-            repository.clear_staging_coordinates(
-                item["upload_id"], actor.user_id, validated_version
-            )
+            if _exact_version_absent(
+                s3, settings, str(item["staging_object_key"]), staging_version
+            ):
+                repository.clear_staging_coordinates(
+                    item["upload_id"], actor.user_id, validated_version
+                )
         except Exception:
             # The exact staging version remains server-only and cleanup-eligible.
             pass

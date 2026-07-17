@@ -534,6 +534,10 @@ def claim_staging_assembly(
     part_ledger_digest: str,
     table: Any | None = None,
 ) -> bool:
+    operation_fence = _require_provider_coordinate(operation_fence)
+    multipart_upload_id = _require_provider_coordinate(multipart_upload_id)
+    ordered_part_count = _require_positive_integer(ordered_part_count)
+    part_ledger_digest = _require_canonical_sha256(part_ledger_digest)
     return _transition(
         upload_id,
         owner_id,
@@ -585,6 +589,7 @@ def recover_staging_completion(
     staging_etag: str,
     table: Any | None = None,
 ) -> bool:
+    operation_fence = _require_provider_coordinate(operation_fence)
     staging_version_id = _require_provider_coordinate(staging_version_id)
     staging_etag = _require_provider_coordinate(staging_etag)
     return _fenced_transition(
@@ -1691,6 +1696,11 @@ def begin_immutable_promotion(
     table: Any | None = None,
 ) -> bool:
     """Fence and persist the exact immutable target before PutObject."""
+    operation_fence = _require_provider_coordinate(operation_fence)
+    immutable_object_key = _require_provider_coordinate(immutable_object_key)
+    content_sha256 = _require_canonical_sha256(content_sha256)
+    content_length = _require_positive_integer(content_length)
+    detected_type = _require_provider_coordinate(detected_type)
     return _transition(
         upload_id,
         owner_id,
@@ -1725,6 +1735,7 @@ def record_immutable_version(
     validated_at: str,
     table: Any | None = None,
 ) -> bool:
+    operation_fence = _require_provider_coordinate(operation_fence)
     immutable_version_id = _require_provider_coordinate(immutable_version_id)
     immutable_etag = _require_provider_coordinate(immutable_etag)
     return _fenced_transition(
