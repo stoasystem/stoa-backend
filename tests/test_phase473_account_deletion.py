@@ -460,3 +460,151 @@ def test_lost_trigger_coroutine_is_safe_to_run_after_response_commit() -> None:
     _repository, _service, job = _deletion_modules()
     function = getattr(job, "continue_deletion_command")
     assert asyncio.run(function("missing-command", service=None)) is None
+
+
+@pytest.mark.parametrize(
+    "cursor",
+    [
+        {"PK": "only-pk"},
+        {"PK": "", "SK": "META"},
+        {"PK": "CURSOR#1", "SK": 7},
+    ],
+)
+def test_private_scan_rejects_malformed_progress(cursor: dict[str, Any]) -> None:
+    repository, _service, _job = _deletion_modules()
+
+    class _Malformed:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": [], "LastEvaluatedKey": cursor}
+
+    with pytest.raises(repository.AccountDeletionConflict):
+        repository.scan_owned_private_rows(STUDENT_ID, table=_Malformed())
+
+
+def test_private_scan_accepts_last_item_cursor_but_rejects_repeated_page_cursor() -> None:
+    repository, _service, _job = _deletion_modules()
+
+    class _Repeating:
+        calls = 0
+
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            self.calls += 1
+            cursor = {"PK": "QUESTION#1", "SK": "META"}
+            return {
+                "Items": [
+                    {
+                        **cursor,
+                        "entity_type": "question",
+                        "student_id": STUDENT_ID,
+                    }
+                ],
+                "LastEvaluatedKey": cursor,
+            }
+
+    with pytest.raises(repository.AccountDeletionConflict, match="repeating"):
+        repository.scan_owned_private_rows(
+            STUDENT_ID, table=_Repeating(), maximum_pages=3
+        )
+
+
+def test_command_lookup_crosses_filtered_empty_pages_with_strong_base_reads() -> None:
+    repository, _service, _job = _deletion_modules()
+    calls: list[dict[str, Any]] = []
+
+    class _Commands:
+        def scan(self, **kwargs: Any) -> dict[str, Any]:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return {
+                    "Items": [],
+                    "LastEvaluatedKey": {"PK": "OTHER#1", "SK": "META"},
+                }
+            return {
+                "Items": [
+                    {
+                        "PK": f"USER#{STUDENT_ID}",
+                        "SK": "DELETE_COMMAND#command-late",
+                        "command_id": "command-late",
+                    }
+                ]
+            }
+
+    command = repository.get_command_by_id("command-late", table=_Commands())
+    assert command and command["command_id"] == "command-late"
+    assert len(calls) == 2
+    assert all(call.get("ConsistentRead") is True for call in calls)
+    assert calls[1]["ExclusiveStartKey"] == {"PK": "OTHER#1", "SK": "META"}
+
+
+def test_primary_branch_persists_cursor_and_requires_two_clean_epochs(monkeypatch) -> None:
+    repository, service, _job = _deletion_modules()
+    pages = [
+        repository.OwnedPrivatePage(
+            (
+                {
+                    "PK": "QUESTION#1",
+                    "SK": "META",
+                    "entity_type": "question",
+                    "student_id": STUDENT_ID,
+                },
+            ),
+            {"PK": "QUESTION#1", "SK": "META"},
+        ),
+        repository.OwnedPrivatePage((), None),
+        repository.OwnedPrivatePage((), None),
+        repository.OwnedPrivatePage((), None),
+    ]
+    monkeypatch.setattr(repository, "scan_owned_private_rows", lambda *_args, **_kwargs: pages.pop(0))
+    mutated: list[str] = []
+    command = {"user_id": STUDENT_ID, "generation": 1}
+    previous: dict[str, Any] = {}
+    results = []
+    for _ in range(4):
+        result = service._run_base_branch(
+            command=command,
+            previous=previous,
+            predicate=lambda item: item.get("entity_type") == "question",
+            mutate=lambda item: mutated.append(str(item["PK"])),
+        )
+        results.append(result)
+        previous = result.persisted(NOW)
+    assert results[0].cursor == {"PK": "QUESTION#1", "SK": "META"}
+    assert [result.epoch for result in results] == [0, 0, 1, 2]
+    assert results[-1].status == "complete" and results[-1].quiescent is True
+    assert mutated == ["QUESTION#1"]
+
+
+def test_tombstone_replacement_retains_only_declared_noncontent_keys() -> None:
+    repository, _service, _job = _deletion_modules()
+    captured: list[dict[str, Any]] = []
+
+    class _Tombstones:
+        def replace_with_deletion_tombstone(
+            self,
+            _item: dict[str, Any],
+            tombstone: dict[str, Any],
+            _user_id: str,
+            _generation: int,
+        ) -> None:
+            captured.append(tombstone)
+
+    repository.replace_with_deletion_tombstone(
+        {
+            "PK": "QUESTION#private",
+            "SK": "META",
+            "entity_type": "question",
+            "question_id": "private",
+            "student_id": STUDENT_ID,
+            "content": "secret",
+            "subject": "private learning context",
+            "ocr_metadata": {"raw": "private"},
+            "teacher_response_rich": {"text": "private"},
+            "created_at": NOW,
+        },
+        user_id=STUDENT_ID,
+        generation=3,
+        now_iso=NOW,
+        table=_Tombstones(),
+    )
+    assert set(captured[0]) <= repository.QUESTION_TOMBSTONE_ALLOWLIST
+    assert repository.PRIVATE_QUESTION_SESSION_FIELDS.isdisjoint(captured[0])

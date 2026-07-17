@@ -1659,10 +1659,10 @@ def claim_account_upload_cleanup(
         {
             "ConditionCheck": {
                 "Key": retention_fence_key(owner_id),
-                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
-                    ":active": "active",
+                    ":pending": "deletion_pending",
                     ":generation": account_fence_generation,
                 },
             }
@@ -1718,10 +1718,10 @@ def delete_account_upload_tombstone(
         {
             "ConditionCheck": {
                 "Key": retention_fence_key(owner_id),
-                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
-                    ":active": "active",
+                    ":pending": "deletion_pending",
                     ":generation": account_fence_generation,
                 },
             }
@@ -1755,10 +1755,10 @@ def delete_empty_storage_usage(
         {
             "ConditionCheck": {
                 "Key": retention_fence_key(owner_id),
-                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
-                    ":active": "active",
+                    ":pending": "deletion_pending",
                     ":generation": account_fence_generation,
                 },
             }
@@ -2753,6 +2753,10 @@ def activate_retention_fence(
 def complete_retention_fence(
     fence: dict[str, Any], *, now_iso: str, table: Any | None = None
 ) -> bool:
+    # The canonical account fence is permanent. Only resource-retention fences
+    # transition to complete; Plan 35 owns the terminal account lifecycle state.
+    if fence.get("SK") == "ACCOUNT_FENCE":
+        return False
     try:
         (table or get_table()).update_item(
             Key={"PK": fence["PK"], "SK": fence["SK"]},
@@ -2808,6 +2812,7 @@ def advance_retention_fence_cursor(
     values.update(
         {
             ":active": "active",
+            ":pending": "deletion_pending",
             ":generation": int(fence["generation"]),
         }
     )
@@ -2815,7 +2820,9 @@ def advance_retention_fence_cursor(
         (table or get_table()).update_item(
             Key={"PK": fence["PK"], "SK": fence["SK"]},
             UpdateExpression=update,
-            ConditionExpression="#status=:active AND generation=:generation",
+            ConditionExpression=(
+                "#status IN (:active,:pending) AND generation=:generation"
+            ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues=values,
         )

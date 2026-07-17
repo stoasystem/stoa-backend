@@ -173,11 +173,19 @@ async def get_deletion_command(
     """Resolve only the immutable DELETE /auth/me command, never an Actor."""
     try:
         binding = await repository.get_binding(verified.issuer, verified.subject)
-        if not binding or binding.get("status") != "active":
-            raise account_deletion_repo.AccountDeletionConflict(
-                "deletion identity is unavailable"
+        user_id = (
+            str(binding.get("user_id") or "").strip()
+            if binding and binding.get("status") == "active"
+            else ""
+        )
+        if not user_id:
+            replay = account_deletion_repo.find_deletion_command_for_identity(
+                account_deletion_repo.normalized_identity_hash(
+                    verified.issuer.strip().rstrip("/")
+                ),
+                account_deletion_repo.normalized_identity_hash(verified.subject.strip()),
             )
-        user_id = str(binding.get("user_id") or "").strip()
+            user_id = str((replay or {}).get("user_id") or "").strip()
         if not user_id:
             raise account_deletion_repo.AccountDeletionConflict(
                 "deletion identity is unavailable"

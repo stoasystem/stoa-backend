@@ -28,12 +28,49 @@ def run_pending_deletions(
 ) -> DeletionJobSummary:
     now = datetime.now(UTC)
     scan = getattr(repository, "scan_pending_deletion_commands", None)
-    if repository is account_deletion_repo:
-        page = account_deletion_repo.scan_pending_deletion_commands(limit=limit)
-        commands = list(page.items)
-    elif callable(scan):
-        raw = scan(limit=limit, exclusive_start_key=None)
-        commands = list(raw[0] if isinstance(raw, tuple) else raw.items)
+    commands: list[dict[str, Any]] = []
+    cursor: dict[str, str] | None = None
+    seen_cursors: set[tuple[str, str]] = set()
+    if repository is account_deletion_repo or callable(scan):
+        pages = 0
+        while len(commands) < limit and pages < 100:
+            pages += 1
+            page_limit = max(limit - len(commands), 1)
+            if repository is account_deletion_repo:
+                page = account_deletion_repo.scan_pending_deletion_commands(
+                    limit=page_limit, cursor=cursor
+                )
+                items, next_cursor = list(page.items), page.cursor
+            else:
+                raw = scan(limit=page_limit, exclusive_start_key=cursor)
+                if isinstance(raw, tuple):
+                    items, next_cursor = list(raw[0]), raw[1]
+                else:
+                    items, next_cursor = list(raw.items), raw.cursor
+            commands.extend(dict(item) for item in items[:page_limit])
+            if next_cursor is None:
+                cursor = None
+                break
+            if (
+                not isinstance(next_cursor, dict)
+                or set(next_cursor) != {"PK", "SK"}
+                or not all(
+                    isinstance(next_cursor.get(field), str) and next_cursor[field]
+                    for field in ("PK", "SK")
+                )
+            ):
+                return DeletionJobSummary(
+                    discovered=len(commands), retryable=1
+                )
+            identity = (next_cursor["PK"], next_cursor["SK"])
+            if identity in seen_cursors:
+                return DeletionJobSummary(
+                    discovered=len(commands), retryable=1
+                )
+            seen_cursors.add(identity)
+            cursor = next_cursor
+        if len(commands) < limit and cursor is not None and pages >= 100:
+            return DeletionJobSummary(discovered=len(commands), retryable=1)
     else:
         return DeletionJobSummary(retryable=1)
     worker = (service_factory or (lambda: AccountDeletionService()))()

@@ -2772,7 +2772,7 @@ def purge_student_attachments(
         fence = {
             **key,
             "owner_id": student_id,
-            "status": "active",
+            "status": "deletion_pending",
             "generation": account_fence_generation,
         }
     try:

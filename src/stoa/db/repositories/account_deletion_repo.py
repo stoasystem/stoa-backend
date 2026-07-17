@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from hashlib import sha256
 from typing import Any, Iterable, Mapping
 
@@ -368,9 +369,14 @@ def scan_owned_private_rows(
     page_limit: int = 100,
 ) -> OwnedPrivatePage:
     """Strong base-table discovery; GSIs never establish deletion completeness."""
+    if maximum_pages <= 0 or page_limit <= 0:
+        raise AccountDeletionConflict("invalid private row scan bound")
     target = table or get_table()
     current = _validated_cursor(cursor) if cursor is not None else None
-    seen: set[tuple[str, str]] = set()
+    seen_rows: set[tuple[str, str]] = set()
+    seen_cursors: set[tuple[str, str]] = set()
+    if current is not None:
+        seen_cursors.add((current["PK"], current["SK"]))
     rows: list[dict[str, Any]] = []
     for _ in range(maximum_pages):
         request: dict[str, Any] = {"ConsistentRead": True, "Limit": page_limit}
@@ -388,17 +394,17 @@ def scan_owned_private_rows(
             identity = (str(item.get("PK") or ""), str(item.get("SK") or ""))
             if not all(identity):
                 raise AccountDeletionConflict("malformed private row key")
-            if identity not in seen:
-                seen.add(identity)
+            if identity not in seen_rows:
+                seen_rows.add(identity)
                 rows.append(item)
         raw_cursor = response.get("LastEvaluatedKey")
         if raw_cursor is None:
             return OwnedPrivatePage(tuple(rows), None)
         next_cursor = _validated_cursor(raw_cursor)
         identity = (next_cursor["PK"], next_cursor["SK"])
-        if identity in seen:
+        if identity in seen_cursors:
             raise AccountDeletionConflict("repeating private row cursor")
-        seen.add(identity)
+        seen_cursors.add(identity)
         current = next_cursor
     return OwnedPrivatePage(tuple(rows), current)
 
@@ -411,20 +417,72 @@ def get_command_by_id(
     if callable(hook):
         value = hook(command_id)
         return dict(value) if value else None
-    response = target.scan(
-        ConsistentRead=True,
-        Limit=100,
-        FilterExpression="entity_type=:entity AND command_id=:command",
-        ExpressionAttributeValues={
-            ":entity": "account_deletion_command",
-            ":command": command_id,
-        },
+    matches = _scan_commands(
+        target,
+        filter_expression="entity_type=:entity AND command_id=:command",
+        values={":entity": "account_deletion_command", ":command": command_id},
     )
-    items = response.get("Items", []) if isinstance(response, Mapping) else []
-    matches = [dict(item) for item in items if isinstance(item, Mapping)]
     if len(matches) > 1:
         raise AccountDeletionConflict("ambiguous deletion command")
     return matches[0] if matches else None
+
+
+def find_deletion_command_for_identity(
+    issuer_hash: str, subject_hash: str, *, table: Any | None = None
+) -> dict[str, Any] | None:
+    """Recover the one replay command after its active binding is terminalized."""
+    matches = _scan_commands(
+        table or get_table(),
+        filter_expression=(
+            "entity_type=:entity AND issuer_hash=:issuer AND subject_hash=:subject"
+        ),
+        values={
+            ":entity": "account_deletion_command",
+            ":issuer": _required(issuer_hash, "issuer_hash"),
+            ":subject": _required(subject_hash, "subject_hash"),
+        },
+    )
+    if len(matches) > 1:
+        raise AccountDeletionConflict("ambiguous deletion identity")
+    return matches[0] if matches else None
+
+
+def _scan_commands(
+    target: Any,
+    *,
+    filter_expression: str,
+    values: Mapping[str, Any],
+    maximum_pages: int = 100,
+) -> list[dict[str, Any]]:
+    cursor: dict[str, str] | None = None
+    seen: set[tuple[str, str]] = set()
+    matches: list[dict[str, Any]] = []
+    for _ in range(maximum_pages):
+        request: dict[str, Any] = {
+            "ConsistentRead": True,
+            "Limit": 100,
+            "FilterExpression": filter_expression,
+            "ExpressionAttributeValues": dict(values),
+        }
+        if cursor is not None:
+            request["ExclusiveStartKey"] = cursor
+        response = target.scan(**request)
+        if not isinstance(response, Mapping) or not isinstance(
+            response.get("Items", []), list
+        ):
+            raise AccountDeletionConflict("malformed deletion command page")
+        matches.extend(
+            dict(item) for item in response.get("Items", []) if isinstance(item, Mapping)
+        )
+        raw_cursor = response.get("LastEvaluatedKey")
+        if raw_cursor is None:
+            return matches
+        cursor = _validated_cursor(raw_cursor)
+        identity = (cursor["PK"], cursor["SK"])
+        if identity in seen:
+            raise AccountDeletionConflict("repeating deletion command cursor")
+        seen.add(identity)
+    raise AccountDeletionConflict("deletion command scan bound exceeded")
 
 
 def replace_with_deletion_tombstone(
@@ -493,6 +551,19 @@ def deletion_fence_condition(user_id: str, generation: int) -> dict[str, Any]:
     }
 
 
+def require_deletion_account_fence(
+    user_id: str, generation: int, *, table: Any | None = None
+) -> dict[str, Any]:
+    fence = get_account_fence(user_id, table=table)
+    if (
+        not fence
+        or fence.get("status") != "deletion_pending"
+        or fence.get("generation") != generation
+    ):
+        raise AccountDeletionConflict("account deletion fence changed")
+    return fence
+
+
 def delete_owned_row(
     item: Mapping[str, Any],
     *,
@@ -512,6 +583,76 @@ def delete_owned_row(
                 "Delete": {
                     "Key": {"PK": item["PK"], "SK": item["SK"]},
                     "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
+                }
+            },
+        ],
+        table=target,
+    )
+
+
+def scrub_parent_profile_child(
+    item: Mapping[str, Any],
+    *,
+    child_user_id: str,
+    generation: int,
+    table: Any | None = None,
+) -> None:
+    """Remove one closing child from embedded parent summaries without deleting parent."""
+    parent_id = _required(item.get("user_id"), "parent user_id")
+    if parent_id == child_user_id:
+        raise AccountDeletionConflict("student profile requires tombstone replacement")
+    target = table or get_table()
+    parent_fence = require_active_account_fence(parent_id, table=target)
+    scrubbed = deepcopy(dict(item))
+    for field in ("child_user_id", "student_id", "child_id"):
+        if scrubbed.get(field) == child_user_id:
+            scrubbed.pop(field, None)
+    for field in ("children", "child_summaries", "student_summaries"):
+        value = scrubbed.get(field)
+        if isinstance(value, list):
+            scrubbed[field] = [
+                entry
+                for entry in value
+                if not (
+                    isinstance(entry, Mapping)
+                    and child_user_id
+                    in {
+                        entry.get("user_id"),
+                        entry.get("student_id"),
+                        entry.get("child_id"),
+                    }
+                )
+            ]
+        elif isinstance(value, Mapping):
+            scrubbed[field] = {
+                key: entry
+                for key, entry in value.items()
+                if key != child_user_id
+                and not (
+                    isinstance(entry, Mapping)
+                    and child_user_id
+                    in {
+                        entry.get("user_id"),
+                        entry.get("student_id"),
+                        entry.get("child_id"),
+                    }
+                )
+            }
+    hook = getattr(target, "scrub_parent_profile_child", None)
+    if callable(hook):
+        hook(dict(item), scrubbed, child_user_id, generation, int(parent_fence["generation"]))
+        return
+    transact(
+        [
+            deletion_fence_condition(child_user_id, generation),
+            active_fence_condition(parent_id, int(parent_fence["generation"])),
+            {
+                "Put": {
+                    "Item": scrubbed,
+                    "ConditionExpression": (
+                        "attribute_exists(PK) AND attribute_exists(SK) AND user_id=:parent"
+                    ),
+                    "ExpressionAttributeValues": {":parent": parent_id},
                 }
             },
         ],
@@ -578,20 +719,80 @@ def create_provider_revoke_debt(
     if callable(hook):
         hook(item)
         return
-    transact(
-        [
-            deletion_fence_condition(user_id, generation),
-            {
-                "Put": {
-                    "Item": item,
-                    "ConditionExpression": (
-                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                    ),
-                }
-            },
-        ],
-        table=target,
-    )
+    try:
+        transact(
+            [
+                deletion_fence_condition(user_id, generation),
+                {
+                    "Put": {
+                        "Item": item,
+                        "ConditionExpression": (
+                            "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                        ),
+                    }
+                },
+            ],
+            table=target,
+        )
+    except AccountDeletionConflict:
+        response = target.get_item(
+            Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
+        )
+        existing = response.get("Item") if isinstance(response, Mapping) else None
+        if not isinstance(existing, Mapping) or any(
+            existing.get(field) != item[field]
+            for field in ("user_id", "generation", "entity_type", "operations")
+        ):
+            raise
+
+
+def complete_provider_revoke_debt(
+    *,
+    user_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> None:
+    target = table or get_table()
+    key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
+    hook = getattr(target, "complete_provider_revoke_debt", None)
+    if callable(hook):
+        hook(key, user_id, generation, now_iso)
+        return
+    try:
+        transact(
+            [
+                deletion_fence_condition(user_id, generation),
+                {
+                    "Update": {
+                        "Key": key,
+                        "UpdateExpression": "SET #status=:complete, completed_at=:now",
+                        "ConditionExpression": (
+                            "user_id=:user AND generation=:generation AND #status=:pending"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":user": user_id,
+                            ":generation": generation,
+                            ":pending": "pending",
+                            ":complete": "complete",
+                            ":now": now_iso,
+                        },
+                    }
+                },
+            ],
+            table=target,
+        )
+    except AccountDeletionConflict:
+        response = target.get_item(Key=key, ConsistentRead=True)
+        existing = response.get("Item") if isinstance(response, Mapping) else None
+        if (
+            not isinstance(existing, Mapping)
+            or existing.get("user_id") != user_id
+            or existing.get("generation") != generation
+            or existing.get("status") != "complete"
+        ):
+            raise
 
 
 def scan_pending_deletion_commands(
@@ -807,6 +1008,8 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
         item.get("student_id"),
         item.get("user_id"),
         item.get("child_id"),
+        item.get("child_user_id"),
+        item.get("target_user_id"),
     }:
         return True
     sk = str(item.get("SK") or "")

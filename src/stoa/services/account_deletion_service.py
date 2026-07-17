@@ -162,10 +162,41 @@ def can_finalize_account_deletion(completed: object, *, sealed: bool = False) ->
     )
 
 
-def _epoch_result(previous: Mapping[str, Any], *, debt: int = 0) -> BranchResult:
-    if debt:
-        return BranchResult("retryable", debt_counts={"remaining": debt})
-    epoch = int(previous.get("epoch") or 0) + 1
+def _run_base_branch(
+    *,
+    command: Mapping[str, Any],
+    previous: Mapping[str, Any],
+    predicate: Callable[[Mapping[str, Any]], bool],
+    mutate: Callable[[dict[str, Any]], None],
+) -> BranchResult:
+    """Advance one bounded strong page and require two clean full-table epochs."""
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = account_deletion_repo.scan_owned_private_rows(
+        str(command["user_id"]), cursor=cursor, maximum_pages=1
+    )
+    matching = [dict(item) for item in page.items if predicate(item)]
+    for item in matching:
+        mutate(item)
+    prior_debt = previous.get("debt_counts")
+    pass_dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(matching)
+    epoch = int(previous.get("epoch") or 0)
+    if page.cursor is not None:
+        return BranchResult(
+            "retryable",
+            cursor=page.cursor,
+            debt_counts={"pass_dirty": int(pass_dirty), "processed": len(matching)},
+            epoch=epoch,
+        )
+    if pass_dirty:
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": len(matching)},
+            epoch=0,
+        )
+    epoch += 1
     return BranchResult(
         "complete" if epoch >= 2 else "retryable",
         debt_counts={},
@@ -174,23 +205,12 @@ def _epoch_result(previous: Mapping[str, Any], *, debt: int = 0) -> BranchResult
     )
 
 
-def _primary_rows(command: Mapping[str, Any]) -> list[dict[str, Any]]:
-    return list(
-        account_deletion_repo.scan_owned_private_rows(str(command["user_id"])).items
-    )
-
-
 def _account_profile_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    rows = [
-        item
-        for item in _primary_rows(command)
-        if item.get("SK") == "PROFILE"
-        or item.get("entity_type") == "parent_student_binding"
-    ]
     now = datetime.now(UTC).isoformat()
-    for item in rows:
+
+    def mutate(item: dict[str, Any]) -> None:
         if item.get("SK") == "PROFILE" and item.get("user_id") == command["user_id"]:
             account_deletion_repo.replace_with_deletion_tombstone(
                 item,
@@ -198,86 +218,140 @@ def _account_profile_branch(
                 generation=int(command["generation"]),
                 now_iso=now,
             )
+        elif item.get("SK") == "PROFILE":
+            account_deletion_repo.scrub_parent_profile_child(
+                item,
+                child_user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+            )
         else:
             account_deletion_repo.delete_owned_row(
                 item,
                 user_id=str(command["user_id"]),
                 generation=int(command["generation"]),
             )
-    return _epoch_result(previous, debt=len(rows))
+
+    return _run_base_branch(
+        command=command,
+        previous=previous,
+        predicate=lambda item: item.get("SK") == "PROFILE"
+        or item.get("entity_type") == "parent_student_binding",
+        mutate=mutate,
+    )
 
 
 def _identity_cross_account_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    rows = [
-        item
-        for item in _primary_rows(command)
-        if item.get("entity_type")
-        in {
-            "identity_binding",
-            "user_identity_inventory",
-            "public_identity_command",
-        }
-    ]
     now = datetime.now(UTC).isoformat()
     account_deletion_repo.create_provider_revoke_debt(
         user_id=str(command["user_id"]),
         generation=int(command["generation"]),
         now_iso=now,
     )
-    for item in rows:
+
+    provider_revoked = False
+
+    def predicate(item: Mapping[str, Any]) -> bool:
+        return item.get("entity_type") in {
+            "identity_binding",
+            "user_identity_inventory",
+            "public_identity_command",
+        }
+
+    def mutate(item: dict[str, Any]) -> None:
+        nonlocal provider_revoked
+        provider_username = next(
+            (
+                str(item.get(field)).strip()
+                for field in ("normalized_email", "email", "subject")
+                if isinstance(item.get(field), str) and str(item.get(field)).strip()
+            ),
+            None,
+        )
+        if provider_username and not provider_revoked:
+            _revoke_provider_identity(
+                str(command["user_id"]),
+                int(command["generation"]),
+                provider_username,
+            )
+            account_deletion_repo.complete_provider_revoke_debt(
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                now_iso=now,
+            )
+            provider_revoked = True
         account_deletion_repo.terminalize_identity_row(
             item,
             user_id=str(command["user_id"]),
             generation=int(command["generation"]),
             now_iso=now,
         )
-    # Provider debt remains explicit until a provider-backed retry proves revoke.
-    return BranchResult(
-        "retryable",
-        debt_counts={"provider_revoke": 1, "local_rows": len(rows)},
+    return _run_base_branch(
+        command=command, previous=previous, predicate=predicate, mutate=mutate
     )
+
+
+def _revoke_provider_identity(user_id: str, generation: int, username: str) -> None:
+    settings = get_settings()
+    provider = boto3.client("cognito-idp", region_name=settings.aws_region)
+    account_deletion_repo.require_deletion_account_fence(user_id, generation)
+    try:
+        provider.admin_user_global_sign_out(
+            UserPoolId=settings.cognito_user_pool_id, Username=username
+        )
+        account_deletion_repo.require_deletion_account_fence(user_id, generation)
+        provider.admin_delete_user(
+            UserPoolId=settings.cognito_user_pool_id, Username=username
+        )
+    except provider.exceptions.UserNotFoundException:
+        return
 
 
 def _capability_scope_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    rows = [
-        item
-        for item in _primary_rows(command)
-        if str(item.get("entity_type") or "").startswith("capability_")
-    ]
     now = datetime.now(UTC).isoformat()
-    for item in rows:
+
+    def mutate(item: dict[str, Any]) -> None:
         account_deletion_repo.terminalize_identity_row(
             item,
             user_id=str(command["user_id"]),
             generation=int(command["generation"]),
             now_iso=now,
         )
-    return _epoch_result(previous, debt=len(rows))
+
+    return _run_base_branch(
+        command=command,
+        previous=previous,
+        predicate=lambda item: str(item.get("entity_type") or "").startswith(
+            "capability_"
+        ),
+        mutate=mutate,
+    )
 
 
 def _question_ocr_session_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    rows = [
-        item
-        for item in _primary_rows(command)
-        if item.get("entity_type")
-        in {"question", "teacher_session", "teacher_escalation_intent"}
-        or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#"))
-    ]
     now = datetime.now(UTC).isoformat()
-    for item in rows:
+
+    def mutate(item: dict[str, Any]) -> None:
         account_deletion_repo.replace_with_deletion_tombstone(
             item,
             user_id=str(command["user_id"]),
             generation=int(command["generation"]),
             now_iso=now,
         )
-    return _epoch_result(previous, debt=len(rows))
+
+    return _run_base_branch(
+        command=command,
+        previous=previous,
+        predicate=lambda item: item.get("entity_type")
+        in {"question", "teacher_session", "teacher_escalation_intent"}
+        or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#")),
+        mutate=mutate,
+    )
 
 
 def _attachments_branch(
