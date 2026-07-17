@@ -34,6 +34,9 @@ def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
         "topic_id": "algebra",
         "prompt": "Solve x + 1 = 2",
         "correct_answer": "x = 1",
+        "explanation": "Subtract one from both sides.",
+        "correct_feedback": "Correct.",
+        "incorrect_feedback": "Review inverse operations.",
         "version_id": "version-1",
     }
     attempts = []
@@ -46,8 +49,11 @@ def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
             attempts.append((args, kwargs))
             or {
                 "attempt_id": "attempt-1",
+                "student_id": args[0],
                 "correct": args[3],
                 "challenge_id": args[1],
+                "student_answer": args[2],
+                **kwargs,
             }
         ),
     )
@@ -103,6 +109,9 @@ def test_practice_answer_records_usage_ledger_without_raw_answer(monkeypatch):
         "topic_id": "algebra",
         "prompt": "Solve x + 1 = 2",
         "correct_answer": "x = 1",
+        "explanation": "Subtract one from both sides.",
+        "correct_feedback": "Correct.",
+        "incorrect_feedback": "Review inverse operations.",
     }
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
     monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [dict(challenge)])
@@ -111,8 +120,11 @@ def test_practice_answer_records_usage_ledger_without_raw_answer(monkeypatch):
         "put_attempt",
         lambda *args, **kwargs: {
             "attempt_id": "attempt-1",
+            "student_id": args[0],
             "correct": args[3],
             "challenge_id": args[1],
+            "student_answer": args[2],
+            **kwargs,
         },
     )
     monkeypatch.setattr(
