@@ -441,7 +441,12 @@ def test_moderation_branch_persists_restart_progress_and_later_zero_epoch(
         results.append(result)
         previous = result.persisted(NOW)
 
-    assert results[0].cursor is not None
+    assert results[0].cursor == {
+        "summary_pk": f"MODERATION#{CASE_ID}",
+        "summary_sk": "SUMMARY",
+        "event_pk": f"MODERATION#{CASE_ID}",
+        "event_sk": "SUMMARY",
+    }
     assert [result.epoch for result in results] == [0, 0, 1, 2]
     assert results[-1].status == "complete"
     assert results[-1].quiescent is True

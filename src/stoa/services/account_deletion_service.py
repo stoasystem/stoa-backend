@@ -379,7 +379,33 @@ def _moderation_support_branch(
 ) -> BranchResult:
     """Scrub one strong moderation page and require two later zero epochs."""
     raw_cursor = previous.get("cursor")
-    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    cursor = None
+    if isinstance(raw_cursor, Mapping):
+        if set(raw_cursor) == {"PK", "SK"}:
+            cursor = {"PK": str(raw_cursor["PK"]), "SK": str(raw_cursor["SK"])}
+        elif set(raw_cursor) == {
+            "summary_pk",
+            "summary_sk",
+            "event_pk",
+            "event_sk",
+        }:
+            summary_cursor = (
+                str(raw_cursor["summary_pk"]),
+                str(raw_cursor["summary_sk"]),
+            )
+            event_cursor = (
+                str(raw_cursor["event_pk"]),
+                str(raw_cursor["event_sk"]),
+            )
+            if summary_cursor != event_cursor or not all(summary_cursor):
+                raise account_deletion_repo.AccountDeletionConflict(
+                    "moderation family cursors diverged"
+                )
+            cursor = {"PK": summary_cursor[0], "SK": summary_cursor[1]}
+        else:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid moderation branch cursor"
+            )
     page = moderation_repo.scan_moderation_private_rows(
         str(command["user_id"]), cursor=cursor, maximum_pages=1
     )
@@ -408,8 +434,14 @@ def _moderation_support_branch(
     epoch = int(previous.get("epoch") or 0)
     debt.update({"pass_dirty": int(pass_dirty), "processed": processed})
     if page.cursor is not None:
+        family_cursor = {
+            "summary_pk": page.cursor["PK"],
+            "summary_sk": page.cursor["SK"],
+            "event_pk": page.cursor["PK"],
+            "event_sk": page.cursor["SK"],
+        }
         return BranchResult(
-            "retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch
+            "retryable", cursor=family_cursor, debt_counts=debt, epoch=epoch
         )
     if pass_dirty:
         if any(key not in {"pass_dirty", "processed"} for key in debt):
