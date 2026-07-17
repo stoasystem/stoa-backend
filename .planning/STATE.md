@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-18-PLAN.md
-last_updated: "2026-07-17T14:42:24.847Z"
+stopped_at: Completed 473-25-PLAN.md (gap-only; next incomplete remains 473-19)
+last_updated: "2026-07-17T15:01:32.457Z"
 last_activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and recovery integrity
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 40
-  percent: 70
+  completed_plans: 41
+  percent: 10
 ---
 
 # Project State
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 
 ## Session
 
-**Last Date:** 2026-07-17T14:41:51.171Z
-**Stopped At:** Completed 473-18-PLAN.md
+**Last Date:** 2026-07-17T15:01:32.452Z
+**Stopped At:** Completed 473-25-PLAN.md (gap-only; next incomplete remains 473-19)
 **Resume File:** None
 
 ## Performance Metrics
@@ -154,6 +154,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 | Phase 473 P16 | 12 min | 2 tasks | 5 files |
 | Phase 473 P17 | 8 min | 2 tasks | 4 files |
 | Phase 473 P18 | 13 min | 3 tasks | 3 files |
+| Phase 473 P25 | 14 min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -217,3 +218,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 - [Phase 473]: External S3, deployed scheduler/IaC, and production/deployed log observations remain NOT RUN under Phases 479/480. — Local fakes and captured local logs cannot establish provider, deployed infrastructure, or production observability proof.
 - [Phase 473]: Provider acknowledgements use exact non-coercive ETag, integer, canonical SHA-256, and pagination-marker parsers before conditional persistence. — Malformed provider success remains retryable and redacted instead of becoming durable ledger state.
 - [Phase 473]: Immutable promotion is create-only and records success only after exact versioned byte and metadata verification; staging coordinates clear only after absence proof. — Crash recovery converges without overwriting, guessing, or erasing the last durable cleanup coordinate.
+- [Phase 473]: Opaque challenge IDs resolve through one answer-free pointer to one exact content-addressed canonical row. — Malformed, missing, duplicated, or stale identity fails closed.
+- [Phase 473]: Post-submit answer content is copied into one create-only owner receipt. — Every later result or mistake projection reads the receipt without consulting mutable curriculum content.
+- [Phase 473]: Pre-submit hints emit only constant bytes from a closed parameter-free catalog. — Exact whole-content non-derivability decisions make reviewer provenance necessary but insufficient.
