@@ -651,6 +651,60 @@ class _ConversationBodySpy:
             raise self.close_exception
 
 
+class _MalformedConversationBodySpy:
+    def __init__(self, read_shape: str) -> None:
+        self.read_shape = read_shape
+        self.close_count = 0
+
+    def __getattribute__(self, name: str):
+        if name == "read":
+            shape = object.__getattribute__(self, "read_shape")
+            if shape == "missing":
+                raise AttributeError(name)
+            if shape == "property_raises":
+                raise RuntimeError("conversation-read-property-private-canary")
+            if shape == "non_callable":
+                return None
+        return object.__getattribute__(self, name)
+
+    def close(self) -> None:
+        self.close_count += 1
+
+
+@pytest.mark.parametrize("read_shape", ["missing", "non_callable", "property_raises"])
+def test_conversation_non_readable_body_ownership_closes_once(
+    read_shape: str,
+) -> None:
+    body = _MalformedConversationBodySpy(read_shape)
+
+    class S3:
+        def get_object(self, **kwargs):
+            assert kwargs["VersionId"] == "immutable-version"
+            return {"Body": body}
+
+    result = conversations.attachment_service.extract_message_attachment_context(
+        [
+            (
+                "attachment",
+                {
+                    "immutable_object_key": "private-key-canary",
+                    "immutable_version_id": "immutable-version",
+                    "immutable_etag": "immutable-etag",
+                    "content_sha256": hashlib.sha256(b"private text").hexdigest(),
+                    "content_length": len(b"private text"),
+                    "detected_type": "text/plain",
+                },
+            )
+        ],
+        s3=S3(),
+        settings=Settings(s3_images_bucket="private-bucket"),
+    )
+
+    assert result == "[attachment:service_unavailable]"
+    assert body.close_count == 1
+    assert "private-canary" not in result
+
+
 @pytest.mark.parametrize(
     "case,expected",
     [

@@ -844,6 +844,79 @@ class _ProviderBodySpy:
             raise self.close_exception
 
 
+class _MalformedProviderBodySpy:
+    def __init__(self, *, read_shape: str, close_shape: str = "callable") -> None:
+        self.read_shape = read_shape
+        self.close_shape = close_shape
+        self.close_count = 0
+
+    def __getattribute__(self, name: str):
+        if name == "read":
+            shape = object.__getattribute__(self, "read_shape")
+            if shape == "missing":
+                raise AttributeError(name)
+            if shape == "property_raises":
+                raise RuntimeError("read-property-private-canary")
+            if shape == "non_callable":
+                return None
+        if name == "close":
+            shape = object.__getattribute__(self, "close_shape")
+            if shape == "missing":
+                raise AttributeError(name)
+            if shape == "property_raises":
+                raise RuntimeError("close-property-private-canary")
+            if shape == "non_callable":
+                return None
+        return object.__getattribute__(self, name)
+
+    def close(self) -> None:
+        self.close_count += 1
+
+
+@pytest.mark.parametrize("read_shape", ["missing", "non_callable", "property_raises"])
+def test_validation_non_readable_body_ownership_closes_once(read_shape: str) -> None:
+    body = _MalformedProviderBodySpy(read_shape=read_shape)
+    repository = _PromotionRepository()
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            _validating_document(3, max_bytes=3),
+            _student_actor(),
+            s3=_PromotionS3(body),
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert body.close_count == 1
+    assert repository.validated is None
+    assert "private-canary" not in str(captured.value)
+
+
+@pytest.mark.parametrize("close_shape", ["missing", "non_callable", "property_raises"])
+def test_validation_close_property_shape_preserves_primary_outcome(
+    close_shape: str,
+) -> None:
+    body = _MalformedProviderBodySpy(
+        read_shape="non_callable", close_shape=close_shape
+    )
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            _validating_document(3, max_bytes=3),
+            _student_actor(),
+            s3=_PromotionS3(body),
+            settings=Settings(s3_images_bucket="private-bucket"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=_PromotionRepository(),
+        )
+
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert body.close_count == 0
+    assert "private-canary" not in str(captured.value)
+
+
 @pytest.mark.parametrize(
     "case,body_data,expected_size,max_bytes,expected_code",
     [

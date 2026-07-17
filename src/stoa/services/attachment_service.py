@@ -81,7 +81,10 @@ def _required_provider_coordinate(response: dict[str, Any], field: str) -> str:
 
 def _close_provider_body(body: Any) -> None:
     """Release one provider response body without replacing the primary outcome."""
-    close = getattr(body, "close", None)
+    try:
+        close = getattr(body, "close", None)
+    except Exception:
+        return
     if not callable(close):
         return
     try:
@@ -968,17 +971,22 @@ def _validate_and_promote_completed(
             )
         )
         body = response.get("Body")
-        if body is None or not callable(getattr(body, "read", None)):
+        if body is None:
             raise AttachmentDecisionError(
                 AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             )
         try:
+            read = getattr(body, "read", None)
+            if not callable(read):
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
             with SpooledTemporaryFile(
                 max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
             ) as spool:
                 maximum = int(item["max_bytes"])
                 while True:
-                    chunk = body.read(
+                    chunk = read(
                         min(UPLOAD_SPOOL_MEMORY_BYTES, maximum + 1 - length)
                     )
                     if not chunk:
@@ -1508,16 +1516,19 @@ def extract_message_attachment_context(
                 )
             )
             body = response.get("Body")
-            if body is None or not callable(getattr(body, "read", None)):
+            if body is None:
                 raise DocumentExtractionFailure("service_unavailable")
             digest = hashlib.sha256()
             measured = 0
             try:
+                read = getattr(body, "read", None)
+                if not callable(read):
+                    raise DocumentExtractionFailure("service_unavailable")
                 with SpooledTemporaryFile(
                     max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
                 ) as spool:
                     while True:
-                        chunk = body.read(
+                        chunk = read(
                             min(UPLOAD_SPOOL_MEMORY_BYTES, length + 1 - measured)
                         )
                         if not chunk:
