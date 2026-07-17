@@ -62,6 +62,8 @@ class TransactionOperationKind(StrEnum):
     MESSAGE_COMMAND_UPDATE = "message_command_update"
     MESSAGE_COMMAND_REJECT = "message_command_reject"
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
+    RESOURCE_RETENTION_FENCE_CHECK = "resource_retention_fence_check"
+    ACCOUNT_RETENTION_FENCE_CHECK = "account_retention_fence_check"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +110,63 @@ def attachment_key(attachment_id: str) -> dict[str, str]:
 
 def storage_key(owner_id: str) -> dict[str, str]:
     return {"PK": f"STORAGE#{owner_id}", "SK": "USAGE"}
+
+
+def retention_fence_key(
+    owner_id: str,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+) -> dict[str, str]:
+    if resource_type is None and resource_id is None:
+        return {"PK": f"OWNER#{owner_id}", "SK": "RETENTION#ACCOUNT"}
+    if (
+        not isinstance(resource_type, str)
+        or not resource_type.strip()
+        or not isinstance(resource_id, str)
+        or not resource_id.strip()
+    ):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    return {
+        "PK": f"OWNER#{owner_id}",
+        "SK": f"RETENTION#RESOURCE#{resource_type}#{resource_id}",
+    }
+
+
+def _retention_fence_checks(
+    owner_id: str, resource_type: str, resource_id: str
+) -> list[TransactionOperation]:
+    expression = "attribute_not_exists(PK) OR #status=:complete"
+    names = {"#status": "status"}
+    values = {":complete": "complete"}
+    return [
+        TransactionOperation(
+            TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
+            {
+                "ConditionCheck": {
+                    "Key": retention_fence_key(
+                        owner_id,
+                        resource_type=resource_type,
+                        resource_id=resource_id,
+                    ),
+                    "ConditionExpression": expression,
+                    "ExpressionAttributeNames": names,
+                    "ExpressionAttributeValues": values,
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+            {
+                "ConditionCheck": {
+                    "Key": retention_fence_key(owner_id),
+                    "ConditionExpression": expression,
+                    "ExpressionAttributeNames": names,
+                    "ExpressionAttributeValues": values,
+                }
+            },
+        ),
+    ]
 
 
 def association_key(
@@ -1519,7 +1578,15 @@ def build_message_attachment_transaction(
     now_iso: str,
     command: dict[str, Any] | None = None,
 ) -> list[TransactionOperation]:
-    operations: list[TransactionOperation] = [
+    operations: list[TransactionOperation] = []
+    if associations:
+        resource_type = str(associations[0].get("resource_type") or "conversation")
+        resource_id = str(associations[0].get("resource_id") or "")
+        if not resource_id:
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        operations.extend(_retention_fence_checks(owner_id, resource_type, resource_id))
+    operations.extend(
+        [
         TransactionOperation(
             TransactionOperationKind.MESSAGE_PUT,
             {
@@ -1529,7 +1596,8 @@ def build_message_attachment_transaction(
                 }
             },
         )
-    ]
+        ]
+    )
     for upload, attachment in fresh:
         operations.extend(
             [
@@ -2150,7 +2218,11 @@ def build_question_attachment_transaction(
     now_iso: str,
 ) -> list[TransactionOperation]:
     """Commit a question and its attachment association as one conditional unit."""
-    operations: list[TransactionOperation] = []
+    resource_type = str(association.get("resource_type") or "question")
+    resource_id = str(association.get("resource_id") or question.get("question_id") or "")
+    if not resource_id:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    operations = _retention_fence_checks(owner_id, resource_type, resource_id)
     if prepared["kind"] == "upload":
         upload = prepared["record"]
         operations.extend(
@@ -2268,18 +2340,162 @@ def get_storage_usage(owner_id: str, *, table: Any | None = None) -> int:
     return int((response.get("Item") or {}).get("used_bytes", 0))
 
 
-def list_owner_attachment_items(owner_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
-    from boto3.dynamodb.conditions import Key
+def list_owner_attachment_items(
+    owner_id: str,
+    *,
+    table: Any | None = None,
+    maximum_pages: int = 100,
+    maximum_items: int = 10_000,
+) -> list[dict[str, Any]]:
+    """Exhaustively read the authoritative table before inferring reference absence.
 
-    response = (table or get_table()).query(
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(owner_id),
+    DynamoDB GSIs cannot provide strongly consistent reads. Retention therefore scans
+    the base table with ConsistentRead and validates every pagination transition.
+    """
+    if not isinstance(owner_id, str) or not owner_id.strip():
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    target = table or get_table()
+    cursor: dict[str, str] | None = None
+    seen_cursors: set[tuple[str, str]] = set()
+    seen_keys: set[tuple[str, str]] = set()
+    result: list[dict[str, Any]] = []
+    for _page in range(maximum_pages):
+        request: dict[str, Any] = {
+            "ConsistentRead": True,
+            "Limit": min(100, maximum_items),
+        }
+        if cursor is not None:
+            request["ExclusiveStartKey"] = cursor
+        try:
+            response = target.scan(**request)
+        except AttachmentRepositoryConflict:
+            raise
+        except Exception:
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+        if not isinstance(response, dict) or not isinstance(response.get("Items", []), list):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        for item in response.get("Items", []):
+            if not isinstance(item, dict):
+                raise AttachmentRepositoryConflict("dependency_failure")
+            if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
+                continue
+            if item.get("entity_type") not in {"attachment", "attachment_association"}:
+                continue
+            pk = item.get("PK")
+            sk = item.get("SK")
+            if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
+                raise AttachmentRepositoryConflict("conditional_conflict")
+            identity = (pk, sk)
+            if identity in seen_keys:
+                continue
+            seen_keys.add(identity)
+            result.append(item)
+            if len(result) > maximum_items:
+                raise AttachmentRepositoryConflict("dependency_failure")
+        raw_cursor = response.get("LastEvaluatedKey")
+        if raw_cursor is None:
+            return result
+        if (
+            not isinstance(raw_cursor, dict)
+            or set(raw_cursor) != {"PK", "SK"}
+            or not isinstance(raw_cursor.get("PK"), str)
+            or not raw_cursor["PK"]
+            or not isinstance(raw_cursor.get("SK"), str)
+            or not raw_cursor["SK"]
+        ):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        cursor_identity = (raw_cursor["PK"], raw_cursor["SK"])
+        if cursor_identity in seen_cursors:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        seen_cursors.add(cursor_identity)
+        cursor = {"PK": raw_cursor["PK"], "SK": raw_cursor["SK"]}
+    raise AttachmentRepositoryConflict("dependency_failure")
+
+
+def activate_retention_fence(
+    owner_id: str,
+    *,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Create one durable active fence, or resume the existing generation."""
+    target = table or get_table()
+    key = retention_fence_key(
+        owner_id, resource_type=resource_type, resource_id=resource_id
     )
-    return [
-        item
-        for item in response.get("Items", [])
-        if item.get("entity_type") in {"attachment", "attachment_association"}
-    ]
+    try:
+        target.update_item(
+            Key=key,
+            UpdateExpression=(
+                "SET owner_id=:owner, entity_type=:entity, schema_version=:schema, "
+                "#status=:active, generation=if_not_exists(generation,:zero)+:one, "
+                "retention_stage=:fenced, updated_at=:now, quiescent_passes=:zero "
+                "REMOVE retention_cursor"
+            ),
+            ConditionExpression="attribute_not_exists(PK) OR #status=:complete",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":entity": "attachment_retention_fence",
+                ":schema": "attachment-retention.v1",
+                ":active": "active",
+                ":complete": "complete",
+                ":fenced": "fenced",
+                ":zero": 0,
+                ":one": 1,
+                ":now": now_iso,
+            },
+        )
+    except ClientError as exc:
+        if not _conditional(exc):
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    try:
+        response = target.get_item(Key=key, ConsistentRead=True)
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    item = response.get("Item") if isinstance(response, dict) else None
+    if (
+        not isinstance(item, dict)
+        or item.get("owner_id") != owner_id
+        or item.get("status") != "active"
+        or isinstance(item.get("generation"), bool)
+        or not isinstance(item.get("generation"), int)
+        or item["generation"] <= 0
+    ):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    return item
+
+
+def complete_retention_fence(
+    fence: dict[str, Any], *, now_iso: str, table: Any | None = None
+) -> bool:
+    try:
+        (table or get_table()).update_item(
+            Key={"PK": fence["PK"], "SK": fence["SK"]},
+            UpdateExpression=(
+                "SET #status=:complete, retention_stage=:complete, updated_at=:now "
+                "REMOVE retention_cursor"
+            ),
+            ConditionExpression="#status=:active AND generation=:generation",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":active": "active",
+                ":complete": "complete",
+                ":generation": int(fence["generation"]),
+                ":now": now_iso,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def build_release_reference_transaction(

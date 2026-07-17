@@ -1835,6 +1835,8 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     assert len(repository.transactions) == 1
     operations = repository.transactions[0]
     assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
+        attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.MESSAGE_PUT,
         attachment_repo.TransactionOperationKind.UPLOAD_CONSUME,
         attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
@@ -1854,7 +1856,11 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
         "ref_count=if_not_exists" in operation.get("Update", {}).get("UpdateExpression", "")
         for operation in operations
     )
-    message = operations[0]["Put"]["Item"]
+    message = next(
+        operation["Put"]["Item"]
+        for operation in operations
+        if operation.kind is attachment_repo.TransactionOperationKind.MESSAGE_PUT
+    )
     assert message["attachment_ids"][1] == "attachment-saved"
     public = str([summary.model_dump(by_alias=True) for summary in summaries])
     assert "provider-coordinate" not in public

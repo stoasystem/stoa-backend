@@ -50,6 +50,43 @@ CLEANUP_RECONCILIATION_MAX_PAGES = 10
 CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
 
 
+class RetentionDisposition(StrEnum):
+    COMPLETE = "complete"
+    INCOMPLETE_RETRYABLE = "incomplete_retryable"
+    CONFLICT = "conflict"
+    CONCEALED_MISSING = "concealed_missing"
+
+
+class RetentionStage(StrEnum):
+    FENCED = "fenced"
+    REFERENCES_RELEASING = "references_releasing"
+    OBJECT_DELETION_PENDING = "object_deletion_pending"
+    OBJECT_ABSENCE_PROVEN = "object_absence_proven"
+    QUOTA_FINALIZE_PENDING = "quota_finalize_pending"
+    COMPLETE = "complete"
+    RETRYABLE = "retryable"
+    CONFLICT = "conflict"
+
+
+class RetentionResult(dict[str, int]):
+    """Typed retention outcome with legacy informational count mapping."""
+
+    disposition: RetentionDisposition
+    stage: RetentionStage
+
+    def __init__(
+        self,
+        disposition: RetentionDisposition,
+        stage: RetentionStage,
+        *,
+        released: int = 0,
+        deleted: int = 0,
+    ) -> None:
+        super().__init__(released=released, deleted=deleted)
+        self.disposition = disposition
+        self.stage = stage
+
+
 def _gateway_call(
     operation, *, conflict_code=AttachmentErrorCode.UPLOAD_NOT_FOUND
 ):
@@ -2127,10 +2164,35 @@ def release_resource_attachments(
     settings: Settings,
     now: datetime | None = None,
     repository: Any = attachment_repo,
-) -> dict[str, int]:
+) -> RetentionResult:
     """Release references and retain a retryable tombstone for last-byte deletion."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
-    items = repository.list_owner_attachment_items(owner_id)
+    fence: dict[str, Any] | None = None
+    activate_fence = getattr(repository, "activate_retention_fence", None)
+    if callable(activate_fence):
+        try:
+            fence = activate_fence(
+                owner_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                now_iso=now.isoformat(),
+            )
+        except attachment_repo.AttachmentRepositoryConflict as exc:
+            disposition = (
+                RetentionDisposition.INCOMPLETE_RETRYABLE
+                if exc.category == "dependency_failure"
+                else RetentionDisposition.CONFLICT
+            )
+            return RetentionResult(disposition, RetentionStage.FENCED)
+    try:
+        items = repository.list_owner_attachment_items(owner_id)
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        disposition = (
+            RetentionDisposition.INCOMPLETE_RETRYABLE
+            if exc.category == "dependency_failure"
+            else RetentionDisposition.CONFLICT
+        )
+        return RetentionResult(disposition, RetentionStage.RETRYABLE)
     attachments = {
         item["attachment_id"]: item for item in items if item.get("entity_type") == "attachment"
     }
@@ -2142,9 +2204,11 @@ def release_resource_attachments(
         and item.get("resource_id") == resource_id
     ]
     released = deleted = 0
+    disposition = RetentionDisposition.COMPLETE
     for association in associations:
         attachment = attachments.get(association.get("attachment_id"))
         if not attachment or attachment.get("status") != "active":
+            disposition = RetentionDisposition.CONCEALED_MISSING
             continue
         last = int(attachment.get("ref_count", 1)) == 1
         try:
@@ -2156,6 +2220,7 @@ def release_resource_attachments(
                 )
             )
         except attachment_repo.AttachmentRepositoryConflict:
+            disposition = RetentionDisposition.CONFLICT
             continue
         released += 1
         if last:
@@ -2181,7 +2246,69 @@ def release_resource_attachments(
             )
         ):
             deleted += 1
-    return {"released": released, "deleted": deleted}
+    try:
+        quiescent_items = repository.list_owner_attachment_items(owner_id)
+    except attachment_repo.AttachmentRepositoryConflict:
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    remaining = [
+        item
+        for item in quiescent_items
+        if (
+            item.get("entity_type") == "attachment_association"
+            and item.get("resource_type") == resource_type
+            and item.get("resource_id") == resource_id
+        )
+        or (
+            item.get("entity_type") == "attachment"
+            and item.get("status") == "deletion_pending"
+            and item.get("deletion_resource_type") == resource_type
+            and item.get("deletion_resource_id") == resource_id
+        )
+    ]
+    if remaining:
+        if disposition is RetentionDisposition.COMPLETE:
+            disposition = RetentionDisposition.INCOMPLETE_RETRYABLE
+        return RetentionResult(
+            disposition,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    if disposition is not RetentionDisposition.COMPLETE:
+        return RetentionResult(
+            disposition,
+            RetentionStage.CONFLICT,
+            released=released,
+            deleted=deleted,
+        )
+    complete_fence = getattr(repository, "complete_retention_fence", None)
+    if fence is not None and callable(complete_fence):
+        try:
+            if not complete_fence(fence, now_iso=now.isoformat()):
+                return RetentionResult(
+                    RetentionDisposition.CONFLICT,
+                    RetentionStage.CONFLICT,
+                    released=released,
+                    deleted=deleted,
+                )
+        except attachment_repo.AttachmentRepositoryConflict:
+            return RetentionResult(
+                RetentionDisposition.INCOMPLETE_RETRYABLE,
+                RetentionStage.RETRYABLE,
+                released=released,
+                deleted=deleted,
+            )
+    return RetentionResult(
+        RetentionDisposition.COMPLETE,
+        RetentionStage.COMPLETE,
+        released=released,
+        deleted=deleted,
+    )
 
 
 def purge_student_attachments(
@@ -2190,9 +2317,27 @@ def purge_student_attachments(
     s3: Any,
     settings: Settings,
     repository: Any = attachment_repo,
-) -> dict[str, int]:
+) -> RetentionResult:
     """Account-closure hook: idempotently release every remaining owner association."""
-    items = repository.list_owner_attachment_items(student_id)
+    now = datetime.now(UTC)
+    fence: dict[str, Any] | None = None
+    activate_fence = getattr(repository, "activate_retention_fence", None)
+    if callable(activate_fence):
+        try:
+            fence = activate_fence(student_id, now_iso=now.isoformat())
+        except attachment_repo.AttachmentRepositoryConflict as exc:
+            disposition = (
+                RetentionDisposition.INCOMPLETE_RETRYABLE
+                if exc.category == "dependency_failure"
+                else RetentionDisposition.CONFLICT
+            )
+            return RetentionResult(disposition, RetentionStage.FENCED)
+    try:
+        items = repository.list_owner_attachment_items(student_id)
+    except attachment_repo.AttachmentRepositoryConflict:
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE, RetentionStage.RETRYABLE
+        )
     resources = {
         (str(item["resource_type"]), str(item["resource_id"]))
         for item in items
@@ -2210,7 +2355,23 @@ def purge_student_attachments(
         )
         released += result["released"]
         deleted += result["deleted"]
-    for attachment in repository.list_owner_attachment_items(student_id):
+        if result.disposition is not RetentionDisposition.COMPLETE:
+            return RetentionResult(
+                result.disposition,
+                result.stage,
+                released=released,
+                deleted=deleted,
+            )
+    try:
+        pending_items = repository.list_owner_attachment_items(student_id)
+    except attachment_repo.AttachmentRepositoryConflict:
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    for attachment in pending_items:
         if (
             attachment.get("entity_type") == "attachment"
             and attachment.get("status") == "deletion_pending"
@@ -2218,12 +2379,53 @@ def purge_student_attachments(
                 attachment,
                 s3=s3,
                 settings=settings,
-                now=datetime.now(UTC),
+                now=now,
                 repository=repository,
             )
         ):
             deleted += 1
-    return {"released": released, "deleted": deleted}
+    try:
+        quiescent_items = repository.list_owner_attachment_items(student_id)
+    except attachment_repo.AttachmentRepositoryConflict:
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    if any(
+        item.get("entity_type") in {"attachment", "attachment_association"}
+        for item in quiescent_items
+    ):
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    complete_fence = getattr(repository, "complete_retention_fence", None)
+    if fence is not None and callable(complete_fence):
+        try:
+            if not complete_fence(fence, now_iso=now.isoformat()):
+                return RetentionResult(
+                    RetentionDisposition.CONFLICT,
+                    RetentionStage.CONFLICT,
+                    released=released,
+                    deleted=deleted,
+                )
+        except attachment_repo.AttachmentRepositoryConflict:
+            return RetentionResult(
+                RetentionDisposition.INCOMPLETE_RETRYABLE,
+                RetentionStage.RETRYABLE,
+                released=released,
+                deleted=deleted,
+            )
+    return RetentionResult(
+        RetentionDisposition.COMPLETE,
+        RetentionStage.COMPLETE,
+        released=released,
+        deleted=deleted,
+    )
 
 
 def release_conversation_attachments(
@@ -2233,7 +2435,7 @@ def release_conversation_attachments(
     s3: Any,
     settings: Settings,
     repository: Any = attachment_repo,
-) -> dict[str, int]:
+) -> RetentionResult:
     """Conversation-deletion integration hook."""
     return release_resource_attachments(
         owner_id,
