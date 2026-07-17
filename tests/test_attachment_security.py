@@ -50,6 +50,7 @@ from stoa.services.attachment_service import (
     storage_limit_for_entitlement,
     _validate_and_promote_completed,
 )
+from stoa.jobs import upload_cleanup
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.db.repositories import attachment_repo
 from stoa.services.entitlement_service import resolve_student_entitlement
@@ -3187,6 +3188,234 @@ def test_no_false_cleanup_complete_when_assembly_version_is_unproven() -> None:
     assert current["operation_fence"] == "assembly-fence-canary"
     assert current.get("cleanup_staging_deleted") is not True
     assert s3.deleted == []
+
+
+@pytest.mark.parametrize(
+    "failure_stage",
+    [
+        "repository_get",
+        "repository_claim",
+        "repository_scan",
+        "repository_progress",
+        "repository_complete",
+        "list_versions_failure",
+        "list_versions_malformed",
+        "head_failure",
+        "head_malformed",
+        "abort_failure",
+        "delete_failure",
+    ],
+)
+def test_cleanup_batch_candidate_isolation_continues_after_first_failure(
+    failure_stage: str, caplog
+) -> None:
+    first = _cleanup_upload(
+        "first-private-candidate-canary", "invalid", 1
+    )
+    if failure_stage in {
+        "list_versions_failure",
+        "list_versions_malformed",
+        "head_failure",
+        "head_malformed",
+    }:
+        first.update(
+            status="assembling",
+            expires_at=2_000_000_000,
+            operation_kind="staging_assembly",
+            operation_fence="first-private-fence-canary",
+            operation_lease_expires_at=1,
+            expected_size=3,
+            multipart_upload_id="first-private-multipart-canary",
+        )
+        first.pop("staging_version_id")
+    elif failure_stage == "abort_failure":
+        first["multipart_upload_id"] = "first-private-multipart-canary"
+        first.pop("staging_version_id")
+    later = _cleanup_upload("later-private-candidate-canary", "invalid", 1)
+
+    class CandidateRepository(_CleanupRepository):
+        def _fail(self, stage: str, upload_id: str) -> None:
+            if (
+                failure_stage == stage
+                and upload_id == "first-private-candidate-canary"
+            ):
+                raise RuntimeError(
+                    "repository-owner-table-key-first-private-diagnostic-canary"
+                )
+
+        def get_upload_intent(self, upload_id):
+            self._fail("repository_get", upload_id)
+            return super().get_upload_intent(upload_id)
+
+        def claim_upload_cleanup(self, upload_id, version, now_epoch, reason):
+            self._fail("repository_claim", upload_id)
+            return super().claim_upload_cleanup(
+                upload_id, version, now_epoch, reason
+            )
+
+        def scan_durable_upload_references(
+            self,
+            upload_id,
+            immutable_key="",
+            immutable_version="",
+            *,
+            limit,
+            exclusive_start_key=None,
+        ):
+            self._fail("repository_scan", upload_id)
+            return super().scan_durable_upload_references(
+                upload_id,
+                immutable_key,
+                immutable_version,
+                limit=limit,
+                exclusive_start_key=exclusive_start_key,
+            )
+
+        def _progress(self, upload_id, version, field):
+            self._fail("repository_progress", upload_id)
+            return super()._progress(upload_id, version, field)
+
+        def complete_upload_cleanup(self, upload_id, version, cleaned_at):
+            self._fail("repository_complete", upload_id)
+            return super().complete_upload_cleanup(upload_id, version, cleaned_at)
+
+    class CandidateS3(_CleanupS3):
+        def list_object_versions(self, **kwargs):
+            if (
+                failure_stage == "list_versions_failure"
+                and kwargs["Prefix"] == first["staging_object_key"]
+            ):
+                raise RuntimeError(
+                    "provider-list-key-first-private-diagnostic-canary"
+                )
+            if (
+                failure_stage == "list_versions_malformed"
+                and kwargs["Prefix"] == first["staging_object_key"]
+            ):
+                return {"Versions": [None]}
+            return super().list_object_versions(**kwargs)
+
+        def head_object(self, **kwargs):
+            if (
+                failure_stage == "head_failure"
+                and kwargs["Key"] == first["staging_object_key"]
+            ):
+                raise RuntimeError(
+                    "provider-head-version-first-private-diagnostic-canary"
+                )
+            if (
+                failure_stage == "head_malformed"
+                and kwargs["Key"] == first["staging_object_key"]
+            ):
+                return []
+            return super().head_object(**kwargs)
+
+        def abort_multipart_upload(self, Bucket, Key, UploadId):
+            if failure_stage == "abort_failure" and Key == first["staging_object_key"]:
+                raise RuntimeError(
+                    "provider-abort-upload-first-private-diagnostic-canary"
+                )
+            return super().abort_multipart_upload(Bucket, Key, UploadId)
+
+        def delete_object(self, Bucket, Key, VersionId):
+            if failure_stage == "delete_failure" and Key == first["staging_object_key"]:
+                raise RuntimeError(
+                    "provider-delete-version-first-private-diagnostic-canary"
+                )
+            return super().delete_object(Bucket, Key, VersionId)
+
+    repository = CandidateRepository([first, later])
+    s3 = CandidateS3()
+    if failure_stage in {"head_failure", "head_malformed"}:
+        s3.versions[first["staging_object_key"]] = [
+            {
+                "Key": first["staging_object_key"],
+                "VersionId": "first-private-version-canary",
+                "ETag": "first-private-etag-canary",
+                "ContentLength": 3,
+                "Metadata": {"upload-id": first["upload_id"]},
+            }
+        ]
+
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.scanned == result.claimed == 2
+    assert result.retryable == result.deleted == 1
+    assert repository.uploads[first["upload_id"]]["status"] in {
+        "invalid",
+        "cleanup_pending",
+    }
+    assert repository.uploads[later["upload_id"]]["status"] == "cleanup_complete"
+
+    repeated = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert repeated.retryable == 1 and repeated.deleted == 0
+    assert sum(key == later["staging_object_key"] for _, key, _ in s3.deleted) == 1
+    rendered = str(result.public_dict()) + caplog.text
+    assert "private-candidate-canary" not in rendered
+    assert "private-diagnostic-canary" not in rendered
+    assert "provider" not in rendered
+
+
+def test_cleanup_batch_unexpected_candidate_isolation_keeps_opaque_continuation(
+    monkeypatch, caplog
+) -> None:
+    candidates = []
+    for index in range(3):
+        candidate = _cleanup_upload(f"candidate-private-{index}", "invalid", 1)
+        candidate.update(PK=f"UPLOAD#private-{index}", SK="META")
+        candidates.append(candidate)
+    repository = _CleanupRepository(candidates)
+    calls: list[str] = []
+
+    def isolated(candidate, **kwargs):
+        calls.append(candidate["upload_id"])
+        if candidate["upload_id"] == "candidate-private-0":
+            raise ValueError(
+                "unexpected-owner-key-provider-coordinate-private-canary"
+            )
+        return "deleted"
+
+    monkeypatch.setattr(upload_cleanup, "cleanup_upload_intent", isolated)
+    result = cleanup_expired_uploads(
+        s3=_CleanupS3(),
+        settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        batch_limit=2,
+        page_limit=3,
+        repository=repository,
+    )
+    assert calls == ["candidate-private-0", "candidate-private-1"]
+    assert result.scanned == result.claimed == 2
+    assert result.retryable == result.deleted == 1
+    assert upload_cleanup._decode_cursor(result.continuation_token) == {
+        "PK": "UPLOAD#private-1",
+        "SK": "META",
+    }
+    rendered = str(result.public_dict()) + caplog.text
+    assert "candidate-private" not in rendered
+    assert "provider-coordinate-private-canary" not in rendered
+
+
+def test_cleanup_batch_global_candidate_listing_failure_is_not_empty_success() -> None:
+    class ListingFailureRepository(_CleanupRepository):
+        def list_upload_cleanup_candidates(self, *args, **kwargs):
+            raise RuntimeError("global-table-provider-private-canary")
+
+    with pytest.raises(RuntimeError, match="global-table-provider-private-canary"):
+        cleanup_expired_uploads(
+            s3=_CleanupS3(),
+            settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+            repository=ListingFailureRepository([]),
+        )
 
 
 def test_cleanup_repository_split_after_exact_delete_retries_without_reviving_upload() -> None:

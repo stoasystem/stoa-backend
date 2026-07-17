@@ -68,14 +68,22 @@ def cleanup_expired_uploads(
     }
     selected = candidates[:batch_limit]
     for candidate in selected:
-        outcome = cleanup_upload_intent(
-            candidate,
-            s3=s3,
-            settings=settings_obj,
-            now=current,
-            reference_scan_limit=page_limit,
-            repository=repository,
-        )
+        try:
+            outcome = cleanup_upload_intent(
+                candidate,
+                s3=s3,
+                settings=settings_obj,
+                now=current,
+                reference_scan_limit=page_limit,
+                repository=repository,
+            )
+            if outcome not in counts:
+                outcome = "retryable"
+        except Exception:
+            # Candidate diagnostics and coordinates are intentionally discarded.
+            # The global listing call remains outside this boundary so a page
+            # failure cannot be misreported as successful empty work.
+            outcome = "retryable"
         counts[outcome] += 1
     continuation = next_cursor
     if len(candidates) > batch_limit:
@@ -83,7 +91,7 @@ def cleanup_expired_uploads(
         last = selected[-1]
         continuation = (
             {"PK": str(last["PK"]), "SK": str(last["SK"])}
-            if last.get("PK") and last.get("SK")
+            if isinstance(last, dict) and last.get("PK") and last.get("SK")
             else cursor
         )
     return CleanupSummary(
