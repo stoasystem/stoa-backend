@@ -253,6 +253,13 @@ def prepare_staging_issuance(item: dict[str, Any], *, table: Any | None = None) 
     create_upload_intent(item, table=table)
 
 
+def _require_provider_coordinate(value: Any) -> str:
+    """Reject malformed provider success coordinates before state can advance."""
+    if not isinstance(value, str) or not value.strip():
+        raise AttachmentRepositoryConflict("invalid_provider_coordinate")
+    return value
+
+
 def record_staging_multipart(
     upload_id: str,
     owner_id: str,
@@ -262,6 +269,7 @@ def record_staging_multipart(
     multipart_upload_id: str,
     table: Any | None = None,
 ) -> bool:
+    multipart_upload_id = _require_provider_coordinate(multipart_upload_id)
     return _fenced_transition(
         upload_id, owner_id, "issuing", "pending_upload", version, operation_fence,
         attributes={"multipart_upload_id": multipart_upload_id},
@@ -500,6 +508,8 @@ def recover_staging_completion(
     staging_etag: str,
     table: Any | None = None,
 ) -> bool:
+    staging_version_id = _require_provider_coordinate(staging_version_id)
+    staging_etag = _require_provider_coordinate(staging_etag)
     return _fenced_transition(
         upload_id, owner_id, "assembling", "validating", version, operation_fence,
         attributes={
@@ -812,6 +822,8 @@ def mark_cleanup_immutable_deleted(
 def record_cleanup_staging_version(
     upload_id: str, version: int, version_id: str, etag: str, *, table: Any | None = None
 ) -> bool:
+    version_id = _require_provider_coordinate(version_id)
+    etag = _require_provider_coordinate(etag)
     return _cleanup_update(
         upload_id,
         version,
@@ -824,6 +836,8 @@ def record_cleanup_staging_version(
 def record_cleanup_immutable_version(
     upload_id: str, version: int, version_id: str, etag: str, *, table: Any | None = None
 ) -> bool:
+    version_id = _require_provider_coordinate(version_id)
+    etag = _require_provider_coordinate(etag)
     return _cleanup_update(
         upload_id,
         version,
@@ -1563,6 +1577,15 @@ def mark_validated(
     *,
     table: Any | None = None,
 ) -> bool:
+    detected = {
+        **detected,
+        "immutable_version_id": _require_provider_coordinate(
+            detected.get("immutable_version_id")
+        ),
+        "immutable_etag": _require_provider_coordinate(
+            detected.get("immutable_etag")
+        ),
+    }
     return _transition(
         upload_id,
         owner_id,
@@ -1625,6 +1648,8 @@ def record_immutable_version(
     validated_at: str,
     table: Any | None = None,
 ) -> bool:
+    immutable_version_id = _require_provider_coordinate(immutable_version_id)
+    immutable_etag = _require_provider_coordinate(immutable_etag)
     return _fenced_transition(
         upload_id,
         owner_id,

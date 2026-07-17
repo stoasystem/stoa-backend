@@ -76,6 +76,19 @@ SENSITIVE_CANARIES = {
 }
 
 
+MALFORMED_PROVIDER_COORDINATES = [
+    None,
+    False,
+    True,
+    0,
+    1,
+    [],
+    {},
+    "",
+    " \t",
+]
+
+
 def test_upload_contract_constants_are_locked() -> None:
     assert UPLOAD_INTENT_TTL_SECONDS == 1800
     assert IMAGE_MAX_BYTES == 10485760
@@ -915,6 +928,39 @@ def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
     assert repository.item["staging_object_key"]
 
 
+@pytest.mark.parametrize(
+    "response",
+    [{}, *({"UploadId": value} for value in MALFORMED_PROVIDER_COORDINATES)],
+)
+def test_malformed_success_upload_id_retains_issuance_fence(response: dict) -> None:
+    class MalformedSuccessS3(_MultipartS3):
+        def create_multipart_upload(self, **kwargs):
+            self.call = kwargs
+            return response
+
+    repository = _IntentRepository()
+    with pytest.raises(AttachmentDecisionError) as captured:
+        create_upload_intent(
+            UploadIntentRequest(
+                purpose="question_image",
+                filename="work.png",
+                contentType="image/png",
+                sizeBytes=10,
+            ),
+            _student_actor(),
+            s3=MalformedSuccessS3(),
+            settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item and repository.item["status"] == "cleanup_pending"
+    assert repository.item["operation_kind"] == "staging_issuance"
+    assert repository.item["operation_fence"]
+    assert repository.item["staging_object_key"]
+    assert "multipart_upload_id" not in repository.item
+
+
 class _CrashLifecycleRepository:
     def __init__(self, item: dict | None = None) -> None:
         self.item = dict(item) if item else None
@@ -1165,6 +1211,228 @@ def test_promotion_provider_success_repository_split_recovers_exact_version() ->
     assert s3.put_calls == 1
     assert repository.item["immutable_object_key"] == immutable_key
     assert repository.takeovers == 1
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("VersionId", value) for value in MALFORMED_PROVIDER_COORDINATES
+    ]
+    + [("ETag", value) for value in MALFORMED_PROVIDER_COORDINATES],
+)
+def test_malformed_success_staging_coordinate_retains_assembly_fence(
+    field: str, value: object
+) -> None:
+    data = _image("PNG")
+    repository = _CrashLifecycleRepository(_pending_upload(expected_size=len(data)))
+    repository.part["content_length"] = len(data)
+
+    class MalformedCompletionS3(_CrashLifecycleS3):
+        def complete_multipart_upload(self, **kwargs):
+            result = super().complete_multipart_upload(**kwargs)
+            result[field] = value
+            return result
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        complete_upload(
+            "upload-1",
+            1,
+            _student_actor(),
+            s3=MalformedCompletionS3(data),
+            settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "assembling"
+    assert repository.item["operation_kind"] == "staging_assembly"
+    assert repository.item["operation_fence"]
+    assert repository.item["multipart_upload_id"] == "provider-upload-canary"
+    assert "staging_version_id" not in repository.item
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("VersionId", value) for value in MALFORMED_PROVIDER_COORDINATES
+    ]
+    + [("ETag", value) for value in MALFORMED_PROVIDER_COORDINATES],
+)
+def test_malformed_success_immutable_coordinate_retains_promotion_fence(
+    field: str, value: object
+) -> None:
+    data = _image("PNG")
+    item = {
+        **_pending_upload(expected_size=len(data)),
+        "status": "validating",
+        "version": 4,
+        "staging_version_id": "staging-version-exact",
+    }
+    repository = _CrashLifecycleRepository(item)
+
+    class MalformedPromotionS3(_CrashLifecycleS3):
+        def put_object(self, **kwargs):
+            result = super().put_object(**kwargs)
+            result[field] = value
+            return result
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _validate_and_promote_completed(
+            repository.item,
+            _student_actor(),
+            s3=MalformedPromotionS3(data),
+            settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+            repository=repository,
+        )
+    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item["status"] == "promoting"
+    assert repository.item["operation_kind"] == "immutable_promotion"
+    assert repository.item["operation_fence"]
+    assert repository.item["immutable_object_key"]
+    assert repository.item["content_sha256"]
+    assert "immutable_version_id" not in repository.item
+
+
+def test_malformed_success_coordinates_recover_after_restart_without_new_mutation() -> None:
+    data = _image("PNG")
+    repository = _CrashLifecycleRepository(_pending_upload(expected_size=len(data)))
+    repository.part["content_length"] = len(data)
+
+    class LostCoordinatesS3(_CrashLifecycleS3):
+        def complete_multipart_upload(self, **kwargs):
+            super().complete_multipart_upload(**kwargs)
+            return {"VersionId": " ", "ETag": "staging-etag-recovered"}
+
+    s3 = LostCoordinatesS3(data)
+    started = datetime(2026, 7, 16, tzinfo=timezone.utc)
+    with pytest.raises(AttachmentDecisionError):
+        complete_upload(
+            "upload-1",
+            1,
+            _student_actor(),
+            s3=s3,
+            settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=started,
+            repository=repository,
+        )
+    assert repository.item["status"] == "assembling"
+    recovered = complete_upload(
+        "upload-1",
+        1,
+        _student_actor(),
+        s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket-canary"),
+        now=started + timedelta(seconds=121),
+        repository=repository,
+    )
+    assert recovered["status"] == "validated"
+    assert s3.complete_calls == 1
+
+
+@pytest.mark.parametrize("coordinate", MALFORMED_PROVIDER_COORDINATES)
+def test_repository_coordinate_guards_run_before_fence_removal(
+    monkeypatch, coordinate: object
+) -> None:
+    def forbidden_transition(*args, **kwargs):
+        raise AssertionError("fence-removing transition must not run")
+
+    monkeypatch.setattr(attachment_repo, "_fenced_transition", forbidden_transition)
+
+    calls = (
+        lambda: attachment_repo.record_staging_multipart(
+            "upload-1",
+            "student-1",
+            1,
+            operation_fence="fence",
+            multipart_upload_id=coordinate,
+        ),
+        lambda: attachment_repo.recover_staging_completion(
+            "upload-1",
+            "student-1",
+            1,
+            operation_fence="fence",
+            staging_version_id=coordinate,
+            staging_etag="etag",
+        ),
+        lambda: attachment_repo.recover_staging_completion(
+            "upload-1",
+            "student-1",
+            1,
+            operation_fence="fence",
+            staging_version_id="version",
+            staging_etag=coordinate,
+        ),
+        lambda: attachment_repo.record_immutable_version(
+            "upload-1",
+            "student-1",
+            1,
+            operation_fence="fence",
+            immutable_version_id=coordinate,
+            immutable_etag="etag",
+            validated_at="2026-07-16T00:00:00+00:00",
+        ),
+        lambda: attachment_repo.record_immutable_version(
+            "upload-1",
+            "student-1",
+            1,
+            operation_fence="fence",
+            immutable_version_id="version",
+            immutable_etag=coordinate,
+            validated_at="2026-07-16T00:00:00+00:00",
+        ),
+    )
+    for call in calls:
+        with pytest.raises(attachment_repo.AttachmentRepositoryConflict) as captured:
+            call()
+        assert captured.value.category == "invalid_provider_coordinate"
+
+
+@pytest.mark.parametrize("coordinate", MALFORMED_PROVIDER_COORDINATES)
+def test_repository_coordinate_compatibility_aliases_reject_invalid_values(
+    monkeypatch, coordinate: object
+) -> None:
+    monkeypatch.setattr(
+        attachment_repo,
+        "get_upload_intent",
+        lambda *args, **kwargs: {
+            "staging_object_key": "staging-key",
+            "operation_fence": "fence",
+        },
+    )
+
+    def forbidden_transition(*args, **kwargs):
+        raise AssertionError("success transition must not run")
+
+    monkeypatch.setattr(attachment_repo, "_fenced_transition", forbidden_transition)
+    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+        attachment_repo.mark_upload_issued(
+            "upload-1",
+            "student-1",
+            1,
+            staging_object_key="staging-key",
+            multipart_upload_id=coordinate,
+        )
+    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+        attachment_repo.mark_staging_completed(
+            "upload-1",
+            "student-1",
+            1,
+            staging_version_id=coordinate,
+            staging_etag="etag",
+        )
+
+    monkeypatch.setattr(attachment_repo, "_transition", forbidden_transition)
+    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+        attachment_repo.mark_validated(
+            "upload-1",
+            "student-1",
+            1,
+            {
+                "immutable_version_id": coordinate,
+                "immutable_etag": "etag",
+            },
+        )
 
 
 class _MessageAttachmentRepository:
@@ -2883,6 +3151,42 @@ def test_cleanup_delete_failure_stays_unusable_retryable_and_redacted() -> None:
     )
     assert retried.deleted == 1
     assert repository.uploads["retry"]["status"] == "cleanup_complete"
+
+
+def test_no_false_cleanup_complete_when_assembly_version_is_unproven() -> None:
+    upload = _cleanup_upload("unproven-assembly", "assembling", 2_000_000_000)
+    upload.update(
+        operation_kind="staging_assembly",
+        operation_fence="assembly-fence-canary",
+        operation_lease_expires_at=1,
+        expected_size=3,
+        multipart_upload_id="completed-multipart-canary",
+    )
+    upload.pop("staging_version_id")
+    repository = _CleanupRepository([upload])
+    s3 = _CleanupS3()
+    s3.versions[upload["staging_object_key"]] = [
+        {
+            "Key": upload["staging_object_key"],
+            "VersionId": "unverified-version-canary",
+            "ETag": "unverified-etag-canary",
+            "ContentLength": 4,
+            "Metadata": {"upload-id": "different-upload-canary"},
+        }
+    ]
+    result = cleanup_expired_uploads(
+        s3=s3,
+        settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+        now=datetime(2026, 7, 16, tzinfo=timezone.utc),
+        repository=repository,
+    )
+    assert result.retryable == 1
+    current = repository.uploads["unproven-assembly"]
+    assert current["status"] == "cleanup_pending"
+    assert current["operation_kind"] == "staging_assembly"
+    assert current["operation_fence"] == "assembly-fence-canary"
+    assert current.get("cleanup_staging_deleted") is not True
+    assert s3.deleted == []
 
 
 def test_cleanup_repository_split_after_exact_delete_retries_without_reviving_upload() -> None:

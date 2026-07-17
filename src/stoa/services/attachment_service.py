@@ -71,6 +71,14 @@ def _provider_mapping(operation) -> dict[str, Any]:
     return response
 
 
+def _required_provider_coordinate(response: dict[str, Any], field: str) -> str:
+    """Accept only an exact non-blank provider coordinate without coercion."""
+    value = response.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
 def _close_provider_body(body: Any) -> None:
     """Release one provider response body without replacing the primary outcome."""
     close = getattr(body, "close", None)
@@ -235,7 +243,10 @@ def cleanup_upload_intent(
             str(current["upload_id"]), version, now.isoformat()
         ):
             return "retryable"
-    except attachment_repo.AttachmentRepositoryConflict:
+    except (
+        AttachmentDecisionError,
+        attachment_repo.AttachmentRepositoryConflict,
+    ):
         return "retryable"
     return "deleted"
 
@@ -270,8 +281,11 @@ def _abort_all_exact_key_multiparts(s3: Any, settings: Settings, key: str) -> No
                 AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             )
         for upload in uploads:
-            if upload.get("Key") == key and upload.get("UploadId"):
-                _abort_multipart_exact(s3, settings, key, str(upload["UploadId"]))
+            if upload.get("Key") == key:
+                multipart_upload_id = _required_provider_coordinate(
+                    upload, "UploadId"
+                )
+                _abort_multipart_exact(s3, settings, key, multipart_upload_id)
         if not response.get("IsTruncated"):
             return
         request["KeyMarker"] = response.get("NextKeyMarker")
@@ -288,8 +302,9 @@ def _matching_exact_version(
     metadata_name: str,
     metadata_value: str,
 ) -> tuple[str, str] | None:
-    for version in _exact_object_versions(s3, settings, key):
-        version_id = str(version.get("VersionId") or "")
+    versions = _exact_object_versions(s3, settings, key)
+    for version in versions:
+        version_id = _required_provider_coordinate(version, "VersionId")
         head = _provider_mapping(
             lambda: s3.head_object(
                 Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
@@ -299,7 +314,12 @@ def _matching_exact_version(
             int(head.get("ContentLength", -1)) == expected_length
             and str((head.get("Metadata") or {}).get(metadata_name) or "") == metadata_value
         ):
-            return version_id, str(head.get("ETag") or version.get("ETag") or "")
+            etag_source = head if head.get("ETag") is not None else version
+            return version_id, _required_provider_coordinate(etag_source, "ETag")
+    if versions:
+        # A never-reused exact key with an unverified version is not proof of
+        # absence. Retain the recovery fence for a later safe reconciliation.
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     return None
 
 
@@ -354,15 +374,17 @@ def create_upload_intent(
     try:
         prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)
         prepare(item)
-        created = s3.create_multipart_upload(
-            Bucket=settings.s3_images_bucket,
-            Key=staging_object_key,
-            ContentType=request.content_type,
-            ServerSideEncryption="AES256",
-            Metadata={"upload-id": upload_id},
-            ChecksumAlgorithm="SHA256",
+        created = _provider_mapping(
+            lambda: s3.create_multipart_upload(
+                Bucket=settings.s3_images_bucket,
+                Key=staging_object_key,
+                ContentType=request.content_type,
+                ServerSideEncryption="AES256",
+                Metadata={"upload-id": upload_id},
+                ChecksumAlgorithm="SHA256",
+            )
         )
-        multipart_upload_id = str(created["UploadId"])
+        multipart_upload_id = _required_provider_coordinate(created, "UploadId")
         record = getattr(repository, "record_staging_multipart", None)
         recorded = (
             record(
@@ -699,6 +721,8 @@ def complete_upload(
                 ]
             },
         ))
+        staging_version_id = _required_provider_coordinate(result, "VersionId")
+        staging_etag = _required_provider_coordinate(result, "ETag")
         recover = getattr(repository, "recover_staging_completion", None)
         persisted = _gateway_call(lambda: (
             recover(
@@ -706,16 +730,16 @@ def complete_upload(
                 actor.user_id,
                 version + 1,
                 operation_fence=operation_fence,
-                staging_version_id=str(result.get("VersionId") or ""),
-                staging_etag=str(result.get("ETag") or ""),
+                staging_version_id=staging_version_id,
+                staging_etag=staging_etag,
             )
             if recover
             else repository.mark_staging_completed(
                 upload_id,
                 actor.user_id,
                 version + 1,
-                staging_version_id=str(result.get("VersionId") or ""),
-                staging_etag=str(result.get("ETag") or ""),
+                staging_version_id=staging_version_id,
+                staging_etag=staging_etag,
             )
         ))
         if not persisted:
@@ -734,8 +758,8 @@ def complete_upload(
         **item,
         "status": "validating",
         "version": version + 2,
-        "staging_version_id": str(result.get("VersionId") or ""),
-        "staging_etag": str(result.get("ETag") or ""),
+        "staging_version_id": staging_version_id,
+        "staging_etag": staging_etag,
     }
     return _validate_and_promote_completed(
         completed,
@@ -795,7 +819,7 @@ def _recover_staging_assembly(
     fence = str(item["operation_fence"])
     try:
         for version in _exact_object_versions(s3, settings, key):
-            version_id = str(version.get("VersionId") or "")
+            version_id = _required_provider_coordinate(version, "VersionId")
             head = _provider_mapping(
                 lambda: s3.head_object(
                     Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
@@ -806,7 +830,8 @@ def _recover_staging_assembly(
                 int(head.get("ContentLength", -1)) == int(item.get("expected_size", -2))
                 and metadata.get("upload-id") == item.get("upload_id")
             ):
-                etag = str(head.get("ETag") or version.get("ETag") or "")
+                etag_source = head if head.get("ETag") is not None else version
+                etag = _required_provider_coordinate(etag_source, "ETag")
                 if _gateway_call(
                     lambda: repository.recover_staging_completion(
                         item["upload_id"],
@@ -854,7 +879,7 @@ def _recover_immutable_promotion(
     fence = str(item["operation_fence"])
     try:
         for version in _exact_object_versions(s3, settings, key):
-            version_id = str(version.get("VersionId") or "")
+            version_id = _required_provider_coordinate(version, "VersionId")
             head = _provider_mapping(
                 lambda: s3.head_object(
                     Bucket=settings.s3_images_bucket, Key=key, VersionId=version_id
@@ -865,7 +890,8 @@ def _recover_immutable_promotion(
                 int(head.get("ContentLength", -1)) == int(item.get("content_length", -2))
                 and metadata.get("content-sha256") == expected_checksum
             ):
-                etag = str(head.get("ETag") or version.get("ETag") or "")
+                etag_source = head if head.get("ETag") is not None else version
+                etag = _required_provider_coordinate(etag_source, "ETag")
                 if _gateway_call(
                     lambda: repository.record_immutable_version(
                         item["upload_id"],
@@ -1005,12 +1031,10 @@ def _validate_and_promote_completed(
                         Metadata={"content-sha256": checksum},
                     )
                 )
-                immutable_version = str(promoted.get("VersionId") or "")
-                immutable_etag = str(promoted.get("ETag") or "")
-                if not immutable_version or not immutable_etag:
-                    raise AttachmentDecisionError(
-                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-                    )
+                immutable_version = _required_provider_coordinate(
+                    promoted, "VersionId"
+                )
+                immutable_etag = _required_provider_coordinate(promoted, "ETag")
                 record = getattr(repository, "record_immutable_version", None)
                 persisted = _gateway_call(
                     lambda: (

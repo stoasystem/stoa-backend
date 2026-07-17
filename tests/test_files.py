@@ -251,6 +251,8 @@ class _GatewayS3:
             raise RuntimeError("S3 owner key version provider-canary")
         if self.stage == "malformed_provider_completion":
             return []
+        if self.stage == "empty_coordinate_completion":
+            return {"VersionId": " ", "ETag": "private-etag-canary"}
         return {"VersionId": "private-version-canary", "ETag": "private-etag-canary"}
 
     def list_object_versions(self, **kwargs):
@@ -280,6 +282,7 @@ class _GatewayS3:
         "assembly_claim",
         "provider_completion",
         "malformed_provider_completion",
+        "empty_coordinate_completion",
         "completion_persist",
         "validation_read",
         "staging_recovery_lookup",
