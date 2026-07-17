@@ -93,19 +93,6 @@ class MessageCommandResult:
     attempt: int | None = None
     operations: tuple[TransactionOperation, ...] = ()
 
-    def __iter__(self):
-        """Temporary tuple compatibility for callers migrated in the router task."""
-        yield self.disposition is MessageCommandDisposition.CLAIMED
-        yield int(self.counter_value or 0)
-
-    def __bool__(self) -> bool:
-        return self.disposition in {
-            MessageCommandDisposition.CLAIMED,
-            MessageCommandDisposition.COMPLETED,
-            MessageCommandDisposition.REJECTED,
-            MessageCommandDisposition.TERMINAL,
-        }
-
 
 def upload_key(upload_id: str) -> dict[str, str]:
     return {"PK": f"UPLOAD#{upload_id}", "SK": "META"}
@@ -222,6 +209,13 @@ def classify_message_command(
     if command.get("fingerprint") != fingerprint:
         return MessageCommandResult(
             MessageCommandDisposition.IDEMPOTENCY_CONFLICT, command=dict(command)
+        )
+    if (
+        command.get("entity_type") != "message_command"
+        or command.get("schema_version") != "message-command.v2"
+    ):
+        return MessageCommandResult(
+            MessageCommandDisposition.RETRYABLE, command=dict(command)
         )
 
     status = command.get("status")
@@ -1605,18 +1599,41 @@ def claim_message_ai_lease(
     expires_at: int,
     max_attempts: int = 3,
     table: Any | None = None,
-) -> tuple[bool, int]:
+) -> MessageCommandResult:
     target = table or get_table()
-    command = get_message_command(conversation_id, idempotency_key, table=target) or {}
+    try:
+        command = get_message_command(conversation_id, idempotency_key, table=target) or {}
+    except Exception:
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     attempt = int(command.get("attempt", 0)) + 1
-    status = command.get("status")
-    can_claim = status == "message_committed" or (
-        status == "ai_running"
+    command_status = command.get("status")
+    can_claim = command_status == "message_committed" or (
+        command_status == "ai_running"
         and int(command.get("expiresAt", 0)) <= now_epoch
         and attempt <= max_attempts
     )
     if not can_claim or attempt > max_attempts:
-        return False, int(command.get("attempt", 0))
+        if command_status == "completed":
+            disposition = MessageCommandDisposition.COMPLETED
+        elif command_status == "rejected":
+            disposition = MessageCommandDisposition.REJECTED
+        elif int(command.get("attempt", 0)) >= max_attempts:
+            disposition = MessageCommandDisposition.TERMINAL
+        elif command_status == "ai_running":
+            disposition = MessageCommandDisposition.LEASE_HELD
+        else:
+            disposition = MessageCommandDisposition.RETRYABLE
+        return MessageCommandResult(
+            disposition,
+            command=dict(command),
+            counter_value=_optional_positive_int(command.get("counter_value")),
+            error_code=(
+                str(command["error_code"])
+                if isinstance(command.get("error_code"), str)
+                else None
+            ),
+            attempt=int(command.get("attempt", 0)),
+        )
     try:
         target.update_item(
             Key=message_command_key(conversation_id, idempotency_key),
@@ -1643,9 +1660,37 @@ def claim_message_ai_lease(
         )
     except ClientError as exc:
         if _conditional(exc):
-            return False, int(command.get("attempt", 0))
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return True, attempt
+            try:
+                reread = get_message_command(
+                    conversation_id, idempotency_key, table=target
+                )
+            except Exception:
+                return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+            if isinstance(reread, dict) and reread.get("owner_id") == owner_id:
+                current_fingerprint = reread.get("fingerprint")
+                if isinstance(current_fingerprint, str):
+                    return classify_message_command(
+                        reread,
+                        owner_id=owner_id,
+                        fingerprint=current_fingerprint,
+                        now_epoch=now_epoch,
+                    )
+            return MessageCommandResult(MessageCommandDisposition.MISSING)
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+    claimed = {
+        **command,
+        "status": "ai_running",
+        "leaseOwner": lease_owner,
+        "claimedAt": now_epoch,
+        "expiresAt": expires_at,
+        "attempt": attempt,
+    }
+    return MessageCommandResult(
+        MessageCommandDisposition.CLAIMED,
+        command=claimed,
+        counter_value=_optional_positive_int(command.get("counter_value")),
+        attempt=attempt,
+    )
 
 
 def complete_message_command(

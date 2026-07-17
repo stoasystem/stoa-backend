@@ -346,6 +346,20 @@ def test_command_state_classifier_distinguishes_missing_and_conflict() -> None:
     assert conflict.disposition is attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT
 
 
+def test_command_state_classifier_rejects_unversioned_rows() -> None:
+    command = _command(status="claimed")
+    command.pop("schema_version")
+
+    result = attachment_repo.classify_message_command(
+        command,
+        owner_id="student-1",
+        fingerprint="f" * 64,
+        now_epoch=1784307600,
+    )
+
+    assert result.disposition is attachment_repo.MessageCommandDisposition.RETRYABLE
+
+
 def _route_client() -> TestClient:
     app = FastAPI()
     app.include_router(conversations.router, prefix="/conversations")
@@ -443,3 +457,72 @@ def test_repository_get_item_fault_is_redacted_dependency_result() -> None:
         )
     assert captured.value.category == "dependency_failure"
     assert "private-canary" not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (_command(status="rejected", error_code="upload_not_found"), "upload_not_found"),
+        (_command(status="terminal_failed"), "message_failed"),
+        (_command(status="expired"), "message_command_expired"),
+        (None, "message_command_not_found"),
+        (_command(status="unknown"), "upload_service_unavailable"),
+    ],
+)
+def test_polling_projects_nonlive_states_without_in_progress(
+    monkeypatch, command: dict[str, Any] | None, expected: str
+) -> None:
+    class Table:
+        def get_item(self, **_kwargs):
+            return {"Item": dict(command)} if command else {}
+
+    monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
+    with pytest.raises(conversations.AttachmentDecisionError) as captured:
+        conversations._wait_for_message_command(
+            "conv-1",
+            "message-key",
+            "f" * 64,
+            table=Table(),
+            owner_id="student-1",
+        )
+    assert captured.value.code.value == expected
+    assert captured.value.code.value != "message_in_progress"
+
+
+@pytest.mark.parametrize("suffix", ["/messages", "/messages/stream"])
+def test_regular_and_sse_replay_exact_durable_rejection(
+    monkeypatch, suffix: str
+) -> None:
+    request = conversations.SendMessageRequest.model_validate(
+        {"content": "same", "idempotencyKey": "message-key"}
+    )
+    rejected = _command(
+        status="rejected",
+        error_code="storage_quota_exceeded",
+        fingerprint=conversations.message_request_fingerprint(request),
+    )
+
+    class Table:
+        def get_item(self, **_kwargs):
+            return {"Item": dict(rejected)}
+
+    table = Table()
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda *_: {
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "subject": "math",
+            "grade": "Sek1",
+        },
+    )
+    monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    response = _route_client().post(
+        f"/conversations/conv-1{suffix}",
+        json={"content": "same", "idempotencyKey": "message-key"},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "storage_quota_exceeded"
+    assert "private" not in response.text

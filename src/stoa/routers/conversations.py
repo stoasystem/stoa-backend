@@ -184,21 +184,28 @@ async def _message_command_dependency(
     """Stage A: compute and compare the command before attachment resolution."""
     fingerprint = message_request_fingerprint(body)
     try:
-        existing = _conversation_repository_call(
-            lambda: attachment_repo.get_message_command(
-                conv_id, body.idempotencyKey
+        state = _conversation_repository_call(
+            lambda: attachment_repo.read_message_command_result(
+                conv_id,
+                body.idempotencyKey,
+                owner_id=actor.user_id,
+                fingerprint=fingerprint,
+                now_epoch=int(datetime.now(timezone.utc).timestamp()),
             )
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-    if existing and existing.get("owner_id") != actor.user_id:
-        existing = None
-    if existing and existing.get("fingerprint") != fingerprint:
+    if state.disposition is attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT:
         _raise_attachment(
             AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT),
             correlation_id,
         )
-    return {"actor": actor, "fingerprint": fingerprint, "existing": existing}
+    return {
+        "actor": actor,
+        "fingerprint": fingerprint,
+        "state": state,
+        "existing": state.command,
+    }
 
 
 async def _attachment_inventory_resolver(resource_id: str):
@@ -552,29 +559,122 @@ def _completed_command_response(command: dict) -> SendMessageResponse | None:
         return None
 
 
+def _command_error_code(
+    result: attachment_repo.MessageCommandResult,
+) -> AttachmentErrorCode:
+    disposition = result.disposition
+    if disposition is attachment_repo.MessageCommandDisposition.REJECTED:
+        try:
+            code = AttachmentErrorCode(str(result.error_code))
+        except ValueError:
+            return AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        if code in {
+            AttachmentErrorCode.MESSAGE_IN_PROGRESS,
+            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT,
+            AttachmentErrorCode.MESSAGE_DAILY_LIMIT,
+        }:
+            return AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        return code
+    return {
+        attachment_repo.MessageCommandDisposition.QUOTA_EXCEEDED: (
+            AttachmentErrorCode.MESSAGE_DAILY_LIMIT
+        ),
+        attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT: (
+            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
+        ),
+        attachment_repo.MessageCommandDisposition.RETRYABLE: (
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ),
+        attachment_repo.MessageCommandDisposition.TERMINAL: (
+            AttachmentErrorCode.MESSAGE_FAILED
+        ),
+        attachment_repo.MessageCommandDisposition.EXPIRED: (
+            AttachmentErrorCode.MESSAGE_COMMAND_EXPIRED
+        ),
+        attachment_repo.MessageCommandDisposition.MISSING: (
+            AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND
+        ),
+    }.get(disposition, AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+
+
+def _result_response(
+    result: attachment_repo.MessageCommandResult,
+) -> SendMessageResponse | None:
+    if result.disposition is not attachment_repo.MessageCommandDisposition.COMPLETED:
+        return None
+    response = _completed_command_response(result.command or {})
+    if response is None:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return response
+
+
+def _coerce_command_result(
+    value,
+    *,
+    false_disposition: attachment_repo.MessageCommandDisposition,
+) -> attachment_repo.MessageCommandResult:
+    """Accept inherited test doubles while production repositories stay typed."""
+    if isinstance(value, attachment_repo.MessageCommandResult):
+        return value
+    if isinstance(value, tuple) and len(value) == 2:
+        success, counter = value
+        return attachment_repo.MessageCommandResult(
+            (
+                attachment_repo.MessageCommandDisposition.CLAIMED
+                if success
+                else false_disposition
+            ),
+            counter_value=int(counter),
+            attempt=int(counter),
+        )
+    if isinstance(value, bool):
+        return attachment_repo.MessageCommandResult(
+            (
+                attachment_repo.MessageCommandDisposition.COMPLETED
+                if value
+                else false_disposition
+            )
+        )
+    return attachment_repo.MessageCommandResult(
+        attachment_repo.MessageCommandDisposition.RETRYABLE
+    )
+
+
 def _wait_for_message_command(
     conversation_id: str,
     idempotency_key: str,
     fingerprint: str,
     *,
     table,
+    owner_id: str | None = None,
 ) -> SendMessageResponse:
+    last = attachment_repo.MessageCommandResult(
+        attachment_repo.MessageCommandDisposition.MISSING
+    )
     for _ in range(_MESSAGE_POLL_ATTEMPTS):
         command = _conversation_repository_call(
             lambda: attachment_repo.get_message_command(
                 conversation_id, idempotency_key, table=table
             )
         )
-        if command and command.get("fingerprint") != fingerprint:
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
-            )
-        if command and (result := _completed_command_response(command)) is not None:
-            return result
+        last = attachment_repo.classify_message_command(
+            command,
+            owner_id=owner_id or str((command or {}).get("owner_id") or ""),
+            fingerprint=fingerprint,
+            now_epoch=int(datetime.now(timezone.utc).timestamp()),
+        )
+        if response := _result_response(last):
+            return response
+        if last.disposition not in {
+            attachment_repo.MessageCommandDisposition.CLAIMED,
+            attachment_repo.MessageCommandDisposition.RESUME,
+            attachment_repo.MessageCommandDisposition.LEASE_HELD,
+        }:
+            raise AttachmentDecisionError(_command_error_code(last))
         time.sleep(_MESSAGE_POLL_SECONDS)
     emit_private_event(
         "message_replay_wait_exhausted",
-        correlation_id=str((command or {}).get("command_id") or "message-command"),
+        correlation_id=str((last.command or {}).get("command_id") or "message-command"),
         level=logging.WARNING,
     )
     raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
@@ -594,15 +694,35 @@ def _execute_message_command(
     fingerprint = str(command_context["fingerprint"])
     table = get_table()
     existing = command_context.get("existing")
-    if existing and (result := _completed_command_response(existing)) is not None:
-        return result
-    if existing and existing.get("status") == "ai_running":
-        if int(existing.get("expiresAt", 0)) > int(datetime.now(timezone.utc).timestamp()):
-            return _wait_for_message_command(
-                conv_id, body.idempotencyKey, fingerprint, table=table
-            )
-    if existing and existing.get("status") == "terminal_failed":
-        raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    state = command_context.get("state")
+    if not isinstance(state, attachment_repo.MessageCommandResult):
+        state = attachment_repo.classify_message_command(
+            existing,
+            owner_id=student_id,
+            fingerprint=fingerprint,
+            now_epoch=now_epoch,
+        )
+    if response := _result_response(state):
+        return response
+    if state.disposition is attachment_repo.MessageCommandDisposition.LEASE_HELD:
+        return _wait_for_message_command(
+            conv_id,
+            body.idempotencyKey,
+            fingerprint,
+            table=table,
+            owner_id=student_id,
+        )
+    if existing and state.disposition in {
+        attachment_repo.MessageCommandDisposition.REJECTED,
+        attachment_repo.MessageCommandDisposition.QUOTA_EXCEEDED,
+        attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT,
+        attachment_repo.MessageCommandDisposition.RETRYABLE,
+        attachment_repo.MessageCommandDisposition.TERMINAL,
+        attachment_repo.MessageCommandDisposition.EXPIRED,
+        attachment_repo.MessageCommandDisposition.MISSING,
+    }:
+        raise AttachmentDecisionError(_command_error_code(state))
 
     command_id = str(
         uuid5(NAMESPACE_URL, f"stoa.conversation.send.v1:{conv_id}:{body.idempotencyKey}")
@@ -610,8 +730,41 @@ def _execute_message_command(
     student_msg_id = str(uuid5(UUID(command_id), "student-message"))
     assistant_msg_id = str(uuid5(UUID(command_id), "assistant-message"))
     created_at = str(existing.get("created_at")) if existing else _now()
+    requested_attachments: list[dict[str, str]] = []
+    deterministic_attachment_ids: list[str] = []
+    for index, reference in enumerate(body.attachmentIds or []):
+        if reference.upload_id is not None:
+            attachment_id = str(uuid5(UUID(command_id), f"attachment:{index}"))
+            deterministic_attachment_ids.append(attachment_id)
+            requested_attachments.append(
+                {
+                    "kind": "upload",
+                    "id": str(reference.upload_id),
+                    "attachment_id": attachment_id,
+                }
+            )
+        else:
+            requested_attachments.append(
+                {
+                    "kind": "attachment",
+                    "id": str(reference.attachment_id),
+                    "attachment_id": str(reference.attachment_id),
+                }
+            )
+    quota_period = (
+        str(existing["quota_period"])
+        if existing and isinstance(existing.get("quota_period"), str)
+        else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    )
+    command_expires_at = (
+        int(existing["expires_at"])
+        if existing and isinstance(existing.get("expires_at"), int)
+        else now_epoch + 172800
+    )
+    usage_idempotency_key = f"chat_message:{student_msg_id}"
     command = existing or {
         "entity_type": "message_command",
+        "schema_version": "message-command.v2",
         "command_id": command_id,
         "conversation_id": conv_id,
         "owner_id": student_id,
@@ -621,11 +774,22 @@ def _execute_message_command(
         "student_message_id": student_msg_id,
         "assistant_message_id": assistant_msg_id,
         "attachment_count": len(body.attachmentIds or []),
+        "requested_attachments": requested_attachments,
+        "deterministic_attachment_ids": deterministic_attachment_ids,
+        "quota_period": quota_period,
+        "usage_action": "chat_message",
+        "usage_resource_id": student_msg_id,
+        "usage_idempotency_key": usage_idempotency_key,
+        "usage_event_id": (
+            f"{student_id}:chat_message:{quota_period}:{usage_idempotency_key}"
+        ),
+        "history_anchor_message_id": student_msg_id,
+        "history_anchor_created_at": created_at,
         "attempt": 0,
         "created_at": created_at,
+        "expires_at": command_expires_at,
     }
 
-    quota_period = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     quota_limit = _chat_limit_for_student(student_id)
     resume_after_message = bool(
         existing and existing.get("status") in {"message_committed", "ai_running"}
@@ -646,20 +810,38 @@ def _execute_message_command(
             ).get("Item")
         )
         if not stored_student:
-            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
         attachment_ids = list(stored_student.get("attachment_ids", []))
         stored_attachments = _conversation_repository_call(
             lambda: attachment_repo.get_attachments(attachment_ids, table=table)
         )
-        prepared = [
-            ("attachment", stored_attachments[value])
-            for value in attachment_ids
-            if value in stored_attachments
-        ]
+        if (
+            len(stored_attachments) != len(attachment_ids)
+            or set(stored_attachments) != set(attachment_ids)
+            or any(
+                item.get("owner_id") != student_id
+                or item.get("status") != "active"
+                or not all(
+                    isinstance(item.get(field), str) and item[field]
+                    for field in (
+                        "immutable_object_key",
+                        "immutable_version_id",
+                        "immutable_etag",
+                        "content_sha256",
+                    )
+                )
+                for item in stored_attachments.values()
+            )
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        prepared = [("attachment", stored_attachments[value]) for value in attachment_ids]
         attachments = attachment_service.attachment_summaries_for_records(
             attachment_ids, stored_attachments
         )
-        counter_value = int(existing.get("counter_value", 1))
     else:
         # Stage B is entered only for an absent command, or to resume a claimed
         # command lost before its deterministic message transaction.
@@ -676,38 +858,38 @@ def _execute_message_command(
             lambda: _get_messages(conv_id)
         )
         if not existing:
-            claimed, counter_value = _conversation_repository_call(
+            claim_result = _coerce_command_result(
+                _conversation_repository_call(
                 lambda: attachment_repo.claim_message_command_and_quota(
                     command=command,
                     owner_id=student_id,
                     quota_period=quota_period,
                     limit=quota_limit,
-                    expires_at=int(datetime.now(timezone.utc).timestamp()) + 172800,
+                    expires_at=command_expires_at,
                     table=table,
                 )
+                ),
+                false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
             )
-            if not claimed:
-                raced = _conversation_repository_call(
-                    lambda: attachment_repo.get_message_command(
-                        conv_id, body.idempotencyKey, table=table
-                    )
-                )
-                if raced:
-                    if raced.get("fingerprint") != fingerprint:
-                        raise AttachmentDecisionError(
-                            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
-                        )
+            if claim_result.disposition is not attachment_repo.MessageCommandDisposition.CLAIMED:
+                if response := _result_response(claim_result):
+                    return response
+                if claim_result.disposition in {
+                    attachment_repo.MessageCommandDisposition.RESUME,
+                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                }:
                     return _wait_for_message_command(
-                        conv_id, body.idempotencyKey, fingerprint, table=table
+                        conv_id,
+                        body.idempotencyKey,
+                        fingerprint,
+                        table=table,
+                        owner_id=student_id,
                     )
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        f"Daily chat message limit ({quota_limit}) reached. Try again tomorrow."
-                    ),
-                )
-        else:
-            counter_value = int(existing.get("counter_value", 1))
+                raise AttachmentDecisionError(_command_error_code(claim_result))
+            command = claim_result.command or {
+                **command,
+                "counter_value": int(claim_result.counter_value or 0),
+            }
         student_item = {
             "PK": _conv_pk(conv_id),
             "SK": _msg_sk(student_msg_id),
@@ -718,11 +900,14 @@ def _execute_message_command(
             "content": body.content,
             "created_at": created_at,
         }
-        deterministic_attachment_ids = [
-            str(uuid5(UUID(command_id), f"attachment:{index}"))
-            for index, (kind, _) in enumerate(prepared)
-            if kind == "upload"
-        ]
+        command_attachment_ids = command.get("deterministic_attachment_ids")
+        if not isinstance(command_attachment_ids, list) or any(
+            not isinstance(value, str) or not value
+            for value in command_attachment_ids
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
         try:
             attachments = _conversation_repository_call(
                 lambda: attachment_service.bind_message_attachments(
@@ -732,75 +917,138 @@ def _execute_message_command(
                     prepared=prepared,
                     effective_plan=effective_plan,
                     command=command,
-                    deterministic_attachment_ids=deterministic_attachment_ids,
+                    deterministic_attachment_ids=command_attachment_ids,
                 )
             )
-        except AttachmentDecisionError:
-            raced = _conversation_repository_call(
-                lambda: attachment_repo.get_message_command(
-                    conv_id, body.idempotencyKey, table=table
+        except AttachmentDecisionError as bind_error:
+            bind_error_code = bind_error.code
+            deterministic = bind_error_code in {
+                AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED,
+                AttachmentErrorCode.UPLOAD_NOT_FOUND,
+                AttachmentErrorCode.UPLOAD_EXPIRED,
+                AttachmentErrorCode.UPLOAD_TOO_LARGE,
+                AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED,
+                AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH,
+                AttachmentErrorCode.UPLOAD_INVALID,
+                AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT,
+            }
+            if deterministic:
+                rejection = _conversation_repository_call(
+                    lambda: attachment_repo.reject_message_command_and_compensate(
+                        conversation_id=conv_id,
+                        idempotency_key=body.idempotencyKey,
+                        owner_id=student_id,
+                        fingerprint=fingerprint,
+                        error_code=bind_error_code.value,
+                        now_iso=_now(),
+                        table=table,
+                    )
                 )
+                if rejection.disposition is attachment_repo.MessageCommandDisposition.REJECTED:
+                    raise bind_error
+                if response := _result_response(rejection):
+                    return response
+                if rejection.disposition not in {
+                    attachment_repo.MessageCommandDisposition.RESUME,
+                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                }:
+                    raise AttachmentDecisionError(_command_error_code(rejection))
+                raced = rejection.command
+            else:
+                reread = _conversation_repository_call(
+                    lambda: attachment_repo.read_message_command_result(
+                        conv_id,
+                        body.idempotencyKey,
+                        owner_id=student_id,
+                        fingerprint=fingerprint,
+                        now_epoch=int(datetime.now(timezone.utc).timestamp()),
+                        table=table,
+                    )
+                )
+                if response := _result_response(reread):
+                    return response
+                if reread.disposition not in {
+                    attachment_repo.MessageCommandDisposition.RESUME,
+                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                }:
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                    )
+                raced = reread.command
+            return _execute_message_command(
+                conv_id=conv_id,
+                student_id=student_id,
+                subject=subject,
+                grade=grade,
+                body=body,
+                command_context={
+                    "actor": actor,
+                    "fingerprint": fingerprint,
+                    "existing": raced,
+                },
             )
-            if raced and raced.get("fingerprint") == fingerprint:
-                return _wait_for_message_command(
-                    conv_id, body.idempotencyKey, fingerprint, table=table
-                )
-            raise
-
-    usage_counter = {
-        "quotaPeriod": quota_period,
-        "counterKey": f"USAGE#{student_id}/CHAT#{quota_period}",
-        "counterValue": counter_value,
-    }
-    _record_chat_usage(
-        student_id=student_id,
-        conv_id=conv_id,
-        student_message_id=student_msg_id,
-        subject=subject,
-        grade=grade,
-        usage_counter=usage_counter,
-        created_at=created_at,
-    )
 
     lease_owner = str(uuid.uuid4())
     now_epoch = int(datetime.now(timezone.utc).timestamp())
-    lease_claimed, _attempt = _conversation_repository_call(
-        lambda: attachment_repo.claim_message_ai_lease(
-            conversation_id=conv_id,
-            idempotency_key=body.idempotencyKey,
-            owner_id=student_id,
-            lease_owner=lease_owner,
-            now_epoch=now_epoch,
-            expires_at=now_epoch + _AI_LEASE_SECONDS,
-            table=table,
-        )
-    )
-    if not lease_claimed:
-        current = (
-            _conversation_repository_call(
-                lambda: attachment_repo.get_message_command(
-                    conv_id, body.idempotencyKey, table=table
-                )
+    lease_result = _coerce_command_result(
+        _conversation_repository_call(
+            lambda: attachment_repo.claim_message_ai_lease(
+                conversation_id=conv_id,
+                idempotency_key=body.idempotencyKey,
+                owner_id=student_id,
+                lease_owner=lease_owner,
+                now_epoch=now_epoch,
+                expires_at=now_epoch + _AI_LEASE_SECONDS,
+                table=table,
             )
-            or {}
-        )
-        if (
-            current.get("status") == "ai_running"
-            and int(current.get("expiresAt", 0)) <= now_epoch
-            and int(current.get("attempt", 0)) >= 3
-        ):
-            _conversation_repository_call(
-                lambda: attachment_repo.mark_message_command_terminal(
-                    conversation_id=conv_id,
-                    idempotency_key=body.idempotencyKey,
+        ),
+        false_disposition=attachment_repo.MessageCommandDisposition.LEASE_HELD,
+    )
+    if lease_result.disposition is not attachment_repo.MessageCommandDisposition.CLAIMED:
+        if response := _result_response(lease_result):
+            return response
+        if lease_result.attempt is not None and lease_result.attempt >= 3:
+            current = _conversation_repository_call(
+                lambda: attachment_repo.read_message_command_result(
+                    conv_id,
+                    body.idempotencyKey,
                     owner_id=student_id,
-                    now_iso=_now(),
+                    fingerprint=fingerprint,
+                    now_epoch=now_epoch,
                     table=table,
                 )
             )
-        return _wait_for_message_command(
-            conv_id, body.idempotencyKey, fingerprint, table=table
-        )
+            if current.disposition in {
+                attachment_repo.MessageCommandDisposition.TERMINAL,
+                attachment_repo.MessageCommandDisposition.RESUME,
+            }:
+                terminal = _conversation_repository_call(
+                    lambda: attachment_repo.mark_message_command_terminal(
+                        conversation_id=conv_id,
+                        idempotency_key=body.idempotencyKey,
+                        owner_id=student_id,
+                        now_iso=_now(),
+                        table=table,
+                    )
+                )
+                terminal = _coerce_command_result(
+                    terminal,
+                    false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
+                )
+                raise AttachmentDecisionError(_command_error_code(terminal))
+            lease_result = current
+        if lease_result.disposition in {
+            attachment_repo.MessageCommandDisposition.LEASE_HELD,
+            attachment_repo.MessageCommandDisposition.RESUME,
+        }:
+            return _wait_for_message_command(
+                conv_id,
+                body.idempotencyKey,
+                fingerprint,
+                table=table,
+                owner_id=student_id,
+            )
+        raise AttachmentDecisionError(_command_error_code(lease_result))
 
     attachment_context = ""
     if prepared:
@@ -877,164 +1125,28 @@ def _execute_message_command(
         "content": ai_content,
         "created_at": assistant_created_at,
     }
-    if not _conversation_repository_call(
-        lambda: attachment_repo.complete_message_command(
-            conversation_id=conv_id,
-            idempotency_key=body.idempotencyKey,
-            owner_id=student_id,
-            lease_owner=lease_owner,
-            assistant_message=assistant_item,
-            result_json=result.model_dump_json(),
-            completed_at=assistant_created_at,
-            table=table,
-        )
-    ):
-        return _wait_for_message_command(
-            conv_id, body.idempotencyKey, fingerprint, table=table
-        )
-    return result
-
-
-def _send_message_impl(
-    conv_id: str,
-    student_id: str,
-    subject: str,
-    grade: str,
-    content: str,
-    table,
-    actor: Actor,
-    prepared_attachments: list[tuple[str, dict]] | None = None,
-    effective_plan: str | None = None,
-) -> tuple[ChatMessage, ChatMessage]:
-    """Persist student message, call Bedrock, persist AI reply. Returns both messages."""
-    now = _now()
-    student_msg_id = str(uuid.uuid4())
-    assistant_msg_id = str(uuid.uuid4())
-
-    # Map frontend subject names to AI service expected values
-    subject_map = {
-        "Mathematics": "math", "Mathematik": "math", "math": "math",
-        "Physics": "physics", "Physik": "physics", "physics": "physics",
-        "German": "german", "Deutsch": "german", "german": "german",
-        "English": "english", "english": "english",
-        "French": "french", "Französisch": "french", "french": "french",
-    }
-    normalized_subject = subject_map.get(subject, "math")
-
-    # Fetch conversation history BEFORE saving the new message so the model
-    # sees the prior turns (student + assistant only; teacher/system excluded).
-    prior_messages = _get_messages(conv_id)
-
-    student_item = {
-        "PK": _conv_pk(conv_id),
-        "SK": _msg_sk(student_msg_id),
-        "message_id": student_msg_id,
-        "conversation_id": conv_id,
-        "student_id": student_id,
-        "role": "student",
-        "content": content,
-        "created_at": now,
-    }
-    effective_plan = effective_plan or _attachment_plan_for_student(student_id)
-    attachments = attachment_service.bind_message_attachments(
-        message=student_item,
-        conversation_id=conv_id,
-        actor=actor,
-        prepared=prepared_attachments or [],
-        effective_plan=str(effective_plan),
-    )
-    attachment_context = ""
-    if prepared_attachments:
-        attachment_context = attachment_service.extract_message_attachment_context(
-            prepared_attachments,
-            s3=boto3.client("s3", region_name=settings.aws_region),
-            settings=settings,
-        )
-
-    # Call Bedrock AI with full conversation history for multi-turn context
-    try:
-        ai_result = ai_service.get_ai_answer(
-            content=content,
-            subject=normalized_subject,
-            grade=grade,
-            language="de",
-            history=prior_messages,
-            attachment_context=attachment_context,
-        )
-        # Format AI response as human-readable text
-        steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(ai_result.get("steps", [])))
-        answer_text = ai_result.get("answer", "")
-        hints = ai_result.get("hints", [])
-        hint_text = ("\n\n**Hinweis:** " + hints[0]) if hints else ""
-        ai_content = f"{steps_text}\n\n{answer_text}{hint_text}".strip()
-        if not ai_content:
-            ai_content = answer_text or "Entschuldigung, ich konnte keine Antwort generieren."
-    except Exception as ai_err:
-        emit_private_event(
-            "conversation_ai_failed",
-            exception=ai_err,
-            input_size=len(content),
-            attachment_count=len(prepared_attachments or []),
-            correlation_id=student_msg_id,
-            level=logging.ERROR,
-        )
-        err_str = str(ai_err)
-        if "use case details" in err_str or "ResourceNotFound" in type(ai_err).__name__:
-            # Bedrock access not yet approved — use a structured placeholder
-            ai_content = (
-                f"Ich helfe dir gerne mit deiner Frage zur {subject}! "
-                "Unser KI-System wird gerade eingerichtet und ist in Kürze verfügbar. "
-                "Für sofortige Hilfe kannst du die 'Lehrer fragen' Funktion nutzen."
+    completion = _coerce_command_result(
+        _conversation_repository_call(
+            lambda: attachment_repo.complete_message_command(
+                conversation_id=conv_id,
+                idempotency_key=body.idempotencyKey,
+                owner_id=student_id,
+                lease_owner=lease_owner,
+                assistant_message=assistant_item,
+                result_json=result.model_dump_json(),
+                completed_at=assistant_created_at,
+                table=table,
             )
-        else:
-            ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
-
-    # Save AI message
-    table.put_item(Item={
-        "PK": _conv_pk(conv_id),
-        "SK": _msg_sk(assistant_msg_id),
-        "message_id": assistant_msg_id,
-        "conversation_id": conv_id,
-        "student_id": student_id,
-        "role": "assistant",
-        "content": ai_content,
-        "created_at": _now(),
-    })
-
-    # Auto-generate title on first message
-    auto_title: str | None = None
-    try:
-        existing = _get_messages(conv_id)
-        # 2 messages = this student + this assistant message (just saved above)
-        if len(existing) <= 2:
-            auto_title = _generate_title(content, subject)
-    except Exception:
-        pass
-
-    # Update conversation's updated_at + last_message_preview (+ title if first message)
-    try:
-        update_expr = "SET updated_at = :u, last_message_preview = :p"
-        expr_values: dict = {
-            ":u": _now(),
-            ":p": (ai_content[:80] + "…") if len(ai_content) > 80 else ai_content,
-        }
-        if auto_title:
-            update_expr += ", title = :t"
-            expr_values[":t"] = auto_title
-        table.update_item(
-            Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
-            UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_values,
-        )
-    except Exception:
-        pass
-
-    return (
-        ChatMessage(id=student_msg_id, conversationId=conv_id, role="student",
-                    content=content, createdAt=now, status="sent", attachments=attachments),
-        ChatMessage(id=assistant_msg_id, conversationId=conv_id, role="assistant",
-                    content=ai_content, createdAt=_now(), status="sent"),
+        ),
+        false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
     )
+    if completion.disposition is attachment_repo.MessageCommandDisposition.COMPLETED:
+        if completion.command is not None:
+            stored = _result_response(completion)
+            assert stored is not None
+            return stored
+        return result
+    raise AttachmentDecisionError(_command_error_code(completion))
 
 
 def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> None:
@@ -1047,38 +1159,6 @@ def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> No
         detail=error.public_body(),
         headers=headers,
     ) from error
-
-
-def _record_chat_usage(
-    *,
-    student_id: str,
-    conv_id: str,
-    student_message_id: str,
-    subject: str,
-    grade: str,
-    usage_counter: dict,
-    created_at: str,
-) -> None:
-    usage_ledger_service.record_usage_event(
-        student_id=student_id,
-        action=usage_ledger_service.CHAT_MESSAGE_ACTION,
-        quota_period=usage_counter["quotaPeriod"],
-        idempotency_key=usage_ledger_service.build_usage_idempotency_key(
-            action=usage_ledger_service.CHAT_MESSAGE_ACTION,
-            resource_id=student_message_id,
-        ),
-        counter_key=usage_counter["counterKey"],
-        counter_value=usage_counter["counterValue"],
-        request_correlation_id=student_message_id,
-        created_at=created_at,
-        metadata={
-            "conversation_id": conv_id,
-            "request_id": student_message_id,
-            "subject": subject,
-            "grade_level": grade,
-            "status": "sent",
-        },
-    )
 
 
 # ── Teacher-help router (separate prefix: /teacher-help) ──────────────────────

@@ -12,7 +12,7 @@ import pytest
 from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
-from stoa.db.repositories import question_repo, user_repo
+from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
 from stoa.routers import conversations
@@ -40,39 +40,6 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
     app.dependency_overrides[get_actor] = lambda: actor or _actor()
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return TestClient(app)
-
-
-def test_send_message_records_chat_usage_without_raw_content(monkeypatch):
-    ledger_calls = []
-    monkeypatch.setattr(
-        conversations.usage_ledger_service,
-        "record_usage_event",
-        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
-    )
-
-    conversations._record_chat_usage(
-        student_id="student-1",
-        conv_id="conv-1",
-        student_message_id="student-message-1",
-        subject="math",
-        grade="Sek1",
-        usage_counter={
-            "quotaPeriod": "2026-07-04",
-            "counterKey": "USAGE#student-1/CHAT#2026-07-04",
-            "counterValue": 2,
-        },
-        created_at="2026-07-04T10:00:00+00:00",
-    )
-    assert ledger_calls[0]["action"] == "chat_message"
-    assert ledger_calls[0]["counter_value"] == 2
-    assert ledger_calls[0]["metadata"] == {
-        "conversation_id": "conv-1",
-        "request_id": "student-message-1",
-        "subject": "math",
-        "grade_level": "Sek1",
-        "status": "sent",
-    }
-    assert "raw student message" not in str(ledger_calls[0])
 
 
 def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
@@ -245,7 +212,7 @@ def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(monk
     )
     monkeypatch.setattr(
         conversations,
-        "_send_message_impl",
+        "_execute_message_command",
         lambda **_kwargs: calls.append("message") or None,
     )
     client = _client(conversations.router, actor=_actor(user_id="student-2"))
@@ -266,7 +233,7 @@ def test_conversation_store_outage_returns_503_before_message_mutation(monkeypat
     )
     monkeypatch.setattr(
         conversations,
-        "_send_message_impl",
+        "_execute_message_command",
         lambda **_kwargs: calls.append("message") or None,
     )
     response = _client(conversations.router).post(
@@ -358,6 +325,8 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
         ),
     )
     return {
+        "entity_type": "message_command",
+        "schema_version": "message-command.v2",
         "owner_id": "student-1",
         "fingerprint": conversations.message_request_fingerprint(body),
         "status": "completed",
@@ -498,14 +467,12 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         {
             "content": "concurrent exact content",
             "idempotencyKey": "concurrent-key",
-            "attachmentIds": [{"attachmentId": "saved-1"}],
+            "attachmentIds": [{"uploadId": "fresh-upload-1"}],
         }
     )
     fingerprint = conversations.message_request_fingerprint(body)
     command_state = {}
-    effects = {
-        "claim": 0, "bind": 0, "usage": 0, "extract": 0, "ai": 0, "complete": 0
-    }
+    effects = {"claim": 0, "bind": 0, "extract": 0, "ai": 0, "complete": 0}
     lock = threading.Lock()
     claim_barrier = threading.Barrier(2)
     summary = _attachment_summary()
@@ -533,7 +500,11 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         with lock:
             effects["claim"] += 1
             if command_state:
-                return False, 0
+                return attachment_repo.MessageCommandResult(
+                    attachment_repo.MessageCommandDisposition.RESUME,
+                    command=dict(command_state),
+                    counter_value=int(command_state.get("counter_value", 0)),
+                )
             command_state.update(kwargs["command"])
             command_state["counter_value"] = 1
             return True, 1
@@ -577,11 +548,6 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1) or "",
     )
     monkeypatch.setattr(
-        conversations,
-        "_record_chat_usage",
-        lambda **_kwargs: effects.__setitem__("usage", effects["usage"] + 1),
-    )
-    monkeypatch.setattr(
         conversations.ai_service,
         "get_ai_answer",
         lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
@@ -614,7 +580,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     assert len(results) == 2
     assert results[0].model_dump() == results[1].model_dump()
     assert effects == {
-        "claim": 2, "bind": 1, "usage": 1, "extract": 1, "ai": 1, "complete": 1
+        "claim": 2, "bind": 1, "extract": 1, "ai": 1, "complete": 1
     }
     expected_attachment_id = str(
         conversations.uuid5(
@@ -638,7 +604,7 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
     command_state: dict = {}
     stored_student: dict = {}
     stored_attachments: dict[str, dict] = {}
-    effects = {"claim": 0, "bind": 0, "usage": 0, "extract": 0, "ai": 0, "complete": 0}
+    effects = {"claim": 0, "bind": 0, "extract": 0, "ai": 0, "complete": 0}
 
     class Table:
         def get_item(self, **_kwargs):
@@ -677,6 +643,7 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         stored_student.update(kwargs["message"], attachment_ids=[attachment_id])
         stored_attachments[attachment_id] = {
             "attachment_id": attachment_id,
+            "owner_id": "student-1",
             "original_filename": "notes.txt",
             "detected_type": "text/plain",
             "content_length": 12,
@@ -721,39 +688,19 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         or "",
     )
     monkeypatch.setattr(
-        conversations,
-        "_record_chat_usage",
-        lambda **_kwargs: effects.__setitem__("usage", effects["usage"] + 1),
-    )
-    monkeypatch.setattr(
         conversations.ai_service,
         "get_ai_answer",
         lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
         or {"steps": [], "answer": "original safe answer", "hints": []},
     )
 
-    with pytest.raises(AttachmentDecisionError) as first:
-        conversations._execute_message_command(
-            conv_id="conv-1",
-            student_id="student-1",
-            subject="math",
-            grade="Sek1",
-            body=body,
-            command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
-        )
-    assert first.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
-
-    second = conversations._execute_message_command(
+    first = conversations._execute_message_command(
         conv_id="conv-1",
         student_id="student-1",
         subject="math",
         grade="Sek1",
         body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": fingerprint,
-            "existing": dict(command_state),
-        },
+        command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
     )
     replay = conversations._execute_message_command(
         conv_id="conv-1",
@@ -768,10 +715,10 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         },
     )
 
-    assert second.model_dump() == replay.model_dump()
-    assert effects == {"claim": 1, "bind": 1, "usage": 1, "extract": 1, "ai": 1, "complete": 1}
+    assert first.model_dump() == replay.model_dump()
+    assert effects == {"claim": 1, "bind": 1, "extract": 1, "ai": 1, "complete": 1}
     assert len(stored_attachments) == 1
-    assert "private-canary" not in second.model_dump_json()
+    assert "private-canary" not in first.model_dump_json()
 
 
 class _ConversationBodySpy:
@@ -914,12 +861,22 @@ def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatc
     monkeypatch.setattr(
         conversations.attachment_repo,
         "get_message_command",
-        lambda *_args, **_kwargs: {"status": "ai_running", "fingerprint": "f" * 64},
+        lambda *_args, **_kwargs: {
+            "entity_type": "message_command",
+            "schema_version": "message-command.v2",
+            "status": "ai_running",
+            "owner_id": "student-1",
+            "fingerprint": "f" * 64,
+        },
     )
     monkeypatch.setattr(conversations.time, "sleep", lambda value: sleeps.append(value))
     with pytest.raises(AttachmentDecisionError) as captured:
         conversations._wait_for_message_command(
-            "conv-1", "bounded-key", "f" * 64, table=object()
+            "conv-1",
+            "bounded-key",
+            "f" * 64,
+            table=object(),
+            owner_id="student-1",
         )
     assert captured.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
     assert sleeps == [0.05] * 20
@@ -950,7 +907,6 @@ def _install_transport_happy_path(monkeypatch) -> None:
         "bind_message_attachments",
         lambda **_kwargs: [],
     )
-    monkeypatch.setattr(conversations, "_record_chat_usage", lambda **_kwargs: None)
     monkeypatch.setattr(
         conversations.attachment_repo,
         "claim_message_ai_lease",
@@ -1109,7 +1065,10 @@ def test_conversation_repository_transport_stages_are_structured_retry(
             conversations.attachment_repo,
             "get_message_command",
             lambda *_args, **_kwargs: {
+                "entity_type": "message_command",
+                "schema_version": "message-command.v2",
                 "status": "ai_running",
+                "owner_id": "student-1",
                 "expiresAt": 0,
                 "attempt": 3,
                 "fingerprint": conversations.message_request_fingerprint(body),
@@ -1197,6 +1156,8 @@ def test_resume_stored_message_transport_is_structured_retry(monkeypatch) -> Non
                 "fingerprint": conversations.message_request_fingerprint(body),
                 "existing": {
                     "status": "message_committed",
+                    "owner_id": "student-1",
+                    "fingerprint": conversations.message_request_fingerprint(body),
                     "created_at": "2026-07-16T00:00:00Z",
                 },
             },
@@ -1221,43 +1182,12 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         "prepare_message_attachments",
         lambda references, actor: calls.append((references, actor.user_id)) or [],
     )
-    monkeypatch.setattr(
-        conversations,
-        "check_and_record_chat",
-        lambda *_args, **_kwargs: {
-            "quotaPeriod": "2026-07-16",
-            "counterKey": "counter",
-            "counterValue": 1,
-        },
-    )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
     monkeypatch.setattr(
         conversations.attachment_service,
         "ensure_message_attachment_capacity",
         lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(conversations, "_record_chat_usage", lambda **_kwargs: None)
-    monkeypatch.setattr(
-        conversations,
-        "_send_message_impl",
-        lambda **kwargs: (
-            conversations.ChatMessage(
-                id="student-message",
-                conversationId=kwargs["conv_id"],
-                role="student",
-                content=kwargs["content"],
-                createdAt="2026-07-16T00:00:00Z",
-                attachments=[summary],
-            ),
-            conversations.ChatMessage(
-                id="assistant-message",
-                conversationId=kwargs["conv_id"],
-                role="assistant",
-                content="reply",
-                createdAt="2026-07-16T00:00:01Z",
-            ),
-        ),
     )
     payload = {"content": "use notes", "idempotencyKey": "attachment-parity", "attachmentIds": [{"attachmentId": "attachment-1"}]}
     monkeypatch.setattr(conversations.attachment_repo, "get_message_command", lambda *_args, **_kwargs: None)
@@ -1331,57 +1261,6 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     assert "raw extracted canary" not in response.text
 
 
-def test_bound_attachment_context_reaches_ai_only_after_transaction(monkeypatch, caplog) -> None:
-    events = []
-    stored = []
-
-    class Table:
-        def put_item(self, Item):
-            stored.append(Item)
-
-        def update_item(self, **_kwargs):
-            return {}
-
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations, "_generate_title", lambda *_: None)
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "bind_message_attachments",
-        lambda **_kwargs: events.append("bind") or [_attachment_summary()],
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        lambda *_args, **_kwargs: events.append("extract") or "internal extracted canary",
-    )
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
-
-    def ai_answer(**kwargs):
-        events.append("ai")
-        assert kwargs["attachment_context"] == "internal extracted canary"
-        return {"steps": ["safe step"], "answer": "safe reply", "hints": []}
-
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", ai_answer)
-    student, assistant = conversations._send_message_impl(
-        conv_id="conv-1",
-        student_id="student-1",
-        subject="math",
-        grade="Sek1",
-        content="use my file",
-        table=Table(),
-        actor=_actor(),
-        prepared_attachments=[("attachment", {"attachment_id": "attachment-1"})],
-        effective_plan="free",
-    )
-    assert events == ["bind", "extract", "ai"]
-    assert student.attachments == [_attachment_summary()]
-    assert (
-        "internal extracted canary"
-        not in str(stored) + student.model_dump_json() + assistant.model_dump_json()
-    )
-    assert "internal extracted canary" not in caplog.text
-
-
 def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_effect(
     monkeypatch,
 ) -> None:
@@ -1394,15 +1273,6 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
             "student_id": "student-1",
             "subject": "math",
             "grade": "Sek1",
-        },
-    )
-    monkeypatch.setattr(
-        conversations,
-        "check_and_record_chat",
-        lambda *args, **kwargs: {
-            "quotaPeriod": "2026-07-16",
-            "counterKey": "opaque-counter",
-            "counterValue": 1,
         },
     )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
@@ -1418,9 +1288,6 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
         lambda **_kwargs: (_ for _ in ()).throw(
             AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         ),
-    )
-    monkeypatch.setattr(
-        conversations, "_record_chat_usage", lambda **kwargs: effects.append("usage")
     )
     monkeypatch.setattr(
         conversations.attachment_service,

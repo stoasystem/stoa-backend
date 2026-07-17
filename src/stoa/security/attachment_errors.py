@@ -20,6 +20,10 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_SERVICE_UNAVAILABLE = "upload_service_unavailable"
     MESSAGE_IDEMPOTENCY_CONFLICT = "message_idempotency_conflict"
     MESSAGE_IN_PROGRESS = "message_in_progress"
+    MESSAGE_DAILY_LIMIT = "message_daily_limit"
+    MESSAGE_FAILED = "message_failed"
+    MESSAGE_COMMAND_EXPIRED = "message_command_expired"
+    MESSAGE_COMMAND_NOT_FOUND = "message_command_not_found"
 
 
 class AttachmentClientAction(StrEnum):
@@ -88,6 +92,26 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = 
         retryable=True,
         idempotent_only=True,
         max_attempts=20,
+    ),
+    AttachmentErrorCode.MESSAGE_DAILY_LIMIT: AttachmentErrorContract(
+        429,
+        "Your daily message limit is reached. Try again tomorrow.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    AttachmentErrorCode.MESSAGE_FAILED: AttachmentErrorContract(
+        409,
+        "This message could not be completed. Send it again.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    AttachmentErrorCode.MESSAGE_COMMAND_EXPIRED: AttachmentErrorContract(
+        409,
+        "This message request expired. Send it again.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND: AttachmentErrorContract(
+        409,
+        "This message request is unavailable. Send it again.",
+        AttachmentClientAction.RETRY_LATER,
     ),
 }
 
