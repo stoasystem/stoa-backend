@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-25-PLAN.md (gap-only; next incomplete remains 473-19)
-last_updated: "2026-07-17T15:01:32.457Z"
-last_activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and recovery integrity
+stopped_at: Completed 473-19-PLAN.md (gap-only; next incomplete remains 473-20)
+last_updated: "2026-07-17T15:26:14.529Z"
+last_activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 41
+  completed_plans: 42
   percent: 10
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 19 of 35
+Plan: 20 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and recovery integrity
+Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 
 ## Accumulated Context
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 
 ## Session
 
-**Last Date:** 2026-07-17T15:01:32.452Z
-**Stopped At:** Completed 473-25-PLAN.md (gap-only; next incomplete remains 473-19)
+**Last Date:** 2026-07-17T15:26:14.525Z
+**Stopped At:** Completed 473-19-PLAN.md (gap-only; next incomplete remains 473-20)
 **Resume File:** None
 
 ## Performance Metrics
@@ -155,6 +155,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 | Phase 473 P17 | 8 min | 2 tasks | 4 files |
 | Phase 473 P18 | 13 min | 3 tasks | 3 files |
 | Phase 473 P25 | 14 min | 3 tasks | 9 files |
+| Phase 473 P19 | 16 min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -221,3 +222,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and 
 - [Phase 473]: Opaque challenge IDs resolve through one answer-free pointer to one exact content-addressed canonical row. — Malformed, missing, duplicated, or stale identity fails closed.
 - [Phase 473]: Post-submit answer content is copied into one create-only owner receipt. — Every later result or mistake projection reads the receipt without consulting mutable curriculum content.
 - [Phase 473]: Pre-submit hints emit only constant bytes from a closed parameter-free catalog. — Exact whole-content non-derivability decisions make reviewer provenance necessary but insufficient.
+- [Phase 473]: Provider cleanup advances only after exact listed absence — Abort and delete acknowledgements are ambiguous; complete validated pagination must exclude the retained UploadId or VersionId.
+- [Phase 473]: Operation lease expiry never shortens upload intent lifetime — Only terminal state or the original intent expiry authorizes destructive cleanup; short leases remain takeover fences.
+- [Phase 473]: PART cleanup requires TTL plus explicit generation-fenced absence — PART rows inherit parent expiry, are scrubbed conditionally, and cleanup completes only after an empty page.
