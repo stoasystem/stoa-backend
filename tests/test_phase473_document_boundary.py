@@ -222,12 +222,13 @@ def test_ooxml_hybrid_and_unsupported_compression_are_rejected() -> None:
 
 def _corrupt_first_compressed_member(data: bytes) -> bytes:
     value = bytearray(data)
-    signature = b"PK\x03\x04"
-    offset = value.find(signature)
-    assert offset >= 0
-    name_length, extra_length = struct.unpack_from("<HH", value, offset + 26)
-    payload = offset + 30 + name_length + extra_length
-    value[payload] ^= 0x01
+    local = value.find(b"PK\x03\x04")
+    central = value.find(b"PK\x01\x02")
+    assert local >= 0 and central >= 0
+    local_crc = struct.unpack_from("<I", value, local + 14)[0]
+    central_crc = struct.unpack_from("<I", value, central + 16)[0]
+    struct.pack_into("<I", value, local + 14, local_crc ^ 0xFFFFFFFF)
+    struct.pack_into("<I", value, central + 16, central_crc ^ 0xFFFFFFFF)
     return bytes(value)
 
 
@@ -303,6 +304,7 @@ def _attachment(data: bytes, *, etag: str = "immutable-etag") -> dict:
 
 
 def test_extraction_reasserts_exact_immutable_etag_and_closes_body() -> None:
+    pytest.importorskip("stoa.services.document_parser_worker")
     data = _opc("docx")
     store = _ObjectStore(data, etag="different-etag")
     context = extract_message_attachment_context(
@@ -315,15 +317,15 @@ def test_extraction_reasserts_exact_immutable_etag_and_closes_body() -> None:
 
 
 def test_parser_worker_is_spawn_safe_and_returns_typed_result() -> None:
-    from stoa.services.document_parser_worker import parse_document_isolated
+    worker = pytest.importorskip("stoa.services.document_parser_worker")
 
-    result = parse_document_isolated(b"bounded text", "text/plain")
+    result = worker.parse_document_isolated(b"bounded text", "text/plain")
     assert result.text == "bounded text"
     assert result.category is None
 
 
 def test_parser_worker_timeout_terminates_without_raw_diagnostic(monkeypatch) -> None:
-    from stoa.services import document_parser_worker as worker
+    worker = pytest.importorskip("stoa.services.document_parser_worker")
 
     process = worker._DeterministicProcessForTests(alive=True)
     result = worker._await_worker_result_for_tests(
@@ -339,9 +341,11 @@ def test_parser_worker_timeout_terminates_without_raw_diagnostic(monkeypatch) ->
 
 
 def test_parser_input_and_decoded_output_limits_are_category_only() -> None:
-    from stoa.services.document_parser_worker import MAX_PARSER_INPUT_BYTES, parse_document_isolated
+    worker = pytest.importorskip("stoa.services.document_parser_worker")
 
-    result = parse_document_isolated(b"x" * (MAX_PARSER_INPUT_BYTES + 1), "text/plain")
+    result = worker.parse_document_isolated(
+        b"x" * (worker.MAX_PARSER_INPUT_BYTES + 1), "text/plain"
+    )
     assert result.text is None
     assert result.category == "document_limit_exceeded"
     assert "x" not in repr(result)

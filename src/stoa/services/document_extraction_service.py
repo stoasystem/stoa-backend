@@ -9,6 +9,12 @@ from zipfile import BadZipFile, ZipFile
 
 from pypdf import PdfReader
 
+from stoa.services.file_validation_service import (
+    PassivePackageError,
+    ensure_safe_xml,
+    validate_passive_ooxml,
+)
+
 
 MAX_EXTRACTED_CHARACTERS = 200_000
 MAX_PDF_PAGES = 100
@@ -74,7 +80,7 @@ def extract_pdf_text(data) -> str:
 
 def extract_docx_text(data) -> str:
     try:
-        with _passive_archive(data) as archive:
+        with _passive_archive(data, "docx") as archive:
             return _xml_text(archive, "word/document.xml", {"t"})
     except DocumentExtractionFailure:
         raise
@@ -84,7 +90,7 @@ def extract_docx_text(data) -> str:
 
 def extract_pptx_text(data) -> str:
     try:
-        with _passive_archive(data) as archive:
+        with _passive_archive(data, "pptx") as archive:
             slides = sorted(
                 (
                     name
@@ -104,7 +110,7 @@ def extract_pptx_text(data) -> str:
 
 def extract_xlsx_text(data) -> str:
     try:
-        with _passive_archive(data) as archive:
+        with _passive_archive(data, "xlsx") as archive:
             shared = _xml_values(archive, "xl/sharedStrings.xml", {"t"}, required=False)
             sheets = sorted(
                 (
@@ -177,23 +183,16 @@ def extract_plain_text(data) -> str:
     return text
 
 
-def _passive_archive(data) -> ZipFile:
+def _passive_archive(data, extension: str) -> ZipFile:
     try:
+        validate_passive_ooxml(data, extension)
         stream = BytesIO(data) if isinstance(data, bytes) else data
         stream.seek(0)
         archive = ZipFile(stream)
+    except PassivePackageError as error:
+        raise DocumentExtractionFailure(error.category) from None
     except BadZipFile:
         raise DocumentExtractionFailure("invalid_document") from None
-    lowered = [name.lower() for name in archive.namelist()]
-    if any(part in name for name in lowered for part in _ACTIVE_MEMBER_PARTS):
-        archive.close()
-        raise DocumentExtractionFailure("active_content")
-    for name in archive.namelist():
-        if name.endswith(".rels"):
-            relationship_xml = archive.read(name).lower()
-            if b'targetmode="external"' in relationship_xml:
-                archive.close()
-                raise DocumentExtractionFailure("active_content")
     return archive
 
 
@@ -226,9 +225,10 @@ def _read_xml_member(archive: ZipFile, name: str) -> bytes:
         data = archive.read(name)
     except (KeyError, OSError, RuntimeError):
         raise DocumentExtractionFailure("invalid_document") from None
-    upper = data.upper()
-    if any(marker in upper for marker in _XML_PROLOG_MARKERS):
-        raise DocumentExtractionFailure("active_content")
+    try:
+        ensure_safe_xml(data)
+    except PassivePackageError as error:
+        raise DocumentExtractionFailure(error.category) from None
     return data
 
 

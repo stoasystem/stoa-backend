@@ -250,10 +250,32 @@ def _pdf() -> bytes:
 
 
 def _ooxml(root: str) -> bytes:
+    facts = {
+        "word": (
+            "word/document.xml",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+        ),
+        "ppt": (
+            "ppt/presentation.xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
+        ),
+        "xl": (
+            "xl/workbook.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+        ),
+    }
+    main, content_type = facts[root]
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
-        archive.writestr("[Content_Types].xml", "<Types/>")
-        archive.writestr(f"{root}/document.xml", "<root/>")
+        archive.writestr(
+            "[Content_Types].xml",
+            f'<Types><Override PartName="/{main}" ContentType="{content_type}"/></Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            f'<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="{main}"/></Relationships>',
+        )
+        archive.writestr(main, "<root/>")
     return output.getvalue()
 
 
@@ -2492,8 +2514,27 @@ def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> No
 
 
 def _archive(parts: dict[str, str | bytes]) -> bytes:
+    if any(name.startswith("word/") for name in parts):
+        main = "word/document.xml"
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
+    elif any(name.startswith("ppt/") for name in parts):
+        main = "ppt/presentation.xml"
+        content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"
+        parts = {main: "<presentation/>", **parts}
+    else:
+        main = "xl/workbook.xml"
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
+        parts = {main: "<workbook/>", **parts}
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            f'<Types><Override PartName="/{main}" ContentType="{content_type}"/></Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            f'<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="{main}"/></Relationships>',
+        )
         for name, value in parts.items():
             archive.writestr(name, value)
     return output.getvalue()
