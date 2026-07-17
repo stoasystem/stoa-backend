@@ -38,6 +38,11 @@ class AttachmentStatus(StrEnum):
     DELETED = "deleted"
 
 
+class SavedAttachmentDeleteStatus(StrEnum):
+    DELETED = "deleted"
+    RETRYABLE = "retryable"
+
+
 class UploadIntentRequest(_AttachmentModel):
     purpose: UploadPurpose
     filename: str = Field(min_length=1, max_length=255)
@@ -61,6 +66,20 @@ class AttachmentSummary(_AttachmentModel):
     size_bytes: int = Field(alias="sizeBytes", ge=0)
     status: AttachmentStatus
     created_at: datetime = Field(alias="createdAt")
+
+
+class SavedAttachmentDetail(AttachmentSummary):
+    """Coordinate-free owner view of one durable saved attachment."""
+
+
+class SavedAttachmentPage(_AttachmentModel):
+    items: list[AttachmentSummary]
+    continuation: OpaqueId | None = None
+
+
+class SavedAttachmentDeleteResult(_AttachmentModel):
+    attachment_id: OpaqueId = Field(alias="attachmentId")
+    status: SavedAttachmentDeleteStatus
 
 
 class UploadChunkResponse(_AttachmentModel):

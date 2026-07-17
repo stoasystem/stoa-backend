@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import hashlib
 from io import BytesIO
 from typing import Any
@@ -162,6 +161,13 @@ class _OwnerRepository:
             else None
         )
         return page, cursor
+
+    def mark_saved_attachment_deletion_pending(self, item: dict[str, Any]) -> bool:
+        current = self.items.get(item["attachment_id"])
+        if not current or current["status"] != "active" or current.get("ref_count", 0):
+            return False
+        current["status"] = "deletion_pending"
+        return True
 
 
 def test_list_and_detail_are_owner_scoped_paginated_and_have_no_quota_gate() -> None:
@@ -343,6 +349,11 @@ class _PurgeRepository:
         self.finalize_calls += 1
         raise AssertionError("attachment branch must not finalize the account fence")
 
+    def list_owner_attachment_items(
+        self, _owner_id: str, *, fence: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
 
 def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority() -> None:
     result_type = getattr(attachment_service, "AttachmentPurgeBranchResult", None)
@@ -414,4 +425,3 @@ def test_download_body_helper_accepts_file_like_stream_contract() -> None:
     # provider body itself or requiring a fully buffered response model.
     body = BytesIO(b"abc")
     assert body.read(2) == b"ab"
-

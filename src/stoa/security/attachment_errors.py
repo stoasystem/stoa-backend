@@ -9,6 +9,7 @@ from uuid import uuid4
 
 
 class AttachmentErrorCode(StrEnum):
+    ATTACHMENT_IN_USE = "attachment_in_use"
     UPLOAD_NOT_FOUND = "upload_not_found"
     UPLOAD_EXPIRED = "upload_expired"
     UPLOAD_TOO_LARGE = "upload_too_large"
@@ -27,6 +28,7 @@ class AttachmentErrorCode(StrEnum):
 
 
 class AttachmentClientAction(StrEnum):
+    REMOVE_FROM_RESOURCE = "remove_from_resource"
     SELECT_FILE = "select_file"
     REDUCE_SIZE = "reduce_size"
     DELETE_OR_UPGRADE = "delete_or_upgrade"
@@ -44,6 +46,11 @@ class AttachmentErrorContract:
 
 
 ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = {
+    AttachmentErrorCode.ATTACHMENT_IN_USE: AttachmentErrorContract(
+        409,
+        "Remove this attachment from its conversation or question first.",
+        AttachmentClientAction.REMOVE_FROM_RESOURCE,
+    ),
     AttachmentErrorCode.UPLOAD_NOT_FOUND: AttachmentErrorContract(
         404, "Select or upload the file again.", AttachmentClientAction.SELECT_FILE
     ),

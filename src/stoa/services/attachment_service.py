@@ -8,9 +8,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import hashlib
-from pathlib import PurePath
+import json
 from tempfile import SpooledTemporaryFile
 from typing import Any
+from urllib.parse import quote
 from uuid import uuid4
 
 from stoa.config import (
@@ -26,6 +27,10 @@ from stoa.models.attachment import (
     AttachmentReference,
     AttachmentStatus,
     AttachmentSummary,
+    SavedAttachmentDeleteResult,
+    SavedAttachmentDeleteStatus,
+    SavedAttachmentDetail,
+    SavedAttachmentPage,
     UploadIntentRequest,
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -87,6 +92,88 @@ class RetentionResult(dict[str, int]):
         self.stage = stage
 
 
+class AttachmentPurgeBranchStatus(StrEnum):
+    COMPLETE = "complete"
+    RETRYABLE = "retryable"
+    CONFLICT = "conflict"
+
+
+PURGE_CURSOR_CATEGORIES = (
+    "saved",
+    "references",
+    "intents",
+    "multipart",
+    "immutable",
+    "staging",
+    "quota",
+    "provider_debt",
+)
+
+
+class AttachmentPurgeBranchResult(RetentionResult):
+    """Attachment-only account-purge progress; never aggregate account closure."""
+
+    status: AttachmentPurgeBranchStatus
+    cursors: dict[str, Any]
+    debt_counts: dict[str, int]
+    quiescent: bool
+
+    def __init__(
+        self,
+        status: AttachmentPurgeBranchStatus,
+        *,
+        cursors: dict[str, Any] | None = None,
+        debt_counts: dict[str, int] | None = None,
+        quiescent: bool = False,
+        released: int = 0,
+        deleted: int = 0,
+    ) -> None:
+        disposition = {
+            AttachmentPurgeBranchStatus.COMPLETE: RetentionDisposition.COMPLETE,
+            AttachmentPurgeBranchStatus.RETRYABLE: RetentionDisposition.INCOMPLETE_RETRYABLE,
+            AttachmentPurgeBranchStatus.CONFLICT: RetentionDisposition.CONFLICT,
+        }[status]
+        stage = (
+            RetentionStage.COMPLETE
+            if status is AttachmentPurgeBranchStatus.COMPLETE
+            else RetentionStage.RETRYABLE
+            if status is AttachmentPurgeBranchStatus.RETRYABLE
+            else RetentionStage.CONFLICT
+        )
+        super().__init__(disposition, stage, released=released, deleted=deleted)
+        self.status = status
+        supplied = cursors or {}
+        self.cursors = {name: supplied.get(name) for name in PURGE_CURSOR_CATEGORIES}
+        supplied_debt = debt_counts or {}
+        self.debt_counts = {
+            name: int(supplied_debt.get(name, 0)) for name in PURGE_CURSOR_CATEGORIES
+        }
+        self.quiescent = quiescent
+
+
+@dataclass(slots=True)
+class PreparedSavedAttachmentDownload:
+    """Verified private bytes plus only safe public response metadata."""
+
+    spool: Any
+    filename: str
+    media_type: str
+    content_length: int
+
+    def iter_bytes(self):
+        try:
+            while chunk := self.spool.read(UPLOAD_SPOOL_MEMORY_BYTES):
+                yield chunk
+        finally:
+            self.spool.close()
+
+    def public_headers(self) -> dict[str, str]:
+        return {
+            "Content-Length": str(self.content_length),
+            "Content-Disposition": safe_attachment_content_disposition(self.filename),
+        }
+
+
 def _list_owner_retention_items(
     repository: Any, owner_id: str, fence: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
@@ -97,6 +184,18 @@ def _list_owner_retention_items(
     except TypeError:
         # Narrow compatibility for in-memory repositories used by inherited tests.
         return repository.list_owner_attachment_items(owner_id)
+
+
+def _list_owner_account_attachment_items(
+    repository: Any, owner_id: str, fence: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Read every attachment-owned account row, including non-GSI upload debt."""
+    try:
+        return repository.list_owner_attachment_items(
+            owner_id, entity_types=None, fence=fence
+        )
+    except TypeError:
+        return _list_owner_retention_items(repository, owner_id, fence)
 
 
 def _gateway_call(
@@ -699,7 +798,7 @@ def create_upload_intent(
         "student_id": actor.user_id,
         "entity_type": "upload_intent",
         "schema_version": "upload-intent.v1",
-        "original_filename": PurePath(request.filename).name,
+        "original_filename": safe_attachment_filename(request.filename),
         "declared_type": request.content_type,
         "expected_kind": request.purpose.value,
         "expected_size": request.size_bytes,
@@ -1730,10 +1829,262 @@ def resolve_owned_attachment(
     item = _gateway_call(lambda: repository.get_attachment(attachment_id))
     if item is not None and not isinstance(item, dict):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    if not item or item.get("owner_id") != actor.user_id or item.get("status") != "active":
+    if (
+        actor.account_status.value != "active"
+        or not item
+        or item.get("owner_id") != actor.user_id
+        or item.get("status") != "active"
+    ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     _require_immutable_record(item)
     return item
+
+
+def safe_attachment_filename(value: str) -> str:
+    """Return one header-safe basename across POSIX and Windows input styles."""
+    normalized = str(value).replace("\\", "/")
+    basename = normalized.rsplit("/", 1)[-1]
+    safe = "".join(
+        "_" if ord(character) < 32 or character in {'"', "'"} else character
+        for character in basename
+    ).strip(" .")
+    return (safe or "attachment")[:255]
+
+
+def safe_attachment_content_disposition(filename: str) -> str:
+    safe = safe_attachment_filename(filename)
+    return f"attachment; filename*=UTF-8''{quote(safe, safe='._-')}"
+
+
+def _encode_attachment_continuation(cursor: dict[str, str] | None) -> str | None:
+    if cursor is None:
+        return None
+    if (
+        not isinstance(cursor, dict)
+        or set(cursor) != {"attachment_id"}
+        or not isinstance(cursor.get("attachment_id"), str)
+        or not cursor["attachment_id"]
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(cursor, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+    return encoded.rstrip("=")
+
+
+def _decode_attachment_continuation(value: str | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value or len(value) > 512:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
+    if (
+        not isinstance(decoded, dict)
+        or set(decoded) != {"attachment_id"}
+        or not isinstance(decoded.get("attachment_id"), str)
+        or not decoded["attachment_id"]
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return {"attachment_id": decoded["attachment_id"]}
+
+
+def saved_attachment_detail(item: dict[str, Any]) -> SavedAttachmentDetail:
+    _require_immutable_record(item)
+    return SavedAttachmentDetail(
+        attachmentId=item["attachment_id"],
+        filename=safe_attachment_filename(item["original_filename"]),
+        mediaType=item["detected_type"],
+        sizeBytes=int(item["content_length"]),
+        status=AttachmentStatus.ACTIVE,
+        createdAt=item["created_at"],
+    )
+
+
+def list_owned_attachments(
+    actor: Actor,
+    *,
+    limit: int = 50,
+    continuation: str | None = None,
+    repository: Any = attachment_repo,
+) -> SavedAttachmentPage:
+    """List durable owner files without consulting storage quota."""
+    if actor.account_status.value != "active":
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    cursor = _decode_attachment_continuation(continuation)
+    try:
+        items, next_cursor = repository.list_saved_attachments(
+            actor.user_id,
+            limit=limit,
+            exclusive_start_key=cursor,
+        )
+    except AttachmentDecisionError:
+        raise
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        code = (
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            if exc.category == "dependency_failure"
+            else AttachmentErrorCode.UPLOAD_NOT_FOUND
+        )
+        raise AttachmentDecisionError(code) from None
+    except Exception:
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ) from None
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    projected: list[AttachmentSummary] = []
+    for item in items:
+        if item.get("owner_id") != actor.user_id or item.get("status") != "active":
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        projected.append(saved_attachment_detail(item))
+    return SavedAttachmentPage(
+        items=projected,
+        continuation=_encode_attachment_continuation(next_cursor),
+    )
+
+
+def prepare_saved_attachment_download(
+    item: dict[str, Any], *, s3: Any, settings: Settings
+) -> PreparedSavedAttachmentDownload:
+    """Read, verify, and spool only the exact authorized immutable version."""
+    _require_immutable_record(item)
+    expected_length = int(item["content_length"])
+    spool = SpooledTemporaryFile(max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b")
+    body = None
+    primary_error: AttachmentDecisionError | None = None
+    try:
+        response = _provider_mapping(
+            lambda: s3.get_object(
+                Bucket=settings.s3_images_bucket,
+                Key=item["immutable_object_key"],
+                VersionId=item["immutable_version_id"],
+            )
+        )
+        body = response.get("Body")
+        if body is None:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        if (
+            type(response.get("ContentLength")) is not int
+            or response["ContentLength"] != expected_length
+            or not isinstance(response.get("ETag"), str)
+            or response["ETag"] != item["immutable_etag"]
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        read = getattr(body, "read", None)
+        if not callable(read):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        digest = hashlib.sha256()
+        measured = 0
+        while True:
+            chunk = read(min(UPLOAD_SPOOL_MEMORY_BYTES, expected_length + 1 - measured))
+            if not chunk:
+                break
+            if not isinstance(chunk, bytes):
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            measured += len(chunk)
+            if measured > expected_length:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            digest.update(chunk)
+            spool.write(chunk)
+        if measured != expected_length or digest.hexdigest() != item["content_sha256"]:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    except AttachmentDecisionError as error:
+        primary_error = error
+    except Exception:
+        primary_error = AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        )
+    finally:
+        close_ok = body is None or _close_provider_body(body)
+    if primary_error is None and not close_ok:
+        primary_error = AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        )
+    if primary_error is not None:
+        spool.close()
+        raise primary_error
+    spool.seek(0)
+    return PreparedSavedAttachmentDownload(
+        spool=spool,
+        filename=safe_attachment_filename(item["original_filename"]),
+        media_type=str(item["detected_type"]),
+        content_length=expected_length,
+    )
+
+
+def delete_saved_attachment(
+    item: dict[str, Any],
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> SavedAttachmentDeleteResult:
+    """Enter the exact Plan 22 deletion lifecycle for one unreferenced file."""
+    _require_immutable_record(item)
+    if int(item.get("ref_count", 0)) > 0:
+        raise AttachmentDecisionError(AttachmentErrorCode.ATTACHMENT_IN_USE)
+    mark_pending = getattr(repository, "mark_saved_attachment_deletion_pending", None)
+    if not callable(mark_pending):
+        return SavedAttachmentDeleteResult(
+            attachmentId=item["attachment_id"],
+            status=SavedAttachmentDeleteStatus.RETRYABLE,
+        )
+    try:
+        marked = mark_pending(item)
+    except Exception:
+        marked = False
+    if not marked:
+        try:
+            current = repository.get_attachment(item["attachment_id"])
+        except Exception:
+            current = item
+        if current is None:
+            return SavedAttachmentDeleteResult(
+                attachmentId=item["attachment_id"],
+                status=SavedAttachmentDeleteStatus.DELETED,
+            )
+        if current.get("owner_id") != item.get("owner_id"):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        if current.get("status") != "deletion_pending":
+            if int(current.get("ref_count", 0)) > 0:
+                raise AttachmentDecisionError(AttachmentErrorCode.ATTACHMENT_IN_USE)
+            return SavedAttachmentDeleteResult(
+                attachmentId=item["attachment_id"],
+                status=SavedAttachmentDeleteStatus.RETRYABLE,
+            )
+        pending = current
+    else:
+        pending = {
+            **item,
+            "status": "deletion_pending",
+            "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
+            "deletion_resource_type": "saved_attachment",
+            "deletion_resource_id": item["attachment_id"],
+        }
+    complete = _finish_pending_deletion(
+        pending,
+        s3=s3,
+        settings=settings,
+        now=(now or datetime.now(UTC)).astimezone(UTC),
+        repository=repository,
+    )
+    return SavedAttachmentDeleteResult(
+        attachmentId=item["attachment_id"],
+        status=(
+            SavedAttachmentDeleteStatus.DELETED
+            if complete
+            else SavedAttachmentDeleteStatus.RETRYABLE
+        ),
+    )
 
 
 def _require_immutable_record(item: dict[str, Any]) -> None:
@@ -2362,29 +2713,42 @@ def release_resource_attachments(
 def purge_student_attachments(
     student_id: str,
     *,
+    account_fence_generation: int | None = None,
+    cursors: dict[str, Any] | None = None,
     s3: Any,
     settings: Settings,
     repository: Any = attachment_repo,
-) -> RetentionResult:
-    """Account-closure hook: idempotently release every remaining owner association."""
+) -> AttachmentPurgeBranchResult:
+    """Advance only attachment/provider debt under an existing account fence."""
     now = datetime.now(UTC)
     fence: dict[str, Any] | None = None
-    activate_fence = getattr(repository, "activate_retention_fence", None)
-    if callable(activate_fence):
-        try:
-            fence = activate_fence(student_id, now_iso=now.isoformat())
-        except attachment_repo.AttachmentRepositoryConflict as exc:
-            disposition = (
-                RetentionDisposition.INCOMPLETE_RETRYABLE
-                if exc.category == "dependency_failure"
-                else RetentionDisposition.CONFLICT
+    progress = {name: (cursors or {}).get(name) for name in PURGE_CURSOR_CATEGORIES}
+    if account_fence_generation is not None:
+        if (
+            isinstance(account_fence_generation, bool)
+            or not isinstance(account_fence_generation, int)
+            or account_fence_generation <= 0
+        ):
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.CONFLICT, cursors=progress
             )
-            return RetentionResult(disposition, RetentionStage.FENCED)
+        key_builder = getattr(repository, "retention_fence_key", None)
+        key = (
+            key_builder(student_id)
+            if callable(key_builder)
+            else attachment_repo.retention_fence_key(student_id)
+        )
+        fence = {
+            **key,
+            "owner_id": student_id,
+            "status": "active",
+            "generation": account_fence_generation,
+        }
     try:
-        items = _list_owner_retention_items(repository, student_id, fence)
+        items = _list_owner_account_attachment_items(repository, student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
-        return RetentionResult(
-            RetentionDisposition.INCOMPLETE_RETRYABLE, RetentionStage.RETRYABLE
+        return AttachmentPurgeBranchResult(
+            AttachmentPurgeBranchStatus.RETRYABLE, cursors=progress
         )
     resources = {
         (str(item["resource_type"]), str(item["resource_id"]))
@@ -2404,18 +2768,115 @@ def purge_student_attachments(
         released += result["released"]
         deleted += result["deleted"]
         if result.disposition is not RetentionDisposition.COMPLETE:
-            return RetentionResult(
-                result.disposition,
-                result.stage,
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE,
+                cursors=progress,
                 released=released,
                 deleted=deleted,
             )
     try:
-        pending_items = _list_owner_retention_items(repository, student_id, fence)
+        pending_items = _list_owner_account_attachment_items(
+            repository, student_id, fence
+        )
     except attachment_repo.AttachmentRepositoryConflict:
-        return RetentionResult(
-            RetentionDisposition.INCOMPLETE_RETRYABLE,
-            RetentionStage.RETRYABLE,
+        return AttachmentPurgeBranchResult(
+            AttachmentPurgeBranchStatus.RETRYABLE,
+            cursors=progress,
+            released=released,
+            deleted=deleted,
+        )
+    for attachment in pending_items:
+        if attachment.get("entity_type") != "attachment":
+            continue
+        if attachment.get("status") == "active" and int(
+            attachment.get("ref_count", 0)
+        ) == 0:
+            outcome = delete_saved_attachment(
+                attachment,
+                s3=s3,
+                settings=settings,
+                now=now,
+                repository=repository,
+            )
+            if outcome.status is SavedAttachmentDeleteStatus.DELETED:
+                deleted += 1
+        elif attachment.get("status") == "deletion_pending" and _finish_pending_deletion(
+            attachment,
+            s3=s3,
+            settings=settings,
+            now=now,
+            repository=repository,
+        ):
+            deleted += 1
+
+    if account_fence_generation is not None:
+        try:
+            after_attachments = _list_owner_account_attachment_items(
+                repository, student_id, fence
+            )
+        except attachment_repo.AttachmentRepositoryConflict:
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE,
+                cursors=progress,
+                released=released,
+                deleted=deleted,
+            )
+        live_attachment_ids = {
+            str(item["attachment_id"])
+            for item in after_attachments
+            if item.get("entity_type") == "attachment"
+            and isinstance(item.get("attachment_id"), str)
+        }
+        claim_cleanup = getattr(repository, "claim_account_upload_cleanup", None)
+        delete_tombstone = getattr(repository, "delete_account_upload_tombstone", None)
+        for upload in after_attachments:
+            if upload.get("entity_type") != "upload_intent":
+                continue
+            durable_attachment_id = upload.get("durable_attachment_id")
+            if (
+                isinstance(durable_attachment_id, str)
+                and durable_attachment_id in live_attachment_ids
+            ):
+                continue
+            current = upload
+            if upload.get("status") != "cleanup_pending":
+                if not callable(claim_cleanup):
+                    continue
+                try:
+                    current = claim_cleanup(
+                        upload,
+                        owner_id=student_id,
+                        account_fence_generation=account_fence_generation,
+                    )
+                except Exception:
+                    current = None
+                if not current:
+                    continue
+            outcome = cleanup_upload_intent(
+                current,
+                s3=s3,
+                settings=settings,
+                now=now,
+                reference_scan_limit=100,
+                repository=repository,
+            )
+            if outcome == "deleted" and callable(delete_tombstone):
+                try:
+                    delete_tombstone(
+                        current["upload_id"],
+                        owner_id=student_id,
+                        account_fence_generation=account_fence_generation,
+                    )
+                except Exception:
+                    pass
+    try:
+        pending_items = _list_owner_account_attachment_items(
+            repository, student_id, fence
+        )
+    except attachment_repo.AttachmentRepositoryConflict:
+        return AttachmentPurgeBranchResult(
+            AttachmentPurgeBranchStatus.RETRYABLE,
+            cursors=progress,
             released=released,
             deleted=deleted,
         )
@@ -2437,9 +2898,9 @@ def purge_student_attachments(
         try:
             cleanup_debts = list_cleanup_debts(student_id)
         except attachment_repo.AttachmentRepositoryConflict:
-            return RetentionResult(
-                RetentionDisposition.INCOMPLETE_RETRYABLE,
-                RetentionStage.RETRYABLE,
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE,
+                cursors=progress,
                 released=released,
                 deleted=deleted,
             )
@@ -2449,51 +2910,85 @@ def purge_student_attachments(
             )
             for debt in cleanup_debts
         ):
-            return RetentionResult(
-                RetentionDisposition.INCOMPLETE_RETRYABLE,
-                RetentionStage.RETRYABLE,
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE,
+                cursors=progress,
                 released=released,
                 deleted=deleted,
             )
     try:
-        quiescent_items = _list_owner_retention_items(repository, student_id, fence)
+        quiescent_items = _list_owner_account_attachment_items(
+            repository, student_id, fence
+        )
     except attachment_repo.AttachmentRepositoryConflict:
-        return RetentionResult(
-            RetentionDisposition.INCOMPLETE_RETRYABLE,
-            RetentionStage.RETRYABLE,
+        return AttachmentPurgeBranchResult(
+            AttachmentPurgeBranchStatus.RETRYABLE,
+            cursors=progress,
             released=released,
             deleted=deleted,
         )
-    if any(
-        item.get("entity_type") in {"attachment", "attachment_association"}
+    remaining = [
+        item
         for item in quiescent_items
-    ):
-        return RetentionResult(
-            RetentionDisposition.INCOMPLETE_RETRYABLE,
-            RetentionStage.RETRYABLE,
+        if item.get("entity_type")
+        in {"attachment", "attachment_association", "upload_intent"}
+    ]
+    if remaining:
+        debt = {
+            **{name: 0 for name in PURGE_CURSOR_CATEGORIES},
+            "saved": sum(item.get("entity_type") == "attachment" for item in remaining),
+            "references": sum(
+                item.get("entity_type") == "attachment_association" for item in remaining
+            ),
+            "intents": sum(
+                item.get("entity_type") == "upload_intent" for item in remaining
+            ),
+            "multipart": sum(
+                bool(item.get("multipart_upload_id")) for item in remaining
+            ),
+            "immutable": sum(
+                bool(item.get("immutable_version_id")) for item in remaining
+            ),
+            "staging": sum(
+                bool(item.get("staging_version_id")) for item in remaining
+            ),
+            "provider_debt": sum(
+                item.get("staging_cleanup_status") == "pending" for item in remaining
+            ),
+        }
+        return AttachmentPurgeBranchResult(
+            AttachmentPurgeBranchStatus.RETRYABLE,
+            cursors=progress,
+            debt_counts=debt,
             released=released,
             deleted=deleted,
         )
-    complete_fence = getattr(repository, "complete_retention_fence", None)
-    if fence is not None and callable(complete_fence):
+    delete_usage = getattr(repository, "delete_empty_storage_usage", None)
+    if account_fence_generation is not None and callable(delete_usage):
         try:
-            if not complete_fence(fence, now_iso=now.isoformat()):
-                return RetentionResult(
-                    RetentionDisposition.CONFLICT,
-                    RetentionStage.CONFLICT,
+            if not delete_usage(
+                student_id,
+                account_fence_generation=account_fence_generation,
+            ):
+                return AttachmentPurgeBranchResult(
+                    AttachmentPurgeBranchStatus.RETRYABLE,
+                    cursors=progress,
+                    debt_counts={"quota": 1},
                     released=released,
                     deleted=deleted,
                 )
-        except attachment_repo.AttachmentRepositoryConflict:
-            return RetentionResult(
-                RetentionDisposition.INCOMPLETE_RETRYABLE,
-                RetentionStage.RETRYABLE,
+        except Exception:
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE,
+                cursors=progress,
+                debt_counts={"quota": 1},
                 released=released,
                 deleted=deleted,
             )
-    return RetentionResult(
-        RetentionDisposition.COMPLETE,
-        RetentionStage.COMPLETE,
+    return AttachmentPurgeBranchResult(
+        AttachmentPurgeBranchStatus.COMPLETE,
+        cursors=progress,
+        quiescent=True,
         released=released,
         deleted=deleted,
     )

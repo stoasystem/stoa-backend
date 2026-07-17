@@ -1540,6 +1540,233 @@ def get_attachments(
     return {attachment_id: by_id[attachment_id] for attachment_id in attachment_ids}
 
 
+def list_saved_attachments(
+    owner_id: str,
+    *,
+    limit: int,
+    exclusive_start_key: dict[str, str] | None = None,
+    table: Any | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
+    """Return a stable owner page from the authoritative strongly-read base table."""
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    if exclusive_start_key is not None and (
+        not isinstance(exclusive_start_key, dict)
+        or set(exclusive_start_key) != {"attachment_id"}
+        or not isinstance(exclusive_start_key.get("attachment_id"), str)
+        or not exclusive_start_key["attachment_id"]
+    ):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    items = list_owner_attachment_items(
+        owner_id,
+        table=table,
+        entity_types=frozenset({"attachment"}),
+    )
+    ordered = sorted(
+        (
+            item
+            for item in items
+            if item.get("status") == "active"
+            and isinstance(item.get("attachment_id"), str)
+            and item["attachment_id"]
+        ),
+        key=lambda item: item["attachment_id"],
+    )
+    if exclusive_start_key is not None:
+        after = exclusive_start_key["attachment_id"]
+        ordered = [item for item in ordered if item["attachment_id"] > after]
+    page = ordered[:limit]
+    cursor = (
+        {"attachment_id": page[-1]["attachment_id"]}
+        if len(ordered) > limit
+        else None
+    )
+    return page, cursor
+
+
+def mark_saved_attachment_deletion_pending(
+    attachment: dict[str, Any], *, table: Any | None = None
+) -> bool:
+    """Fence an unreferenced owner attachment before exact-version deletion."""
+    try:
+        (table or get_table()).update_item(
+            Key=attachment_key(attachment["attachment_id"]),
+            UpdateExpression=(
+                "SET #status=:pending, deletion_stage=:stage, "
+                "deletion_resource_type=:resource_type, "
+                "deletion_resource_id=:resource_id, "
+                "deletion_expected_ref_count=:zero, "
+                "deletion_expected_quota_bytes=:size"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:active AND "
+                "(attribute_not_exists(ref_count) OR ref_count=:zero) AND "
+                "immutable_object_key=:key AND immutable_version_id=:version AND "
+                "immutable_etag=:etag AND content_length=:size"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": attachment["owner_id"],
+                ":active": "active",
+                ":pending": "deletion_pending",
+                ":stage": "object_deletion_pending",
+                ":resource_type": "saved_attachment",
+                ":resource_id": attachment["attachment_id"],
+                ":zero": 0,
+                ":size": _require_positive_integer(attachment["content_length"]),
+                ":key": _require_provider_coordinate(
+                    attachment["immutable_object_key"]
+                ),
+                ":version": _require_provider_coordinate(
+                    attachment["immutable_version_id"]
+                ),
+                ":etag": _require_provider_coordinate(attachment["immutable_etag"]),
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except AttachmentRepositoryConflict:
+        raise
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def claim_account_upload_cleanup(
+    upload: dict[str, Any],
+    *,
+    owner_id: str,
+    account_fence_generation: int,
+    table: Any | None = None,
+) -> dict[str, Any] | None:
+    """Make any account-owned upload non-consumable under the account fence."""
+    operations = [
+        {
+            "ConditionCheck": {
+                "Key": retention_fence_key(owner_id),
+                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":active": "active",
+                    ":generation": account_fence_generation,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": upload_key(upload["upload_id"]),
+                "UpdateExpression": (
+                    "SET #status=:pending, #version=:next, cleanup_reason=:reason "
+                    "REMOVE durable_attachment_id"
+                ),
+                "ConditionExpression": (
+                    "owner_id=:owner AND #version=:version AND "
+                    "#status<>:complete"
+                ),
+                "ExpressionAttributeNames": {
+                    "#status": "status",
+                    "#version": "version",
+                },
+                "ExpressionAttributeValues": {
+                    ":owner": owner_id,
+                    ":version": int(upload["version"]),
+                    ":next": int(upload["version"]) + 1,
+                    ":pending": "cleanup_pending",
+                    ":complete": "cleanup_complete",
+                    ":reason": "account_closure",
+                },
+            }
+        },
+    ]
+    try:
+        transact(operations, table=table)
+    except AttachmentRepositoryConflict:
+        return None
+    current = get_upload_intent(upload["upload_id"], table=table)
+    if (
+        not current
+        or current.get("owner_id") != owner_id
+        or current.get("status") != "cleanup_pending"
+    ):
+        return None
+    return current
+
+
+def delete_account_upload_tombstone(
+    upload_id: str,
+    *,
+    owner_id: str,
+    account_fence_generation: int,
+    table: Any | None = None,
+) -> bool:
+    operations = [
+        {
+            "ConditionCheck": {
+                "Key": retention_fence_key(owner_id),
+                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":active": "active",
+                    ":generation": account_fence_generation,
+                },
+            }
+        },
+        {
+            "Delete": {
+                "Key": upload_key(upload_id),
+                "ConditionExpression": "owner_id=:owner AND #status=:complete",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":owner": owner_id,
+                    ":complete": "cleanup_complete",
+                },
+            }
+        },
+    ]
+    try:
+        transact(operations, table=table)
+    except AttachmentRepositoryConflict:
+        return False
+    return True
+
+
+def delete_empty_storage_usage(
+    owner_id: str,
+    *,
+    account_fence_generation: int,
+    table: Any | None = None,
+) -> bool:
+    operations = [
+        {
+            "ConditionCheck": {
+                "Key": retention_fence_key(owner_id),
+                "ConditionExpression": "#status=:active AND generation=:generation",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":active": "active",
+                    ":generation": account_fence_generation,
+                },
+            }
+        },
+        {
+            "Delete": {
+                "Key": storage_key(owner_id),
+                "ConditionExpression": (
+                    "attribute_not_exists(used_bytes) OR used_bytes=:zero"
+                ),
+                "ExpressionAttributeValues": {":zero": 0},
+            }
+        },
+    ]
+    try:
+        transact(operations, table=table)
+    except AttachmentRepositoryConflict:
+        return False
+    return True
+
+
 def _batch_response_page(
     response: Any,
     *,
