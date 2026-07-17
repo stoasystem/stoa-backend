@@ -87,6 +87,18 @@ class RetentionResult(dict[str, int]):
         self.stage = stage
 
 
+def _list_owner_retention_items(
+    repository: Any, owner_id: str, fence: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    if fence is None:
+        return repository.list_owner_attachment_items(owner_id)
+    try:
+        return repository.list_owner_attachment_items(owner_id, fence=fence)
+    except TypeError:
+        # Narrow compatibility for in-memory repositories used by inherited tests.
+        return repository.list_owner_attachment_items(owner_id)
+
+
 def _gateway_call(
     operation, *, conflict_code=AttachmentErrorCode.UPLOAD_NOT_FOUND
 ):
@@ -2220,7 +2232,7 @@ def release_resource_attachments(
             )
             return RetentionResult(disposition, RetentionStage.FENCED)
     try:
-        items = repository.list_owner_attachment_items(owner_id)
+        items = _list_owner_retention_items(repository, owner_id, fence)
     except attachment_repo.AttachmentRepositoryConflict as exc:
         disposition = (
             RetentionDisposition.INCOMPLETE_RETRYABLE
@@ -2283,7 +2295,7 @@ def release_resource_attachments(
         ):
             deleted += 1
     try:
-        quiescent_items = repository.list_owner_attachment_items(owner_id)
+        quiescent_items = _list_owner_retention_items(repository, owner_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return RetentionResult(
             RetentionDisposition.INCOMPLETE_RETRYABLE,
@@ -2369,7 +2381,7 @@ def purge_student_attachments(
             )
             return RetentionResult(disposition, RetentionStage.FENCED)
     try:
-        items = repository.list_owner_attachment_items(student_id)
+        items = _list_owner_retention_items(repository, student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return RetentionResult(
             RetentionDisposition.INCOMPLETE_RETRYABLE, RetentionStage.RETRYABLE
@@ -2399,7 +2411,7 @@ def purge_student_attachments(
                 deleted=deleted,
             )
     try:
-        pending_items = repository.list_owner_attachment_items(student_id)
+        pending_items = _list_owner_retention_items(repository, student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return RetentionResult(
             RetentionDisposition.INCOMPLETE_RETRYABLE,
@@ -2444,7 +2456,7 @@ def purge_student_attachments(
                 deleted=deleted,
             )
     try:
-        quiescent_items = repository.list_owner_attachment_items(student_id)
+        quiescent_items = _list_owner_retention_items(repository, student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return RetentionResult(
             RetentionDisposition.INCOMPLETE_RETRYABLE,

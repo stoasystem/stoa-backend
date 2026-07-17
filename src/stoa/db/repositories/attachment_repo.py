@@ -2349,6 +2349,7 @@ def list_owner_attachment_items(
     entity_types: frozenset[str] | None = frozenset(
         {"attachment", "attachment_association"}
     ),
+    fence: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Exhaustively read the authoritative table before inferring reference absence.
 
@@ -2397,6 +2398,10 @@ def list_owner_attachment_items(
                 raise AttachmentRepositoryConflict("dependency_failure")
         raw_cursor = response.get("LastEvaluatedKey")
         if raw_cursor is None:
+            if fence is not None and not advance_retention_fence_cursor(
+                fence, None, table=target
+            ):
+                raise AttachmentRepositoryConflict("conditional_conflict")
             return result
         if (
             not isinstance(raw_cursor, dict)
@@ -2412,6 +2417,10 @@ def list_owner_attachment_items(
             raise AttachmentRepositoryConflict("dependency_failure")
         seen_cursors.add(cursor_identity)
         cursor = {"PK": raw_cursor["PK"], "SK": raw_cursor["SK"]}
+        if fence is not None and not advance_retention_fence_cursor(
+            fence, cursor, table=target
+        ):
+            raise AttachmentRepositoryConflict("conditional_conflict")
     raise AttachmentRepositoryConflict("dependency_failure")
 
 
@@ -2505,6 +2514,56 @@ def complete_retention_fence(
                 ":generation": int(fence["generation"]),
                 ":now": now_iso,
             },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def advance_retention_fence_cursor(
+    fence: dict[str, Any],
+    cursor: dict[str, str] | None,
+    *,
+    table: Any | None = None,
+) -> bool:
+    """Persist validated scan progress and count completed quiescence passes."""
+    if cursor is None:
+        update = (
+            "SET retention_stage=:releasing, "
+            "quiescent_passes=if_not_exists(quiescent_passes,:zero)+:one "
+            "REMOVE retention_cursor"
+        )
+        values: dict[str, Any] = {
+            ":releasing": "references_releasing",
+            ":zero": 0,
+            ":one": 1,
+        }
+    elif (
+        isinstance(cursor, dict)
+        and set(cursor) == {"PK", "SK"}
+        and all(isinstance(cursor[field], str) and cursor[field] for field in ("PK", "SK"))
+    ):
+        update = "SET retention_stage=:releasing, retention_cursor=:cursor"
+        values = {":releasing": "references_releasing", ":cursor": cursor}
+    else:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    values.update(
+        {
+            ":active": "active",
+            ":generation": int(fence["generation"]),
+        }
+    )
+    try:
+        (table or get_table()).update_item(
+            Key={"PK": fence["PK"], "SK": fence["SK"]},
+            UpdateExpression=update,
+            ConditionExpression="#status=:active AND generation=:generation",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues=values,
         )
     except ClientError as exc:
         if _conditional(exc):
