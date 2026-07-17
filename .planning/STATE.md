@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-21-PLAN.md
-last_updated: "2026-07-17T20:03:35.085Z"
+stopped_at: Completed 473-22-PLAN.md
+last_updated: "2026-07-17T20:22:07.193Z"
 last_activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 46
+  completed_plans: 47
   percent: 10
 ---
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 
 ## Session
 
-**Last Date:** 2026-07-17T20:03:35.080Z
-**Stopped At:** Completed 473-21-PLAN.md
+**Last Date:** 2026-07-17T20:21:10.451Z
+**Stopped At:** Completed 473-22-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -160,6 +160,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 | Phase 473 P20 | 38 min | 3 tasks | 6 files |
 | Phase 473 P24 | 24 min | 3 tasks | 7 files |
 | Phase 473 P21 | 22 min | 3 tasks | 10 files |
+| Phase 473 P22 | 13 min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -240,3 +241,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 - [Phase 473]: Conversation replay persists exact ordered history IDs and a canonical fingerprint. — Later messages are ignored, while missing or changed anchored rows remain retryable instead of drifting prompt context.
 - [Phase 473]: Attachment replay accepts only one complete ordered owner-bound active immutable row set. — Exact entity/schema, key, version, ETag, checksum, length, and source validation prevents partial or foreign private context from reaching AI.
 - [Phase 473]: AI work uses a 90-second deadline and lease-generation conditional completion. — Response cleanup, post-invocation renewal, and owner/attempt/expiry conditions prevent stale workers from freezing results after takeover.
+- [Phase 473]: Strong base-table reads alone establish retention reference absence. — DynamoDB GSIs cannot provide strongly consistent absence proof.
+- [Phase 473]: Every association transaction checks exact resource and account deletion fences. — Concurrent association creation cannot race exhaustive release or account purge.
+- [Phase 473]: Exact VersionId absence precedes one atomic attachment and quota finalization. — Delete and finalize lost responses converge without double quota decrement.
+- [Phase 473]: Immutable promotion persists staging cleanup debt before deletion. — Server-only staging coordinates remain durable until exact absence proof.
