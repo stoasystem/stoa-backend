@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-19-PLAN.md (gap-only; next incomplete remains 473-20)
-last_updated: "2026-07-17T15:26:14.529Z"
+stopped_at: Completed 473-26-PLAN.md (gap-only; next incomplete remains 473-20)
+last_updated: "2026-07-17T15:47:30.346Z"
 last_activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 42
+  completed_plans: 43
   percent: 10
 ---
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 
 ## Session
 
-**Last Date:** 2026-07-17T15:26:14.525Z
-**Stopped At:** Completed 473-19-PLAN.md (gap-only; next incomplete remains 473-20)
+**Last Date:** 2026-07-17T15:47:30.336Z
+**Stopped At:** Completed 473-26-PLAN.md (gap-only; next incomplete remains 473-20)
 **Resume File:** None
 
 ## Performance Metrics
@@ -156,6 +156,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 | Phase 473 P18 | 13 min | 3 tasks | 3 files |
 | Phase 473 P25 | 14 min | 3 tasks | 9 files |
 | Phase 473 P19 | 16 min | 3 tasks | 5 files |
+| Phase 473 P26 | 15 min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -225,3 +226,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 - [Phase 473]: Provider cleanup advances only after exact listed absence — Abort and delete acknowledgements are ambiguous; complete validated pagination must exclude the retained UploadId or VersionId.
 - [Phase 473]: Operation lease expiry never shortens upload intent lifetime — Only terminal state or the original intent expiry authorizes destructive cleanup; short leases remain takeover fences.
 - [Phase 473]: PART cleanup requires TTL plus explicit generation-fenced absence — PART rows inherit parent expiry, are scrubbed conditionally, and cleanup completes only after an empty page.
+- [Phase 473]: Teacher curriculum-answer reads require both exact current course and exact current class; lesson, subject, and grade can only narrow that already-authorized scope. — Subject or grade overlap must never create pre-attempt answer authority.
+- [Phase 473]: The current curriculum assignment is accepted only from its deterministic teacher key with canonical entity type, positive version, strict read-contract collections, and a fresh active teacher account. — Malformed, stale, or coerced facts must fail closed without broadening the one-role Actor contract.
+- [Phase 473]: The privileged answer dependency validates one direct-resolver identity/version/hash/scope value and passes that same loaded value to the answer projection; admins retain only the narrow READ purpose. — One loaded object prevents authorization/projection TOCTOU and preserves read-only admin access.
