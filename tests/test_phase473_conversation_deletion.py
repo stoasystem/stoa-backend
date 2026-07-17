@@ -114,7 +114,6 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         "usage_resource_id": "request-private",
         "quota_period": "2026-07-18",
         "counter_value": 1,
-        "created_at": NOW,
         "expires_at": 100,
     }
     claim = attachment_repo.build_message_command_claim_transaction(
