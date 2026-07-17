@@ -247,6 +247,7 @@ def test_t472_02_dependency_path_denies_suspension_next_request_without_mutation
     assert handler_calls == ["student-1"]
     assert {operation for operation, *_ in repository.calls} <= {
         "get_binding",
+        "get_account_fence",
         "get_account",
         "get_current_grants",
     }
