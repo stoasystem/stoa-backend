@@ -39,7 +39,7 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 ### Content Privacy And Practice Integrity
 
 - [x] **V9PRIV-01:** Question OCR accepts only an existing, unconsumed upload owned by the authenticated student and atomically associates it with the created question.
-- [ ] **V9PRIV-02:** Uploads enforce supported extension/MIME/magic-byte rules, bounded size, lifecycle expiry, post-upload validation, stable errors, and safe failure cleanup.
+- [x] **V9PRIV-02:** Uploads enforce supported extension/MIME/magic-byte rules, bounded size, lifecycle expiry, post-upload validation, stable errors, and safe failure cleanup.
 - [x] **V9PRIV-03:** Student practice preview, overview, path, and lesson responses never expose correct answers or answer-derived explanations before a recorded submission.
 - [ ] **V9PRIV-04:** Application logs omit student/model content, tokens, object keys, provider payloads, and secrets while retaining request IDs, event IDs, sizes, categories, and exception classes.
 

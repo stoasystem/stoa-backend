@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | 27/35 | In Progress|  |
+| 473 | 28/35 | In Progress|  |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-29-PLAN.md
-last_updated: "2026-07-17T21:20:01.906Z"
-last_activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
+stopped_at: Completed 473-30-PLAN.md
+last_updated: "2026-07-17T23:15:14.377Z"
+last_activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing, and purge
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 49
-  percent: 10
+  completed_plans: 50
+  percent: 88
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 28 of 35
+Plan: 30 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
+Last activity: 2026-07-17 -- Completed Plan 473-30 moderation ownership, fencing, and purge
 
 ## Accumulated Context
 
+- Moderation summaries and events now derive one authoritative student/generation from the strong question read, every writer loses to the permanent account fence, owner-bound notification handoff is mandatory, and strong paginated scrubbing requires two later zero epochs.
 - Phase 473 staging assembly and immutable promotion now persist exact pre-mutation coordinates behind expiring operation fences; bounded takeovers change both fence and row version so stale workers cannot record success.
 - Upload cleanup persists exact multipart, staging-version, and immutable-version progress independently and cannot reach `cleanup_complete` until every marker is durable.
 - Recovery and cleanup select only exact never-reused keys and exact VersionIds; durable references and mismatching/newer versions block destructive cleanup.
@@ -106,8 +107,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 
 ## Session
 
-**Last Date:** 2026-07-17T21:20:01.901Z
-**Stopped At:** Completed 473-29-PLAN.md
+**Last Date:** 2026-07-17T23:14:30.061Z
+**Stopped At:** Completed 473-30-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -163,6 +164,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 | Phase 473 P22 | 13 min | 3 tasks | 4 files |
 | Phase 473 P23 | 15 min | 3 tasks | 7 files |
 | Phase 473 P29 | 33 min | 3 tasks | 27 files |
+| Phase 473 P30 | 13 min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -253,3 +255,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 - [Phase 473]: The permanent account fence is the only account-write truth; pending deletion never restores Actor authority and Plan 35 alone may terminalize it. — One permanent lifecycle row prevents mutable profiles or stale workers from reviving authority.
 - [Phase 473]: Deletion replay resolves only an immutable issuer/subject command fingerprint and returns the same opaque receipt after identity rows are terminalized. — Post-fence retries must recover the committed command without recreating general application authority.
 - [Phase 473]: Primary branch readiness requires two full clean strong-scan epochs; malformed, repeated, partial, or dirty progress remains retryable debt. — Filtered pages and eventually consistent indexes cannot prove private-row absence.
+- [Phase 473]: Authoritative moderation ownership comes from the strongly read question; reporter, actor, and assignee identities never substitute for the student owner. — Every summary, event, writer fence, purge selector, and notification handoff uses one student lineage.
+- [Phase 473]: Moderation summary and event rows use one strong base-table discovery pass with separately persisted family continuation coordinates. — This avoids GSI absence fiction while malformed or divergent restart state fails closed.
+- [Phase 473]: Moderation tombstones retain only opaque row identities, lifecycle facts, timestamps, and privacy generation. — No content hashes, notes, contexts, changes, reporter identities, or actor pseudonyms survive account deletion.
