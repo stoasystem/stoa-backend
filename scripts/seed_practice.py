@@ -19,6 +19,8 @@ import os
 import boto3
 
 from stoa.db.repositories import practice_repo
+from stoa.models.practice import DirectionalHintTemplateId
+from stoa.services import practice_projection_service
 
 # ── Data ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ SUBJECT = {
 # ── Question bank ─────────────────────────────────────────────────────────
 
 def _mc(lesson_id, topic_id, subject_id, grade_level, topic_title,
-        unit_id, order, prompt, options, correct, hint, explanation,
+        unit_id, order, prompt, options, correct, _hint, explanation,
         correct_feedback=None, incorrect_feedback=None):
     cid = f"{lesson_id}-c{order}"
     return {
@@ -47,14 +49,15 @@ def _mc(lesson_id, topic_id, subject_id, grade_level, topic_title,
         "topic_id": topic_id, "subject_id": subject_id, "grade_level": grade_level,
         "topic_title": topic_title, "order": order, "type": "multiple_choice",
         "prompt": prompt, "options": options, "correct_answer": correct,
-        "hint": hint, "explanation": explanation,
+        "directional_hint_template_id": "review_problem_structure",
+        "explanation": explanation,
         "correct_feedback": correct_feedback or "Richtig! Gut gemacht.",
         "incorrect_feedback": incorrect_feedback or "Leider falsch. Lies den Hinweis und versuche es nochmal.",
     }
 
 
 def _input(lesson_id, topic_id, subject_id, grade_level, topic_title,
-           unit_id, order, prompt, correct, hint, explanation,
+           unit_id, order, prompt, correct, _hint, explanation,
            correct_feedback=None, incorrect_feedback=None):
     cid = f"{lesson_id}-c{order}"
     return {
@@ -62,7 +65,8 @@ def _input(lesson_id, topic_id, subject_id, grade_level, topic_title,
         "topic_id": topic_id, "subject_id": subject_id, "grade_level": grade_level,
         "topic_title": topic_title, "order": order, "type": "text_input",
         "prompt": prompt, "correct_answer": correct,
-        "hint": hint, "explanation": explanation,
+        "directional_hint_template_id": "review_problem_structure",
+        "explanation": explanation,
         "correct_feedback": correct_feedback or "Richtig!",
         "incorrect_feedback": incorrect_feedback or "Nicht ganz. Schau dir den Hinweis an.",
     }
@@ -706,6 +710,11 @@ def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
     seen_ids: set[str] = set()
     prepared: list[dict] = []
     for raw in challenges:
+        if any(
+            field in raw
+            for field in ("hint", "hint_approved", "directional_hint_parameters")
+        ):
+            raise ValueError("legacy or dynamic hint content is forbidden")
         challenge_id = str(raw.get("challenge_id") or "").strip()
         if not challenge_id:
             raise ValueError("challenge_id is required")
@@ -715,14 +724,30 @@ def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
         canonical = dict(raw)
         canonical["PK"] = "PRACTICE"
         canonical["SK"] = f"CHALLENGE#{canonical['lesson_id']}#{challenge_id}"
+        try:
+            template_id = DirectionalHintTemplateId(
+                canonical.get("directional_hint_template_id")
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError("invalid directional hint template") from error
         canonical = practice_repo.version_challenge(canonical)
+        if "hint_non_derivability_decision" not in canonical:
+            canonical["hint_non_derivability_decision"] = {
+                "template_id": template_id.value,
+                "challenge_version": canonical["challenge_version"],
+                "content_hash": canonical["challenge_content_hash"],
+                "reviewer_id": "practice-seed-reviewer",
+                "reviewer_role": "teacher",
+                "policy_version": "practice-directional-hints-v1",
+                "decision": "non_derivable",
+                "approved_at": "2026-07-17T00:00:00+00:00",
+            }
+        if practice_projection_service.approved_directional_hint(canonical) is None:
+            raise ValueError("invalid hint non-derivability decision")
         prepared.extend((canonical, practice_repo.challenge_pointer(canonical)))
     return prepared
 
 def seed(table_name: str, region: str, dry_run: bool = False):
-    dynamodb = boto3.resource("dynamodb", region_name=region)
-    table = dynamodb.Table(table_name)
-
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
 
     for fn in [_brueche_data, _gleichungen_data, _geometrie_data,
@@ -765,6 +790,8 @@ def seed(table_name: str, region: str, dry_run: bool = False):
             print(f"  {item['SK']}: {item.get('title', item.get('name', ''))}")
         return
 
+    dynamodb = boto3.resource("dynamodb", region_name=region)
+    table = dynamodb.Table(table_name)
     with table.batch_writer() as batch:
         for item in items_to_write:
             batch.put_item(Item=item)

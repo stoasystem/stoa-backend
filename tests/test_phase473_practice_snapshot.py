@@ -359,7 +359,13 @@ def test_partial_attempt_route_reveals_no_answer(monkeypatch) -> None:
 def _approved_challenge(**overrides: Any) -> dict[str, Any]:
     challenge = _challenge()
     challenge.update(overrides)
-    challenge["hint_non_derivability_decision"] = _hint_decision(challenge)
+    versioned = practice_repo.version_challenge(challenge)
+    challenge.update(
+        challenge_version=versioned["challenge_version"],
+        challenge_content_hash=versioned["challenge_content_hash"],
+    )
+    if "hint_non_derivability_decision" not in overrides:
+        challenge["hint_non_derivability_decision"] = _hint_decision(challenge)
     return challenge
 
 
@@ -399,6 +405,27 @@ def test_only_closed_parameter_free_template_can_render() -> None:
         if isinstance(invalid.get("hint_non_derivability_decision"), Mapping):
             invalid["hint_non_derivability_decision"] = _hint_decision(invalid)
         assert practice_projection_service.approved_directional_hint(invalid) is None
+
+
+def test_answer_bearing_inputs_cannot_influence_rendered_hint_bytes() -> None:
+    rendered = {
+        practice_projection_service.approved_directional_hint(
+            _approved_challenge(
+                correct_answer=answer,
+                explanation=explanation,
+                correct_feedback=f"correct-{index}",
+                incorrect_feedback=f"incorrect-{index}",
+            )
+        )
+        for index, (answer, explanation) in enumerate(
+            (("5", "subtract four"), ("second choice", "compare choices"), ("42", "divide"))
+        )
+    }
+    assert rendered == {
+        practice_projection_service.DIRECTIONAL_HINT_TEMPLATES[
+            "review_problem_structure"
+        ]
+    }
 
 
 @pytest.mark.parametrize(

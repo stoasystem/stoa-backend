@@ -7,12 +7,29 @@ from typing import Any
 
 from stoa.models.practice import (
     CurriculumLessonPreview,
+    DirectionalHintTemplateId,
+    HintNonDerivabilityDecision,
     PracticeAttemptResult,
     PracticeChallengePreview,
     PracticeExercisePreview,
     PracticeLessonPreview,
     PrivilegedPracticeAnswer,
 )
+from stoa.db.repositories import practice_repo
+
+
+DIRECTIONAL_HINT_POLICY_VERSION = "practice-directional-hints-v1"
+DIRECTIONAL_HINT_TEMPLATES: dict[str, str] = {
+    DirectionalHintTemplateId.REVIEW_PROBLEM_STRUCTURE.value: (
+        "Identify what the problem gives you and which operation it asks for."
+    ),
+    DirectionalHintTemplateId.CHECK_EACH_STEP.value: (
+        "Check each step against the rule named in the question."
+    ),
+    DirectionalHintTemplateId.REPRESENT_BEFORE_SOLVING.value: (
+        "Represent the given relationships before you calculate."
+    ),
+}
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -34,7 +51,7 @@ def build_challenge_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
             type=raw.get("type", "text_input"),
             prompt=raw["prompt"],
             options=raw.get("options"),
-            hintAvailable=bool(raw.get("hint") and raw.get("hint_approved") is True),
+            hintAvailable=approved_directional_hint(raw) is not None,
         )
     )
 
@@ -181,28 +198,35 @@ def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeA
 
 
 def approved_directional_hint(challenge: Mapping[str, Any]) -> str | None:
-    """Return only an explicitly approved hint that contains no answer material."""
-    if challenge.get("hint_approved") is not True:
-        return None
-    hint = str(challenge.get("hint") or "").strip()
-    normalized_hint = _normalize_sensitive_text(hint)
-    if not normalized_hint:
-        return None
-    for sensitive in (
-        challenge.get("correct_answer"),
-        challenge.get("answer_key"),
-        challenge.get("explanation"),
-        challenge.get("correct_feedback"),
-        challenge.get("incorrect_feedback"),
+    """Render only a reviewed constant selected by an exact content-bound decision."""
+    if any(
+        field in challenge
+        for field in ("hint", "hint_approved", "directional_hint_parameters")
     ):
-        normalized_sensitive = _normalize_sensitive_text(sensitive)
-        if normalized_sensitive and normalized_sensitive in normalized_hint:
-            return None
-    return hint
-
-
-def _normalize_sensitive_text(value: Any) -> str:
-    return "".join(character.lower() for character in str(value or "") if character.isalnum())
+        return None
+    raw_template_id = challenge.get("directional_hint_template_id")
+    raw_decision = challenge.get("hint_non_derivability_decision")
+    if not isinstance(raw_template_id, str) or not isinstance(raw_decision, Mapping):
+        return None
+    try:
+        template_id = DirectionalHintTemplateId(raw_template_id)
+        decision = HintNonDerivabilityDecision.model_validate(raw_decision)
+    except (TypeError, ValueError):
+        return None
+    if decision.approved_at.utcoffset() is None:
+        return None
+    content_hash = practice_repo.canonical_challenge_content_hash(dict(challenge))
+    version = f"sha256:{content_hash}"
+    if (
+        decision.template_id is not template_id
+        or decision.challenge_version != version
+        or decision.content_hash != content_hash
+        or decision.policy_version != DIRECTIONAL_HINT_POLICY_VERSION
+        or challenge.get("challenge_content_hash") != content_hash
+        or challenge.get("challenge_version") != version
+    ):
+        return None
+    return DIRECTIONAL_HINT_TEMPLATES.get(template_id.value)
 
 
 def _content_state(raw: Mapping[str, Any]) -> str:

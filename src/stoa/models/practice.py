@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from enum import Enum
+from typing import Literal
 from typing import Annotated, Any, Mapping
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
@@ -106,6 +109,32 @@ class PracticeHintResponse(_PracticeContract):
     challenge_id: NonEmptyText = Field(alias="challengeId")
     hint_available: bool = Field(alias="hintAvailable")
     hint: NonEmptyText | None = None
+
+
+class DirectionalHintTemplateId(str, Enum):
+    """Closed IDs whose rendered bytes are reviewed and parameter-free."""
+
+    REVIEW_PROBLEM_STRUCTURE = "review_problem_structure"
+    CHECK_EACH_STEP = "check_each_step"
+    REPRESENT_BEFORE_SOLVING = "represent_before_solving"
+
+
+class HintReviewerRole(str, Enum):
+    TEACHER = "teacher"
+    ADMIN = "admin"
+
+
+class HintNonDerivabilityDecision(_PracticeContract):
+    """Fail-closed approval bound to one exact complete challenge version."""
+
+    template_id: DirectionalHintTemplateId
+    challenge_version: NonEmptyText
+    content_hash: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+    reviewer_id: NonEmptyText
+    reviewer_role: HintReviewerRole
+    policy_version: Literal["practice-directional-hints-v1"]
+    decision: Literal["non_derivable"]
+    approved_at: datetime
 
 
 class PracticeAttemptResult(_PracticeContract):

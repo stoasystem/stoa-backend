@@ -119,14 +119,12 @@ def test_practice_authorization_outage_prevents_completion_write(monkeypatch):
 
 
 def test_practice_hint_body_cannot_select_another_student(monkeypatch):
-    challenge = {
+    challenge = _approved_hint_challenge({
         "challenge_id": "challenge-1",
         "prompt": "Solve",
-        "hint": "Use an inverse operation.",
-        "hint_approved": True,
         "correct_answer": "x = 5",
         "explanation": "Subtract four from both sides.",
-    }
+    })
     monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id: challenge)
     monkeypatch.setattr(
         practice,
@@ -151,7 +149,9 @@ def test_practice_hint_body_cannot_select_another_student(monkeypatch):
     assert response.json() == {
         "challengeId": "challenge-1",
         "hintAvailable": True,
-        "hint": "Use an inverse operation.",
+        "hint": practice.practice_projection_service.DIRECTIONAL_HINT_TEMPLATES[
+            "review_problem_structure"
+        ],
     }
 
 
@@ -167,6 +167,23 @@ def _challenge() -> dict:
         "correct_feedback": "Correct.",
         "incorrect_feedback": "Review inverse operations.",
     }
+
+
+def _approved_hint_challenge(challenge: dict | None = None) -> dict:
+    item = dict(challenge or _challenge())
+    item["directional_hint_template_id"] = "review_problem_structure"
+    item.update(practice.practice_repo.version_challenge(item))
+    item["hint_non_derivability_decision"] = {
+        "template_id": "review_problem_structure",
+        "challenge_version": item["challenge_version"],
+        "content_hash": item["challenge_content_hash"],
+        "reviewer_id": "teacher-reviewer-1",
+        "reviewer_role": "teacher",
+        "policy_version": "practice-directional-hints-v1",
+        "decision": "non_derivable",
+        "approved_at": "2026-07-17T00:00:00+00:00",
+    }
+    return item
 
 
 def _install_answer_dependencies(monkeypatch, challenge: dict | None = None) -> dict:
@@ -295,13 +312,11 @@ def test_hint_requires_approval_and_rejects_answer_or_explanation_canaries(monke
     monkeypatch.setattr(practice, "_hint_limit_for_student", lambda _id: 5)
 
     cases = [
-        {**_challenge(), "hint": "Use an inverse operation.", "hint_approved": False},
-        {**_challenge(), "hint": "The answer is x = 5.", "hint_approved": True},
-        {
-            **_challenge(),
-            "hint": "Subtract four from both sides.",
-            "hint_approved": True,
-        },
+        {**_challenge(), "directional_hint_template_id": "review_problem_structure"},
+        _approved_hint_challenge({**_challenge(), "hint": "The answer is x = 5."}),
+        _approved_hint_challenge(
+            {**_challenge(), "hint": "Subtract four from both sides."}
+        ),
     ]
     for challenge in cases:
         monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id, item=challenge: item)
