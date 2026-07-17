@@ -608,3 +608,29 @@ def test_tombstone_replacement_retains_only_declared_noncontent_keys() -> None:
     )
     assert set(captured[0]) <= repository.QUESTION_TOMBSTONE_ALLOWLIST
     assert repository.PRIVATE_QUESTION_SESSION_FIELDS.isdisjoint(captured[0])
+
+
+def test_base_scan_discovers_embedded_parent_profile_child_summary() -> None:
+    repository, _service, _job = _deletion_modules()
+
+    class _ParentProfile:
+        def scan(self, **kwargs: Any) -> dict[str, Any]:
+            assert kwargs["ConsistentRead"] is True
+            return {
+                "Items": [
+                    {
+                        "PK": "USER#parent-1",
+                        "SK": "PROFILE",
+                        "entity_type": "user_profile",
+                        "user_id": "parent-1",
+                        "child_summaries": [
+                            {"student_id": STUDENT_ID, "name": "private child name"}
+                        ],
+                    }
+                ]
+            }
+
+    page = repository.scan_owned_private_rows(STUDENT_ID, table=_ParentProfile())
+    assert [(item["PK"], item["SK"]) for item in page.items] == [
+        ("USER#parent-1", "PROFILE")
+    ]

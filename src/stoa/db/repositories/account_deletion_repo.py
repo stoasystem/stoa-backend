@@ -1015,6 +1015,23 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
     sk = str(item.get("SK") or "")
     if sk in {f"CHILD#{user_id}", f"PARENT#{user_id}"}:
         return True
+    for field in ("children", "child_summaries", "student_summaries"):
+        value = item.get(field)
+        if isinstance(value, Mapping):
+            if user_id in value:
+                return True
+            entries = value.values()
+        elif isinstance(value, (list, tuple)):
+            entries = value
+        else:
+            continue
+        for entry in entries:
+            if isinstance(entry, Mapping) and user_id in {
+                entry.get("user_id"),
+                entry.get("student_id"),
+                entry.get("child_id"),
+            }:
+                return True
     scope = str(item.get("scope") or "")
     return scope in {f"student:{user_id}", f"student/{user_id}", user_id}
 
