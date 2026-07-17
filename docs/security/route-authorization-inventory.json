@@ -4,6 +4,24 @@
       {
         "action": "delete",
         "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "attachment_id"
+    ],
+    "method": "DELETE",
+    "path": "/files/attachments/{attachment_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "delete",
+        "capability": null,
         "purpose": "notification_self_service",
         "resource_type": "notification_push_token"
       }
@@ -1169,6 +1187,51 @@
     "identifiers": [],
     "method": "GET",
     "path": "/conversations/{conv_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "files",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/files/attachments",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "attachment_id"
+    ],
+    "method": "GET",
+    "path": "/files/attachments/{attachment_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "attachment"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "attachment_id"
+    ],
+    "method": "GET",
+    "path": "/files/attachments/{attachment_id}/content",
     "sensitive": true
   },
   {

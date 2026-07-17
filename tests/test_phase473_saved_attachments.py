@@ -385,11 +385,16 @@ def test_purge_hook_returns_typed_independent_progress_without_aggregate_authori
     assert repository.finalize_calls == 0
 
 
-def _client(monkeypatch: pytest.MonkeyPatch, *, actor: Actor | None = None) -> TestClient:
+def _client(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    actor: Actor | None = None,
+    s3: Any = None,
+) -> TestClient:
     app = FastAPI()
     app.include_router(files.router, prefix="/files")
     app.dependency_overrides[get_actor] = lambda: actor or _actor()
-    app.dependency_overrides[get_s3_client] = lambda: object()
+    app.dependency_overrides[get_s3_client] = lambda: s3 if s3 is not None else object()
     app.dependency_overrides[get_settings] = lambda: Settings(
         s3_images_bucket=PRIVATE_CANARIES[0]
     )
@@ -405,6 +410,74 @@ def test_owner_route_matrix_is_reachable_through_real_router(monkeypatch) -> Non
         ("delete", "/files/attachments/attachment-1"),
     ):
         assert getattr(_client(monkeypatch), method)(path).status_code != 404
+
+
+def test_owner_routes_use_one_loaded_record_and_exact_private_content(monkeypatch) -> None:
+    data = b"saved attachment bytes"
+    item = _saved_attachment(data=data)
+    calls: list[str] = []
+
+    def get_attachment(attachment_id: str, **_kwargs: Any) -> dict[str, Any]:
+        calls.append(attachment_id)
+        return dict(item)
+
+    monkeypatch.setattr(files.attachment_repo, "get_attachment", get_attachment)
+    monkeypatch.setattr(
+        files.attachment_repo,
+        "list_saved_attachments",
+        lambda owner_id, **_kwargs: ([dict(item)] if owner_id == "student-1" else [], None),
+    )
+    body = _Body(data)
+    s3 = _DownloadS3(
+        {
+            "Body": body,
+            "ContentLength": len(data),
+            "ETag": PRIVATE_CANARIES[3],
+        }
+    )
+    client = _client(monkeypatch, s3=s3)
+    listing = client.get("/files/attachments")
+    assert listing.status_code == 200
+    assert listing.json()["items"][0]["attachmentId"] == "attachment-1"
+    detail = client.get("/files/attachments/attachment-1")
+    assert detail.status_code == 200
+    assert calls == ["attachment-1"]
+    content = client.get("/files/attachments/attachment-1/content")
+    assert content.status_code == 200 and content.content == data
+    assert calls == ["attachment-1", "attachment-1"]
+    assert body.close_count == 1
+    assert s3.calls[0]["VersionId"] == PRIVATE_CANARIES[2]
+    rendered = content.text + repr(dict(content.headers))
+    assert all(canary not in rendered for canary in PRIVATE_CANARIES)
+
+
+def test_foreign_and_missing_routes_share_concealed_attachment_error(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    shapes = []
+    for item in (None, _saved_attachment(owner_id="student-2")):
+        monkeypatch.setattr(
+            files.attachment_repo,
+            "get_attachment",
+            lambda _attachment_id, value=item, **_kwargs: value,
+        )
+        response = client.get("/files/attachments/attachment-private-canary")
+        assert response.status_code == 404
+        shapes.append(response.json()["detail"])
+        assert "attachment-private-canary" not in response.text
+    assert shapes[0]["code"] == shapes[1]["code"] == "upload_not_found"
+    assert shapes[0]["message"] == shapes[1]["message"]
+
+
+def test_referenced_delete_route_returns_friendly_stable_in_use_action(monkeypatch) -> None:
+    monkeypatch.setattr(
+        files.attachment_repo,
+        "get_attachment",
+        lambda _attachment_id, **_kwargs: _saved_attachment(ref_count=1),
+    )
+    response = _client(monkeypatch).delete("/files/attachments/attachment-1")
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "attachment_in_use"
+    assert "conversation" in response.json()["detail"]["message"].lower()
 
 
 def test_route_privacy_denies_coordinates_in_headers_and_bodies(monkeypatch) -> None:
