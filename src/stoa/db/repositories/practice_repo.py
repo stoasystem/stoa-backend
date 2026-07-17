@@ -1,10 +1,148 @@
 """DynamoDB access patterns for practice content and student progress."""
+import hashlib
+import json
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 import uuid
 
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 from stoa.db.dynamodb import get_table
+
+
+CHALLENGE_POINTER_PK = "PRACTICE_CHALLENGE_LOOKUP"
+CHALLENGE_POINTER_ENTITY = "practice_challenge_pointer"
+_CHALLENGE_METADATA_FIELDS = {
+    "PK",
+    "SK",
+    "challenge_content_hash",
+    "challenge_version",
+    "entity_type",
+    "hint_non_derivability_decision",
+}
+_POINTER_FIELDS = {
+    "PK",
+    "SK",
+    "entity_type",
+    "challenge_id",
+    "target_pk",
+    "target_sk",
+    "challenge_version",
+    "challenge_content_hash",
+}
+_MAX_CHALLENGE_PAGES = 1000
+
+
+def _canonical_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _canonical_json_value(child)
+            for key, child in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_canonical_json_value(child) for child in value]
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return format(value.normalize(), "f")
+    if isinstance(value, float):
+        decimal = Decimal(str(value))
+        if decimal == decimal.to_integral_value():
+            return int(decimal)
+        return format(decimal.normalize(), "f")
+    return value
+
+
+def canonical_challenge_content_hash(challenge: dict | Any) -> str:
+    """Hash every challenge content field while excluding storage/approval metadata."""
+    if not isinstance(challenge, dict):
+        challenge = dict(challenge)
+    content = {
+        key: value
+        for key, value in challenge.items()
+        if key not in _CHALLENGE_METADATA_FIELDS
+    }
+    encoded = json.dumps(
+        _canonical_json_value(content),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def version_challenge(challenge: dict[str, Any]) -> dict[str, Any]:
+    """Return one canonical row with a content-derived immutable version."""
+    canonical = dict(challenge)
+    content_hash = canonical_challenge_content_hash(canonical)
+    canonical["challenge_content_hash"] = content_hash
+    canonical["challenge_version"] = f"sha256:{content_hash}"
+    return canonical
+
+
+def challenge_pointer(challenge: dict[str, Any]) -> dict[str, Any]:
+    """Build an answer-free direct pointer to one exact canonical row."""
+    return {
+        "PK": CHALLENGE_POINTER_PK,
+        "SK": f"CHALLENGE#{challenge['challenge_id']}",
+        "entity_type": CHALLENGE_POINTER_ENTITY,
+        "challenge_id": challenge["challenge_id"],
+        "target_pk": challenge["PK"],
+        "target_sk": challenge["SK"],
+        "challenge_version": challenge["challenge_version"],
+        "challenge_content_hash": challenge["challenge_content_hash"],
+    }
+
+
+def _valid_versioned_challenge(challenge: Any) -> bool:
+    if not isinstance(challenge, dict):
+        return False
+    challenge_id = challenge.get("challenge_id")
+    content_hash = challenge.get("challenge_content_hash")
+    version = challenge.get("challenge_version")
+    if not isinstance(challenge_id, str) or not challenge_id.strip():
+        return False
+    if not isinstance(content_hash, str) or len(content_hash) != 64:
+        return False
+    if version != f"sha256:{content_hash}":
+        return False
+    return canonical_challenge_content_hash(challenge) == content_hash
+
+
+def _query_all_challenge_pages(table: Any, **query: Any) -> list[dict]:
+    items: list[dict] = []
+    previous_marker: dict[str, Any] | None = None
+    for _page in range(_MAX_CHALLENGE_PAGES):
+        response = table.query(**query)
+        page_items = response.get("Items", [])
+        if not isinstance(page_items, list):
+            raise ValueError("malformed challenge pagination response")
+        items.extend(page_items)
+        marker = response.get("LastEvaluatedKey")
+        if marker is None:
+            break
+        if not isinstance(marker, dict) or not marker or marker == previous_marker:
+            raise ValueError("challenge pagination did not make progress")
+        previous_marker = marker
+        query["ExclusiveStartKey"] = marker
+    else:
+        raise ValueError("challenge pagination exceeded the bounded page limit")
+    return items
+
+
+def _validate_unique_challenges(items: list[dict]) -> list[dict]:
+    identities: set[tuple[str, str]] = set()
+    ids: set[str] = set()
+    for item in items:
+        if not _valid_versioned_challenge(item):
+            raise ValueError("malformed versioned challenge row")
+        challenge_id = item["challenge_id"]
+        identity = (challenge_id, item["challenge_version"])
+        if challenge_id in ids or identity in identities:
+            raise ValueError("duplicate challenge identity")
+        ids.add(challenge_id)
+        identities.add(identity)
+    return items
 
 
 # ── Content read ──────────────────────────────────────────────────────────
@@ -61,13 +199,13 @@ def get_lesson(lesson_id: str) -> dict | None:
 
 def get_challenges(lesson_id: str) -> list[dict]:
     table = get_table()
-    resp = table.query(
+    items = _query_all_challenge_pages(
+        table,
         KeyConditionExpression=(
             Key("PK").eq("PRACTICE") & Key("SK").begins_with(f"CHALLENGE#{lesson_id}#")
         )
     )
-    items = resp.get("Items", [])
-    return sorted(items, key=lambda x: x.get("order", 0))
+    return sorted(_validate_unique_challenges(items), key=lambda x: x.get("order", 0))
 
 
 def get_all_challenges(
@@ -77,12 +215,13 @@ def get_all_challenges(
 ) -> list[dict]:
     table = get_table()
     prefix = f"CHALLENGE#{lesson_id}#" if lesson_id else "CHALLENGE#"
-    resp = table.query(
+    items = _query_all_challenge_pages(
+        table,
         KeyConditionExpression=(
             Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix)
         )
     )
-    items = resp.get("Items", [])
+    items = _validate_unique_challenges(items)
     if subject_id:
         items = [i for i in items if i.get("subject_id") == subject_id]
     if topic_id:
@@ -91,21 +230,40 @@ def get_all_challenges(
 
 
 def get_challenge(challenge_id: str) -> dict | None:
-    """Look up a challenge by its full SK (CHALLENGE#{lesson_id}#{challenge_id})
-    or by scanning for challenge_id attribute."""
+    """Resolve one opaque ID through an answer-free pointer and exact row key."""
+    if not isinstance(challenge_id, str) or not challenge_id.strip():
+        return None
     table = get_table()
-    # Try direct lookup with known SK pattern first
-    for prefix in ["CHALLENGE#"]:
-        resp = table.query(
-            KeyConditionExpression=(
-                Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix)
-            ),
-            FilterExpression=Attr("challenge_id").eq(challenge_id),
-        )
-        items = resp.get("Items", [])
-        if items:
-            return items[0]
-    return None
+    pointer = table.get_item(
+        Key={"PK": CHALLENGE_POINTER_PK, "SK": f"CHALLENGE#{challenge_id}"}
+    ).get("Item")
+    if not isinstance(pointer, dict) or set(pointer) != _POINTER_FIELDS:
+        return None
+    if (
+        pointer.get("PK") != CHALLENGE_POINTER_PK
+        or pointer.get("SK") != f"CHALLENGE#{challenge_id}"
+        or pointer.get("entity_type") != CHALLENGE_POINTER_ENTITY
+        or pointer.get("challenge_id") != challenge_id
+        or pointer.get("target_pk") != "PRACTICE"
+        or not isinstance(pointer.get("target_sk"), str)
+        or not pointer["target_sk"].startswith("CHALLENGE#")
+    ):
+        return None
+    challenge = table.get_item(
+        Key={"PK": pointer["target_pk"], "SK": pointer["target_sk"]}
+    ).get("Item")
+    if not _valid_versioned_challenge(challenge):
+        return None
+    if (
+        challenge.get("PK") != pointer["target_pk"]
+        or challenge.get("SK") != pointer["target_sk"]
+        or challenge.get("challenge_id") != challenge_id
+        or challenge.get("challenge_version") != pointer.get("challenge_version")
+        or challenge.get("challenge_content_hash")
+        != pointer.get("challenge_content_hash")
+    ):
+        return None
+    return challenge
 
 
 def get_units(topic_id: str) -> list[dict]:
@@ -158,6 +316,18 @@ def put_attempt(
     subject_id: str = "",
     lesson_id: str = "",
     topic_id: str = "",
+    unit_id: str = "",
+    challenge_version: str = "",
+    challenge_content_hash: str = "",
+    standard_answer: Any = None,
+    explanation: str = "",
+    correct_feedback: str = "",
+    incorrect_feedback: str = "",
+    feedback: str = "",
+    next_challenge_id: str | None = None,
+    prompt: str = "",
+    options: list[Any] | None = None,
+    challenge_type: str = "",
     attempt_id: str | None = None,
     created_at: str | None = None,
 ) -> dict:
@@ -174,11 +344,27 @@ def put_attempt(
         "subject_id": subject_id,
         "topic_id": topic_id,
         "lesson_id": lesson_id,
+        "unit_id": unit_id,
         "student_answer": submitted_answer,
         "submitted_answer": submitted_answer,
         "correct": bool(correct),
         "created_at": created_at or datetime.now(timezone.utc).isoformat(),
     }
+    snapshot_fields = {
+        "challenge_version": challenge_version,
+        "challenge_content_hash": challenge_content_hash,
+        "standard_answer": standard_answer,
+        "explanation": explanation,
+        "correct_feedback": correct_feedback,
+        "incorrect_feedback": incorrect_feedback,
+        "feedback": feedback,
+        "next_challenge_id": next_challenge_id,
+        "prompt": prompt,
+        "options": options,
+        "challenge_type": challenge_type,
+    }
+    if any(value not in (None, "", []) for value in snapshot_fields.values()):
+        item.update(snapshot_fields)
     table.put_item(
         Item=item,
         ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",

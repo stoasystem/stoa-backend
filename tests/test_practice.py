@@ -238,13 +238,25 @@ def test_attempt_write_failure_returns_no_answer_or_provider_detail(monkeypatch,
 
 def test_attempt_result_is_owner_scoped_and_unknown_matches_foreign(monkeypatch):
     challenge = _install_answer_dependencies(monkeypatch)
+    versioned = practice.practice_repo.version_challenge(challenge)
     attempt = {
         "attempt_id": "attempt-1",
         "student_id": "student-1",
         "challenge_id": challenge["challenge_id"],
+        "challenge_version": versioned["challenge_version"],
+        "challenge_content_hash": versioned["challenge_content_hash"],
+        "subject_id": challenge["subject_id"],
+        "topic_id": challenge["topic_id"],
         "lesson_id": challenge["lesson_id"],
         "student_answer": "x = 4",
         "correct": False,
+        "standard_answer": challenge["correct_answer"],
+        "explanation": challenge["explanation"],
+        "correct_feedback": challenge["correct_feedback"],
+        "incorrect_feedback": challenge["incorrect_feedback"],
+        "feedback": challenge["incorrect_feedback"],
+        "next_challenge_id": None,
+        "created_at": "2026-07-17T00:00:00+00:00",
     }
     monkeypatch.setattr(
         practice.practice_repo,

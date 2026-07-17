@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -516,4 +515,3 @@ def test_every_student_preview_route_recursively_filters_real_row_canaries(monke
     for response in responses:
         assert response.status_code == 200, response.text
         _assert_answer_free(response.json())
-

@@ -109,24 +109,53 @@ def build_curriculum_lesson_preview(
 
 def build_attempt_result(
     recorded_attempt: Mapping[str, Any] | None,
-    challenge: Mapping[str, Any],
-    *,
-    next_challenge_id: str | None,
 ) -> PracticeAttemptResult:
-    """Build an answer-bearing result only from a durable attempt receipt."""
-    correct = bool((recorded_attempt or {}).get("correct"))
-    feedback = (
-        challenge.get("correct_feedback") if correct else challenge.get("incorrect_feedback")
-    ) or ("Richtig!" if correct else "Leider falsch. Prüfe die Erklärung und versuche es erneut.")
-    standard_answer = challenge.get("correct_answer", challenge.get("answer_key"))
-    explanation = challenge.get("explanation") or "Vergleiche deinen Lösungsweg mit der Standardantwort."
+    """Build an answer-bearing result from one complete immutable receipt only."""
+    receipt = dict(recorded_attempt or {})
+    required_text = (
+        "attempt_id",
+        "student_id",
+        "challenge_id",
+        "challenge_version",
+        "challenge_content_hash",
+        "standard_answer",
+        "explanation",
+        "correct_feedback",
+        "incorrect_feedback",
+        "feedback",
+        "subject_id",
+        "topic_id",
+        "lesson_id",
+        "created_at",
+    )
+    if any(not isinstance(receipt.get(field), str) or not receipt[field].strip() for field in required_text):
+        raise ValueError("a complete immutable attempt receipt is required")
+    content_hash = receipt["challenge_content_hash"]
+    if (
+        len(content_hash) != 64
+        or receipt["challenge_version"] != f"sha256:{content_hash}"
+        or type(receipt.get("correct")) is not bool
+        or not ({"submitted_answer", "student_answer"} & receipt.keys())
+    ):
+        raise ValueError("a complete immutable attempt receipt is required")
+    expected_feedback = (
+        receipt["correct_feedback"]
+        if receipt["correct"]
+        else receipt["incorrect_feedback"]
+    )
+    if receipt["feedback"] != expected_feedback:
+        raise ValueError("a complete immutable attempt receipt is required")
+    next_challenge_id = receipt.get("next_challenge_id")
+    if next_challenge_id is not None and not isinstance(next_challenge_id, str):
+        raise ValueError("a complete immutable attempt receipt is required")
+    correct = receipt["correct"]
     return PracticeAttemptResult.from_recorded_attempt(
-        recorded_attempt,
-        challengeId=challenge["challenge_id"],
+        receipt,
+        challengeId=receipt["challenge_id"],
         correct=correct,
-        standardAnswer=str(standard_answer or "Keine Standardantwort verfügbar."),
-        explanation=str(explanation),
-        feedback=str(feedback),
+        standardAnswer=receipt["standard_answer"],
+        explanation=receipt["explanation"],
+        feedback=receipt["feedback"],
         nextChallengeId=next_challenge_id,
         retryAllowed=not correct,
         attemptsRemaining=0 if correct else 2,

@@ -752,6 +752,19 @@ async def submit_answer(
 
     correct = _norm(student_answer) == _norm(correct_answer)
 
+    versioned_challenge = practice_repo.version_challenge(challenge)
+    lesson_id = str(versioned_challenge.get("lesson_id") or "")
+    next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
+    correct_feedback = str(
+        versioned_challenge.get("correct_feedback") or "Correct."
+    )
+    incorrect_feedback = str(
+        versioned_challenge.get("incorrect_feedback")
+        or "Review the explanation and try again."
+    )
+    feedback = correct_feedback if correct else incorrect_feedback
+    created_at = datetime.now(timezone.utc).isoformat()
+
     try:
         recorded_attempt = practice_repo.put_attempt(
             actor.user_id,
@@ -760,8 +773,24 @@ async def submit_answer(
             correct,
             subject_id=challenge.get("subject_id", ""),
             topic_id=challenge.get("topic_id", ""),
-            lesson_id=challenge.get("lesson_id", ""),
+            lesson_id=lesson_id,
+            unit_id=challenge.get("unit_id", ""),
+            challenge_version=versioned_challenge["challenge_version"],
+            challenge_content_hash=versioned_challenge["challenge_content_hash"],
+            standard_answer=str(
+                challenge.get("correct_answer", challenge.get("answer_key")) or ""
+            ),
+            explanation=str(challenge.get("explanation") or ""),
+            correct_feedback=correct_feedback,
+            incorrect_feedback=incorrect_feedback,
+            feedback=feedback,
+            next_challenge_id=next_challenge_id,
+            prompt=str(challenge.get("prompt") or ""),
+            options=challenge.get("options"),
+            challenge_type=str(challenge.get("type") or ""),
+            created_at=created_at,
         )
+        result = practice_projection_service.build_attempt_result(recorded_attempt)
     except Exception as error:  # noqa: BLE001
         logger.warning("Practice attempt persistence failed")
         raise HTTPException(
@@ -779,10 +808,6 @@ async def submit_answer(
         correct=correct,
     )
 
-    # Find challenges in the same lesson for next_challenge_id
-    lesson_id = challenge.get("lesson_id", "")
-    next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
-
     user_id = actor.user_id
     _record_practice_usage(
         student_id=user_id,
@@ -798,11 +823,7 @@ async def submit_answer(
         },
     )
 
-    return practice_projection_service.build_attempt_result(
-        recorded_attempt,
-        challenge,
-        next_challenge_id=next_challenge_id,
-    )
+    return result
 
 
 @router.get(
@@ -814,16 +835,10 @@ async def get_attempt_result(
     authorized_attempt: AuthorizedResource = Depends(_authorized_attempt_read),
 ):
     attempt = dict(authorized_attempt.value)
-    challenge = practice_repo.get_challenge(attempt.get("challenge_id", ""))
-    if not challenge:
+    try:
+        return practice_projection_service.build_attempt_result(attempt)
+    except (KeyError, TypeError, ValueError):
         raise HTTPException(status_code=404, detail="Practice attempt not found")
-    return practice_projection_service.build_attempt_result(
-        attempt,
-        challenge,
-        next_challenge_id=_next_challenge_id(
-            attempt["challenge_id"], attempt.get("lesson_id", "")
-        ),
-    )
 
 
 @router.get("/mistakes")
@@ -832,15 +847,16 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
     attempts = practice_repo.get_mistakes(user_id)
     mistakes = []
     for attempt in attempts[-20:]:  # last 20 wrong answers
-        ch = practice_repo.get_challenge(attempt["challenge_id"])
-        if not ch:
+        try:
+            practice_projection_service.build_attempt_result(attempt)
+        except (KeyError, TypeError, ValueError):
             continue
         mistakes.append({
             "id": attempt.get("SK", attempt["challenge_id"]),
             "challengeId": attempt["challenge_id"],
             "subjectId": attempt.get("subject_id", ""),
-            "topic": ch.get("topic_title", ""),
-            "prompt": ch["prompt"],
+            "topic": attempt.get("topic_id", ""),
+            "prompt": attempt.get("prompt", ""),
             "yourAnswer": attempt.get("student_answer", ""),
             "createdAt": attempt.get("created_at", ""),
         })

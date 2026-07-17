@@ -14,13 +14,11 @@ Each topic has 2 units, each unit has 2 lessons, each lesson has 3 challenges.
 Total: 5 topics × 2 units × 2 lessons × 3 challenges = 60 questions.
 """
 import argparse
-import json
 import os
-import sys
-import uuid
-from pathlib import Path
 
 import boto3
+
+from stoa.db.repositories import practice_repo
 
 # ── Data ──────────────────────────────────────────────────────────────────
 
@@ -703,6 +701,24 @@ def _textaufgaben_data():
 
 # ── DynamoDB writer ───────────────────────────────────────────────────────
 
+def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
+    """Version challenges and create one answer-free direct pointer per opaque ID."""
+    seen_ids: set[str] = set()
+    prepared: list[dict] = []
+    for raw in challenges:
+        challenge_id = str(raw.get("challenge_id") or "").strip()
+        if not challenge_id:
+            raise ValueError("challenge_id is required")
+        if challenge_id in seen_ids:
+            raise ValueError(f"duplicate challenge_id: {challenge_id}")
+        seen_ids.add(challenge_id)
+        canonical = dict(raw)
+        canonical["PK"] = "PRACTICE"
+        canonical["SK"] = f"CHALLENGE#{canonical['lesson_id']}#{challenge_id}"
+        canonical = practice_repo.version_challenge(canonical)
+        prepared.extend((canonical, practice_repo.challenge_pointer(canonical)))
+    return prepared
+
 def seed(table_name: str, region: str, dry_run: bool = False):
     dynamodb = boto3.resource("dynamodb", region_name=region)
     table = dynamodb.Table(table_name)
@@ -731,13 +747,13 @@ def seed(table_name: str, region: str, dry_run: bool = False):
         items_to_write.append({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u})
 
     # Lessons
-    for l in all_lessons:
-        items_to_write.append({"PK": "PRACTICE", "SK": f"LESSON#{l['lesson_id']}", **l})
+    for lesson in all_lessons:
+        items_to_write.append(
+            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson}
+        )
 
-    # Challenges: PK=PRACTICE, SK=CHALLENGE#{lesson_id}#{challenge_id}
-    for c in all_challenges:
-        sk = f"CHALLENGE#{c['lesson_id']}#{c['challenge_id']}"
-        items_to_write.append({"PK": "PRACTICE", "SK": sk, **c})
+    # Validate all IDs before any write, then add canonical rows and direct pointers.
+    items_to_write.extend(prepare_challenge_items(all_challenges))
 
     print(f"Items to seed: {len(items_to_write)}")
     print(f"  Subjects: 1 | Topics: {len(all_topics)} | Units: {len(all_units)} | "
