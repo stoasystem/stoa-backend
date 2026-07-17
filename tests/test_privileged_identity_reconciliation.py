@@ -22,7 +22,21 @@ class CapabilityTable:
     """Atomic in-memory table for the capability repository contract."""
 
     def __init__(self, items=()):
-        self.items = {(item["PK"], item["SK"]): dict(item) for item in items}
+        seeded = list(items)
+        for user_id in ("admin-1", "student-2"):
+            fence_key = (f"USER#{user_id}", "ACCOUNT_FENCE")
+            if not any((item["PK"], item["SK"]) == fence_key for item in seeded):
+                seeded.append(
+                    {
+                        "PK": fence_key[0],
+                        "SK": fence_key[1],
+                        "entity_type": "account_fence",
+                        "user_id": user_id,
+                        "status": "active",
+                        "generation": 1,
+                    }
+                )
+        self.items = {(item["PK"], item["SK"]): dict(item) for item in seeded}
         self.transactions = 0
 
     def get_item(self, *, Key, **_kwargs):
@@ -35,6 +49,18 @@ class CapabilityTable:
     def apply_capability_transaction(self, operations):
         pending = dict(self.items)
         for operation in operations:
+            if operation.get("kind") == "condition":
+                key_data = operation["key"]
+                current = pending.get((key_data["PK"], key_data["SK"]))
+                if current is None or any(
+                    current.get(name) != value
+                    for name, value in operation["expected"].items()
+                ):
+                    raise ClientError(
+                        {"Error": {"Code": "ConditionalCheckFailedException"}},
+                        "TransactWriteItems",
+                    )
+                continue
             item = operation["item"]
             key = (item["PK"], item["SK"])
             current = pending.get(key)
