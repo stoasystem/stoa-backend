@@ -12,6 +12,7 @@ def _question(**overrides):
     item = {
         "question_id": "question-1",
         "student_id": "student-1",
+        "account_fence_generation": 1,
         "subject": "math",
         "content": "Solve 2x = 10",
         "status": "ai_answered",
@@ -34,6 +35,7 @@ def _case(**overrides):
         "surface": "ai_answer",
         "question_id": "question-1",
         "student_id": "student-1",
+        "privacy_generation": 1,
         "reporter_id": "student-1",
         "reporter_role": "student",
         "assigned_admin_id": None,
