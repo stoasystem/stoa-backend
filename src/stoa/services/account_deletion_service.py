@@ -11,7 +11,7 @@ from uuid import uuid4
 import boto3
 
 from stoa.config import get_settings
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, moderation_repo
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import attachment_service
 
@@ -374,7 +374,64 @@ def _attachments_branch(
     )
 
 
+def _moderation_support_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    """Scrub one strong moderation page and require two later zero epochs."""
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = moderation_repo.scan_moderation_private_rows(
+        str(command["user_id"]), cursor=cursor, maximum_pages=1
+    )
+    now = datetime.now(UTC).isoformat()
+    debt: dict[str, int] = {}
+    processed = 0
+    for item in page.items:
+        identity = f"{item.get('PK', '')}|{item.get('SK', '')}"
+        try:
+            moderation_repo.scrub_moderation_row(
+                item,
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                now_iso=now,
+            )
+            processed += 1
+        except Exception:
+            debt[identity] = 1
+    if page.unresolved:
+        debt["unresolved_lineage"] = int(page.unresolved)
+
+    prior_debt = previous.get("debt_counts")
+    pass_dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(pass_dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult(
+            "retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch
+        )
+    if pass_dirty:
+        if any(key not in {"pass_dirty", "processed"} for key in debt):
+            return BranchResult("retryable", debt_counts=debt, epoch=0)
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": processed},
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
+    # Derived rows must resolve their authoritative question owner before the
+    # primary question branch can replace that question with a tombstone.
+    "moderation_support": _moderation_support_branch,
     "account_profile": _account_profile_branch,
     "identity_cross_account": _identity_cross_account_branch,
     "capability_scope": _capability_scope_branch,
@@ -401,7 +458,7 @@ class AccountDeletionService:
         command = self._load_command(command_id)
         if not command:
             return
-        for branch_id in PRIMARY_BRANCH_IDS:
+        for branch_id in self.branch_handlers:
             previous = (command.get("branch_results") or {}).get(branch_id) or {}
             if previous.get("status") == "complete" and previous.get("quiescent") is True:
                 continue

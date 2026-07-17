@@ -216,9 +216,19 @@ def scan_moderation_private_rows(
                 sk == "SUMMARY" or sk.startswith("EVENT#")
             ):
                 continue
+            if raw.get("privacy_deleted") is True:
+                continue
             owner = _resolve_private_owner(target, raw)
             if owner is None:
-                if raw.get("student_id") in {None, "", user_id}:
+                claimed_owner = raw.get("student_id")
+                if sk.startswith("EVENT#"):
+                    case_id = str(raw.get("case_id") or pk[len("MODERATION#") :])
+                    summary = _strong_item(
+                        target, pk=f"MODERATION#{case_id}", sk="SUMMARY"
+                    )
+                    if summary:
+                        claimed_owner = summary.get("student_id")
+                if claimed_owner == user_id:
                     unresolved += 1
                 continue
             student_id, generation = owner
@@ -240,6 +250,74 @@ def scan_moderation_private_rows(
         seen_cursors.add(cursor_identity)
         current = next_cursor
     return ModerationPrivatePage(tuple(items), current, unresolved)
+
+
+def scrub_moderation_row(
+    item: Mapping[str, Any],
+    *,
+    user_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Replace one resolved moderation row with a strict noncontent tombstone."""
+    target = table or get_table()
+    key = _validated_cursor({"PK": item.get("PK"), "SK": item.get("SK")})
+    if not key["PK"].startswith("MODERATION#") or not (
+        key["SK"] == "SUMMARY" or key["SK"].startswith("EVENT#")
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "row is not registered moderation content"
+        )
+    tombstone = {
+        key_name: value
+        for key_name, value in dict(item).items()
+        if key_name in MODERATION_TOMBSTONE_ALLOWLIST and value is not None
+    }
+    tombstone.update(
+        {
+            "PK": key["PK"],
+            "SK": key["SK"],
+            "entity_type": (
+                "moderation_case"
+                if key["SK"] == "SUMMARY"
+                else "moderation_event"
+            ),
+            "privacy_deleted": True,
+            "privacy_generation": generation,
+            "updated_at": now_iso,
+            "deleted_at": now_iso,
+        }
+    )
+    hook = getattr(target, "scrub_moderation_row", None)
+    if callable(hook):
+        hook(dict(item), tombstone, user_id, generation)
+        return tombstone
+    account_deletion_repo.require_deletion_account_fence(
+        user_id, generation, table=target
+    )
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.deletion_fence_condition(user_id, generation),
+            {
+                "Put": {
+                    "Item": tombstone,
+                    "ConditionExpression": (
+                        "attribute_exists(PK) AND attribute_exists(SK) "
+                        "AND (attribute_not_exists(student_id) OR student_id=:owner) "
+                        "AND (attribute_not_exists(privacy_generation) OR "
+                        "privacy_generation=:generation)"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":owner": user_id,
+                        ":generation": generation,
+                    },
+                }
+            },
+        ],
+        table=target,
+    )
+    return tombstone
 
 
 def put_case(

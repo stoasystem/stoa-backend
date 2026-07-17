@@ -353,6 +353,23 @@ def test_moderation_discovery_rejects_malformed_or_repeating_cursor() -> None:
         )
 
 
+def test_moderation_unavailable_authoritative_question_remains_debt() -> None:
+    scan = _require_contract("scan_moderation_private_rows")
+
+    class _Unavailable:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": [_summary()]}
+
+        def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+            if Key["PK"].startswith("MODERATION#"):
+                return {"Item": _summary()}
+            return {}
+
+    page = scan(STUDENT_ID, table=_Unavailable(), maximum_pages=1)
+    assert page.items == ()
+    assert page.unresolved == 1
+
+
 def test_moderation_branch_persists_restart_progress_and_later_zero_epoch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
