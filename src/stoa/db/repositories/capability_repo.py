@@ -11,6 +11,7 @@ from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
 
 
 TEACHER_IDENTITY_REVIEWER = "teacher_identity_reviewer"
@@ -108,6 +109,25 @@ def grant_capability(
         raise ValueError("break-glass grants must expire")
 
     table = (table_factory or get_table)()
+    fence_user_ids = {user_id}
+    target_student = _target_student_from_scope(scope)
+    if target_student:
+        fence_user_ids.add(target_student)
+    fence_operations = []
+    for fence_user_id in sorted(fence_user_ids):
+        fence = account_deletion_repo.require_active_account_fence(
+            fence_user_id, table=table
+        )
+        fence_operations.append(
+            {
+                "kind": "condition",
+                "key": account_deletion_repo.account_fence_key(fence_user_id),
+                "expected": {
+                    "status": "active",
+                    "generation": int(fence["generation"]),
+                },
+            }
+        )
     pointer_key = _pointer_key(user_id, capability, scope)
     pointer = _get(table, pointer_key)
     if pointer is None:
@@ -161,6 +181,7 @@ def grant_capability(
     _apply(
         table,
         [
+            *fence_operations,
             {"kind": "put", "item": revision, "condition": "absent"},
             {
                 "kind": "put",
@@ -438,6 +459,29 @@ def _apply(table: Any, operations: list[dict[str, Any]]) -> None:
         table_name = table.name
         transact_items = []
         for operation in operations:
+            if operation["kind"] == "condition":
+                names = {}
+                values = {}
+                clauses = []
+                for index, (field, value) in enumerate(operation["expected"].items()):
+                    names[f"#n{index}"] = field
+                    values[f":v{index}"] = serializer.serialize(value)
+                    clauses.append(f"#n{index} = :v{index}")
+                transact_items.append(
+                    {
+                        "ConditionCheck": {
+                            "TableName": table_name,
+                            "Key": {
+                                key: serializer.serialize(value)
+                                for key, value in operation["key"].items()
+                            },
+                            "ConditionExpression": " AND ".join(clauses),
+                            "ExpressionAttributeNames": names,
+                            "ExpressionAttributeValues": values,
+                        }
+                    }
+                )
+                continue
             item = operation["item"]
             names: dict[str, str] = {}
             values: dict[str, Any] = {}
@@ -474,3 +518,11 @@ def _parse_time(value: Any) -> datetime | None:
         return None
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _target_student_from_scope(scope: str) -> str | None:
+    normalized = str(scope).strip()
+    for prefix in ("student:", "student/"):
+        if normalized.startswith(prefix) and normalized[len(prefix):].strip():
+            return normalized[len(prefix):].strip()
+    return None

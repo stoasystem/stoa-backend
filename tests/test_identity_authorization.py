@@ -23,8 +23,9 @@ from stoa.security.tokens import VerifiedAccessToken
 
 
 class FakeIdentityRepository:
-    def __init__(self, *, binding=None, account=None, grants=None, error=None):
+    def __init__(self, *, binding=None, fence=None, account=None, grants=None, error=None):
         self.binding = binding
+        self.fence = fence
         self.account = account
         self.grants = list(grants or [])
         self.error = error
@@ -41,6 +42,12 @@ class FakeIdentityRepository:
         if self.error:
             raise self.error
         return self.account
+
+    async def get_account_fence(self, user_id):
+        self.reads.append(("fence", user_id))
+        if self.error:
+            raise self.error
+        return self.fence
 
     async def get_current_grants(self, user_id):
         self.reads.append(("grants", user_id))
@@ -61,6 +68,7 @@ def verified_token(*groups):
 def active_repository(**overrides):
     values = {
         "binding": {"status": "active", "user_id": "student-1"},
+        "fence": {"status": "active", "generation": 1},
         "account": {
             "user_id": "student-1",
             "role": "student",
@@ -202,6 +210,7 @@ async def test_identity_resolves_only_binding_one_group_active_role_and_fresh_gr
     assert [grant.capability for grant in actor.current_grants] == ["student_support_lookup"]
     assert repository.reads == [
         ("binding", "https://identity.test/primary", "subject-1"),
+        ("fence", "student-1"),
         ("account", "student-1"),
         ("grants", "student-1"),
     ]
@@ -294,7 +303,14 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
 
     class FakeTable:
         def __init__(self):
-            self.items = {}
+            self.items = {
+                ("USER#admin-1", "ACCOUNT_FENCE"): {
+                    "PK": "USER#admin-1",
+                    "SK": "ACCOUNT_FENCE",
+                    "status": "active",
+                    "generation": 1,
+                }
+            }
 
         def get_item(self, *, Key, **_kwargs):
             item = self.items.get((Key["PK"], Key["SK"]))
@@ -306,6 +322,19 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
         def apply_capability_transaction(self, operations):
             pending = dict(self.items)
             for operation in operations:
+                if operation["kind"] == "condition":
+                    current = pending.get(
+                        (operation["key"]["PK"], operation["key"]["SK"])
+                    )
+                    if not current or any(
+                        current.get(name) != value
+                        for name, value in operation["expected"].items()
+                    ):
+                        raise ClientError(
+                            {"Error": {"Code": "ConditionalCheckFailedException"}},
+                            "TransactWriteItems",
+                        )
+                    continue
                 item = operation["item"]
                 key = (item["PK"], item["SK"])
                 current = pending.get(key)

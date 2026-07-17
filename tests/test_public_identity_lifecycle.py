@@ -121,6 +121,9 @@ async def test_pending_public_profile_cannot_construct_actor():
         async def get_binding(self, issuer, subject):
             return {"status": "active", "user_id": "student-1"}
 
+        async def get_account_fence(self, user_id):
+            return {"status": "active", "generation": 1}
+
         async def get_account(self, user_id):
             return {"role": "student", "account_status": "pending_verification"}
 
@@ -224,6 +227,9 @@ async def test_register_confirm_converges_one_subject_bound_actor(monkeypatch, r
     class Repository:
         async def get_binding(self, issuer, provider_subject):
             return identity_repo.get_identity_binding(issuer, provider_subject)
+
+        async def get_account_fence(self, user_id):
+            return {"status": "active", "generation": 1}
 
         async def get_account(self, user_id):
             return profiles.get(user_id)
@@ -375,6 +381,10 @@ async def test_verified_token_binding_ignores_duplicate_email_decoy(
             self.reads.append(("binding", issuer, subject))
             return {"status": "active", "user_id": "student-1"}
 
+        async def get_account_fence(self, user_id):
+            self.reads.append(("fence", user_id))
+            return {"status": "active", "generation": 1}
+
         async def get_account(self, user_id):
             self.reads.append(("account", user_id))
             return dict(profile)
@@ -405,6 +415,7 @@ async def test_verified_token_binding_ignores_duplicate_email_decoy(
     assert resolved["user_id"] == "student-1"
     assert repository.reads == [
         ("binding", keyset.issuer, "subject-1"),
+        ("fence", "student-1"),
         ("account", "student-1"),
         ("grants", "student-1"),
         ("account", "student-1"),
@@ -425,6 +436,9 @@ async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):
             if case == "subject_mismatch":
                 return {"status": "active", "user_id": "foreign-user"}
             return {"status": "active", "user_id": "student-1"}
+
+        async def get_account_fence(self, user_id):
+            return {"status": "active", "generation": 1}
 
         async def get_account(self, user_id):
             return {

@@ -11,6 +11,7 @@ from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS
+from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
 
@@ -119,7 +120,7 @@ def retention_fence_key(
     resource_id: str | None = None,
 ) -> dict[str, str]:
     if resource_type is None and resource_id is None:
-        return {"PK": f"OWNER#{owner_id}", "SK": "RETENTION#ACCOUNT"}
+        return account_deletion_repo.account_fence_key(owner_id)
     if (
         not isinstance(resource_type, str)
         or not resource_type.strip()
@@ -134,7 +135,10 @@ def retention_fence_key(
 
 
 def _retention_fence_checks(
-    owner_id: str, resource_type: str, resource_id: str
+    owner_id: str,
+    resource_type: str,
+    resource_id: str,
+    account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
     expression = "attribute_not_exists(PK) OR #status=:complete"
     names = {"#status": "status"}
@@ -157,14 +161,9 @@ def _retention_fence_checks(
         ),
         TransactionOperation(
             TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-            {
-                "ConditionCheck": {
-                    "Key": retention_fence_key(owner_id),
-                    "ConditionExpression": expression,
-                    "ExpressionAttributeNames": names,
-                    "ExpressionAttributeValues": values,
-                }
-            },
+            account_deletion_repo.active_fence_condition(
+                owner_id, account_fence_generation
+            ),
         ),
     ]
 
@@ -542,13 +541,27 @@ def question_association_key(attachment_id: str, question_id: str) -> dict[str, 
 
 
 def create_upload_intent(item: dict[str, Any], *, table: Any | None = None) -> None:
+    owner_id = str(item.get("owner_id") or "")
+    generation = item.get("account_fence_generation")
+    if type(generation) is not int or generation <= 0:
+        raise AttachmentRepositoryConflict("conditional_conflict")
     try:
-        (table or get_table()).put_item(
-            Item={**upload_key(item["upload_id"]), **item},
-            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(owner_id, generation),
+                {
+                    "Put": {
+                        "Item": {**upload_key(item["upload_id"]), **item},
+                        "ConditionExpression": (
+                            "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                        ),
+                    }
+                },
+            ],
+            table=table or get_table(),
         )
-    except ClientError as exc:
-        _translate(exc)
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise AttachmentRepositoryConflict("conditional_conflict") from exc
 
 
 def prepare_staging_issuance(item: dict[str, Any], *, table: Any | None = None) -> None:
@@ -1804,6 +1817,7 @@ def build_message_attachment_transaction(
     limit_bytes: int,
     now_iso: str,
     command: dict[str, Any] | None = None,
+    account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
     operations: list[TransactionOperation] = []
     if associations:
@@ -1811,7 +1825,14 @@ def build_message_attachment_transaction(
         resource_id = str(associations[0].get("resource_id") or "")
         if not resource_id:
             raise AttachmentRepositoryConflict("conditional_conflict")
-        operations.extend(_retention_fence_checks(owner_id, resource_type, resource_id))
+        operations.extend(
+            _retention_fence_checks(
+                owner_id,
+                resource_type,
+                resource_id,
+                account_fence_generation=account_fence_generation,
+            )
+        )
     operations.extend(
         [
         TransactionOperation(
@@ -2443,13 +2464,19 @@ def build_question_attachment_transaction(
     owner_id: str,
     limit_bytes: int,
     now_iso: str,
+    account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
     """Commit a question and its attachment association as one conditional unit."""
     resource_type = str(association.get("resource_type") or "question")
     resource_id = str(association.get("resource_id") or question.get("question_id") or "")
     if not resource_id:
         raise AttachmentRepositoryConflict("conditional_conflict")
-    operations = _retention_fence_checks(owner_id, resource_type, resource_id)
+    operations = _retention_fence_checks(
+        owner_id,
+        resource_type,
+        resource_id,
+        account_fence_generation=account_fence_generation,
+    )
     if prepared["kind"] == "upload":
         upload = prepared["record"]
         operations.extend(

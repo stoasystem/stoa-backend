@@ -142,6 +142,19 @@ def start_or_resume_public_registration(
     """Converge a public signup into a deny-first profile, binding, and group."""
 
     timestamp = _timestamp(now)
+    existing = user_repo.get_user(user_id)
+    if not existing:
+        user_repo.put_user(
+            {
+                **profile,
+                "user_id": user_id,
+                "email": str(email).strip().casefold(),
+                "role": role,
+                "registration_command": PUBLIC_REGISTRATION_COMMAND,
+                "registration_role": role,
+                "account_status": "pending_verification",
+            }
+        )
     command = public_identity_repo.create_or_get_public_identity_command(
         email=email,
         issuer=issuer,
@@ -223,6 +236,7 @@ def _resume_public_registration(
 
     try:
         if not command.binding_complete:
+            public_identity_repo.require_command_fence(command)
             identity_repo.create_identity_binding(
                 issuer=command.issuer,
                 subject=command.subject,
@@ -232,6 +246,7 @@ def _resume_public_registration(
             )
         command = _mark(command, "binding_complete", timestamp)
         if not command.canonical_group_complete:
+            public_identity_repo.require_command_fence(command)
             provider.admin_add_user_to_group(
                 UserPoolId=user_pool_id,
                 Username=command.email,
@@ -284,6 +299,7 @@ def confirm_and_reconcile_public_identity(
     timestamp = _timestamp(now)
     try:
         if not command.binding_complete:
+            public_identity_repo.require_command_fence(command)
             identity_repo.create_identity_binding(
                 issuer=command.issuer,
                 subject=command.subject,
@@ -293,6 +309,7 @@ def confirm_and_reconcile_public_identity(
             )
         command = _mark(command, "binding_complete", timestamp)
         if not command.canonical_group_complete:
+            public_identity_repo.require_command_fence(command)
             provider.admin_add_user_to_group(
                 UserPoolId=user_pool_id,
                 Username=command.email,
@@ -301,6 +318,7 @@ def confirm_and_reconcile_public_identity(
         command = _mark(command, "canonical_group_complete", timestamp)
         command = _mark(command, "email_verification_complete", timestamp)
         if not command.activation_complete:
+            public_identity_repo.require_command_fence(command)
             fields = {
                 **account_verification_service.verified_fields(timestamp),
                 "account_status": "active",

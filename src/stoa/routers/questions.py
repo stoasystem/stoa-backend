@@ -433,10 +433,12 @@ async def request_teacher(
         teacher_requested_at=item.get("teacher_requested_at") or now,
         queue_visible_at=item.get("queue_visible_at") or now,
     )
+    operation_id = str(uuid.uuid4())
     notify_service.enqueue_teacher_request(
         question_id=question_id,
-        student_id=student_id,
-        subject=item["subject"],
+        operation_id=operation_id,
+        generation=int(item.get("account_fence_generation") or 1),
+        owner_id=student_id,
     )
     notification_service.emit_teacher_requested(
         question_id=question_id,

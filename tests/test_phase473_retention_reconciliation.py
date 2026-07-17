@@ -144,10 +144,12 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
     checks = _condition_checks(operations)
     assert len(checks) == 2
     assert {check["Key"]["SK"] for check in checks} == {
-        "RETENTION#ACCOUNT",
+        "ACCOUNT_FENCE",
         f"RETENTION#RESOURCE#conversation#{RESOURCE}",
     }
-    assert all("attribute_not_exists" in check["ConditionExpression"] for check in checks)
+    account = next(check for check in checks if check["Key"]["SK"] == "ACCOUNT_FENCE")
+    assert account["Key"]["PK"] == f"USER#{OWNER}"
+    assert account["ConditionExpression"] == "#status=:active AND generation=:generation"
 
 
 def test_question_association_transaction_checks_resource_and_account_fences() -> None:
@@ -164,7 +166,7 @@ def test_question_association_transaction_checks_resource_and_account_fences() -
 
     checks = _condition_checks(operations)
     assert {check["Key"]["SK"] for check in checks} == {
-        "RETENTION#ACCOUNT",
+        "ACCOUNT_FENCE",
         "RETENTION#RESOURCE#question#question-1",
     }
 

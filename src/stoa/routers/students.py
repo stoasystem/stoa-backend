@@ -8,8 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from stoa.db.repositories import practice_repo, question_repo
-from stoa.db.dynamodb import get_table
+from stoa.db.repositories import practice_repo, question_repo, user_repo
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
@@ -104,18 +103,12 @@ async def update_my_profile(
         update_expr_parts.append("#n = :n")
         expr_values[":n"] = body.name
 
-    table = get_table()
-    kwargs: dict = {
-        "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
-        "UpdateExpression": "SET " + ", ".join(update_expr_parts),
-        "ExpressionAttributeValues": expr_values,
-        "ReturnValues": "ALL_NEW",
-    }
-    if body.name is not None:
-        kwargs["ExpressionAttributeNames"] = {"#n": "name"}
-
-    result = table.update_item(**kwargs)
-    updated = result.get("Attributes", {})
+    updated = user_repo.update_profile_fields(
+        user_id,
+        update_expression="SET " + ", ".join(update_expr_parts),
+        expression_attribute_values=expr_values,
+        expression_attribute_names={"#n": "name"} if body.name is not None else None,
+    )
 
     return StudentProfileResponse(
         id=updated.get("user_id", user_id),

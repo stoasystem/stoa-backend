@@ -1,11 +1,16 @@
 """DynamoDB access patterns for the User entity."""
+from datetime import UTC, datetime
+
 from boto3.dynamodb.conditions import Attr, Key
+from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
 
 def put_user(item: dict) -> None:
-    table = get_table()
-    table.put_item(Item={"PK": f"USER#{item['user_id']}", "SK": "PROFILE", **item})
+    timestamp = str(item.get("created_at") or datetime.now(UTC).isoformat())
+    account_deletion_repo.materialize_profile_with_fence(
+        item, now_iso=timestamp, table=get_table()
+    )
 
 
 def get_user(user_id: str) -> dict | None:
@@ -45,21 +50,18 @@ def list_children_by_parent_scan(parent_id: str) -> list[dict]:
 
 
 def update_locale_preference(user_id: str, locale: str, updated_at: str) -> dict:
-    table = get_table()
-    resp = table.update_item(
-        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
-        UpdateExpression=(
+    return update_profile_fields(
+        user_id,
+        update_expression=(
             "SET preferred_locale = :locale, preferredLocale = :locale, "
             "#language = :locale, locale_updated_at = :updated_at, updated_at = :updated_at"
         ),
-        ExpressionAttributeNames={"#language": "language"},
-        ExpressionAttributeValues={
+        expression_attribute_names={"#language": "language"},
+        expression_attribute_values={
             ":locale": locale,
             ":updated_at": updated_at,
         },
-        ReturnValues="ALL_NEW",
     )
-    return resp.get("Attributes", {})
 
 
 def update_teacher_availability(
@@ -69,31 +71,27 @@ def update_teacher_availability(
     weekly_availability: list[dict],
     updated_at: str,
 ) -> dict:
-    table = get_table()
-    resp = table.update_item(
-        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
-        UpdateExpression=(
+    return update_profile_fields(
+        user_id,
+        update_expression=(
             "SET subjects = :subjects, primary_subjects = :subjects, "
             "dispatch_subjects = :subjects, weekly_availability = :weekly_availability, "
             "weeklyAvailability = :weekly_availability, availability_status = :availability, "
             "dispatch_availability = :availability, updated_at = :updated_at"
         ),
-        ExpressionAttributeValues={
+        expression_attribute_values={
             ":subjects": subjects,
             ":weekly_availability": weekly_availability,
             ":availability": "available",
             ":updated_at": updated_at,
         },
-        ReturnValues="ALL_NEW",
     )
-    return resp.get("Attributes", {})
 
 
 def update_email_verification_state(user_id: str, fields: dict) -> dict:
     """Update bounded email verification metadata on a user profile."""
     if not fields:
         return get_user(user_id) or {}
-    table = get_table()
     update_parts = []
     attr_names: dict[str, str] = {}
     attr_values: dict[str, object] = {}
@@ -103,14 +101,61 @@ def update_email_verification_state(user_id: str, fields: dict) -> dict:
         attr_names[name_key] = field
         attr_values[value_key] = value
         update_parts.append(f"{name_key} = {value_key}")
-    resp = table.update_item(
-        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
-        UpdateExpression="SET " + ", ".join(update_parts),
-        ExpressionAttributeNames=attr_names,
-        ExpressionAttributeValues=attr_values,
-        ReturnValues="ALL_NEW",
+    return update_profile_fields(
+        user_id,
+        update_expression="SET " + ", ".join(update_parts),
+        expression_attribute_names=attr_names,
+        expression_attribute_values=attr_values,
     )
-    return resp.get("Attributes", {})
+
+
+def build_profile_update_transaction(
+    user_id: str,
+    *,
+    update_expression: str,
+    expression_attribute_values: dict,
+    expression_attribute_names: dict | None = None,
+    expected_generation: int,
+) -> list[dict]:
+    """Build one exact-generation profile update that cannot ghost-upsert."""
+    return [
+        account_deletion_repo.active_fence_condition(user_id, expected_generation),
+        {
+            "Update": {
+                "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
+                "UpdateExpression": update_expression,
+                "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
+                **(
+                    {"ExpressionAttributeNames": expression_attribute_names}
+                    if expression_attribute_names
+                    else {}
+                ),
+                "ExpressionAttributeValues": expression_attribute_values,
+            }
+        },
+    ]
+
+
+def update_profile_fields(
+    user_id: str,
+    *,
+    update_expression: str,
+    expression_attribute_values: dict,
+    expression_attribute_names: dict | None = None,
+) -> dict:
+    table = get_table()
+    fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+    account_deletion_repo.transact(
+        build_profile_update_transaction(
+            user_id,
+            update_expression=update_expression,
+            expression_attribute_values=expression_attribute_values,
+            expression_attribute_names=expression_attribute_names,
+            expected_generation=int(fence["generation"]),
+        ),
+        table=table,
+    )
+    return get_user(user_id) or {}
 
 
 def put_parent_student_binding(
@@ -126,6 +171,7 @@ def put_parent_student_binding(
 ) -> dict:
     """Persist the formal parent/student binding and a reverse lookup row."""
     table = get_table()
+    fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
     binding = {
         "entity_type": "parent_student_binding",
         "parent_id": parent_id,
@@ -138,19 +184,23 @@ def put_parent_student_binding(
         "created_at": created_at,
         "updated_at": created_at,
     }
-    table.put_item(
-        Item={
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.active_fence_condition(
+                student_id, int(fence["generation"])
+            ),
+            {"Put": {"Item": {
             "PK": f"USER#{parent_id}",
             "SK": f"CHILD#{student_id}",
             **binding,
-        }
-    )
-    table.put_item(
-        Item={
+            }}},
+            {"Put": {"Item": {
             "PK": f"USER#{student_id}",
             "SK": f"PARENT#{parent_id}",
             **binding,
-        }
+            }}},
+        ],
+        table=table,
     )
     return binding
 
@@ -193,14 +243,13 @@ def list_student_parent_bindings(student_id: str) -> list[dict]:
 
 
 def update_student_parent_link(student_id: str, parent_id: str, relationship: str = "child") -> None:
-    table = get_table()
-    table.update_item(
-        Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
-        UpdateExpression=(
+    update_profile_fields(
+        student_id,
+        update_expression=(
             "SET parent_id = :parent_id, relationship = :relationship, "
             "parent_binding_status = :status"
         ),
-        ExpressionAttributeValues={
+        expression_attribute_values={
             ":parent_id": parent_id,
             ":relationship": relationship,
             ":status": "active",

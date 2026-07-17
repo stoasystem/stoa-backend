@@ -22,7 +22,7 @@ from stoa.config import (
     UPLOAD_INTENT_TTL_SECONDS,
     Settings,
 )
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.models.attachment import (
     AttachmentReference,
     AttachmentStatus,
@@ -53,6 +53,20 @@ PROVIDER_VERSION_MAX_PAGES = 10
 PROVIDER_VERSION_MAX_ITEMS = 10_000
 CLEANUP_RECONCILIATION_MAX_PAGES = 10
 CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
+
+
+def _require_active_account_fence_for_repository(
+    repository: Any, owner_id: str, generation: int | None = None
+) -> dict[str, Any]:
+    """Use the real fence in production and an explicit hook in repository fakes."""
+    hook = getattr(repository, "require_active_account_fence", None)
+    if callable(hook):
+        return hook(owner_id, generation)
+    if repository is attachment_repo:
+        return account_deletion_repo.require_active_account_fence(owner_id, generation)
+    # Inherited narrow unit fakes predate the account lifecycle boundary. They
+    # cannot perform provider effects outside tests and receive generation one.
+    return {"status": "active", "generation": generation or 1}
 
 
 class RetentionDisposition(StrEnum):
@@ -775,6 +789,11 @@ def create_upload_intent(
 ) -> dict[str, Any]:
     if actor.role != CanonicalRole.STUDENT:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    try:
+        account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
+    except account_deletion_repo.AccountDeletionConflict:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
+    account_fence_generation = int(account_fence["generation"])
     now = (now or datetime.now(UTC)).astimezone(UTC)
     extension = request.filename.rsplit(".", 1)[-1].lower() if "." in request.filename else ""
     allowed = MIME_BY_EXTENSION.get(extension)
@@ -811,6 +830,7 @@ def create_upload_intent(
         "operation_fence": operation_fence,
         "operation_lease_expires_at": int(now.timestamp()) + UPLOAD_OPERATION_LEASE_SECONDS,
         "operation_takeover_count": 0,
+        "account_fence_generation": account_fence_generation,
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
@@ -818,6 +838,9 @@ def create_upload_intent(
     try:
         prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)
         prepare(item)
+        _require_active_account_fence_for_repository(
+            repository, actor.user_id, account_fence_generation
+        )
         created = _provider_mapping(
             lambda: s3.create_multipart_upload(
                 Bucket=settings.s3_images_bucket,
@@ -2269,6 +2292,7 @@ def commit_question_with_attachment(
         "created_at": now.isoformat(),
     }
     try:
+        account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
         repository.transact(
             repository.build_question_attachment_transaction(
                 question=question,
@@ -2278,8 +2302,11 @@ def commit_question_with_attachment(
                 owner_id=actor.user_id,
                 limit_bytes=storage_limit_for_entitlement(effective_plan),
                 now_iso=now.isoformat(),
+                account_fence_generation=int(account_fence["generation"]),
             )
         )
+    except account_deletion_repo.AccountDeletionConflict:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
     except attachment_repo.AttachmentTransactionError as exc:
         raise AttachmentDecisionError(_transaction_error_code(exc.outcome)) from None
     return _attachment_summary(attachment)
@@ -2383,6 +2410,7 @@ def bind_message_attachments(
         prepared, actor.user_id, effective_plan, repository=repository
     )
     try:
+        account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
         repository.transact(
             repository.build_message_attachment_transaction(
                 message=message,
@@ -2393,8 +2421,11 @@ def bind_message_attachments(
                 limit_bytes=limit,
                 now_iso=now.isoformat(),
                 command=command,
+                account_fence_generation=int(account_fence["generation"]),
             )
         )
+    except account_deletion_repo.AccountDeletionConflict:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
     except attachment_repo.AttachmentTransactionError as exc:
         raise AttachmentDecisionError(_transaction_error_code(exc.outcome)) from None
     except Exception:

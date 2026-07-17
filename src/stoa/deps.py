@@ -1,4 +1,5 @@
 """FastAPI dependency injection — DB client, auth, AWS clients."""
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -13,6 +14,7 @@ from stoa.config import (
     validate_authorization_audit_keyring,
 )
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
+from stoa.db.repositories import account_deletion_repo
 from stoa.db.repositories.security_audit_repo import (
     AuthorizationAuditSink,
     DynamoAuthorizationAuditSink,
@@ -22,6 +24,7 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole, IdentityRepository, resolve_actor
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
+from stoa.services.account_deletion_service import DeletionReceipt, begin_or_replay_deletion
 
 security = HTTPBearer()
 
@@ -161,6 +164,45 @@ async def get_actor(
         return await resolve_actor(verified, repository)
     except SecurityDecisionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+
+
+async def get_deletion_command(
+    verified: VerifiedAccessToken = Depends(get_verified_token),
+    repository: IdentityRepository = Depends(get_identity_repository),
+) -> DeletionReceipt:
+    """Resolve only the immutable DELETE /auth/me command, never an Actor."""
+    try:
+        binding = await repository.get_binding(verified.issuer, verified.subject)
+        if not binding or binding.get("status") != "active":
+            raise account_deletion_repo.AccountDeletionConflict(
+                "deletion identity is unavailable"
+            )
+        user_id = str(binding.get("user_id") or "").strip()
+        if not user_id:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "deletion identity is unavailable"
+            )
+        return begin_or_replay_deletion(
+            verified=verified,
+            user_id=user_id,
+            method="DELETE",
+            path="/auth/me",
+            body=b"",
+            now_iso=datetime.now(UTC).isoformat(),
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        error = SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from exc
+    except Exception as exc:
+        error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body()
+        ) from exc
 
 
 async def get_current_user(actor: Actor = Depends(get_actor)) -> dict[str, Any]:

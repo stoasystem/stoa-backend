@@ -1,0 +1,351 @@
+"""Deny-first account deletion command and primary branch orchestration."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from hashlib import sha256
+from typing import Any, Callable, Mapping
+from uuid import uuid4
+
+import boto3
+
+from stoa.config import get_settings
+from stoa.db.repositories import account_deletion_repo
+from stoa.security.tokens import VerifiedAccessToken
+from stoa.services import attachment_service
+
+
+ACCOUNT_DELETION_BRANCH_IDS = (
+    "account_profile",
+    "identity_cross_account",
+    "capability_scope",
+    "question_ocr_session",
+    "attachments",
+    "conversations_messages",
+    "practice_attempts",
+    "learning_profiles",
+    "usage_ledgers",
+    "subscriptions_billing",
+    "notifications_reports",
+    "moderation_support",
+    "teacher_ai_drafts",
+    "curriculum_personalization",
+    "provider_objects",
+    "analytics_evidence",
+    "final_identity_accounting",
+)
+PRIMARY_BRANCH_IDS = {
+    "account_profile",
+    "identity_cross_account",
+    "capability_scope",
+    "question_ocr_session",
+    "attachments",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class DeletionReceipt:
+    command_id: str
+    status: str
+    accepted_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class BranchResult:
+    status: str
+    cursor: dict[str, str] | None = None
+    debt_counts: dict[str, int] | None = None
+    quiescent: bool = False
+    epoch: int = 0
+
+    def persisted(self, updated_at: str) -> dict[str, Any]:
+        return {**asdict(self), "updated_at": updated_at}
+
+
+def deletion_command_fingerprint(
+    *,
+    verified: VerifiedAccessToken,
+    user_id: str,
+    method: str,
+    path: str,
+    body: bytes,
+    generation: int,
+) -> str:
+    if not isinstance(body, bytes):
+        raise account_deletion_repo.AccountDeletionConflict("request body must be bytes")
+    fields = (
+        verified.issuer.strip().rstrip("/"),
+        verified.subject.strip(),
+        user_id.strip(),
+        method.strip().upper(),
+        path.strip(),
+        sha256(body).hexdigest(),
+        str(generation),
+    )
+    if any(not field for field in fields):
+        raise account_deletion_repo.AccountDeletionConflict("incomplete deletion identity")
+    framed = b"account-delete-command.v1"
+    for field in fields:
+        encoded = field.encode("utf-8")
+        framed += len(encoded).to_bytes(4, "big") + encoded
+    return sha256(framed).hexdigest()
+
+
+def begin_or_replay_deletion(
+    *,
+    verified: VerifiedAccessToken,
+    user_id: str,
+    method: str,
+    path: str,
+    body: bytes,
+    now_iso: str,
+    table: Any | None = None,
+    command_id: str | None = None,
+) -> DeletionReceipt:
+    """Create or replay one immutable command without constructing an Actor."""
+    fence = account_deletion_repo.get_account_fence(user_id, table=table)
+    if not fence or type(fence.get("generation")) is not int:
+        raise account_deletion_repo.AccountDeletionConflict("missing account fence")
+    fingerprint = deletion_command_fingerprint(
+        verified=verified,
+        user_id=user_id,
+        method=method,
+        path=path,
+        body=body,
+        generation=int(fence["generation"]),
+    )
+    command = {
+        "command_id": command_id or str(uuid4()),
+        "issuer_hash": account_deletion_repo.normalized_identity_hash(
+            verified.issuer.strip().rstrip("/")
+        ),
+        "subject_hash": account_deletion_repo.normalized_identity_hash(
+            verified.subject.strip()
+        ),
+        "fingerprint": fingerprint,
+        "method": method.strip().upper(),
+        "path": path.strip(),
+        "request_body_sha256": sha256(body).hexdigest(),
+    }
+    _fence, persisted = account_deletion_repo.begin_account_deletion(
+        user_id=user_id,
+        command=command,
+        now_iso=now_iso,
+        table=table,
+    )
+    immutable = {
+        "issuer_hash": command["issuer_hash"],
+        "subject_hash": command["subject_hash"],
+        "fingerprint": fingerprint,
+        "user_id": user_id,
+        "generation": int(fence["generation"]),
+        "method": method.strip().upper(),
+        "path": path.strip(),
+        "request_body_sha256": command["request_body_sha256"],
+    }
+    if any(persisted.get(key) != value for key, value in immutable.items()):
+        raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
+    return DeletionReceipt(
+        command_id=str(persisted["command_id"]),
+        status="deletion_pending",
+        accepted_at=str(persisted["accepted_at"]),
+    )
+
+
+def can_finalize_account_deletion(completed: object, *, sealed: bool = False) -> bool:
+    """Plan 35 is the only caller allowed to set ``sealed=True``."""
+    return bool(
+        sealed
+        and isinstance(completed, (set, frozenset, tuple, list))
+        and set(completed) == set(ACCOUNT_DELETION_BRANCH_IDS)
+    )
+
+
+def _epoch_result(previous: Mapping[str, Any], *, debt: int = 0) -> BranchResult:
+    if debt:
+        return BranchResult("retryable", debt_counts={"remaining": debt})
+    epoch = int(previous.get("epoch") or 0) + 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
+def _primary_rows(command: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return list(
+        account_deletion_repo.scan_owned_private_rows(str(command["user_id"])).items
+    )
+
+
+def _account_profile_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    rows = [
+        item
+        for item in _primary_rows(command)
+        if item.get("SK") == "PROFILE"
+        or item.get("entity_type") == "parent_student_binding"
+    ]
+    now = datetime.now(UTC).isoformat()
+    for item in rows:
+        if item.get("SK") == "PROFILE" and item.get("user_id") == command["user_id"]:
+            account_deletion_repo.replace_with_deletion_tombstone(
+                item,
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                now_iso=now,
+            )
+        else:
+            account_deletion_repo.delete_owned_row(
+                item,
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+            )
+    return _epoch_result(previous, debt=len(rows))
+
+
+def _identity_cross_account_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    rows = [
+        item
+        for item in _primary_rows(command)
+        if item.get("entity_type")
+        in {
+            "identity_binding",
+            "user_identity_inventory",
+            "public_identity_command",
+        }
+    ]
+    now = datetime.now(UTC).isoformat()
+    account_deletion_repo.create_provider_revoke_debt(
+        user_id=str(command["user_id"]),
+        generation=int(command["generation"]),
+        now_iso=now,
+    )
+    for item in rows:
+        account_deletion_repo.terminalize_identity_row(
+            item,
+            user_id=str(command["user_id"]),
+            generation=int(command["generation"]),
+            now_iso=now,
+        )
+    # Provider debt remains explicit until a provider-backed retry proves revoke.
+    return BranchResult(
+        "retryable",
+        debt_counts={"provider_revoke": 1, "local_rows": len(rows)},
+    )
+
+
+def _capability_scope_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    rows = [
+        item
+        for item in _primary_rows(command)
+        if str(item.get("entity_type") or "").startswith("capability_")
+    ]
+    now = datetime.now(UTC).isoformat()
+    for item in rows:
+        account_deletion_repo.terminalize_identity_row(
+            item,
+            user_id=str(command["user_id"]),
+            generation=int(command["generation"]),
+            now_iso=now,
+        )
+    return _epoch_result(previous, debt=len(rows))
+
+
+def _question_ocr_session_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    rows = [
+        item
+        for item in _primary_rows(command)
+        if item.get("entity_type")
+        in {"question", "teacher_session", "teacher_escalation_intent"}
+        or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#"))
+    ]
+    now = datetime.now(UTC).isoformat()
+    for item in rows:
+        account_deletion_repo.replace_with_deletion_tombstone(
+            item,
+            user_id=str(command["user_id"]),
+            generation=int(command["generation"]),
+            now_iso=now,
+        )
+    return _epoch_result(previous, debt=len(rows))
+
+
+def _attachments_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    settings = get_settings()
+    result = attachment_service.purge_student_attachments(
+        str(command["user_id"]),
+        account_fence_generation=int(command["generation"]),
+        cursors=previous.get("cursor") if isinstance(previous, Mapping) else None,
+        s3=boto3.client("s3", region_name=settings.aws_region),
+        settings=settings,
+    )
+    return BranchResult(
+        str(result.status),
+        cursor=dict(result.cursors),
+        debt_counts=dict(result.debt_counts),
+        quiescent=bool(result.quiescent),
+        epoch=int(previous.get("epoch") or 0) + (1 if result.quiescent else 0),
+    )
+
+
+BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
+    "account_profile": _account_profile_branch,
+    "identity_cross_account": _identity_cross_account_branch,
+    "capability_scope": _capability_scope_branch,
+    "question_ocr_session": _question_ocr_session_branch,
+    "attachments": _attachments_branch,
+}
+
+
+class AccountDeletionService:
+    """Resume independent primary branches from one durable command lease."""
+
+    def __init__(
+        self,
+        *,
+        repository: Any = account_deletion_repo,
+        branch_handlers: Mapping[str, Callable[..., BranchResult]] | None = None,
+        now: Callable[[], str] | None = None,
+    ) -> None:
+        self.repository = repository
+        self.branch_handlers = dict(branch_handlers or BRANCH_HANDLERS)
+        self.now = now or (lambda: "")
+
+    def continue_command(self, command_id: str) -> None:
+        command = self._load_command(command_id)
+        if not command:
+            return
+        for branch_id in PRIMARY_BRANCH_IDS:
+            previous = (command.get("branch_results") or {}).get(branch_id) or {}
+            if previous.get("status") == "complete" and previous.get("quiescent") is True:
+                continue
+            handler = self.branch_handlers[branch_id]
+            try:
+                result = handler(command=command, previous=previous)
+            except Exception:
+                result = BranchResult("retryable", debt_counts={"dependency": 1})
+            self.repository.persist_branch_result(
+                command, branch_id, result.persisted(self.now())
+            )
+        # Deliberately no aggregate finalizer. Plans 30-34 add the remaining
+        # branches and Plan 35 alone seals the exact registry.
+
+    def _load_command(self, command_id: str) -> dict[str, Any] | None:
+        loader = getattr(self.repository, "get_command_by_id", None)
+        if callable(loader):
+            return loader(command_id)
+        if self.repository is account_deletion_repo:
+            return account_deletion_repo.get_command_by_id(command_id)
+        return None

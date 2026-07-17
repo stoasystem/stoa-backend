@@ -25,6 +25,7 @@ class AccountStatus(StrEnum):
     SUSPENDED_PENDING_REVIEW = "suspended_pending_review"
     REVOKED = "revoked"
     DISABLED = "disabled"
+    DELETION_PENDING = "deletion_pending"
     DELETED = "deleted"
 
 
@@ -73,6 +74,8 @@ class Actor:
 class IdentityRepository(Protocol):
     async def get_binding(self, issuer: str, subject: str) -> Mapping[str, Any] | None: ...
 
+    async def get_account_fence(self, user_id: str) -> Mapping[str, Any] | None: ...
+
     async def get_account(self, user_id: str) -> Mapping[str, Any] | None: ...
 
     async def get_current_grants(self, user_id: str) -> list[Mapping[str, Any]]: ...
@@ -97,6 +100,15 @@ async def resolve_actor(
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
         user_id = str(binding.get("user_id") or "").strip()
         if not user_id:
+            raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+
+        fence = await repository.get_account_fence(user_id)
+        if (
+            not fence
+            or fence.get("status") != "active"
+            or type(fence.get("generation")) is not int
+            or int(fence["generation"]) <= 0
+        ):
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
         account = await repository.get_account(user_id)

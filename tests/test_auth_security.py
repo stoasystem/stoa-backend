@@ -208,6 +208,10 @@ def test_t472_02_dependency_path_denies_suspension_next_request_without_mutation
             self.calls.append(("get_binding", issuer, subject))
             return {"status": "active", "user_id": "student-1"}
 
+        async def get_account_fence(self, user_id):
+            self.calls.append(("get_account_fence", user_id))
+            return {"status": "active", "generation": 1}
+
         async def get_account(self, user_id):
             self.calls.append(("get_account", user_id))
             return {"role": "student", "account_status": self.status}

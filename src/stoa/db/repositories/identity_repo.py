@@ -9,6 +9,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
 
 
 class IdentityBindingConflict(RuntimeError):
@@ -48,6 +49,51 @@ def create_identity_binding(
         "created_by": created_by,
     }
     table = get_table()
+    if hasattr(getattr(table, "meta", None), "client"):
+        fence = account_deletion_repo.require_active_account_fence(
+            normalized_user_id, table=table
+        )
+        inventory = {
+            "PK": f"USER#{normalized_user_id}",
+            "SK": f"IDENTITY#{issuer_hash(normalized_issuer)}#{normalized_subject}",
+            "entity_type": "user_identity_inventory",
+            "issuer": normalized_issuer,
+            "subject": normalized_subject,
+            "user_id": normalized_user_id,
+            "binding_pk": binding["PK"],
+            "created_at": created_at,
+        }
+        try:
+            account_deletion_repo.transact(
+                [
+                    account_deletion_repo.active_fence_condition(
+                        normalized_user_id, int(fence["generation"])
+                    ),
+                    {
+                        "Put": {
+                            "Item": binding,
+                            "ConditionExpression": (
+                                "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                            ),
+                        }
+                    },
+                    {
+                        "Put": {
+                            "Item": inventory,
+                            "ConditionExpression": (
+                                "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                            ),
+                        }
+                    },
+                ],
+                table=table,
+            )
+            return binding
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            existing = get_identity_binding(normalized_issuer, normalized_subject)
+            if existing and existing.get("user_id") == normalized_user_id:
+                return existing
+            raise IdentityBindingConflict("external identity is already bound") from exc
     try:
         table.put_item(
             Item=binding,
@@ -123,6 +169,11 @@ class DynamoIdentityRepository:
 
     async def get_binding(self, issuer: str, subject: str) -> dict[str, Any] | None:
         return await asyncio.to_thread(get_identity_binding, issuer, subject)
+
+    async def get_account_fence(self, user_id: str) -> dict[str, Any] | None:
+        from stoa.db.repositories import account_deletion_repo
+
+        return await asyncio.to_thread(account_deletion_repo.get_account_fence, user_id)
 
     async def get_account(self, user_id: str) -> dict[str, Any] | None:
         from stoa.db.repositories import user_repo

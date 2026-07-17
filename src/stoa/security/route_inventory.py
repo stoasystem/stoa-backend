@@ -92,6 +92,7 @@ def explicit_route_classification(
             tuple(allowed_identifiers),
             identifier_scope,
         )
+        endpoint.__route_auth_classification__ = endpoint.stoa_route_classification  # type: ignore[attr-defined]
         return endpoint
 
     return decorate

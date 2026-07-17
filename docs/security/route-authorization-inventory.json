@@ -1,5 +1,14 @@
 [
   {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "auth",
+    "identifiers": [],
+    "method": "DELETE",
+    "path": "/auth/me",
+    "sensitive": false
+  },
+  {
     "authorization": [
       {
         "action": "delete",

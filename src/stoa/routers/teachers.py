@@ -206,18 +206,14 @@ async def takeover(
         **sla_fields,
     )
 
-    # Persist a TeacherSession record in DynamoDB
-    table = get_table()
-    table.put_item(Item={
-        "PK": f"SESSION#{session_id}",
-        "SK": "META",
+    question_repo.create_teacher_session({
         "session_id": session_id,
         "question_id": question_id,
         "teacher_id": teacher_id,
         "student_id": item["student_id"],
         "started_at": now,
         "resolved_at": None,
-    })
+    }, table=get_table())
     notification_service.emit_teacher_takeover(question=item, teacher_id=teacher_id)
 
     return TakeoverResponse(
@@ -305,12 +301,10 @@ async def resolve(
     # Update session record
     session_id = item.get("session_id")
     if session_id:
-        table = get_table()
-        table.update_item(
-            Key={"PK": f"SESSION#{session_id}", "SK": "META"},
-            UpdateExpression="SET resolved_at = :r",
-            ExpressionAttributeValues={":r": now},
-        )
+        if not question_repo.update_teacher_session(
+            session_id, resolved_at=now, table=get_table()
+        ):
+            raise HTTPException(status_code=409, detail="Teacher session changed; retry")
 
     return {"question_id": question_id, "status": QuestionStatus.RESOLVED.value, "resolved_at": now}
 

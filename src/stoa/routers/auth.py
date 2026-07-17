@@ -3,12 +3,18 @@ from datetime import datetime, timezone
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import user_repo
-from stoa.deps import get_current_user, get_identity_repository, get_jwks_key_provider
+from stoa.deps import (
+    get_current_user,
+    get_deletion_command,
+    get_identity_repository,
+    get_jwks_key_provider,
+)
+from stoa.jobs.account_deletion import continue_deletion_command
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import account_verification_service, locale_service, public_identity_service
 from stoa.security.route_inventory import explicit_route_classification
@@ -19,6 +25,7 @@ from stoa.security.public_auth_errors import (
     public_auth_error_response,
 )
 from stoa.security.request_correlation import get_request_correlation_id
+from stoa.services.account_deletion_service import DeletionReceipt
 
 router = APIRouter()
 
@@ -131,6 +138,12 @@ class LocalePreferenceResponse(BaseModel):
     effectiveLocale: str
     supportedLocales: list[str]
     updatedAt: str | None = None
+
+
+class AccountDeletionReceiptResponse(BaseModel):
+    commandId: str
+    status: str
+    acceptedAt: str
 
 
 # ---------------------------------------------------------------------------
@@ -872,6 +885,23 @@ async def me(
             "role": current_user.get("role") or "student",
         }
     return _build_user_out(profile)
+
+
+@router.delete("/me", response_model=AccountDeletionReceiptResponse, status_code=202)
+@explicit_route_classification(
+    "authenticated-global", "verified-subject account deletion command"
+)
+async def delete_me(
+    background_tasks: BackgroundTasks,
+    receipt: DeletionReceipt = Depends(get_deletion_command),
+):
+    """Fence first, return an opaque receipt, then continue outside the request."""
+    background_tasks.add_task(continue_deletion_command, receipt.command_id)
+    return AccountDeletionReceiptResponse(
+        commandId=receipt.command_id,
+        status=receipt.status,
+        acceptedAt=receipt.accepted_at,
+    )
 
 
 @router.patch("/me/preferences/locale", response_model=LocalePreferenceResponse)

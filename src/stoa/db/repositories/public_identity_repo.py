@@ -9,6 +9,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
 
 
 PUBLIC_REGISTRATION_COMMAND = "public_self_service"
@@ -115,8 +116,38 @@ def create_or_get_public_identity_command(
         created_at=created_at,
         updated_at=created_at,
     )
+    table = get_table()
+    if hasattr(getattr(table, "meta", None), "client"):
+        try:
+            fence = account_deletion_repo.require_active_account_fence(
+                normalized_user_id, table=table
+            )
+            account_deletion_repo.transact(
+                [
+                    account_deletion_repo.active_fence_condition(
+                        normalized_user_id, int(fence["generation"])
+                    ),
+                    {
+                        "Put": {
+                            "Item": command.as_item(),
+                            "ConditionExpression": (
+                                "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                            ),
+                        }
+                    },
+                ],
+                table=table,
+            )
+            return command
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            existing = get_public_identity_command(email)
+            if existing and existing.fingerprint == fingerprint:
+                return existing
+            raise PublicIdentityCommandConflict(
+                "public identity command conflicts"
+            ) from exc
     try:
-        get_table().put_item(
+        table.put_item(
             Item=command.as_item(),
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -138,6 +169,16 @@ def get_public_identity_command(email: str) -> PublicIdentityCommandState | None
     )
     item = response.get("Item")
     return PublicIdentityCommandState.from_item(dict(item)) if item else None
+
+
+def require_command_fence(command: PublicIdentityCommandState) -> int:
+    table = get_table()
+    if not hasattr(getattr(table, "meta", None), "client"):
+        return 1
+    fence = account_deletion_repo.require_active_account_fence(
+        command.user_id, table=table
+    )
+    return int(fence["generation"])
 
 
 def advance_public_identity_command(
