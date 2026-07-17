@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-20-PLAN.md
-last_updated: "2026-07-17T17:41:31.717Z"
+stopped_at: Completed 473-24-PLAN.md
+last_updated: "2026-07-17T18:59:33.776Z"
 last_activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 44
+  completed_plans: 45
   percent: 10
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 21 of 35
+Plan: 22 of 35
 Status: Executing gap-closure plans
 Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cleanup convergence
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 
 ## Session
 
-**Last Date:** 2026-07-17T17:41:00.462Z
-**Stopped At:** Completed 473-20-PLAN.md
+**Last Date:** 2026-07-17T18:58:53.877Z
+**Stopped At:** Completed 473-24-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -158,6 +158,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 | Phase 473 P19 | 16 min | 3 tasks | 5 files |
 | Phase 473 P26 | 15 min | 3 tasks | 6 files |
 | Phase 473 P20 | 38 min | 3 tasks | 6 files |
+| Phase 473 P24 | 24 min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -233,3 +234,5 @@ Last activity: 2026-07-17 -- Completed Plan 473-19 exact provider absence and cl
 - [Phase 473]: Message command claims persist exact quota, usage, request, attachment, message, and history identities so every retry reuses the same facts across midnight. — Retry-time reconstruction can drift or duplicate durable effects; persisted first-claim facts make replay deterministic.
 - [Phase 473]: Message and attachment effects share one transaction with the usage-ledger event; deterministic pre-bind rejection compensates only that command's quota operation. — Usage cannot become a fallible post-effect, and compensation must never reverse another command's charge.
 - [Phase 473]: Regular and SSE transports project the same validated typed command state, and only a live command may return message_in_progress. — One closed projection prevents transport-specific masking of rejected, terminal, expired, missing, or retryable durable states.
+- [Phase 473]: OOXML admission and extraction share one canonical OPC graph and XML event parser. — Content types, exact main relationships, canonical members, and entity/external refusal establish semantic passive type before use.
+- [Phase 473]: Document text crosses a spawn-isolated closed-result worker after exact immutable tuple revalidation. — CPU, memory, wall, input, output, and IPC fences prevent parser resource and diagnostic leakage into AI context.
