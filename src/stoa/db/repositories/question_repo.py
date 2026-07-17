@@ -63,7 +63,21 @@ def get_teacher_curriculum_assignment(teacher_id: str) -> dict | None:
         },
         ConsistentRead=True,
     )
-    return response.get("Item")
+    item = response.get("Item")
+    if not isinstance(item, dict):
+        return None
+    version = item.get("version")
+    if (
+        item.get("PK") != f"TEACHER_ASSIGNMENT#{teacher_id}"
+        or item.get("SK") != "CURRICULUM#CURRENT"
+        or item.get("entity_type") != "teacher_curriculum_assignment"
+        or item.get("teacher_id") != teacher_id
+        or not isinstance(version, int)
+        or isinstance(version, bool)
+        or version <= 0
+    ):
+        return None
+    return item
 
 
 def list_by_student(student_id: str, limit: int = 20, last_key: dict | None = None) -> dict:

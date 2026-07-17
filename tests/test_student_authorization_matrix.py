@@ -361,12 +361,20 @@ def test_teacher_separate_assignment_requires_exact_resource_action_and_purpose_
     )
 
 
-def _curriculum_answer_resource(*, subject_id="math", grade_level="secondary"):
+def _curriculum_answer_resource(
+    *,
+    course_id="course-1",
+    class_id="class-1",
+    subject_id="math",
+    grade_level="secondary",
+):
     return AuthorizedResource(
         ResourceRef(
             ResourceType.CURRICULUM_ANSWER,
             "challenge-1",
             "challenge-1",
+            course_id=course_id,
+            class_id=class_id,
             lesson_id="lesson-1",
             subject_id=subject_id,
             grade_level=grade_level,
@@ -377,10 +385,18 @@ def _curriculum_answer_resource(*, subject_id="math", grade_level="secondary"):
 
 def _curriculum_assignment(**overrides):
     assignment = {
+        "PK": "TEACHER_ASSIGNMENT#teacher-1",
+        "SK": "CURRICULUM#CURRENT",
+        "entity_type": "teacher_curriculum_assignment",
+        "version": 1,
         "teacher_id": "teacher-1",
         "status": "active",
-        "subject_id": "math",
-        "grade_level": "secondary",
+        "curriculum_scope": {
+            "course_id": "course-1",
+            "class_id": "class-1",
+            "subject_id": "math",
+            "grade_level": "secondary",
+        },
         "resource_types": ["curriculum_answer"],
         "actions": ["read"],
         "purposes": ["curriculum_answer_read"],
@@ -494,7 +510,16 @@ def test_teacher_curriculum_scope_uses_only_exact_challenge_coordinates(scope):
         (None, "active"),
         (_curriculum_assignment(status="revoked"), "active"),
         (_curriculum_assignment(expires_at="2020-01-01T00:00:00Z"), "active"),
-        (_curriculum_assignment(subject_id="physics"), "active"),
+        (
+            _curriculum_assignment(
+                curriculum_scope={
+                    "course_id": "course-1",
+                    "class_id": "class-1",
+                    "subject_id": "physics",
+                }
+            ),
+            "active",
+        ),
         (_curriculum_assignment(resource_types=["practice"]), "active"),
         (_curriculum_assignment(actions=["update"]), "active"),
         (_curriculum_assignment(purposes=["curriculum_operations"]), "active"),

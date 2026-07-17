@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_authorization_audit_sink
 from stoa.routers import practice
 from stoa.security.authorization import (
@@ -19,6 +20,7 @@ from stoa.security.authorization import (
     AuthorizationPolicy,
     AuthorizationPurpose,
     AuthorizedResource,
+    CurrentAuthorizationFactRepository,
     CurriculumAnswerAuthorizationFacts,
     ResourceRef,
     ResourceType,
@@ -228,6 +230,76 @@ def test_non_current_malformed_or_actor_mismatched_assignment_denies(
     )
     assert decision.allowed is False
     assert decision.result_code is SecurityErrorCode.RESOURCE_NOT_FOUND
+
+
+def test_assignment_repository_reads_exact_current_key_consistently(monkeypatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class Table:
+        def get_item(self, **kwargs):
+            calls.append(kwargs)
+            return {"Item": _assignment()}
+
+    monkeypatch.setattr(question_repo, "get_table", lambda: Table())
+    assert question_repo.get_teacher_curriculum_assignment("teacher-1") == _assignment()
+    assert calls == [
+        {
+            "Key": {
+                "PK": "TEACHER_ASSIGNMENT#teacher-1",
+                "SK": "CURRICULUM#CURRENT",
+            },
+            "ConsistentRead": True,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_current_fact_repository_reloads_assignment_and_account_each_request(
+    monkeypatch,
+) -> None:
+    assignments = [_assignment(), _assignment(status="revoked")]
+    assignment_loads: list[str] = []
+    account_loads: list[str] = []
+
+    def load_assignment(teacher_id: str):
+        assignment_loads.append(teacher_id)
+        return assignments[len(assignment_loads) - 1]
+
+    def load_account(teacher_id: str):
+        account_loads.append(teacher_id)
+        return {
+            "user_id": teacher_id,
+            "role": "teacher",
+            "account_status": "active",
+        }
+
+    monkeypatch.setattr(question_repo, "get_teacher_curriculum_assignment", load_assignment)
+    monkeypatch.setattr(user_repo, "get_user", load_account)
+    repo = CurrentAuthorizationFactRepository()
+    actor = _actor(CanonicalRole.TEACHER)
+    target = _resource()
+
+    first = await repo.facts_for(
+        actor,
+        target.ref,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+        target.value,
+    )
+    second = await repo.facts_for(
+        actor,
+        target.ref,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+        target.value,
+    )
+
+    assert first.curriculum_answer is not None
+    assert first.curriculum_answer.assignment["status"] == "active"
+    assert second.curriculum_answer is not None
+    assert second.curriculum_answer.assignment["status"] == "revoked"
+    assert assignment_loads == ["teacher-1", "teacher-1"]
+    assert account_loads == ["teacher-1", "teacher-1"]
 
 
 def test_admin_is_global_read_only_and_teacher_read_never_grants_mutation() -> None:

@@ -292,17 +292,23 @@ class CurriculumAnswerAuthorizationFacts:
         if not _active_account(self.teacher_account, actor_id, CanonicalRole.TEACHER):
             return False
         assignment = self.assignment
-        if not assignment or assignment.get("status") != "active":
+        if not _valid_curriculum_assignment_row(assignment, actor_id):
             return False
-        if assignment.get("teacher_id") != actor_id or _expired(
+        assert assignment is not None
+        if assignment.get("status") != "active" or _expired(
             assignment.get("expires_at"), now
         ):
             return False
+        resource_types = _strict_string_set(assignment.get("resource_types"))
+        actions = _strict_string_set(assignment.get("actions"))
+        purposes = _strict_string_set(assignment.get("purposes"))
         if (
-            resource.resource_type.value
-            not in _string_set(assignment.get("resource_types"))
-            or action.value not in _string_set(assignment.get("actions"))
-            or purpose.value not in _string_set(assignment.get("purposes"))
+            resource_types is None
+            or actions is None
+            or purposes is None
+            or resource.resource_type.value not in resource_types
+            or action.value not in actions
+            or purpose.value not in purposes
         ):
             return False
         return _curriculum_scope_matches(assignment, resource)
@@ -905,16 +911,51 @@ def _string_set(value: object) -> set[str]:
     return {str(item) for item in value}
 
 
+def _strict_string_set(value: object) -> frozenset[str] | None:
+    """Return a closed collection of exact strings without scalar coercion."""
+    if not isinstance(value, (list, tuple, set, frozenset)) or not value:
+        return None
+    if any(not isinstance(item, str) or not item.strip() for item in value):
+        return None
+    normalized = frozenset(value)
+    return normalized if len(normalized) == len(value) else None
+
+
+def _valid_curriculum_assignment_row(
+    assignment: Mapping[str, object] | None, actor_id: str
+) -> bool:
+    """Validate the one deterministic current curriculum assignment projection."""
+    if not assignment:
+        return False
+    version = assignment.get("version")
+    return bool(
+        isinstance(actor_id, str)
+        and actor_id
+        and assignment.get("PK") == f"TEACHER_ASSIGNMENT#{actor_id}"
+        and assignment.get("SK") == "CURRICULUM#CURRENT"
+        and assignment.get("entity_type") == "teacher_curriculum_assignment"
+        and assignment.get("teacher_id") == actor_id
+        and isinstance(version, int)
+        and not isinstance(version, bool)
+        and version > 0
+        and isinstance(assignment.get("curriculum_scope"), Mapping)
+    )
+
+
+def _strict_scope_values(value: object) -> frozenset[str] | None:
+    if isinstance(value, str):
+        return frozenset((value,)) if value.strip() else None
+    return _strict_string_set(value)
+
+
 def _curriculum_scope_matches(
     assignment: Mapping[str, object], resource: ResourceRef
 ) -> bool:
-    """Match only authoritative challenge coordinates, never request fields.
-
-    An assignment may scope on one or more dimensions. Every declared dimension
-    must match, and at least one dimension must be declared.
-    """
+    """Require exact course/class, then apply declared optional narrowing."""
     nested = assignment.get("curriculum_scope")
-    scope = nested if isinstance(nested, Mapping) else assignment
+    if not isinstance(nested, Mapping):
+        return False
+    scope = nested
     coordinates = {
         "course_id": resource.course_id,
         "class_id": resource.class_id,
@@ -922,22 +963,31 @@ def _curriculum_scope_matches(
         "subject_id": resource.subject_id,
         "grade_level": resource.grade_level,
     }
-    matched = False
-    for field_name, requested in coordinates.items():
+    for field_name in ("course_id", "class_id"):
+        requested = coordinates[field_name]
+        allowed = _strict_scope_values(scope.get(field_name))
+        if (
+            not isinstance(requested, str)
+            or not requested
+            or allowed is None
+            or requested not in allowed
+        ):
+            return False
+
+    for field_name in ("lesson_id", "subject_id", "grade_level"):
         declared = scope.get(field_name)
-        if declared in (None, "", [], (), set(), frozenset()):
+        if declared is None:
             continue
-        if requested in (None, ""):
+        requested = coordinates[field_name]
+        allowed = _strict_scope_values(declared)
+        if (
+            not isinstance(requested, str)
+            or not requested
+            or allowed is None
+            or requested not in allowed
+        ):
             return False
-        allowed = (
-            {str(item) for item in declared}
-            if isinstance(declared, (list, tuple, set, frozenset))
-            else {str(declared)}
-        )
-        if str(requested) not in allowed:
-            return False
-        matched = True
-    return matched
+    return True
 
 
 def _matching_grant(
