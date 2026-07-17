@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Product Reality, Authorization And Core Journey Completion
-status: executing
-stopped_at: Phase 473 verification found four blockers and two warnings; gap planning required
-last_updated: "2026-07-17T09:34:18Z"
-last_activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
+status: ready_to_execute
+stopped_at: Phase 473 final gap-closure plans 18-35 verified and ready; implementation has not started
+last_updated: "2026-07-17T12:51:25Z"
+last_activity: 2026-07-17 -- Phase 473 deep gap audit planned 18 closure plans; checker passed 3/3 requirements and 22/22 decisions
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 39
+  total_plans: 57
   completed_plans: 39
-  percent: 100
+  percent: 68
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 17 of 17 execution plans complete; independent verification found new gaps
-Status: Verification gaps found; V9PRIV-02 remains pending
-Last activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9PRIV-02 remains pending
+Phase: 473 (Student Content Privacy And Practice Integrity) — READY TO EXECUTE GAP CLOSURE
+Plan: 17 of 35 execution plans complete; Plans 18-35 are planned and independently checker-verified
+Status: Ready to execute; no closure implementation has started and V9PRIV-02 remains pending
+Last activity: 2026-07-17 -- Deep source audit and four checker passes closed planning gaps across 3/3 requirements and 22/22 decisions
 
 ## Accumulated Context
 
@@ -83,10 +83,11 @@ Last activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9P
 - Plans 473-08 through 473-11 close those gaps through an authenticated chunk gateway, server-only immutable promotion, category-stable transaction outcomes, replayable conversation commands, private-safe telemetry, and one final source-bound evidence gate.
 - Plans 473-15 through 473-17 now cover CR-009 and WR-009 through WR-011 with strict provider-coordinate invariants, per-candidate cleanup isolation, provider-body ownership, conversation transport normalization, and a final immutable source-bound evidence gate.
 - Post-execution verification confirmed those targeted fixes but reproduced four adjacent blockers: malformed UploadPart/ListParts ETags, swallowed completion transport failures, partial BatchGetItem replay, and first-page-only attachment deletion; deterministic bind errors and OOXML external relationships remain warnings.
+- Plans 473-18 through 473-35 form the final source-backed closure plan: strict provider/replay/retention/parser/practice fixes, a permanent account-content fence covering 17 durable private-store families, deterministic read/write boundary inventories, and final immutable evidence. Planning is complete only; none of these fixes has been executed.
 
 ### Pending Todos
 
-- Plan the four blockers and two warnings from the latest Phase 473 verification; do not mark Phase 473 complete until V9PRIV-02 passes independent re-verification.
+- Execute Plans 473-18 through 473-35, then independently re-verify every local gate before marking Phase 473 or V9PRIV-02 complete.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -100,14 +101,14 @@ Last activity: 2026-07-17 -- Phase 473 independently verified at 4/5 truths; V9P
 
 ## Operator Next Steps
 
-- Run `$gsd-plan-phase 473 --gaps` to close multipart ETag, completion transport, exact attachment replay, exhaustive deletion, bind-error, and OOXML relationship gaps.
+- Run `$gsd-execute-phase 473 --gaps-only` when ready to implement the verified Plans 473-18 through 473-35.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-17T09:34:18Z
-**Stopped At:** Phase 473 verification found four blockers and two warnings; gap planning required
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-VERIFICATION.md
+**Last Date:** 2026-07-17T12:51:25Z
+**Stopped At:** Phase 473 final gap-closure plans 18-35 verified and ready; implementation has not started
+**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-18-PLAN.md
 
 ## Performance Metrics
 

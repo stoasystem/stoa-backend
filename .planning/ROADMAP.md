@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | 17/17 plans executed; verification found new V9PRIV-02 gaps | Phase 472 |
+| 473 | Student Content Privacy And Practice Integrity | 17/35 plans executed; final gap-closure Plans 18-35 verified and ready | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -43,7 +43,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 ## Phases
 
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (17/17 plans executed; verification gaps found 2026-07-17)
+- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (17/35 plans executed; Plans 18-35 planned and checker-verified 2026-07-17)
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
@@ -222,6 +222,69 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 - [x] `473-17` — Lock the remediated source and regenerate exhaustive redacted evidence for the remaining gaps.
 
+**Wave 15** *(final gap closure; blocked on Wave 14 completion)*
+
+- [ ] `473-18` — Enforce exact multipart acknowledgements, ledger-bound recovery, and create-only checksum-verified promotion.
+- [ ] `473-25` — Bind results to immutable attempt snapshots and replace free-form hints with a closed non-derivable template policy.
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] `473-19` — Prove exact multipart/object absence across retries, pagination, intent TTL, cleanup debt, and PART lifecycle.
+- [ ] `473-26` — Require an exact current teacher course/class assignment for answer reads while keeping admin access read-only.
+
+**Wave 17** *(blocked on Wave 16 completion)*
+
+- [ ] `473-20` — Replace ambiguous conversation outcomes with one typed durable command, quota, usage, retry, and transport contract.
+- [ ] `473-24` — Add semantic passive-document validation and resource-isolated bounded extraction for every supported type.
+
+**Wave 18** *(blocked on Wave 17 completion)*
+
+- [ ] `473-21` — Reconstruct exact replay attachments/history, fence AI leases, and keep extraction/provider failures retryable.
+
+**Wave 19** *(blocked on Wave 18 completion)*
+
+- [ ] `473-22` — Make resource release and deletion exhaustive, fenced, paginated, reconciled, and crash-resumable.
+
+**Wave 20** *(blocked on Wave 19 completion)*
+
+- [ ] `473-23` — Deliver owner list/view/download/delete APIs and a durable exact attachment-purge branch.
+
+**Wave 21** *(blocked on Wave 20 completion)*
+
+- [ ] `473-29` — Add the permanent self-delete fence, replay-only post-fence authorization, and profile/question/OCR/upload closure.
+
+**Wave 22** *(blocked on Wave 21 completion)*
+
+- [ ] `473-30` — Fence and scrub every moderation summary, history, event, note, and derived private-content writer.
+
+**Wave 23** *(blocked on Wave 22 completion)*
+
+- [ ] `473-31` — Reconcile all report/recovery/support rows, exact S3 versions, SES sends, and lawful-retention exceptions.
+
+**Wave 24** *(blocked on Wave 23 completion)*
+
+- [ ] `473-32` — Purge and fence conversations, messages, command results, teacher notes, help state, AI completion, and attachment links.
+
+**Wave 25** *(blocked on Wave 24 completion)*
+
+- [ ] `473-33` — Purge and fence practice answers/progress/mistakes, adaptive assignments/memory, and student analytics signals.
+
+**Wave 26** *(blocked on Wave 25 completion)*
+
+- [ ] `473-34` — Purge notification/assistance/draft copies, revoke device/realtime credentials, and stop pending external deliveries.
+
+**Wave 27** *(blocked on Wave 26 completion)*
+
+- [ ] `473-35` — Source-discover and seal all 17 private-store branches, retained-evidence policy, zero debt, and two zero epochs.
+
+**Wave 28** *(blocked on Wave 27 completion)*
+
+- [ ] `473-27` — Fail closed on unregistered private writes and unstrict provider/repository/parser response consumption.
+
+**Wave 29** *(final evidence; blocked on Wave 28 completion)*
+
+- [ ] `473-28` — Test one immutable candidate with strict receipts and publish independently revalidated source-bound evidence.
+
 **Cross-cutting constraints:**
 
 - Public responses, logs, and errors expose opaque IDs and safe categories only—never object keys, provider coordinates, raw OCR, extracted text, or parser/provider exceptions.
@@ -229,13 +292,17 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 - Student preview contracts stay answer-free; answer-bearing results require a successfully recorded attempt, while teacher/admin answer reads use a separate scoped contract.
 - Client upload responses expose only opaque application identifiers; provider multipart coordinates and ETags remain server-only, and all downstream reads/deletes bind to the immutable validated version.
 - Exact conversation retries converge before attachment resolution, while new foreign or missing references create zero command, quota, association, provider, or AI effects.
+- One permanent canonical account fence precedes every student-private write; provider-accepted copies and lawful retained evidence remain explicit policy states and never count as physically purged.
+- Every private mutation belongs to the source-sealed 17-branch registry, a narrow retained-evidence policy, or a reviewed non-student exclusion; deletion completes only after zero debt and two authoritative zero epochs.
+- Every untrusted provider/repository/parser field crosses a named strict parser; new raw coercions, unchecked fields, and unmapped private sinks fail deterministic inventories.
+- Final evidence is generated only after source and tests are committed, and every local gate runs against that unchanged candidate SHA.
 
 **Success criteria:**
 
 1. A student can upload a supported bounded file and use it once in their own question.
 2. Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors.
 3. No student preview/overview/path/lesson response contains `correctAnswer` or answer-derived explanation before submission.
-4. Authorized author/admin tooling retains an explicit answer-bearing contract separate from the student contract.
+4. Authorized teacher/admin tooling retains an explicit answer-bearing contract separate from the student contract.
 5. Existing question responses continue to hide object keys and raw OCR text.
 
 **Required evidence:** Upload/object ownership matrix, content validation fixtures, S3 error redaction test, OpenAPI response checks, and student preview snapshots.
