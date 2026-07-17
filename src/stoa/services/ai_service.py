@@ -290,11 +290,32 @@ def get_ai_answer(
     response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
         raise AIInvocationFailure("deadline_exceeded")
+    response_body = None
+    close_ok = True
     try:
-        result = json.loads(response["body"].read())
+        if not isinstance(response, dict):
+            raise AIInvocationFailure("malformed_response")
+        response_body = response.get("body")
+        read = getattr(response_body, "read", None)
+        if not callable(read):
+            raise AIInvocationFailure("malformed_response")
+        result = json.loads(read())
         raw_text = result["content"][0]["text"]
+    except AIInvocationFailure:
+        raise
     except Exception:
         raise AIInvocationFailure("malformed_response") from None
+    finally:
+        try:
+            close = getattr(response_body, "close", None)
+            if not callable(close):
+                close_ok = False
+            else:
+                close()
+        except Exception:
+            close_ok = False
+    if not close_ok:
+        raise AIInvocationFailure("response_cleanup_failed")
     if not isinstance(raw_text, str) or not raw_text:
         raise AIInvocationFailure("malformed_response")
     emit_private_event(

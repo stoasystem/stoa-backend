@@ -579,12 +579,18 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     monkeypatch.setattr(conversations.attachment_repo, "claim_message_command_and_quota", claim)
     monkeypatch.setattr(conversations.attachment_repo, "get_message_command", get_command)
     monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(
+        conversations.attachment_repo, "renew_message_ai_lease", lambda **_kwargs: True
+    )
     monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
     monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
-        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1) or "",
+        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1)
+        or conversations.attachment_service.AttachmentContextResult(
+            conversations.attachment_service.AttachmentContextDisposition.READY
+        ),
     )
     monkeypatch.setattr(
         conversations.ai_service,
@@ -658,6 +664,11 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         "_get_messages",
         lambda *_: [dict(stored_student)] if stored_student else [],
     )
+    monkeypatch.setattr(
+        conversations,
+        "_load_anchored_message_history",
+        lambda **_kwargs: [],
+    )
     monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
     monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(
@@ -681,8 +692,12 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         attachment_id = kwargs["deterministic_attachment_ids"][0]
         stored_student.update(kwargs["message"], attachment_ids=[attachment_id])
         stored_attachments[attachment_id] = {
+            **attachment_repo.attachment_key(attachment_id),
             "attachment_id": attachment_id,
             "owner_id": "student-1",
+            "student_id": "student-1",
+            "entity_type": "attachment",
+            "schema_version": "attachment.v1",
             "original_filename": "notes.txt",
             "detected_type": "text/plain",
             "content_length": 12,
@@ -719,12 +734,18 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
     )
     monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
     monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(
+        conversations.attachment_repo, "renew_message_ai_lease", lambda **_kwargs: True
+    )
     monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
         lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1)
-        or "",
+        or conversations.attachment_service.AttachmentContextResult(
+            conversations.attachment_service.AttachmentContextDisposition.READY,
+            context="private text",
+        ),
     )
     monkeypatch.setattr(
         conversations.ai_service,
@@ -841,9 +862,11 @@ def test_conversation_non_readable_body_ownership_closes_once(
         settings=Settings(s3_images_bucket="private-bucket"),
     )
 
-    assert result == "[attachment:service_unavailable]"
+    assert result.disposition.value == "retryable"
+    assert result.context == ""
+    assert result.error_code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert body.close_count == 1
-    assert "private-canary" not in result
+    assert "private-canary" not in str(result)
 
 
 @pytest.mark.parametrize(
@@ -914,7 +937,7 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
     assert result.context == expected
     assert result.error_code is error_code
     assert body.close_count == 1
-    assert "provider-canary" not in result
+    assert "provider-canary" not in str(result)
 
 
 def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatch) -> None:

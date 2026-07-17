@@ -2621,6 +2621,9 @@ class _ReadBody:
         self.offset += len(value)
         return value
 
+    def close(self) -> None:
+        return None
+
 
 class _PrivateS3:
     def __init__(self, objects=None) -> None:
@@ -2653,14 +2656,17 @@ def test_ai_attachment_context_is_bounded_and_category_safe() -> None:
         s3=_PrivateS3({item["immutable_object_key"]: (text, "context-etag")}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
-    assert context == text.decode()
-    assert "context-canary" not in context
+    assert context.disposition.value == "ready"
+    assert context.context == text.decode()
+    assert "context-canary" not in context.context
     broken = extract_message_attachment_context(
         [("attachment", {**item, "content_length": len(text) + 1})],
         s3=_PrivateS3({item["immutable_object_key"]: (text, "context-etag")}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
-    assert broken == "[attachment:immutable_bytes_changed]"
+    assert broken.disposition.value == "retryable"
+    assert broken.context == ""
+    assert broken.error_code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
 
 
 def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
@@ -2697,8 +2703,9 @@ def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
         s3=s3,
         settings=Settings(s3_images_bucket="private-bucket"),
     )
-    assert context == old.decode()
-    assert newer.decode() not in context
+    assert context.disposition.value == "ready"
+    assert context.context == old.decode()
+    assert newer.decode() not in context.context
     assert s3.calls == [("objects/shared-key.txt", "version-old")]
 
 

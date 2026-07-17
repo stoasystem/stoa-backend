@@ -724,9 +724,19 @@ def _completed_command_response(command: dict) -> SendMessageResponse | None:
     if command.get("status") != "completed" or not command.get("result_json"):
         return None
     try:
-        return SendMessageResponse.model_validate_json(str(command["result_json"]))
+        response = SendMessageResponse.model_validate_json(str(command["result_json"]))
     except (ValueError, TypeError):
         return None
+    if (
+        response.studentMessage.id != command.get("student_message_id")
+        or response.assistantMessage.id != command.get("assistant_message_id")
+        or response.studentMessage.conversationId != command.get("conversation_id")
+        or response.assistantMessage.conversationId != command.get("conversation_id")
+        or response.studentMessage.role != "student"
+        or response.assistantMessage.role != "assistant"
+    ):
+        return None
+    return response
 
 
 def _command_error_code(
@@ -1051,7 +1061,9 @@ def _execute_message_command(
         ]
         command["history_fingerprint"] = _history_snapshot_fingerprint(prior_messages)
 
-    quota_limit = _chat_limit_for_student(student_id)
+    quota_limit = _conversation_repository_call(
+        lambda: _chat_limit_for_student(student_id)
+    )
     resume_after_message = bool(
         existing and existing.get("status") in {"message_committed", "ai_running"}
     )
@@ -1117,14 +1129,20 @@ def _execute_message_command(
     else:
         # Stage B is entered only for an absent command, or to resume a claimed
         # command lost before its deterministic message transaction.
-        prepared = attachment_service.prepare_message_attachments(
-            body.attachmentIds or [], actor
+        prepared = _conversation_repository_call(
+            lambda: attachment_service.prepare_message_attachments(
+                body.attachmentIds or [], actor
+            )
         )
         effective_plan = "free"
         if body.attachmentIds:
-            effective_plan = _attachment_plan_for_student(student_id)
-            attachment_service.ensure_message_attachment_capacity(
-                prepared, student_id, effective_plan
+            effective_plan = _conversation_repository_call(
+                lambda: _attachment_plan_for_student(student_id)
+            )
+            _conversation_repository_call(
+                lambda: attachment_service.ensure_message_attachment_capacity(
+                    prepared, student_id, effective_plan
+                )
             )
         if not existing:
             claim_result = _coerce_command_result(
