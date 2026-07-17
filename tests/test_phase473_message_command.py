@@ -6,8 +6,6 @@ do not replace the command executor or completion repository method with a mock.
 
 from __future__ import annotations
 
-import asyncio
-import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -110,7 +108,11 @@ class _ClaimTable:
         del ConsistentRead
         if Key["SK"].startswith("MESSAGE_COMMAND#"):
             self.command_reads += 1
-            return {"Item": dict(self.reread_command)} if self.reread_command else {}
+            return (
+                {"Item": dict(self.reread_command)}
+                if self.reread_command and self.transactions
+                else {}
+            )
         if Key["SK"].startswith("CHAT#"):
             return {"Item": {"count": self.counter}} if self.counter else {}
         return {}
@@ -263,6 +265,7 @@ def test_completion_transport_is_typed_and_commit_then_raise_reconciles(
 class _RejectTable:
     def __init__(self) -> None:
         self.transactions: list[list[dict[str, Any]]] = []
+        self.command = _command(counter_value=3)
 
     def transact_write_items(self, *, TransactItems):  # noqa: N803
         self.transactions.append(TransactItems)
@@ -270,7 +273,7 @@ class _RejectTable:
 
     def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
         del Key, ConsistentRead
-        return {}
+        return {"Item": dict(self.command)}
 
 
 @pytest.mark.parametrize(

@@ -27,6 +27,22 @@ class AttachmentTransactionOutcome(StrEnum):
     RETRYABLE_DEPENDENCY = "retryable_dependency"
 
 
+class MessageCommandDisposition(StrEnum):
+    """Closed durable outcomes for every message-command transition."""
+
+    CLAIMED = "claimed"
+    RESUME = "resume"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+    QUOTA_EXCEEDED = "quota_exceeded"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    RETRYABLE = "retryable"
+    LEASE_HELD = "lease_held"
+    TERMINAL = "terminal"
+    EXPIRED = "expired"
+    MISSING = "missing"
+
+
 class TransactionOperationKind(StrEnum):
     """Semantic transaction positions; never derived from provider diagnostics."""
 
@@ -40,7 +56,11 @@ class TransactionOperationKind(StrEnum):
     MESSAGE_COMMAND_PUT = "message_command_put"
     CHAT_QUOTA_OPERATION_PUT = "chat_quota_operation_put"
     CHAT_QUOTA_UPDATE = "chat_quota_update"
+    CHAT_QUOTA_OPERATION_DELETE = "chat_quota_operation_delete"
+    CHAT_QUOTA_COMPENSATE = "chat_quota_compensate"
+    USAGE_EVENT_PUT = "usage_event_put"
     MESSAGE_COMMAND_UPDATE = "message_command_update"
+    MESSAGE_COMMAND_REJECT = "message_command_reject"
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
 
 
@@ -62,6 +82,29 @@ class TransactionOperation:
 @dataclass(frozen=True, slots=True)
 class AttachmentTransactionError(Exception):
     outcome: AttachmentTransactionOutcome
+
+
+@dataclass(frozen=True, slots=True)
+class MessageCommandResult:
+    disposition: MessageCommandDisposition
+    command: dict[str, Any] | None = None
+    counter_value: int | None = None
+    error_code: str | None = None
+    attempt: int | None = None
+    operations: tuple[TransactionOperation, ...] = ()
+
+    def __iter__(self):
+        """Temporary tuple compatibility for callers migrated in the router task."""
+        yield self.disposition is MessageCommandDisposition.CLAIMED
+        yield int(self.counter_value or 0)
+
+    def __bool__(self) -> bool:
+        return self.disposition in {
+            MessageCommandDisposition.CLAIMED,
+            MessageCommandDisposition.COMPLETED,
+            MessageCommandDisposition.REJECTED,
+            MessageCommandDisposition.TERMINAL,
+        }
 
 
 def upload_key(upload_id: str) -> dict[str, str]:
@@ -104,6 +147,54 @@ def chat_quota_operation_key(owner_id: str, command_id: str) -> dict[str, str]:
     return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT_QUOTA_OP#{command_id}"}
 
 
+def _message_usage_event_item(
+    *, command: dict[str, Any], owner_id: str, now_iso: str
+) -> dict[str, Any]:
+    action = str(command["usage_action"])
+    quota_period = str(command["quota_period"])
+    idempotency_key = str(command["usage_idempotency_key"])
+    counter_value = int(command["counter_value"])
+    resource_id = str(command["usage_resource_id"])
+    return {
+        "PK": f"USAGE_LEDGER#{owner_id}",
+        "SK": f"EVENT#{action}#{quota_period}#{idempotency_key}",
+        "entity_type": "usage_ledger_event",
+        "schema_version": "usage-ledger.v1",
+        "event_id": str(command["usage_event_id"]),
+        "actor_id": owner_id,
+        "actor_role": "student",
+        "student_id": owner_id,
+        "action": action,
+        "quantity": 1,
+        "quota_period": quota_period,
+        "counter_key": f"USAGE#{owner_id}/CHAT#{quota_period}",
+        "counter_value_after": counter_value,
+        "idempotency_key": idempotency_key,
+        "request_correlation_id": resource_id,
+        "privacy": {
+            "raw_content_stored": False,
+            "raw_learning_content_stored": False,
+            "private_artifact_keys_stored": False,
+            "provider_payloads_stored": False,
+            "auth_tokens_stored": False,
+            "verification_codes_stored": False,
+        },
+        "metadata": {
+            "usage_type": "daily_chat_message",
+            "summary_group": "chat",
+            "quota_enforced": True,
+            "support_visible": True,
+            "conversation_id": str(command["conversation_id"]),
+            "request_id": resource_id,
+            "status": "sent",
+            "write_order": "message_effect_transaction",
+        },
+        "created_at": str(command["created_at"]),
+        "updated_at": now_iso,
+        "expires_at": int(command["expires_at"]),
+    }
+
+
 def get_message_command(
     conversation_id: str,
     idempotency_key: str,
@@ -114,6 +205,101 @@ def get_message_command(
         Key=message_command_key(conversation_id, idempotency_key), ConsistentRead=True
     )
     return response.get("Item")
+
+
+def classify_message_command(
+    command: dict[str, Any] | None,
+    *,
+    owner_id: str,
+    fingerprint: str,
+    now_epoch: int,
+) -> MessageCommandResult:
+    """Validate identity and project one persisted command into a named state."""
+    if not isinstance(command, dict):
+        return MessageCommandResult(MessageCommandDisposition.MISSING)
+    if command.get("owner_id") != owner_id:
+        return MessageCommandResult(MessageCommandDisposition.MISSING)
+    if command.get("fingerprint") != fingerprint:
+        return MessageCommandResult(
+            MessageCommandDisposition.IDEMPOTENCY_CONFLICT, command=dict(command)
+        )
+
+    status = command.get("status")
+    if not isinstance(status, str):
+        return MessageCommandResult(
+            MessageCommandDisposition.RETRYABLE, command=dict(command)
+        )
+    persisted = dict(command)
+    counter_value = _optional_positive_int(persisted.get("counter_value"))
+    if status == "claimed":
+        expires_at = _optional_positive_int(persisted.get("expires_at"))
+        disposition = (
+            MessageCommandDisposition.EXPIRED
+            if expires_at is not None and expires_at <= now_epoch
+            else MessageCommandDisposition.CLAIMED
+        )
+    elif status == "message_committed":
+        disposition = MessageCommandDisposition.RESUME
+    elif status == "ai_running":
+        lease_expiry = _optional_positive_int(persisted.get("expiresAt"))
+        disposition = (
+            MessageCommandDisposition.RESUME
+            if lease_expiry is not None and lease_expiry <= now_epoch
+            else MessageCommandDisposition.LEASE_HELD
+        )
+    elif status == "completed":
+        disposition = (
+            MessageCommandDisposition.COMPLETED
+            if isinstance(persisted.get("result_json"), str)
+            and bool(persisted["result_json"])
+            else MessageCommandDisposition.RETRYABLE
+        )
+    elif status == "rejected":
+        disposition = MessageCommandDisposition.REJECTED
+    elif status == "terminal_failed":
+        disposition = MessageCommandDisposition.TERMINAL
+    elif status == "expired":
+        disposition = MessageCommandDisposition.EXPIRED
+    else:
+        disposition = MessageCommandDisposition.RETRYABLE
+    return MessageCommandResult(
+        disposition,
+        command=persisted,
+        counter_value=counter_value,
+        error_code=(
+            str(persisted["error_code"])
+            if isinstance(persisted.get("error_code"), str)
+            else None
+        ),
+        attempt=_optional_positive_int(persisted.get("attempt")) or 0,
+    )
+
+
+def read_message_command_result(
+    conversation_id: str,
+    idempotency_key: str,
+    *,
+    owner_id: str,
+    fingerprint: str,
+    now_epoch: int = 0,
+    table: Any | None = None,
+) -> MessageCommandResult:
+    try:
+        command = get_message_command(conversation_id, idempotency_key, table=table)
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return classify_message_command(
+        command,
+        owner_id=owner_id,
+        fingerprint=fingerprint,
+        now_epoch=now_epoch,
+    )
+
+
+def _optional_positive_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 def build_message_command_claim_transaction(
@@ -150,6 +336,8 @@ def build_message_command_claim_transaction(
                         ),
                         **command,
                         "counter_value": expected_counter + 1,
+                        "quota_period": quota_period,
+                        "expires_at": expires_at,
                     },
                     "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                 }
@@ -198,9 +386,22 @@ def claim_message_command_and_quota(
     limit: int,
     expires_at: int,
     table: Any | None = None,
-) -> tuple[bool, int]:
+) -> MessageCommandResult:
     """Atomically create a message command and charge its daily quota once."""
     target = table or get_table()
+    fingerprint = str(command["fingerprint"])
+    now_epoch = max(0, expires_at - 172800)
+    existing = read_message_command_result(
+        str(command["conversation_id"]),
+        str(command["idempotency_key"]),
+        owner_id=owner_id,
+        fingerprint=fingerprint,
+        now_epoch=now_epoch,
+        table=target,
+    )
+    if existing.disposition is not MessageCommandDisposition.MISSING:
+        return existing
+
     expected = 0
     for _ in range(3):
         try:
@@ -211,7 +412,27 @@ def claim_message_command_and_quota(
             raise AttachmentRepositoryConflict("dependency_failure") from None
         expected = int(counter.get("count", 0))
         if expected >= limit:
-            return False, expected
+            raced = read_message_command_result(
+                str(command["conversation_id"]),
+                str(command["idempotency_key"]),
+                owner_id=owner_id,
+                fingerprint=fingerprint,
+                now_epoch=now_epoch,
+                table=target,
+            )
+            if raced.disposition is not MessageCommandDisposition.MISSING:
+                if raced.disposition is MessageCommandDisposition.CLAIMED:
+                    return MessageCommandResult(
+                        MessageCommandDisposition.RESUME,
+                        command=raced.command,
+                        counter_value=raced.counter_value,
+                        attempt=raced.attempt,
+                    )
+                return raced
+            return MessageCommandResult(
+                MessageCommandDisposition.QUOTA_EXCEEDED,
+                counter_value=expected,
+            )
         operations = build_message_command_claim_transaction(
             command=command,
             owner_id=owner_id,
@@ -224,10 +445,40 @@ def claim_message_command_and_quota(
             transact(operations, table=target)
         except AttachmentTransactionError as exc:
             if exc.outcome is AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY:
-                raise
+                return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+            raced = read_message_command_result(
+                str(command["conversation_id"]),
+                str(command["idempotency_key"]),
+                owner_id=owner_id,
+                fingerprint=fingerprint,
+                now_epoch=now_epoch,
+                table=target,
+            )
+            if raced.disposition is not MessageCommandDisposition.MISSING:
+                if raced.disposition is MessageCommandDisposition.CLAIMED:
+                    return MessageCommandResult(
+                        MessageCommandDisposition.RESUME,
+                        command=raced.command,
+                        counter_value=raced.counter_value,
+                        attempt=raced.attempt,
+                    )
+                return raced
             continue
-        return True, expected + 1
-    return False, expected
+        persisted = {
+            **command,
+            "counter_value": expected + 1,
+            "quota_period": quota_period,
+            "expires_at": expires_at,
+        }
+        return MessageCommandResult(
+            MessageCommandDisposition.CLAIMED,
+            command=persisted,
+            counter_value=expected + 1,
+        )
+    return MessageCommandResult(
+        MessageCommandDisposition.RETRYABLE,
+        counter_value=expected,
+    )
 
 
 def question_association_key(attachment_id: str, question_id: str) -> dict[str, str]:
@@ -1303,6 +1554,21 @@ def build_message_attachment_transaction(
     if command is not None:
         operations.append(
             TransactionOperation(
+                TransactionOperationKind.USAGE_EVENT_PUT,
+                {
+                    "Put": {
+                        "Item": _message_usage_event_item(
+                            command=command, owner_id=owner_id, now_iso=now_iso
+                        ),
+                        "ConditionExpression": (
+                            "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                        ),
+                    }
+                },
+            )
+        )
+        operations.append(
+            TransactionOperation(
                 TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
                 {
                     "Update": {
@@ -1392,7 +1658,7 @@ def complete_message_command(
     result_json: str,
     completed_at: str,
     table: Any | None = None,
-) -> bool:
+) -> MessageCommandResult:
     operations = [
         TransactionOperation(
             TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
@@ -1431,8 +1697,26 @@ def complete_message_command(
     try:
         transact(operations, table=table)
     except AttachmentTransactionError:
-        return False
-    return True
+        try:
+            command = get_message_command(
+                conversation_id, idempotency_key, table=table
+            )
+        except Exception:
+            return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+        if (
+            isinstance(command, dict)
+            and command.get("owner_id") == owner_id
+            and command.get("status") == "completed"
+            and isinstance(command.get("result_json"), str)
+            and command["result_json"]
+        ):
+            return MessageCommandResult(
+                MessageCommandDisposition.COMPLETED,
+                command=dict(command),
+                counter_value=_optional_positive_int(command.get("counter_value")),
+            )
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+    return MessageCommandResult(MessageCommandDisposition.COMPLETED)
 
 
 def renew_message_ai_lease(
@@ -1469,6 +1753,118 @@ def renew_message_ai_lease(
     return True
 
 
+def reject_message_command_and_compensate(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    fingerprint: str,
+    error_code: str,
+    now_iso: str,
+    table: Any | None = None,
+) -> MessageCommandResult:
+    """Terminally reject a pre-bind command and reverse its one quota claim."""
+    target = table or get_table()
+    try:
+        command = get_message_command(conversation_id, idempotency_key, table=target)
+    except Exception:
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+    current = classify_message_command(
+        command,
+        owner_id=owner_id,
+        fingerprint=fingerprint,
+        now_epoch=0,
+    )
+    if current.disposition is not MessageCommandDisposition.CLAIMED:
+        return current
+    assert current.command is not None
+    command_id = str(current.command["command_id"])
+    quota_period = str(current.command["quota_period"])
+    counter_value = int(current.command["counter_value"])
+    operations = (
+        TransactionOperation(
+            TransactionOperationKind.MESSAGE_COMMAND_REJECT,
+            {
+                "Update": {
+                    "Key": message_command_key(conversation_id, idempotency_key),
+                    "UpdateExpression": (
+                        "SET #status=:rejected, error_code=:error, rejected_at=:now"
+                    ),
+                    "ConditionExpression": (
+                        "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":owner": owner_id,
+                        ":fingerprint": fingerprint,
+                        ":claimed": "claimed",
+                        ":rejected": "rejected",
+                        ":error": error_code,
+                        ":now": now_iso,
+                    },
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.CHAT_QUOTA_OPERATION_DELETE,
+            {
+                "Delete": {
+                    "Key": chat_quota_operation_key(owner_id, command_id),
+                    "ConditionExpression": "command_id=:command",
+                    "ExpressionAttributeValues": {":command": command_id},
+                }
+            },
+        ),
+        TransactionOperation(
+            TransactionOperationKind.CHAT_QUOTA_COMPENSATE,
+            {
+                "Update": {
+                    "Key": chat_quota_key(owner_id, quota_period),
+                    "UpdateExpression": "SET #count=#count-:one",
+                    "ConditionExpression": "#count=:expected AND #count>:zero",
+                    "ExpressionAttributeNames": {"#count": "count"},
+                    "ExpressionAttributeValues": {
+                        ":one": 1,
+                        ":zero": 0,
+                        ":expected": counter_value,
+                    },
+                }
+            },
+        ),
+    )
+    try:
+        transact(list(operations), table=target)
+    except AttachmentTransactionError:
+        try:
+            reread = get_message_command(
+                conversation_id, idempotency_key, table=target
+            )
+        except Exception:
+            return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+        reconciled = classify_message_command(
+            reread,
+            owner_id=owner_id,
+            fingerprint=fingerprint,
+            now_epoch=0,
+        )
+        if reconciled.disposition is MessageCommandDisposition.REJECTED:
+            return reconciled
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+    rejected = {
+        **current.command,
+        "status": "rejected",
+        "error_code": error_code,
+        "rejected_at": now_iso,
+    }
+    return MessageCommandResult(
+        MessageCommandDisposition.REJECTED,
+        command=rejected,
+        counter_value=counter_value,
+        error_code=error_code,
+        operations=operations,
+    )
+
+
 def mark_message_command_terminal(
     *,
     conversation_id: str,
@@ -1476,7 +1872,7 @@ def mark_message_command_terminal(
     owner_id: str,
     now_iso: str,
     table: Any | None = None,
-) -> bool:
+) -> MessageCommandResult:
     try:
         (table or get_table()).update_item(
             Key=message_command_key(conversation_id, idempotency_key),
@@ -1495,9 +1891,24 @@ def mark_message_command_terminal(
         )
     except ClientError as exc:
         if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return True
+            try:
+                command = get_message_command(
+                    conversation_id, idempotency_key, table=table
+                )
+            except Exception:
+                return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+            if isinstance(command, dict) and command.get("owner_id") == owner_id:
+                fingerprint = command.get("fingerprint")
+                if isinstance(fingerprint, str):
+                    return classify_message_command(
+                        command,
+                        owner_id=owner_id,
+                        fingerprint=fingerprint,
+                        now_epoch=0,
+                    )
+            return MessageCommandResult(MessageCommandDisposition.MISSING)
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+    return MessageCommandResult(MessageCommandDisposition.TERMINAL)
 
 
 def reserve_upload_for_question(

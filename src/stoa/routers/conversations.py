@@ -55,7 +55,6 @@ from stoa.services import (
     usage_ledger_service,
     attachment_service,
 )
-from stoa.services.rate_limit import check_and_record_chat
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +123,6 @@ class CreateConversationRequest(BaseModel):
 
     subject: str
     grade: str
-    initialMessage: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -385,39 +383,13 @@ async def create_conversation(
     }
     table.put_item(Item=conv_item)
 
-    messages: list[ChatMessage] = []
-
-    # If an initial message was provided, immediately get an AI reply
-    if body.initialMessage:
-        usage_counter = check_and_record_chat(student_id, limit=_chat_limit_for_student(student_id))
-        student_msg, assistant_msg = _send_message_impl(
-            conv_id=conv_id,
-            student_id=student_id,
-            subject=body.subject,
-            grade=body.grade,
-            content=body.initialMessage,
-            table=table,
-            actor=actor,
-            prepared_attachments=[],
-        )
-        _record_chat_usage(
-            student_id=student_id,
-            conv_id=conv_id,
-            student_message_id=student_msg.id,
-            subject=body.subject,
-            grade=body.grade,
-            usage_counter=usage_counter,
-            created_at=student_msg.createdAt,
-        )
-        messages = [student_msg, assistant_msg]
-
     return ConversationDetail(
         id=conv_id,
         title=title,
         subject=body.subject,
         grade=body.grade,
         updatedAt=now,
-        messages=messages,
+        messages=[],
     )
 
 
