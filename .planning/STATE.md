@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-23-PLAN.md
-last_updated: "2026-07-17T20:41:12.913Z"
+stopped_at: Completed 473-29-PLAN.md
+last_updated: "2026-07-17T21:20:01.906Z"
 last_activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 48
+  completed_plans: 49
   percent: 10
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 27 of 35
+Plan: 28 of 35
 Status: Executing gap-closure plans
 Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 
 ## Session
 
-**Last Date:** 2026-07-17T20:41:12.908Z
-**Stopped At:** Completed 473-23-PLAN.md
+**Last Date:** 2026-07-17T21:20:01.901Z
+**Stopped At:** Completed 473-29-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -162,6 +162,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 | Phase 473 P21 | 22 min | 3 tasks | 10 files |
 | Phase 473 P22 | 13 min | 3 tasks | 4 files |
 | Phase 473 P23 | 15 min | 3 tasks | 7 files |
+| Phase 473 P29 | 33 min | 3 tasks | 27 files |
 
 ## Decisions
 
@@ -249,3 +250,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 - [Phase 473]: Owner attachment routes authorize one authoritative loaded resource and conceal missing or foreign identifiers identically. — This prevents duplicate reads and identifier-existence leaks.
 - [Phase 473]: Downloads verify the exact immutable object version before streaming and close the provider body on every path. — Clients never receive unverified bytes and provider connections remain bounded.
 - [Phase 473]: Attachment purge reports typed independent progress under the existing account fence and cannot finalize that fence. — The later account purge orchestrator retains exclusive ownership of account-level completion.
+- [Phase 473]: The permanent account fence is the only account-write truth; pending deletion never restores Actor authority and Plan 35 alone may terminalize it. — One permanent lifecycle row prevents mutable profiles or stale workers from reviving authority.
+- [Phase 473]: Deletion replay resolves only an immutable issuer/subject command fingerprint and returns the same opaque receipt after identity rows are terminalized. — Post-fence retries must recover the committed command without recreating general application authority.
+- [Phase 473]: Primary branch readiness requires two full clean strong-scan epochs; malformed, repeated, partial, or dirty progress remains retryable debt. — Filtered pages and eventually consistent indexes cannot prove private-row absence.
