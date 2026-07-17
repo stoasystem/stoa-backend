@@ -1648,6 +1648,8 @@ def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic
     assert len(repository.transactions) == 1
     operations = repository.transactions[0]
     assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
+        attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.UPLOAD_CONSUME,
         attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
         attachment_repo.TransactionOperationKind.STORAGE_QUOTA_UPDATE,
@@ -2643,6 +2645,17 @@ class _PrivateS3:
 
     def delete_object(self, Bucket, Key, VersionId):
         self.deleted.append((Bucket, Key, VersionId))
+
+    def list_object_versions(self, Bucket, Prefix, MaxKeys, **_kwargs):
+        deleted_versions = {(key, version) for _, key, version in self.deleted}
+        versions = []
+        for key, value in self.objects.items():
+            if key != Prefix:
+                continue
+            version = value[2] if isinstance(value, tuple) and len(value) > 2 else None
+            if version is not None and (key, version) not in deleted_versions:
+                versions.append({"Key": key, "VersionId": version, "ETag": "immutable-etag"})
+        return {"Versions": versions, "DeleteMarkers": [], "IsTruncated": False}
 
 
 def test_ai_attachment_context_is_bounded_and_category_safe() -> None:

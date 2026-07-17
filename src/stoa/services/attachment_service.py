@@ -684,6 +684,9 @@ def create_upload_intent(
     item = {
         "upload_id": upload_id,
         "owner_id": actor.user_id,
+        "student_id": actor.user_id,
+        "entity_type": "upload_intent",
+        "schema_version": "upload-intent.v1",
         "original_filename": PurePath(request.filename).name,
         "declared_type": request.content_type,
         "expected_kind": request.purpose.value,
@@ -1028,6 +1031,9 @@ def complete_upload(
     now = (now or datetime.now(UTC)).astimezone(UTC)
     item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
     if item.get("status") == "validated":
+        _reconcile_staging_cleanup_debt(
+            item, s3=s3, settings=settings, repository=repository
+        )
         return {"uploadId": upload_id, "status": "validated", "attachment": None}
     if item.get("status") == "assembling":
         item = _recover_staging_assembly(
@@ -1601,21 +1607,17 @@ def _validate_and_promote_completed(
         finally:
             _close_provider_body(body)
         validated_version = validating_version + (2 if promotion_started else 1)
-        try:
-            s3.delete_object(
-                Bucket=settings.s3_images_bucket,
-                Key=item["staging_object_key"],
-                VersionId=staging_version,
-            )
-            if _exact_version_absent(
-                s3, settings, str(item["staging_object_key"]), staging_version
-            ):
-                repository.clear_staging_coordinates(
-                    item["upload_id"], actor.user_id, validated_version
-                )
-        except Exception:
-            # The exact staging version remains server-only and cleanup-eligible.
-            pass
+        _reconcile_staging_cleanup_debt(
+            {
+                **item,
+                "status": "validated",
+                "version": validated_version,
+                "staging_cleanup_status": "pending",
+            },
+            s3=s3,
+            settings=settings,
+            repository=repository,
+        )
         return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
     except ValidationFailure as exc:
         failure_code = exc.code
@@ -1661,6 +1663,39 @@ def _delete_exact_if_present(
         )
     except Exception:
         pass
+
+
+def _reconcile_staging_cleanup_debt(
+    item: dict[str, Any], *, s3: Any, settings: Settings, repository: Any
+) -> bool:
+    """Clear a durable staging coordinate only after exact listed absence."""
+    if item.get("staging_cleanup_status") != "pending":
+        return True
+    key = item.get("staging_object_key")
+    version_id = item.get("staging_version_id")
+    if not isinstance(key, str) or not key or not isinstance(version_id, str) or not version_id:
+        return False
+    try:
+        s3.delete_object(
+            Bucket=settings.s3_images_bucket,
+            Key=key,
+            VersionId=version_id,
+        )
+    except Exception:
+        pass
+    try:
+        absent, cursor, _pages = _exact_version_absence(
+            s3, settings, key, version_id
+        )
+        if not absent or cursor is not None:
+            return False
+        return bool(
+            repository.clear_staging_coordinates(
+                item["upload_id"], item["owner_id"], int(item["version"])
+            )
+        )
+    except Exception:
+        return False
 
 
 def resolve_owned_upload(
@@ -2227,6 +2262,7 @@ def release_resource_attachments(
             pending = {
                 **attachment,
                 "status": "deletion_pending",
+                "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
                 "deletion_resource_type": resource_type,
                 "deletion_resource_id": resource_id,
             }
@@ -2384,6 +2420,29 @@ def purge_student_attachments(
             )
         ):
             deleted += 1
+    list_cleanup_debts = getattr(repository, "list_owner_staging_cleanup_debts", None)
+    if callable(list_cleanup_debts):
+        try:
+            cleanup_debts = list_cleanup_debts(student_id)
+        except attachment_repo.AttachmentRepositoryConflict:
+            return RetentionResult(
+                RetentionDisposition.INCOMPLETE_RETRYABLE,
+                RetentionStage.RETRYABLE,
+                released=released,
+                deleted=deleted,
+            )
+        if any(
+            not _reconcile_staging_cleanup_debt(
+                debt, s3=s3, settings=settings, repository=repository
+            )
+            for debt in cleanup_debts
+        ):
+            return RetentionResult(
+                RetentionDisposition.INCOMPLETE_RETRYABLE,
+                RetentionStage.RETRYABLE,
+                released=released,
+                deleted=deleted,
+            )
     try:
         quiescent_items = repository.list_owner_attachment_items(student_id)
     except attachment_repo.AttachmentRepositoryConflict:
@@ -2457,18 +2516,53 @@ def _finish_pending_deletion(
 ) -> bool:
     try:
         _require_immutable_record(attachment)
+    except Exception:
+        return False
+    try:
         s3.delete_object(
             Bucket=settings.s3_images_bucket,
             Key=attachment["immutable_object_key"],
             VersionId=attachment["immutable_version_id"],
         )
+    except Exception:
+        # A provider error may be a lost response; exact listing decides progress.
+        pass
+    try:
+        absent, cursor, _pages = _exact_version_absence(
+            s3,
+            settings,
+            str(attachment["immutable_object_key"]),
+            str(attachment["immutable_version_id"]),
+        )
+        if not absent or cursor is not None:
+            return False
+        mark_absent = getattr(repository, "mark_deletion_absence_proven", None)
+        if callable(mark_absent) and not mark_absent(attachment):
+            current = repository.get_attachment(attachment["attachment_id"])
+            if not current or current.get("deletion_stage") != RetentionStage.OBJECT_ABSENCE_PROVEN:
+                return False
+        attachment = {
+            **attachment,
+            "deletion_stage": RetentionStage.OBJECT_ABSENCE_PROVEN.value,
+        }
         repository.transact(
             repository.build_finalize_deletion_transaction(attachment, now.isoformat())
         )
     except attachment_repo.AttachmentRepositoryConflict:
+        get_attachment = getattr(repository, "get_attachment", None)
+        if callable(get_attachment):
+            try:
+                return get_attachment(attachment["attachment_id"]) is None
+            except Exception:
+                return False
         return False
     except Exception:
-        # The deletion-pending tombstone preserves retryability and prevents reuse.
+        get_attachment = getattr(repository, "get_attachment", None)
+        if callable(get_attachment):
+            try:
+                return get_attachment(attachment["attachment_id"]) is None
+            except Exception:
+                return False
         return False
     return True
 

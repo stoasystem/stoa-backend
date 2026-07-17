@@ -2346,6 +2346,9 @@ def list_owner_attachment_items(
     table: Any | None = None,
     maximum_pages: int = 100,
     maximum_items: int = 10_000,
+    entity_types: frozenset[str] | None = frozenset(
+        {"attachment", "attachment_association"}
+    ),
 ) -> list[dict[str, Any]]:
     """Exhaustively read the authoritative table before inferring reference absence.
 
@@ -2379,7 +2382,7 @@ def list_owner_attachment_items(
                 raise AttachmentRepositoryConflict("dependency_failure")
             if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
                 continue
-            if item.get("entity_type") not in {"attachment", "attachment_association"}:
+            if entity_types is not None and item.get("entity_type") not in entity_types:
                 continue
             pk = item.get("PK")
             sk = item.get("SK")
@@ -2410,6 +2413,20 @@ def list_owner_attachment_items(
         seen_cursors.add(cursor_identity)
         cursor = {"PK": raw_cursor["PK"], "SK": raw_cursor["SK"]}
     raise AttachmentRepositoryConflict("dependency_failure")
+
+
+def list_owner_staging_cleanup_debts(
+    owner_id: str, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in list_owner_attachment_items(
+            owner_id,
+            table=table,
+            entity_types=None,
+        )
+        if item.get("staging_cleanup_status") == "pending"
+    ]
 
 
 def activate_retention_fence(
@@ -2533,7 +2550,8 @@ def build_release_reference_transaction(
                 "Key": attachment_key(attachment["attachment_id"]),
                 "UpdateExpression": (
                     "SET #status=:pending, deletion_resource_type=:resource_type, "
-                    "deletion_resource_id=:resource_id"
+                    "deletion_resource_id=:resource_id, deletion_stage=:stage, "
+                    "deletion_expected_ref_count=:one, deletion_expected_quota_bytes=:size"
                 ),
                 "ConditionExpression": (
                     "owner_id=:owner AND #status=:active AND "
@@ -2547,10 +2565,51 @@ def build_release_reference_transaction(
                     ":one": 1,
                     ":resource_type": association["resource_type"],
                     ":resource_id": association["resource_id"],
+                    ":stage": "object_deletion_pending",
+                    ":size": int(attachment["content_length"]),
                 },
             }
         },
     ]
+
+
+def mark_deletion_absence_proven(
+    attachment: dict[str, Any], *, table: Any | None = None
+) -> bool:
+    """Persist exact object-absence proof before quota/reference finalization."""
+    try:
+        (table or get_table()).update_item(
+            Key=attachment_key(attachment["attachment_id"]),
+            UpdateExpression="SET deletion_stage=:absence",
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:pending AND "
+                "immutable_object_key=:key AND immutable_version_id=:version AND "
+                "immutable_etag=:etag AND content_length=:size AND "
+                "(attribute_not_exists(deletion_stage) OR deletion_stage IN (:deleting,:absence))"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": attachment["owner_id"],
+                ":pending": "deletion_pending",
+                ":key": _require_provider_coordinate(attachment["immutable_object_key"]),
+                ":version": _require_provider_coordinate(
+                    attachment["immutable_version_id"]
+                ),
+                ":etag": _require_provider_coordinate(attachment["immutable_etag"]),
+                ":size": _require_positive_integer(attachment["content_length"]),
+                ":deleting": "object_deletion_pending",
+                ":absence": "object_absence_proven",
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except AttachmentRepositoryConflict:
+        raise
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def build_finalize_deletion_transaction(
@@ -2561,11 +2620,20 @@ def build_finalize_deletion_transaction(
         {
             "Delete": {
                 "Key": attachment_key(attachment["attachment_id"]),
-                "ConditionExpression": "owner_id=:owner AND #status=:pending",
+                "ConditionExpression": (
+                    "owner_id=:owner AND #status=:pending AND deletion_stage=:absence AND "
+                    "immutable_object_key=:key AND immutable_version_id=:version AND "
+                    "immutable_etag=:etag AND content_length=:size"
+                ),
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
                     ":owner": attachment["owner_id"],
                     ":pending": "deletion_pending",
+                    ":absence": "object_absence_proven",
+                    ":key": attachment["immutable_object_key"],
+                    ":version": attachment["immutable_version_id"],
+                    ":etag": attachment["immutable_etag"],
+                    ":size": size,
                 },
             }
         },
@@ -2686,6 +2754,7 @@ def record_immutable_version(
             "immutable_version_id": immutable_version_id,
             "immutable_etag": immutable_etag,
             "validated_at": validated_at,
+            "staging_cleanup_status": "pending",
         },
         remove_operation=True,
         table=table,
@@ -2703,7 +2772,8 @@ def clear_staging_coordinates(
         (table or get_table()).update_item(
             Key=upload_key(upload_id),
             UpdateExpression=(
-                "REMOVE staging_object_key, staging_version_id, staging_etag, multipart_upload_id"
+                "REMOVE staging_object_key, staging_version_id, staging_etag, "
+                "multipart_upload_id, staging_cleanup_status"
             ),
             ConditionExpression=("owner_id=:owner AND #status=:validated AND #version=:version"),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},

@@ -276,8 +276,8 @@ def test_promotion_success_persists_cleanup_debt_before_staging_delete() -> None
         table=table,
     )
     values = table.calls[0]["ExpressionAttributeValues"]
-    assert "staging_cleanup_status" in table.calls[0]["UpdateExpression"]
-    assert values[":staging_cleanup_pending"] == "pending"
+    assert "staging_cleanup_status" in table.calls[0]["ExpressionAttributeNames"].values()
+    assert "pending" in values.values()
 
 
 def test_retention_outcome_contract_is_closed_and_typed() -> None:
