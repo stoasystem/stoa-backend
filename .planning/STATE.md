@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-22-PLAN.md
-last_updated: "2026-07-17T20:22:27.225Z"
+stopped_at: Completed 473-23-PLAN.md
+last_updated: "2026-07-17T20:41:12.913Z"
 last_activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 47
+  completed_plans: 48
   percent: 10
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 23 of 35
+Plan: 27 of 35
 Status: Executing gap-closure plans
 Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and deletion reconciliation
 
@@ -106,8 +106,8 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 
 ## Session
 
-**Last Date:** 2026-07-17T20:21:10.451Z
-**Stopped At:** Completed 473-22-PLAN.md
+**Last Date:** 2026-07-17T20:41:12.908Z
+**Stopped At:** Completed 473-23-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -161,6 +161,7 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 | Phase 473 P24 | 24 min | 3 tasks | 7 files |
 | Phase 473 P21 | 22 min | 3 tasks | 10 files |
 | Phase 473 P22 | 13 min | 3 tasks | 4 files |
+| Phase 473 P23 | 15 min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -245,3 +246,6 @@ Last activity: 2026-07-17 -- Completed Plan 473-22 exhaustive retention and dele
 - [Phase 473]: Every association transaction checks exact resource and account deletion fences. — Concurrent association creation cannot race exhaustive release or account purge.
 - [Phase 473]: Exact VersionId absence precedes one atomic attachment and quota finalization. — Delete and finalize lost responses converge without double quota decrement.
 - [Phase 473]: Immutable promotion persists staging cleanup debt before deletion. — Server-only staging coordinates remain durable until exact absence proof.
+- [Phase 473]: Owner attachment routes authorize one authoritative loaded resource and conceal missing or foreign identifiers identically. — This prevents duplicate reads and identifier-existence leaks.
+- [Phase 473]: Downloads verify the exact immutable object version before streaming and close the provider body on every path. — Clients never receive unverified bytes and provider connections remain bounded.
+- [Phase 473]: Attachment purge reports typed independent progress under the existing account fence and cannot finalize that fence. — The later account purge orchestrator retains exclusive ownership of account-level completion.
