@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pytest
 from botocore.exceptions import ClientError
@@ -145,6 +146,8 @@ class _BatchReadTable:
             "Responses": {
                 self.name: [
                     {
+                        "PK": key["PK"],
+                        "SK": key["SK"],
                         "attachment_id": attachment_id,
                         "owner_id": "student-1",
                         "status": "active",
@@ -546,10 +549,24 @@ def test_regular_and_sse_replay_exact_durable_rejection(
     request = conversations.SendMessageRequest.model_validate(
         {"content": "same", "idempotencyKey": "message-key"}
     )
+    command_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            "stoa.conversation.send.v1:conv-1:message-key",
+        )
+    )
+    student_message_id = str(uuid5(UUID(command_id), "student-message"))
     rejected = _command(
         status="rejected",
         error_code="storage_quota_exceeded",
         fingerprint=conversations.message_request_fingerprint(request),
+        command_id=command_id,
+        student_message_id=student_message_id,
+        assistant_message_id=str(uuid5(UUID(command_id), "assistant-message")),
+        history_anchor_message_id=student_message_id,
+        history_message_ids=[],
+        history_fingerprint="0" * 64,
+        attachment_count=1,
     )
 
     class Table:

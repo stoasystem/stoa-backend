@@ -132,6 +132,9 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
                 }
             ).encode()
 
+        def close(self):
+            return None
+
     class FakeBedrock:
         def invoke_model(self, **kwargs):
             captured.update(kwargs)

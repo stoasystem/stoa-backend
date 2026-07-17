@@ -12,7 +12,10 @@ from pypdf import PdfWriter
 
 from stoa.config import Settings
 from stoa.security.attachment_errors import AttachmentErrorCode
-from stoa.services.attachment_service import extract_message_attachment_context
+from stoa.services.attachment_service import (
+    AttachmentContextDisposition,
+    extract_message_attachment_context,
+)
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
     extract_attachment_text,
@@ -314,7 +317,9 @@ def test_extraction_reasserts_exact_immutable_etag_and_closes_body() -> None:
         s3=store,
         settings=Settings(s3_images_bucket="private"),
     )
-    assert context == "[attachment:immutable_bytes_changed]"
+    assert context.disposition is AttachmentContextDisposition.RETRYABLE
+    assert context.context == ""
+    assert context.error_code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert store.body is not None and store.body.closed == 1
 
 
