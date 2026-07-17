@@ -1394,34 +1394,66 @@ def get_attachments(
         return {}
     target = table or get_table()
     if hasattr(target, "batch_get_item"):
-        response = target.batch_get_item(
-            RequestItems={
-                target.name: {"Keys": [attachment_key(value) for value in attachment_ids]}
-            }
-        )
-        items = response.get("Responses", {}).get(target.name, [])
+        pending = [attachment_key(value) for value in attachment_ids]
+        items: list[dict[str, Any]] = []
+        for _attempt in range(3):
+            try:
+                response = target.batch_get_item(
+                    RequestItems={target.name: {"Keys": pending}}
+                )
+            except Exception:
+                raise AttachmentRepositoryConflict("dependency_failure") from None
+            items.extend(response.get("Responses", {}).get(target.name, []))
+            pending = (
+                response.get("UnprocessedKeys", {})
+                .get(target.name, {})
+                .get("Keys", [])
+            )
+            if not pending:
+                break
+        if pending:
+            raise AttachmentRepositoryConflict("dependency_failure")
     elif hasattr(target, "meta") and hasattr(target.meta, "client"):
         serializer = TypeSerializer()
-        response = target.meta.client.batch_get_item(
-            RequestItems={
-                target.name: {
-                    "Keys": [
-                        {
-                            key: serializer.serialize(value)
-                            for key, value in attachment_key(item).items()
-                        }
-                        for item in attachment_ids
-                    ]
-                }
+        pending = [
+            {
+                key: serializer.serialize(value)
+                for key, value in attachment_key(item).items()
             }
-        )
+            for item in attachment_ids
+        ]
+        raw_items: list[dict[str, Any]] = []
+        for _attempt in range(3):
+            try:
+                response = target.meta.client.batch_get_item(
+                    RequestItems={target.name: {"Keys": pending}}
+                )
+            except Exception:
+                raise AttachmentRepositoryConflict("dependency_failure") from None
+            raw_items.extend(response.get("Responses", {}).get(target.name, []))
+            pending = (
+                response.get("UnprocessedKeys", {})
+                .get(target.name, {})
+                .get("Keys", [])
+            )
+            if not pending:
+                break
+        if pending:
+            raise AttachmentRepositoryConflict("dependency_failure")
         deserializer = TypeDeserializer()
         items = [
             {key: deserializer.deserialize(value) for key, value in item.items()}
-            for item in response.get("Responses", {}).get(target.name, [])
+            for item in raw_items
         ]
     else:
-        items = [item for value in attachment_ids if (item := get_attachment(value, table=target))]
+        try:
+            items = [
+                item
+                for value in attachment_ids
+                if (item := get_attachment(value, table=target))
+            ]
+        except Exception:
+            raise AttachmentRepositoryConflict("dependency_failure") from None
     return {str(item.get("attachment_id")): item for item in items if item.get("attachment_id")}
 
 

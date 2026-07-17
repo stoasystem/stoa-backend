@@ -124,6 +124,56 @@ class _ClaimTable:
         return {}
 
 
+class _BatchReadTable:
+    name = "private-table-canary"
+
+    def __init__(self, *, permanently_unprocessed: bool = False) -> None:
+        self.calls: list[list[dict[str, str]]] = []
+        self.permanently_unprocessed = permanently_unprocessed
+
+    def batch_get_item(self, *, RequestItems):  # noqa: N803
+        keys = RequestItems[self.name]["Keys"]
+        self.calls.append(keys)
+        key = keys[0]
+        attachment_id = key["PK"].removeprefix("ATTACHMENT#")
+        if self.permanently_unprocessed or len(self.calls) == 1:
+            return {
+                "Responses": {self.name: []},
+                "UnprocessedKeys": {self.name: {"Keys": keys}},
+            }
+        return {
+            "Responses": {
+                self.name: [
+                    {
+                        "attachment_id": attachment_id,
+                        "owner_id": "student-1",
+                        "status": "active",
+                    }
+                ]
+            },
+            "UnprocessedKeys": {},
+        }
+
+
+def test_batch_get_retries_unprocessed_keys_before_projecting_resume_state() -> None:
+    table = _BatchReadTable()
+
+    result = attachment_repo.get_attachments(["attachment-1"], table=table)
+
+    assert list(result) == ["attachment-1"]
+    assert len(table.calls) == 2
+
+
+def test_batch_get_exhaustion_is_a_redacted_dependency_failure() -> None:
+    table = _BatchReadTable(permanently_unprocessed=True)
+
+    with pytest.raises(attachment_repo.AttachmentRepositoryConflict) as captured:
+        attachment_repo.get_attachments(["attachment-1"], table=table)
+
+    assert captured.value.category == "dependency_failure"
+    assert len(table.calls) == 3
+
+
 def test_repository_claim_persists_one_complete_command_usage_identity() -> None:
     table = _ClaimTable(counter=2)
 
