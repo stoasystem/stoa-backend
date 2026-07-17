@@ -134,7 +134,7 @@ Convert STOA from broad local backend/readiness contracts into a trustworthy, in
 | V9ACCESS-02 | Phase 472 | Complete |
 | V9ACCESS-03 | Phase 472 | Complete |
 | V9PRIV-01 | Phase 473 | Complete |
-| V9PRIV-02 | Phase 473 | Pending |
+| V9PRIV-02 | Phase 473 | Complete |
 | V9PRIV-03 | Phase 473 | Complete |
 | V9PRIV-04 | Phase 480 | Pending |
 | V9QUAL-01 | Phase 474 | Pending |

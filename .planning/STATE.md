@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v9.0
-milestone_name: Product Reality, Authorization And Core Journey Completion
-status: ready_to_execute
-stopped_at: Phase 473 final gap-closure plans 18-35 verified and ready; implementation has not started
-last_updated: "2026-07-17T12:51:25Z"
-last_activity: 2026-07-17 -- Phase 473 deep gap audit planned 18 closure plans; checker passed 3/3 requirements and 22/22 decisions
+milestone_name: milestone
+status: executing
+stopped_at: Completed 473-18-PLAN.md
+last_updated: "2026-07-17T14:42:24.847Z"
+last_activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and recovery integrity
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 39
-  percent: 68
+  completed_plans: 40
+  percent: 70
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 (Student Content Privacy And Practice Integrity) — READY TO EXECUTE GAP CLOSURE
-Plan: 17 of 35 execution plans complete; Plans 18-35 are planned and independently checker-verified
-Status: Ready to execute; no closure implementation has started and V9PRIV-02 remains pending
-Last activity: 2026-07-17 -- Deep source audit and four checker passes closed planning gaps across 3/3 requirements and 22/22 decisions
+Phase: 473 — Student Content Privacy and Practice Integrity
+Plan: 19 of 35
+Status: Executing gap-closure plans
+Last activity: 2026-07-17 -- Completed Plan 473-18 provider acknowledgement and recovery integrity
 
 ## Accumulated Context
 
@@ -106,9 +106,9 @@ Last activity: 2026-07-17 -- Deep source audit and four checker passes closed pl
 
 ## Session
 
-**Last Date:** 2026-07-17T12:51:25Z
-**Stopped At:** Phase 473 final gap-closure plans 18-35 verified and ready; implementation has not started
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-18-PLAN.md
+**Last Date:** 2026-07-17T14:41:51.171Z
+**Stopped At:** Completed 473-18-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -153,6 +153,7 @@ Last activity: 2026-07-17 -- Deep source audit and four checker passes closed pl
 | Phase 473 P15 | 15 min | 2 tasks | 5 files |
 | Phase 473 P16 | 12 min | 2 tasks | 5 files |
 | Phase 473 P17 | 8 min | 2 tasks | 4 files |
+| Phase 473 P18 | 13 min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -214,3 +215,5 @@ Last activity: 2026-07-17 -- Deep source audit and four checker passes closed pl
 - [Phase 473]: Every conversation command repository call crosses one classifier; known semantic outcomes remain distinct while generic transport becomes a redacted bounded retry and ambiguous commits reread the original fingerprinted command. — Preserves concealment and exact replay while preventing raw repository transport failures and duplicate effects.
 - [Phase 473]: The clean Plan 473-16 closeout SHA bc61107b920b158201ce4927485986d43aac59c8 is the immutable Phase 473 evidence candidate. — Source, tests, and the checked authorization inventory already reproduced without change, so an artificial empty candidate commit was unnecessary.
 - [Phase 473]: External S3, deployed scheduler/IaC, and production/deployed log observations remain NOT RUN under Phases 479/480. — Local fakes and captured local logs cannot establish provider, deployed infrastructure, or production observability proof.
+- [Phase 473]: Provider acknowledgements use exact non-coercive ETag, integer, canonical SHA-256, and pagination-marker parsers before conditional persistence. — Malformed provider success remains retryable and redacted instead of becoming durable ledger state.
+- [Phase 473]: Immutable promotion is create-only and records success only after exact versioned byte and metadata verification; staging coordinates clear only after absence proof. — Crash recovery converges without overwriting, guessing, or erasing the last durable cleanup coordinate.
