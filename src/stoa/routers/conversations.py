@@ -297,7 +297,9 @@ class CreateConversationRequest(BaseModel):
 
 def _active_conversation_generation(owner_id: str, table: Any) -> int:
     """Resolve one exact active generation before a private conversation effect."""
-    if not hasattr(table, "get_item"):
+    if not hasattr(table, "get_item") or (
+        not hasattr(table, "meta") and not hasattr(table, "transact_write_items")
+    ):
         # Narrow inherited-test compatibility; production DynamoDB tables always
         # expose get_item and fail closed through the permanent fence.
         return 1

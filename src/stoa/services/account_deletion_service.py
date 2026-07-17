@@ -11,7 +11,12 @@ from uuid import uuid4
 import boto3
 
 from stoa.config import get_settings
-from stoa.db.repositories import account_deletion_repo, moderation_repo, report_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    attachment_repo,
+    moderation_repo,
+    report_repo,
+)
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import attachment_service
 
@@ -607,6 +612,91 @@ def _support_recovery_feed_branch(
     return _run_report_row_branch(command=command, previous=previous, family="support")
 
 
+def _conversation_messages_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    """Drain commands/references before scrubbing one strong conversation page."""
+    owner_id = str(command["user_id"])
+    generation = int(command["generation"])
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = attachment_repo.scan_conversation_private_rows(
+        owner_id, cursor=cursor, maximum_pages=1
+    )
+    debt: dict[str, int] = {}
+    processed = 0
+    now_iso = datetime.now(UTC).isoformat()
+    settings = get_settings()
+    s3 = boto3.client("s3", region_name=settings.aws_region)
+    released_conversations: set[str] = set()
+    for item in page.items:
+        identity = f"{item.get('PK')}|{item.get('SK')}"
+        try:
+            if (
+                item.get("entity_type") == "message_command"
+                and item.get("status") in attachment_repo.CONVERSATION_ACTIVE_COMMAND_STATES
+            ):
+                attachment_repo.cancel_stale_message_command(
+                    item,
+                    owner_id=owner_id,
+                    deletion_generation=generation,
+                    now_iso=now_iso,
+                )
+            conversation_id = str(item.get("conversation_id") or "")
+            if item.get("attachment_ids") and conversation_id not in released_conversations:
+                release = attachment_service.release_conversation_attachments(
+                    owner_id=owner_id,
+                    conversation_id=conversation_id,
+                    s3=s3,
+                    settings=settings,
+                )
+                released_conversations.add(conversation_id)
+                disposition = (
+                    release.get("disposition")
+                    if isinstance(release, Mapping)
+                    else getattr(release, "disposition", None)
+                )
+                if disposition is not None and str(disposition) not in {
+                    "complete",
+                    "RetentionDisposition.COMPLETE",
+                }:
+                    debt[f"association:{conversation_id}"] = 1
+                    continue
+            attachment_repo.scrub_conversation_private_row(
+                item,
+                owner_id=owner_id,
+                generation=generation,
+                now_iso=now_iso,
+            )
+            processed += 1
+        except Exception:
+            debt[identity] = 1
+
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult("retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch)
+    if dirty:
+        if any(key not in {"pass_dirty", "processed"} for key in debt):
+            return BranchResult("retryable", debt_counts=debt, epoch=0)
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": processed},
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     # Derived rows must resolve their authoritative question owner before the
     # primary question branch can replace that question with a tombstone.
@@ -621,6 +711,7 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     "report_records": _report_records_branch,
     "report_artifacts": _report_artifacts_branch,
     "support_recovery_feed": _support_recovery_feed_branch,
+    "conversation_messages": _conversation_messages_branch,
 }
 
 
