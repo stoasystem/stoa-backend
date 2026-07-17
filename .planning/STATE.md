@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v9.0
-milestone_name: Product Reality, Authorization And Core Journey Completion
+milestone_name: milestone
 status: executing
-stopped_at: Phase 473 gap plans 15-17 verified and ready for execution
-last_updated: "2026-07-16T22:36:14Z"
-last_activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verification
+stopped_at: Completed 473-15-PLAN.md
+last_updated: "2026-07-17T08:42:54.585Z"
+last_activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 39
-  completed_plans: 36
-  percent: 92
+  completed_plans: 37
+  percent: 10
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 14 of 17 execution plans complete; Plans 15-17 ready
-Status: Gap plans verified; V9PRIV-02 remains pending until execution and independent re-verification
-Last activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verification
+Plan: 16 of 17
+Status: Ready to execute
+Last activity: 2026-07-17 -- Plan 473-15 completed; Plan 473-16 ready
 
 ## Accumulated Context
 
@@ -104,9 +104,9 @@ Last activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verificat
 
 ## Session
 
-**Last Date:** 2026-07-16T22:36:14Z
-**Stopped At:** Phase 473 gap plans 15-17 verified and ready for execution
-**Resume File:** .planning/phases/473-student-content-privacy-and-practice-integrity/473-15-PLAN.md
+**Last Date:** 2026-07-17T08:41:36.132Z
+**Stopped At:** Completed 473-15-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -148,6 +148,7 @@ Last activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verificat
 | Phase 473 P12 | 14 min | 2 tasks | 3 files |
 | Phase 473 P13 | 36 min | 2 tasks | 6 files |
 | Phase 473 P14 | 10 min | 2 tasks | 3 files |
+| Phase 473 P15 | 15 min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -203,3 +204,5 @@ Last activity: 2026-07-17 -- Phase 473 gap plans 15-17 passed planning verificat
 - [Phase 473]: Fresh question image reservation precedes OCR and commits consumption, attachment, association, byte charge, and question in one transaction. — Foreign, missing, invalid, reused, raced, or failed attachment commands cannot leave partial attachment/question state.
 - [Phase 473]: OCR accepts only a resolved internal active JPEG/PNG attachment and public questions retain safe summary metadata, but the provider read is not version/ETag-bound. — Ownership is enforced while immutable-byte integrity remains a verification gap.
 - [Phase 473]: Evidence commits follow one immutable tested source candidate with exactly three narrative/manifest paths. — This keeps test observations source-bound, reproducible, and non-circular.
+- [Phase 473]: Provider success coordinates must be nonblank strings before any lifecycle transition can remove a recovery fence; malformed success retains exact recovery identity. — Coercing malformed provider output could create false durable success and erase the only bounded restart-recovery fence.
+- [Phase 473]: Unexpected candidate-local cleanup failures become coordinate-free retryable outcomes, while failure to list the global candidate page still propagates. — Per-item isolation preserves bounded progress without disguising a global scan failure or exposing private storage coordinates and diagnostics.
