@@ -426,8 +426,15 @@ def test_terminal_cleanup_scrubs_every_part_before_completion() -> None:
 
 
 class _PutRecordingTable:
-    def __init__(self) -> None:
+    def __init__(self, *, intent_expires_at: int | None = None) -> None:
         self.item: dict[str, Any] | None = None
+        self.intent_expires_at = intent_expires_at
+
+    def get_item(self, **kwargs):
+        del kwargs
+        if self.intent_expires_at is None:
+            return {}
+        return {"Item": {"expires_at": self.intent_expires_at}}
 
     def put_item(self, **kwargs):
         self.item = kwargs["Item"]
@@ -435,7 +442,8 @@ class _PutRecordingTable:
 
 
 def test_part_rows_receive_lifecycle_ttl() -> None:
-    table = _PutRecordingTable()
+    parent_expiry = NOW_EPOCH + 600
+    table = _PutRecordingTable(intent_expires_at=parent_expiry)
 
     attachment_repo.claim_upload_part(
         "opaque-upload",
@@ -448,7 +456,7 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     )
 
     assert table.item is not None
-    assert table.item["expires_at"] >= NOW_EPOCH + 120
+    assert table.item["expires_at"] == parent_expiry
 
 
 class _EligibilityRecordingTable:
@@ -494,3 +502,42 @@ def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) 
     assert result.retryable == result.deleted == 1
     assert result.continuation_token is not None
     assert "private-provider-diagnostic-canary" not in str(result.public_dict())
+
+
+def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None:
+    uploads = [_candidate(f"opaque-{index}") for index in range(5)]
+    repository = StatefulCleanupRepository(uploads)
+    visited: list[str] = []
+
+    def observed(candidate, **kwargs):
+        visited.append(candidate["upload_id"])
+        return "deferred"
+
+    monkeypatch.setattr("stoa.jobs.upload_cleanup.cleanup_upload_intent", observed)
+    token = None
+    for _ in range(3):
+        result = cleanup_expired_uploads(
+            s3=StatefulProvider(),
+            settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+            now=NOW,
+            batch_limit=2,
+            page_limit=5,
+            continuation_token=token,
+            repository=repository,
+        )
+        token = result.continuation_token
+
+    assert visited == ["opaque-0", "opaque-1", "opaque-2", "opaque-3", "opaque-4"]
+    assert token is None
+
+    wrapped = cleanup_expired_uploads(
+        s3=StatefulProvider(),
+        settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
+        now=NOW,
+        batch_limit=2,
+        page_limit=5,
+        continuation_token=token,
+        repository=repository,
+    )
+    assert wrapped.scanned == 2
+    assert visited[-2:] == ["opaque-0", "opaque-1"]

@@ -88,12 +88,7 @@ def cleanup_expired_uploads(
     continuation = next_cursor
     if len(candidates) > batch_limit:
         # Resume after the last selected record without returning raw coordinates.
-        last = selected[-1]
-        continuation = (
-            {"PK": str(last["PK"]), "SK": str(last["SK"])}
-            if isinstance(last, dict) and last.get("PK") and last.get("SK")
-            else cursor
-        )
+        continuation = _candidate_cursor(selected[-1])
     return CleanupSummary(
         scanned=len(selected),
         claimed=len(selected) - counts["skipped"],
@@ -121,6 +116,16 @@ def _bounded_limit(value: Any, default: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return min(max(parsed, 1), maximum)
+
+
+def _candidate_cursor(candidate: Any) -> dict[str, str]:
+    """Accept an exact repository cursor without coercing private values."""
+    if not isinstance(candidate, dict):
+        raise RuntimeError("invalid cleanup candidate page")
+    cursor = {"PK": candidate.get("PK"), "SK": candidate.get("SK")}
+    if any(not isinstance(value, str) or not value for value in cursor.values()):
+        raise RuntimeError("invalid cleanup candidate page")
+    return cursor  # type: ignore[return-value]
 
 
 def _encode_cursor(cursor: dict[str, Any] | None) -> str | None:

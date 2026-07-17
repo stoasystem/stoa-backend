@@ -387,6 +387,19 @@ def claim_upload_part(
     if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
         raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
     target = table or get_table()
+    intent_expires_at = now_epoch + UPLOAD_INTENT_TTL_SECONDS
+    if hasattr(target, "get_item"):
+        intent = get_upload_intent(upload_id, table=target)
+        if intent is None:
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        raw_expires_at = intent.get("expires_at")
+        if (
+            isinstance(raw_expires_at, bool)
+            or not isinstance(raw_expires_at, int)
+            or raw_expires_at <= now_epoch
+        ):
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        intent_expires_at = raw_expires_at
     item = {
         **upload_part_key(upload_id, part_number),
         "upload_id": upload_id,
@@ -396,7 +409,7 @@ def claim_upload_part(
         "content_length": length,
         "lease_owner": lease_owner,
         "lease_expires_at": now_epoch + 120,
-        "expires_at": now_epoch + UPLOAD_INTENT_TTL_SECONDS,
+        "expires_at": intent_expires_at,
         "attempt": 1,
     }
     try:
@@ -736,7 +749,17 @@ def list_upload_cleanup_candidates(
     if exclusive_start_key:
         scan["ExclusiveStartKey"] = exclusive_start_key
     response = (table or get_table()).scan(**scan)
-    return list(response.get("Items", [])), response.get("LastEvaluatedKey")
+    items = response.get("Items", [])
+    cursor = response.get("LastEvaluatedKey")
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if cursor is not None and (
+        not isinstance(cursor, dict)
+        or set(cursor) != {"PK", "SK"}
+        or any(not isinstance(value, str) or not value for value in cursor.values())
+    ):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    return items, cursor
 
 
 def claim_upload_cleanup(
