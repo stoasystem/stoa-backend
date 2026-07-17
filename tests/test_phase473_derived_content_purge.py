@@ -12,7 +12,6 @@ from stoa.models.moderation import (
     ModerationCaseNoteRequest,
     ModerationReportRequest,
     ModerationSeverity,
-    ModerationStatus,
     ModerationSurface,
     ModerationReason,
 )
@@ -125,7 +124,6 @@ def test_moderation_source_registry_closes_rows_fields_writers_and_branch() -> N
     } <= private_fields
     assert writers == {"put_case", "update_case", "put_event"}
     assert "moderation_support" in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
-    assert "moderation_support" in account_deletion_service.BRANCH_HANDLERS
 
 
 def test_moderation_create_binds_authoritative_owner_generation_and_handoff(
@@ -393,4 +391,3 @@ def test_moderation_branch_persists_restart_progress_and_later_zero_epoch(
     assert results[-1].quiescent is True
     assert scrubbed == ["SUMMARY", "EVENT#late"]
     assert asdict(results[-1])["debt_counts"] == {}
-

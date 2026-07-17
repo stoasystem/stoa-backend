@@ -100,7 +100,11 @@ def test_student_can_report_own_question_without_private_image_key(monkeypatch):
     stored = {}
     events = []
     monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
-    monkeypatch.setattr(moderation_service.moderation_repo, "put_case", lambda item: stored.update(item))
+    monkeypatch.setattr(
+        moderation_service.moderation_repo,
+        "put_case",
+        lambda item, event: (stored.update(item), events.append(event)),
+    )
     monkeypatch.setattr(moderation_service.moderation_repo, "put_event", lambda case_id, event: events.append(event))
 
     response = _questions_app({"sub": "student-1", "role": "student"}).post(

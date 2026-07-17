@@ -174,7 +174,15 @@ def emit_teacher_reply(*, question: dict[str, Any], teacher_id: str) -> None:
     )
 
 
-def emit_moderation_update(*, case_item: dict[str, Any], actor_id: str, actor_role: str) -> None:
+def emit_moderation_update(
+    *,
+    case_item: dict[str, Any],
+    actor_id: str,
+    actor_role: str,
+    owner_id: str,
+    privacy_generation: int,
+) -> None:
+    _require_moderation_owner(owner_id, privacy_generation)
     if case_item.get("reporter_id") and case_item.get("reporter_role") != "admin":
         create_event_safe(
             recipient_id=str(case_item["reporter_id"]),
@@ -184,13 +192,26 @@ def emit_moderation_update(*, case_item: dict[str, Any], actor_id: str, actor_ro
             target_id=str(case_item.get("case_id") or ""),
             title="Moderation case updated",
             summary=f"Moderation case status is {case_item.get('status', 'updated')}.",
-            metadata={"question_id": case_item.get("question_id"), "status": case_item.get("status")},
+            metadata={
+                "question_id": case_item.get("question_id"),
+                "status": case_item.get("status"),
+                "owner_id": owner_id,
+                "privacy_generation": privacy_generation,
+            },
             actor_id=actor_id,
             actor_role=actor_role,
         )
 
 
-def emit_moderation_created(*, case_item: dict[str, Any], actor_id: str, actor_role: str) -> None:
+def emit_moderation_created(
+    *,
+    case_item: dict[str, Any],
+    actor_id: str,
+    actor_role: str,
+    owner_id: str,
+    privacy_generation: int,
+) -> None:
+    _require_moderation_owner(owner_id, privacy_generation)
     create_event_safe(
         recipient_id=None,
         recipient_role="admin",
@@ -199,10 +220,28 @@ def emit_moderation_created(*, case_item: dict[str, Any], actor_id: str, actor_r
         target_id=str(case_item.get("case_id") or ""),
         title="New moderation case",
         summary=f"{case_item.get('severity', 'medium')} moderation case reported.",
-        metadata={"question_id": case_item.get("question_id"), "reason": case_item.get("reason")},
+        metadata={
+            "question_id": case_item.get("question_id"),
+            "reason": case_item.get("reason"),
+            "owner_id": owner_id,
+            "privacy_generation": privacy_generation,
+        },
         actor_id=actor_id,
         actor_role=actor_role,
     )
+
+
+def _require_moderation_owner(owner_id: str, privacy_generation: int) -> None:
+    if (
+        not isinstance(owner_id, str)
+        or not owner_id.strip()
+        or isinstance(privacy_generation, bool)
+        or not isinstance(privacy_generation, int)
+        or privacy_generation <= 0
+    ):
+        raise HTTPException(
+            status_code=409, detail="Moderation notification owner is required"
+        )
 
 
 def emit_subscription_update(

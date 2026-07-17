@@ -43,6 +43,17 @@ def create_case(
     _require_report_access(question, user)
     _validate_surface(question, body.surface.value)
 
+    student_id = question.get("student_id")
+    privacy_generation = question.get("account_fence_generation")
+    if (
+        not isinstance(student_id, str)
+        or not student_id
+        or isinstance(privacy_generation, bool)
+        or not isinstance(privacy_generation, int)
+        or privacy_generation <= 0
+    ):
+        raise HTTPException(status_code=409, detail="Question is not writable")
+
     created_at = now_iso()
     case_id = f"mod-{uuid4().hex}"
     item = {
@@ -53,7 +64,8 @@ def create_case(
         "severity": body.severity.value,
         "surface": body.surface.value,
         "question_id": question_id,
-        "student_id": question.get("student_id"),
+        "student_id": student_id,
+        "privacy_generation": privacy_generation,
         "reporter_id": str(user.get("sub") or user.get("username") or "unknown"),
         "reporter_role": str(user.get("role") or "unknown"),
         "assigned_admin_id": None,
@@ -76,14 +88,17 @@ def create_case(
             "severity": item["severity"],
         },
         note=item["report_note"],
+        student_id=student_id,
+        privacy_generation=privacy_generation,
     )
     item["history"] = [event]
-    moderation_repo.put_case(item)
-    moderation_repo.put_event(case_id, event)
+    moderation_repo.put_case(item, event)
     notification_service.emit_moderation_created(
         case_item=item,
         actor_id=item["reporter_id"],
         actor_role=item["reporter_role"],
+        owner_id=student_id,
+        privacy_generation=privacy_generation,
     )
     return item
 
@@ -154,6 +169,8 @@ def update_case(case_id: str, body: ModerationCaseUpdateRequest, user: dict[str,
         at=now,
         changes=changes,
         note=updates.get("resolution_note"),
+        student_id=str(existing["student_id"]),
+        privacy_generation=int(existing["privacy_generation"]),
     )
     updated = moderation_repo.update_case(case_id, updates) or {**existing, **updates}
     moderation_repo.put_event(case_id, event)
@@ -163,6 +180,8 @@ def update_case(case_id: str, body: ModerationCaseUpdateRequest, user: dict[str,
         case_item=updated,
         actor_id=actor_id,
         actor_role=str(user.get("role") or "admin"),
+        owner_id=str(existing["student_id"]),
+        privacy_generation=int(existing["privacy_generation"]),
     )
     return updated
 
@@ -179,6 +198,8 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
         at=now,
         changes={},
         note=_clean_note(body.note),
+        student_id=str(existing["student_id"]),
+        privacy_generation=int(existing["privacy_generation"]),
     )
     moderation_repo.update_case(case_id, {"updated_at": now})
     moderation_repo.put_event(case_id, event)
@@ -189,6 +210,8 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
         case_item=updated,
         actor_id=actor_id,
         actor_role=str(user.get("role") or "admin"),
+        owner_id=str(existing["student_id"]),
+        privacy_generation=int(existing["privacy_generation"]),
     )
     return updated
 
@@ -239,6 +262,8 @@ def _event(
     at: str,
     changes: dict[str, Any],
     note: str | None,
+    student_id: str,
+    privacy_generation: int,
 ) -> dict[str, Any]:
     return {
         "event_id": f"{at}#{uuid4().hex}",
@@ -249,6 +274,8 @@ def _event(
         "created_at": at,
         "changes": changes,
         "note": note,
+        "student_id": student_id,
+        "privacy_generation": privacy_generation,
     }
 
 
