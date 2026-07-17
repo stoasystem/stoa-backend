@@ -62,6 +62,11 @@ def get_authorization_fact_repository() -> CurrentAuthorizationFactRepository:
     return CurrentAuthorizationFactRepository()
 
 
+def get_authorization_policy() -> AuthorizationPolicy:
+    """Provide the request policy through an overridable clock boundary."""
+    return AuthorizationPolicy()
+
+
 def _raise_http(error: SecurityDecisionError) -> None:
     headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
     raise HTTPException(
@@ -299,6 +304,7 @@ def authorized_curriculum_answer_dependency():
         facts: CurrentAuthorizationFactRepository = Depends(
             get_authorization_fact_repository
         ),
+        policy: AuthorizationPolicy = Depends(get_authorization_policy),
         correlation_id: str = Depends(get_request_correlation_id),
         audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> AuthorizedResource:
@@ -315,6 +321,7 @@ def authorized_curriculum_answer_dependency():
                 fact_repository=facts,
                 correlation_id=correlation_id,
                 audit_sink=audit_sink,
+                policy=policy,
             )
         except SecurityDecisionError as error:
             _raise_http(error)

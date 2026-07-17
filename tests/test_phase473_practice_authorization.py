@@ -27,7 +27,10 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.route_authorization import (
+    get_authorization_fact_repository,
+    get_authorization_policy,
+)
 
 
 ANSWER_CANARY = "STANDARD-ANSWER-473-26-CANARY"
@@ -370,6 +373,9 @@ def _client(
     facts = _MutableFacts(assignment)
     audit = MemoryAuthorizationAuditSink()
     app.dependency_overrides[get_authorization_fact_repository] = lambda: facts
+    app.dependency_overrides[get_authorization_policy] = lambda: AuthorizationPolicy(
+        clock=lambda: NOW
+    )
     app.dependency_overrides[get_authorization_audit_sink] = lambda: audit
     return TestClient(app), actor, facts, challenge_loads, audit
 
