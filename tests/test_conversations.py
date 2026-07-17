@@ -313,22 +313,61 @@ def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
 
 
 def _completed_command(body: conversations.SendMessageRequest) -> dict:
+    command_id = str(
+        conversations.uuid5(
+            conversations.NAMESPACE_URL,
+            f"stoa.conversation.send.v1:conv-1:{body.idempotencyKey}",
+        )
+    )
+    student_id = str(conversations.uuid5(conversations.UUID(command_id), "student-message"))
+    assistant_id = str(
+        conversations.uuid5(conversations.UUID(command_id), "assistant-message")
+    )
     response = conversations.SendMessageResponse(
         studentMessage=conversations.ChatMessage(
-            id="student-original", conversationId="conv-1", role="student",
+            id=student_id, conversationId="conv-1", role="student",
             content=body.content, createdAt="2026-07-16T00:00:00Z",
         ),
         assistantMessage=conversations.ChatMessage(
-            id="assistant-original", conversationId="conv-1", role="assistant",
+            id=assistant_id, conversationId="conv-1", role="assistant",
             content="original answer", createdAt="2026-07-16T00:00:01Z",
         ),
     )
+    requested = [
+        {
+            "kind": "upload" if reference.upload_id else "attachment",
+            "id": str(reference.upload_id or reference.attachment_id),
+            "attachment_id": (
+                str(conversations.uuid5(conversations.UUID(command_id), f"attachment:{index}"))
+                if reference.upload_id
+                else str(reference.attachment_id)
+            ),
+        }
+        for index, reference in enumerate(body.attachmentIds or [])
+    ]
     return {
         "entity_type": "message_command",
         "schema_version": "message-command.v2",
+        "command_id": command_id,
+        "conversation_id": "conv-1",
         "owner_id": "student-1",
+        "idempotency_key": body.idempotencyKey,
         "fingerprint": conversations.message_request_fingerprint(body),
         "status": "completed",
+        "student_message_id": student_id,
+        "assistant_message_id": assistant_id,
+        "attachment_count": len(requested),
+        "requested_attachments": requested,
+        "deterministic_attachment_ids": [
+            item["attachment_id"]
+            for item in requested
+            if item["kind"] == "upload"
+        ],
+        "history_message_ids": [],
+        "history_fingerprint": conversations._history_snapshot_fingerprint([]),
+        "history_anchor_message_id": student_id,
+        "history_anchor_created_at": "2026-07-16T00:00:00Z",
+        "created_at": "2026-07-16T00:00:00Z",
         "result_json": response.model_dump_json(),
     }
 
@@ -361,8 +400,8 @@ def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(
             "existing": command,
         },
     )
-    assert result.studentMessage.id == "student-original"
-    assert result.assistantMessage.id == "assistant-original"
+    assert result.studentMessage.id == command["student_message_id"]
+    assert result.assistantMessage.id == command["assistant_message_id"]
     assert effects == []
     assert "exact bytes" not in caplog.text
     assert "original answer" not in caplog.text
@@ -430,6 +469,7 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
     effects = []
     monkeypatch.setattr(conversations, "get_table", lambda: object())
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
@@ -807,17 +847,27 @@ def test_conversation_non_readable_body_ownership_closes_once(
 
 
 @pytest.mark.parametrize(
-    "case,expected",
+    "case,disposition,expected,error_code",
     [
-        ("success", "private text"),
-        ("checksum", "[attachment:immutable_bytes_changed]"),
-        ("parser", "[attachment:invalid_document]"),
-        ("read_exception", "[attachment:service_unavailable]"),
-        ("close_exception", "private text"),
+        ("success", "ready", "private text", None),
+        ("checksum", "retryable", "", AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE),
+        ("parser", "invalid", "", AttachmentErrorCode.UPLOAD_INVALID),
+        (
+            "read_exception",
+            "retryable",
+            "",
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+        ),
+        (
+            "close_exception",
+            "retryable",
+            "",
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+        ),
     ],
 )
 def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
-    monkeypatch, case: str, expected: str
+    monkeypatch, case: str, disposition: str, expected: str, error_code
 ) -> None:
     data = b"private text"
     body = _ConversationBodySpy(
@@ -860,7 +910,9 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
         s3=S3(),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
-    assert result == expected
+    assert result.disposition.value == disposition
+    assert result.context == expected
+    assert result.error_code is error_code
     assert body.close_count == 1
     assert "provider-canary" not in result
 

@@ -1392,23 +1392,31 @@ def get_attachments(
 ) -> dict[str, dict[str, Any]]:
     if not attachment_ids:
         return {}
+    if (
+        any(not isinstance(value, str) or not value for value in attachment_ids)
+        or len(set(attachment_ids)) != len(attachment_ids)
+    ):
+        raise AttachmentRepositoryConflict("conditional_conflict")
     target = table or get_table()
+    expected_keys = [attachment_key(value) for value in attachment_ids]
     if hasattr(target, "batch_get_item"):
-        pending = [attachment_key(value) for value in attachment_ids]
+        pending = expected_keys
         items: list[dict[str, Any]] = []
         for _attempt in range(3):
             try:
                 response = target.batch_get_item(
-                    RequestItems={target.name: {"Keys": pending}}
+                    RequestItems={
+                        target.name: {"Keys": pending, "ConsistentRead": True}
+                    }
                 )
             except Exception:
                 raise AttachmentRepositoryConflict("dependency_failure") from None
-            items.extend(response.get("Responses", {}).get(target.name, []))
-            pending = (
-                response.get("UnprocessedKeys", {})
-                .get(target.name, {})
-                .get("Keys", [])
+            returned, pending = _batch_response_page(
+                response,
+                table_name=target.name,
+                expected_pending=pending,
             )
+            items.extend(returned)
             if not pending:
                 break
         if pending:
@@ -1426,16 +1434,18 @@ def get_attachments(
         for _attempt in range(3):
             try:
                 response = target.meta.client.batch_get_item(
-                    RequestItems={target.name: {"Keys": pending}}
+                    RequestItems={
+                        target.name: {"Keys": pending, "ConsistentRead": True}
+                    }
                 )
             except Exception:
                 raise AttachmentRepositoryConflict("dependency_failure") from None
-            raw_items.extend(response.get("Responses", {}).get(target.name, []))
-            pending = (
-                response.get("UnprocessedKeys", {})
-                .get(target.name, {})
-                .get("Keys", [])
+            returned, pending = _batch_response_page(
+                response,
+                table_name=target.name,
+                expected_pending=pending,
             )
+            raw_items.extend(returned)
             if not pending:
                 break
         if pending:
@@ -1454,7 +1464,48 @@ def get_attachments(
             ]
         except Exception:
             raise AttachmentRepositoryConflict("dependency_failure") from None
-    return {str(item.get("attachment_id")): item for item in items if item.get("attachment_id")}
+    by_id: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        attachment_id = item.get("attachment_id")
+        if not isinstance(attachment_id, str) or attachment_id in by_id:
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        if attachment_id not in attachment_ids:
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        if item.get("PK") != attachment_key(attachment_id)["PK"] or item.get("SK") != "META":
+            raise AttachmentRepositoryConflict("conditional_conflict")
+        by_id[attachment_id] = item
+    if set(by_id) != set(attachment_ids):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    return {attachment_id: by_id[attachment_id] for attachment_id in attachment_ids}
+
+
+def _batch_response_page(
+    response: Any,
+    *,
+    table_name: str,
+    expected_pending: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Validate one BatchGet response without coercing provider shapes."""
+    if not isinstance(response, dict):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    responses = response.get("Responses", {})
+    unprocessed = response.get("UnprocessedKeys", {})
+    if not isinstance(responses, dict) or not isinstance(unprocessed, dict):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    returned = responses.get(table_name, [])
+    table_unprocessed = unprocessed.get(table_name, {})
+    if not isinstance(returned, list) or not isinstance(table_unprocessed, dict):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    pending = table_unprocessed.get("Keys", [])
+    if not isinstance(pending, list) or any(not isinstance(key, dict) for key in pending):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if any(key not in expected_pending for key in pending) or len(pending) != len(
+        {repr(sorted(key.items())) for key in pending}
+    ):
+        raise AttachmentRepositoryConflict("dependency_failure")
+    return returned, pending
 
 
 def build_message_attachment_transaction(
@@ -1734,8 +1785,19 @@ def complete_message_command(
     assistant_message: dict[str, Any],
     result_json: str,
     completed_at: str,
+    lease_attempt: int = 1,
+    completed_epoch: int = 0,
     table: Any | None = None,
 ) -> MessageCommandResult:
+    if (
+        isinstance(lease_attempt, bool)
+        or not isinstance(lease_attempt, int)
+        or lease_attempt <= 0
+        or isinstance(completed_epoch, bool)
+        or not isinstance(completed_epoch, int)
+        or completed_epoch < 0
+    ):
+        return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     operations = [
         TransactionOperation(
             TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
@@ -1756,7 +1818,9 @@ def complete_message_command(
                         "REMOVE leaseOwner, claimedAt, expiresAt"
                     ),
                     "ConditionExpression": (
-                        "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner"
+                        "owner_id=:owner AND #status=:running AND "
+                        "leaseOwner=:lease_owner AND attempt=:lease_attempt AND "
+                        "expiresAt>:completed_epoch"
                     ),
                     "ExpressionAttributeNames": {"#status": "status"},
                     "ExpressionAttributeValues": {
@@ -1764,6 +1828,8 @@ def complete_message_command(
                         ":running": "ai_running",
                         ":completed": "completed",
                         ":lease_owner": lease_owner,
+                        ":lease_attempt": lease_attempt,
+                        ":completed_epoch": completed_epoch,
                         ":result": result_json,
                         ":completed_at": completed_at,
                     },

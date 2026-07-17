@@ -15,6 +15,7 @@ import struct
 import time
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
@@ -92,17 +93,185 @@ def _get_conversation(conv_id: str) -> dict | None:
 
 
 def _get_messages(conv_id: str) -> list[dict]:
-    table = get_table()
-    resp = table.query(
-        KeyConditionExpression=(
-            boto3.dynamodb.conditions.Key("PK").eq(_conv_pk(conv_id)) &
-            boto3.dynamodb.conditions.Key("SK").begins_with("MSG#")
-        ),
-        ScanIndexForward=True,
+    return _load_anchored_message_history(
+        conversation_id=conv_id,
+        owner_id=None,
+        expected_message_ids=None,
+        expected_fingerprint=None,
+        table=get_table(),
     )
-    items = resp.get("Items", [])
-    # Sort by creation time so teacher notes and system messages appear in chronological order
-    return sorted(items, key=lambda x: x.get("created_at", ""))
+
+
+def _history_snapshot_fingerprint(messages: list[dict]) -> str:
+    projection = [
+        {
+            "message_id": item["message_id"],
+            "conversation_id": item["conversation_id"],
+            "student_id": item["student_id"],
+            "role": item["role"],
+            "content": item["content"],
+            "created_at": item["created_at"],
+        }
+        for item in messages
+    ]
+    encoded = json.dumps(
+        projection, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _validate_history_message(
+    item: Any, *, conversation_id: str, owner_id: str | None
+) -> dict:
+    if not isinstance(item, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    message_id = item.get("message_id")
+    if (
+        not isinstance(message_id, str)
+        or not message_id
+        or item.get("PK") != _conv_pk(conversation_id)
+        or item.get("SK") != _msg_sk(message_id)
+        or item.get("conversation_id") != conversation_id
+        or (owner_id is not None and item.get("student_id") != owner_id)
+        or not isinstance(item.get("student_id"), str)
+        or not item["student_id"]
+        or item.get("role") not in {"student", "assistant", "teacher", "system"}
+        or not isinstance(item.get("content"), str)
+        or not isinstance(item.get("created_at"), str)
+        or not item["created_at"]
+        or item.get("entity_type") != "conversation_message"
+        or item.get("schema_version") != "conversation-message.v1"
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return item
+
+
+def _load_anchored_message_history(
+    *,
+    conversation_id: str,
+    owner_id: str | None,
+    expected_message_ids: list[str] | None,
+    expected_fingerprint: str | None,
+    table,
+) -> list[dict]:
+    """Load one consistent bounded history and optionally prove an exact snapshot."""
+    if expected_message_ids is not None and (
+        any(not isinstance(value, str) or not value for value in expected_message_ids)
+        or len(set(expected_message_ids)) != len(expected_message_ids)
+        or not isinstance(expected_fingerprint, str)
+        or len(expected_fingerprint) != 64
+        or any(value not in "0123456789abcdef" for value in expected_fingerprint)
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    items: list[dict] = []
+    cursor = None
+    for _page in range(64):
+        request = {
+            "KeyConditionExpression": (
+                boto3.dynamodb.conditions.Key("PK").eq(_conv_pk(conversation_id))
+                & boto3.dynamodb.conditions.Key("SK").begins_with("MSG#")
+            ),
+            "ScanIndexForward": True,
+            "ConsistentRead": True,
+        }
+        if cursor is not None:
+            request["ExclusiveStartKey"] = cursor
+        response = table.query(**request)
+        if not isinstance(response, dict) or not isinstance(response.get("Items", []), list):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        page = response.get("Items", [])
+        items.extend(
+            _validate_history_message(
+                item, conversation_id=conversation_id, owner_id=owner_id
+            )
+            for item in page
+        )
+        if len(items) > 2_000:
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        cursor = response.get("LastEvaluatedKey")
+        if cursor is None:
+            break
+        if not isinstance(cursor, dict) or not cursor:
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+    else:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+    ordered = sorted(items, key=lambda value: (value["created_at"], value["message_id"]))
+    if expected_message_ids is None:
+        if len({item["message_id"] for item in ordered}) != len(ordered):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        return ordered
+    selected: dict[str, dict] = {}
+    expected = set(expected_message_ids)
+    for item in ordered:
+        message_id = item["message_id"]
+        if message_id not in expected:
+            continue
+        if message_id in selected:
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        selected[message_id] = item
+    if set(selected) != expected:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    snapshot = [selected[message_id] for message_id in expected_message_ids]
+    if _history_snapshot_fingerprint(snapshot) != expected_fingerprint:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return snapshot
+
+
+def _validate_replay_attachment(
+    item: Any, *, attachment_id: str, owner_id: str
+) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    text_fields = (
+        "immutable_object_key",
+        "immutable_version_id",
+        "immutable_etag",
+        "detected_type",
+        "original_filename",
+    )
+    checksum = item.get("content_sha256")
+    source_fingerprint = item.get("source_fingerprint")
+    if (
+        item.get("PK") != attachment_repo.attachment_key(attachment_id)["PK"]
+        or item.get("SK") != "META"
+        or item.get("attachment_id") != attachment_id
+        or item.get("owner_id") != owner_id
+        or item.get("student_id") != owner_id
+        or item.get("status") != "active"
+        or item.get("entity_type") != "attachment"
+        or item.get("schema_version") != "attachment.v1"
+        or any(
+            not isinstance(item.get(field), str) or not item[field]
+            for field in text_fields
+        )
+        or not isinstance(checksum, str)
+        or len(checksum) != 64
+        or any(value not in "0123456789abcdef" for value in checksum)
+        or isinstance(item.get("content_length"), bool)
+        or not isinstance(item.get("content_length"), int)
+        or item["content_length"] <= 0
+        or (
+            source_fingerprint is not None
+            and (
+                not isinstance(source_fingerprint, str)
+                or len(source_fingerprint) != 64
+                or any(value not in "0123456789abcdef" for value in source_fingerprint)
+            )
+        )
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return item
 
 
 def _chat_limit_for_student(student_id: str) -> int:
@@ -548,6 +717,7 @@ async def stream_message(
 _MESSAGE_POLL_ATTEMPTS = 20
 _MESSAGE_POLL_SECONDS = 0.05
 _AI_LEASE_SECONDS = 120
+_AI_INVOCATION_DEADLINE_SECONDS = 90
 
 
 def _completed_command_response(command: dict) -> SendMessageResponse | None:
@@ -680,6 +850,72 @@ def _wait_for_message_command(
     raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
 
 
+def _validate_replay_command(
+    command: Any,
+    *,
+    conversation_id: str,
+    owner_id: str,
+    idempotency_key: str,
+    fingerprint: str,
+) -> dict:
+    if not isinstance(command, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    expected_command_id = str(
+        uuid5(
+            NAMESPACE_URL,
+            f"stoa.conversation.send.v1:{conversation_id}:{idempotency_key}",
+        )
+    )
+    expected_student_id = str(uuid5(UUID(expected_command_id), "student-message"))
+    expected_assistant_id = str(uuid5(UUID(expected_command_id), "assistant-message"))
+    history_ids = command.get("history_message_ids")
+    deterministic_ids = command.get("deterministic_attachment_ids")
+    requested = command.get("requested_attachments")
+    history_fingerprint = command.get("history_fingerprint")
+    if (
+        command.get("entity_type") != "message_command"
+        or command.get("schema_version") != "message-command.v2"
+        or command.get("command_id") != expected_command_id
+        or command.get("conversation_id") != conversation_id
+        or command.get("owner_id") != owner_id
+        or command.get("idempotency_key") != idempotency_key
+        or command.get("fingerprint") != fingerprint
+        or command.get("student_message_id") != expected_student_id
+        or command.get("assistant_message_id") != expected_assistant_id
+        or command.get("history_anchor_message_id") != expected_student_id
+        or command.get("status")
+        not in {
+            "claimed",
+            "message_committed",
+            "ai_running",
+            "completed",
+            "rejected",
+            "terminal_failed",
+            "expired",
+        }
+        or not isinstance(history_ids, list)
+        or any(not isinstance(value, str) or not value for value in history_ids)
+        or len(set(history_ids)) != len(history_ids)
+        or not isinstance(history_fingerprint, str)
+        or len(history_fingerprint) != 64
+        or any(value not in "0123456789abcdef" for value in history_fingerprint)
+        or not isinstance(deterministic_ids, list)
+        or any(not isinstance(value, str) or not value for value in deterministic_ids)
+        or len(set(deterministic_ids)) != len(deterministic_ids)
+        or not isinstance(requested, list)
+        or not isinstance(command.get("attachment_count"), int)
+        or isinstance(command.get("attachment_count"), bool)
+        or command["attachment_count"] < 0
+        or command["attachment_count"] != len(requested)
+        or not isinstance(command.get("created_at"), str)
+        or not command["created_at"]
+        or not isinstance(command.get("history_anchor_created_at"), str)
+        or command["history_anchor_created_at"] != command["created_at"]
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return command
+
+
 def _execute_message_command(
     *,
     conv_id: str,
@@ -702,6 +938,14 @@ def _execute_message_command(
             owner_id=student_id,
             fingerprint=fingerprint,
             now_epoch=now_epoch,
+        )
+    if existing:
+        existing = _validate_replay_command(
+            existing,
+            conversation_id=conv_id,
+            owner_id=student_id,
+            idempotency_key=body.idempotencyKey,
+            fingerprint=fingerprint,
         )
     if response := _result_response(state):
         return response
@@ -790,55 +1034,83 @@ def _execute_message_command(
         "expires_at": command_expires_at,
     }
 
+    if existing:
+        prior_messages = _conversation_repository_call(
+            lambda: _load_anchored_message_history(
+                conversation_id=conv_id,
+                owner_id=student_id,
+                expected_message_ids=command["history_message_ids"],
+                expected_fingerprint=command["history_fingerprint"],
+                table=table,
+            )
+        )
+    else:
+        prior_messages = _conversation_repository_call(lambda: _get_messages(conv_id))
+        command["history_message_ids"] = [
+            item["message_id"] for item in prior_messages
+        ]
+        command["history_fingerprint"] = _history_snapshot_fingerprint(prior_messages)
+
     quota_limit = _chat_limit_for_student(student_id)
     resume_after_message = bool(
         existing and existing.get("status") in {"message_committed", "ai_running"}
     )
-    prior_messages: list[dict] = []
     if resume_after_message:
-        prior_messages = _conversation_repository_call(
-            lambda: [
-                item
-                for item in _get_messages(conv_id)
-                if item.get("message_id") != student_msg_id
-            ]
-        )
         stored_student = _conversation_repository_call(
             lambda: table.get_item(
                 Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(student_msg_id)},
                 ConsistentRead=True,
             ).get("Item")
         )
-        if not stored_student:
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            )
-        attachment_ids = list(stored_student.get("attachment_ids", []))
-        stored_attachments = _conversation_repository_call(
-            lambda: attachment_repo.get_attachments(attachment_ids, table=table)
-        )
         if (
-            len(stored_attachments) != len(attachment_ids)
-            or set(stored_attachments) != set(attachment_ids)
-            or any(
-                item.get("owner_id") != student_id
-                or item.get("status") != "active"
-                or not all(
-                    isinstance(item.get(field), str) and item[field]
-                    for field in (
-                        "immutable_object_key",
-                        "immutable_version_id",
-                        "immutable_etag",
-                        "content_sha256",
-                    )
-                )
-                for item in stored_attachments.values()
-            )
+            not isinstance(stored_student, dict)
+            or stored_student.get("PK") != _conv_pk(conv_id)
+            or stored_student.get("SK") != _msg_sk(student_msg_id)
+            or stored_student.get("entity_type") != "conversation_message"
+            or stored_student.get("schema_version") != "conversation-message.v1"
+            or stored_student.get("message_id") != student_msg_id
+            or stored_student.get("conversation_id") != conv_id
+            or stored_student.get("student_id") != student_id
+            or stored_student.get("role") != "student"
+            or stored_student.get("content") != body.content
+            or stored_student.get("created_at") != created_at
         ):
             raise AttachmentDecisionError(
                 AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             )
-        prepared = [("attachment", stored_attachments[value]) for value in attachment_ids]
+        raw_attachment_ids = stored_student.get("attachment_ids", [])
+        if (
+            not isinstance(raw_attachment_ids, list)
+            or any(
+                not isinstance(value, str) or not value
+                for value in raw_attachment_ids
+            )
+            or len(set(raw_attachment_ids)) != len(raw_attachment_ids)
+        ):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+        attachment_ids = list(raw_attachment_ids)
+        stored_attachments = _conversation_repository_call(
+            lambda: attachment_repo.get_attachments(attachment_ids, table=table)
+        )
+        if len(stored_attachments) != len(attachment_ids) or set(
+            stored_attachments
+        ) != set(attachment_ids):
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_NOT_FOUND
+            )
+        prepared = [
+            (
+                "attachment",
+                _validate_replay_attachment(
+                    stored_attachments[value],
+                    attachment_id=value,
+                    owner_id=student_id,
+                ),
+            )
+            for value in attachment_ids
+        ]
         attachments = attachment_service.attachment_summaries_for_records(
             attachment_ids, stored_attachments
         )
@@ -854,9 +1126,6 @@ def _execute_message_command(
             attachment_service.ensure_message_attachment_capacity(
                 prepared, student_id, effective_plan
             )
-        prior_messages = _conversation_repository_call(
-            lambda: _get_messages(conv_id)
-        )
         if not existing:
             claim_result = _coerce_command_result(
                 _conversation_repository_call(
@@ -893,6 +1162,8 @@ def _execute_message_command(
         student_item = {
             "PK": _conv_pk(conv_id),
             "SK": _msg_sk(student_msg_id),
+            "entity_type": "conversation_message",
+            "schema_version": "conversation-message.v1",
             "message_id": student_msg_id,
             "conversation_id": conv_id,
             "student_id": student_id,
@@ -1052,11 +1323,29 @@ def _execute_message_command(
 
     attachment_context = ""
     if prepared:
-        attachment_context = attachment_service.extract_message_attachment_context(
-            prepared,
-            s3=boto3.client("s3", region_name=settings.aws_region),
-            settings=settings,
+        s3 = _conversation_repository_call(
+            lambda: boto3.client("s3", region_name=settings.aws_region)
         )
+        context_result = _conversation_repository_call(
+            lambda: attachment_service.extract_message_attachment_context(
+                prepared,
+                s3=s3,
+                settings=settings,
+            )
+        )
+        if (
+            not isinstance(context_result, attachment_service.AttachmentContextResult)
+            or context_result.disposition
+            is not attachment_service.AttachmentContextDisposition.READY
+        ):
+            code = (
+                context_result.error_code
+                if isinstance(context_result, attachment_service.AttachmentContextResult)
+                and context_result.error_code is not None
+                else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            )
+            raise AttachmentDecisionError(code)
+        attachment_context = context_result.context
     normalized_subject = {
         "Mathematics": "math", "Mathematik": "math", "math": "math",
         "Physics": "physics", "Physik": "physics", "physics": "physics",
@@ -1064,6 +1353,7 @@ def _execute_message_command(
         "English": "english", "english": "english",
         "French": "french", "Französisch": "french", "french": "french",
     }.get(subject, "math")
+    ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
     try:
         ai_result = ai_service.get_ai_answer(
             content=body.content,
@@ -1073,16 +1363,26 @@ def _execute_message_command(
             history=prior_messages,
             attachment_context=attachment_context,
             correlation_id=command_id,
+            deadline_monotonic=ai_deadline,
         )
+        if (
+            not isinstance(ai_result, dict)
+            or not isinstance(ai_result.get("steps", []), list)
+            or any(not isinstance(value, str) for value in ai_result.get("steps", []))
+            or not isinstance(ai_result.get("answer", ""), str)
+            or not isinstance(ai_result.get("hints", []), list)
+            or any(not isinstance(value, str) for value in ai_result.get("hints", []))
+        ):
+            raise ai_service.AIInvocationFailure("malformed_response")
         steps = "\n".join(
             f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
         )
         answer = ai_result.get("answer", "")
         hints = ai_result.get("hints", [])
         hint = ("\n\n**Hinweis:** " + hints[0]) if hints else ""
-        ai_content = f"{steps}\n\n{answer}{hint}".strip() or (
-            answer or "Entschuldigung, ich konnte keine Antwort generieren."
-        )
+        ai_content = f"{steps}\n\n{answer}{hint}".strip()
+        if not ai_content:
+            raise ai_service.AIInvocationFailure("malformed_response")
     except Exception as exc:
         emit_private_event(
             "conversation_ai_failed",
@@ -1092,7 +1392,31 @@ def _execute_message_command(
             correlation_id=command_id,
             level=logging.ERROR,
         )
-        ai_content = "Es gab ein technisches Problem. Bitte versuche es nochmals oder frage deinen Lehrer."
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ) from None
+
+    completed_epoch = int(datetime.now(timezone.utc).timestamp())
+    renewed = _conversation_repository_call(
+        lambda: attachment_repo.renew_message_ai_lease(
+            conversation_id=conv_id,
+            idempotency_key=body.idempotencyKey,
+            owner_id=student_id,
+            lease_owner=lease_owner,
+            now_epoch=completed_epoch,
+            expires_at=completed_epoch + _AI_LEASE_SECONDS,
+            table=table,
+        )
+    )
+    if renewed is not True:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    lease_attempt = lease_result.attempt
+    if (
+        isinstance(lease_attempt, bool)
+        or not isinstance(lease_attempt, int)
+        or lease_attempt <= 0
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
 
     assistant_created_at = _now()
     student_message = ChatMessage(
@@ -1118,6 +1442,8 @@ def _execute_message_command(
     assistant_item = {
         "PK": _conv_pk(conv_id),
         "SK": _msg_sk(assistant_msg_id),
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
         "message_id": assistant_msg_id,
         "conversation_id": conv_id,
         "student_id": student_id,
@@ -1132,6 +1458,8 @@ def _execute_message_command(
                 idempotency_key=body.idempotencyKey,
                 owner_id=student_id,
                 lease_owner=lease_owner,
+                lease_attempt=lease_attempt,
+                completed_epoch=completed_epoch,
                 assistant_message=assistant_item,
                 result_json=result.model_dump_json(),
                 completed_at=assistant_created_at,

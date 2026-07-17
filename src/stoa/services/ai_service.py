@@ -10,7 +10,10 @@ Implements a lightweight AI harness:
 import json
 import logging
 import re
+import time
+from typing import Any, Callable
 import boto3
+from botocore.config import Config
 
 from stoa.config import settings
 from stoa.security.private_telemetry import emit_private_event
@@ -64,6 +67,14 @@ _MAX_INPUT_CHARS = 2000
 
 # How many recent turns (student + assistant pairs) to include in context
 _MAX_HISTORY_TURNS = 6
+
+
+class AIInvocationFailure(Exception):
+    """Closed model-boundary failure without provider diagnostics."""
+
+    def __init__(self, category: str):
+        self.category = category
+        super().__init__(category)
 
 
 # ── Input sanitisation ─────────────────────────────────────────────────────────
@@ -218,6 +229,9 @@ def get_ai_answer(
     history: list[dict] | None = None,
     attachment_context: str = "",
     correlation_id: str | None = None,
+    deadline_monotonic: float | None = None,
+    clock: Callable[[], float] | None = None,
+    client: Any | None = None,
 ) -> dict:
     """Invoke Bedrock Claude with a controlled educational prompt.
 
@@ -240,7 +254,23 @@ def get_ai_answer(
     )
     messages = _build_messages(safe_content, history, attachment_context)
 
-    client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+    clock = clock or time.monotonic
+    remaining = None
+    if deadline_monotonic is not None:
+        remaining = deadline_monotonic - clock()
+        if remaining <= 0:
+            raise AIInvocationFailure("deadline_exceeded")
+    if client is None:
+        read_timeout = max(1, min(90, int((remaining or 90) - 5)))
+        client = boto3.client(
+            "bedrock-runtime",
+            region_name=settings.aws_region,
+            config=Config(
+                connect_timeout=5,
+                read_timeout=read_timeout,
+                retries={"total_max_attempts": 1, "mode": "standard"},
+            ),
+        )
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": settings.bedrock_max_tokens,
@@ -255,9 +285,18 @@ def get_ai_answer(
         attachment_count=1 if attachment_context else 0,
         correlation_id=correlation_id,
     )
+    if deadline_monotonic is not None and clock() >= deadline_monotonic:
+        raise AIInvocationFailure("deadline_exceeded")
     response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
-    result = json.loads(response["body"].read())
-    raw_text = result["content"][0]["text"]
+    if deadline_monotonic is not None and clock() >= deadline_monotonic:
+        raise AIInvocationFailure("deadline_exceeded")
+    try:
+        result = json.loads(response["body"].read())
+        raw_text = result["content"][0]["text"]
+    except Exception:
+        raise AIInvocationFailure("malformed_response") from None
+    if not isinstance(raw_text, str) or not raw_text:
+        raise AIInvocationFailure("malformed_response")
     emit_private_event(
         "ai_response_received",
         output_size=len(raw_text),

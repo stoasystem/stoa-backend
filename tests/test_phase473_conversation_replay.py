@@ -263,7 +263,7 @@ def _provider_body(data: bytes, *, read_error: bool = False, close_error: bool =
     "stage",
     ["get", "body", "read", "close", "checksum", "parser-retryable"],
 )
-def test_retryable_extraction_fault_is_typed_all_or_nothing_without_prompt_marker(
+def test_retryable_context_fault_is_typed_all_or_nothing_without_prompt_marker(
     monkeypatch, stage: str
 ) -> None:
     row = _attachment("attachment-1")

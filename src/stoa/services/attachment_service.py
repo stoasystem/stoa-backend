@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 import hashlib
 from pathlib import PurePath
 from tempfile import SpooledTemporaryFile
@@ -128,19 +130,20 @@ def _provider_truncation(value: Any) -> bool:
     return value
 
 
-def _close_provider_body(body: Any) -> None:
+def _close_provider_body(body: Any) -> bool:
     """Release one provider response body without replacing the primary outcome."""
     try:
         close = getattr(body, "close", None)
     except Exception:
-        return
+        return False
     if not callable(close):
-        return
+        return False
     try:
         close()
     except Exception:
         # Provider cleanup is best-effort and must not replace the stable decision.
-        pass
+        return False
+    return True
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
@@ -1733,6 +1736,7 @@ def reserve_question_attachment(
             "owner_id": actor.user_id,
             "student_id": actor.user_id,
             "entity_type": "attachment",
+            "schema_version": "attachment.v1",
             "immutable_object_key": upload["immutable_object_key"],
             "immutable_version_id": upload["immutable_version_id"],
             "immutable_etag": upload["immutable_etag"],
@@ -1902,6 +1906,7 @@ def bind_message_attachments(
                 "owner_id": actor.user_id,
                 "student_id": actor.user_id,
                 "entity_type": "attachment",
+                "schema_version": "attachment.v1",
                 "immutable_object_key": item["immutable_object_key"],
                 "immutable_version_id": item["immutable_version_id"],
                 "immutable_etag": item["immutable_etag"],
@@ -1980,22 +1985,40 @@ def _transaction_error_code(
     }[outcome]
 
 
+class AttachmentContextDisposition(StrEnum):
+    READY = "ready"
+    RETRYABLE = "retryable"
+    INVALID = "invalid"
+
+
+@dataclass(frozen=True, slots=True)
+class AttachmentContextResult:
+    disposition: AttachmentContextDisposition
+    context: str = ""
+    error_code: AttachmentErrorCode | None = None
+
+
 def extract_message_attachment_context(
     prepared: list[tuple[str, dict[str, Any]]],
     *,
     s3: Any,
     settings: Settings,
-) -> str:
-    """Read immutable private bytes and return bounded model-only document context."""
+) -> AttachmentContextResult:
+    """Return one all-or-nothing typed context from exact immutable private bytes."""
     parts: list[str] = []
     total = 0
     for _, item in prepared:
         try:
             _require_immutable_record(item)
         except AttachmentDecisionError:
-            parts.append("[attachment:immutable_reference_missing]")
-            continue
+            return AttachmentContextResult(
+                AttachmentContextDisposition.INVALID,
+                error_code=AttachmentErrorCode.UPLOAD_NOT_FOUND,
+            )
         length = int(item["content_length"])
+        body = None
+        primary_error: DocumentExtractionFailure | None = None
+        value = ""
         try:
             response = _provider_mapping(
                 lambda: s3.get_object(
@@ -2007,64 +2030,80 @@ def extract_message_attachment_context(
             body = response.get("Body")
             if body is None:
                 raise DocumentExtractionFailure("service_unavailable")
-            try:
-                response_etag = response.get("ETag")
-                response_length = response.get("ContentLength")
-                if (
-                    not isinstance(response_etag, str)
-                    or response_etag != item["immutable_etag"]
-                    or type(response_length) is not int
-                    or response_length != length
-                ):
-                    raise DocumentExtractionFailure("immutable_bytes_changed")
-                digest = hashlib.sha256()
-                measured = 0
-                read = getattr(body, "read", None)
-                if not callable(read):
-                    raise DocumentExtractionFailure("service_unavailable")
-                with SpooledTemporaryFile(
-                    max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
-                ) as spool:
-                    while True:
-                        chunk = read(
-                            min(UPLOAD_SPOOL_MEMORY_BYTES, length + 1 - measured)
-                        )
-                        if not chunk:
-                            break
-                        spool.write(chunk)
-                        digest.update(chunk)
-                        measured += len(chunk)
-                        if measured > length:
-                            break
-                    if (
-                        measured != length
-                        or digest.hexdigest() != item["content_sha256"]
-                    ):
-                        raise DocumentExtractionFailure("immutable_bytes_changed")
-                    spool.seek(0)
-                    try:
-                        detected = validate_uploaded_file(
-                            spool,
-                            str(item["original_filename"]),
-                            str(item["detected_type"]),
-                        )
-                    except ValidationFailure:
-                        raise DocumentExtractionFailure("invalid_document") from None
-                    if detected.media_type != item["detected_type"]:
-                        raise DocumentExtractionFailure("immutable_bytes_changed")
-                    spool.seek(0)
-                    parsed = parse_document_isolated(
-                        spool, str(item["detected_type"])
+            response_etag = response.get("ETag")
+            response_length = response.get("ContentLength")
+            if (
+                not isinstance(response_etag, str)
+                or response_etag != item["immutable_etag"]
+                or type(response_length) is not int
+                or response_length != length
+            ):
+                raise DocumentExtractionFailure("immutable_bytes_changed")
+            digest = hashlib.sha256()
+            measured = 0
+            read = getattr(body, "read", None)
+            if not callable(read):
+                raise DocumentExtractionFailure("service_unavailable")
+            with SpooledTemporaryFile(
+                max_size=UPLOAD_SPOOL_MEMORY_BYTES, mode="w+b"
+            ) as spool:
+                while True:
+                    chunk = read(
+                        min(UPLOAD_SPOOL_MEMORY_BYTES, length + 1 - measured)
                     )
-                    if parsed.category is not None:
-                        raise DocumentExtractionFailure(parsed.category)
-                    value = (parsed.text or "").strip()
-            finally:
-                _close_provider_body(body)
+                    if not chunk:
+                        break
+                    if not isinstance(chunk, bytes):
+                        raise DocumentExtractionFailure("service_unavailable")
+                    spool.write(chunk)
+                    digest.update(chunk)
+                    measured += len(chunk)
+                    if measured > length:
+                        break
+                if measured != length or digest.hexdigest() != item["content_sha256"]:
+                    raise DocumentExtractionFailure("immutable_bytes_changed")
+                spool.seek(0)
+                try:
+                    detected = validate_uploaded_file(
+                        spool,
+                        item["original_filename"],
+                        item["detected_type"],
+                    )
+                except ValidationFailure:
+                    raise DocumentExtractionFailure("invalid_document") from None
+                if detected.media_type != item["detected_type"]:
+                    raise DocumentExtractionFailure("immutable_bytes_changed")
+                spool.seek(0)
+                parsed = parse_document_isolated(spool, item["detected_type"])
+                if parsed.category is not None:
+                    raise DocumentExtractionFailure(parsed.category)
+                value = (parsed.text or "").strip()
         except DocumentExtractionFailure as error:
-            value = f"[attachment:{error.category}]"
+            primary_error = error
         except Exception:
-            value = "[attachment:service_unavailable]"
+            primary_error = DocumentExtractionFailure("service_unavailable")
+        finally:
+            close_ok = body is None or _close_provider_body(body)
+        if primary_error is None and not close_ok:
+            primary_error = DocumentExtractionFailure("service_unavailable")
+        if primary_error is not None:
+            if primary_error.category == "no_extractable_text":
+                continue
+            if primary_error.category in {
+                "invalid_document",
+                "active_content",
+                "encrypted_document",
+                "unsupported_document",
+                "document_limit_exceeded",
+            }:
+                return AttachmentContextResult(
+                    AttachmentContextDisposition.INVALID,
+                    error_code=AttachmentErrorCode.UPLOAD_INVALID,
+                )
+            return AttachmentContextResult(
+                AttachmentContextDisposition.RETRYABLE,
+                error_code=AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
+            )
         if not value:
             continue
         remaining = MAX_EXTRACTED_CHARACTERS - total
@@ -2073,7 +2112,10 @@ def extract_message_attachment_context(
         value = value[:remaining]
         parts.append(value)
         total += len(value)
-    return "\n\n".join(parts)
+    return AttachmentContextResult(
+        AttachmentContextDisposition.READY,
+        context="\n\n".join(parts),
+    )
 
 
 def release_resource_attachments(
