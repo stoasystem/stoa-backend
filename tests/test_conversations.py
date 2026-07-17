@@ -19,7 +19,6 @@ from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
-from stoa.services.document_extraction_service import DocumentExtractionFailure
 
 
 def _actor(role=CanonicalRole.STUDENT, user_id="student-1", grants=()):
@@ -777,7 +776,11 @@ def test_conversation_non_readable_body_ownership_closes_once(
     class S3:
         def get_object(self, **kwargs):
             assert kwargs["VersionId"] == "immutable-version"
-            return {"Body": body}
+            return {
+                "Body": body,
+                "ETag": "immutable-etag",
+                "ContentLength": len(b"private text"),
+            }
 
     result = conversations.attachment_service.extract_message_attachment_context(
         [
@@ -790,6 +793,7 @@ def test_conversation_non_readable_body_ownership_closes_once(
                     "content_sha256": hashlib.sha256(b"private text").hexdigest(),
                     "content_length": len(b"private text"),
                     "detected_type": "text/plain",
+                    "original_filename": "private.txt",
                 },
             )
         ],
@@ -807,7 +811,7 @@ def test_conversation_non_readable_body_ownership_closes_once(
     [
         ("success", "private text"),
         ("checksum", "[attachment:immutable_bytes_changed]"),
-        ("parser", "[attachment:parser_failure]"),
+        ("parser", "[attachment:invalid_document]"),
         ("read_exception", "[attachment:service_unavailable]"),
         ("close_exception", "private text"),
     ],
@@ -825,15 +829,19 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
     class S3:
         def get_object(self, **kwargs):
             assert kwargs["VersionId"] == "immutable-version"
-            return {"Body": body}
+            return {
+                "Body": body,
+                "ETag": "immutable-etag",
+                "ContentLength": len(data),
+            }
 
     if case == "parser":
         monkeypatch.setattr(
             conversations.attachment_service,
-            "extract_attachment_text",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                DocumentExtractionFailure("parser_failure")
-            ),
+            "parse_document_isolated",
+            lambda *_args, **_kwargs: __import__(
+                "stoa.services.document_parser_worker", fromlist=["ParserResult"]
+            ).ParserResult(category="invalid_document"),
         )
     checksum = hashlib.sha256(data).hexdigest()
     if case == "checksum":
@@ -845,6 +853,7 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
         "content_sha256": checksum,
         "content_length": len(data),
         "detected_type": "text/plain",
+        "original_filename": "private.txt",
     }
     result = conversations.attachment_service.extract_message_attachment_context(
         [("attachment", item)],

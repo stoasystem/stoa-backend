@@ -2628,7 +2628,9 @@ class _PrivateS3:
         self.deleted = []
 
     def get_object(self, Bucket, Key, VersionId):
-        return {"Body": _ReadBody(self.objects[Key])}
+        value = self.objects[Key]
+        data, etag = value if isinstance(value, tuple) else (value, "immutable-etag")
+        return {"Body": _ReadBody(data), "ETag": etag, "ContentLength": len(data)}
 
     def delete_object(self, Bucket, Key, VersionId):
         self.deleted.append((Bucket, Key, VersionId))
@@ -2643,18 +2645,19 @@ def test_ai_attachment_context_is_bounded_and_category_safe() -> None:
         "immutable_etag": "context-etag",
         "content_sha256": hashlib.sha256(text).hexdigest(),
         "detected_type": "text/plain",
+        "original_filename": "context.txt",
         "content_length": len(text),
     }
     context = extract_message_attachment_context(
         [("attachment", item)],
-        s3=_PrivateS3({item["immutable_object_key"]: text}),
+        s3=_PrivateS3({item["immutable_object_key"]: (text, "context-etag")}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
     assert context == text.decode()
     assert "context-canary" not in context
     broken = extract_message_attachment_context(
         [("attachment", {**item, "content_length": len(text) + 1})],
-        s3=_PrivateS3({item["immutable_object_key"]: text}),
+        s3=_PrivateS3({item["immutable_object_key"]: (text, "context-etag")}),
         settings=Settings(s3_images_bucket="private-bucket"),
     )
     assert broken == "[attachment:immutable_bytes_changed]"
@@ -2671,6 +2674,7 @@ def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
         "immutable_etag": "etag-old",
         "content_sha256": hashlib.sha256(old).hexdigest(),
         "detected_type": "text/plain",
+        "original_filename": "shared-key.txt",
         "content_length": len(old),
     }
 
@@ -2684,7 +2688,8 @@ def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
 
         def get_object(self, Bucket, Key, VersionId):
             self.calls.append((Key, VersionId))
-            return {"Body": _ReadBody(self.objects[(Key, VersionId)])}
+            data = self.objects[(Key, VersionId)]
+            return {"Body": _ReadBody(data), "ETag": "etag-old", "ContentLength": len(data)}
 
     s3 = VersionedS3()
     context = extract_message_attachment_context(

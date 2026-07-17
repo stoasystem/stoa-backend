@@ -264,8 +264,9 @@ def validate_passive_ooxml(data, extension: str) -> PassivePackageFacts:
 
             for name in names:
                 if name.casefold().endswith(".rels"):
+                    source_part = _relationship_source_part(name)
                     for attrs in _relationship_elements(_read_bounded_member(archive, name)):
-                        _normalise_relationship_target(attrs)
+                        _normalise_relationship_target(attrs, source_part=source_part)
 
             # Force bounded reads of every member so CRC and decompressor failures close admission.
             for info in infos:
@@ -309,7 +310,9 @@ def _normalise_part_name(value: str) -> str:
     return _canonical_member_name(unquote(value[1:]))
 
 
-def _normalise_relationship_target(attrs: dict[str, str]) -> str:
+def _normalise_relationship_target(
+    attrs: dict[str, str], *, source_part: str | None = None
+) -> str:
     target_mode = attrs.get("targetmode", "")
     target = unquote(attrs.get("target", ""))
     relationship_type = attrs.get("type", "")
@@ -323,10 +326,22 @@ def _normalise_relationship_target(attrs: dict[str, str]) -> str:
         or any(marker in relationship_type.casefold() for marker in _ACTIVE_TYPE_MARKERS)
     ):
         raise PassivePackageError("active_content")
-    normalised = posixpath.normpath(target)
+    base = posixpath.dirname(source_part) if source_part else ""
+    normalised = posixpath.normpath(posixpath.join(base, target))
     if normalised in {"", ".", ".."} or normalised.startswith("../"):
         raise PassivePackageError("invalid_document")
     return _canonical_member_name(normalised)
+
+
+def _relationship_source_part(relationship_name: str) -> str | None:
+    if relationship_name == "_rels/.rels":
+        return None
+    directory, filename = posixpath.split(relationship_name)
+    if not directory.endswith("/_rels") or not filename.endswith(".rels"):
+        raise PassivePackageError("invalid_document")
+    source_directory = directory[: -len("/_rels")]
+    source_name = filename[: -len(".rels")]
+    return posixpath.join(source_directory, source_name)
 
 
 def _relationship_elements(data: bytes) -> list[dict[str, str]]:

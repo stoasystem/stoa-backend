@@ -33,8 +33,8 @@ from stoa.services.file_validation_service import ValidationFailure, validate_up
 from stoa.services.document_extraction_service import (
     MAX_EXTRACTED_CHARACTERS,
     DocumentExtractionFailure,
-    extract_attachment_text,
 )
+from stoa.services.document_parser_worker import parse_document_isolated
 
 
 UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024
@@ -1658,6 +1658,8 @@ def _require_immutable_record(item: dict[str, Any]) -> None:
                 "immutable_version_id",
                 "immutable_etag",
                 "content_sha256",
+                "original_filename",
+                "detected_type",
             )
         )
         or int(item.get("content_length", 0)) <= 0
@@ -2005,9 +2007,18 @@ def extract_message_attachment_context(
             body = response.get("Body")
             if body is None:
                 raise DocumentExtractionFailure("service_unavailable")
-            digest = hashlib.sha256()
-            measured = 0
             try:
+                response_etag = response.get("ETag")
+                response_length = response.get("ContentLength")
+                if (
+                    not isinstance(response_etag, str)
+                    or response_etag != item["immutable_etag"]
+                    or type(response_length) is not int
+                    or response_length != length
+                ):
+                    raise DocumentExtractionFailure("immutable_bytes_changed")
+                digest = hashlib.sha256()
+                measured = 0
                 read = getattr(body, "read", None)
                 if not callable(read):
                     raise DocumentExtractionFailure("service_unavailable")
@@ -2031,9 +2042,23 @@ def extract_message_attachment_context(
                     ):
                         raise DocumentExtractionFailure("immutable_bytes_changed")
                     spool.seek(0)
-                    value = extract_attachment_text(
+                    try:
+                        detected = validate_uploaded_file(
+                            spool,
+                            str(item["original_filename"]),
+                            str(item["detected_type"]),
+                        )
+                    except ValidationFailure:
+                        raise DocumentExtractionFailure("invalid_document") from None
+                    if detected.media_type != item["detected_type"]:
+                        raise DocumentExtractionFailure("immutable_bytes_changed")
+                    spool.seek(0)
+                    parsed = parse_document_isolated(
                         spool, str(item["detected_type"])
-                    ).strip()
+                    )
+                    if parsed.category is not None:
+                        raise DocumentExtractionFailure(parsed.category)
+                    value = (parsed.text or "").strip()
             finally:
                 _close_provider_body(body)
         except DocumentExtractionFailure as error:

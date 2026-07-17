@@ -3,6 +3,8 @@ from __future__ import annotations
 from io import BytesIO
 import hashlib
 import struct
+import sys
+from types import SimpleNamespace
 from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import pytest
@@ -327,16 +329,39 @@ def test_parser_worker_is_spawn_safe_and_returns_typed_result() -> None:
 def test_parser_worker_timeout_terminates_without_raw_diagnostic(monkeypatch) -> None:
     worker = pytest.importorskip("stoa.services.document_parser_worker")
 
-    process = worker._DeterministicProcessForTests(alive=True)
+    class Process:
+        def __init__(self) -> None:
+            self.alive = True
+            self.terminated = False
+            self.joined = False
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.alive = False
+
+        def join(self, timeout: float) -> None:
+            self.joined = True
+
+    class Connection:
+        def poll(self, _timeout: float) -> bool:
+            return False
+
+        def close(self) -> None:
+            pass
+
+    process = Process()
     result = worker._await_worker_result_for_tests(
         process,
-        worker._DeterministicConnectionForTests(),
+        Connection(),
         deadline=0.0,
         monotonic=lambda: 1.0,
     )
     assert result.text is None
     assert result.category == "parser_timeout"
-    assert process.terminated and process.joined and not process.orphaned
+    assert process.terminated and process.joined and not process.is_alive()
     assert "private" not in repr(result)
 
 
@@ -348,4 +373,54 @@ def test_parser_input_and_decoded_output_limits_are_category_only() -> None:
     )
     assert result.text is None
     assert result.category == "document_limit_exceeded"
-    assert "x" not in repr(result)
+    assert "x" * 64 not in repr(result)
+    decoded = worker.parse_document_isolated(b"x" * 200_001, "text/plain")
+    assert decoded.text is None
+    assert decoded.category == "document_limit_exceeded"
+
+
+def test_parser_worker_installs_cpu_memory_and_core_limits_before_parsing(monkeypatch) -> None:
+    worker = pytest.importorskip("stoa.services.document_parser_worker")
+    calls: list[tuple[int, tuple[int, int]]] = []
+    fake = SimpleNamespace(
+        RLIMIT_CPU=1,
+        RLIMIT_AS=2,
+        RLIMIT_CORE=3,
+        setrlimit=lambda kind, value: calls.append((kind, value)),
+    )
+    monkeypatch.setitem(sys.modules, "resource", fake)
+    assert worker._apply_resource_limits()
+    assert calls == [
+        (1, (worker.PARSER_CPU_SECONDS, worker.PARSER_CPU_SECONDS)),
+        (2, (worker.PARSER_ADDRESS_SPACE_BYTES, worker.PARSER_ADDRESS_SPACE_BYTES)),
+        (3, (0, 0)),
+    ]
+
+
+def test_parser_worker_enforces_pdf_page_and_archive_structure_limits() -> None:
+    worker = pytest.importorskip("stoa.services.document_parser_worker")
+    pdf = BytesIO()
+    writer = PdfWriter()
+    for _ in range(101):
+        writer.add_blank_page(width=10, height=10)
+    writer.write(pdf)
+    pdf_result = worker.parse_document_isolated(pdf.getvalue(), "application/pdf")
+    assert pdf_result.category == "document_limit_exceeded"
+
+    slides = [
+        (f"ppt/slides/slide{index}.xml", "<slide/>", ZIP_DEFLATED)
+        for index in range(1, 202)
+    ]
+    presentation_result = worker.parse_document_isolated(
+        _opc("pptx", extras=slides), OOXML["pptx"]["mime"]
+    )
+    assert presentation_result.category == "document_limit_exceeded"
+
+    sheets = [
+        (f"xl/worksheets/sheet{index}.xml", "<worksheet/>", ZIP_DEFLATED)
+        for index in range(1, 52)
+    ]
+    workbook_result = worker.parse_document_isolated(
+        _opc("xlsx", extras=sheets), OOXML["xlsx"]["mime"]
+    )
+    assert workbook_result.category == "document_limit_exceeded"
