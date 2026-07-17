@@ -413,7 +413,10 @@ def get_case(
         Key={"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
-    return resp.get("Item")
+    item = resp.get("Item")
+    if not isinstance(item, Mapping) or item.get("privacy_deleted") is True:
+        return None
+    return dict(item)
 
 
 def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -423,7 +426,11 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
         Limit=limit,
         ScanIndexForward=True,
     )
-    return resp.get("Items", [])
+    return [
+        dict(item)
+        for item in resp.get("Items", [])
+        if isinstance(item, Mapping) and item.get("privacy_deleted") is not True
+    ]
 
 
 def list_cases(limit: int = 50) -> list[dict[str, Any]]:
@@ -432,7 +439,11 @@ def list_cases(limit: int = 50) -> list[dict[str, Any]]:
         FilterExpression=Attr("entity_type").eq("moderation_case"),
         Limit=limit,
     )
-    return resp.get("Items", [])
+    return [
+        dict(item)
+        for item in resp.get("Items", [])
+        if isinstance(item, Mapping) and item.get("privacy_deleted") is not True
+    ]
 
 
 def update_case(

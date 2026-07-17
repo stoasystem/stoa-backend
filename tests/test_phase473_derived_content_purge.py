@@ -370,6 +370,45 @@ def test_moderation_unavailable_authoritative_question_remains_debt() -> None:
     assert page.unresolved == 1
 
 
+def test_moderation_tombstones_are_not_returned_as_active_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tombstone = {
+        "PK": f"MODERATION#{CASE_ID}",
+        "SK": "SUMMARY",
+        "entity_type": "moderation_case",
+        "case_id": CASE_ID,
+        "privacy_deleted": True,
+        "privacy_generation": 7,
+    }
+    active = _summary(case_id="active-case", PK="MODERATION#active-case")
+
+    class _Table:
+        def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Item": dict(tombstone)}
+
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": [dict(tombstone), dict(active)]}
+
+        def query(self, **_kwargs: Any) -> dict[str, Any]:
+            return {
+                "Items": [
+                    {**_event("deleted"), "privacy_deleted": True},
+                    _event("active"),
+                ]
+            }
+
+    table = _Table()
+    monkeypatch.setattr(moderation_repo, "get_table", lambda: table)
+    assert moderation_repo.get_case(CASE_ID, table=table) is None
+    assert [item["case_id"] for item in moderation_repo.list_cases()] == [
+        "active-case"
+    ]
+    assert [item["event_id"] for item in moderation_repo.list_case_events(CASE_ID)] == [
+        "active"
+    ]
+
+
 def test_moderation_branch_persists_restart_progress_and_later_zero_epoch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
