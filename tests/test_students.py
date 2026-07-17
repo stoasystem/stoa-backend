@@ -144,7 +144,11 @@ def test_admin_role_only_is_known_403_and_outage_precedes_profile_mutation(monke
         "get_user",
         lambda _user_id: (_ for _ in ()).throw(TimeoutError("store canary")),
     )
-    monkeypatch.setattr(students, "get_table", lambda: writes.append("table") or None)
+    monkeypatch.setattr(
+        students.user_repo,
+        "update_profile_fields",
+        lambda *_args, **_kwargs: writes.append("profile"),
+    )
     outage = _client(_actor(CanonicalRole.STUDENT, "student-1")).patch(
         "/students/me/profile", json={"grade": "Sek2"}
     )
