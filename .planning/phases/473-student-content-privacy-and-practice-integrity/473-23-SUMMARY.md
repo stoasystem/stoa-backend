@@ -20,11 +20,11 @@ key-files:
   created:
     - tests/test_phase473_saved_attachments.py
   modified:
-    - src/stoa/api/v1/files_router.py
-    - src/stoa/core/errors.py
-    - src/stoa/models/file.py
-    - src/stoa/repositories/file_repository.py
-    - src/stoa/services/file_service.py
+    - src/stoa/models/attachment.py
+    - src/stoa/security/attachment_errors.py
+    - src/stoa/db/repositories/attachment_repo.py
+    - src/stoa/services/attachment_service.py
+    - src/stoa/routers/files.py
     - docs/security/route-authorization-inventory.json
 key-decisions:
   - Owner routes authorize one authoritative loaded attachment resource and conceal missing or foreign identifiers identically.
@@ -68,11 +68,11 @@ Each task was committed atomically:
 ## Files Created/Modified
 
 - `tests/test_phase473_saved_attachments.py` - Owner lifecycle, safe download, deletion, concealment, and purge contracts.
-- `src/stoa/models/file.py` - Coordinate-free attachment projections and typed purge progress models.
-- `src/stoa/core/errors.py` - Structured attachment-in-use failure with safe recovery action.
-- `src/stoa/repositories/file_repository.py` - Authoritative attachment enumeration plus account upload cleanup, tombstone, and quota helpers.
-- `src/stoa/services/file_service.py` - Owner access, exact-version download verification, reference-safe delete, and attachment purge branch.
-- `src/stoa/api/v1/files_router.py` - Four load-once authorized saved-attachment routes.
+- `src/stoa/models/attachment.py` - Coordinate-free attachment projections and typed purge progress models.
+- `src/stoa/security/attachment_errors.py` - Structured attachment-in-use failure with safe recovery action.
+- `src/stoa/db/repositories/attachment_repo.py` - Authoritative attachment enumeration plus account upload cleanup, tombstone, and quota helpers.
+- `src/stoa/services/attachment_service.py` - Owner access, exact-version download verification, reference-safe delete, and attachment purge branch.
+- `src/stoa/routers/files.py` - Four load-once authorized saved-attachment routes.
 - `docs/security/route-authorization-inventory.json` - Regenerated classifications for the new route surface.
 
 ## Decisions Made
