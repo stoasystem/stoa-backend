@@ -434,7 +434,8 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
 
 def test_regular_and_sse_share_one_closed_executor_boundary() -> None:
     source = open(conversations.__file__, encoding="utf-8").read()
-    assert source.count("_execute_message_command(") == 4
+    # One definition plus four closed call sites, including initial-message reuse.
+    assert source.count("_execute_message_command(") == 5
     assert "[attachment:" not in source
     assert "Entschuldigung, ich konnte keine Antwort generieren." not in source
     assert "Es gab ein technisches Problem." not in source
