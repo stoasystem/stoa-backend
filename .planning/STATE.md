@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 474 context gathered; v9.0 Web-first replan pending
-last_updated: "2026-07-18T18:41:19.170Z"
-last_activity: 2026-07-18 -- Phase 473 independently verified and completed
+stopped_at: v9.0 Web-first roadmap approved; Phase 474 ready for planning
+last_updated: "2026-07-18T19:17:46.026Z"
+last_activity: 2026-07-18 -- Replanned v9.0 Web-first; Phase 474 ready for planning
 progress:
   total_phases: 10
   completed_phases: 2
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474
 Plan: Not started
-Status: Phase 473 complete; ready to plan Phase 474
-Last activity: 2026-07-18 -- Phase 473 independently verified and completed
+Status: Phase 474 context complete; Web-first roadmap approved; ready for planning
+Last activity: 2026-07-18 -- Replanned v9.0 Web-first; Phase 474 ready for planning
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-18 -- Phase 473 independently verified and completed
 
 ## Session
 
-**Last Date:** 2026-07-18T18:41:19.160Z
-**Stopped At:** Phase 474 context gathered; v9.0 Web-first replan pending
+**Last Date:** 2026-07-18T19:17:13.821Z
+**Stopped At:** v9.0 Web-first roadmap approved; Phase 474 ready for planning
 **Resume File:** .planning/phases/474-deterministic-verification-and-gated-delivery/474-CONTEXT.md
 
 ## Performance Metrics
@@ -308,3 +308,4 @@ Last activity: 2026-07-18 -- Phase 473 independently verified and completed
 - [Phase 473]: Final-gap evidence counts only exact observed runtime nodes joined to both checked finding registries and declared lower fakes. — Collection, source strings, or broad high-level tests cannot substitute for the reviewed boundary.
 - [Phase 473]: V9PRIV-02 and D-10/D-16/D-17 retain checked inventory coverage and additionally require exact deletion, crash-recovery, and delivery-denial nodes. — Earlier coverage cannot mask a missing current concurrency or provider-effect observation.
 - [Phase 473]: Candidate snapshots are recomputed from immutable candidate Git blobs. — A direct-child publication cannot change tested-source hashes or byte counts during post-commit capture verification.
+- [Phase 474]: Remaining v9.0 work is Web-first across backend and /Users/zhdeng/stoa-frontend; every retained production route and student, parent, teacher, admin/operator journey must work or be intentionally disabled; native clients are deferred until Web testing is stable. — Owner product correction on 2026-07-18; Phase 474 CONTEXT and the 51-requirement roadmap are canonical.
