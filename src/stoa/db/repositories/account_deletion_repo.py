@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from copy import deepcopy
+from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
+import json
 from typing import Any, Iterable, Mapping
 
 from boto3.dynamodb.types import TypeSerializer
@@ -17,10 +19,84 @@ class AccountDeletionConflict(RuntimeError):
     """A lifecycle mutation did not match the permanent fence generation."""
 
 
+class DeletionCommandClaimLost(AccountDeletionConflict):
+    """The deletion worker no longer owns the exact durable command state."""
+
+
+class AccountDeletionRowConflict(AccountDeletionConflict):
+    """A scanned private row changed before its narrow deletion mutation."""
+
+
+@dataclass(frozen=True, slots=True)
+class DeletionCommandClaim:
+    """Opaque lease/CAS coordinates; never contains student content."""
+
+    command_id: str
+    generation: int
+    lease_owner: str
+    lease_expires_at: int
+    command_version: int
+    branch_results_digest: str
+
+
 @dataclass(frozen=True, slots=True)
 class OwnedPrivatePage:
     items: tuple[dict[str, Any], ...]
     cursor: dict[str, str] | None = None
+
+
+def _valid_lifecycle_timestamp(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise AccountDeletionConflict("invalid lifecycle timestamp")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise AccountDeletionConflict("invalid lifecycle timestamp") from exc
+    offset = parsed.utcoffset() if parsed.tzinfo is not None else None
+    if offset is None or offset.total_seconds() != 0:
+        raise AccountDeletionConflict("invalid lifecycle timestamp")
+    return value
+
+
+def branch_results_digest(results: Mapping[str, Any]) -> str:
+    if not isinstance(results, Mapping):
+        raise AccountDeletionConflict("invalid deletion branch results")
+    try:
+        canonical = json.dumps(
+            dict(results),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise AccountDeletionConflict("invalid deletion branch results") from exc
+    return sha256(canonical).hexdigest()
+
+
+def _positive_int(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise AccountDeletionConflict(f"invalid {field}")
+    return value
+
+
+def _claim_from_command(command: Mapping[str, Any]) -> DeletionCommandClaim:
+    owner = _required(command.get("lease_owner"), "lease_owner")
+    digest = _required(command.get("branch_results_digest"), "branch_results_digest")
+    if len(digest) != 64:
+        raise AccountDeletionConflict("invalid branch results digest")
+    return DeletionCommandClaim(
+        command_id=_required(command.get("command_id"), "command_id"),
+        generation=_positive_int(command.get("generation"), "generation"),
+        lease_owner=owner,
+        lease_expires_at=_positive_int(
+            command.get("lease_expires_at"), "lease expiry"
+        ),
+        command_version=_positive_int(
+            command.get("command_version") or command.get("version"),
+            "command version",
+        ),
+        branch_results_digest=digest,
+    )
 
 
 PRIVATE_QUESTION_SESSION_FIELDS = frozenset(
@@ -162,6 +238,7 @@ def ensure_active_account_fence(
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Backfill only one existing active canonical profile; never infer missing as active."""
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     target = table or get_table()
     existing = get_account_fence(user_id, table=target)
     if existing:
@@ -226,6 +303,7 @@ def ensure_active_account_fence(
 def materialize_profile_with_fence(
     profile: dict[str, Any], *, now_iso: str, table: Any | None = None
 ) -> None:
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     user_id = _required(profile.get("user_id"), "user_id")
     target = table or get_table()
     fence = {
@@ -279,6 +357,7 @@ def begin_account_deletion(
     now_iso: str,
     table: Any | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     target = table or get_table()
     current = get_account_fence(user_id, table=target)
     if not current:
@@ -306,6 +385,9 @@ def begin_account_deletion(
         "created_at": now_iso,
         "updated_at": now_iso,
         "version": 1,
+        "command_version": 1,
+        "branch_results": {},
+        "branch_results_digest": branch_results_digest({}),
     }
     next_fence = {
         **current,
@@ -605,6 +687,9 @@ def scrub_parent_profile_child(
         raise AccountDeletionConflict("student profile requires tombstone replacement")
     target = table or get_table()
     parent_fence = require_active_account_fence(parent_id, table=target)
+    expected_version = item.get("version")
+    if expected_version is not None:
+        expected_version = _positive_int(expected_version, "parent profile version")
     scrubbed = deepcopy(dict(item))
     for field in ("child_user_id", "student_id", "child_id"):
         if scrubbed.get(field) == child_user_id:
@@ -640,10 +725,46 @@ def scrub_parent_profile_child(
                     }
                 )
             }
+    if scrubbed == dict(item):
+        raise AccountDeletionRowConflict("closing child reference changed")
     hook = getattr(target, "scrub_parent_profile_child", None)
     if callable(hook):
-        hook(dict(item), scrubbed, child_user_id, generation, int(parent_fence["generation"]))
+        hook(
+            dict(item),
+            scrubbed,
+            child_user_id,
+            generation,
+            int(parent_fence["generation"]),
+            expected_version=expected_version,
+        )
         return
+    if expected_version is None:
+        # A narrow first write gives a legacy row a version without replacing any
+        # concurrently mutable parent field. The caller must strongly rescan.
+        transact(
+            [
+                deletion_fence_condition(child_user_id, generation),
+                active_fence_condition(parent_id, int(parent_fence["generation"])),
+                {
+                    "Update": {
+                        "Key": {"PK": item["PK"], "SK": item["SK"]},
+                        "UpdateExpression": "SET #version=:one",
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND attribute_exists(SK) AND "
+                            "user_id=:parent AND attribute_not_exists(#version)"
+                        ),
+                        "ExpressionAttributeNames": {"#version": "version"},
+                        "ExpressionAttributeValues": {
+                            ":parent": parent_id,
+                            ":one": 1,
+                        },
+                    }
+                },
+            ],
+            table=target,
+        )
+        raise AccountDeletionRowConflict("legacy parent profile normalized; rescan")
+    scrubbed["version"] = expected_version + 1
     transact(
         [
             deletion_fence_condition(child_user_id, generation),
@@ -652,9 +773,14 @@ def scrub_parent_profile_child(
                 "Put": {
                     "Item": scrubbed,
                     "ConditionExpression": (
-                        "attribute_exists(PK) AND attribute_exists(SK) AND user_id=:parent"
+                        "attribute_exists(PK) AND attribute_exists(SK) AND "
+                        "user_id=:parent AND #version=:expected_version"
                     ),
-                    "ExpressionAttributeValues": {":parent": parent_id},
+                    "ExpressionAttributeNames": {"#version": "version"},
+                    "ExpressionAttributeValues": {
+                        ":parent": parent_id,
+                        ":expected_version": expected_version,
+                    },
                 }
             },
         ],
@@ -671,6 +797,7 @@ def terminalize_identity_row(
     table: Any | None = None,
 ) -> None:
     """Retain only keyed, scope-free security evidence for old identity state."""
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     evidence = {
         "PK": item["PK"],
         "SK": item["SK"],
@@ -706,6 +833,7 @@ def create_provider_revoke_debt(
     now_iso: str,
     table: Any | None = None,
 ) -> None:
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     item = {
         "PK": f"USER#{user_id}",
         "SK": f"PROVIDER_REVOKE#{generation:020d}",
@@ -755,6 +883,7 @@ def complete_provider_revoke_debt(
     now_iso: str,
     table: Any | None = None,
 ) -> None:
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     target = table or get_table()
     key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
     hook = getattr(target, "complete_provider_revoke_debt", None)
@@ -837,30 +966,49 @@ def claim_deletion_command(
     command: Mapping[str, Any],
     *,
     lease_owner: str,
+    now_epoch: int,
     lease_expires_at: int,
     now_iso: str,
     table: Any | None = None,
-) -> dict[str, Any] | None:
+) -> DeletionCommandClaim | None:
+    lease_owner = _required(lease_owner, "lease_owner")
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    lease_expires_at = _positive_int(lease_expires_at, "lease expiry")
+    if lease_expires_at <= now_epoch:
+        raise AccountDeletionConflict("lease must expire after current epoch")
+    now_iso = _valid_lifecycle_timestamp(now_iso)
     target = table or get_table()
     hook = getattr(target, "claim_deletion_command", None)
     if callable(hook):
-        return hook(
-            str(command["command_id"]),
-            int(command["generation"]),
+        claimed = hook(
+            dict(command),
             lease_owner=lease_owner,
+            now_epoch=now_epoch,
             lease_expires_at=lease_expires_at,
             now_iso=now_iso,
         )
+        if claimed is None or isinstance(claimed, DeletionCommandClaim):
+            return claimed
+        if isinstance(claimed, Mapping):
+            return _claim_from_command(claimed)
+        raise AccountDeletionConflict("malformed deletion claim")
+    initial_version = _positive_int(
+        command.get("command_version") or command.get("version"), "command version"
+    )
+    empty_digest = branch_results_digest({})
     try:
         response = target.update_item(
             Key={"PK": command["PK"], "SK": command["SK"]},
             UpdateExpression=(
                 "SET #status=:running, lease_owner=:owner, lease_expires_at=:expiry, "
-                "updated_at=:now, #version=#version+:one"
+                "updated_at=:now, branch_results=if_not_exists(branch_results,:empty), "
+                "branch_results_digest=if_not_exists(branch_results_digest,:empty_digest), "
+                "command_version=if_not_exists(command_version,:initial_version)+:one, "
+                "#version=#version+:one"
             ),
             ConditionExpression=(
                 "generation=:generation AND (#status=:pending OR "
-                "(#status=:running AND lease_expires_at<:expiry))"
+                "(#status=:running AND lease_expires_at<:now_epoch))"
             ),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
@@ -869,8 +1017,12 @@ def claim_deletion_command(
                 ":generation": int(command["generation"]),
                 ":owner": lease_owner,
                 ":expiry": lease_expires_at,
+                ":now_epoch": now_epoch,
                 ":now": now_iso,
                 ":one": 1,
+                ":empty": {},
+                ":empty_digest": empty_digest,
+                ":initial_version": initial_version,
             },
             ReturnValues="ALL_NEW",
         )
@@ -878,7 +1030,81 @@ def claim_deletion_command(
         if _conditional(exc):
             return None
         raise AccountDeletionConflict("deletion claim unavailable") from exc
-    return dict(response.get("Attributes") or {})
+    attributes = response.get("Attributes") if isinstance(response, Mapping) else None
+    if not isinstance(attributes, Mapping):
+        raise AccountDeletionConflict("malformed deletion claim")
+    return _claim_from_command(attributes)
+
+
+def renew_deletion_command_claim(
+    command: Mapping[str, Any],
+    *,
+    claim: DeletionCommandClaim,
+    now_epoch: int,
+    lease_expires_at: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> DeletionCommandClaim:
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    lease_expires_at = _positive_int(lease_expires_at, "lease expiry")
+    if lease_expires_at <= now_epoch:
+        raise AccountDeletionConflict("lease must expire after current epoch")
+    now_iso = _valid_lifecycle_timestamp(now_iso)
+    target = table or get_table()
+    hook = getattr(target, "renew_deletion_command_claim", None)
+    if callable(hook):
+        renewed = hook(
+            dict(command),
+            claim=claim,
+            now_epoch=now_epoch,
+            lease_expires_at=lease_expires_at,
+            now_iso=now_iso,
+        )
+        if isinstance(renewed, DeletionCommandClaim):
+            return renewed
+        if isinstance(renewed, Mapping):
+            return _claim_from_command(renewed)
+        raise DeletionCommandClaimLost("deletion renewal lost")
+    try:
+        target.update_item(
+            Key={"PK": command["PK"], "SK": command["SK"]},
+            UpdateExpression=(
+                "SET lease_expires_at=:expiry, updated_at=:now, "
+                "command_version=command_version+:one, #version=#version+:one"
+            ),
+            ConditionExpression=(
+                "#status=:running AND generation=:generation AND lease_owner=:owner "
+                "AND command_version=:command_version "
+                "AND branch_results_digest=:branch_results_digest "
+                "AND lease_expires_at>=:now_epoch"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":running": "running",
+                ":generation": claim.generation,
+                ":owner": claim.lease_owner,
+                ":command_version": claim.command_version,
+                ":branch_results_digest": claim.branch_results_digest,
+                ":now_epoch": now_epoch,
+                ":expiry": lease_expires_at,
+                ":now": now_iso,
+                ":one": 1,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            raise DeletionCommandClaimLost("deletion renewal lost") from exc
+        raise AccountDeletionConflict("deletion renewal unavailable") from exc
+    return DeletionCommandClaim(
+        command_id=claim.command_id,
+        generation=claim.generation,
+        lease_owner=claim.lease_owner,
+        lease_expires_at=lease_expires_at,
+        command_version=claim.command_version + 1,
+        branch_results_digest=claim.branch_results_digest,
+    )
 
 
 def persist_branch_result(
@@ -886,13 +1112,36 @@ def persist_branch_result(
     branch_id: str,
     result: Mapping[str, Any],
     *,
+    claim: DeletionCommandClaim,
+    expected_branch_results_digest: str,
+    now_epoch: int,
+    expected_result_version: int | None = None,
     table: Any | None = None,
-) -> None:
+) -> DeletionCommandClaim:
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
+    if expected_branch_results_digest != claim.branch_results_digest:
+        raise DeletionCommandClaimLost("branch result digest changed")
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    updated_at = _valid_lifecycle_timestamp(result.get("updated_at"))
+    current_results = command.get("branch_results") or {}
+    if not isinstance(current_results, Mapping):
+        raise AccountDeletionConflict("invalid deletion branch results")
+    if branch_results_digest(current_results) != expected_branch_results_digest:
+        raise DeletionCommandClaimLost("durable branch proof changed")
+    previous = current_results.get(branch_id) or {}
+    if not isinstance(previous, Mapping):
+        raise AccountDeletionConflict("invalid prior branch result")
+    prior_result_version = previous.get("result_version", 0)
+    if isinstance(prior_result_version, bool) or not isinstance(
+        prior_result_version, int
+    ) or prior_result_version < 0:
+        raise AccountDeletionConflict("invalid branch result version")
+    if expected_result_version is None:
+        expected_result_version = prior_result_version
+    if expected_result_version != prior_result_version:
+        raise DeletionCommandClaimLost("branch result version changed")
     target = table or get_table()
-    hook = getattr(target, "persist_branch_result", None)
-    if callable(hook):
-        hook(command, branch_id, result)
-        return
     safe_result = {
         key: value
         for key, value in result.items()
@@ -908,19 +1157,82 @@ def persist_branch_result(
             "subfamilies",
             "legal_retention_blocked",
             "external_receipts",
+            "updated_at",
         }
     }
-    target.update_item(
-        Key={"PK": command["PK"], "SK": command["SK"]},
-        UpdateExpression="SET branch_results.#branch=:result, updated_at=:now",
-        ConditionExpression="generation=:generation AND #status=:running",
-        ExpressionAttributeNames={"#branch": branch_id, "#status": "status"},
-        ExpressionAttributeValues={
-            ":result": safe_result,
-            ":generation": int(command["generation"]),
-            ":running": "running",
-            ":now": result.get("updated_at", ""),
-        },
+    safe_result["updated_at"] = updated_at
+    safe_result["result_version"] = prior_result_version + 1
+    next_results = {key: dict(value) for key, value in current_results.items()}
+    next_results[branch_id] = safe_result
+    next_digest = branch_results_digest(next_results)
+    hook = getattr(target, "persist_branch_result", None)
+    if callable(hook):
+        persisted = hook(
+            dict(command),
+            branch_id,
+            safe_result,
+            claim=claim,
+            expected_branch_results_digest=expected_branch_results_digest,
+            expected_result_version=expected_result_version,
+            next_branch_results_digest=next_digest,
+            now_epoch=now_epoch,
+        )
+        if isinstance(persisted, DeletionCommandClaim):
+            return persisted
+        if isinstance(persisted, Mapping):
+            return _claim_from_command(persisted)
+        raise DeletionCommandClaimLost("branch result claim lost")
+    result_condition = (
+        "attribute_not_exists(branch_results.#branch)"
+        if expected_result_version == 0
+        else "branch_results.#branch.result_version=:result_version"
+    )
+    values: dict[str, Any] = {
+        ":result": safe_result,
+        ":generation": claim.generation,
+        ":running": "running",
+        ":owner": claim.lease_owner,
+        ":command_version": claim.command_version,
+        ":branch_results_digest": expected_branch_results_digest,
+        ":next_digest": next_digest,
+        ":now_epoch": now_epoch,
+        ":now": updated_at,
+        ":one": 1,
+    }
+    if expected_result_version:
+        values[":result_version"] = expected_result_version
+    try:
+        target.update_item(
+            Key={"PK": command["PK"], "SK": command["SK"]},
+            UpdateExpression=(
+                "SET branch_results.#branch=:result, updated_at=:now, "
+                "branch_results_digest=:next_digest, "
+                "command_version=command_version+:one, #version=#version+:one"
+            ),
+            ConditionExpression=(
+                "generation=:generation AND #status=:running AND lease_owner=:owner "
+                "AND command_version=:command_version "
+                "AND branch_results_digest=:branch_results_digest "
+                "AND lease_expires_at>=:now_epoch AND " + result_condition
+            ),
+            ExpressionAttributeNames={
+                "#branch": branch_id,
+                "#status": "status",
+                "#version": "version",
+            },
+            ExpressionAttributeValues=values,
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            raise DeletionCommandClaimLost("branch result claim lost") from exc
+        raise AccountDeletionConflict("branch result unavailable") from exc
+    return DeletionCommandClaim(
+        command_id=claim.command_id,
+        generation=claim.generation,
+        lease_owner=claim.lease_owner,
+        lease_expires_at=claim.lease_expires_at,
+        command_version=claim.command_version + 1,
+        branch_results_digest=next_digest,
     )
 
 
@@ -929,10 +1241,16 @@ def finalize_account_deletion(
     command: Mapping[str, Any],
     fence: Mapping[str, Any],
     seal: Mapping[str, Any],
+    claim: DeletionCommandClaim,
+    now_epoch: int,
     now_iso: str,
     table: Any | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Permanently terminalize one fully sealed command and fence exactly once."""
+    now_iso = _valid_lifecycle_timestamp(now_iso)
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
     if (
         command.get("status") == "complete"
         and fence.get("status") == "deleted"
@@ -941,6 +1259,36 @@ def finalize_account_deletion(
         and command.get("inventory_sha256") == seal.get("inventory_sha256")
     ):
         return dict(command), dict(fence)
+
+    target = table or get_table()
+    loader = getattr(target, "get_deletion_command", None)
+    if callable(loader):
+        loaded = loader(str(command["user_id"]), str(command["command_id"]))
+        if not isinstance(loaded, Mapping):
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        command = dict(loaded)
+    elif not callable(getattr(target, "finalize_account_deletion", None)):
+        loaded = get_deletion_command(
+            str(command["user_id"]), str(command["command_id"]), table=target
+        )
+        if not loaded:
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        command = loaded
+
+    durable_results = command.get("branch_results")
+    durable_digest = command.get("branch_results_digest")
+    if (
+        not isinstance(durable_results, Mapping)
+        or branch_results_digest(durable_results) != durable_digest
+        or durable_digest != claim.branch_results_digest
+        or command.get("command_id") != claim.command_id
+        or command.get("generation") != claim.generation
+        or command.get("lease_owner") != claim.lease_owner
+        or command.get("command_version") != claim.command_version
+        or not isinstance(command.get("lease_expires_at"), int)
+        or int(command["lease_expires_at"]) < now_epoch
+    ):
+        raise DeletionCommandClaimLost("terminal deletion claim lost")
 
     # Local import avoids a repository/service import cycle while still making
     # the lower transactional boundary independently reject a weak caller.
@@ -953,7 +1301,8 @@ def finalize_account_deletion(
     user_id = _required(command.get("user_id"), "user_id")
     command_id = _required(command.get("command_id"), "command_id")
     generation = command.get("generation")
-    command_version = command.get("version")
+    command_version = command.get("command_version")
+    storage_version = command.get("version")
     fence_version = fence.get("version")
     if (
         isinstance(generation, bool)
@@ -962,6 +1311,9 @@ def finalize_account_deletion(
         or isinstance(command_version, bool)
         or not isinstance(command_version, int)
         or command_version <= 0
+        or isinstance(storage_version, bool)
+        or not isinstance(storage_version, int)
+        or storage_version <= 0
         or isinstance(fence_version, bool)
         or not isinstance(fence_version, int)
         or fence_version <= 0
@@ -1000,7 +1352,9 @@ def finalize_account_deletion(
         or f"DELETE_ACCOUNTING#{command_id}",
         "external_receipts": minimal_receipts,
         "evidence_references": list(command.get("evidence_references") or []),
-        "version": command_version + 1,
+        "version": storage_version + 1,
+        "command_version": command_version + 1,
+        "branch_results_digest": durable_digest,
     }
     for field in (
         "issuer_hash",
@@ -1034,9 +1388,11 @@ def finalize_account_deletion(
         "generation": generation,
         "inventory_sha256": seal["inventory_sha256"],
         "command_version": command_version,
+        "branch_results_digest": durable_digest,
+        "lease_owner": claim.lease_owner,
+        "lease_expires_at": claim.lease_expires_at,
         "fence_version": fence_version,
     }
-    target = table or get_table()
     hook = getattr(target, "finalize_account_deletion", None)
     if callable(hook):
         persisted_command, persisted_fence = hook(
@@ -1050,18 +1406,23 @@ def finalize_account_deletion(
                     "Put": {
                         "Item": terminal_command,
                         "ConditionExpression": (
-                            "#status IN (:pending,:running) AND generation=:generation "
-                            "AND #version=:command_version AND inventory_sha256=:inventory"
+                            "#status=:running AND generation=:generation "
+                            "AND command_version=:command_version "
+                            "AND branch_results_digest=:branch_results_digest "
+                            "AND lease_owner=:lease_owner "
+                            "AND lease_expires_at>=:now_epoch "
+                            "AND inventory_sha256=:inventory"
                         ),
                         "ExpressionAttributeNames": {
                             "#status": "status",
-                            "#version": "version",
                         },
                         "ExpressionAttributeValues": {
-                            ":pending": "pending",
                             ":running": "running",
                             ":generation": generation,
                             ":command_version": command_version,
+                            ":branch_results_digest": durable_digest,
+                            ":lease_owner": claim.lease_owner,
+                            ":now_epoch": now_epoch,
                             ":inventory": seal["inventory_sha256"],
                         },
                     }
@@ -1099,6 +1460,7 @@ def finalize_account_deletion(
             and replay_command.get("inventory_sha256") == seal["inventory_sha256"]
             and replay_command.get("command_id") == command_id
             and replay_fence.get("command_id") == command_id
+            and replay_command.get("branch_results_digest") == durable_digest
         ):
             return replay_command, replay_fence
         raise

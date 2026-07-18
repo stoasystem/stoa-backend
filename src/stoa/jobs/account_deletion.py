@@ -81,21 +81,22 @@ def run_pending_deletions(
                 claim = account_deletion_repo.claim_deletion_command(
                     command,
                     lease_owner=uuid4().hex,
+                    now_epoch=int(now.timestamp()),
                     lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
                     now_iso=now.isoformat(),
                 )
             else:
                 claim = repository.claim_deletion_command(
-                    str(command["command_id"]),
-                    int(command["generation"]),
+                    command,
                     lease_owner=uuid4().hex,
+                    now_epoch=int(now.timestamp()),
                     lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
                     now_iso=now.isoformat(),
                 )
             if not claim:
                 continue
             claimed += 1
-            worker.continue_command(str(command["command_id"]))
+            worker.continue_command(claim)
             continued += 1
         except Exception:
             retryable += 1
@@ -107,7 +108,21 @@ async def continue_deletion_command(
 ) -> None:
     worker = service or AccountDeletionService()
     try:
-        await asyncio.to_thread(worker.continue_command, command_id)
+        repository = worker.repository
+        loader = getattr(repository, "get_command_by_id", None)
+        command = loader(command_id) if callable(loader) else None
+        if not command:
+            return
+        now = datetime.now(UTC)
+        claim = repository.claim_deletion_command(
+            command,
+            lease_owner=uuid4().hex,
+            now_epoch=int(now.timestamp()),
+            lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
+            now_iso=now.isoformat(),
+        )
+        if claim:
+            await asyncio.to_thread(worker.continue_command, claim)
     except Exception:
         # The committed command remains discoverable by the scheduled handler.
         return

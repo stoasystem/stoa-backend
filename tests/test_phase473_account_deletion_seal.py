@@ -50,7 +50,12 @@ def _ready_fixture():
         "user_id": "student-1", "generation": generation, "version": 11,
         "status": "running", "inventory_sha256": seal["inventory_sha256"],
         "branch_ids": list(EXPECTED_BRANCHES), "branch_contracts": seal["branch_contracts"],
-        "branch_results": results, "accepted_at": "2026-07-18T00:00:00+00:00",
+        "branch_results": results,
+        "branch_results_digest": account_deletion_repo.branch_results_digest(results),
+        "command_version": 11,
+        "lease_owner": "worker-1",
+        "lease_expires_at": 2_000_000_000,
+        "accepted_at": "2026-07-18T00:00:00+00:00",
     }
     fence = {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE", "status": "deletion_pending",
              "generation": generation, "version": 4, "command_id": "command-1"}
@@ -142,12 +147,23 @@ class _ServiceRepository:
     def persist_branch_result(self, *_args):
         raise AssertionError("already sealed branches must not be rewritten")
 
-    def finalize_account_deletion(self, *, command: dict, fence: dict, seal: dict, now_iso: str):
+    def finalize_account_deletion(
+        self,
+        *,
+        command: dict,
+        fence: dict,
+        seal: dict,
+        claim: account_deletion_repo.DeletionCommandClaim,
+        now_epoch: int,
+        now_iso: str,
+    ):
         self.finalized += 1
         self.command, self.fence = account_deletion_repo.finalize_account_deletion(
             command=command,
             fence=fence,
             seal=seal,
+            claim=claim,
+            now_epoch=now_epoch,
             now_iso=now_iso,
             table=_FinalizerTable(command, fence),
         )
@@ -162,7 +178,8 @@ def test_worker_revalidates_the_runtime_projection_and_invokes_only_plan35_final
         now=lambda: "2026-07-18T01:00:00+00:00",
         inventory_path=INVENTORY_PATH,
     )
-    worker.continue_command(command["command_id"])
+    claim = account_deletion_repo._claim_from_command(command)
+    worker.continue_command(claim)
     assert repository.finalized == 1
     assert repository.command["status"] == "complete"
     assert repository.fence["status"] == "deleted"
@@ -175,7 +192,7 @@ def test_worker_revalidates_the_runtime_projection_and_invokes_only_plan35_final
         inventory_path=INVENTORY_PATH,
     )
     with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        worker.continue_command(command["command_id"])
+        worker.continue_command(account_deletion_repo._claim_from_command(drifted))
     assert repository.finalized == 0
 
 
@@ -187,6 +204,8 @@ class _FinalizerTable:
         if self.command["status"] == "complete" and self.fence["status"] == "deleted":
             return deepcopy(self.command), deepcopy(self.fence)
         assert expected["command_version"] == self.command["version"]
+        assert expected["branch_results_digest"] == self.command["branch_results_digest"]
+        assert expected["lease_owner"] == self.command["lease_owner"]
         assert expected["fence_version"] == self.fence["version"]
         self.command, self.fence = deepcopy(command_item), deepcopy(fence_item)
         self.mutations += 1
@@ -198,8 +217,9 @@ def test_terminal_transaction_is_exact_once_and_replay_minimal_forever():
     table = _FinalizerTable(command, fence)
     finalizer = getattr(account_deletion_repo, "finalize_account_deletion", None)
     assert callable(finalizer), "same-table account terminalizer is missing"
-    first_command, first_fence = finalizer(command=command, fence=fence, seal=seal, now_iso="2026-07-18T01:00:00+00:00", table=table)
-    second_command, second_fence = finalizer(command=first_command, fence=first_fence, seal=seal, now_iso="2026-07-18T02:00:00+00:00", table=table)
+    claim = account_deletion_repo._claim_from_command(command)
+    first_command, first_fence = finalizer(command=command, fence=fence, seal=seal, claim=claim, now_epoch=1_784_380_000, now_iso="2026-07-18T01:00:00+00:00", table=table)
+    second_command, second_fence = finalizer(command=first_command, fence=first_fence, seal=seal, claim=claim, now_epoch=1_784_383_600, now_iso="2026-07-18T02:00:00+00:00", table=table)
     assert table.mutations == 1
     assert first_command == second_command and first_fence == second_fence
     assert first_command["status"] == "complete" and first_fence["status"] == "deleted"
@@ -210,7 +230,8 @@ def test_terminal_transaction_is_exact_once_and_replay_minimal_forever():
         "generation", "status", "accepted_at", "completed_at", "inventory_sha256",
         "issuer_hash", "subject_hash", "fingerprint", "method", "path",
         "request_body_sha256", "receipt", "accounting_identity", "external_receipts",
-        "evidence_references", "version",
+        "evidence_references", "version", "command_version",
+        "branch_results_digest",
     }
 
 

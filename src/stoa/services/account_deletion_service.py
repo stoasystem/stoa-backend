@@ -56,6 +56,9 @@ PRIMARY_BRANCH_IDS = {
     "attachments",
 }
 
+DeletionCommandClaim = account_deletion_repo.DeletionCommandClaim
+DeletionCommandClaimLost = account_deletion_repo.DeletionCommandClaimLost
+
 
 @dataclass(frozen=True, slots=True)
 class DeletionReceipt:
@@ -380,7 +383,15 @@ def _run_base_branch(
     )
     matching = [dict(item) for item in page.items if predicate(item)]
     for item in matching:
-        mutate(item)
+        try:
+            mutate(item)
+        except account_deletion_repo.AccountDeletionRowConflict:
+            return BranchResult(
+                "retryable",
+                cursor=cursor,
+                debt_counts={"row_conflict": 1, "pass_dirty": 1},
+                epoch=0,
+            )
     prior_debt = previous.get("debt_counts")
     pass_dirty = bool(
         isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
@@ -1270,23 +1281,30 @@ class AccountDeletionService:
         repository: Any = account_deletion_repo,
         branch_handlers: Mapping[str, Callable[..., BranchResult]] | None = None,
         now: Callable[[], str] | None = None,
+        now_epoch: Callable[[], int] | None = None,
+        lease_seconds: int = 120,
         inventory_path: Path | str | None = None,
     ) -> None:
         self.repository = repository
         self.branch_handlers = dict(branch_handlers or BRANCH_HANDLERS)
-        self.now = now or (lambda: "")
+        self.now = now or (lambda: datetime.now(UTC).isoformat())
+        self.now_epoch = now_epoch or (lambda: int(datetime.now(UTC).timestamp()))
+        self.lease_seconds = lease_seconds
         self.seal = load_private_store_seal(inventory_path)
         if tuple(self.branch_handlers) != ACCOUNT_DELETION_BRANCH_IDS:
             raise account_deletion_repo.AccountDeletionConflict(
                 "runtime branch handlers do not match sealed registry"
             )
 
-    def continue_command(self, command_id: str) -> None:
-        command = self._load_command(command_id)
+    def continue_command(self, claim: DeletionCommandClaim) -> None:
+        if not isinstance(claim, DeletionCommandClaim):
+            raise DeletionCommandClaimLost("opaque deletion claim required")
+        command = self._load_command(claim.command_id)
         if not command:
-            return
+            raise DeletionCommandClaimLost("deletion command disappeared")
         if command.get("status") == "complete":
             return
+        self._require_current_claim(command, claim)
         if (
             command.get("inventory_sha256") != self.seal["inventory_sha256"]
             or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
@@ -1301,9 +1319,26 @@ class AccountDeletionService:
                 "invalid deletion branch results"
             )
         for branch_id in ACCOUNT_DELETION_BRANCH_IDS:
+            command = self._load_command(claim.command_id)
+            if not command:
+                raise DeletionCommandClaimLost("deletion command disappeared")
+            self._require_current_claim(command, claim)
             previous = (command.get("branch_results") or {}).get(branch_id) or {}
             if previous.get("status") == "complete" and previous.get("quiescent") is True:
                 continue
+            current_epoch = self.now_epoch()
+            now_iso = self.now()
+            claim = self.repository.renew_deletion_command_claim(
+                command,
+                claim=claim,
+                now_epoch=current_epoch,
+                lease_expires_at=current_epoch + self.lease_seconds,
+                now_iso=now_iso,
+            )
+            command = self._load_command(claim.command_id)
+            if not command:
+                raise DeletionCommandClaimLost("deletion command disappeared")
+            self._require_current_claim(command, claim)
             handler = self.branch_handlers[branch_id]
             try:
                 result = handler(command=command, previous=previous)
@@ -1316,8 +1351,19 @@ class AccountDeletionService:
                 handler_version=str(contract["handler_version"]),
                 subfamilies=contract["subfamilies"],
             )
-            self.repository.persist_branch_result(command, branch_id, persisted)
-            branch_results[branch_id] = persisted
+            claim = self.repository.persist_branch_result(
+                command,
+                branch_id,
+                persisted,
+                claim=claim,
+                expected_branch_results_digest=claim.branch_results_digest,
+                expected_result_version=int(previous.get("result_version") or 0),
+                now_epoch=self.now_epoch(),
+            )
+        command = self._load_command(claim.command_id)
+        if not command:
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        self._require_current_claim(command, claim)
         fence = self._load_fence(str(command["user_id"]))
         if fence and validate_deletion_seal(
             command=command, fence=fence, seal=self.seal
@@ -1326,8 +1372,29 @@ class AccountDeletionService:
                 command=command,
                 fence=fence,
                 seal=self.seal,
+                claim=claim,
+                now_epoch=self.now_epoch(),
                 now_iso=self.now(),
             )
+
+    @staticmethod
+    def _require_current_claim(
+        command: Mapping[str, Any], claim: DeletionCommandClaim
+    ) -> None:
+        durable_results = command.get("branch_results") or {}
+        if (
+            command.get("status") != "running"
+            or command.get("command_id") != claim.command_id
+            or command.get("generation") != claim.generation
+            or command.get("lease_owner") != claim.lease_owner
+            or command.get("lease_expires_at") != claim.lease_expires_at
+            or command.get("command_version") != claim.command_version
+            or command.get("branch_results_digest") != claim.branch_results_digest
+            or not isinstance(durable_results, Mapping)
+            or account_deletion_repo.branch_results_digest(durable_results)
+            != claim.branch_results_digest
+        ):
+            raise DeletionCommandClaimLost("deletion claim lost")
 
     def _load_command(self, command_id: str) -> dict[str, Any] | None:
         loader = getattr(self.repository, "get_command_by_id", None)

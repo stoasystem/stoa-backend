@@ -11,7 +11,12 @@ from typing import Any
 
 import pytest
 
-from stoa.db.repositories import attachment_repo, question_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    attachment_repo,
+    question_repo,
+    user_repo,
+)
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
@@ -109,16 +114,30 @@ class _AccountTable:
         del exclusive_start_key
         return [dict(item) for item in self.pending[:limit]], None
 
-    def claim_deletion_command(self, command_id: str, generation: int, **_kwargs: Any):
+    def claim_deletion_command(self, command: dict[str, Any], **kwargs: Any):
         match = next(
             (
                 item
                 for item in self.pending
-                if item["command_id"] == command_id and item["generation"] == generation
+                if item["command_id"] == command["command_id"]
+                and item["generation"] == command["generation"]
             ),
             None,
         )
-        return dict(match) if match else None
+        if not match:
+            return None
+        digest = account_deletion_repo.branch_results_digest(
+            match.get("branch_results") or {}
+        )
+        return account_deletion_repo.DeletionCommandClaim(
+            command_id=str(match["command_id"]),
+            generation=int(match["generation"]),
+            lease_owner=str(kwargs["lease_owner"]),
+            lease_expires_at=int(kwargs["lease_expires_at"]),
+            command_version=int(match.get("command_version") or match.get("version") or 1)
+            + 1,
+            branch_results_digest=digest,
+        )
 
 
 def test_account_status_and_registry_are_closed_before_later_branches() -> None:
@@ -441,7 +460,7 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
             "status": "pending",
         }
     )
-    calls: list[str] = []
+    calls: list[account_deletion_repo.DeletionCommandClaim] = []
     result = job.run_pending_deletions(
         repository=table,
         service_factory=lambda: type(
@@ -451,7 +470,8 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
         )(),
         limit=10,
     )
-    assert calls == ["delete-command-1"]
+    assert [claim.command_id for claim in calls] == ["delete-command-1"]
+    assert calls[0].lease_owner
     assert result.discovered == 1 and result.claimed == 1
     assert result.retryable == 0
     assert service.can_finalize_account_deletion(service.PRIMARY_BRANCH_IDS) is False
