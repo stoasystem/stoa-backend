@@ -43,7 +43,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 ## Phases
 
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (35/35 plans executed; independent verification pending)
+- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (35/40 plans executed; final verification gaps planned)
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
@@ -284,6 +284,23 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 **Wave 29** *(final evidence; blocked on Wave 28 completion)*
 
 - [ ] `473-28` — Test one immutable candidate with strict receipts and publish independently revalidated source-bound evidence.
+
+**Wave 30** *(gap closure; blocked on Wave 29 completion)*
+
+- [ ] `473-36` — Fence account-deletion claims, branch evidence, finalization, lifecycle timestamps, and parent-profile scrubbing with exact CAS.
+- [ ] `473-37` — Add a crash-safe delivery-intent state machine that separates recoverable pre-effect claims from ambiguous provider acceptance.
+
+**Wave 31** *(blocked on Wave 30 completion)*
+
+- [ ] `473-38` — Resolve private delivery ownership authoritatively, fail closed on missing metadata, and fence digest, push, and WebSocket effects.
+
+**Wave 32** *(blocked on Wave 31 completion)*
+
+- [ ] `473-39` — Refresh source-sealed inventories and lower-bound selectors for deletion leases, delivery ownership, timestamps, parent CAS, and intent recovery.
+
+**Wave 33** *(final evidence; blocked on Wave 32 completion)*
+
+- [ ] `473-40` — Capture one immutable candidate and publish clean, source-bound evidence that independently closes all remaining verification findings.
 
 **Cross-cutting constraints:**
 
