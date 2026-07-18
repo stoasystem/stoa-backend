@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-27-PLAN.md
-last_updated: "2026-07-18T11:08:06.009Z"
-last_activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store registry and account deletion finalizer
+stopped_at: Completed 473-28-PLAN.md; awaiting aggregate phase verification
+last_updated: "2026-07-18T11:42:05.397Z"
+last_activity: 2026-07-18 -- Completed Plan 473-28 checked immutable evidence capture and publication
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 56
+  completed_plans: 57
   percent: 10
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 473 — Student Content Privacy and Practice Integrity
 Plan: 35 of 35
-Status: Executing gap-closure plans
-Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store registry and account deletion finalizer
+Status: Ready for independent verification
+Last activity: 2026-07-18 -- Completed Plan 473-28 checked immutable evidence capture and publication
 
 ## Accumulated Context
 
@@ -45,7 +45,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 - Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
 - Conversation sends now use an exact versioned fingerprint, atomic command/chat-quota claim, deterministic effects, and a fenced expiring AI lease; regular and SSE retries replay one original result.
 - AI, title, conversation, replay, and OCR-fed question logs now use closed category/class/size/count/correlation telemetry with cross-service private-canary coverage.
-- Final evidence is bound to tested source `060f07f187441bc9cb31ac9c1286ea6165d5bfa0`: 301 Phase 473 tests, 636 inherited authorization tests, and the 1303-test full suite pass; deterministic inventory, Ruff, diff-check, manifest, and private denylist gates pass. External S3, deployed cleanup/IaC, and production log capture remain NOT RUN.
+- Final checked evidence is bound to immutable candidate `cf3549ad799843fd91bb7494064a02d57227c953`: 889 deep Phase 473 nodes, 455 inherited Phase 473 nodes, 636 Phase 472 authorization nodes, and the 1,923-node full suite pass with exact receipts, coverage, hashes, and zero privacy matches. External S3, deployed cleanup/IaC, and production log capture remain NOT RUN.
 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
@@ -112,8 +112,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 
 ## Session
 
-**Last Date:** 2026-07-18T11:08:06.003Z
-**Stopped At:** Completed 473-27-PLAN.md
+**Last Date:** 2026-07-18T11:42:05.392Z
+**Stopped At:** Completed 473-28-PLAN.md; awaiting aggregate phase verification
 **Resume File:** None
 
 ## Performance Metrics
@@ -176,6 +176,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 | Phase 473 P34 | 14 min | 3 tasks | 7 files |
 | Phase 473 P35 | 27 min | 3 tasks | 9 files |
 | Phase 473 P27 | 13min | 3 tasks | 3 files |
+| Phase 473 P28 | 26min | 3 tasks | 11 files |
 
 ## Decisions
 
@@ -290,3 +291,6 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 - [Phase 473]: Plan 27 owns only the untrusted-read registry; Plan 35 remains the sole owner of private-write rows and is invoked semantically on every composed check. — Preserves single ownership while making the combined gate fail on write drift.
 - [Phase 473]: Read authorization is per consumed field/body operation and always re-runs taint semantics. — Refreshing a source-symbol digest cannot bless raw response use.
 - [Phase 473]: Runtime evidence is joined by exact pytest node and lower-fake target across regular, SSE, and all 17 deletion branches. — Collected high-level tests alone do not prove the declared lower boundary executed.
+- [Phase 473]: A gate counts only when its exact argv, raw log, JUnit, node manifest, candidate state, hashes, counts, and privacy facts independently reproduce.
+- [Phase 473]: Any Phase 473 capture or publication failure invalidates the observation set and requires a new immutable candidate plus a complete registry rerun.
+- [Phase 473]: Real S3, deployed scheduler/IaC, and production logs remain exact NOT RUN obligations owned by Phases 479 and 480.
