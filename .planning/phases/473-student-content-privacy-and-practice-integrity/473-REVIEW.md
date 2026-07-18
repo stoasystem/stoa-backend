@@ -1,87 +1,93 @@
 ---
 phase: 473-student-content-privacy-and-practice-integrity
-reviewed: 2026-07-18T11:52:24Z
+reviewed: 2026-07-18T16:55:51Z
 depth: standard
-diff_base: fce68392137d1020a378d239c27af1cf9c7fe156^
-head: faf6646baf8a0e1810738a575969cab8ce91994d
-files_reviewed: 69
+diff_base: 401a68f
+head: 37bad48dcef555238f7e8eaf199a3462bed001b7
+files_reviewed: 9
 severity:
-  critical: 2
-  warning: 3
+  critical: 0
+  warning: 4
   info: 0
-  total: 5
+  total: 4
 status: issues_found
 ---
 
-# Phase 473 Code Review
+# Phase 473 Post-Gap Code Review
 
 ## Summary
 
-The deterministic 69-file `src`/`scripts` scope was reviewed at standard depth. The implementation closes the six findings from the earlier, narrower Phase 473 review, and the complete test suite and scoped lint pass. This final pass nevertheless found two ship-blocking account-deletion/provider-race defects and three robustness defects.
+The deterministic nine-file `src`/`scripts` scope was reviewed at standard depth after Plans 473-36 through 473-40. Prior findings CR-01, CR-02, WR-01, and WR-03 are closed in the production call chains. WR-02 is only partially fixed: the scrub now checks a row version, but ordinary profile writers never advance that version, so the original lost-update race remains. The review also found two account/delivery replay defects and a final evidence-verification defect.
 
 Verification performed:
 
-- `.venv/bin/python -m pytest -q` — **1923 passed**
-- `.venv/bin/ruff check <all 69 scoped Python files>` — **all checks passed**
-- Source review — call-chain, conditional-write, deletion-fence, provider-effect, restart, and evidence-generator analysis across every existing file returned by the supplied diff-base command
+- `.venv/bin/python -m pytest -q` — **2,009 passed**
+- `.venv/bin/ruff check <all 9 scoped Python files>` — **all checks passed**
+- Both Phase 473 inventory generators with `--check` — **passed**
+- `git diff --check 401a68f..HEAD -- src scripts` — **passed**
+- `verify-publication --candidate b43c71b...` from current HEAD — **failed** because HEAD is no longer the publication commit's direct child
 
-## Critical findings
+## Prior-finding closure
 
-### CR-01: An active deletion-command lease is immediately stealable, and stale workers may overwrite branch results
-
-**Files:** `src/stoa/jobs/account_deletion.py:79-99`; `src/stoa/db/repositories/account_deletion_repo.py:836-924`; `src/stoa/services/account_deletion_service.py:1284-1329`
-
-`run_account_deletion_scan` claims a command with an expiry two minutes in the future. `claim_deletion_command` decides whether a running lease is expired using `lease_expires_at < :expiry`, where `:expiry` is that *new future expiry*, rather than comparing the stored expiry with the current time. Almost every currently active lease therefore satisfies the takeover condition as soon as another scanner sees it.
-
-The returned lease owner/version is then discarded. `continue_command` reloads by command ID, and `persist_branch_result` conditions only on generation and `status == running`; it does not require the claim's lease owner or claimed command version. A stolen/stale worker can consequently overwrite a newer worker's cursor, epoch, debt, or completion result. Finalization validates the caller's in-memory branch map, while its transaction checks command version but not the stored branch-result map; branch persistence itself does not advance that version. This can make the two-clean-epoch proof diverge from the durable state used during concurrent execution and can duplicate irreversible provider cleanup.
-
-**Fix:** Pass an explicit `now_epoch` to the claim and compare stored expiry with that value. Return and thread an opaque claim token (lease owner plus version) through the service; condition every branch persist, renewal, and finalization on it. Advance a CAS version with each branch result and validate the durable branch-result digest/set in the final transaction. Add two-worker tests covering an unexpired lease, expired takeover, stale cursor/result writes, and stale finalization.
-
-### CR-02: Missing owner-generation metadata bypasses delivery intents and calls providers directly
-
-**Files:** `src/stoa/services/notification_service.py:747-779,934-965`; `src/stoa/services/websocket_service.py:193-268`
-
-Email digest and push delivery use the fenced `run_delivery_intent` path only when an owner and positive account-fence generation are present. Otherwise they call the email/push provider directly. WebSocket fanout similarly sets `leased = False` for a missing/invalid generation, then posts to matching connections without any account-fence recheck. These are private notification payloads, not the sealed `global_nonprivate` classification.
-
-Legacy, malformed, or partially migrated rows can therefore produce outbound effects after account deletion has installed its permanent fence. The fallback directly contradicts the Phase 473 contract that unresolved private-looking delivery is debt and that every provider mutation is owner/fence/lease bound. It also allows the final deletion scan to race a delivery path it cannot cancel through an intent.
-
-**Fix:** Fail closed for private rows without an authoritative owner and generation. Resolve legacy ownership through an authoritative strongly consistent join before delivery; only a persisted, explicit sealed `global_nonprivate` classification may use a non-owner path. Route all other digest, push, and WebSocket effects through one intent/lease primitive and add deletion-race tests for missing, malformed, and stale generation metadata.
+| Finding | Result | Evidence |
+| --- | --- | --- |
+| CR-01 deletion lease theft/stale branch writes | Closed | Claim takeover compares against explicit current epoch; renewal, branch persistence, and finalization carry owner/version/digest CAS state. |
+| CR-02 direct notification provider fallback | Closed | Digest, push, and WebSocket now strongly load persisted events and route permitted effects through the intent begin transition. |
+| WR-01 blank production deletion timestamps | Closed | The service defaults to timezone-aware UTC and deletion persistence validates lifecycle timestamps. |
+| WR-02 stale full-row parent scrub | **Not closed** | The scrub checks `version`, but active profile writers do not increment it. |
+| WR-03 unrecoverable claimed delivery intent | Closed | Expired `claimed_pre_effect` work is recoverable; `effect_inflight` is terminalized unknown without blind retry. |
 
 ## Warnings
 
-### WR-01: Production deletion audit timestamps default to empty strings
+### WR-01: Parent-profile scrub CAS does not observe normal concurrent profile updates
 
-**Files:** `src/stoa/services/account_deletion_service.py:1264-1278,1313-1329`; `src/stoa/jobs/account_deletion.py:76`; `src/stoa/db/repositories/account_deletion_repo.py:913-923,982-1029`
+**Files:** `src/stoa/db/repositories/account_deletion_repo.py:690-784`; downstream call chain `src/stoa/db/repositories/user_repo.py:52-158`
 
-`AccountDeletionService` defaults `self.now` to `lambda: ""`. Both production entry points construct it without injecting a clock. Branch `updated_at`, terminal `completed_at`, receipt completion time, and the permanent fence's `deleted_at`/`updated_at` are therefore blank in production. Tests mostly inject a deterministic clock, hiding the default-path defect.
+`scrub_parent_profile_child` now conditions its full-row replacement on the scanned profile's `version`. However, normal active-profile mutations—including locale, teacher availability, email verification, and parent-link updates—use `update_profile_fields`, whose transaction neither checks nor increments `version`. A concurrent update can therefore change unrelated parent fields while leaving the version unchanged; the deletion scrub's stale full-row `Put` still satisfies `#version=:expected_version` and overwrites those changes.
 
-**Fix:** Default to `datetime.now(UTC).isoformat()` and reject blank or unparsable lifecycle timestamps at the repository boundary. Exercise the production constructor in finalization tests.
+The focused race test simulates a concurrent writer that advances the version, so it proves only cooperation by a version-aware writer, not the actual production writer chain.
 
-### WR-02: Parent-profile scrubbing can overwrite concurrent parent updates
+**Fix:** Make every profile mutation participate in one version CAS/increment contract, or change the deletion scrub to a genuinely narrow conditional update that never replaces unrelated fields. Add a race through real `user_repo.update_profile_fields` and prove the concurrent locale/preference bytes survive.
 
-**Files:** `src/stoa/services/account_deletion_service.py:414-433`; `src/stoa/db/repositories/account_deletion_repo.py:595-662`
+### WR-02: A transient delivery-begin dependency failure is permanently mislabeled as account deletion
 
-The account-profile branch deep-copies a parent profile, removes the deleting child, and replaces the entire row. The transaction verifies both account fences, but the row condition checks only that the row exists and still has the same parent user ID. It does not compare a row version or the original image. A concurrent active-parent profile update between scan and `Put` can be silently lost when the stale scrubbed copy wins.
+**Files:** `src/stoa/db/repositories/notification_repo.py:275-283,807-920`; `src/stoa/db/repositories/account_deletion_repo.py:1506-1527`; `src/stoa/services/notification_service.py:529-542`
 
-**Fix:** Use a narrow `UpdateExpression` where the schema permits it, or require and increment a row version/original-image digest in the transaction. On conflict, retain branch debt and rescan. Add a concurrent parent preference/profile update test.
+`account_deletion_repo.transact` maps both conditional transaction cancellation and nonconditional DynamoDB dependency failure to the same `AccountDeletionConflict` base type. `_delivery_conditional_loss` then returns `True` for every `AccountDeletionConflict`. Consequently, a network/service failure during `begin_delivery_effect` is converted to “delivery begin claim lost”; the service attempts `cancel_delivery_intent` and, if that write succeeds, permanently records `canceled_account_deletion` even though the account fence remained active.
 
-### WR-03: Claimed notification delivery intents have no crash-recovery path
+This violates the Plan 37 requirement to map only typed conditional loss and propagate dependency failure as retryable. It can permanently suppress a valid digest, push, or WebSocket operation and publishes the wrong terminal reason.
 
-**Files:** `src/stoa/services/notification_service.py:115-170`; `src/stoa/db/repositories/notification_repo.py:361-386`
+**Fix:** Preserve separate typed conditional and dependency outcomes through `transact`. Only a verified fence/claim loss may cancel as account deletion; transient dependency failure must leave `claimed_pre_effect` recoverable and return a retryable dependency status. Test a nonconditional `ClientError` below `transact_write_items` followed by a healthy retry.
 
-Delivery intents store `lease_expires_at`, but `claim_delivery_intent` accepts only `status == registered`; it never permits takeover of an expired `claimed` intent. If a worker crashes after claim and before completion, replay observes the existing claimed record, fails the registered-only claim, and returns `retryable_claim_conflict` forever. The same operation is never delivered or conclusively terminalized, and the orphaned pending intent can remain account-deletion debt.
+### WR-03: Completed account deletion cannot replay its promised receipt
 
-**Fix:** Add expired-lease takeover using a comparison against current epoch, with a new owner/token and CAS protection. Preserve the no-blind-retry rule by allowing takeover only while no provider effect could have begun, or introduce an explicit pre-effect state transition that makes ambiguity terminal. Test crashes before the final fence check, immediately before provider invocation, and after provider acceptance.
+**Files:** `src/stoa/db/repositories/account_deletion_repo.py:1254-1435`; `src/stoa/services/account_deletion_service.py:285-349`
+
+The finalizer replaces the command with a minimized terminal row that omits `branch_ids` and `branch_contracts`. A later identical `DELETE /auth/me` resolves the completed command, but `begin_or_replay_deletion` requires both omitted fields to equal the current sealed registry. The immutable comparison therefore raises `deletion replay conflict` instead of returning the stored `deleted` receipt.
+
+This affects the exact lost-response/idempotent replay contract: deletion completes safely, but a client that did not receive the final response cannot retrieve the terminal receipt through the documented endpoint.
+
+**Fix:** Either retain the sealed branch IDs/contracts in the terminal row or use a distinct terminal replay validation based on the retained inventory digest, identity hashes, fingerprint, generation, and receipt. Add an end-to-end replay test that finalizes through the real terminal projection and invokes `begin_or_replay_deletion` again.
+
+### WR-04: Published evidence cannot be independently reverified from the final Phase 473 HEAD
+
+**File:** `scripts/verify_phase473_evidence.py:1092-1102`
+
+Clean `verify-publication` requires the current `HEAD^` to equal the captured candidate and the candidate-to-HEAD diff to contain exactly four publication files. That was true at publication commit `5da6936`, but Plan 40 then added metadata commit `37bad48`. From the final Phase 473 HEAD, the documented verifier now fails immediately with `publication must be a clean direct candidate child`, even though the evidence files are unchanged.
+
+This makes the published evidence dependent on checking out a historical commit, while the CLI has no argument for the publication commit and reads artifacts from the current worktree. The summary's claim that the result is ready for independent aggregate verification is therefore not reproducible in the delivered repository state.
+
+**Fix:** Accept and verify an explicit publication commit: require it to be the candidate's single direct child, read all four artifacts from that commit's Git blobs, and separately prove the current HEAD descends from it without modifying those blobs. Add a regression with one or more later metadata commits.
 
 ## Scope
 
-The review covered every existing file returned by:
+Reviewed every existing file returned by:
 
 ```text
-git diff --name-only fce68392137d1020a378d239c27af1cf9c7fe156^..HEAD -- src scripts
+git diff --name-only 401a68f..HEAD -- src scripts
 ```
 
-The scope contains 5 scripts and 64 source files (69 total). No source file was modified by this review.
+The nine files are the two inventory generators, evidence verifier, account-deletion repository/job/service, notification repository/service, and WebSocket service. Cross-file callers were inspected where necessary to validate the changed contracts. No source file was modified by this review.
 
 ---
 
