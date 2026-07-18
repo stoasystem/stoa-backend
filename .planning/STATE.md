@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-34-PLAN.md
-last_updated: "2026-07-18T10:11:38.835Z"
-last_activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, device, and realtime deletion closure
+stopped_at: Completed 473-35-PLAN.md
+last_updated: "2026-07-18T10:44:56.045Z"
+last_activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store registry and account deletion finalizer
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 54
-  percent: 95
+  completed_plans: 55
+  percent: 96
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 34 of 35
+Plan: 35 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, device, and realtime deletion closure
+Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store registry and account deletion finalizer
 
 ## Accumulated Context
 
+- Every reviewed private mutation now maps to a deterministic source-sealed inventory row, narrow retained-evidence class, or one of four reviewed non-student exclusions; exact current-generation results for all 17 ordered branches, two zero epochs, zero blocking debt, and one same-table CAS are required to permanently terminalize deletion.
 - Private notification broadcasts, assistance summaries, preferences, push credentials, WebSocket endpoints, and outbound delivery intents now share the permanent account fence; provider mutation rechecks immediately before effect, accepted/unknown external copies are not overclaimed, and the branch requires two later clean scans.
 - Practice receipts/progress, adaptive assignments/memories, AI drafts, learning usage, and curriculum signals now share the permanent account fence; opaque owner manifests replace deterministic hashes, exact aggregate reversal is retry-safe, and five branches require two later clean scans.
 - Conversation headers, messages, teacher-help state, commands, chat usage metadata, and attachment associations now share one permanent-fence generation; stale AI returns cannot complete, associations release before scrub, and two later clean strong scans prove quiescence.
@@ -111,8 +112,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, dev
 
 ## Session
 
-**Last Date:** 2026-07-18T10:11:38.830Z
-**Stopped At:** Completed 473-34-PLAN.md
+**Last Date:** 2026-07-18T10:44:56.039Z
+**Stopped At:** Completed 473-35-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -173,6 +174,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, dev
 | Phase 473 P32 | 10 min | 3 tasks | 6 files |
 | Phase 473 P33 | 19 min | 3 tasks | 14 files |
 | Phase 473 P34 | 14 min | 3 tasks | 7 files |
+| Phase 473 P35 | 27 min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -280,3 +282,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, dev
 - [Phase 473]: Digest, push, and WebSocket effects claim one durable operation and recheck the exact active generation twice, including immediately before provider mutation. — A pre-deletion claim cannot authorize an outbound effect after the permanent fence changes.
 - [Phase 473]: Provider accepted and acceptance-unknown outcomes retain only operation, channel, time, and status policy facts and are never reported as purged external copies. — Backend deletion cannot prove erasure from recipient or provider systems.
 - [Phase 473]: Notification, assistance, preference, token, delivery-intent, and connection discovery uses strong base-table pagination and two later clean epochs. — A first empty or filtered page cannot prove quiescence.
+- [Phase 473]: A checked JSON refresh cannot approve a mutation; every mutating source file is independently sealed by a reviewed source digest. — Digest regeneration must not bless an unreviewed private sink.
+- [Phase 473]: The account deletion runtime registry is exactly 17 ordered branch IDs bound to handler, root, subfamily, generation, and inventory digest. — Missing, duplicated, stale, or smaller branch sets must fail closed.
+- [Phase 473]: Only a same-table conditional command-and-fence transition can terminalize deletion, and replay preserves the permanent fence. — Prevents partial completion, resurrection, and duplicate terminal effects.
+- [Phase 473]: Accepted, delivered, and acceptance-unknown external receipts remain minimized facts outside backend purge authority; pending work and legal holds block. — Backend completion must not overclaim provider/client erasure or lawful-retention absence.
