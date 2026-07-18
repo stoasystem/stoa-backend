@@ -140,6 +140,21 @@ def test_account_status_and_registry_are_closed_before_later_branches() -> None:
     assert service.can_finalize_account_deletion(service.PRIMARY_BRANCH_IDS) is False
 
 
+def test_plan35_requires_the_exact_source_sealed_registry_before_completion() -> None:
+    _repository, service, _job = _deletion_modules()
+    expected = {
+        "account_profile", "identity_cross_account", "capability_scope",
+        "question_ocr_session", "attachments", "moderation", "report_records",
+        "report_artifacts", "support_recovery_feed", "conversation_messages",
+        "practice_progress", "adaptive_assignment", "learning_memory",
+        "ai_teacher_draft", "curriculum_signal", "notification_device_realtime",
+        "external_delivery_debt",
+    }
+    assert set(service.ACCOUNT_DELETION_BRANCH_IDS) == expected
+    assert set(service.BRANCH_HANDLERS) == expected
+    assert hasattr(service, "load_private_store_seal")
+
+
 @pytest.mark.asyncio
 async def test_resolve_actor_checks_permanent_fence_before_profile_or_grants() -> None:
     active = _IdentityFacts(
