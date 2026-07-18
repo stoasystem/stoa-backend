@@ -1837,8 +1837,8 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     assert len(repository.transactions) == 1
     operations = repository.transactions[0]
     assert [operation.kind for operation in operations] == [
-        attachment_repo.TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
+        attachment_repo.TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.MESSAGE_PUT,
         attachment_repo.TransactionOperationKind.UPLOAD_CONSUME,
         attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
