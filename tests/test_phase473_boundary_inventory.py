@@ -53,6 +53,33 @@ REQUIRED_ROW_FIELDS = {
     "requirement_ids",
 }
 
+FINDING_SELECTORS = {
+    "CR-01": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+    "CR-02": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+    "WR-01": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+    "WR-02": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+    "WR-03": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+}
+
+REQUIRED_AUTHORITY_FIELDS = {
+    "lease_expires_at",
+    "now_epoch",
+    "command_version",
+    "branch_results",
+    "branch_results_digest",
+    "updated_at",
+    "version",
+    "effect_state",
+    "intent_version",
+    "scope_digest",
+    "payload_digest",
+    "owner_id",
+    "account_fence_generation",
+    "event_version",
+    "classification_contract",
+    "classification_digest",
+}
+
 
 def _generator_module():
     assert GENERATOR.is_file(), "Plan 473-27 generator has not been implemented"
@@ -303,6 +330,59 @@ def test_every_plan35_purge_and_no_resurrection_selector_executes():
     assert {row["branch_id"] for row in private["branch_registry"]} == set(
         EXPECTED_BRANCHES
     )
+
+
+def test_all_new_authority_fields_have_closed_parsers_and_exact_finding_selectors():
+    payload = json.loads(INVENTORY.read_text())
+    rows = payload["rows"]
+    assert REQUIRED_AUTHORITY_FIELDS <= {
+        row["consumed_field_path"] for row in rows
+    }
+    for row in rows:
+        if row["consumed_field_path"] in REQUIRED_AUTHORITY_FIELDS:
+            assert row["named_parser"]
+            assert row["strict_validator"] not in {"truthy", "coerce", "default"}
+            assert row["lower_fake_target"]
+            assert row["malformed_selector"].startswith("tests/")
+    findings = {row["finding_id"]: row for row in payload["finding_registry"]}
+    assert set(findings) == set(FINDING_SELECTORS)
+    for finding_id, selector in FINDING_SELECTORS.items():
+        assert findings[finding_id]["runtime_selector"] == selector
+        assert findings[finding_id]["lower_fake_target"]
+        assert findings[finding_id]["observed_assertion"]
+
+
+@pytest.mark.parametrize(
+    ("relative", "before", "after"),
+    [
+        (
+            "src/stoa/db/repositories/account_deletion_repo.py",
+            "command.get(\"command_version\") or command.get(\"version\")",
+            "int(command.get(\"command_version\") or command.get(\"version\") or 1)",
+        ),
+        (
+            "src/stoa/services/notification_service.py",
+            "classification = event.get(\"owner_classification\")",
+            "classification = event.get(\"owner_classification\") or event.get(\"event_type\")",
+        ),
+        (
+            "src/stoa/services/notification_service.py",
+            "return resolve_legacy_delivery_owner(event, table=table)",
+            "return AuthoritativeDeliveryOwnership.private_owner(owner_id=str(event.get('recipient_id')), generation=1)",
+        ),
+    ],
+)
+def test_authority_taint_mutations_fail_after_regeneration(
+    tmp_path: Path, relative: str, before: str, after: str
+):
+    module = _generator_module()
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    source = (ROOT / relative).read_text()
+    assert before in source
+    target.write_text(source.replace(before, after, 1))
+    with pytest.raises(ValueError, match="unsafe authority-bearing read"):
+        module.validate_taint_semantics(tmp_path)
 
 
 @pytest.mark.parametrize(
