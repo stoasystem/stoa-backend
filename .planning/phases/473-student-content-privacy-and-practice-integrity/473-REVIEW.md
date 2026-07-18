@@ -1,138 +1,88 @@
 ---
 phase: 473-student-content-privacy-and-practice-integrity
-reviewed: 2026-07-17T09:20:40Z
+reviewed: 2026-07-18T11:52:24Z
 depth: standard
-files_reviewed: 36
-files_reviewed_list:
-  - docs/security/phase-473-evidence-manifest.json
-  - docs/security/phase-473-evidence.md
-  - docs/security/route-authorization-inventory.json
-  - src/stoa/config.py
-  - src/stoa/db/repositories/attachment_repo.py
-  - src/stoa/db/repositories/practice_repo.py
-  - src/stoa/db/repositories/question_repo.py
-  - src/stoa/jobs/__init__.py
-  - src/stoa/jobs/upload_cleanup.py
-  - src/stoa/models/attachment.py
-  - src/stoa/models/practice.py
-  - src/stoa/models/question.py
-  - src/stoa/routers/conversations.py
-  - src/stoa/routers/files.py
-  - src/stoa/routers/practice.py
-  - src/stoa/routers/questions.py
-  - src/stoa/security/attachment_errors.py
-  - src/stoa/security/authorization.py
-  - src/stoa/security/private_telemetry.py
-  - src/stoa/security/route_authorization.py
-  - src/stoa/security/route_inventory.py
-  - src/stoa/services/ai_service.py
-  - src/stoa/services/attachment_service.py
-  - src/stoa/services/curriculum_service.py
-  - src/stoa/services/document_extraction_service.py
-  - src/stoa/services/entitlement_service.py
-  - src/stoa/services/file_validation_service.py
-  - src/stoa/services/ocr_service.py
-  - src/stoa/services/practice_projection_service.py
-  - tests/test_attachment_security.py
-  - tests/test_conversations.py
-  - tests/test_files.py
-  - tests/test_practice_privacy.py
-  - tests/test_questions.py
-  - tests/test_route_authorization_inventory.py
-  - tests/test_student_authorization_matrix.py
-findings:
-  critical: 4
-  warning: 2
+diff_base: fce68392137d1020a378d239c27af1cf9c7fe156^
+head: faf6646baf8a0e1810738a575969cab8ce91994d
+files_reviewed: 69
+severity:
+  critical: 2
+  warning: 3
   info: 0
-  total: 6
+  total: 5
 status: issues_found
 ---
 
-# Phase 473: Code Review Report
-
-**Reviewed:** 2026-07-17T09:20:40Z
-**Depth:** standard
-**Files Reviewed:** 36
-**Status:** issues_found
-
-## Narrative Findings (AI reviewer)
+# Phase 473 Code Review
 
 ## Summary
 
-Plans 473-15 and 473-16 close the exact malformed upload-level coordinates, candidate-local cleanup isolation, and malformed attachment-body ownership paths they changed. The review nevertheless found four ship-blocking correctness/privacy gaps and two robustness defects in adjacent phase paths that the source-bound evidence does not exercise.
+The deterministic 69-file `src`/`scripts` scope was reviewed at standard depth. The implementation closes the six findings from the earlier, narrower Phase 473 review, and the complete test suite and scoped lint pass. This final pass nevertheless found two ship-blocking account-deletion/provider-race defects and three robustness defects.
 
-The most direct regression is another provider-success transition: multipart part completion still accepts an absent, non-string, empty, or whitespace-only ETag, persists the part as completed, and removes its retry lease. Conversation completion transport also remains incorrectly normalized at the real repository boundary: `complete_message_command` swallows the typed retryable outcome before the router adapter can produce the promised structured 503 or perform an explicit ambiguity reread. A committed lost-response resume may then run AI against a silently partial DynamoDB `BatchGetItem`, and attachment deletion/account purge stops permanently at the first GSI page. These defects invalidate the evidence claims that every coordinate, completion transport, committed replay, and D-10 deletion path passed.
+Verification performed:
 
-Review probes confirmed that `complete_upload_part(..., provider_etag="")` returns `True` and persists the empty ETag, and that `complete_message_command` returns `False` when `transact` raises `RETRYABLE_DEPENDENCY`. The selected existing remediation tests still pass because they do not traverse either real boundary: 18 selected tests passed. Real S3 multipart/version behavior, deployed cleanup scheduling/IaC, and production log capture remain honestly **NOT RUN** and owned by Phases 479/480.
+- `.venv/bin/python -m pytest -q` — **1923 passed**
+- `.venv/bin/ruff check <all 69 scoped Python files>` — **all checks passed**
+- Source review — call-chain, conditional-write, deletion-fence, provider-effect, restart, and evidence-generator analysis across every existing file returned by the supplied diff-base command
 
-## Critical Issues
+## Critical findings
 
-### CR-01: Multipart part success accepts an unusable ETag and permanently closes the retry fence
+### CR-01: An active deletion-command lease is immediately stealable, and stale workers may overwrite branch results
 
-**Classification:** BLOCKER
-**Files:** `src/stoa/services/attachment_service.py:539-559,575-619,682-724`; `src/stoa/db/repositories/attachment_repo.py:410-440`
+**Files:** `src/stoa/jobs/account_deletion.py:79-99`; `src/stoa/db/repositories/account_deletion_repo.py:836-924`; `src/stoa/services/account_deletion_service.py:1284-1329`
 
-**Issue:** The strict provider-coordinate helper added by Plan 473-15 is not applied to `UploadPart` success. The service converts `result.get("ETag")` to `""` and passes it to `complete_upload_part`; stale reconciliation does the same for `ListParts`. The repository accepts that empty value, marks the part `completed`, and removes `lease_expires_at`. `complete_upload` trusts every completed ledger row and sends the empty ETag to `CompleteMultipartUpload`. The provider rejects that request, while subsequent identical chunk retries short-circuit on `status == "completed"` and can never repair the ledger. The upload remains unusable until expiry even if the part bytes were successfully stored.
+`run_account_deletion_scan` claims a command with an expiry two minutes in the future. `claim_deletion_command` decides whether a running lease is expired using `lease_expires_at < :expiry`, where `:expiry` is that *new future expiry*, rather than comparing the stored expiry with the current time. Almost every currently active lease therefore satisfies the takeover condition as soon as another scanner sees it.
 
-This is the same malformed-success/idempotency class Plan 473-15 claimed to close, just one transition earlier. The direct repository probe returned `True` and captured `:etag == ""`; the coordinate test matrix only covers upload issuance, staging completion, promotion, and cleanup writes.
+The returned lease owner/version is then discarded. `continue_command` reloads by command ID, and `persist_branch_result` conditions only on generation and `status == running`; it does not require the claim's lease owner or claimed command version. A stolen/stale worker can consequently overwrite a newer worker's cursor, epoch, debt, or completion result. Finalization validates the caller's in-memory branch map, while its transaction checks command version but not the stored branch-result map; branch persistence itself does not advance that version. This can make the two-clean-epoch proof diverge from the durable state used during concurrent execution and can duplicate irreversible provider cleanup.
 
-**Fix:** Validate the `UploadPart`/`ListParts` ETag with the non-coercing required-coordinate helper before calling `complete_upload_part`, and add the same guard inside `complete_upload_part` before it removes the lease. On malformed success, leave the part in `uploading` so an expired takeover can reconcile the exact provider part. Add the full absent/non-string/blank matrix for both `upload_part` and `list_parts`, plus a restart test proving the part is adopted once and assembly succeeds without another upload.
+**Fix:** Pass an explicit `now_epoch` to the claim and compare stored expiry with that value. Return and thread an opaque claim token (lease owner plus version) through the service; condition every branch persist, renewal, and finalization on it. Advance a CAS version with each branch result and validate the durable branch-result digest/set in the final transaction. Add two-worker tests covering an unexpired lease, expired takeover, stale cursor/result writes, and stale finalization.
 
-### CR-02: Real completion transport failures are swallowed before structured retry or lost-response reconciliation
+### CR-02: Missing owner-generation metadata bypasses delivery intents and calls providers directly
 
-**Classification:** BLOCKER
-**Files:** `src/stoa/db/repositories/attachment_repo.py:1141-1191,1905-1936`; `src/stoa/routers/conversations.py:908-922`; `tests/test_conversations.py:1123-1139`; `docs/security/phase-473-evidence.md:31,42,64`
+**Files:** `src/stoa/services/notification_service.py:747-779,934-965`; `src/stoa/services/websocket_service.py:193-268`
 
-**Issue:** `transact` correctly converts a generic completion SDK/transport exception into `AttachmentTransactionError(RETRYABLE_DEPENDENCY)`, but `complete_message_command` catches every `AttachmentTransactionError` and returns `False`. The router therefore never sees the typed failure through `_conversation_repository_call`; it merely polls the command and usually returns `message_in_progress` after one second. A known uncommitted outage is not the promised structured 503, while an ambiguous commit is not explicitly classified and reread at the repository boundary.
+Email digest and push delivery use the fenced `run_delivery_intent` path only when an owner and positive account-fence generation are present. Otherwise they call the email/push provider directly. WebSocket fanout similarly sets `leased = False` for a missing/invalid generation, then posts to matching connections without any account-fence recheck. These are private notification payloads, not the sealed `global_nonprivate` classification.
 
-The completion-stage test bypasses this behavior by monkeypatching `complete_message_command` itself to raise a raw exception. The review probe exercised the actual function with a typed retryable transaction and observed `False`. Consequently the evidence statement that completion transport and ambiguous reread paths all passed is not supported by the tested call chain.
+Legacy, malformed, or partially migrated rows can therefore produce outbound effects after account deletion has installed its permanent fence. The fallback directly contradicts the Phase 473 contract that unresolved private-looking delivery is debt and that every provider mutation is owner/fence/lease bound. It also allows the final deletion scan to race a delivery path it cannot cancel through an intent.
 
-**Fix:** Preserve a typed completion result. On `RETRYABLE_DEPENDENCY`, consistently reread the same command: return the stored completed result if the transaction committed, return structured `upload_service_unavailable` if it did not or cannot be read, and preserve conflict/concealment semantics for conditional outcomes. Do not collapse dependency and conditional ambiguity into one boolean. Test endpoint/timeout/generic SDK errors by injecting them below `transact_write_items`, including a commit-then-raise fake, for both regular and SSE routes.
-
-### CR-03: Lost-response replay can finalize a different AI answer from a partial attachment read
-
-**Classification:** BLOCKER
-**Files:** `src/stoa/db/repositories/attachment_repo.py:901-936`; `src/stoa/routers/conversations.py:662-689,833-856`
-
-**Issue:** `get_attachments` performs one DynamoDB `BatchGetItem` and ignores `UnprocessedKeys`. It also does not require the returned IDs to equal the requested IDs. During `message_committed`/`ai_running` recovery, the router silently constructs `prepared` from whatever subset arrived, emits summaries for that subset, and continues extraction and AI generation. Normal DynamoDB throttling can therefore make a committed message with up to eight attachments resume using only some or none of its immutable content. The final stored assistant result can differ from the original request while the same idempotency key reports successful one-effect convergence.
-
-The committed-lost-response test replaces `get_attachments` with a complete in-memory dictionary, so it cannot detect this provider-supported partial-success shape.
-
-**Fix:** Retry `UnprocessedKeys` with a small bounded policy and consistent redacted dependency handling. Before AI work, require every stored attachment ID to resolve to the expected active owner-bound immutable record; if the complete set cannot be loaded, raise `upload_service_unavailable` without claiming/rerunning the AI lease. Add one- and multi-round `UnprocessedKeys` tests, plus a permanently missing item case, and assert zero extraction/AI/completion effects until the exact committed set is available.
-
-### CR-04: Conversation deletion and account purge leave private attachments beyond the first DynamoDB page
-
-**Classification:** BLOCKER
-**Files:** `src/stoa/db/repositories/attachment_repo.py:1473-1484`; `src/stoa/services/attachment_service.py:1571-1634,1637-1676`; `docs/security/phase-473-evidence.md:58`
-
-**Issue:** `list_owner_attachment_items` issues one GSI query and discards `LastEvaluatedKey`. Both conversation deletion and account purge depend on that result as if it were exhaustive. Once an owner has more than one DynamoDB page, associations or attachment metadata on later pages are never released. Worse, an association and its attachment metadata can land on different pages; the first-page association is skipped because its metadata is absent, and repeated calls query the same first page, so the private object can remain indefinitely after conversation deletion or account closure.
-
-This is a privacy-retention correctness failure under D-10, not a query optimization. The cited evidence test uses a small single-page fake and cannot establish complete deletion.
-
-**Fix:** Make the owner-item repository API exhaustively paginate, or expose a bounded continuation and persist deletion progress until every page is processed. Ensure association/metadata joins work across page boundaries and that retries resume after partial provider/database failure. Add multi-page tests with the association and metadata split across pages, and verify account purge/conversation deletion removes all logical references and exactly the last physical version.
+**Fix:** Fail closed for private rows without an authoritative owner and generation. Resolve legacy ownership through an authoritative strongly consistent join before delivery; only a persisted, explicit sealed `global_nonprivate` classification may use a non-owner path. Route all other digest, push, and WebSocket effects through one intent/lease primitive and add deletion-race tests for missing, malformed, and stale generation metadata.
 
 ## Warnings
 
-### WR-01: Deterministic attachment errors are masked as an in-progress command after quota was charged
+### WR-01: Production deletion audit timestamps default to empty strings
 
-**Classification:** WARNING
-**Files:** `src/stoa/routers/conversations.py:706-776`; `src/stoa/services/attachment_service.py:1455-1478`
+**Files:** `src/stoa/services/account_deletion_service.py:1264-1278,1313-1329`; `src/stoa/jobs/account_deletion.py:76`; `src/stoa/db/repositories/account_deletion_repo.py:913-923,982-1029`
 
-**Issue:** After the command/quota claim succeeds, any `AttachmentDecisionError` from binding is caught and followed by a command reread. The command necessarily exists with the same fingerprint even when the bind transaction definitely failed and its status is still `claimed`, so the code always enters `_wait_for_message_command` and eventually reports `message_in_progress`. Stable outcomes such as `storage_quota_exceeded` or a concealed upload/attachment conflict are lost, the daily message quota remains charged, and the claimed command can repeat the same deterministic failure until its TTL expires.
+`AccountDeletionService` defaults `self.now` to `lambda: ""`. Both production entry points construct it without injecting a clock. Branch `updated_at`, terminal `completed_at`, receipt completion time, and the permanent fence's `deleted_at`/`updated_at` are therefore blank in production. Tests mostly inject a deterministic clock, hiding the default-path defect.
 
-**Fix:** Reread only to resolve an ambiguous dependency/lost-response result. If the command advanced to `message_committed`, `ai_running`, or `completed`, converge normally; if it remains `claimed`, propagate the original deterministic error (or the structured dependency outage) and apply the documented quota-release/consumption policy. Add command-level tests for quota and concealed-resource transaction outcomes, not only service-level transaction classification.
+**Fix:** Default to `datetime.now(UTC).isoformat()` and reject blank or unparsable lifecycle timestamps at the repository boundary. Exercise the production constructor in finalization tests.
 
-### WR-02: External OOXML relationships bypass the active-content guard
+### WR-02: Parent-profile scrubbing can overwrite concurrent parent updates
 
-**Classification:** WARNING
-**File:** `src/stoa/services/document_extraction_service.py:19-27,180-197`
+**Files:** `src/stoa/services/account_deletion_service.py:414-433`; `src/stoa/db/repositories/account_deletion_repo.py:595-662`
 
-**Issue:** Archive names are lowercased before comparison, but `_ACTIVE_MEMBER_PARTS` contains mixed-case `externalLinks/`, so `xl/externalLinks/...` never matches. The relationship check is also a raw search for exactly `targetmode="external"`; valid XML using single quotes or whitespace around `=` bypasses it. The parser currently reads only selected members, which limits immediate exploitation, but documents that violate the explicit no-active/external-content contract are accepted and sent into extraction rather than rejected as `active_content`.
+The account-profile branch deep-copies a parent profile, removes the deleting child, and replaces the entire row. The transaction verifies both account fences, but the row condition checks only that the row exists and still has the same parent user ID. It does not compare a row version or the original image. A concurrent active-parent profile update between scan and `Put` can be silently lost when the stale scrubbed copy wins.
 
-**Fix:** Store all member markers in lowercase and parse `.rels` XML, rejecting any `Relationship` whose `TargetMode` attribute equals `External` case-insensitively regardless of quoting or whitespace. Add XLSX external-link members and single-quoted/whitespace relationship fixtures.
+**Fix:** Use a narrow `UpdateExpression` where the schema permits it, or require and increment a row version/original-image digest in the transaction. On conflict, retain branch debt and rescan. Add a concurrent parent preference/profile update test.
+
+### WR-03: Claimed notification delivery intents have no crash-recovery path
+
+**Files:** `src/stoa/services/notification_service.py:115-170`; `src/stoa/db/repositories/notification_repo.py:361-386`
+
+Delivery intents store `lease_expires_at`, but `claim_delivery_intent` accepts only `status == registered`; it never permits takeover of an expired `claimed` intent. If a worker crashes after claim and before completion, replay observes the existing claimed record, fails the registered-only claim, and returns `retryable_claim_conflict` forever. The same operation is never delivered or conclusively terminalized, and the orphaned pending intent can remain account-deletion debt.
+
+**Fix:** Add expired-lease takeover using a comparison against current epoch, with a new owner/token and CAS protection. Preserve the no-blind-retry rule by allowing takeover only while no provider effect could have begun, or introduce an explicit pre-effect state transition that makes ambiguity terminal. Test crashes before the final fence check, immediately before provider invocation, and after provider acceptance.
+
+## Scope
+
+The review covered every existing file returned by:
+
+```text
+git diff --name-only fce68392137d1020a378d239c27af1cf9c7fe156^..HEAD -- src scripts
+```
+
+The scope contains 5 scripts and 64 source files (69 total). No source file was modified by this review.
 
 ---
 
-_Reviewed: 2026-07-17T09:20:40Z_
-_Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Reviewer: Codex using the gsd-code-review workflow_
