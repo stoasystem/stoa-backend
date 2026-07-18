@@ -1,82 +1,85 @@
-# Phase 473 final privacy and practice-integrity evidence
+# Phase 473 checked privacy and practice-integrity evidence
 
-`testedSourceSha`: `bc61107b920b158201ce4927485986d43aac59c8`
+Immutable candidate: `cf3549ad799843fd91bb7494064a02d57227c953`. Phase base: `8badde886ca2c9a6fa8baada0e387977ec7f99f6`.
+All observations are local deterministic tests/fakes; external obligations remain NOT RUN.
 
-Evidence date: 2026-07-17 UTC. Environment: local offline test processes in `/Users/zhdeng/stoa-backend`. The tested source was the clean committed tree containing Plans 473-15 and 473-16 plus the checked authorization inventory. The inventory was generated twice before the source lock observation and twice after all test/static gates; every generated copy was byte-identical to the checked JSON. HEAD and tree cleanliness were unchanged throughout the successful observation set.
+## Checked gate receipts
 
-No production mutation, live AWS/provider call, object upload/delete, deployed scheduler invocation, identity/billing effect, or student-data mutation was performed. Provider, table, object, content, actor, concurrency, and failure effects were deterministic local fakes only.
-
-## Immutable source and blocking gates
-
-| Gate | Exact command | Observed result |
-| --- | --- | --- |
-| CR-009 / WR-009/010/011 remediation selectors | `.venv/bin/python -m pytest -q tests/test_attachment_security.py::test_malformed_success_upload_id_retains_issuance_fence tests/test_attachment_security.py::test_malformed_success_staging_coordinate_retains_assembly_fence tests/test_attachment_security.py::test_malformed_success_immutable_coordinate_retains_promotion_fence tests/test_attachment_security.py::test_malformed_success_coordinates_recover_after_restart_without_new_mutation tests/test_attachment_security.py::test_repository_coordinate_guards_run_before_fence_removal tests/test_attachment_security.py::test_repository_coordinate_compatibility_aliases_reject_invalid_values tests/test_attachment_security.py::test_no_false_cleanup_complete_when_assembly_version_is_unproven tests/test_attachment_security.py::test_cleanup_batch_candidate_isolation_continues_after_first_failure tests/test_attachment_security.py::test_cleanup_batch_unexpected_candidate_isolation_keeps_opaque_continuation tests/test_attachment_security.py::test_cleanup_batch_global_candidate_listing_failure_is_not_empty_success tests/test_attachment_security.py::test_validation_non_readable_body_ownership_closes_once tests/test_attachment_security.py::test_described_transaction_generic_transport_is_retryable_and_redacted tests/test_conversations.py::test_conversation_non_readable_body_ownership_closes_once tests/test_conversations.py::test_stage_a_transport_is_structured_retry_without_diagnostics tests/test_conversations.py::test_regular_sse_stage_a_transport_has_identical_structured_retry tests/test_conversations.py::test_conversation_repository_transport_stages_are_structured_retry tests/test_conversations.py::test_replay_poll_transport_is_structured_retry tests/test_conversations.py::test_resume_stored_message_transport_is_structured_retry tests/test_conversations.py::test_committed_lost_response_same_fingerprint_retry_has_one_effect_set` | PASS — 99 passed in 0.31s; observed 2026-07-17T09:03:25Z |
-| Phase 473 matrix | `.venv/bin/python -m pytest -q tests/test_files.py tests/test_attachment_security.py tests/test_questions.py tests/test_conversations.py tests/test_practice.py tests/test_practice_privacy.py tests/test_curriculum_rollout.py tests/test_route_authorization_inventory.py tests/test_student_authorization_matrix.py` | PASS — 445 passed in 4.77s; zero failures; observed 2026-07-17T09:03:38Z |
-| Phase 472 authorization regression | `.venv/bin/python -m pytest -q tests/test_auth_security.py tests/test_identity_authorization.py tests/test_client_error_actions.py tests/test_teacher_onboarding.py tests/test_teacher_terminology_gate.py tests/test_student_authorization_matrix.py tests/test_route_authorization_inventory.py tests/test_authorization_audit.py tests/test_public_auth_error_boundary.py tests/test_public_identity_lifecycle.py tests/test_notifications.py tests/test_websocket_notifications.py tests/test_admin_authorization.py tests/test_privileged_identity_reconciliation.py tests/test_provision_production_admin.py tests/test_auth_account_lifecycle.py tests/test_parent_children.py tests/test_questions.py tests/test_teacher_dispatch.py tests/test_adaptive_learning.py tests/test_curriculum_ops.py` | PASS — 636 passed in 8.81s; zero failures; observed 2026-07-17T09:04:08Z |
-| Full repository suite | `.venv/bin/python -m pytest -q` | PASS — 1,447 passed in 34.40s; zero failures; observed 2026-07-17T09:04:53Z |
-| Targeted static analysis | `.venv/bin/ruff check src/stoa/db/repositories/attachment_repo.py src/stoa/services/attachment_service.py src/stoa/jobs/upload_cleanup.py src/stoa/routers/conversations.py tests/test_attachment_security.py tests/test_files.py tests/test_conversations.py` | PASS — all Plans 15/16 actual and declared Python paths checked; zero findings at 2026-07-17T09:05:12Z |
-| Diff hygiene | `git diff --check` | PASS — zero findings |
-| Deterministic authorization inventory | `PYTHONPATH=src .venv/bin/python scripts/generate_route_authorization_inventory.py --check` | PASS — four generated copies and checked JSON were identical; SHA-256 `9a3be6b628af5b08cc2ea918a7f775221d1c3f272b603fffd61f982008413b03`, 106,534 bytes |
-| Fixed-string privacy denylist | `! rg -F -i -f /tmp/phase473-gap-private-denylist.txt <all test logs, all generated/checked inventories, and all three evidence artifacts>` | PASS — 107 seeded values; zero matches after final artifact generation |
-
-Captured log SHA-256 values: remediation `390bc8caab6281a63e81c6e1609c1d53dead80905a9fa3fac9be3de3aff943df`; focused `8687f195db3922fd68c3b539157d97498c747b1b5527a24571fc8fafc85455d0`; Phase 472 `c84cacd7942b819cf7f94ffa07f7e29a7740baf14823c9e94df999e6705a061b`; full suite `51d65f168779a9259d294dd9a448ce4a7170244b7cc7d050e6f5c7a1c897b520`; Ruff `82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18`; diff check `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
-
-## Gap-finding closure
-
-| Finding | Exact command / selector | Observed result |
-| --- | --- | --- |
-| CR-009 | `tests/test_attachment_security.py::test_malformed_success_coordinates_recover_after_restart_without_new_mutation` plus `tests/test_attachment_security.py::test_repository_coordinate_guards_run_before_fence_removal` | PASS — every missing, non-string, empty, and whitespace provider-coordinate case passed in the 99-test remediation run; issuance, assembly, and promotion fences remain durable and direct repository calls cannot remove them |
-| WR-009 | `tests/test_attachment_security.py::test_cleanup_batch_candidate_isolation_continues_after_first_failure` plus `tests/test_attachment_security.py::test_cleanup_batch_unexpected_candidate_isolation_keeps_opaque_continuation` | PASS — all parameterized candidate-local lookup/repository/provider/malformed/unexpected failure cases passed; later candidates converge while global page-list failure remains visible |
-| WR-010 | `tests/test_attachment_security.py::test_validation_non_readable_body_ownership_closes_once` plus `tests/test_conversations.py::test_conversation_non_readable_body_ownership_closes_once` | PASS — every missing, non-callable, property-raising, call-raising, and close-failure case passed; each closable non-None body is offered exactly one close without replacing the primary result |
-| WR-011 | `tests/test_conversations.py::test_conversation_repository_transport_stages_are_structured_retry` plus `tests/test_conversations.py::test_committed_lost_response_same_fingerprint_retry_has_one_effect_set` | PASS — Stage-A, claim, transaction, race reread, polling, stored recovery, AI lease, terminal marking, completion, and ambiguous committed-reread controls all passed with structured redacted retry/convergence |
-| CR-007 | `tests/test_attachment_security.py::test_validated_cleanup_deletes_staging_and_immutable_exact_versions_before_complete` plus `tests/test_attachment_security.py::test_no_false_cleanup_complete_when_assembly_version_is_unproven` | PASS — both controls passed in the 445-test matrix/remediation run; exact unreferenced staging/immutable versions are deleted before completion and unresolved provider success cannot manufacture completion |
-| WR-006 | `tests/test_attachment_security.py::test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys` plus `tests/test_attachment_security.py::test_lost_transaction_retry_rebuilds_identical_attachment_and_association_keys` | PASS — both selectors passed in the 445-test matrix; command-derived IDs and durable keys remain exact across retry |
-| WR-007 | `tests/test_files.py::test_complete_gateway_dependency_matrix_is_one_redacted_safe_503` plus `tests/test_conversations.py::test_conversation_repository_transport_stages_are_structured_retry` | PASS — file gateway and connected conversation dependency stages converge on structured retryable responses with zero raw diagnostics |
-| WR-008 | `tests/test_attachment_security.py::test_validation_provider_body_closes_once_on_every_read_exit` plus `tests/test_conversations.py::test_conversation_exact_version_body_closes_once_on_every_extraction_exit` | PASS — readable and malformed-body matrices passed; the exact provider body closes once across success, primary failure, and malformed-shape exits |
+| Gate | Nodes | Fail | Error | Skip | XFAIL | XPASS | Privacy | Result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `P473-NEW-CLOSED` | 889 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `P473-INHERITED-9` | 455 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `P472-REGRESSION-21` | 636 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `FULL-PYTEST` | 1923 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `RUFF-PHASE-DIFF` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `DIFF-CHECK-PHASE` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `SHOW-CHECK-CANDIDATE` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `READ-BOUNDARY-GENERATE-A` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `READ-BOUNDARY-GENERATE-B` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `READ-BOUNDARY-CHECK` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `PRIVATE-STORE-GENERATE-A` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `PRIVATE-STORE-GENERATE-B` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `PRIVATE-STORE-CHECK` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `ROUTE-GENERATE-A` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `ROUTE-GENERATE-B` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `ROUTE-CHECK` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
+| `PRIVACY-DENIAL` | 1 | 0 | 0 | 0 | 0 | 0 | 0 | PASS |
 
 ## Requirement proof
 
-| Requirement | Exact command / selector | Observed result |
+| Requirement | Observed node | Result |
 | --- | --- | --- |
-| V9PRIV-01 | `tests/test_attachment_security.py::test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic` plus `tests/test_conversations.py::test_committed_lost_response_same_fingerprint_retry_has_one_effect_set` | PASS — Actor-owned opaque input, immutable OCR coordinates, atomic association, and one-effect replay all passed within the 445/99 observations |
-| V9PRIV-02 | `tests/test_attachment_security.py::test_malformed_success_coordinates_recover_after_restart_without_new_mutation` plus `tests/test_attachment_security.py::test_cleanup_batch_candidate_isolation_continues_after_first_failure` plus `tests/test_conversations.py::test_conversation_repository_transport_stages_are_structured_retry` | PASS — strict validation, durable fences, exact cleanup truth, batch isolation, Body ownership, and stable dependency handling all passed locally |
-| V9PRIV-03 | `tests/test_practice_privacy.py::test_every_practice_preview_route_recursively_omits_answer_canaries` | PASS — selector and role matrix passed within 445 tests; preview routes remain structurally answer-free and reveal requires a recorded attempt |
+| V9PRIV-01 | `tests/test_authorization_audit.py::test_denial_persists_redacted_distinct_resource_events_and_idempotent_replay` | PASS |
+| V9PRIV-02 | `tests/test_authorization_audit.py::test_denial_persists_redacted_distinct_resource_events_and_idempotent_replay` | PASS |
+| V9PRIV-03 | `tests/test_authorization_audit.py::test_denial_persists_redacted_distinct_resource_events_and_idempotent_replay` | PASS |
 
-## Decision results
+## Decision proof
 
-| Decision | Exact command / selector | Observed result |
+| Decision | Observed node | Result |
 | --- | --- | --- |
-| D-01 | `tests/test_attachment_security.py::test_validate_supported_bytes` | PASS — all parameter cases passed within the 445 passed matrix; question-image acceptance remains JPEG/PNG only |
-| D-02 | `tests/test_attachment_security.py::test_validate_rejects_mime_magic_dimension_archive_and_utf8_failures` | PASS — image size/dimension and bounded-content negatives passed within 445 passed |
-| D-03 | `tests/test_attachment_security.py::test_validate_supported_bytes` | PASS — conversation JPEG/PNG/PDF/DOCX/PPTX/XLSX/TXT/MD cases passed within 445 passed |
-| D-04 | `tests/test_attachment_security.py::test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version` | PASS — exact 50 MiB boundary passed within 445 passed; max-plus-one negative also passed |
-| D-05 | `tests/test_attachment_security.py::test_validate_rejects_mime_magic_dimension_archive_and_utf8_failures` | PASS — extension/MIME/magic/container/integrity cases passed within 445 passed |
-| D-06 | `tests/test_attachment_security.py::test_upload_contract_constants_are_locked` | PASS — exact 1,800-second intent expiry assertion passed within 445 passed |
-| D-07 | `tests/test_conversations.py::test_committed_lost_response_same_fingerprint_retry_has_one_effect_set` | PASS — same-fingerprint post-commit retry produced one original message, attachment set, quota charge, extraction, AI call, and completion in the 99-test remediation run |
-| D-08 | `tests/test_questions.py::test_terminal_ocr_failure_invalidates_without_question_write` | PASS — terminal invalidation and transient retry controls passed within 445 passed |
-| D-09 | `tests/test_attachment_security.py::test_malformed_success_coordinates_recover_after_restart_without_new_mutation` plus `tests/test_attachment_security.py::test_no_false_cleanup_complete_when_assembly_version_is_unproven` plus `tests/test_attachment_security.py::test_cleanup_batch_candidate_isolation_continues_after_first_failure` | PASS — strict coordinate/fence, truthful exact cleanup, and first-candidate-fails/later-candidate-progress controls all passed within the 99-test remediation run |
-| D-10 | `tests/test_attachment_security.py::test_reference_release_preserves_multi_reference_then_deletes_last_once` | PASS — durable reference retention and explicit last-release deletion passed within 445 passed |
-| D-11 | `tests/test_attachment_security.py::test_storage_quota_uses_authoritative_entitlement_tiers` | PASS — exact 5 GiB/15 GiB tier assertions passed within 445 passed |
-| D-12 | `tests/test_attachment_security.py::test_saved_attachment_reuse_does_not_mutate_storage_usage` | PASS — owner-scoped logical reuse with zero extra storage charge passed within 445 passed |
-| D-13 | `tests/test_attachment_security.py::test_upload_contract_rejects_client_selected_owner_and_storage_fields` | PASS — all client owner/storage-coordinate parameter cases passed within 445 passed |
-| D-14 | `tests/test_files.py::test_missing_and_foreign_complete_have_same_safe_shape` | PASS — missing/foreign equivalence passed within 445 passed |
-| D-15 | `tests/test_attachment_security.py::test_attachment_error_registry_is_exhaustive_and_retry_is_bounded` | PASS — `upload_expired` status/action contract passed within 445 passed |
-| D-16 | `tests/test_attachment_security.py::test_malformed_success_upload_id_retains_issuance_fence` plus `tests/test_conversations.py::test_conversation_repository_transport_stages_are_structured_retry` plus `tests/test_conversations.py::test_replay_poll_transport_is_structured_retry` plus `tests/test_conversations.py::test_committed_lost_response_same_fingerprint_retry_has_one_effect_set` | PASS — malformed provider coordinates and every Stage-A/poll/transaction/reread/lease/completion transport path produced stable structured outcomes or same-fingerprint convergence within 99 passed |
-| D-17 | `tests/test_attachment_security.py::test_ai_private_telemetry_excludes_input_output_and_provider_canaries` | PASS — local response/log privacy control passed within 445 passed; deployed log capture remains NOT RUN |
-| D-18 | `tests/test_practice.py::test_answer_is_revealed_only_after_every_attempt_is_persisted` | PASS — both correct/incorrect write-before-reveal cases passed within 445 passed |
-| D-19 | `tests/test_practice.py::test_hint_requires_approval_and_rejects_answer_or_explanation_canaries` | PASS — directional-only hint controls passed within 445 passed |
-| D-20 | `tests/test_practice_privacy.py::test_every_practice_preview_route_recursively_omits_answer_canaries` | PASS — all student preview families passed within 445 passed |
-| D-21 | `tests/test_student_authorization_matrix.py::test_assigned_teacher_and_active_admin_read_only_curriculum_answers` | PASS — exact assigned-teacher and narrow admin read positives passed within 445 passed |
-| D-22 | `tests/test_practice_privacy.py::test_privileged_answer_route_hides_unassigned_stale_wrong_scope_and_roles` | PASS — anonymous/student/parent/unassigned and stale/wrong-scope role negatives passed within 445 passed |
+| D-01 | `tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body` | PASS |
+| D-02 | `tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body` | PASS |
+| D-03 | `tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context` | PASS |
+| D-04 | `tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body` | PASS |
+| D-05 | `tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context` | PASS |
+| D-06 | `tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted` | PASS |
+| D-07 | `tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape[duplicate-row]` | PASS |
+| D-08 | `tests/test_phase473_conversation_replay.py::test_regular_and_sse_share_one_closed_executor_boundary` | PASS |
+| D-09 | `tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted` | PASS |
+| D-10 | `tests/test_authorization_audit.py::test_denial_persists_redacted_distinct_resource_events_and_idempotent_replay` | PASS |
+| D-11 | `tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body` | PASS |
+| D-12 | `tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape[duplicate-row]` | PASS |
+| D-13 | `tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal[accepted_mislabeled_purged]` | PASS |
+| D-14 | `tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape[duplicate-row]` | PASS |
+| D-15 | `tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted` | PASS |
+| D-16 | `tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only` | PASS |
+| D-17 | `tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal[accepted_mislabeled_purged]` | PASS |
+| D-18 | `tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load[bad-hash]` | PASS |
+| D-19 | `tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers` | PASS |
+| D-20 | `tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load[bad-hash]` | PASS |
+| D-21 | `tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load[bad-hash]` | PASS |
+| D-22 | `tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load[bad-hash]` | PASS |
 
-Canonical role vocabulary remains exactly `student|parent|teacher|admin`; one account has one role. Public failures expose only stable structured code, safe message, server correlation, and bounded recovery guidance.
+## Retained verification/review findings
 
-## External evidence boundaries
-
-| External item | Status | Boundary |
+| Finding | Observed node | Result |
 | --- | --- | --- |
-| Real S3 chunk, multipart, version, promotion, overwrite, restart-recovery, and immutable-read behavior | **NOT RUN** | No separately approved non-production bucket or credentials; local deterministic fakes do not prove deployed provider policy. Phase 479 owns this evidence. |
-| Deployed cleanup scheduler/EventBridge/Lambda/IaC, retries, and alarms | **NOT RUN** | Authoritative deployment/IaC evidence is unavailable. Phase 479 owns this evidence. |
-| Production/deployed log-redaction capture | **NOT RUN** | Production access/provider execution was not approved; only local captured-log proof exists. Phase 480 owns this evidence. |
+| CR-01 | `tests/test_phase473_provider_state_machine.py::test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_unequal_checksum[1]` | PASS |
+| CR-02 | `tests/test_phase473_message_command.py::test_completion_transport_is_typed_and_commit_then_raise_reconciles[False]` | PASS |
+| CR-03 | `tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape[duplicate-row]` | PASS |
+| CR-04 | `tests/test_phase473_retention_reconciliation.py::test_strong_owner_enumeration_joins_metadata_and_associations_across_pages` | PASS |
+| WR-01 | `tests/test_phase473_message_command.py::test_deterministic_prebind_rejection_is_terminal_and_compensates_once[storage_quota_exceeded]` | PASS |
+| WR-02 | `tests/test_phase473_document_boundary.py::test_relationship_external_detection_is_encoding_and_spelling_independent[<Relationships><Relationship TARGETMODE='external' Target='//private.invalid/x' Type='x'/></Relationships>]` | PASS |
 
-These boundaries are limitations, not passes. This document intentionally contains no SHA for the later docs-only commit that contains it.
+## Complete boundary appendices
+
+The checked results contain 49 read dataflows, 226 private writes, 17 exact deletion branches, and 3 retained-policy rows, each mapped exactly once to observed nodes. Purge/no-resurrection selectors are included.
+Legal-retention-blocked material remains retained policy debt. Provider accepted, delivered, or acceptance-unknown copies remain outside backend purge authority and are never labeled deleted. Only purgeable exact absence is called purged.
+
+## External obligations
+
+| Obligation | Status | Owner |
+| --- | --- | --- |
+| `P479-REAL-S3-MULTIPART-VERSIONING` | **NOT RUN** | Phase 479 |
+| `P480-DEPLOYED-CLEANUP-SCHEDULER-IAC` | **NOT RUN** | Phase 480 |
+| `P480-PRODUCTION-LOGS` | **NOT RUN** | Phase 480 |
