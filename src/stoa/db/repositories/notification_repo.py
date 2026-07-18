@@ -732,6 +732,17 @@ def begin_delivery_effect(
                 str(scope.owner_id), int(scope.generation or 0)
             ),
         )
+    else:
+        update_details = update["Update"]
+        update_details["ConditionExpression"] += (
+            " AND scope_kind=:global_kind AND classification_seal=:classification_seal"
+        )
+        update_details["ExpressionAttributeValues"].update(
+            {
+                ":global_kind": "global_nonprivate",
+                ":classification_seal": scope.classification_seal,
+            }
+        )
     try:
         account_deletion_repo.transact(operations, table=target)
     except Exception as exc:

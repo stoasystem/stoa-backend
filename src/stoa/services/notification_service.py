@@ -114,63 +114,124 @@ def _canonical_payload_digest(payload: Any) -> str:
 
 def run_delivery_intent(
     *,
-    owner_id: str,
-    generation: int,
+    scope: notification_repo.DeliveryIntentScope | None = None,
+    owner_id: str | None = None,
+    generation: int | None = None,
     operation_id: str,
     channel: str,
     event_ids: list[str],
     payload: Any,
     provider_call: Any,
+    now_epoch: int | None = None,
+    lease_seconds: int = 90,
 ) -> dict[str, Any]:
-    """Claim, twice recheck, and classify one provider mutation without blind retry."""
-    lease_owner = f"delivery-worker-{uuid4().hex}"
+    """Cross a durable pre-effect/inflight boundary before one provider mutation."""
+    if scope is None:
+        scope = notification_repo.DeliveryIntentScope.private_owner(
+            owner_id=str(owner_id or ""), generation=int(generation or 0)
+        )
+    if not isinstance(scope, notification_repo.DeliveryIntentScope):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "delivery scope is required"
+        )
+    if type(now_epoch) is not int:
+        now_epoch = int(datetime.now(timezone.utc).timestamp())
+    if now_epoch < 0 or type(lease_seconds) is not int or lease_seconds <= 0:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "delivery lease time is invalid"
+        )
     created_at = now_iso()
+    payload_digest = _canonical_payload_digest(payload)
     intent = notification_repo.register_delivery_intent(
-        owner_id=owner_id,
-        generation=generation,
+        scope=scope,
         operation_id=operation_id,
         channel=channel,
         event_ids=list(event_ids),
-        payload_digest=_canonical_payload_digest(payload),
+        payload_digest=payload_digest,
         now_iso=created_at,
     )
-    prior_status = str(intent.get("status") or "")
-    if prior_status in {"accepted", "provider_acceptance_unknown", "canceled_account_deletion"}:
+    prior_status = str(intent.get("outcome_status") or intent.get("status") or "")
+    if prior_status in {
+        "accepted",
+        "provider_acceptance_unknown",
+        "canceled_account_deletion",
+    }:
         return {"status": prior_status}
+    try:
+        recovered = notification_repo.recover_delivery_intent(
+            scope=scope,
+            operation_id=operation_id,
+            payload_digest=payload_digest,
+            now_epoch=now_epoch,
+            now_iso=now_iso(),
+        )
+    except account_deletion_repo.AccountDeletionConflict:
+        return {"status": "retryable_claim_conflict"}
+    recovered_status = str(
+        recovered.get("outcome_status") or recovered.get("status") or ""
+    )
+    if recovered_status in {
+        "accepted",
+        "provider_acceptance_unknown",
+        "canceled_account_deletion",
+    }:
+        return {"status": recovered_status}
     claimed = notification_repo.claim_delivery_intent(
-        owner_id=owner_id,
-        generation=generation,
+        scope=scope,
         operation_id=operation_id,
-        lease_owner=lease_owner,
-        lease_expires_at=int(datetime.now(timezone.utc).timestamp()) + 90,
+        payload_digest=payload_digest,
+        now_epoch=now_epoch,
+        lease_expires_at=now_epoch + lease_seconds,
         now_iso=now_iso(),
     )
     if not claimed:
         return {"status": "retryable_claim_conflict"}
-    check = {
-        "owner_id": owner_id,
-        "generation": generation,
-        "operation_id": operation_id,
-        "lease_owner": lease_owner,
-    }
-    # The second check is deliberately adjacent to the provider effect.  A
-    # claim made before the permanent fence may not act after it changes.
-    if not notification_repo.delivery_intent_sendable(**check) or not notification_repo.delivery_intent_sendable(**check):
-        notification_repo.complete_delivery_intent(
-            **check, status="canceled_account_deletion", now_iso=now_iso()
-        )
+    if not notification_repo.delivery_intent_sendable(scope=scope, claim=claimed):
+        try:
+            notification_repo.cancel_delivery_intent(
+                scope=scope, claim=claimed, now_iso=now_iso()
+            )
+        except account_deletion_repo.AccountDeletionConflict:
+            return {"status": "retryable_claim_conflict"}
         return {"status": "canceled_account_deletion"}
     try:
-        provider_result = provider_call()
-    except Exception:
-        notification_repo.complete_delivery_intent(
-            **check, status="provider_acceptance_unknown", now_iso=now_iso()
+        inflight_claim = notification_repo.begin_delivery_effect(
+            scope=scope,
+            claim=claimed,
+            now_iso=now_iso(),
         )
+    except account_deletion_repo.AccountDeletionConflict:
+        try:
+            notification_repo.cancel_delivery_intent(
+                scope=scope, claim=claimed, now_iso=now_iso()
+            )
+        except account_deletion_repo.AccountDeletionConflict:
+            return {"status": "retryable_claim_conflict"}
+        return {"status": "canceled_account_deletion"}
+    # No call may be inserted between this durable begin and the provider.
+    try:
+        provider_call()
+    except Exception:
+        try:
+            notification_repo.complete_delivery_intent(
+                scope=scope,
+                claim=inflight_claim,
+                status="provider_acceptance_unknown",
+                now_iso=now_iso(),
+            )
+        except Exception:
+            pass
         return {"status": "provider_acceptance_unknown"}
-    notification_repo.complete_delivery_intent(
-        **check, status="accepted", now_iso=now_iso()
-    )
-    return {"status": "accepted", "provider_result": provider_result}
+    try:
+        notification_repo.complete_delivery_intent(
+            scope=scope,
+            claim=inflight_claim,
+            status="accepted",
+            now_iso=now_iso(),
+        )
+    except Exception:
+        return {"status": "provider_acceptance_unknown"}
+    return {"status": "accepted"}
 
 
 def create_event(

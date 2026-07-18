@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 import pytest
 
-from stoa.db.repositories import notification_repo, websocket_repo
+from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
 
 
@@ -166,13 +166,31 @@ def test_delivery_claim_rechecks_fence_immediately_before_provider_effect(
 ) -> None:
     calls: list[str] = []
     monkeypatch.setattr(notification_repo, "register_delivery_intent", lambda **_kw: {"status": "registered"})
-    monkeypatch.setattr(notification_repo, "claim_delivery_intent", lambda **_kw: {"status": "claimed"})
-    checks = iter((True, False))
-    monkeypatch.setattr(notification_repo, "delivery_intent_sendable", lambda **_kw: next(checks))
+    monkeypatch.setattr(notification_repo, "recover_delivery_intent", lambda **_kw: {"status": "registered"})
+
+    def claim(**kwargs: Any) -> Any:
+        return notification_repo.DeliveryIntentClaim(
+            operation_id=kwargs["operation_id"],
+            lease_owner="opaque-fence-claim",
+            intent_version=2,
+            lease_expires_at=kwargs["lease_expires_at"],
+            scope_digest=kwargs["scope"].digest,
+            payload_digest=kwargs["payload_digest"],
+        )
+
+    monkeypatch.setattr(notification_repo, "claim_delivery_intent", claim)
+    monkeypatch.setattr(notification_repo, "delivery_intent_sendable", lambda **_kw: True)
     monkeypatch.setattr(
         notification_repo,
-        "complete_delivery_intent",
-        lambda **kw: calls.append(str(kw["status"])) or dict(kw),
+        "begin_delivery_effect",
+        lambda **_kw: (_ for _ in ()).throw(
+            account_deletion_repo.AccountDeletionConflict("fence changed")
+        ),
+    )
+    monkeypatch.setattr(
+        notification_repo,
+        "cancel_delivery_intent",
+        lambda **kw: calls.append("canceled_account_deletion") or dict(kw),
     )
     result = _contract(notification_service, "run_delivery_intent")(
         owner_id=STUDENT_ID,
@@ -193,8 +211,25 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
     provider_calls: list[str] = []
     completions: list[str] = []
     monkeypatch.setattr(notification_repo, "register_delivery_intent", lambda **_kw: {"status": "registered"})
-    monkeypatch.setattr(notification_repo, "claim_delivery_intent", lambda **_kw: {"status": "claimed"})
+    monkeypatch.setattr(notification_repo, "recover_delivery_intent", lambda **_kw: {"status": "registered"})
+
+    def claim(**kwargs: Any) -> Any:
+        return notification_repo.DeliveryIntentClaim(
+            operation_id=kwargs["operation_id"],
+            lease_owner="opaque-provider-claim",
+            intent_version=2,
+            lease_expires_at=kwargs["lease_expires_at"],
+            scope_digest=kwargs["scope"].digest,
+            payload_digest=kwargs["payload_digest"],
+        )
+
+    monkeypatch.setattr(notification_repo, "claim_delivery_intent", claim)
     monkeypatch.setattr(notification_repo, "delivery_intent_sendable", lambda **_kw: True)
+    monkeypatch.setattr(
+        notification_repo,
+        "begin_delivery_effect",
+        lambda **kw: replace(kw["claim"], intent_version=3),
+    )
     monkeypatch.setattr(
         notification_repo,
         "complete_delivery_intent",
