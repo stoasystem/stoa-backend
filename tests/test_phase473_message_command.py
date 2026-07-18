@@ -191,7 +191,12 @@ def test_repository_claim_persists_one_complete_command_usage_identity() -> None
 
     assert result.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
     assert result.counter_value == 3
-    command_put = table.transactions[0][0]["Put"]["Item"]
+    command_put = next(
+        operation["Put"]["Item"]
+        for operation in table.transactions[0]
+        if operation.get("Put", {}).get("Item", {}).get("entity_type")
+        == "message_command"
+    )
     assert command_put["quota_period"] == "2026-07-17"
     assert command_put["counter_value"] == 3
     assert command_put["fingerprint"] == "f" * 64
@@ -205,7 +210,9 @@ def test_repository_claim_persists_one_complete_command_usage_identity() -> None
 
 def test_claim_cas_contention_rereads_same_fingerprint_instead_of_false_429() -> None:
     existing = _command(counter_value=4)
-    error = _transaction_cancel(["ConditionalCheckFailed", "None", "None"])
+    error = _transaction_cancel(
+        ["None", "ConditionalCheckFailed", "None", "None"]
+    )
     table = _ClaimTable(counter=3, transact_error=error, reread_command=existing)
 
     result = attachment_repo.claim_message_command_and_quota(
@@ -275,7 +282,11 @@ class _CompletionTable:
     def transact_write_items(self, *, TransactItems):  # noqa: N803
         self.calls += 1
         if self.commit_then_raise:
-            update = TransactItems[1]["Update"]
+            update = next(
+                operation["Update"]
+                for operation in TransactItems
+                if "Update" in operation
+            )
             self.command.update(
                 status="completed",
                 result_json=update["ExpressionAttributeValues"][":result"],
@@ -421,20 +432,58 @@ def _route_client() -> TestClient:
     return TestClient(app)
 
 
-def test_create_conversation_rejects_legacy_initial_message_before_effect(monkeypatch) -> None:
+def test_create_conversation_routes_initial_message_through_shared_executor(
+    monkeypatch,
+) -> None:
     effects: list[str] = []
+    command_contexts: list[dict[str, Any]] = []
+    table = object()
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(
+        conversations,
+        "_active_conversation_generation",
+        lambda _owner_id, _table: 7,
+    )
+    monkeypatch.setattr(
+        attachment_repo,
+        "create_conversation_record",
+        lambda *_args, **_kwargs: effects.append("create"),
+    )
 
-    class Table:
-        def put_item(self, **_kwargs):
-            effects.append("put")
+    def execute_message_command(**kwargs):
+        effects.append("execute")
+        command_contexts.append(kwargs)
+        conv_id = kwargs["conv_id"]
+        return conversations.SendMessageResponse(
+            studentMessage=conversations.ChatMessage(
+                id="student-message-1",
+                conversationId=conv_id,
+                role="student",
+                content="through-shared-command",
+                createdAt="2026-07-18T00:00:00Z",
+            ),
+            assistantMessage=conversations.ChatMessage(
+                id="assistant-message-1",
+                conversationId=conv_id,
+                role="assistant",
+                content="answer",
+                createdAt="2026-07-18T00:00:01Z",
+            ),
+        )
 
-    monkeypatch.setattr(conversations, "get_table", Table)
+    monkeypatch.setattr(conversations, "_execute_message_command", execute_message_command)
     response = _route_client().post(
         "/conversations",
-        json={"subject": "math", "grade": "Sek1", "initialMessage": "bypass"},
+        json={
+            "subject": "math",
+            "grade": "Sek1",
+            "initialMessage": "through-shared-command",
+        },
     )
-    assert response.status_code == 422
-    assert effects == []
+    assert response.status_code == 201
+    assert effects == ["create", "execute"]
+    assert command_contexts[0]["body"].content == "through-shared-command"
+    assert command_contexts[0]["command_context"]["account_fence_generation"] == 7
 
 
 @pytest.mark.parametrize("suffix", ["/messages", "/messages/stream"])
