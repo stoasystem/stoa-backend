@@ -591,24 +591,24 @@ The activation order inside Wave 5/6 is strict: synth/policy tests -> provision 
 |---|-------|---------|---------------|
 | — | None. Recommendations are derived from locked decisions, repository/runtime observations, or cited official documentation. | — | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What exact AWS resources and CloudFormation stacks are live?**
+1. **RESOLVED — What exact AWS resources and CloudFormation stacks are live?**
    - What we know: the repository CDK uses hard-coded production names and no alias/pointer topology. [VERIFIED: stoa-infra inspection]
    - What's unclear: live physical IDs, deployed templates, roles, bucket lock state, aliases, and safe import/replacement boundaries because credentials are unavailable. [VERIFIED: AWS CLI probe]
-   - Recommendation: make read-only AWS/CloudFormation inventory plus `cdk diff` a blocking operator checkpoint before any deployment; if unavailable, infrastructure deployment is exact `NOT RUN`, not PASS. [VERIFIED: D-03]
-2. **Who has GitHub admin authority to create protected environments and cross-repo credentials?**
+   - Selected answer: Plan 474-24 performs a blocking, read-only AWS/CloudFormation inventory and retained `cdk diff` before any staging mutation. Unknown resources, replacements, destructive changes, or unavailable read authority block staging; production is always exact `NOT RUN` in Phase 474. [RESOLVED: Plan 474-24, D-03]
+2. **RESOLVED — Who has GitHub admin authority to create protected environments and cross-repo credentials?**
    - What we know: all three repositories currently report zero environments; the current token cannot establish admin configuration. [VERIFIED: GitHub API]
    - What's unclear: whether the executor or only the owner can configure environment reviewers, deployment branches, OIDC subjects, and a GitHub App/fine-grained token. [VERIFIED: current token capability]
-   - Recommendation: planner inserts an owner/admin checkpoint; configure the owner as required reviewer with prevent-self-review disabled, matching the one-person decision. [VERIFIED: D-06] [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments]
-3. **Can the initial mypy-zero attempt complete within the phase?**
+   - Selected answer: Plan 474-24 contains the blocking owner/admin checkpoint. The sole project owner is the required production reviewer and self-approval is allowed; no second reviewer or prevent-self-review policy is invented. [RESOLVED: Plan 474-24, D-06] [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments]
+3. **RESOLVED — Can the initial mypy-zero attempt complete within the phase?**
    - What we know: the defined full command reports 435 errors across 113 files, with concentrated import/type-cascade categories. [VERIFIED: local mypy run]
    - What's unclear: the irreducible residual and repair cost until stubs/package roots/shared DTOs are repaired. [VERIFIED: D-09 sequencing]
-   - Recommendation: budget multiple repair tasks and a full-zero rerun; only then expose an owner decision checkpoint with exact residuals. [VERIFIED: D-09]
-4. **Which endpoints form bounded staging smoke?**
+   - Selected answer: Plans 474-06 through 474-14 and their bounded split plans require the full repair attempt and exact full command. Only exact residuals remaining after that mandatory attempt may reach the conditional owner decision checkpoint in Plan 474-14; no historical or invented baseline is eligible. [RESOLVED: Plan 474-14, D-09]
+4. **RESOLVED — Which endpoints form bounded staging smoke?**
    - What we know: smoke must cover the core Web/backend set and exact release identity. [VERIFIED: agent discretion in CONTEXT.md]
    - What's unclear: the stable authenticated fixture/user and minimal teacher/admin route set after later Web route inventory work. [VERIFIED: current phase boundary]
-   - Recommendation: Phase 474 should include public health/release-identity plus one authenticated API and one real Web boot/API call; make later route journeys additive through the same gate registry. [VERIFIED: D-01/D-17]
+   - Selected answer: Phase 474 smoke is bounded to public health/release identity, one authenticated API, and one real Web boot/API call. Later Web route journeys extend the same closed gate registry and cannot replace or bypass these obligations. [RESOLVED: Plans 474-17/474-25, D-01/D-17]
 
 ## Environment Availability
 

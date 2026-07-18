@@ -343,35 +343,96 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 26 plans
+**Plans:** 85 plans
 
 Plans:
-- [ ] 474-01-PLAN.md — Define the authoritative local/CI gate and fail-closed receipt contract.
-- [ ] 474-02-PLAN.md — Implement fresh Python 3.12 two-clock hermetic verification.
-- [ ] 474-03-PLAN.md — Reverify Phase 473 publication from immutable Git blobs and later HEAD.
-- [ ] 474-04-PLAN.md — Enforce backend/Web dependency policy and repair runtime advisories.
-- [ ] 474-05-PLAN.md — Define the immutable cross-repository manifest and backend artifact.
-- [ ] 474-06-PLAN.md — Repair authorization and identity typing foundations.
-- [ ] 474-07-PLAN.md — Repair privileged repository typing.
-- [ ] 474-08-PLAN.md — Repair remaining repository type boundaries.
-- [ ] 474-09-PLAN.md — Repair report, document, OCR, and AI service typing.
-- [ ] 474-10-PLAN.md — Repair remaining operational and business service typing.
-- [ ] 474-11-PLAN.md — Repair routers and background-job typing.
-- [ ] 474-12-PLAN.md — Repair security, scripts, and high-error test typing.
-- [ ] 474-13-PLAN.md — Repair remaining domain and Phase 473 test typing.
-- [ ] 474-14-PLAN.md — Prove Ruff zero and the full-repository mypy-zero attempt.
-- [ ] 474-15-PLAN.md — Repair Web dependency baseline and runtime configuration separation.
-- [ ] 474-16-PLAN.md — Add locked Web and real backend/OpenAPI verification to the common gate.
-- [ ] 474-17-PLAN.md — Repair Web tests and add strict real-staging browser acceptance.
-- [ ] 474-18-PLAN.md — Create immutable release stores, transaction state, and scoped roles.
-- [ ] 474-19-PLAN.md — Add Lambda aliases, Web pointers, and release bypass removal.
-- [ ] 474-20-PLAN.md — Implement durable two-pointer delivery and compensation.
-- [ ] 474-21-PLAN.md — Harden frontend workflows as thin common-gate and delivery callers.
-- [ ] 474-22-PLAN.md — Harden infrastructure workflow for staging-only substrate deployment.
-- [ ] 474-23-PLAN.md — Assemble and test the integrated cross-repository delivery DAG.
-- [ ] 474-24-PLAN.md — Configure protected environments and bootstrap the staging substrate.
-- [ ] 474-25-PLAN.md — Execute live staging and controlled non-production rollback proofs.
-- [ ] 474-26-PLAN.md — Seal failure-matrix, later-HEAD, final-evidence, and source-audit proof.
+- [ ] 474-01-PLAN.md — Define the one authoritative backend-owned local/CI gate and its fail-closed receipt contract per D-01 and D-03.
+- [ ] 474-02-PLAN.md — Implement the hermetic two-clock backend verification boundary required by D-02, D-03, and D-04.
+- [ ] 474-03-PLAN.md — Close the Phase 473 `final-head-publication-reverification` defect with immutable Git-blob and ancestry verification.
+- [ ] 474-04-PLAN.md — Enforce the exact cross-ecosystem dependency policy.
+- [ ] 474-05-PLAN.md — Define and validate the immutable cross-repository manifest.
+- [ ] 474-06-PLAN.md — Type executable authorization metadata and decisions.
+- [ ] 474-07-PLAN.md — Type identity and capability repositories.
+- [ ] 474-08-PLAN.md — Type the DynamoDB provider and attachment repository.
+- [ ] 474-09-PLAN.md — Type report lifecycle and recovery services.
+- [ ] 474-10-PLAN.md — Type subscription orchestration.
+- [ ] 474-11-PLAN.md — Type teacher routes.
+- [ ] 474-12-PLAN.md — Type Phase 473 inventory generators.
+- [ ] 474-13-PLAN.md — Type conversation, usage, and subscription tests.
+- [ ] 474-14-PLAN.md — Prove the full 435-error repair reaches Ruff zero and full-repository mypy zero without policy weakening.
+- [ ] 474-15-PLAN.md — Repair the root Web dependency baseline.
+- [ ] 474-16-PLAN.md — Add the locked Web verifier and focused real backend/OpenAPI adapter contract to the authoritative backend gate.
+- [ ] 474-17-PLAN.md — Enforce strict Playwright release outcomes.
+- [ ] 474-18-PLAN.md — Create the minimum immutable storage, transaction, and scoped role substrate for gated delivery.
+- [ ] 474-19-PLAN.md — Publish backend versions and route through aliases.
+- [ ] 474-20-PLAN.md — Implement the durable two-pointer staging/promotion/rollback coordinator.
+- [ ] 474-21-PLAN.md — Make the Web repository workflows thin, immutable callers of Phase 474's common verification and delivery contracts.
+- [ ] 474-22-PLAN.md — Harden the infrastructure workflow around the minimum staging release substrate and the canonical release gate.
+- [ ] 474-23-PLAN.md — Assemble the cross-repository delivery workflow DAG and prove its security invariants before any live staging exercise.
+- [ ] 474-24-PLAN.md — Inventory live release surfaces, configure protected GitHub environments, and bootstrap only the staging release substrate.
+- [ ] 474-25-PLAN.md — Run the complete gate and prove live staging smoke.
+- [ ] 474-26-PLAN.md — Run the integrated intentional-failure matrix.
+- [ ] 474-27-PLAN.md — Repair the measured backend runtime advisories.
+- [ ] 474-28-PLAN.md — Build a reproducible lock-bound Lambda artifact.
+- [ ] 474-29-PLAN.md — Type identity, JWKS, token, and public-auth boundaries.
+- [ ] 474-30-PLAN.md — Type route inventory and reconciliation actions.
+- [ ] 474-31-PLAN.md — Type privileged activation and security-audit repositories.
+- [ ] 474-32-PLAN.md — Type curriculum and AI-operations repositories.
+- [ ] 474-33-PLAN.md — Type notification and account-deletion repositories.
+- [ ] 474-34-PLAN.md — Type question and usage-ledger repositories.
+- [ ] 474-35-PLAN.md — Type report persistence.
+- [ ] 474-36-PLAN.md — Type adaptive-learning and practice repositories.
+- [ ] 474-37-PLAN.md — Type WebSocket persistence.
+- [ ] 474-38-PLAN.md — Type moderation persistence.
+- [ ] 474-39-PLAN.md — Type report recovery jobs and evidence.
+- [ ] 474-40-PLAN.md — Type attachment validation, extraction, and OCR services.
+- [ ] 474-41-PLAN.md — Type AI provider and operations services.
+- [ ] 474-42-PLAN.md — Type support routing, SLA, and pilot services.
+- [ ] 474-43-PLAN.md — Type moderation service decisions.
+- [ ] 474-44-PLAN.md — Type curriculum operations and migrations.
+- [ ] 474-45-PLAN.md — Type adaptive-learning and learning-profile services.
+- [ ] 474-46-PLAN.md — Type AI-teacher and teacher-assistance services.
+- [ ] 474-47-PLAN.md — Type WebSocket and notification delivery services.
+- [ ] 474-48-PLAN.md — Type account-deletion orchestration.
+- [ ] 474-49-PLAN.md — Type practice and student routes.
+- [ ] 474-50-PLAN.md — Type parent routes.
+- [ ] 474-51-PLAN.md — Type conversation routes.
+- [ ] 474-52-PLAN.md — Type notification routes.
+- [ ] 474-53-PLAN.md — Type admin routes.
+- [ ] 474-54-PLAN.md — Type question and file routes.
+- [ ] 474-55-PLAN.md — Type auth and teacher-application routes.
+- [ ] 474-56-PLAN.md — Type the weekly-report job.
+- [ ] 474-57-PLAN.md — Type the upload-cleanup job.
+- [ ] 474-58-PLAN.md — Type the account-deletion job.
+- [ ] 474-59-PLAN.md — Type privileged-admin and practice-seed scripts.
+- [ ] 474-60-PLAN.md — Type attachment security fixtures and fakes.
+- [ ] 474-61-PLAN.md — Type authorization and identity audit tests.
+- [ ] 474-62-PLAN.md — Type public-auth lifecycle and security tests.
+- [ ] 474-63-PLAN.md — Type parent and file-route tests.
+- [ ] 474-64-PLAN.md — Type report and question tests.
+- [ ] 474-65-PLAN.md — Type adaptive-learning and practice-privacy tests.
+- [ ] 474-66-PLAN.md — Type deletion-claim and notification-deletion tests.
+- [ ] 474-67-PLAN.md — Type practice-authorization and delivery-recovery tests.
+- [ ] 474-68-PLAN.md — Type saved-attachment and provider-state tests.
+- [ ] 474-69-PLAN.md — Type private-delivery and document-boundary tests.
+- [ ] 474-70-PLAN.md — Type conversation- and report-deletion tests.
+- [ ] 474-71-PLAN.md — Type practice-snapshot, message-command, and purge tests.
+- [ ] 474-72-PLAN.md — Define the closed non-secret runtime configuration contract.
+- [ ] 474-73-PLAN.md — Bootstrap runtime configuration before Web services.
+- [ ] 474-74-PLAN.md — Capture the bounded Web E2E baseline.
+- [ ] 474-75-PLAN.md — Repair the measured student-navigation label mismatch without changing the retained Chat route.
+- [ ] 474-76-PLAN.md — Prove real-staging Web boot, identity, auth, and API acceptance.
+- [ ] 474-77-PLAN.md — Make immutable Web prefixes and served pointers deployable.
+- [ ] 474-78-PLAN.md — Wire the release topology and remove the stale-dist bypass.
+- [ ] 474-79-PLAN.md — Exercise controlled staging failure and two-pointer rollback.
+- [ ] 474-80-PLAN.md — Generate the complete multi-source coverage audit.
+- [ ] 474-81-PLAN.md — Seal and independently validate final Phase 474 evidence.
+- [ ] 474-82-PLAN.md — Repair the measured parent weekly-report strict-locator failure.
+- [ ] 474-83-PLAN.md — Bind exact clean starting SHAs for the frontend and infrastructure repositories.
+- [ ] 474-84-PLAN.md — Commit the complete frontend slice locally and hand off its immutable SHA.
+- [ ] 474-85-PLAN.md — Commit the complete infrastructure slice locally and hand off its immutable SHA.
+
+
 **UI hint:** yes
 
 **Likely plan slices:**
