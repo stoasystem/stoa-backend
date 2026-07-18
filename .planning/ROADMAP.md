@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | 40/40 plans executed; immutable evidence published | Independent aggregate review pending |
+| 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -43,7 +43,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 ## Phases
 
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (40/40 plans executed; awaiting independent aggregate verification)
+- [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified)
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
