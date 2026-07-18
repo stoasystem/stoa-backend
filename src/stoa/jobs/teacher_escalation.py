@@ -53,4 +53,3 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, int]:
         result = consume_message(record)
         counts[result] += 1
     return counts
-

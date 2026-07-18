@@ -845,13 +845,37 @@ def _render_evidence(result: dict[str, Any]) -> str:
             f"{counts['error']} | {counts['skipped']} | {counts['xfail']} | "
             f"{counts['xpass']} | {row['privacy']['match_count']} | PASS |"
         )
-    lines.extend(["", "## Requirement proof", "", "| Requirement | Observed node | Result |", "| --- | --- | --- |"]) 
+    lines.extend(
+        [
+            "",
+            "## Requirement proof",
+            "",
+            "| Requirement | Observed node | Result |",
+            "| --- | --- | --- |",
+        ]
+    )
     for row in coverage["requirements"]:
         lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
-    lines.extend(["", "## Decision proof", "", "| Decision | Observed node | Result |", "| --- | --- | --- |"]) 
+    lines.extend(
+        [
+            "",
+            "## Decision proof",
+            "",
+            "| Decision | Observed node | Result |",
+            "| --- | --- | --- |",
+        ]
+    )
     for row in coverage["decisions"]:
         lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
-    lines.extend(["", "## Retained verification/review findings", "", "| Finding | Observed node | Result |", "| --- | --- | --- |"]) 
+    lines.extend(
+        [
+            "",
+            "## Retained verification/review findings",
+            "",
+            "| Finding | Observed node | Result |",
+            "| --- | --- | --- |",
+        ]
+    )
     for row in result["finding_adjudications"]:
         lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
     lines.extend(

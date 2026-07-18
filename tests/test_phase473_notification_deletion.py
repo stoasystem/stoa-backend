@@ -338,4 +338,3 @@ def test_notification_branch_is_registered_and_requires_two_later_clean_scans(
     assert first.status == "retryable" and first.epoch == 0
     assert second.status == "retryable" and second.epoch == 1
     assert third.status == "complete" and third.quiescent is True and third.epoch == 2
-
