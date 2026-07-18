@@ -281,6 +281,131 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         decisions=("D-07", "D-08", "D-10", "D-13", "D-17"),
         transport="sse",
     )
+    + _flows(
+        file="src/stoa/db/repositories/account_deletion_repo.py",
+        symbol="_claim_from_command",
+        call="dynamodb.update_item.Attributes",
+        fields=(
+            ("lease_expires_at", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),
+            ("command_version", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),
+            ("branch_results_digest", "sha256_hex", "_claim_from_command", "exact_64_hex_digest"),
+        ),
+        fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/account_deletion_repo.py",
+        symbol="claim_deletion_command",
+        call="scheduler explicit clock",
+        fields=(("now_epoch", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
+        fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/account_deletion_repo.py",
+        symbol="persist_branch_result",
+        call="deletion command strong row",
+        fields=(
+            ("branch_results", "mapping", "branch_results_digest", "canonical_mapping_only"),
+            ("updated_at", "utc_iso8601", "_valid_lifecycle_timestamp", "nonblank_timezone_aware_utc"),
+        ),
+        fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/account_deletion_repo.py",
+        symbol="scrub_parent_profile_child",
+        call="dynamodb strong parent profile",
+        fields=(("version", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
+        fake="src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/notification_repo.py",
+        symbol="_intent_claim",
+        call="dynamodb delivery intent row",
+        fields=(
+            ("lease_expires_at", "positive_int", "_intent_claim", "closed_positive_int"),
+            ("intent_version", "positive_int", "_intent_claim", "closed_positive_int"),
+            ("scope_digest", "sha256_hex", "_intent_claim", "exact_64_hex_digest"),
+            ("payload_digest", "sha256_hex", "_intent_claim", "exact_64_hex_digest"),
+        ),
+        fake="src/stoa/db/repositories/notification_repo.py:table.get_item",
+        selector="tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/notification_repo.py",
+        symbol="claim_delivery_intent",
+        call="dynamodb delivery intent row",
+        fields=(("effect_state", "closed_state", "claim_delivery_intent", "registered_or_expired_pre_effect_only"),),
+        fake="src/stoa/db/repositories/notification_repo.py:table.update_item",
+        selector="tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/services/notification_service.py",
+        symbol="resolve_delivery_ownership",
+        call="notification_repo.load_delivery_event_strong",
+        fields=(
+            ("owner_id", "nonblank_str", "resolve_delivery_ownership", "persisted_private_owner_only"),
+            ("account_fence_generation", "positive_int", "resolve_delivery_ownership", "type_is_int_not_bool_positive"),
+            ("event_version", "positive_int", "resolve_delivery_ownership", "type_is_int_not_bool_positive"),
+        ),
+        fake="src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+        selector="tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+    + _flows(
+        file="src/stoa/db/repositories/notification_repo.py",
+        symbol="validate_global_nonprivate_event",
+        call="notification_repo.load_delivery_event_strong",
+        fields=(
+            ("classification_contract", "closed_literal", "validate_global_nonprivate_event", "registered_contract_only"),
+            ("classification_digest", "sha256_hex", "validate_global_nonprivate_event", "exact_content_seal"),
+        ),
+        fake="src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+        selector="tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+        decisions=("D-10", "D-16", "D-17"),
+    )
+)
+
+
+FINDING_REGISTRY = (
+    {
+        "finding_id": "CR-01",
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        "observed_assertion": "owner/version/digest/current-lease conditions and advancing claim",
+    },
+    {
+        "finding_id": "CR-02",
+        "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+        "runtime_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        "observed_assertion": "strong canonical load and zero provider calls for invalid scope",
+    },
+    {
+        "finding_id": "WR-01",
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        "observed_assertion": "blank naive malformed and non-string lifecycle values rejected",
+    },
+    {
+        "finding_id": "WR-02",
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "observed_assertion": "row-version CAS preserves concurrent parent preferences",
+    },
+    {
+        "finding_id": "WR-03",
+        "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
+        "runtime_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        "observed_assertion": "only expired pre-effect claims are recoverable",
+    },
 )
 
 
@@ -334,6 +459,38 @@ def validate_taint_semantics(root: Path | str) -> None:
         if unsafe:
             joined = ",".join(str(value) for value in unsafe)
             raise BoundaryViolation(f"unsafe tainted response consumption at {attachment.name}:{joined}")
+    deletion = root / "src/stoa/db/repositories/account_deletion_repo.py"
+    if deletion.exists():
+        source = deletion.read_text()
+        functions = _symbol_nodes(ast.parse(source, filename=deletion.as_posix()))
+        claim = ast.get_source_segment(source, functions.get("_claim_from_command"))
+        if (
+            not claim
+            or 'command.get("command_version") or command.get("version")' not in claim
+            or 'int(command.get("command_version")' in claim
+        ):
+            raise BoundaryViolation(
+                "unsafe authority-bearing read: deletion command version"
+            )
+    notification = root / "src/stoa/services/notification_service.py"
+    if notification.exists():
+        source = notification.read_text()
+        functions = _symbol_nodes(ast.parse(source, filename=notification.as_posix()))
+        resolver = ast.get_source_segment(
+            source, functions.get("resolve_delivery_ownership")
+        )
+        if (
+            not resolver
+            or 'classification = event.get("owner_classification")' not in resolver
+            or "return resolve_legacy_delivery_owner(event, table=table)" not in resolver
+            or any(
+                marker in resolver
+                for marker in ("recipient_id", "actor_id", "metadata", "event_type")
+            )
+        ):
+            raise BoundaryViolation(
+                "unsafe authority-bearing read: delivery ownership inference"
+            )
 
 
 def discover_dataflows(root: Path | str) -> list[dict[str, Any]]:
@@ -433,12 +590,16 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
     registry = payload.get("branch_registry")
     if not isinstance(registry, list) or [row.get("branch_id") for row in registry] != list(EXPECTED_BRANCHES):
         raise ValueError("private-store branch registry drift")
+    finding_ids = [row.get("finding_id") for row in payload.get("finding_registry", ())]
+    if finding_ids != ["CR-01", "CR-02", "WR-01", "WR-02", "WR-03"]:
+        raise ValueError("private-store finding registry drift")
     return {
         "schema_version": PRIVATE_SCHEMA_VERSION,
         "inventory_sha256": sha256(checked_path.read_bytes()).hexdigest(),
         "row_count": len(actual_rows),
         "write_ids": actual_ids,
         "branch_ids": list(EXPECTED_BRANCHES),
+        "finding_ids": finding_ids,
         "source_digests": sorted(
             {
                 row["source"]["normalized_ast_sha256"]
@@ -499,6 +660,7 @@ def build_inventory(root: Path | str) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "rows": rows,
         "source_files": source_files,
+        "finding_registry": [dict(finding) for finding in FINDING_REGISTRY],
         "private_store_composition": composition,
     }
 

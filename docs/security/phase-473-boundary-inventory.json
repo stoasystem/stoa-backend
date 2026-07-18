@@ -1,4 +1,36 @@
 {
+  "finding_registry": [
+    {
+      "finding_id": "CR-01",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "observed_assertion": "owner/version/digest/current-lease conditions and advancing claim",
+      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim"
+    },
+    {
+      "finding_id": "CR-02",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "observed_assertion": "strong canonical load and zero provider calls for invalid scope",
+      "runtime_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation"
+    },
+    {
+      "finding_id": "WR-01",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
+      "observed_assertion": "blank naive malformed and non-string lifecycle values rejected",
+      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps"
+    },
+    {
+      "finding_id": "WR-02",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+      "observed_assertion": "row-version CAS preserves concurrent parent preferences",
+      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences"
+    },
+    {
+      "finding_id": "WR-03",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
+      "observed_assertion": "only expired pre-effect claims are recoverable",
+      "runtime_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry"
+    }
+  ],
   "private_store_composition": {
     "branch_ids": [
       "account_profile",
@@ -19,8 +51,15 @@
       "notification_device_realtime",
       "external_delivery_debt"
     ],
-    "inventory_sha256": "8a31e68770e43deca4b83a7e11a4ca8f8262af528b7daa989ecb544eaba7ee47",
-    "row_count": 226,
+    "finding_ids": [
+      "CR-01",
+      "CR-02",
+      "WR-01",
+      "WR-02",
+      "WR-03"
+    ],
+    "inventory_sha256": "30d6788378d16c7f0a3a1f50bde0398be76b884214bc44f6366cb69a84c84e06",
+    "row_count": 232,
     "schema_version": "phase-473-private-store-inventory.v1",
     "source_digests": [
       "03a7a756e13656486cc8ac9a719c2435d8d5fe7b64b09a5840b8850c67597859",
@@ -28,7 +67,6 @@
       "04a9d2820e8d2a9c9beb6123e3841f6de3b3ca736a400743ae0a1fef3a3bcf07",
       "04afcdabfe5020ab39cda0053098687550c0d819857e07dd86781b71296e0165",
       "04d0f124f2010380f20ddf75643df3470d701582d6918cc53f48fc7d42339ee6",
-      "05d2933e2f51057370b3060b289c6c85407563d56000e6a8b87d8a57dadb803f",
       "070f2f4631f3a0f2ae692918c4a7f1ebb1af8635fa021bcb8762ad42b6f8834d",
       "08db68cf73642391914a6a60b2764bd0ece6d2600ba65bfd3b1d060444ca6869",
       "09cae62e6c2d66b17190dcc1a7e8c30b422b4e049279f2a41169f575f53626ab",
@@ -43,14 +81,12 @@
       "13ffa4a9765ffdd3d6ea671852d714d981182f91d6f8d2c17ad47cdeab2ef55d",
       "15847d5ed0482b80dcea0aabd037a5746d1360dfdd7f30886cc5f6b007068bad",
       "178cac4ee96c72b88f7ccf7c56faee40b193cdd8efaaaf7d27ef0210275e27a9",
-      "17c283f9fb5d80bfd0fc26da4cbaceca6c80aff78fafa450147d899ab7eec98d",
       "19d24c39d20c2662c925cac10f41edb0c99ef91c782ffeda985323e33b0596ac",
       "19ead2d1c11851f92a57eec0c5b18579dea71ab13cf1a0d39b2996e1c4c665a1",
       "1ed38beb332fd52eb0d856494d03fc954cf50ecf3325c47d50b07be1b67291bb",
       "21b80a121fd4832bc6deeb617713f25b87c774515cfe493641c811e045fc2501",
       "261ae6c45c1a967094716f6f7778b71872fa4ae097a7899c988e8f88e1170972",
       "26dafc6d17db7c5627d8c0602fa6ebba69a92e0e7c2921a2d35ee98fe5bf8a9c",
-      "27cd92224a21872975ec64835389bf036364e26f0f1dc634d9fbbb3e400784f0",
       "282510cfcfa39bc7ac3323d2b72e0cba749cf450ca7103165ca8af60a163d656",
       "293e3a8b62a56ca589d02c035e907baed582f8e9c4cc67c5fd6044e0d8378987",
       "2a41aed834e62729fb96be57923b8b023c005f10ca18089e5f75a266081878f0",
@@ -67,7 +103,9 @@
       "3b7716747a358b9279099a33d0338baf5b810bccb4c8de85a90fcfd5fc7a8286",
       "3e22d050e5db3b91c47111dfcb01f97d6b6f9246ea11f4fae40a15e5483fcb57",
       "422e6fde8ff132e64d2506b135575104414a05f29bdbf77de62ee5226a91febe",
+      "43146fabf295cdb4d747ee378bebdda46c892f98f086eb9d9529d96e719086bd",
       "4b70a1780e5d75370451e079881ae2469689e220888bf692538671375d3f376a",
+      "4c449b1058b8c18353be557aba02b40e72a6089a3129f27d0b2318ce8d0441b9",
       "4c5463ea77cd57cadd7c088c771e2cc6c6ee587c5d2effc68513f37c099c2f6f",
       "4cf6eb5446320b0bc7dde9ce3b5dce0201891488206aaa3b9277c2c77243c258",
       "4de817901f3bfec57d4bdf64b4d3310c38e72fdc8cd6793611e1ef60fb146cdb",
@@ -79,6 +117,7 @@
       "5abdbecb5c04a2438a14af3a94d99a5538e7b3375fbeb73f2104e374989eae07",
       "5ae286d19163ae3410aa3b9d2ddcc2a72715d5f6298981e4bd220797d3909405",
       "5c78bb19538232b8f75b7b08df99b0a091fc1e374519e552579038e152a1e0ad",
+      "5eea518a2001f36cfad9ed2cde1c105135850aa5eec64fa56cce9bf84ab1ead7",
       "6085410e93b7283b87b9ee0adca1e82a86606be83455d9d88666697011543273",
       "618a4f3b50dda41745f335f1daf279228a2a306a52cb1dfa8e61dbd9b1e6d5a7",
       "62a117e6957a827504fac103d39413934987b332ebf5c190f880bcffb08db77a",
@@ -89,7 +128,6 @@
       "6833a164f0013c163c9ee736a7c68fe853e3b3c3d6adc2122c09edd551253500",
       "6a5893e996107d981371b59eff7c9101797022fdd9766acef4b76a7abab32360",
       "6bb99afdb9f2f91044c784244e6374aeaa0bbc6eb749d0d480b419305c7fe72f",
-      "6c38d4c012adea5b6e714588bfc582c3a56992bda899e8764f268338ead4380f",
       "6da3254ef8a3ef82d1f5c314a08cf5d7a6f0ce8afb4c94f0c4a7ac642b237e26",
       "6e537a82d85ecf65a78b57f9d5676a7bfdc6cd4e78bf093ce5b869d9645edc80",
       "70c1e492396f524513bad64095f1fcb542966bef6349bd73edb96034e4ed8780",
@@ -99,6 +137,7 @@
       "72bdf9dcfaf6a19fc5fbdac6a0eaf19041419ceec4c024176218a3a695bbdeac",
       "73b989044da88350708bc206504fd4d349ed140a8563b3e1ff0c50af4bfc682a",
       "750a3f5e78df049795f8134133fb1696d88b4b421009db313255b8d99994856d",
+      "753b41fa3d2cec2ca4aec347b2a6ddb81f05e8a56cc6deb016766e2f7c2ddc15",
       "755f90fda3ef342eab9bd8c71b01e6cd85dc95610e44a2fb4e4e14fa06941946",
       "779b0ab31ea1fa08cde3884bb06010aaed31f0b183a3efaae0f542c3561e1d9b",
       "783ee75df739d5ea7bccfe070ce21aa7ab26747d34c73d7a399053eb6508b9f6",
@@ -110,9 +149,9 @@
       "800e9dd08e7319fec30a0c3a14f6c82dfa859b41d712a78e37a38404cac4fd59",
       "804a117bbfee005d7587e9015e2e583f74c7410f25664de85f566133e7df7582",
       "80739a3c8bf0b0e5b1409034e3eb5c92bd09e7eae4bb84d15324c6ddb531ee6f",
-      "8335c666ada35236df200af1a53900db0aded7c05309db51e2a8b44aebd1b1b8",
       "83900c0fdd25161237341590c6140a4bbba6e226b18e4d8be7505371b48a2f6a",
       "83aaae2458bf6b13172ef2afaf8fda96ebc741bf30caab70e73ec73a288371ee",
+      "88b81741fe3fd8c06f6a7f8ce2ef5bd7997cee1512ec091929a149fcdc633681",
       "88c1d1ce67131bfaedf0efcaa6617cbebfa336776ebaecdb799c7b24c52b1e06",
       "8a3dd4f0fa45891f2dfb01427b495957d3b9280dc133fbb3ed1e80aad9fa6634",
       "8a5a9efbd084a9e771f7818f46406efe8318645d939110089d8bb3445022bb4c",
@@ -131,7 +170,6 @@
       "9a47769cc118f0c9f56daffd3243048d39d6442805531694a92a2eb6c3558a19",
       "9c40a33ef0f098cdc2402ca153e968fd9dd3a642f85e8f87355a3778cfa26134",
       "9cd0d2cb8e2fd9497895d60d90f3b9711f7afad6e7c3038285922839f10b2240",
-      "9d078569dcc194eb8b281e879b2daffec2705b3959e9fc6f9e8ce0501a29e016",
       "9d5543ce8ce2faa4fe9fa53ca88f1120cf83017163548d17a8adfa99c219ce6a",
       "a080917424ee43d4ef1c53147ffcebfaa5930c0e07946302836b0dbd9b230d96",
       "a0e4379b399f9ab2ee4824a56970e9c7cf7fd1aa56105d0ad253ebd258035b41",
@@ -142,7 +180,9 @@
       "a51bd830cb2b30235f5611ab37b38e378fc3c0a4abd1efecb1a9daf530b94b48",
       "a53cc4838fad9f80cfd52a868906d991c25c7ee845266f1ac8ccdc72da14da56",
       "a6cddeb9fabff9f963d89f72c4d5fd10763eb2547a927d2dd41649787d2c1974",
+      "a730d1a4503814f2d6060cefe29727828728dc0915cd20318ab1506dc0bcae98",
       "a9026f46e3ef9fd5a0f7af5bb46621ed2fb7b9e62c4cc69a2a722a1cda18479c",
+      "abe25c250f329f5864ed47a98849300eed2b2c2a24a0590c5a8dc50a763b8ccc",
       "adee95a56edddbf7bc46120dfb3a64303390ed4fb3cabfbaa753644a390f4318",
       "b161a145c6cf9bdfa0f95dadda75586f4194202dd239dcfa675afae7d717252b",
       "b21d7510d9e26ca55cdb33df76dbcb2d7dfd51dd86f185afeef0e0405aa83abf",
@@ -152,10 +192,12 @@
       "b98ca8d1d3d039c37e4f3db31a7d061501a0fb6e1c5119d1b84a30bd7c7f0f67",
       "bae4875a57e473f41f548f5e467a33c6fa3a36736113e8913f9cdf52a3d8966f",
       "baf269d5ad286db197f5686d35b4d5fb39aff7d7db4d54c2bfdb1831f03e7f8e",
+      "bd4f273799442f359246b3c6f783e3b82b982e753e805f22b8580e02d3d7b67b",
       "bdabaf766738e6b22680b10961560fe50fd6449383a873f6fe5bd7e2202c0f0c",
       "bfb8b87901d99c4be72497de4525aeb98a3e023a1b3cdb1a59ab616621a5d44c",
       "c09a30ef6dd9887ecaededfdd1c465f3bf18f343f067a7285590994119b19b17",
       "c3e17cf7c25de8c1030e156e7505524335030d6a1c67d09df2ff614e68355040",
+      "c44e7f7dfcfa4b32e1e83576d922967989f8f79381476ba708bb57671c0cf061",
       "c51b783791568d3066c059c1195f4131d15ed1d69e049dfd5cf33cb740bf4603",
       "c53bddb6937e24058424042b8a97bfe69bffae01decccf6038923cd1c010d125",
       "c53f0f0c770aa71ce1139c37ab0ce8d97392e00498069ff3cd4a48d90976ee4f",
@@ -171,14 +213,15 @@
       "d572def9d44254f3b5d515751d8940fc2bdfc99496468a1afd3ef4ace713e0b1",
       "d6f97bad80fb8dcdffbe775b6a60238fc4afbfeca1da97c0ce64fd0b0f56c476",
       "d707cce97731b0cfd0da7fc982c0a9e877f1238058ad770d5cc668ba711d0a8e",
+      "d863a55785538c06d484a4ada3b2fb36396f8e080d0aa93fdec3fa0d342ee276",
       "d9073b7a6cbf46352d9fc544dbf8a794296711053071cbf13b71fde512479dff",
       "da1dc07306ed64b64dce3a8eddb6e7383cbdf4bc57789eb7f000a4db0b22ee80",
       "da3b3b20a5330752ad53de6927b6107ad8d59b2284cb3732a91acdd4552d604a",
       "dcf1c14eb9aca09753663888c785e383deec60e3e5a2bd6d526cceb002719e60",
+      "de4701d8e57d231e8ab8fd29c8d1674e1140a62ff48c63918ab96d1a12b86324",
       "df01eff09da0d84b48e65d643d411e88fe08902f57e526cc1ddc22d762569499",
       "df754de73045626474ba49c6dd079b5a3ef96aef668ce36e7e32055980b7853e",
       "e13bc50bf430bc729cae69dd1070d3385f018a3c99f1709ae737677a46c768c1",
-      "e3749312d3e383509ad90ad3e3b9f1fdc6cae1793a49e4088af689bdd74c470c",
       "e3bca04f49e44efcfb174224120789ec66016ba9e0ef9cabb9702c284a687dd8",
       "e4882c27a33e08682a5321527d15bf4750dedfe4caff84f92d357657f953a275",
       "e6fedd122f926127566a3fc2991e846a336c6f6fbe2ec1e6aa712844f41c2245",
@@ -229,7 +272,7 @@
       "0897f04ae5ec30dae1807e20",
       "08b349e7fab08ee827cd99c6",
       "08d554f5c99c2b3708774170",
-      "09b7e1db8998906347034d5b",
+      "09f1b0681abb28469e80e572",
       "0a38cf1d00277f5dfc827a4b",
       "0bb28579dc17cf656e4ec677",
       "0ca42dc8eafb3698c0cf8103",
@@ -244,7 +287,8 @@
       "1648fe17cde84d46353822f3",
       "17a9caba5d8ac4d88473e379",
       "1b9f24583726ad2753f36559",
-      "1f40ce520aaf831bdd6bc2d3",
+      "1f61acad5b41a2f2ed888e68",
+      "1f9bc976f72505f0cc153d2f",
       "2059702f392cd85a8df2ab4c",
       "21aa7d5663e96d9fe3d942ec",
       "227614c02a2d2e626725c7f0",
@@ -253,51 +297,47 @@
       "2407f3f71ffbd261845bbfc8",
       "267cafd3817a400fe9757912",
       "2b98d9811f7a8ff63c8bed30",
-      "2bafa95aa7074e734ada2615",
-      "2f78febcc2728b57fc2cc5a8",
+      "2c002f1baf0067448161152c",
       "2fa8c702830c4a5737ae3798",
       "31340ec715cd6fbce237c53e",
       "332cde2a832f7559c4ccb0a0",
       "336f1d623e85dbf87c15a76e",
       "34b76b7d6dadd0761d855bd2",
       "35d4eacdaef2881c8d087210",
-      "37823f1752de27861b788fe5",
       "37a1c10410592dc71eb5bd01",
       "39327970c8de5ec23a8ab17c",
       "396347df4f5967dfa6051366",
-      "3b0c5a16df07ead2a3a020b7",
       "3bf5bc300b399a8e35ea34c2",
       "3c08a78619b976d1a756bad6",
       "3c72545d9f7b8cca8a9db85a",
       "3c8a2e9cb8c972b75ae79f5e",
-      "3c9fd4a33cf776e2aae64695",
+      "3d22e79d655b2e6b7527dd6e",
       "3dad8e8c8cb80acbf8a24e2b",
       "3e7e24cef3b2d2ea5a8b0092",
       "3eafa19a9b17c8c9f93e5c6d",
+      "407d98aa675c6c82906eed83",
+      "41a1ce8744cb0d7249624131",
       "41b09cbdaef1724be5caaa69",
       "42f75b43791a0a3989faaa8f",
-      "43bf3ec3b3ac437e4e03e85f",
       "483e33249af1c2bc4503884e",
       "48561ce8875f7d08ca8eb16d",
       "4b4ea1fea622b8f9d5ad6ae8",
       "4c354dd5ab1f9e227e269734",
+      "4d77c54c4b83a9722ff20e29",
       "4ee51ae20ba34e9fb3283371",
       "510ca386b3c52c44d90a1072",
       "511622a7f846bdbcbcccb8e7",
       "51a0352b457e3518d9d05ad8",
+      "51dc05063e8690b5b4f68517",
       "51f51ffc47d996b3418a47de",
       "523fe5e96719e7d6f397c17a",
-      "5372d099ff98a2dfbfe5b80a",
       "542dedc7171e67d1df64974d",
       "556f47772b4ba5450168e82f",
       "55ebf62b1ad77ac2770640a3",
-      "561c3bf8fa01fee733dde775",
-      "56e3b1fdb03b222b6b56327e",
       "572e2fc4f52273b3260adf69",
       "57acba34f093c761ec6a98c6",
       "5b39c4008bf68e0b3ad409d3",
       "5b9e96a4add6a9735ad73daa",
-      "5bc4ac0074275bff310ed24a",
       "5d0082d94dcff67f65323b07",
       "5d3e166be4c082a182456c43",
       "5e943ebfc341ee831945ae61",
@@ -310,15 +350,16 @@
       "65e7a9d263787b7107002465",
       "65fa2a7e03d8c4691cb2d7b7",
       "67d36f2f63378815072df54e",
-      "6b5cf226e93ed5d50d2bb6ea",
+      "67ffdd682c697018117a9cb1",
+      "69d9248b3be9c4f1bd664f1a",
       "6dc6844798c73e6f41eac160",
       "6df5029d7e0607cb94ca5b90",
+      "6e2909b28db43e88431243c0",
       "6eab7e21df7d51eeae467342",
       "700041b2fc00b9dfba87a43d",
       "728d74584a1f3384c1783c9f",
       "72a2851df043e4118f01a230",
       "732fd473484945f0ca7a52fe",
-      "744ae07bddb26b29319e8e43",
       "74aa63847a5db827301254a0",
       "7523699a0453084869d9686d",
       "75a7907772c2c11378d5fd58",
@@ -330,25 +371,28 @@
       "7a88aed618422ee10262f005",
       "7b55618bcc918473951027b9",
       "7c99ef943f559c1a1c027715",
+      "7ca2647b39efd602110a14ba",
       "7fafb147cfd646125968fd41",
       "7fe7398fa7b7fb73f8a5f2be",
       "8251eb5f2156fa0f2a6d6e47",
-      "848b41756dee95c5fc8bb0ba",
       "852cbf24753fb2f8a3ba3216",
       "88449dc26cdb74bebe23565c",
       "8857e4c2133bee11725f710e",
       "8906d4e13dde9bd9c5103ac6",
       "8926c50750aceeac25882aa0",
       "89a5cf035e3827b6bfa2403a",
+      "8b771c840663cb0d97c35ee8",
       "8dd7e201f03d5a101c197f3b",
       "8ea7d0a9fc153e0390477a01",
+      "8ffa7312e05477aafe641d32",
+      "90d6a60e9194ca8b68d6b3d4",
+      "910565c7741af8ae09e90130",
       "9201a38ca3433480798bdc8f",
       "9255cdbbf2c95294a621786e",
       "93b7e8f0006e9efaf8428ede",
+      "942fcfd0bbe6d14bca2fb74f",
       "94bf8bff926deaec2101c0f1",
       "94c8c74d7034f6d56fac861e",
-      "9687bde34537468f2e6db325",
-      "994ad8a34959f53b8e474b8a",
       "9a384f80df04ce41cd80cd3a",
       "9aac84da5519bd7385a39343",
       "9be5f6d9835c1daccdde0a60",
@@ -359,6 +403,7 @@
       "9f87366f69b8eddeb654b0d2",
       "a08d4b7c6bb8d3db572ea219",
       "a1352d6a98fecb813ba89fcb",
+      "a17f27d1d86272663fe23483",
       "a295bb396d7e0365d1491ce7",
       "a4def3097a83310314f6f08d",
       "a5120eff1d39cf23e9d45aff",
@@ -367,16 +412,15 @@
       "a684c25c855f0e3c3a0e5fa1",
       "aa3ecdba2b3c895edd9f15ce",
       "aa47ede2ee3eb3beaf81a5cd",
-      "aa6d2d86e41c5f610721ef79",
       "aaab0dd258ef77356783e11f",
       "ab77327d3a71d901ffcc2ff9",
       "ae52984b61682cc0914527f4",
       "ae6e694887fff7de8178e2f6",
       "aeb2a5a8481ebb8da1e475e4",
-      "af60562bc84d474685432f71",
       "afa3427f723573ed7b2f8d9b",
-      "b03f9938361eb9002d53b041",
       "b27842dea1379722ae23229f",
+      "b38b2919e08020dba506ad8e",
+      "b391b34b740e63e2b556dc91",
       "b5753287c502560ea22c8df9",
       "b744c102916161f5e5e68312",
       "b82e8c1b7da94a3bf22f9c9b",
@@ -384,10 +428,12 @@
       "b897738343ea2ba4744de623",
       "b990c161ce0790c841163c6a",
       "b9a32f2f2c4dd54c93f410fd",
-      "ba60679fcd0975bc4c0870d4",
       "bacf9db03a24f1014790866d",
       "bda139ffbedace76aa73d72e",
+      "c01cd031494a07643aa9b849",
       "c0b436ae9877f231b510e47a",
+      "c315185ea781685b84fc7330",
+      "c4306d93ca9740f6278d0105",
       "c44891e1657cde9f2e736218",
       "c6c274da9d6c933c7aca7d23",
       "c71d8ccb22941162ddb97ca0",
@@ -407,6 +453,7 @@
       "d5c41e5bc617d557fd516859",
       "d6a177638647b6c8ed6d0f44",
       "d7b2b60b2a55b2d1ba24bee1",
+      "dd4ad7ad026f00fa6777c7d3",
       "ded897060c7d4bfa47ef7b0a",
       "e1cc31ebcc8ee02b8afb8e0b",
       "e46896f433189e0bdf0f2944",
@@ -421,20 +468,22 @@
       "ec940df553c253b4c19a3bb6",
       "ee37eb8a1f5e66cf6f919e22",
       "ee506b5280675e4f8c20b3ea",
-      "eecdd3591c2f8d1408ef8abf",
       "eed15cd8554f89833d31d898",
       "efb971dc86493f7162dde1bc",
       "f0347a1f103214176f4566eb",
+      "f0a5bf6162937ed7190a5b9e",
       "f15ba72e26f52439fcceac3e",
       "f258caad9ae6f4c2e0119f15",
+      "f3685c7e659f28a9572c1725",
       "f4554374e40efb502cb64985",
       "f537a32c7218fd2f318f53b7",
       "f5a095755036d9729fd30381",
       "f6045178658adda5495d0123",
+      "f68bec8a4f9005870f4fa59f",
       "f791fd77eb517fb1cd7e35d1",
-      "f7b51809051fe85309679da4",
       "fa35a7f88bf05a31f3fa7b07",
       "fa85b7bbcd590c6758addc8b",
+      "faf83f9fbd7cee831d21db7b",
       "fc755ab22b258a4a357f21f6",
       "fcf0871df50fa69926d1fac8",
       "fd2f83d6107c356b6ee31776"
@@ -520,6 +569,78 @@
     {
       "alias_chain": [
         "raw_response",
+        "_positive_int"
+      ],
+      "body_operation": null,
+      "boundary_id": "0b12c320a41a43fa67fb0c8d",
+      "client_call": "dynamodb.update_item.Attributes",
+      "consumed_field_path": "lease_expires_at",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "named_parser": "_positive_int",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "58c4b63cafadcea85ab208f56093e62270702ce0001b5f694e414a3ce288e89e",
+        "span": [
+          82,
+          99
+        ],
+        "symbol": "_claim_from_command"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_positive_int"
+      ],
+      "body_operation": null,
+      "boundary_id": "17657f88a0b0a049a391bd1a",
+      "client_call": "dynamodb.update_item.Attributes",
+      "consumed_field_path": "command_version",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "named_parser": "_positive_int",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "58c4b63cafadcea85ab208f56093e62270702ce0001b5f694e414a3ce288e89e",
+        "span": [
+          82,
+          99
+        ],
+        "symbol": "_claim_from_command"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "_required_provider_coordinate"
       ],
       "body_operation": null,
@@ -582,8 +703,8 @@
         "file": "src/stoa/services/account_deletion_service.py",
         "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
         "span": [
-          104,
-          162
+          107,
+          165
         ],
         "symbol": "load_private_store_seal"
       },
@@ -972,6 +1093,42 @@
     {
       "alias_chain": [
         "raw_response",
+        "_intent_claim"
+      ],
+      "body_operation": null,
+      "boundary_id": "40e752084884b82f80ffb881",
+      "client_call": "dynamodb delivery intent row",
+      "consumed_field_path": "intent_version",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
+      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "named_parser": "_intent_claim",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "9f25ce05695a28320b87e20d6339282afd66e93173beca07d5595375ef429030",
+        "span": [
+          247,
+          272
+        ],
+        "symbol": "_intent_claim"
+      },
+      "strict_validator": "closed_positive_int",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "_required_provider_coordinate"
       ],
       "body_operation": null,
@@ -1162,6 +1319,42 @@
     {
       "alias_chain": [
         "raw_response",
+        "_valid_lifecycle_timestamp"
+      ],
+      "body_operation": null,
+      "boundary_id": "531c01aed037fb2abb87cc57",
+      "client_call": "deletion command strong row",
+      "consumed_field_path": "updated_at",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "utc_iso8601",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+      "named_parser": "_valid_lifecycle_timestamp",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "602307ea1ee32c71d8ba7ba919f93530d19efec723d87e8c34d75893f2efb7ac",
+        "span": [
+          1110,
+          1236
+        ],
+        "symbol": "persist_branch_result"
+      },
+      "strict_validator": "nonblank_timezone_aware_utc",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "parse_report_object_ack"
       ],
       "body_operation": null,
@@ -1259,8 +1452,8 @@
         "file": "src/stoa/services/account_deletion_service.py",
         "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
         "span": [
-          104,
-          162
+          107,
+          165
         ],
         "symbol": "load_private_store_seal"
       },
@@ -1423,6 +1616,42 @@
     {
       "alias_chain": [
         "raw_response",
+        "resolve_delivery_ownership"
+      ],
+      "body_operation": null,
+      "boundary_id": "6e101bf482c0f8aa63633712",
+      "client_call": "notification_repo.load_delivery_event_strong",
+      "consumed_field_path": "event_version",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "named_parser": "resolve_delivery_ownership",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/notification_service.py",
+        "normalized_ast_sha256": "d05db8d1a805a26599bd88a38749b715411a79d3e9848465da2f92aca8d09c0e",
+        "span": [
+          332,
+          369
+        ],
+        "symbol": "resolve_delivery_ownership"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "load_private_store_seal"
       ],
       "body_operation": null,
@@ -1447,12 +1676,48 @@
         "file": "src/stoa/services/account_deletion_service.py",
         "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
         "span": [
-          104,
-          162
+          107,
+          165
         ],
         "symbol": "load_private_store_seal"
       },
       "strict_validator": "closed_branch_contract",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "branch_results_digest"
+      ],
+      "body_operation": null,
+      "boundary_id": "76fc99a90848bab0f531b265",
+      "client_call": "deletion command strong row",
+      "consumed_field_path": "branch_results",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "mapping",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+      "named_parser": "branch_results_digest",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "602307ea1ee32c71d8ba7ba919f93530d19efec723d87e8c34d75893f2efb7ac",
+        "span": [
+          1110,
+          1236
+        ],
+        "symbol": "persist_branch_result"
+      },
+      "strict_validator": "canonical_mapping_only",
       "tainted_response_root": "raw_response",
       "trust_direction": "untrusted_to_application"
     },
@@ -1491,6 +1756,150 @@
         "symbol": "_exact_version_absence"
       },
       "strict_validator": "type_is_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_intent_claim"
+      ],
+      "body_operation": null,
+      "boundary_id": "7cba37009f4c5d32c06f5ee3",
+      "client_call": "dynamodb delivery intent row",
+      "consumed_field_path": "payload_digest",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "sha256_hex",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
+      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "named_parser": "_intent_claim",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "9f25ce05695a28320b87e20d6339282afd66e93173beca07d5595375ef429030",
+        "span": [
+          247,
+          272
+        ],
+        "symbol": "_intent_claim"
+      },
+      "strict_validator": "exact_64_hex_digest",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "resolve_delivery_ownership"
+      ],
+      "body_operation": null,
+      "boundary_id": "7d9be45380e6d928fc52c212",
+      "client_call": "notification_repo.load_delivery_event_strong",
+      "consumed_field_path": "account_fence_generation",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "named_parser": "resolve_delivery_ownership",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/notification_service.py",
+        "normalized_ast_sha256": "d05db8d1a805a26599bd88a38749b715411a79d3e9848465da2f92aca8d09c0e",
+        "span": [
+          332,
+          369
+        ],
+        "symbol": "resolve_delivery_ownership"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "claim_delivery_intent"
+      ],
+      "body_operation": null,
+      "boundary_id": "829ecb7cda4332706ae35474",
+      "client_call": "dynamodb delivery intent row",
+      "consumed_field_path": "effect_state",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "closed_state",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+      "named_parser": "claim_delivery_intent",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "e723becb0a6fc445c535422726aa3ac72ebae45aacf58e561f243997885a1fd1",
+        "span": [
+          670,
+          764
+        ],
+        "symbol": "claim_delivery_intent"
+      },
+      "strict_validator": "registered_or_expired_pre_effect_only",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "validate_global_nonprivate_event"
+      ],
+      "body_operation": null,
+      "boundary_id": "835e84c737eb9e74e292cb5e",
+      "client_call": "notification_repo.load_delivery_event_strong",
+      "consumed_field_path": "classification_contract",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "closed_literal",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+      "named_parser": "validate_global_nonprivate_event",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "e21e11cf7f1409198b30513a59b742aa22f35ad1a1c903c285d37dc2174a6e78",
+        "span": [
+          470,
+          512
+        ],
+        "symbol": "validate_global_nonprivate_event"
+      },
+      "strict_validator": "registered_contract_only",
       "tainted_response_root": "raw_response",
       "trust_direction": "untrusted_to_application"
     },
@@ -1793,6 +2202,78 @@
     {
       "alias_chain": [
         "raw_response",
+        "_positive_int"
+      ],
+      "body_operation": null,
+      "boundary_id": "b36f8e46cdb7a6b4e826f0fb",
+      "client_call": "dynamodb strong parent profile",
+      "consumed_field_path": "version",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+      "named_parser": "_positive_int",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "c32d0f9430c9ee0e7f22d74d7db997c5830e96b6347e81a2ebdb2515d9b2c3e4",
+        "span": [
+          677,
+          788
+        ],
+        "symbol": "scrub_parent_profile_child"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "resolve_delivery_ownership"
+      ],
+      "body_operation": null,
+      "boundary_id": "b94cded09bd0a61df7a7b8f7",
+      "client_call": "notification_repo.load_delivery_event_strong",
+      "consumed_field_path": "owner_id",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "named_parser": "resolve_delivery_ownership",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/notification_service.py",
+        "normalized_ast_sha256": "d05db8d1a805a26599bd88a38749b715411a79d3e9848465da2f92aca8d09c0e",
+        "span": [
+          332,
+          369
+        ],
+        "symbol": "resolve_delivery_ownership"
+      },
+      "strict_validator": "persisted_private_owner_only",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "get_attachments"
       ],
       "body_operation": null,
@@ -1901,6 +2382,42 @@
         "symbol": "_reconcile_provider_part"
       },
       "strict_validator": "type_is_int_not_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_intent_claim"
+      ],
+      "body_operation": null,
+      "boundary_id": "d9a28fbf36dee745e5d22a4d",
+      "client_call": "dynamodb delivery intent row",
+      "consumed_field_path": "scope_digest",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "sha256_hex",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
+      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "named_parser": "_intent_claim",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "9f25ce05695a28320b87e20d6339282afd66e93173beca07d5595375ef429030",
+        "span": [
+          247,
+          272
+        ],
+        "symbol": "_intent_claim"
+      },
+      "strict_validator": "exact_64_hex_digest",
       "tainted_response_root": "raw_response",
       "trust_direction": "untrusted_to_application"
     },
@@ -2057,6 +2574,42 @@
     {
       "alias_chain": [
         "raw_response",
+        "_positive_int"
+      ],
+      "body_operation": null,
+      "boundary_id": "e37a708348d00b65ef19da80",
+      "client_call": "scheduler explicit clock",
+      "consumed_field_path": "now_epoch",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+      "named_parser": "_positive_int",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "72201bdecab07f19377aa83780df428dd8c17ac228c179abec4b86305e84c904",
+        "span": [
+          965,
+          1036
+        ],
+        "symbol": "claim_deletion_command"
+      },
+      "strict_validator": "type_is_int_not_bool_positive",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "_coerce_command_result"
       ],
       "body_operation": null,
@@ -2170,6 +2723,78 @@
     {
       "alias_chain": [
         "raw_response",
+        "_intent_claim"
+      ],
+      "body_operation": null,
+      "boundary_id": "f4070d65a8679cfba6b20562",
+      "client_call": "dynamodb delivery intent row",
+      "consumed_field_path": "lease_expires_at",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
+      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "named_parser": "_intent_claim",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "9f25ce05695a28320b87e20d6339282afd66e93173beca07d5595375ef429030",
+        "span": [
+          247,
+          272
+        ],
+        "symbol": "_intent_claim"
+      },
+      "strict_validator": "closed_positive_int",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_claim_from_command"
+      ],
+      "body_operation": null,
+      "boundary_id": "f6201e6420455d6f66685541",
+      "client_call": "dynamodb.update_item.Attributes",
+      "consumed_field_path": "branch_results_digest",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "sha256_hex",
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "named_parser": "_claim_from_command",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "58c4b63cafadcea85ab208f56093e62270702ce0001b5f694e414a3ce288e89e",
+        "span": [
+          82,
+          99
+        ],
+        "symbol": "_claim_from_command"
+      },
+      "strict_validator": "exact_64_hex_digest",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "_provider_sha256"
       ],
       "body_operation": null,
@@ -2201,6 +2826,42 @@
         "symbol": "_reconcile_provider_part"
       },
       "strict_validator": "strict_base64_sha256",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "validate_global_nonprivate_event"
+      ],
+      "body_operation": null,
+      "boundary_id": "fea1ae3e0342c80571822e8c",
+      "client_call": "notification_repo.load_delivery_event_strong",
+      "consumed_field_path": "classification_digest",
+      "decision_ids": [
+        "D-10",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "sha256_hex",
+      "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+      "named_parser": "validate_global_nonprivate_event",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/notification_repo.py",
+        "normalized_ast_sha256": "e21e11cf7f1409198b30513a59b742aa22f35ad1a1c903c285d37dc2174a6e78",
+        "span": [
+          470,
+          512
+        ],
+        "symbol": "validate_global_nonprivate_event"
+      },
+      "strict_validator": "exact_content_seal",
       "tainted_response_root": "raw_response",
       "trust_direction": "untrusted_to_application"
     },
@@ -2283,10 +2944,29 @@
   "schema_version": "phase-473-boundary-inventory.v1",
   "source_files": [
     {
+      "boundary_count": 7,
+      "file": "src/stoa/db/repositories/account_deletion_repo.py",
+      "symbol_digests": [
+        "58c4b63cafadcea85ab208f56093e62270702ce0001b5f694e414a3ce288e89e",
+        "602307ea1ee32c71d8ba7ba919f93530d19efec723d87e8c34d75893f2efb7ac",
+        "72201bdecab07f19377aa83780df428dd8c17ac228c179abec4b86305e84c904",
+        "c32d0f9430c9ee0e7f22d74d7db997c5830e96b6347e81a2ebdb2515d9b2c3e4"
+      ]
+    },
+    {
       "boundary_count": 4,
       "file": "src/stoa/db/repositories/attachment_repo.py",
       "symbol_digests": [
         "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e"
+      ]
+    },
+    {
+      "boundary_count": 7,
+      "file": "src/stoa/db/repositories/notification_repo.py",
+      "symbol_digests": [
+        "9f25ce05695a28320b87e20d6339282afd66e93173beca07d5595375ef429030",
+        "e21e11cf7f1409198b30513a59b742aa22f35ad1a1c903c285d37dc2174a6e78",
+        "e723becb0a6fc445c535422726aa3ac72ebae45aacf58e561f243997885a1fd1"
       ]
     },
     {
@@ -2340,6 +3020,13 @@
       "file": "src/stoa/services/document_parser_worker.py",
       "symbol_digests": [
         "ce676520a1a10fcfe9c0520638e80306d302c3af82f8acd8843fdb0cf63afe67"
+      ]
+    },
+    {
+      "boundary_count": 3,
+      "file": "src/stoa/services/notification_service.py",
+      "symbol_digests": [
+        "d05db8d1a805a26599bd88a38749b715411a79d3e9848465da2f92aca8d09c0e"
       ]
     },
     {
