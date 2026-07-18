@@ -1172,6 +1172,29 @@ def _render_evidence(result: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Raw receipt integrity",
+            "",
+            "Every argv below is an exact JSON array executed without a shell. UTC bounds, "
+            "raw log/JUnit/node-manifest byte counts, and SHA-256 values are independently "
+            "recomputed by `verify-capture`.",
+            "",
+            "| Gate | Exact argv | UTC bounds | Log SHA-256/bytes | JUnit SHA-256/bytes | Node SHA-256/bytes |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for row in receipts:
+        artifacts = row["artifacts"]
+        lines.append(
+            f"| `{row['gate_id']}` | `{json.dumps(row['argv'], separators=(',', ':'))}` | "
+            f"`{row['started_at']}` → `{row['ended_at']}` | "
+            f"`{artifacts['log']['sha256']}`/{artifacts['log']['bytes']} | "
+            f"`{artifacts['junit']['sha256']}`/{artifacts['junit']['bytes']} | "
+            f"`{artifacts['node_manifest']['sha256']}`/"
+            f"{artifacts['node_manifest']['bytes']} |"
+        )
+    lines.extend(
+        [
+            "",
             "## Requirement proof",
             "",
             "| Requirement | Observed node | Result |",
@@ -1179,7 +1202,13 @@ def _render_evidence(result: dict[str, Any]) -> str:
         ]
     )
     for row in coverage["requirements"]:
-        lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
+        required_nodes = ", ".join(
+            f"`{item['node_id']}`" for item in row["required_lower_nodes"]
+        ) or "—"
+        lines.append(
+            f"| {row['id']} | `{row['node_id']}`<br>Required final-gap: "
+            f"{required_nodes} | {row['result']} |"
+        )
     lines.extend(
         [
             "",
@@ -1190,18 +1219,82 @@ def _render_evidence(result: dict[str, Any]) -> str:
         ]
     )
     for row in coverage["decisions"]:
-        lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
+        required_nodes = ", ".join(
+            f"`{item['node_id']}`" for item in row["required_lower_nodes"]
+        ) or "—"
+        lines.append(
+            f"| {row['id']} | `{row['node_id']}`<br>Required final-gap: "
+            f"{required_nodes} | {row['result']} |"
+        )
     lines.extend(
         [
             "",
             "## Retained verification/review findings",
             "",
-            "| Finding | Observed node | Result |",
-            "| --- | --- | --- |",
+            "| Finding | Observed node | Lower fake(s) | Observed condition | Result |",
+            "| --- | --- | --- | --- | --- |",
         ]
     )
     for row in result["finding_adjudications"]:
-        lines.append(f"| {row['id']} | `{row['node_id']}` | {row['result']} |")
+        lower_fakes = "<br>".join(f"`{item}`" for item in row["lower_fake_targets"])
+        lines.append(
+            f"| {row['id']} | `{row['node_id']}` | {lower_fakes} | "
+            f"{row['observed_condition']} | {row['result']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Final-gap observed matrices",
+            "",
+            "The following rows are runtime lower-fake observations. Source-string or "
+            "collection-only assertions cannot satisfy these selectors.",
+            "",
+            "| Truth | Exact observed node | Lower fake | Observed condition |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for row in coverage["gap_truths"]:
+        lines.append(
+            f"| `{row['id']}` | `{row['node_id']}` | "
+            f"`{row['lower_fake_target']}` | {row['observed_condition']} |"
+        )
+    for title, section in (
+        ("Deletion lease, timestamp, and parent-CAS matrix", "claim_fence_nodes"),
+        ("Legacy/malformed/global/deletion-race delivery matrix", "delivery_scope_nodes"),
+        ("Pre-effect/inflight/post-acceptance crash matrix", "crash_state_nodes"),
+    ):
+        lines.extend(
+            [
+                "",
+                f"### {title}",
+                "",
+                "| Exact observed node | Lower fake | Observed condition |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for row in coverage[section]:
+            lines.append(
+                f"| `{row['node_id']}` | `{row['lower_fake_target']}` | "
+                f"{row['observed_condition']} |"
+            )
+    lines.extend(
+        [
+            "",
+            "The deletion matrix explicitly covers unexpired refusal, one expired takeover, "
+            "stale write/finalization denial, valid production UTC construction, and parent-row "
+            "CAS conflict/rescan. The crash matrix separates pre-effect reclaim, durable inflight "
+            "ambiguity, provider acceptance, and terminal replay. The delivery matrix covers "
+            "strong legacy owner joins, missing/malformed/stale metadata, sealed-global validation, "
+            "and zero email/push/WebSocket provider counters for every denied or deletion-raced path.",
+            "",
+            "## Checked inventory artifacts",
+            "",
+            "| Artifact | Bytes | SHA-256 |",
+            "| --- | ---: | --- |",
+        ]
+    )
+    for name, meta in sorted(result["inventory_artifacts"].items()):
+        lines.append(f"| `{name}` | {meta['bytes']} | `{meta['sha256']}` |")
     lines.extend(
         [
             "",
@@ -1228,6 +1321,9 @@ def _render_evidence(result: dict[str, Any]) -> str:
 
 def _render_validation(result: dict[str, Any]) -> str:
     candidate = result["candidate_sha"]
+    receipt_counts = {
+        row["gate_id"]: row["counts"]["total"] for row in result["receipts"]
+    }
     return (
         "---\nphase: 473\nslug: student-content-privacy-and-practice-integrity\n"
         "status: local_gates_complete\nnyquist_compliant: true\n"
@@ -1235,10 +1331,20 @@ def _render_validation(result: dict[str, Any]) -> str:
         "# Phase 473 — checked final validation\n\n"
         f"All local observations derive from immutable candidate `{candidate}`. "
         f"The strict full suite observed {result['observed_full_suite_count']} nodes.\n\n"
+        "Dedicated final-gap receipts observed "
+        f"{receipt_counts['P473-DELETION-CLAIM-FENCING']} deletion-claim nodes, "
+        f"{receipt_counts['P473-DELIVERY-INTENT-RECOVERY']} delivery-recovery nodes, "
+        f"{receipt_counts['P473-PRIVATE-DELIVERY-FENCING']} private-delivery nodes, and "
+        f"{receipt_counts['P473-FINAL-GAP-REGRESSION']} combined regression nodes. "
+        "CR-01, CR-02, WR-01, WR-02, and WR-03 map to exact runtime lower fakes.\n\n"
         "Every receipt has exact argv, UTC bounds, clean candidate state, raw log/JUnit/node "
         "hashes, recomputed counts, and zero denylist matches. Requirements V9PRIV-01/02/03, "
         "D-01 through D-22, all checked read/private-store boundaries, exact 17 branches, and "
-        "retained-policy rows map to observed nodes in the checked results JSON.\n\n"
+        "retained-policy rows map to observed nodes in the checked results JSON. The checked "
+        "matrices include two-worker unexpired/expired takeover, stale write/finalization, valid "
+        "production UTC, parent CAS conflict/rescan, pre-effect/inflight/post-acceptance crash "
+        "states, strong legacy owner joins, malformed/stale/global delivery classification, and "
+        "zero provider calls for denied/deletion-raced effects.\n\n"
         "Real S3 multipart/versioning, deployed cleanup scheduler/IaC, and production logs are "
         "separate NOT RUN obligations owned by Phases 479/480. No external deletion is inferred; "
         "legal holds and accepted/delivered provider copies are not called purged.\n"

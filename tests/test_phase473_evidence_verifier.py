@@ -368,6 +368,61 @@ def test_final_gap_coverage_rejects_duplicate_node_mapping() -> None:
         verifier.verify_coverage(duplicate, boundary, private, policy, observed)
 
 
+def test_rendered_publication_exposes_raw_receipts_and_all_final_gap_matrices() -> None:
+    verifier = _load_verifier()
+    boundary, private, policy, observed = _coverage_fixture()
+    coverage = verifier.derive_coverage(boundary, private, policy, observed)
+    artifacts = {
+        name: {"sha256": name[0] * 64, "bytes": index + 1}
+        for index, name in enumerate(("log", "junit", "node_manifest"))
+    }
+    receipts = [
+        {
+            "gate_id": gate_id,
+            "argv": [sys.executable, "-m", "pytest", *modules],
+            "started_at": "2026-07-18T10:00:00Z",
+            "ended_at": "2026-07-18T10:00:01Z",
+            "artifacts": artifacts,
+            "counts": {
+                "total": 1,
+                "passed": 1,
+                "failed": 0,
+                "error": 0,
+                "skipped": 0,
+                "xfail": 0,
+                "xpass": 0,
+            },
+            "privacy": {"match_count": 0},
+        }
+        for gate_id, modules in FINAL_GAP_GATES.items()
+    ]
+    result = {
+        "candidate_sha": CANDIDATE,
+        "phase_base_sha": "b" * 40,
+        "observed_full_suite_count": 1,
+        "receipts": receipts,
+        "coverage": coverage,
+        "finding_adjudications": coverage["review_findings"],
+        "inventory_artifacts": {"boundary_checked": {"bytes": 1, "sha256": "c" * 64}},
+        "external_obligations": [
+            {"id": item, "status": "NOT RUN", "owner_phase": owner}
+            for item, owner in EXTERNAL.items()
+        ],
+    }
+
+    evidence = verifier._render_evidence(result)
+    validation = verifier._render_validation(result)
+    for expected in (
+        "Raw receipt integrity",
+        "Deletion lease, timestamp, and parent-CAS matrix",
+        "Legacy/malformed/global/deletion-race delivery matrix",
+        "Pre-effect/inflight/post-acceptance crash matrix",
+        "zero email/push/WebSocket provider counters",
+    ):
+        assert expected in evidence
+    assert "CR-01, CR-02, WR-01, WR-02, and WR-03" in validation
+
+
 @pytest.mark.parametrize(
     "section",
     [
