@@ -335,7 +335,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Goal:** Make it impossible for unverified backend or Web source to reach staging or production, while preserving one reproducible release identity and the minimum versioned release infrastructure from clean verification through rollback.
 
-**Why now:** The backend workflow updates production Lambda functions on every `main` push, the Web workflow rebuilds and syncs production S3/CloudFront directly, frontend CI omits Playwright, the audited backend baseline is runtime/time/cloud dependent, and the current CDK stack lacks the minimum staging, immutable artifact, Lambda alias, Web release-pointer, protected-promotion, and rollback primitives that this gate must exercise. Later fixes cannot produce trustworthy evidence until both repositories share one formal gate and its minimum substrate.
+**Why now:** The audit found a red test/type/dependency baseline and direct-to-production backend/Web workflows. Phase 474 establishes the common trustworthy delivery boundary before later Web functionality phases consume it.
 
 **Depends on:** Completed Phases 472 and 473.
 
@@ -343,120 +343,126 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 85 plans
+**Plans:** 38 plans
 
 Plans:
-- [ ] 474-01-PLAN.md — Define the one authoritative backend-owned local/CI gate and its fail-closed receipt contract per D-01 and D-03.
-- [ ] 474-02-PLAN.md — Implement the hermetic two-clock backend verification boundary required by D-02, D-03, and D-04.
-- [ ] 474-03-PLAN.md — Close the Phase 473 `final-head-publication-reverification` defect with immutable Git-blob and ancestry verification.
-- [ ] 474-04-PLAN.md — Enforce the exact cross-ecosystem dependency policy.
-- [ ] 474-05-PLAN.md — Define and validate the immutable cross-repository manifest.
-- [ ] 474-06-PLAN.md — Type executable authorization metadata and decisions.
-- [ ] 474-07-PLAN.md — Type identity and capability repositories.
-- [ ] 474-08-PLAN.md — Type the DynamoDB provider and attachment repository.
-- [ ] 474-09-PLAN.md — Type report lifecycle and recovery services.
-- [ ] 474-10-PLAN.md — Type subscription orchestration.
-- [ ] 474-11-PLAN.md — Type teacher routes.
-- [ ] 474-12-PLAN.md — Type Phase 473 inventory generators.
-- [ ] 474-13-PLAN.md — Type conversation, usage, and subscription tests.
-- [ ] 474-14-PLAN.md — Prove the full 435-error repair reaches Ruff zero and full-repository mypy zero without policy weakening.
-- [ ] 474-15-PLAN.md — Repair the root Web dependency baseline.
-- [ ] 474-16-PLAN.md — Add the locked Web verifier and focused real backend/OpenAPI adapter contract to the authoritative backend gate.
-- [ ] 474-17-PLAN.md — Enforce strict Playwright release outcomes.
-- [ ] 474-18-PLAN.md — Create the minimum immutable storage, transaction, and scoped role substrate for gated delivery.
-- [ ] 474-19-PLAN.md — Publish backend versions and route through aliases.
-- [ ] 474-20-PLAN.md — Implement the durable two-pointer staging/promotion/rollback coordinator.
-- [ ] 474-21-PLAN.md — Make the Web repository workflows thin, immutable callers of Phase 474's common verification and delivery contracts.
-- [ ] 474-22-PLAN.md — Harden the infrastructure workflow around the minimum staging release substrate and the canonical release gate.
-- [ ] 474-23-PLAN.md — Assemble the cross-repository delivery workflow DAG and prove its security invariants before any live staging exercise.
-- [ ] 474-24-PLAN.md — Inventory live release surfaces, configure protected GitHub environments, and bootstrap only the staging release substrate.
-- [ ] 474-25-PLAN.md — Run the complete gate and prove live staging smoke.
-- [ ] 474-26-PLAN.md — Run the integrated intentional-failure matrix.
-- [ ] 474-27-PLAN.md — Repair the measured backend runtime advisories.
-- [ ] 474-28-PLAN.md — Build a reproducible lock-bound Lambda artifact.
-- [ ] 474-29-PLAN.md — Type identity, JWKS, token, and public-auth boundaries.
-- [ ] 474-30-PLAN.md — Type route inventory and reconciliation actions.
-- [ ] 474-31-PLAN.md — Type privileged activation and security-audit repositories.
-- [ ] 474-32-PLAN.md — Type curriculum and AI-operations repositories.
-- [ ] 474-33-PLAN.md — Type notification and account-deletion repositories.
-- [ ] 474-34-PLAN.md — Type question and usage-ledger repositories.
-- [ ] 474-35-PLAN.md — Type report persistence.
-- [ ] 474-36-PLAN.md — Type adaptive-learning and practice repositories.
-- [ ] 474-37-PLAN.md — Type WebSocket persistence.
-- [ ] 474-38-PLAN.md — Type moderation persistence.
-- [ ] 474-39-PLAN.md — Type report recovery jobs and evidence.
-- [ ] 474-40-PLAN.md — Type attachment validation, extraction, and OCR services.
-- [ ] 474-41-PLAN.md — Type AI provider and operations services.
-- [ ] 474-42-PLAN.md — Type support routing, SLA, and pilot services.
-- [ ] 474-43-PLAN.md — Type moderation service decisions.
-- [ ] 474-44-PLAN.md — Type curriculum operations and migrations.
-- [ ] 474-45-PLAN.md — Type adaptive-learning and learning-profile services.
-- [ ] 474-46-PLAN.md — Type AI-teacher and teacher-assistance services.
-- [ ] 474-47-PLAN.md — Type WebSocket and notification delivery services.
-- [ ] 474-48-PLAN.md — Type account-deletion orchestration.
-- [ ] 474-49-PLAN.md — Type practice and student routes.
-- [ ] 474-50-PLAN.md — Type parent routes.
-- [ ] 474-51-PLAN.md — Type conversation routes.
-- [ ] 474-52-PLAN.md — Type notification routes.
-- [ ] 474-53-PLAN.md — Type admin routes.
-- [ ] 474-54-PLAN.md — Type question and file routes.
-- [ ] 474-55-PLAN.md — Type auth and teacher-application routes.
-- [ ] 474-56-PLAN.md — Type the weekly-report job.
-- [ ] 474-57-PLAN.md — Type the upload-cleanup job.
-- [ ] 474-58-PLAN.md — Type the account-deletion job.
-- [ ] 474-59-PLAN.md — Type privileged-admin and practice-seed scripts.
-- [ ] 474-60-PLAN.md — Type attachment security fixtures and fakes.
-- [ ] 474-61-PLAN.md — Type authorization and identity audit tests.
-- [ ] 474-62-PLAN.md — Type public-auth lifecycle and security tests.
-- [ ] 474-63-PLAN.md — Type parent and file-route tests.
-- [ ] 474-64-PLAN.md — Type report and question tests.
-- [ ] 474-65-PLAN.md — Type adaptive-learning and practice-privacy tests.
-- [ ] 474-66-PLAN.md — Type deletion-claim and notification-deletion tests.
-- [ ] 474-67-PLAN.md — Type practice-authorization and delivery-recovery tests.
-- [ ] 474-68-PLAN.md — Type saved-attachment and provider-state tests.
-- [ ] 474-69-PLAN.md — Type private-delivery and document-boundary tests.
-- [ ] 474-70-PLAN.md — Type conversation- and report-deletion tests.
-- [ ] 474-71-PLAN.md — Type practice-snapshot, message-command, and purge tests.
-- [ ] 474-72-PLAN.md — Define the closed non-secret runtime configuration contract.
-- [ ] 474-73-PLAN.md — Bootstrap runtime configuration before Web services.
-- [ ] 474-74-PLAN.md — Capture the bounded Web E2E baseline.
-- [ ] 474-75-PLAN.md — Repair the measured student-navigation label mismatch without changing the retained Chat route.
-- [ ] 474-76-PLAN.md — Prove real-staging Web boot, identity, auth, and API acceptance.
-- [ ] 474-77-PLAN.md — Make immutable Web prefixes and served pointers deployable.
-- [ ] 474-78-PLAN.md — Wire the release topology and remove the stale-dist bypass.
-- [ ] 474-79-PLAN.md — Exercise controlled staging failure and two-pointer rollback.
-- [ ] 474-80-PLAN.md — Generate the complete multi-source coverage audit.
-- [ ] 474-81-PLAN.md — Seal and independently validate final Phase 474 evidence.
-- [ ] 474-82-PLAN.md — Repair the measured parent weekly-report strict-locator failure.
-- [ ] 474-83-PLAN.md — Bind exact clean starting SHAs for the frontend and infrastructure repositories.
-- [ ] 474-84-PLAN.md — Commit the complete frontend slice locally and hand off its immutable SHA.
-- [ ] 474-85-PLAN.md — Commit the complete infrastructure slice locally and hand off its immutable SHA.
 
+**Wave 1**
 
-**UI hint:** yes
+- [ ] `474-01` — Execution-time clean candidate preflight. *(blocking checkpoint)*
 
-**Likely plan slices:**
+**Wave 2**
 
-1. One authoritative local/CI entry point, clean Python 3.12 `uv.lock` bootstrap, fixed/future clocks, deterministic seed/collection receipts, and centralized ambient AWS/network denial.
-2. Repair the complete suite without weakened assertions; enforce zero skip/xfail/xpass; reach Ruff zero; attempt full mypy zero with narrow typed provider boundaries before any owner baseline decision.
-3. Add locked Web install, ESLint, TypeScript build, focused OpenAPI/adapter checks, Playwright, and backend/Web dependency policy to the common gate.
-4. Define the minimum release substrate in CDK: isolated staging and production release roles, immutable artifact/evidence storage, Lambda versions and aliases, immutable Web release prefixes plus an atomic release pointer or equivalent, protected environments, and authorized rollback controls. Deploy and exercise staging/controlled non-production resources; prove production definitions with synth/diff and policy tests unless a later explicit operational approval authorizes their mutation.
-5. Build Linux-arm64 backend and production Web artifacts once; emit one manifest containing exact commits, source/lock identities, artifact digests, runtimes, verification runs, and gate results; verify the eventual publication commit from a later metadata HEAD by reading release artifacts as Git blobs and proving unchanged ancestry.
-6. Replace direct production deploys with automatic staging deploy/smoke, sole-owner protected production approval, unchanged promotion, no bypass, automatic rollback, retention, and intentional-failure/tamper exercises; prove promotion/rollback through controlled non-production execution without treating the owner's policy selection as production-mutation authorization.
+- [ ] `474-02` — Canonical gate and receipt contract.
+- [ ] `474-04` — Later-HEAD Phase 473 publication reverification.
+
+**Wave 3**
+
+- [ ] `474-03` — Fresh hermetic Python verification.
+- [ ] `474-06` — Cross-repository manifest and reproducible backend artifact.
+
+**Wave 4**
+
+- [ ] `474-05` — Dependency policy and measured advisory repair.
+- [ ] `474-26` — Minimum immutable CDK release topology.
+
+**Wave 5**
+
+- [ ] `474-07` — Auth and security roots.
+- [ ] `474-23` — Web dependency and runtime-configuration contract.
+
+**Wave 6**
+
+- [ ] `474-08` — Identity and security repositories.
+- [ ] `474-09` — Content and report repositories.
+- [ ] `474-10` — Domain and delivery repositories.
+
+**Wave 7**
+
+- [ ] `474-11` — Report document OCR and recovery services.
+- [ ] `474-12` — AI support moderation and subscription services.
+- [ ] `474-13` — Learning curriculum and teacher services.
+- [ ] `474-14` — Notification and account-deletion services.
+
+**Wave 8**
+
+- [ ] `474-15` — Auth admin and teacher routers.
+- [ ] `474-16` — Learning question and file routers.
+- [ ] `474-17` — Parent conversation and notification routers.
+
+**Wave 9**
+
+- [ ] `474-18` — Jobs scripts and inventory generators.
+- [ ] `474-19` — Auth security tests and fixtures.
+- [ ] `474-20` — Domain content and route tests.
+- [ ] `474-21` — Phase 473 regression fixtures.
+
+**Wave 10**
+
+- [ ] `474-22` — Full mypy-zero quality gate and conditional owner disposition. *(blocking checkpoint)*
+
+**Wave 11**
+
+- [ ] `474-24` — Web verifier Playwright policy and measured repairs.
+
+**Wave 12**
+
+- [ ] `474-25` — Real-staging Web acceptance and thin frontend workflows.
+- [ ] `474-27` — Durable two-pointer delivery coordinator.
+
+**Wave 13**
+
+- [ ] `474-28` — Thin exact-ref infrastructure workflow.
+- [ ] `474-29` — Frontend repository source handoff.
+
+**Wave 14**
+
+- [ ] `474-30` — Infrastructure repository source handoff.
+
+**Wave 15**
+
+- [ ] `474-32` — Backend delivery workflow and environment controller.
+
+**Wave 16**
+
+- [ ] `474-31` — Backend source identity handoff.
+
+**Wave 17**
+
+- [ ] `474-33` — Live inventory protected environments and owner authority checkpoint. *(blocking checkpoint)*
+
+**Wave 18**
+
+- [ ] `474-34` — Immutable staging substrate bootstrap.
+
+**Wave 19**
+
+- [ ] `474-35` — Live staging delivery smoke and controlled rollback.
+
+**Wave 20**
+
+- [ ] `474-36` — Integrated intentional-failure matrix.
+
+**Wave 21**
+
+- [ ] `474-37` — Final multi-source coverage audit.
+
+**Wave 22**
+
+- [ ] `474-38` — Final evidence sealing and later-HEAD reverification.
 
 **Success criteria:**
 
-1. From clean checkouts, one documented command recreates fresh locked backend and Web environments and returns the same formal gate result as CI; an existing developer environment cannot issue release evidence.
-2. Two separate fresh Python 3.12 runs—fixed standard time and explicit future time—pass the complete collection with zero skip/xfail/xpass while assertions prove ambient AWS credentials and non-allowlisted network are unavailable; unavailable external obligations are exact `NOT RUN` records, never passes.
-3. Ruff, the recorded full-mypy-zero attempt or explicit owner-approved temporary decision, Web lint/type/build/Playwright, Linux-arm64 boot smoke, and backend/Web dependency policy all pass without broad suppression.
-4. CDK synth/diff and staging evidence prove that the repository owns the minimum release substrate needed by the gate: isolated release roles, immutable artifact/evidence storage, Lambda versions and aliases, immutable Web release prefixes plus an atomic pointer or equivalent, protected promotion, and authorized rollback.
-5. One manifest binds the exact tested backend/Web source and lock identities to byte-addressed artifacts; the Phase 473 publication verifier accepts a later metadata HEAD only when the publication commit is the candidate's direct child, current HEAD descends from it, and all four Phase 473 publication-artifact Git blobs are unchanged; intentional failures block promotion, staging receives only the bound bytes, and a controlled non-production failure proves both pointers restore known-good backend and Web bytes without rebuilding. The configured production gate requires protected owner approval and applies the same rollback semantics, but real production promotion/smoke remains exact `NOT RUN` unless later explicitly authorized.
+1. One authoritative command verifies exact clean backend/Web/infra identities; Python runs twice in fresh 3.12 frozen environments with zero skip/xfail/xpass and ambient AWS/network denial.
+2. Ruff is zero, the complete 435-error mypy-zero attempt is executed across every preserved file family, and dependency policy covers backend/Web locks without broad suppression or mobile substitution.
+3. Backend and Web artifacts build once; one manifest binds execution-derived source/tree/lock/gate/artifact/config identities and byte-identical staging use.
+4. Protected environments implement sole-owner/self-approval semantics; a verified staging-only immutable substrate is applied before live staging delivery and smoke.
+5. A controlled nonproduction failure automatically restores both Lambda and Web pointers with durable evidence; all production infrastructure/deploy/smoke/rollback operations remain exact `NOT RUN` absent later explicit approval.
+6. Phase 473 publication reverifies from a later clean metadata HEAD using immutable Git blobs.
 
-**Required evidence:** Authoritative command identity; fixed/future run receipts with Python version, `uv.lock` hash, collection hash, seed, clock, outcome counts, AWS/network denial; Ruff/mypy repair report and any owner decision; `package-lock.json` hash plus Web lint/type/build/Playwright reports; both dependency scans and exception ledger; Linux-arm64 import/handler smoke; CDK outputs and synth/diff proving the minimum release roles, immutable stores, Lambda aliases, Web release prefixes/pointer, protected environments, and rollback authority; protected-owner gate configuration and policy-denial tests; cross-repository manifest; backend/Web artifact digests; publication-verifier tests for a later metadata HEAD, mutated blobs, non-direct-child publication, and invalid ancestry; staging deploy/smoke IDs; controlled non-production failed-promotion and automatic two-pointer rollback IDs; retention inventory; intentional-failure CI run IDs. Actual protected-owner approval, production deploy, production smoke, and production rollback evidence are required only if a later explicit operational approval authorizes that mutation; otherwise each is recorded exactly as `NOT RUN` and does not weaken or block Phase 474.
+**Required evidence:** Three repository source receipts; two-clock gate receipts; quality/dependency/Web/CDK/workflow results; protected-environment owner verification; `staging-substrate.json`; live staging delivery/smoke; controlled rollback; failure matrix; source audit; final evidence index.
 
-**Known follow-up defect closed:** `final-head-publication-reverification` from Phase 473.
-
-**Exit gate:** Direct main-to-production backend and Web deployment is disabled, and the minimum release substrate, protected approval policy, controlled non-production rollback, plus publication verifier are proven. A real production mutation is not a Phase 474 prerequisite and requires later explicit operational approval; otherwise it remains exact `NOT RUN`. Every later phase must extend, not bypass or reimplement, this common gate; Phase 479 cannot own a prerequisite needed to pass this gate.
+**Exit gate:** All 70 task rows and the full gate pass, staging and rollback evidence are live and source-bound, production mutation remains exact `NOT RUN`, and zero source-audit item is missing.
 
 ### Phase 475: Transactional Usage Assignment And Relationship Consistency
 
@@ -754,7 +760,7 @@ Phase 473 remains complete; its four nonblocking verification findings have one 
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 0/TBD | Not started | - |
+| 474. Deterministic Verification And Gated Delivery | 0/38 | Planning revision | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 0/TBD | Not started | - |
 | 476. Billing Idempotency And Paid Access Recovery | 0/TBD | Not started | - |
 | 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
