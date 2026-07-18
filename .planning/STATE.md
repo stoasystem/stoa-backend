@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-33-PLAN.md
-last_updated: "2026-07-18T09:51:54.051Z"
-last_activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, draft, and analytics deletion closure
+stopped_at: Completed 473-34-PLAN.md
+last_updated: "2026-07-18T10:11:38.835Z"
+last_activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, device, and realtime deletion closure
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 53
-  percent: 93
+  completed_plans: 54
+  percent: 95
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 33 of 35
+Plan: 34 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, draft, and analytics deletion closure
+Last activity: 2026-07-18 -- Completed Plan 473-34 notification, assistance, device, and realtime deletion closure
 
 ## Accumulated Context
 
+- Private notification broadcasts, assistance summaries, preferences, push credentials, WebSocket endpoints, and outbound delivery intents now share the permanent account fence; provider mutation rechecks immediately before effect, accepted/unknown external copies are not overclaimed, and the branch requires two later clean scans.
 - Practice receipts/progress, adaptive assignments/memories, AI drafts, learning usage, and curriculum signals now share the permanent account fence; opaque owner manifests replace deterministic hashes, exact aggregate reversal is retry-safe, and five branches require two later clean scans.
 - Conversation headers, messages, teacher-help state, commands, chat usage metadata, and attachment associations now share one permanent-fence generation; stale AI returns cannot complete, associations release before scrub, and two later clean strong scans prove quiescence.
 - Report generation, artifact edits, and recovery delivery now use owner-partitioned exact object/email intents behind the permanent account fence; exact VersionId absence and explicit legal-retention debt govern report purge quiescence.
@@ -110,8 +111,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, 
 
 ## Session
 
-**Last Date:** 2026-07-18T09:51:54.046Z
-**Stopped At:** Completed 473-33-PLAN.md
+**Last Date:** 2026-07-18T10:11:38.830Z
+**Stopped At:** Completed 473-34-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -171,6 +172,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, 
 | Phase 473 P31 | 13 min | 3 tasks | 13 files |
 | Phase 473 P32 | 10 min | 3 tasks | 6 files |
 | Phase 473 P33 | 19 min | 3 tasks | 14 files |
+| Phase 473 P34 | 14 min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -274,3 +276,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, 
 - [Phase 473]: Student curriculum signals are globally anonymous and resolve to an account only through a same-transaction owner manifest under that account deletion partition.
 - [Phase 473]: Signal deletion, aggregate decrement, owner-manifest removal, and an owner-free reconciliation receipt form one exact conditional transaction.
 - [Phase 473]: Practice, assignments, memories, drafts, and curriculum signals each prove quiescence independently through item debt and two later clean scans.
+- [Phase 473]: Notification ownership is an internal owner envelope; recipient role, actor identity, and recipient absence never establish or waive student ownership. — Private role broadcasts must resolve the same closing account as their authoritative target.
+- [Phase 473]: Digest, push, and WebSocket effects claim one durable operation and recheck the exact active generation twice, including immediately before provider mutation. — A pre-deletion claim cannot authorize an outbound effect after the permanent fence changes.
+- [Phase 473]: Provider accepted and acceptance-unknown outcomes retain only operation, channel, time, and status policy facts and are never reported as purged external copies. — Backend deletion cannot prove erasure from recipient or provider systems.
+- [Phase 473]: Notification, assistance, preference, token, delivery-intent, and connection discovery uses strong base-table pagination and two later clean epochs. — A first empty or filtered page cannot prove quiescence.
