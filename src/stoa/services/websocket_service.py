@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -61,8 +62,11 @@ def register_connection(
         "last_seen_at": connected_at,
         "expires_at": now_epoch() + max(int(settings.websocket_connection_ttl_seconds), 1),
         "endpoint_url": endpoint_url or settings.websocket_api_endpoint or None,
+        "owner_id": user_id,
     }
-    websocket_repo.put_connection(item)
+    persisted = websocket_repo.put_connection(item)
+    if isinstance(persisted, dict):
+        item = persisted
     return connection_response(item)
 
 
@@ -190,6 +194,48 @@ def fanout_notification_event(
     attempted_at = now_iso()
     target_channels = _target_channels(item)
     results: list[dict[str, Any]] = []
+    owner_id = str(item.get("owner_id") or item.get("recipient_id") or "")
+    generation = item.get("account_fence_generation")
+    lease_owner: str | None = None
+    leased = bool(owner_id and type(generation) is int and generation > 0)
+    if leased:
+        payload_digest = hashlib.sha256(
+            json.dumps(
+                event_envelope(item, delivery_id=delivery_id, delivery_attempt=1),
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+                default=str,
+            ).encode("utf-8")
+        ).hexdigest()
+        intent = notification_repo.register_delivery_intent(
+            owner_id=owner_id,
+            generation=generation,
+            operation_id=delivery_id,
+            channel="websocket",
+            event_ids=[event_id],
+            payload_digest=payload_digest,
+            now_iso=attempted_at,
+        )
+        if str(intent.get("status") or "") in {
+            "accepted",
+            "provider_acceptance_unknown",
+            "canceled_account_deletion",
+        }:
+            return {"deliveryId": delivery_id, "results": []}
+        lease_owner = f"websocket-worker-{uuid4().hex}"
+        claim = notification_repo.claim_delivery_intent(
+            owner_id=owner_id,
+            generation=generation,
+            operation_id=delivery_id,
+            lease_owner=lease_owner,
+            lease_expires_at=now_epoch() + 90,
+            now_iso=attempted_at,
+        )
+        if not claim:
+            return {"deliveryId": delivery_id, "results": []}
+
+    completion_status = "rejected"
 
     for connection in websocket_repo.list_connections(limit=500):
         connection_id = str(connection.get("connection_id") or "")
@@ -209,11 +255,27 @@ def fanout_notification_event(
             continue
 
         try:
+            if leased and lease_owner is not None:
+                check = {
+                    "owner_id": owner_id,
+                    "generation": generation,
+                    "operation_id": delivery_id,
+                    "lease_owner": lease_owner,
+                }
+                if not notification_repo.delivery_intent_sendable(
+                    **check
+                ) or not notification_repo.delivery_intent_sendable(**check):
+                    completion_status = "canceled_account_deletion"
+                    results.append(
+                        {"connection_id": connection_id, "status": completion_status}
+                    )
+                    break
             if post_func is not None:
                 post_func(connection, envelope)
             else:
                 _post_to_connection(endpoint_url, connection_id, envelope)
             results.append({"connection_id": connection_id, "status": "delivered"})
+            completion_status = "accepted"
         except ClientError as exc:
             if _is_gone_exception(exc):
                 websocket_repo.delete_connection(connection_id)
@@ -221,7 +283,21 @@ def fanout_notification_event(
             else:
                 results.append({"connection_id": connection_id, "status": "failed"})
         except Exception:
-            results.append({"connection_id": connection_id, "status": "failed"})
+            results.append(
+                {"connection_id": connection_id, "status": "provider_acceptance_unknown"}
+            )
+            completion_status = "provider_acceptance_unknown"
+            break
+
+    if leased and lease_owner is not None:
+        notification_repo.complete_delivery_intent(
+            owner_id=owner_id,
+            generation=generation,
+            operation_id=delivery_id,
+            lease_owner=lease_owner,
+            status=completion_status,
+            now_iso=now_iso(),
+        )
 
     _record_delivery_attempt(
         item,

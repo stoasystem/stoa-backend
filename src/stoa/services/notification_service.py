@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 from urllib import request
@@ -14,7 +14,7 @@ import boto3
 from fastapi import HTTPException
 
 from stoa.config import settings
-from stoa.db.repositories import notification_repo
+from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import websocket_service
 from stoa.security.identity import Actor
 
@@ -56,6 +56,123 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+_SEALED_GLOBAL_NONPRIVATE_TARGETS = frozenset({"system_status"})
+_SEALED_GLOBAL_NONPRIVATE_EVENT_TYPES = frozenset(
+    {"subscription_request_update", "moderation_case_update"}
+)
+
+
+def classify_notification_owner(
+    *,
+    recipient_id: str | None,
+    target_type: str,
+    target_id: str,
+    metadata: dict[str, Any],
+    owner_id: str | None,
+    generation: int | None,
+    global_nonprivate: bool,
+) -> dict[str, Any]:
+    """Return the one internal owner envelope or a sealed global classification."""
+    candidate = str(
+        owner_id
+        or metadata.get("owner_id")
+        or metadata.get("student_id")
+        or recipient_id
+        or ""
+    ).strip()
+    if candidate:
+        if type(generation) is not int or generation <= 0:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "notification fence generation is required"
+            )
+        return {
+            "owner_id": candidate,
+            "account_fence_generation": generation,
+            "target_type": target_type,
+            "target_id": target_id,
+            "classification": "private_owner",
+        }
+    if global_nonprivate and target_type in _SEALED_GLOBAL_NONPRIVATE_TARGETS and not metadata:
+        return {
+            "owner_id": None,
+            "account_fence_generation": None,
+            "target_type": target_type,
+            "target_id": target_id,
+            "classification": "global_nonprivate",
+        }
+    raise account_deletion_repo.AccountDeletionConflict(
+        "private notification owner is unresolved"
+    )
+
+
+def _canonical_payload_digest(payload: Any) -> str:
+    encoded = json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def run_delivery_intent(
+    *,
+    owner_id: str,
+    generation: int,
+    operation_id: str,
+    channel: str,
+    event_ids: list[str],
+    payload: Any,
+    provider_call: Any,
+) -> dict[str, Any]:
+    """Claim, twice recheck, and classify one provider mutation without blind retry."""
+    lease_owner = f"delivery-worker-{uuid4().hex}"
+    created_at = now_iso()
+    intent = notification_repo.register_delivery_intent(
+        owner_id=owner_id,
+        generation=generation,
+        operation_id=operation_id,
+        channel=channel,
+        event_ids=list(event_ids),
+        payload_digest=_canonical_payload_digest(payload),
+        now_iso=created_at,
+    )
+    prior_status = str(intent.get("status") or "")
+    if prior_status in {"accepted", "provider_acceptance_unknown", "canceled_account_deletion"}:
+        return {"status": prior_status}
+    claimed = notification_repo.claim_delivery_intent(
+        owner_id=owner_id,
+        generation=generation,
+        operation_id=operation_id,
+        lease_owner=lease_owner,
+        lease_expires_at=int(datetime.now(timezone.utc).timestamp()) + 90,
+        now_iso=now_iso(),
+    )
+    if not claimed:
+        return {"status": "retryable_claim_conflict"}
+    check = {
+        "owner_id": owner_id,
+        "generation": generation,
+        "operation_id": operation_id,
+        "lease_owner": lease_owner,
+    }
+    # The second check is deliberately adjacent to the provider effect.  A
+    # claim made before the permanent fence may not act after it changes.
+    if not notification_repo.delivery_intent_sendable(**check) or not notification_repo.delivery_intent_sendable(**check):
+        notification_repo.complete_delivery_intent(
+            **check, status="canceled_account_deletion", now_iso=now_iso()
+        )
+        return {"status": "canceled_account_deletion"}
+    try:
+        provider_result = provider_call()
+    except Exception:
+        notification_repo.complete_delivery_intent(
+            **check, status="provider_acceptance_unknown", now_iso=now_iso()
+        )
+        return {"status": "provider_acceptance_unknown"}
+    notification_repo.complete_delivery_intent(
+        **check, status="accepted", now_iso=now_iso()
+    )
+    return {"status": "accepted", "provider_result": provider_result}
+
+
 def create_event(
     *,
     recipient_id: str | None,
@@ -70,6 +187,9 @@ def create_event(
     actor_role: str | None = None,
     status: str = "created",
     created_at: str | None = None,
+    owner_id: str | None = None,
+    account_fence_generation: int | None = None,
+    global_nonprivate: bool = False,
 ) -> dict[str, Any]:
     if event_type not in EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported notification event type")
@@ -77,6 +197,52 @@ def create_event(
         raise HTTPException(status_code=400, detail="Unsupported notification status")
     if not recipient_role:
         raise HTTPException(status_code=400, detail="Notification recipient role is required")
+
+    raw_metadata = dict(metadata or {})
+    inferred_owner = str(
+        owner_id
+        or raw_metadata.get("owner_id")
+        or raw_metadata.get("student_id")
+        or recipient_id
+        or ""
+    ).strip()
+    raw_generation = (
+        account_fence_generation
+        if account_fence_generation is not None
+        else raw_metadata.get("privacy_generation")
+        or raw_metadata.get("account_fence_generation")
+    )
+    generation = raw_generation if type(raw_generation) is int and raw_generation > 0 else None
+    if inferred_owner and generation is not None:
+        ownership = classify_notification_owner(
+            recipient_id=recipient_id,
+            target_type=target_type,
+            target_id=target_id,
+            metadata=raw_metadata,
+            owner_id=inferred_owner,
+            generation=generation,
+            global_nonprivate=False,
+        )
+    elif inferred_owner:
+        # The repository resolves the current generation on the real atomic
+        # table.  This compatibility path exists for older unit fakes only.
+        ownership = {
+            "owner_id": inferred_owner,
+            "account_fence_generation": None,
+            "target_type": target_type,
+            "target_id": target_id,
+            "classification": "private_owner",
+        }
+    elif global_nonprivate or event_type in _SEALED_GLOBAL_NONPRIVATE_EVENT_TYPES:
+        ownership = {
+            "owner_id": None,
+            "account_fence_generation": None,
+            "target_type": target_type,
+            "target_id": target_id,
+            "classification": "global_nonprivate",
+        }
+    else:
+        raise HTTPException(status_code=409, detail="Notification owner is required")
 
     category = category_for_event(event_type=event_type, target_type=target_type)
     preferences = get_preferences_for_user(recipient_id) if recipient_id else default_preferences()
@@ -104,14 +270,21 @@ def create_event(
         "read_at": now_iso() if event_status == "archived" else None,
         "archived_at": now_iso() if event_status == "archived" else None,
         "metadata": {
-            **_clean_metadata(metadata or {}),
+            **_clean_metadata(raw_metadata),
             "delivery_decision": delivery,
         },
         "actor_id": actor_id,
         "actor_role": actor_role,
         "category": category,
+        "owner_id": ownership["owner_id"],
+        "account_fence_generation": ownership["account_fence_generation"],
+        "owner_classification": ownership["classification"],
+        "owner_target_type": ownership["target_type"],
+        "owner_target_id": ownership["target_id"],
     }
-    notification_repo.put_event(item)
+    persisted = notification_repo.put_event(item)
+    if isinstance(persisted, dict):
+        item = persisted
     if delivery["channels"]["realtime"]["decision"] == "attempted":
         websocket_service.fanout_notification_event_safe(item)
     if delivery["channels"]["push"]["decision"] == "deferred_push":
@@ -128,7 +301,9 @@ def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
         return None
 
 
-def emit_teacher_requested(*, question_id: str, student_id: str, subject: str) -> None:
+def emit_teacher_requested(
+    *, question_id: str, student_id: str, subject: str, account_fence_generation: int | None = None
+) -> None:
     for recipient_role in ("teacher", "admin"):
         create_event_safe(
             recipient_id=None,
@@ -141,6 +316,8 @@ def emit_teacher_requested(*, question_id: str, student_id: str, subject: str) -
             metadata={"student_id": student_id, "subject": subject},
             actor_id=student_id,
             actor_role="student",
+            owner_id=student_id,
+            account_fence_generation=account_fence_generation,
         )
 
 
@@ -156,6 +333,8 @@ def emit_teacher_takeover(*, question: dict[str, Any], teacher_id: str) -> None:
         metadata={"subject": question.get("subject"), "teacher_id": teacher_id},
         actor_id=teacher_id,
         actor_role="teacher",
+        owner_id=str(question.get("student_id") or ""),
+        account_fence_generation=question.get("account_fence_generation"),
     )
 
 
@@ -171,6 +350,8 @@ def emit_teacher_reply(*, question: dict[str, Any], teacher_id: str) -> None:
         metadata={"subject": question.get("subject"), "teacher_id": teacher_id},
         actor_id=teacher_id,
         actor_role="teacher",
+        owner_id=str(question.get("student_id") or ""),
+        account_fence_generation=question.get("account_fence_generation"),
     )
 
 
@@ -200,6 +381,8 @@ def emit_moderation_update(
             },
             actor_id=actor_id,
             actor_role=actor_role,
+            owner_id=owner_id,
+            account_fence_generation=privacy_generation,
         )
 
 
@@ -228,6 +411,8 @@ def emit_moderation_created(
         },
         actor_id=actor_id,
         actor_role=actor_role,
+        owner_id=owner_id,
+        account_fence_generation=privacy_generation,
     )
 
 
@@ -252,6 +437,12 @@ def emit_subscription_update(
     actor_id: str,
     actor_role: str,
 ) -> None:
+    owner_id = str(
+        request_item.get("student_id")
+        or request_item.get("parent_id")
+        or recipient_id
+        or ""
+    )
     create_event_safe(
         recipient_id=recipient_id,
         recipient_role=recipient_role,
@@ -267,6 +458,8 @@ def emit_subscription_update(
         },
         actor_id=actor_id,
         actor_role=actor_role,
+        owner_id=owner_id,
+        account_fence_generation=request_item.get("account_fence_generation"),
     )
 
 
@@ -355,6 +548,7 @@ def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, A
         {
             "entity_type": notification_repo.PREFERENCE_ENTITY,
             "user_id": user_id,
+            "owner_id": user_id,
             "preferences": merged,
             "updated_at": updated_at,
         }
@@ -542,21 +736,47 @@ def send_digest(
     elif not settings.notification_email_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
-        try:
-            payload = {
-                "deliveryId": delivery_id,
-                "recipientEmail": recipient_email,
-                "subject": "STOA notification digest",
-                "html": _digest_email_html(preview["items"]),
-                "items": preview["items"],
-                "template": settings.notification_email_digest_template,
-            }
-            provider_result = send_func(payload) if send_func is not None else _send_email_digest_provider(payload)
-            attempt["status"] = "sent"
-            attempt["provider_result"] = _redacted_provider_result(provider_result)
-        except Exception as exc:
-            attempt["status"] = "failed"
-            attempt["provider_result"] = {"error": _redacted_error_class(exc)}
+        payload = {
+            "deliveryId": delivery_id,
+            "recipientEmail": recipient_email,
+            "subject": "STOA notification digest",
+            "html": _digest_email_html(preview["items"]),
+            "items": preview["items"],
+            "template": settings.notification_email_digest_template,
+        }
+        owner_event = notification_repo.get_event(event_ids[0]) if event_ids else None
+        owner_id = str((owner_event or {}).get("owner_id") or "")
+        generation = (owner_event or {}).get("account_fence_generation")
+        if owner_id and type(generation) is int and generation > 0:
+            result = run_delivery_intent(
+                owner_id=owner_id,
+                generation=generation,
+                operation_id=delivery_id,
+                channel="email_digest",
+                event_ids=event_ids,
+                payload=payload,
+                provider_call=lambda: (
+                    send_func(payload)
+                    if send_func is not None
+                    else _send_email_digest_provider(payload)
+                ),
+            )
+            attempt["status"] = {
+                "accepted": "sent",
+                "provider_acceptance_unknown": "provider_acceptance_unknown",
+                "canceled_account_deletion": "canceled_account_deletion",
+            }.get(str(result.get("status") or ""), "retryable")
+            attempt["provider_result"] = _redacted_provider_result(
+                result.get("provider_result")
+            )
+        else:
+            try:
+                provider_result = send_func(payload) if send_func is not None else _send_email_digest_provider(payload)
+                attempt["status"] = "sent"
+                attempt["provider_result"] = _redacted_provider_result(provider_result)
+            except Exception as exc:
+                attempt["status"] = "failed"
+                attempt["provider_result"] = {"error": _redacted_error_class(exc)}
 
     _record_event_attempts(event_ids, "email_digest_delivery_attempts", attempt)
     return {
@@ -622,8 +842,11 @@ def register_push_token(
         "created_at": now,
         "last_seen_at": now,
         "revoked_at": None,
+        "owner_id": user_id,
     }
-    notification_repo.put_push_token(item)
+    persisted = notification_repo.put_push_token(item)
+    if isinstance(persisted, dict):
+        item = persisted
     return push_token_response(item)
 
 
@@ -695,26 +918,51 @@ def attempt_push_delivery(
     elif not settings.notification_push_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
-        try:
-            payload = {
-                "deliveryId": delivery_id,
-                "tokenReferences": token_refs,
-                "title": item.get("title"),
-                "body": item.get("summary"),
-                "data": {
-                    "eventId": item.get("event_id"),
-                    "eventType": item.get("event_type"),
-                    "targetType": item.get("target_type"),
-                    "targetId": item.get("target_id"),
-                },
-                "template": settings.notification_push_template,
-            }
-            provider_result = send_func(payload) if send_func is not None else _send_push_provider(payload)
-            attempt["status"] = "sent"
-            attempt["provider_result"] = _redacted_provider_result(provider_result)
-        except Exception as exc:
-            attempt["status"] = "failed"
-            attempt["provider_result"] = {"error": _redacted_error_class(exc)}
+        payload = {
+            "deliveryId": delivery_id,
+            "tokenReferences": token_refs,
+            "title": item.get("title"),
+            "body": item.get("summary"),
+            "data": {
+                "eventId": item.get("event_id"),
+                "eventType": item.get("event_type"),
+                "targetType": item.get("target_type"),
+                "targetId": item.get("target_id"),
+            },
+            "template": settings.notification_push_template,
+        }
+        owner_id = str(item.get("owner_id") or recipient_id)
+        generation = item.get("account_fence_generation")
+        if owner_id and type(generation) is int and generation > 0:
+            result = run_delivery_intent(
+                owner_id=owner_id,
+                generation=generation,
+                operation_id=delivery_id,
+                channel="push",
+                event_ids=[str(item.get("event_id") or "")],
+                payload=payload,
+                provider_call=lambda: (
+                    send_func(payload)
+                    if send_func is not None
+                    else _send_push_provider(payload)
+                ),
+            )
+            attempt["status"] = {
+                "accepted": "sent",
+                "provider_acceptance_unknown": "provider_acceptance_unknown",
+                "canceled_account_deletion": "canceled_account_deletion",
+            }.get(str(result.get("status") or ""), "retryable")
+            attempt["provider_result"] = _redacted_provider_result(
+                result.get("provider_result")
+            )
+        else:
+            try:
+                provider_result = send_func(payload) if send_func is not None else _send_push_provider(payload)
+                attempt["status"] = "sent"
+                attempt["provider_result"] = _redacted_provider_result(provider_result)
+            except Exception as exc:
+                attempt["status"] = "failed"
+                attempt["provider_result"] = {"error": _redacted_error_class(exc)}
 
     _record_event_attempts([str(item.get("event_id") or "")], "push_delivery_attempts", attempt)
     return {

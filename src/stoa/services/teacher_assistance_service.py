@@ -39,8 +39,12 @@ def build_summary_seed(
         "source_count": _source_count(question),
         "created_at": created_at,
         "created_by": actor.user_id,
+        "owner_id": question.get("student_id"),
+        "account_fence_generation": question.get("account_fence_generation"),
     }
-    notification_repo.put_summary_seed(seed)
+    persisted = notification_repo.put_summary_seed(seed)
+    if isinstance(persisted, dict):
+        seed = persisted
     return summary_seed_response(seed)
 
 
