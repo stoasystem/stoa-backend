@@ -7,7 +7,6 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urlparse
-from uuid import uuid4
 
 import boto3
 from botocore.exceptions import ClientError
@@ -190,117 +189,94 @@ def fanout_notification_event(
     if not event_id:
         raise HTTPException(status_code=400, detail="Notification event id is required")
 
-    delivery_id = f"ws-{uuid4().hex}"
-    attempted_at = now_iso()
-    target_channels = _target_channels(item)
-    results: list[dict[str, Any]] = []
-    owner_id = str(item.get("owner_id") or item.get("recipient_id") or "")
-    generation = item.get("account_fence_generation")
-    lease_owner: str | None = None
-    leased = bool(owner_id and type(generation) is int and generation > 0)
-    if leased:
-        payload_digest = hashlib.sha256(
-            json.dumps(
-                event_envelope(item, delivery_id=delivery_id, delivery_attempt=1),
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-                default=str,
-            ).encode("utf-8")
-        ).hexdigest()
-        intent = notification_repo.register_delivery_intent(
-            owner_id=owner_id,
-            generation=generation,
-            operation_id=delivery_id,
-            channel="websocket",
-            event_ids=[event_id],
-            payload_digest=payload_digest,
-            now_iso=attempted_at,
-        )
-        if str(intent.get("status") or "") in {
-            "accepted",
-            "provider_acceptance_unknown",
-            "canceled_account_deletion",
-        }:
-            return {"deliveryId": delivery_id, "results": []}
-        lease_owner = f"websocket-worker-{uuid4().hex}"
-        claim = notification_repo.claim_delivery_intent(
-            owner_id=owner_id,
-            generation=generation,
-            operation_id=delivery_id,
-            lease_owner=lease_owner,
-            lease_expires_at=now_epoch() + 90,
-            now_iso=attempted_at,
-        )
-        if not claim:
-            return {"deliveryId": delivery_id, "results": []}
+    # Imported lazily to avoid the notification-service/WebSocket module cycle.
+    from stoa.services import notification_service
 
-    completion_status = "rejected"
+    try:
+        batch = notification_service.load_authoritative_delivery_events([event_id])
+    except notification_service.DeliveryOwnershipError as exc:
+        return {"deliveryId": None, "status": exc.status, "results": []}
+    canonical = batch.events[0]
+    delivery_id = f"websocket-{batch.event_set_digest[:40]}"
+    attempted_at = now_iso()
+    target_channels = _target_channels(canonical)
+    results: list[dict[str, Any]] = []
 
     for connection in websocket_repo.list_connections(limit=500):
         connection_id = str(connection.get("connection_id") or "")
         if not connection_id:
             continue
+        connection_ref = _connection_evidence_ref(connection_id)
         if _is_expired(connection):
             websocket_repo.delete_connection(connection_id)
-            results.append({"connection_id": connection_id, "status": "stale_removed"})
+            results.append(
+                {"connection_id": connection_ref, "status": "stale_removed"}
+            )
             continue
         if not target_channels.intersection(set(connection.get("subscribed_channels") or [])):
             continue
 
-        envelope = event_envelope(item, delivery_id=delivery_id, delivery_attempt=1)
         endpoint_url = str(connection.get("endpoint_url") or settings.websocket_api_endpoint or "")
         if not endpoint_url and post_func is None:
-            results.append({"connection_id": connection_id, "status": "skipped_no_endpoint"})
+            results.append(
+                {"connection_id": connection_ref, "status": "skipped_no_endpoint"}
+            )
             continue
+        discriminator = hashlib.sha256(
+            (
+                "stoa.websocket-connection.v1\x00" + connection_id
+            ).encode("utf-8")
+        ).hexdigest()
+        effect_id = notification_service.authoritative_delivery_operation_id(
+            channel="websocket",
+            batch=batch,
+            discriminator=discriminator,
+        )
+        envelope = event_envelope(
+            canonical, delivery_id=effect_id, delivery_attempt=1
+        )
+        provider_state = {"gone": False}
 
-        try:
-            if leased and lease_owner is not None:
-                check = {
-                    "owner_id": owner_id,
-                    "generation": generation,
-                    "operation_id": delivery_id,
-                    "lease_owner": lease_owner,
-                }
-                if not notification_repo.delivery_intent_sendable(
-                    **check
-                ) or not notification_repo.delivery_intent_sendable(**check):
-                    completion_status = "canceled_account_deletion"
-                    results.append(
-                        {"connection_id": connection_id, "status": completion_status}
-                    )
-                    break
+        def post() -> None:
             if post_func is not None:
                 post_func(connection, envelope)
             else:
-                _post_to_connection(endpoint_url, connection_id, envelope)
-            results.append({"connection_id": connection_id, "status": "delivered"})
-            completion_status = "accepted"
-        except ClientError as exc:
-            if _is_gone_exception(exc):
-                websocket_repo.delete_connection(connection_id)
-                results.append({"connection_id": connection_id, "status": "gone_removed"})
-            else:
-                results.append({"connection_id": connection_id, "status": "failed"})
-        except Exception:
+                try:
+                    _post_to_connection(endpoint_url, connection_id, envelope)
+                except ClientError as exc:
+                    provider_state["gone"] = _is_gone_exception(exc)
+                    raise
+
+        result = notification_service.run_authoritative_delivery(
+            channel="websocket",
+            batch=batch,
+            payload=envelope,
+            discriminator=discriminator,
+            provider_call=post,
+        )
+        status = str(result.get("status") or "")
+        if provider_state["gone"]:
+            websocket_repo.delete_connection(connection_id)
             results.append(
-                {"connection_id": connection_id, "status": "provider_acceptance_unknown"}
+                {"connection_id": connection_ref, "status": "gone_removed"}
             )
-            completion_status = "provider_acceptance_unknown"
+            continue
+        projected = {
+            "accepted": "delivered",
+            "provider_acceptance_unknown": "provider_acceptance_unknown",
+            "canceled_account_deletion": "canceled_account_deletion",
+            "retryable_claim_conflict": "retryable",
+        }.get(status, "retryable")
+        results.append({"connection_id": connection_ref, "status": projected})
+        if projected in {
+            "provider_acceptance_unknown",
+            "canceled_account_deletion",
+            "retryable",
+        }:
             break
 
-    if leased and lease_owner is not None:
-        notification_repo.complete_delivery_intent(
-            owner_id=owner_id,
-            generation=generation,
-            operation_id=delivery_id,
-            lease_owner=lease_owner,
-            status=completion_status,
-            now_iso=now_iso(),
-        )
-
     _record_delivery_attempt(
-        item,
+        canonical,
         {
             "delivery_id": delivery_id,
             "attempted_at": attempted_at,
@@ -309,7 +285,7 @@ def fanout_notification_event(
             "results": results,
         },
     )
-    return {"deliveryId": delivery_id, "results": results}
+    return {"deliveryId": delivery_id, "status": "completed", "results": results}
 
 
 def event_envelope(
@@ -464,11 +440,20 @@ def _endpoint_host(endpoint: str) -> str | None:
 
 
 def _record_delivery_attempt(item: dict[str, Any], attempt: dict[str, Any]) -> None:
+    if item.get("owner_classification") == "global_nonprivate":
+        return
     metadata = dict(item.get("metadata") or {})
     attempts = list(metadata.get("websocket_delivery_attempts") or [])
     attempts.append(attempt)
     metadata["websocket_delivery_attempts"] = attempts[-5:]
     notification_repo.update_event(str(item["event_id"]), {"metadata": metadata})
+
+
+def _connection_evidence_ref(connection_id: str) -> str:
+    digest = hashlib.sha256(
+        ("stoa.websocket-evidence.v1\x00" + connection_id).encode("utf-8")
+    ).hexdigest()
+    return f"connection-{digest[:16]}"
 
 
 def _post_to_connection(endpoint_url: str, connection_id: str, envelope: dict[str, Any]) -> None:

@@ -1,3 +1,5 @@
+import hashlib
+
 from fastapi import HTTPException
 
 from stoa.config import Settings
@@ -9,10 +11,33 @@ def _install_notification_repo(monkeypatch):
     preferences: dict[str, dict] = {}
 
     def put_event(item):
-        events[item["event_id"]] = dict(item)
+        stored = dict(item)
+        stored.setdefault("schema_version", "notification-event.v3")
+        stored.setdefault("event_version", 1)
+        stored.setdefault("owner_classification", "private_owner")
+        if not stored.get("owner_id"):
+            stored["owner_id"] = stored.get("recipient_id") or "student-owner"
+        if type(stored.get("account_fence_generation")) is not int:
+            stored["account_fence_generation"] = 1
+        events[item["event_id"]] = stored
+        return stored
 
     def get_event(event_id):
         return events.get(event_id)
+
+    def load_delivery_event_strong(event_id):
+        item = dict(events[event_id])
+        item.setdefault("PK", f"NOTIFICATION#{event_id}")
+        item.setdefault("SK", "META")
+        item.setdefault("entity_type", "notification_event")
+        item.setdefault("schema_version", "notification-event.v3")
+        item.setdefault("event_version", 1)
+        item.setdefault("owner_classification", "private_owner")
+        if not item.get("owner_id"):
+            item["owner_id"] = item.get("recipient_id") or "student-owner"
+        if type(item.get("account_fence_generation")) is not int:
+            item["account_fence_generation"] = 1
+        return item
 
     def list_events(limit=100):
         return list(events.values())[:limit]
@@ -29,12 +54,45 @@ def _install_notification_repo(monkeypatch):
 
     monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
     monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
+    monkeypatch.setattr(
+        notification_service.notification_repo,
+        "load_delivery_event_strong",
+        load_delivery_event_strong,
+    )
     monkeypatch.setattr(notification_service.notification_repo, "list_events", list_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
     monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
     monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
     monkeypatch.setattr(websocket_service.notification_repo, "update_event", update_event)
+    monkeypatch.setattr(
+        notification_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner_id, generation=None, **_kwargs: {
+            "status": "active",
+            "generation": int(generation or 1),
+        },
+    )
+
+    def run_authoritative_delivery(**kwargs):
+        try:
+            kwargs["provider_call"]()
+        except Exception:
+            return {"status": "provider_acceptance_unknown"}
+        return {"status": "accepted"}
+
+    monkeypatch.setattr(
+        notification_service,
+        "run_authoritative_delivery",
+        run_authoritative_delivery,
+    )
     return events
+
+
+def _connection_ref(connection_id: str) -> str:
+    digest = hashlib.sha256(
+        ("stoa.websocket-evidence.v1\x00" + connection_id).encode("utf-8")
+    ).hexdigest()
+    return f"connection-{digest[:16]}"
 
 
 def _install_websocket_repo(monkeypatch):
@@ -132,9 +190,11 @@ def test_teacher_connection_receives_teacher_role_broadcast(monkeypatch):
         post_func=lambda connection, envelope: sent.append((connection, envelope)),
     )
 
-    assert result["results"] == [{"connection_id": "teacher-conn", "status": "delivered"}]
+    assert result["results"] == [
+        {"connection_id": _connection_ref("teacher-conn"), "status": "delivered"}
+    ]
     assert sent[0][1]["eventId"] == "notif-1"
-    assert sent[0][1]["deliveryId"] == result["deliveryId"]
+    assert sent[0][1]["deliveryId"].startswith("websocket-")
     assert "role:teacher" in sent[0][0]["subscribed_channels"]
 
 
@@ -163,7 +223,9 @@ def test_direct_user_fanout_records_delivery_attempt_metadata(monkeypatch):
 
     attempts = events["notif-2"]["metadata"]["websocket_delivery_attempts"]
     assert attempts[0]["target_channels"] == ["role:student", "user:student-1"]
-    assert attempts[0]["results"] == [{"connection_id": "student-conn", "status": "delivered"}]
+    assert attempts[0]["results"] == [
+        {"connection_id": _connection_ref("student-conn"), "status": "delivered"}
+    ]
 
 
 def test_delivery_failure_does_not_break_durable_notification(monkeypatch):
@@ -188,7 +250,10 @@ def test_delivery_failure_does_not_break_durable_notification(monkeypatch):
     assert events[event["eventId"]]["status"] == "created"
     attempts = events[event["eventId"]]["metadata"]["websocket_delivery_attempts"]
     assert attempts[0]["results"] == [
-        {"connection_id": "student-conn", "status": "skipped_no_endpoint"}
+        {
+            "connection_id": _connection_ref("student-conn"),
+            "status": "skipped_no_endpoint",
+        }
     ]
 
 

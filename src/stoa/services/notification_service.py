@@ -1596,6 +1596,8 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
         item = notification_repo.get_event(event_id)
         if not item:
             continue
+        if item.get("owner_classification") == "global_nonprivate":
+            continue
         metadata = dict(item.get("metadata") or {})
         attempts = list(metadata.get(metadata_key) or [])
         attempts.append(attempt)

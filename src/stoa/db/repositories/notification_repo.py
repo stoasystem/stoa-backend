@@ -516,6 +516,10 @@ def update_event(event_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
     existing = get_event(event_id)
     if not existing:
         return None
+    if existing.get("owner_classification") == "global_nonprivate":
+        raise account_deletion_repo.AccountDeletionConflict(
+            "global delivery event is immutable"
+        )
     if not updates:
         return existing
     _persist_private(existing, mode="update", updates=updates)
@@ -853,6 +857,49 @@ def begin_delivery_effect(
             ),
         )
     else:
+        intent = target.get_item(
+            Key=_delivery_key(scope, claim.operation_id), ConsistentRead=True
+        ).get("Item")
+        event_ids = intent.get("event_ids") if isinstance(intent, Mapping) else None
+        if (
+            not isinstance(event_ids, list)
+            or not event_ids
+            or any(not isinstance(event_id, str) or not event_id for event_id in event_ids)
+        ):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "global delivery event set is invalid"
+            )
+        event_checks: list[dict[str, Any]] = []
+        for event_id in event_ids:
+            event = load_delivery_event_strong(event_id, table=target)
+            if (
+                event is None
+                or not validate_global_nonprivate_event(event)
+                or event.get("classification_digest") != scope.classification_seal
+            ):
+                raise account_deletion_repo.AccountDeletionConflict(
+                    "global delivery classification changed"
+                )
+            event_checks.append(
+                {
+                    "ConditionCheck": {
+                        "Key": {"PK": notification_pk(event_id), "SK": "META"},
+                        "ConditionExpression": (
+                            "owner_classification=:global_kind AND "
+                            "classification_contract=:contract AND "
+                            "classification_digest=:classification_seal AND "
+                            "event_version=:event_version"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":global_kind": "global_nonprivate",
+                            ":contract": GLOBAL_NONPRIVATE_CONTRACT_ID,
+                            ":classification_seal": scope.classification_seal,
+                            ":event_version": event["event_version"],
+                        },
+                    }
+                }
+            )
+        operations = [*event_checks, update]
         update_details = update["Update"]
         update_details["ConditionExpression"] += (
             " AND scope_kind=:global_kind AND classification_seal=:classification_seal"
