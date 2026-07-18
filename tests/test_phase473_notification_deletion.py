@@ -74,6 +74,8 @@ def test_source_registry_closes_rows_writers_private_fields_and_external_boundar
         "update_push_token",
         "register_delivery_intent",
         "claim_delivery_intent",
+        "begin_delivery_effect",
+        "recover_delivery_intent",
         "complete_delivery_intent",
     } <= set(writers)
     assert {
