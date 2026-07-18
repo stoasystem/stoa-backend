@@ -24,6 +24,61 @@ EXTERNAL = {
     "P480-DEPLOYED-CLEANUP-SCHEDULER-IAC": "480",
     "P480-PRODUCTION-LOGS": "480",
 }
+FINAL_GAP_GATES = {
+    "P473-DELETION-CLAIM-FENCING": (
+        "tests/test_phase473_account_deletion_claim_fencing.py",
+    ),
+    "P473-DELIVERY-INTENT-RECOVERY": (
+        "tests/test_phase473_delivery_intent_recovery.py",
+    ),
+    "P473-PRIVATE-DELIVERY-FENCING": (
+        "tests/test_phase473_private_delivery_fencing.py",
+    ),
+    "P473-FINAL-GAP-REGRESSION": (
+        "tests/test_phase473_account_deletion_claim_fencing.py",
+        "tests/test_phase473_account_deletion.py",
+        "tests/test_phase473_account_deletion_seal.py",
+        "tests/test_phase473_delivery_intent_recovery.py",
+        "tests/test_phase473_notification_deletion.py",
+        "tests/test_phase473_private_delivery_fencing.py",
+        "tests/test_notifications.py",
+        "tests/test_websocket_notifications.py",
+    ),
+}
+FINAL_GAP_NODE_GROUPS = {
+    "claim_fence_nodes": {
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_two_workers_cannot_steal_active_lease_and_only_one_wins_after_expiry",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_service_invokes_no_branch_or_later_write_after_claim_renewal_loss",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_forged_in_memory_complete_map_cannot_terminalize_durable_incomplete_set",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_production_service_clock_is_nonblank_timezone_aware_utc",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_fresh_parent_rescan_removes_only_child_and_advances_row_version",
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_account_profile_row_conflict_stays_retryable_debt",
+    },
+    "delivery_scope_nodes": {
+        "tests/test_phase473_private_delivery_fencing.py::test_strong_event_loader_uses_exact_base_key_and_consistent_read",
+        "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        "tests/test_phase473_private_delivery_fencing.py::test_legacy_question_owner_resolution_uses_closed_strong_target_join",
+        "tests/test_phase473_private_delivery_fencing.py::test_legacy_metadata_only_owner_fails_closed_without_target",
+        "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+        "tests/test_phase473_private_delivery_fencing.py::test_mixed_owner_digest_is_refused_before_email_provider",
+        "tests/test_phase473_private_delivery_fencing.py::test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothing",
+    },
+    "crash_state_nodes": {
+        "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        "tests/test_phase473_delivery_intent_recovery.py::test_unexpired_pre_effect_claim_and_inflight_are_never_takeover_eligible",
+        "tests/test_phase473_delivery_intent_recovery.py::test_begin_private_claim_is_one_fence_plus_exact_version_cas",
+        "tests/test_phase473_delivery_intent_recovery.py::test_crash_pre_effect_recovers_only_after_actual_time_passes",
+        "tests/test_phase473_delivery_intent_recovery.py::test_crash_after_durable_transition_terminalizes_unknown_without_provider_call",
+        "tests/test_phase473_delivery_intent_recovery.py::test_provider_acceptance_lost_response_replays_unknown_without_blind_retry",
+        "tests/test_phase473_delivery_intent_recovery.py::test_terminal_completion_lost_response_replays_accepted_without_provider_payload",
+        "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+        "tests/test_phase473_delivery_intent_recovery.py::test_provider_effect_order_is_recover_fence_transition_call_and_complete",
+    },
+}
 
 
 def _load_verifier() -> Any:
@@ -114,6 +169,7 @@ def _receipt(tmp_path: Path) -> dict[str, Any]:
         ("argv drift", lambda r: r["argv"].append("--maxfail=1")),
         ("nonzero exit", lambda r: r.__setitem__("exit_code", 1)),
         ("candidate drift", lambda r: r["after"].__setitem__("head", "b" * 40)),
+        ("wrong candidate", lambda r: r.__setitem__("candidate_sha", "b" * 40)),
         ("dirty before", lambda r: r["before"].__setitem__("clean", False)),
         ("invalid UTC order", lambda r: r.__setitem__("ended_at", "2026-07-17T10:00:00Z")),
         ("changed log hash", lambda r: r["artifacts"]["log"].__setitem__("sha256", "0" * 64)),
@@ -206,8 +262,24 @@ def _coverage_fixture() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any],
         row[key]
         for row in private["branch_registry"]
         for key in ("purge_selector", "no_resurrection_selector")
-    }
+    } | set().union(*FINAL_GAP_NODE_GROUPS.values())
     return boundary, private, policy, observed
+
+
+def test_registry_contains_exact_dedicated_and_combined_final_gap_gates(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_verifier()
+    candidate = _git(ROOT, "rev-parse", "HEAD")
+    registry = {row["id"]: row for row in verifier.gate_registry(candidate, tmp_path)}
+
+    for gate_id, modules in FINAL_GAP_GATES.items():
+        assert gate_id in registry
+        argv = registry[gate_id]["argv"]
+        assert argv[-len(modules) :] == list(modules)
+        assert "-p" in argv and "scripts.phase473_pytest_guard" in argv
+        assert "xfail_strict=true" in argv
+    assert set(FINAL_GAP_GATES) <= set(registry)
 
 
 def test_coverage_is_exact_for_requirements_decisions_boundaries_and_private_stores() -> None:
@@ -224,11 +296,93 @@ def test_coverage_is_exact_for_requirements_decisions_boundaries_and_private_sto
         f"D-{index:02d}" for index in range(1, 23)
     }
     assert len(coverage["branches"]) == 17
+    assert {row["id"] for row in coverage["review_findings"]} == {
+        "CR-01",
+        "CR-02",
+        "WR-01",
+        "WR-02",
+        "WR-03",
+    }
+    assert {row["id"] for row in coverage["gap_truths"]} == {
+        "current_epoch_claim",
+        "two_worker_takeover",
+        "stale_write_and_finalization",
+        "production_utc_timestamp",
+        "parent_row_cas",
+        "pre_effect_crash_recovery",
+        "inflight_ambiguity_terminalization",
+        "legacy_malformed_delivery_denial",
+        "sealed_global_validation",
+        "deletion_race_zero_provider_effects",
+    }
+    for section, selectors in FINAL_GAP_NODE_GROUPS.items():
+        assert {row["selector"] for row in coverage[section]} == selectors
+        assert all(row["node_id"].startswith(row["selector"]) for row in coverage[section])
+        assert all(row["lower_fake_target"] and row["observed_condition"] for row in coverage[section])
+
+
+@pytest.mark.parametrize(
+    "missing_selector",
+    sorted(set().union(*FINAL_GAP_NODE_GROUPS.values())),
+)
+def test_final_gap_coverage_rejects_every_missing_lower_node(
+    missing_selector: str,
+) -> None:
+    verifier = _load_verifier()
+    boundary, private, policy, observed = _coverage_fixture()
+    observed.remove(missing_selector)
+    with pytest.raises(verifier.EvidenceError, match="selector not observed"):
+        verifier.derive_coverage(boundary, private, policy, observed)
+
+
+def test_final_gap_coverage_rejects_high_level_or_source_string_substitutes() -> None:
+    verifier = _load_verifier()
+    boundary, private, policy, observed = _coverage_fixture()
+    required = next(iter(FINAL_GAP_NODE_GROUPS["delivery_scope_nodes"]))
+    observed.remove(required)
+    observed.add(
+        "tests/test_source_inventory.py::test_source_contains_provider_call_counter_and_owner_join"
+    )
+    with pytest.raises(verifier.EvidenceError, match="selector not observed"):
+        verifier.derive_coverage(boundary, private, policy, observed)
+
+
+def test_finding_registry_join_rejects_stale_or_disagreeing_inventory() -> None:
+    verifier = _load_verifier()
+    boundary, private, policy, observed = _coverage_fixture()
+    stale = deepcopy(boundary)
+    stale["finding_registry"][0]["runtime_selector"] = (
+        "tests/test_source_inventory.py::test_source_mentions_current_epoch"
+    )
+    with pytest.raises(verifier.EvidenceError, match="finding registry"):
+        verifier.derive_coverage(stale, private, policy, observed)
+
+
+def test_final_gap_coverage_rejects_duplicate_node_mapping() -> None:
+    verifier = _load_verifier()
+    boundary, private, policy, observed = _coverage_fixture()
+    coverage = verifier.derive_coverage(boundary, private, policy, observed)
+    duplicate = deepcopy(coverage)
+    duplicate["gap_truths"][1]["node_id"] = duplicate["gap_truths"][0]["node_id"]
+    with pytest.raises(verifier.EvidenceError, match="coverage|duplicate"):
+        verifier.verify_coverage(duplicate, boundary, private, policy, observed)
 
 
 @pytest.mark.parametrize(
     "section",
-    ["requirements", "decisions", "read_boundaries", "private_writes", "branches", "retained_policy"],
+    [
+        "requirements",
+        "decisions",
+        "read_boundaries",
+        "private_writes",
+        "branches",
+        "retained_policy",
+        "review_findings",
+        "gap_truths",
+        "claim_fence_nodes",
+        "delivery_scope_nodes",
+        "crash_state_nodes",
+    ],
 )
 def test_coverage_rejects_missing_or_duplicate_rows(section: str) -> None:
     verifier = _load_verifier()
