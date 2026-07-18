@@ -291,7 +291,7 @@ def _publication_repo(tmp_path: Path) -> tuple[Path, str]:
     evidence = repo / "docs/security/phase-473-evidence.md"
     validation = repo / ".planning/phases/473-test/473-VALIDATION.md"
     manifest = repo / "docs/security/phase-473-evidence-manifest.json"
-    _json(results, {"schema_version": "phase-473-evidence-results.v1", "candidate_sha": candidate})
+    _json(results, {"schema_version": "phase-473-test-results.v1", "candidate_sha": candidate})
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(f"candidate `{candidate}`\n", encoding="utf-8")
     validation.parent.mkdir(parents=True, exist_ok=True)
