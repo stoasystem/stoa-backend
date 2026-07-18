@@ -37,7 +37,7 @@ class _ExpressionTable:
             **self.item,
             "effect_state": "claimed_pre_effect",
             "status": "claimed_pre_effect",
-            "intent_version": 2,
+            "intent_version": int(self.item["intent_version"]) + 1,
             "lease_owner": kwargs["ExpressionAttributeValues"][":lease"],
             "lease_expires_at": kwargs["ExpressionAttributeValues"][":expiry"],
         }
@@ -57,6 +57,8 @@ def test_repository_claim_uses_explicit_current_time_not_proposed_expiry(
             "scope_kind": "private_owner",
             "scope_digest": scope.digest,
             "payload_digest": PAYLOAD_DIGEST,
+            "owner_id": OWNER,
+            "account_fence_generation": GENERATION,
             "effect_state": "claimed_pre_effect",
             "status": "claimed_pre_effect",
             "intent_version": 4,
@@ -106,6 +108,8 @@ def test_unexpired_pre_effect_claim_and_inflight_are_never_takeover_eligible(
                 "scope_kind": "private_owner",
                 "scope_digest": scope.digest,
                 "payload_digest": PAYLOAD_DIGEST,
+                "owner_id": OWNER,
+                "account_fence_generation": GENERATION,
                 "effect_state": state,
                 "status": state,
                 "intent_version": 4,
@@ -127,6 +131,45 @@ def test_unexpired_pre_effect_claim_and_inflight_are_never_takeover_eligible(
             )
             is None
         )
+
+
+def test_begin_private_claim_is_one_fence_plus_exact_version_cas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope = _scope()
+    claim = notification_repo.DeliveryIntentClaim(
+        operation_id=OPERATION,
+        lease_owner="opaque-begin-owner",
+        intent_version=8,
+        lease_expires_at=190,
+        scope_digest=scope.digest,
+        payload_digest=PAYLOAD_DIGEST,
+    )
+    captured: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        account_deletion_repo,
+        "transact",
+        lambda operations, **_kwargs: captured.extend(operations),
+    )
+
+    begun = notification_repo.begin_delivery_effect(
+        scope=scope,
+        claim=claim,
+        now_iso="2026-07-18T15:00:00+00:00",
+        table=object(),
+    )
+
+    assert begun.intent_version == 9
+    assert len(captured) == 2
+    fence = captured[0]["ConditionCheck"]
+    assert fence["ConditionExpression"] == "#status=:active AND generation=:generation"
+    assert fence["ExpressionAttributeValues"][":generation"] == GENERATION
+    update = captured[1]["Update"]
+    assert "#effect=:pre_effect" in update["ConditionExpression"]
+    assert "lease_owner=:lease" in update["ConditionExpression"]
+    assert "intent_version=:version" in update["ConditionExpression"]
+    assert "scope_digest=:scope" in update["ConditionExpression"]
+    assert "payload_digest=:payload" in update["ConditionExpression"]
 
 
 class _MemoryIntentStore:
@@ -163,6 +206,12 @@ class _MemoryIntentStore:
     def recover(self, **kwargs: Any) -> dict[str, Any]:
         self.order.append("recover")
         assert self.item is not None
+        expected = kwargs.get("expected_claim")
+        if expected is not None and (
+            self.item.get("intent_version") != expected.intent_version
+            or self.item.get("lease_owner") != expected.lease_owner
+        ):
+            raise account_deletion_repo.AccountDeletionConflict("stale claim")
         if self.item["effect_state"] == "effect_inflight":
             self.item.update(
                 effect_state="provider_acceptance_unknown",
@@ -279,7 +328,7 @@ def _run(store: _MemoryIntentStore, *, now_epoch: int, provider: Any | None = No
     )
 
 
-def test_crash_after_claim_before_begin_recovers_only_after_actual_expiry(
+def test_crash_pre_effect_recovers_only_after_actual_time_passes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = _MemoryIntentStore()
@@ -302,7 +351,7 @@ def test_crash_after_claim_before_begin_recovers_only_after_actual_expiry(
     assert store.provider_calls == 1
 
 
-def test_crash_after_durable_begin_before_provider_terminalizes_unknown_without_call(
+def test_crash_after_durable_transition_terminalizes_unknown_without_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = _MemoryIntentStore()
@@ -385,7 +434,7 @@ def test_private_and_sealed_global_scopes_are_closed_digest_only_contracts() -> 
     assert "student-delivery-owner" not in serialized
 
 
-def test_provider_order_is_register_recover_claim_check_begin_provider_complete(
+def test_provider_effect_order_is_recover_fence_transition_call_and_complete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = _MemoryIntentStore()

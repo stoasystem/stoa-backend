@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any, Mapping
+from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr
+from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
@@ -36,6 +40,9 @@ NOTIFICATION_WRITER_REGISTRY = frozenset(
         "update_push_token",
         "register_delivery_intent",
         "claim_delivery_intent",
+        "begin_delivery_effect",
+        "recover_delivery_intent",
+        "cancel_delivery_intent",
         "complete_delivery_intent",
     }
 )
@@ -106,6 +113,164 @@ class NotificationPrivatePage:
     items: tuple[dict[str, Any], ...]
     cursor: dict[str, str] | None = None
     scanned: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryIntentScope:
+    """Validated delivery classification used to bind one logical effect."""
+
+    kind: str
+    digest: str
+    owner_id: str | None = None
+    generation: int | None = None
+    classification_seal: str | None = None
+
+    @classmethod
+    def private_owner(cls, *, owner_id: str, generation: int) -> DeliveryIntentScope:
+        owner = str(owner_id).strip()
+        if not owner or type(generation) is not int or generation <= 0:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "private delivery scope is invalid"
+            )
+        facts = {"kind": "private_owner", "owner_id": owner, "generation": generation}
+        return cls(
+            kind="private_owner",
+            digest=_delivery_digest(facts),
+            owner_id=owner,
+            generation=generation,
+        )
+
+    @classmethod
+    def global_nonprivate(
+        cls, *, classification_seal: str
+    ) -> DeliveryIntentScope:
+        seal = str(classification_seal).strip()
+        if not seal:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "global delivery classification seal is required"
+            )
+        facts = {"kind": "global_nonprivate", "classification_seal": seal}
+        return cls(
+            kind="global_nonprivate",
+            digest=_delivery_digest(facts),
+            classification_seal=seal,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryIntentClaim:
+    """Opaque exact-version authority for one delivery-intent transition."""
+
+    operation_id: str
+    lease_owner: str
+    intent_version: int
+    lease_expires_at: int
+    scope_digest: str
+    payload_digest: str
+
+
+_DELIVERY_TERMINAL_STATES = frozenset(
+    {"accepted", "provider_acceptance_unknown", "canceled_account_deletion"}
+)
+
+
+def _delivery_digest(value: Mapping[str, Any]) -> str:
+    encoded = json.dumps(
+        dict(value), ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _delivery_scope(
+    scope: DeliveryIntentScope | None,
+    *,
+    owner_id: str | None = None,
+    generation: int | None = None,
+) -> DeliveryIntentScope:
+    if isinstance(scope, DeliveryIntentScope):
+        return scope
+    if owner_id is not None and generation is not None:
+        return DeliveryIntentScope.private_owner(
+            owner_id=owner_id, generation=generation
+        )
+    raise account_deletion_repo.AccountDeletionConflict("delivery scope is required")
+
+
+def _delivery_key(scope: DeliveryIntentScope, operation_id: str) -> dict[str, str]:
+    operation = str(operation_id).strip()
+    if not operation:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "delivery operation is required"
+        )
+    partition = (
+        scope.owner_id if scope.kind == "private_owner" else "GLOBAL_NONPRIVATE"
+    )
+    return {"PK": delivery_intent_pk(str(partition)), "SK": delivery_intent_sk(operation)}
+
+
+def _delivery_identity_matches(
+    item: Mapping[str, Any],
+    *,
+    scope: DeliveryIntentScope,
+    operation_id: str,
+    payload_digest: str,
+) -> bool:
+    return bool(
+        item.get("operation_id") == operation_id
+        and item.get("scope_kind") == scope.kind
+        and item.get("scope_digest") == scope.digest
+        and item.get("payload_digest") == payload_digest
+        and (
+            scope.kind != "private_owner"
+            or (
+                item.get("owner_id") == scope.owner_id
+                and item.get("account_fence_generation") == scope.generation
+            )
+        )
+        and (
+            scope.kind != "global_nonprivate"
+            or item.get("classification_seal") == scope.classification_seal
+        )
+    )
+
+
+def _intent_claim(item: Mapping[str, Any]) -> DeliveryIntentClaim:
+    try:
+        claim = DeliveryIntentClaim(
+            operation_id=str(item["operation_id"]),
+            lease_owner=str(item["lease_owner"]),
+            intent_version=int(item["intent_version"]),
+            lease_expires_at=int(item["lease_expires_at"]),
+            scope_digest=str(item["scope_digest"]),
+            payload_digest=str(item["payload_digest"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "delivery claim is malformed"
+        ) from exc
+    if (
+        not claim.operation_id
+        or not claim.lease_owner
+        or claim.intent_version <= 0
+        or claim.lease_expires_at <= 0
+        or len(claim.scope_digest) != 64
+        or len(claim.payload_digest) != 64
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "delivery claim is malformed"
+        )
+    return claim
+
+
+def _delivery_conditional_loss(exc: Exception) -> bool:
+    if isinstance(exc, account_deletion_repo.AccountDeletionConflict):
+        return True
+    if not isinstance(exc, ClientError):
+        return False
+    return str(exc.response.get("Error", {}).get("Code") or "") in {
+        "ConditionalCheckFailedException",
+        "TransactionCanceledException",
+    }
 
 
 def notification_pk(event_id: str) -> str:
@@ -310,8 +475,9 @@ def put_summary_seed(item: dict[str, Any]) -> dict[str, Any]:
 
 def register_delivery_intent(
     *,
-    owner_id: str,
-    generation: int,
+    scope: DeliveryIntentScope | None = None,
+    owner_id: str | None = None,
+    generation: int | None = None,
     operation_id: str,
     channel: str,
     event_ids: list[str],
@@ -319,113 +485,437 @@ def register_delivery_intent(
     now_iso: str,
     table: Any | None = None,
 ) -> dict[str, Any]:
+    scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
-    key = {"PK": delivery_intent_pk(owner_id), "SK": delivery_intent_sk(operation_id)}
+    key = _delivery_key(scope, operation_id)
     existing = target.get_item(Key=key, ConsistentRead=True).get("Item")
     if existing:
-        if (
-            existing.get("owner_id") != owner_id
-            or existing.get("account_fence_generation") != generation
-            or existing.get("channel") != channel
-            or existing.get("event_ids") != event_ids
-            or existing.get("payload_digest") != payload_digest
-        ):
+        if not _delivery_identity_matches(
+            existing,
+            scope=scope,
+            operation_id=operation_id,
+            payload_digest=payload_digest,
+        ) or existing.get("channel") != channel or existing.get("event_ids") != event_ids:
             raise account_deletion_repo.AccountDeletionConflict("delivery intent identity changed")
         return dict(existing)
     item = {
         **key,
         "entity_type": DELIVERY_INTENT_ENTITY,
-        "schema_version": "notification-delivery-intent.v1",
+        "schema_version": "notification-delivery-intent.v2",
         "operation_id": operation_id,
-        "owner_id": owner_id,
-        "account_fence_generation": generation,
+        "scope_kind": scope.kind,
+        "scope_digest": scope.digest,
         "channel": channel,
         "event_ids": list(event_ids),
         "payload_digest": payload_digest,
+        "intent_version": 1,
+        "effect_state": "registered",
         "status": "registered",
+        "outcome_status": None,
         "created_at": now_iso,
         "updated_at": now_iso,
     }
+    if scope.kind == "private_owner":
+        item.update(
+            owner_id=scope.owner_id,
+            account_fence_generation=scope.generation,
+        )
+    else:
+        item["classification_seal"] = scope.classification_seal
     hook = getattr(target, "register_delivery_intent", None)
     if callable(hook):
         return dict(hook(item) or item)
-    account_deletion_repo.transact(
-        build_notification_write_transaction(
-            item=item, owner_id=owner_id, generation=generation, mode="put"
-        ),
-        table=target,
-    )
+    if scope.kind == "private_owner":
+        account_deletion_repo.transact(
+            build_notification_write_transaction(
+                item=item,
+                owner_id=str(scope.owner_id),
+                generation=int(scope.generation or 0),
+                mode="put",
+            ),
+            table=target,
+        )
+    else:
+        target.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
     return item
 
 
 def claim_delivery_intent(
-    *, owner_id: str, generation: int, operation_id: str, lease_owner: str, lease_expires_at: int,
-    now_iso: str, table: Any | None = None
-) -> dict[str, Any] | None:
+    *,
+    scope: DeliveryIntentScope | None = None,
+    owner_id: str | None = None,
+    generation: int | None = None,
+    operation_id: str,
+    payload_digest: str | None = None,
+    now_epoch: int | None = None,
+    lease_expires_at: int,
+    lease_owner: str | None = None,
+    now_iso: str | None = None,
+    table: Any | None = None,
+) -> DeliveryIntentClaim | None:
+    scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
+    key = _delivery_key(scope, operation_id)
+    current = target.get_item(Key=key, ConsistentRead=True).get("Item")
+    if not isinstance(current, Mapping):
+        return None
+    digest = str(payload_digest or current.get("payload_digest") or "")
+    if not _delivery_identity_matches(
+        current,
+        scope=scope,
+        operation_id=operation_id,
+        payload_digest=digest,
+    ):
+        raise account_deletion_repo.AccountDeletionConflict("delivery intent identity changed")
+    if type(now_epoch) is not int:
+        from time import time
+
+        now_epoch = int(time())
+    if now_epoch < 0 or type(lease_expires_at) is not int or lease_expires_at <= now_epoch:
+        raise account_deletion_repo.AccountDeletionConflict("delivery lease time is invalid")
+    opaque_owner = str(lease_owner or f"delivery-lease-{uuid4().hex}").strip()
+    if not opaque_owner:
+        raise account_deletion_repo.AccountDeletionConflict("delivery lease owner is invalid")
     hook = getattr(target, "claim_delivery_intent", None)
     if callable(hook):
-        value = hook(owner_id, generation, operation_id, lease_owner, lease_expires_at, now_iso)
-        return dict(value) if isinstance(value, Mapping) else value
-    account_deletion_repo.require_active_account_fence(owner_id, generation, table=target)
-    key = {"PK": delivery_intent_pk(owner_id), "SK": delivery_intent_sk(operation_id)}
+        value = hook(
+            scope,
+            operation_id,
+            digest,
+            now_epoch,
+            opaque_owner,
+            lease_expires_at,
+            now_iso,
+        )
+        if value is None:
+            return None
+        return value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
+    if scope.kind == "private_owner":
+        account_deletion_repo.require_active_account_fence(
+            str(scope.owner_id), int(scope.generation or 0), table=target
+        )
     try:
         response = target.update_item(
             Key=key,
-            UpdateExpression="SET #status=:claimed, lease_owner=:lease, lease_expires_at=:expiry, updated_at=:now",
-            ConditionExpression="#status=:registered AND owner_id=:owner AND account_fence_generation=:generation",
-            ExpressionAttributeNames={"#status": "status"},
+            UpdateExpression=(
+                "SET #effect=:pre_effect, #status=:pre_effect, "
+                "lease_owner=:lease, lease_expires_at=:expiry, "
+                "intent_version=intent_version + :one, updated_at=:now"
+            ),
+            ConditionExpression=(
+                "(#effect=:registered OR (#effect=:pre_effect AND "
+                "lease_expires_at < :now_epoch)) AND scope_digest=:scope "
+                "AND payload_digest=:payload AND intent_version=:version"
+            ),
+            ExpressionAttributeNames={"#effect": "effect_state", "#status": "status"},
             ExpressionAttributeValues={
-                ":registered": "registered", ":claimed": "claimed", ":owner": owner_id,
-                ":generation": generation, ":lease": lease_owner, ":expiry": lease_expires_at,
-                ":now": now_iso,
+                ":registered": "registered",
+                ":pre_effect": "claimed_pre_effect",
+                ":scope": scope.digest,
+                ":payload": digest,
+                ":version": int(current.get("intent_version") or 0),
+                ":lease": opaque_owner,
+                ":expiry": lease_expires_at,
+                ":now_epoch": now_epoch,
+                ":one": 1,
+                ":now": now_iso or "",
             },
             ReturnValues="ALL_NEW",
         )
-    except Exception:
-        return None
-    return response.get("Attributes")
+    except Exception as exc:
+        if _delivery_conditional_loss(exc):
+            return None
+        raise
+    attributes = response.get("Attributes")
+    if not isinstance(attributes, Mapping):
+        attributes = {
+            **dict(current),
+            "lease_owner": opaque_owner,
+            "lease_expires_at": lease_expires_at,
+            "intent_version": int(current.get("intent_version") or 0) + 1,
+        }
+    return _intent_claim(attributes)
 
 
 def delivery_intent_sendable(
-    *, owner_id: str, generation: int, operation_id: str, lease_owner: str,
-    table: Any | None = None
+    *,
+    scope: DeliveryIntentScope | None = None,
+    claim: DeliveryIntentClaim | None = None,
+    owner_id: str | None = None,
+    generation: int | None = None,
+    operation_id: str | None = None,
+    lease_owner: str | None = None,
+    table: Any | None = None,
 ) -> bool:
+    scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
+    operation = claim.operation_id if claim is not None else str(operation_id or "")
     target = table or get_table()
-    try:
-        account_deletion_repo.require_active_account_fence(owner_id, generation, table=target)
-    except account_deletion_repo.AccountDeletionConflict:
-        return False
+    if scope.kind == "private_owner":
+        try:
+            account_deletion_repo.require_active_account_fence(
+                str(scope.owner_id), int(scope.generation or 0), table=target
+            )
+        except account_deletion_repo.AccountDeletionConflict:
+            return False
     item = target.get_item(
-        Key={"PK": delivery_intent_pk(owner_id), "SK": delivery_intent_sk(operation_id)},
+        Key=_delivery_key(scope, operation),
         ConsistentRead=True,
     ).get("Item")
+    if not isinstance(item, Mapping):
+        return False
+    if claim is not None:
+        return bool(
+            item.get("effect_state") == "claimed_pre_effect"
+            and item.get("lease_owner") == claim.lease_owner
+            and item.get("intent_version") == claim.intent_version
+            and item.get("scope_digest") == claim.scope_digest == scope.digest
+            and item.get("payload_digest") == claim.payload_digest
+        )
     return bool(
-        item
-        and item.get("status") == "claimed"
+        item.get("effect_state") in {"claimed_pre_effect", "claimed"}
         and item.get("lease_owner") == lease_owner
-        and item.get("account_fence_generation") == generation
+    )
+
+
+def begin_delivery_effect(
+    *,
+    scope: DeliveryIntentScope,
+    claim: DeliveryIntentClaim,
+    now_iso: str,
+    table: Any | None = None,
+) -> DeliveryIntentClaim:
+    """Durably cross the final exact CAS immediately before provider mutation."""
+    scope = _delivery_scope(scope)
+    if claim.scope_digest != scope.digest:
+        raise account_deletion_repo.AccountDeletionConflict("delivery scope changed")
+    target = table or get_table()
+    hook = getattr(target, "begin_delivery_effect", None)
+    if callable(hook):
+        value = hook(scope, claim, now_iso)
+        return value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
+    update = {
+        "Update": {
+            "Key": _delivery_key(scope, claim.operation_id),
+            "UpdateExpression": (
+                "SET #effect=:inflight, #status=:inflight, effect_started_at=:now, "
+                "intent_version=intent_version + :one"
+            ),
+            "ConditionExpression": (
+                "#effect=:pre_effect AND lease_owner=:lease AND "
+                "intent_version=:version AND scope_digest=:scope AND "
+                "payload_digest=:payload"
+            ),
+            "ExpressionAttributeNames": {
+                "#effect": "effect_state",
+                "#status": "status",
+            },
+            "ExpressionAttributeValues": {
+                ":pre_effect": "claimed_pre_effect",
+                ":inflight": "effect_inflight",
+                ":lease": claim.lease_owner,
+                ":version": claim.intent_version,
+                ":scope": claim.scope_digest,
+                ":payload": claim.payload_digest,
+                ":now": now_iso,
+                ":one": 1,
+            },
+        }
+    }
+    operations = [update]
+    if scope.kind == "private_owner":
+        operations.insert(
+            0,
+            account_deletion_repo.active_fence_condition(
+                str(scope.owner_id), int(scope.generation or 0)
+            ),
+        )
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except Exception as exc:
+        if _delivery_conditional_loss(exc):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "delivery begin claim lost"
+            ) from exc
+        raise
+    return DeliveryIntentClaim(
+        operation_id=claim.operation_id,
+        lease_owner=claim.lease_owner,
+        intent_version=claim.intent_version + 1,
+        lease_expires_at=claim.lease_expires_at,
+        scope_digest=claim.scope_digest,
+        payload_digest=claim.payload_digest,
+    )
+
+
+def recover_delivery_intent(
+    *,
+    scope: DeliveryIntentScope,
+    operation_id: str,
+    payload_digest: str,
+    now_epoch: int,
+    expected_claim: DeliveryIntentClaim | None = None,
+    now_iso: str | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Classify replay and terminalize an observed ambiguous inflight effect."""
+    scope = _delivery_scope(scope)
+    target = table or get_table()
+    key = _delivery_key(scope, operation_id)
+    item = target.get_item(Key=key, ConsistentRead=True).get("Item")
+    if not isinstance(item, Mapping) or not _delivery_identity_matches(
+        item,
+        scope=scope,
+        operation_id=operation_id,
+        payload_digest=payload_digest,
+    ):
+        raise account_deletion_repo.AccountDeletionConflict("delivery intent identity changed")
+    state = str(item.get("effect_state") or item.get("status") or "")
+    if expected_claim is not None:
+        current_claim = _intent_claim(item)
+        if current_claim != expected_claim:
+            raise account_deletion_repo.AccountDeletionConflict("stale delivery claim")
+    if state in _DELIVERY_TERMINAL_STATES:
+        return {"status": state}
+    if state != "effect_inflight":
+        return dict(item)
+    observed = _intent_claim(item)
+    try:
+        response = target.update_item(
+            Key=key,
+            UpdateExpression=(
+                "SET #effect=:unknown, #status=:unknown, outcome_status=:unknown, "
+                "intent_version=intent_version + :one, updated_at=:now "
+                "REMOVE lease_owner, lease_expires_at"
+            ),
+            ConditionExpression=(
+                "#effect=:inflight AND lease_owner=:lease AND intent_version=:version "
+                "AND scope_digest=:scope AND payload_digest=:payload"
+            ),
+            ExpressionAttributeNames={"#effect": "effect_state", "#status": "status"},
+            ExpressionAttributeValues={
+                ":inflight": "effect_inflight",
+                ":unknown": "provider_acceptance_unknown",
+                ":lease": observed.lease_owner,
+                ":version": observed.intent_version,
+                ":scope": observed.scope_digest,
+                ":payload": observed.payload_digest,
+                ":one": 1,
+                ":now": now_iso or "",
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except Exception as exc:
+        if _delivery_conditional_loss(exc):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "delivery recovery claim lost"
+            ) from exc
+        raise
+    attributes = response.get("Attributes")
+    return dict(attributes) if isinstance(attributes, Mapping) else {
+        "status": "provider_acceptance_unknown"
+    }
+
+
+def cancel_delivery_intent(
+    *,
+    scope: DeliveryIntentScope,
+    claim: DeliveryIntentClaim,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    return _finish_delivery_intent(
+        scope=scope,
+        claim=claim,
+        status="canceled_account_deletion",
+        expected_state="claimed_pre_effect",
+        now_iso=now_iso,
+        table=table,
     )
 
 
 def complete_delivery_intent(
-    *, owner_id: str, generation: int, operation_id: str, lease_owner: str,
-    status: str, now_iso: str, table: Any | None = None
+    *,
+    scope: DeliveryIntentScope | None = None,
+    claim: DeliveryIntentClaim | None = None,
+    owner_id: str | None = None,
+    generation: int | None = None,
+    operation_id: str | None = None,
+    lease_owner: str | None = None,
+    status: str,
+    now_iso: str,
+    table: Any | None = None,
 ) -> dict[str, Any]:
-    if status not in {"accepted", "provider_acceptance_unknown", "canceled_account_deletion", "rejected"}:
+    legacy = claim is None
+    if status not in _DELIVERY_TERMINAL_STATES and not (legacy and status == "rejected"):
         raise account_deletion_repo.AccountDeletionConflict("invalid delivery completion")
+    scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
+    if claim is None:
+        item = target.get_item(
+            Key=_delivery_key(scope, str(operation_id or "")), ConsistentRead=True
+        ).get("Item")
+        if not isinstance(item, Mapping) or item.get("lease_owner") != lease_owner:
+            raise account_deletion_repo.AccountDeletionConflict("stale delivery claim")
+        claim = _intent_claim(item)
     hook = getattr(target, "complete_delivery_intent", None)
     if callable(hook):
-        return dict(hook(owner_id, generation, operation_id, lease_owner, status, now_iso))
+        return dict(hook(scope, claim, status, now_iso))
+    return _finish_delivery_intent(
+        scope=scope,
+        claim=claim,
+        status=status,
+        expected_state=(
+            str(item.get("effect_state") or item.get("status") or "")
+            if legacy
+            else "effect_inflight"
+        ),
+        now_iso=now_iso,
+        table=target,
+    )
+
+
+def _finish_delivery_intent(
+    *,
+    scope: DeliveryIntentScope,
+    claim: DeliveryIntentClaim,
+    status: str,
+    expected_state: str,
+    now_iso: str,
+    table: Any | None,
+) -> dict[str, Any]:
+    target = table or get_table()
+    hook_name = (
+        "cancel_delivery_intent"
+        if status == "canceled_account_deletion" and expected_state == "claimed_pre_effect"
+        else None
+    )
+    hook = getattr(target, hook_name, None) if hook_name else None
+    if callable(hook):
+        return dict(hook(scope, claim, now_iso))
     response = target.update_item(
-        Key={"PK": delivery_intent_pk(owner_id), "SK": delivery_intent_sk(operation_id)},
-        UpdateExpression="SET #status=:status, updated_at=:now REMOVE lease_owner, lease_expires_at",
-        ConditionExpression="owner_id=:owner AND account_fence_generation=:generation AND lease_owner=:lease",
-        ExpressionAttributeNames={"#status": "status"},
+        Key=_delivery_key(scope, claim.operation_id),
+        UpdateExpression=(
+            "SET #effect=:status, #status=:status, outcome_status=:status, "
+            "intent_version=intent_version + :one, updated_at=:now "
+            "REMOVE lease_owner, lease_expires_at"
+        ),
+        ConditionExpression=(
+            "#effect=:expected AND lease_owner=:lease AND intent_version=:version "
+            "AND scope_digest=:scope AND payload_digest=:payload"
+        ),
+        ExpressionAttributeNames={"#effect": "effect_state", "#status": "status"},
         ExpressionAttributeValues={
-            ":status": status, ":now": now_iso, ":owner": owner_id,
-            ":generation": generation, ":lease": lease_owner,
+            ":status": status,
+            ":expected": expected_state,
+            ":now": now_iso,
+            ":lease": claim.lease_owner,
+            ":version": claim.intent_version,
+            ":scope": claim.scope_digest,
+            ":payload": claim.payload_digest,
+            ":one": 1,
         },
         ReturnValues="ALL_NEW",
     )
