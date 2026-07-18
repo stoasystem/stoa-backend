@@ -86,7 +86,7 @@
       "required_roots": [
         "UPLOAD#",
         "ATTACHMENT#",
-        "s3://server-private/attachments/"
+        "OBJECT_STORE_ATTACHMENT_VERSION"
       ],
       "subfamilies": [
         "intent",
@@ -129,7 +129,7 @@
       "purge_selector": "tests/test_phase473_report_deletion.py::test_exact_object_purge_never_removes_coordinates_before_absence",
       "required_roots": [
         "REPORT_OBJECT#",
-        "s3://server-private/reports/"
+        "OBJECT_STORE_REPORT_VERSION"
       ],
       "subfamilies": [
         "object_intent",
@@ -2857,7 +2857,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -2941,7 +2941,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3025,7 +3025,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3277,7 +3277,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3361,7 +3361,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3445,7 +3445,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3529,7 +3529,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3613,7 +3613,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3697,7 +3697,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3781,7 +3781,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3865,7 +3865,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -3949,7 +3949,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4033,7 +4033,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4117,7 +4117,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4201,7 +4201,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4285,7 +4285,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4789,7 +4789,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4873,7 +4873,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -4957,7 +4957,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5041,7 +5041,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5125,7 +5125,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5209,7 +5209,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5293,7 +5293,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5377,7 +5377,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5461,7 +5461,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -5545,7 +5545,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -10117,7 +10117,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -10200,7 +10200,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -10283,7 +10283,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -10366,7 +10366,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -10449,7 +10449,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -11362,7 +11362,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -11445,7 +11445,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -12690,7 +12690,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -12773,7 +12773,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -13105,7 +13105,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -15364,7 +15364,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15448,7 +15448,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15532,7 +15532,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15616,7 +15616,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15700,7 +15700,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15784,7 +15784,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15868,7 +15868,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -15952,7 +15952,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16036,7 +16036,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16120,7 +16120,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16204,7 +16204,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16288,7 +16288,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16456,7 +16456,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16540,7 +16540,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -16624,7 +16624,7 @@
         "roots": [
           "UPLOAD#",
           "ATTACHMENT#",
-          "s3://server-private/attachments/"
+          "OBJECT_STORE_ATTACHMENT_VERSION"
         ],
         "sk_or_object_prefix": "intent"
       },
@@ -17707,7 +17707,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -17790,7 +17790,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -17873,7 +17873,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -17956,7 +17956,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -18039,7 +18039,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
@@ -18122,7 +18122,7 @@
         "pk_schema": "source-declared owner partition",
         "roots": [
           "REPORT_OBJECT#",
-          "s3://server-private/reports/"
+          "OBJECT_STORE_REPORT_VERSION"
         ],
         "sk_or_object_prefix": "object_intent"
       },
