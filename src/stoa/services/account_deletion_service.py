@@ -18,8 +18,10 @@ from stoa.db.repositories import (
     attachment_repo,
     curriculum_analytics_repo,
     moderation_repo,
+    notification_repo,
     practice_repo,
     report_repo,
+    websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import attachment_service
@@ -856,6 +858,136 @@ def _curriculum_signal_branch(
     )
 
 
+def _notification_device_realtime_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    """Revoke credentials, minimize receipts, and prove two clean strong epochs."""
+    owner_id = str(command["user_id"])
+    generation = int(command["generation"])
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else {}
+
+    def family_cursor(prefix: str) -> dict[str, str] | None:
+        pk = cursor.get(f"{prefix}_pk")
+        sk = cursor.get(f"{prefix}_sk")
+        if pk is None and sk is None:
+            return None
+        if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid notification branch cursor"
+            )
+        return {"PK": pk, "SK": sk}
+
+    notification_page = notification_repo.scan_notification_private_rows(
+        owner_id,
+        cursor=family_cursor("notification"),
+        maximum_pages=1,
+    )
+    connection_page = websocket_repo.scan_account_connections(
+        owner_id,
+        cursor=family_cursor("connection"),
+        maximum_pages=1,
+    )
+    debt: dict[str, int] = {}
+    processed = 0
+    external_accepted = 0
+    external_unknown = 0
+    current_time = datetime.now(UTC).isoformat()
+    for item in notification_page.items:
+        identity = f"{item.get('PK')}|{item.get('SK')}"
+        try:
+            if item.get("entity_type") == notification_repo.DELIVERY_INTENT_ENTITY:
+                status = str(item.get("status") or "")
+                if status == "accepted":
+                    external_accepted += 1
+                elif status == "provider_acceptance_unknown":
+                    external_unknown += 1
+            notification_repo.scrub_notification_private_row(
+                item,
+                owner_id=owner_id,
+                generation=generation,
+                now_iso=current_time,
+            )
+            processed += 1
+        except Exception:
+            debt[f"notification:{identity}"] = 1
+    for item in connection_page.items:
+        identity = f"{item.get('PK')}|{item.get('SK')}"
+        try:
+            websocket_repo.revoke_account_connection(
+                item,
+                owner_id=owner_id,
+                generation=generation,
+            )
+            processed += 1
+        except Exception:
+            debt[f"connection:{identity}"] = 1
+
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(notification_page.items) or bool(connection_page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update(
+        {
+            "pass_dirty": int(dirty),
+            "processed": processed,
+            # These are policy-fact counts only. Provider/client copies are
+            # explicitly outside backend purge authority.
+            "external_accepted": external_accepted,
+            "external_unknown": external_unknown,
+        }
+    )
+    next_cursor: dict[str, str] = {}
+    if notification_page.cursor is not None:
+        next_cursor.update(
+            {
+                "notification_pk": notification_page.cursor["PK"],
+                "notification_sk": notification_page.cursor["SK"],
+            }
+        )
+    if connection_page.cursor is not None:
+        next_cursor.update(
+            {
+                "connection_pk": connection_page.cursor["PK"],
+                "connection_sk": connection_page.cursor["SK"],
+            }
+        )
+    if next_cursor:
+        return BranchResult(
+            "retryable", cursor=next_cursor, debt_counts=debt, epoch=epoch
+        )
+    item_debt = debt.keys() - {
+        "pass_dirty",
+        "processed",
+        "external_accepted",
+        "external_unknown",
+    }
+    if item_debt:
+        return BranchResult("retryable", debt_counts=debt, epoch=0)
+    if dirty:
+        return BranchResult(
+            "retryable",
+            debt_counts={
+                "pass_dirty": 0,
+                "processed": processed,
+                "external_accepted": external_accepted,
+                "external_unknown": external_unknown,
+            },
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={
+            "external_accepted": external_accepted,
+            "external_unknown": external_unknown,
+        },
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     # Derived rows must resolve their authoritative question owner before the
     # primary question branch can replace that question with a tombstone.
@@ -876,6 +1008,7 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     "learning_memory": _learning_memory_branch,
     "ai_teacher_draft": _ai_teacher_draft_branch,
     "curriculum_signal": _curriculum_signal_branch,
+    "notification_device_realtime": _notification_device_realtime_branch,
 }
 
 
