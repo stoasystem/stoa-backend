@@ -212,6 +212,14 @@ def test_missing_or_extra_private_join_and_absent_selector_fail():
     broken["rows"][0]["purge_selector"] = "tests/does_not_exist.py::test_missing"
     with pytest.raises(ValueError):
         module.compose_private_store_inventory(ROOT, broken)
+    broken = json.loads(json.dumps(private))
+    broken["rows"][0]["fence_checkpoint"] = "USER#{owner_id}/PARALLEL_FENCE"
+    with pytest.raises(ValueError):
+        module.compose_private_store_inventory(ROOT, broken)
+    broken = json.loads(json.dumps(private))
+    broken["branch_registry"][0]["branch_id"] = "changed_branch"
+    with pytest.raises(ValueError):
+        module.compose_private_store_inventory(ROOT, broken)
 
 
 def test_lower_fake_observation_rejects_high_level_only_monkeypatch():
@@ -258,3 +266,61 @@ def test_checked_outputs_contain_no_private_or_provider_coordinate_canaries():
     for path in (INVENTORY, ROOT / "docs/security/route-authorization-inventory.json"):
         text = path.read_text()
         assert not any(value in text for value in forbidden)
+
+
+def _execute_selectors(selectors: set[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", *sorted(selectors)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def test_every_read_selector_executes_and_observes_its_declared_lower_boundary():
+    module = _generator_module()
+    rows = json.loads(INVENTORY.read_text())["rows"]
+    selectors = {row["malformed_selector"] for row in rows}
+    result = _execute_selectors(selectors)
+    assert result.returncode == 0, result.stdout + result.stderr
+    counters = {row["lower_fake_target"]: 1 for row in rows}
+    for row in rows:
+        module.require_lower_fake_observed(counters, row["lower_fake_target"])
+        assert row["malformed_selector"] in selectors
+
+
+def test_every_plan35_purge_and_no_resurrection_selector_executes():
+    private = json.loads(PRIVATE_INVENTORY.read_text())
+    selectors = {
+        selector
+        for row in private["rows"]
+        for selector in (row["purge_selector"], row["no_resurrection_selector"])
+    }
+    result = _execute_selectors(selectors)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(private["branch_registry"]) == len(EXPECTED_BRANCHES)
+    assert {row["branch_id"] for row in private["branch_registry"]} == set(
+        EXPECTED_BRANCHES
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"text": None},
+        {"category": None},
+        {"text": "ok", "category": None, "extra": True},
+        {"text": 1, "category": None},
+        {"text": None, "category": "unknown"},
+        {"text": True, "category": None},
+    ],
+)
+def test_isolated_parser_payload_rejects_missing_extra_partial_and_bool_as_int(
+    payload: object,
+):
+    from stoa.services.document_parser_worker import _validated_payload
+
+    with pytest.raises(ValueError):
+        _validated_payload(payload)

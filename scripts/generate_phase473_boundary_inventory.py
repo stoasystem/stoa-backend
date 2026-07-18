@@ -406,6 +406,8 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
     if not checked_path.is_file():
         raise ValueError("checked private-store inventory is missing")
     checked = json.loads(checked_path.read_text())
+    if payload != checked:
+        raise ValueError("private-store checked projection drift")
     if payload.get("schema_version") != PRIVATE_SCHEMA_VERSION:
         raise ValueError("private-store schema mismatch")
     if tuple(payload.get("branch_ids", ())) != EXPECTED_BRANCHES:
@@ -421,6 +423,8 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
         for key in ("source", "store", "owner_resolver", "fence_checkpoint", "purge_selector", "no_resurrection_selector"):
             if not row.get(key):
                 raise ValueError(f"private-store join missing {key}")
+        if row["fence_checkpoint"] != "USER#{owner_id}/ACCOUNT_FENCE:active:generation":
+            raise ValueError("private-store parallel fence mapping")
         if row.get("classification") == "private_store" and not row.get("branch_id"):
             raise ValueError("private-store join missing branch_id")
         for selector_key in ("purge_selector", "no_resurrection_selector"):
