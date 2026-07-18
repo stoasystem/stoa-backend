@@ -98,6 +98,15 @@ Each task was committed atomically:
 
 - The parent-profile CAS primitive was implemented in Task 2's production commit because the prescribed Task 2 `-k` expression includes `claim`, which selects the entire claim-fencing test file including the parent race. Task 3 then added the planned two-worker, no-later-handler, durable-finalizer, retryable-debt, and fresh-rescan convergence coverage. Scope and final behavior are unchanged.
 
+### Auto-fixed Issues
+
+**1. [Rule 1 - Tooling Bug] Repaired roadmap progress projection**
+- **Found during:** Plan metadata commit
+- **Issue:** The registered roadmap progress handler matched the four-column execution-order table as if it were a progress table, replacing the phase name/outcome/dependency cells and failing to match the backtick-wrapped Plan 36 checkbox.
+- **Fix:** Restored the four-column execution-order semantics with the current 36/40 progress and marked only Plan 36 complete.
+- **Files modified:** `.planning/ROADMAP.md`
+- **Verification:** Roadmap Phase 473 row retains all four declared meanings and Plan 37-40 remain unchecked.
+
 ## Verification
 
 - **RED:** 9 collected tests failed behaviorally; pytest exited exactly `1` with no collection/import errors.
