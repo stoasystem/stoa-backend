@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-32-PLAN.md
-last_updated: "2026-07-17T23:49:01.984Z"
-last_activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in-flight AI deletion closure
+stopped_at: Completed 473-33-PLAN.md
+last_updated: "2026-07-18T09:51:54.051Z"
+last_activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, draft, and analytics deletion closure
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 52
-  percent: 91
+  completed_plans: 53
+  percent: 93
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 32 of 35
+Plan: 33 of 35
 Status: Executing gap-closure plans
-Last activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in-flight AI deletion closure
+Last activity: 2026-07-18 -- Completed Plan 473-33 practice, adaptive learning, draft, and analytics deletion closure
 
 ## Accumulated Context
 
+- Practice receipts/progress, adaptive assignments/memories, AI drafts, learning usage, and curriculum signals now share the permanent account fence; opaque owner manifests replace deterministic hashes, exact aggregate reversal is retry-safe, and five branches require two later clean scans.
 - Conversation headers, messages, teacher-help state, commands, chat usage metadata, and attachment associations now share one permanent-fence generation; stale AI returns cannot complete, associations release before scrub, and two later clean strong scans prove quiescence.
 - Report generation, artifact edits, and recovery delivery now use owner-partitioned exact object/email intents behind the permanent account fence; exact VersionId absence and explicit legal-retention debt govern report purge quiescence.
 - Moderation summaries and events now derive one authoritative student/generation from the strong question read, every writer loses to the permanent account fence, owner-bound notification handoff is mandatory, and strong paginated scrubbing requires two later zero epochs.
@@ -109,8 +110,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in
 
 ## Session
 
-**Last Date:** 2026-07-17T23:49:01.977Z
-**Stopped At:** Completed 473-32-PLAN.md
+**Last Date:** 2026-07-18T09:51:54.046Z
+**Stopped At:** Completed 473-33-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -169,6 +170,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in
 | Phase 473 P30 | 13 min | 3 tasks | 6 files |
 | Phase 473 P31 | 13 min | 3 tasks | 13 files |
 | Phase 473 P32 | 10 min | 3 tasks | 6 files |
+| Phase 473 P33 | 19 min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -269,3 +271,6 @@ Last activity: 2026-07-18 -- Completed Plan 473-32 conversation, command, and in
 - [Phase 473]: Initial-message, regular, and SSE sends share the same command implementation and permanent-fence checkpoints. — Transport and creation variants cannot bypass command fencing.
 - [Phase 473]: Bedrock request/response retention is outside backend deletion control; only backend durable copies are claimed scrubbed. — Deletion evidence must not overclaim provider-side erasure.
 - [Phase 473]: Conversation quiescence requires association release, inactive commands, zero debt, and two later clean strong base-table scans. — A first empty or filtered page cannot prove durable absence.
+- [Phase 473]: Student curriculum signals are globally anonymous and resolve to an account only through a same-transaction owner manifest under that account deletion partition.
+- [Phase 473]: Signal deletion, aggregate decrement, owner-manifest removal, and an owner-free reconciliation receipt form one exact conditional transaction.
+- [Phase 473]: Practice, assignments, memories, drafts, and curriculum signals each prove quiescence independently through item debt and two later clean scans.
