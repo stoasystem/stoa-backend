@@ -4,7 +4,7 @@ milestone: v9.0
 milestone_name: milestone
 status: planning
 stopped_at: v9.0 Web-first roadmap approved; Phase 474 ready for planning
-last_updated: "2026-07-18T19:17:46.026Z"
+last_updated: "2026-07-18T22:27:06.723Z"
 last_activity: 2026-07-18 -- Replanned v9.0 Web-first; Phase 474 ready for planning
 progress:
   total_phases: 10
