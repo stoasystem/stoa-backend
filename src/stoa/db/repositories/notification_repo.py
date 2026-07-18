@@ -20,6 +20,16 @@ SUMMARY_SEED_ENTITY = "teacher_assistance_summary_seed"
 PREFERENCE_ENTITY = "notification_preference"
 PUSH_TOKEN_ENTITY = "notification_push_token"
 DELIVERY_INTENT_ENTITY = "notification_delivery_intent"
+GLOBAL_NONPRIVATE_CONTRACT_ID = "stoa-global-nonprivate.v1"
+GLOBAL_NONPRIVATE_DELIVERY_CONTRACTS = {
+    GLOBAL_NONPRIVATE_CONTRACT_ID: {
+        "event_types": frozenset(
+            {"moderation_case_update", "subscription_request_update"}
+        ),
+        "target_types": frozenset({"system_status"}),
+        "metadata_keys": frozenset(),
+    }
+}
 
 NOTIFICATION_PRIVATE_ROW_REGISTRY = frozenset(
     {
@@ -384,12 +394,122 @@ def _persist_private(item: dict[str, Any], *, mode: str = "put", updates: Mappin
 
 def put_event(item: dict[str, Any]) -> dict[str, Any]:
     stored = {**item, "PK": notification_pk(item["event_id"]), "SK": "META"}
+    if stored.get("owner_classification") == "global_nonprivate":
+        stored = seal_global_nonprivate_event(stored)
+        target = get_table()
+        target.put_item(
+            Item=stored,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+        return stored
     return _persist_private(stored)
 
 
 def get_event(event_id: str) -> dict[str, Any] | None:
     response = get_table().get_item(Key={"PK": notification_pk(event_id), "SK": "META"})
     return response.get("Item")
+
+
+def load_delivery_event_strong(
+    event_id: str, *, table: Any | None = None
+) -> dict[str, Any] | None:
+    """Load the canonical event row by base key for provider delivery."""
+    canonical_id = str(event_id).strip()
+    if not canonical_id:
+        return None
+    target = table or get_table()
+    response = target.get_item(
+        Key={"PK": notification_pk(canonical_id), "SK": "META"},
+        ConsistentRead=True,
+    )
+    item = response.get("Item") if isinstance(response, Mapping) else None
+    if not isinstance(item, Mapping):
+        return None
+    if (
+        item.get("PK") != notification_pk(canonical_id)
+        or item.get("SK") != "META"
+        or item.get("entity_type") != NOTIFICATION_ENTITY
+        or item.get("event_id") != canonical_id
+    ):
+        return None
+    return dict(item)
+
+
+def _global_classification_facts(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "classification_contract": item.get("classification_contract"),
+        "event_id": item.get("event_id"),
+        "event_version": item.get("event_version"),
+        "event_type": item.get("event_type"),
+        "target_type": item.get("target_type"),
+        "target_id": item.get("target_id"),
+        "title": item.get("title"),
+        "summary": item.get("summary"),
+        "recipient_role": item.get("recipient_role"),
+        "category": item.get("category"),
+        "created_at": item.get("created_at"),
+        "metadata": item.get("metadata"),
+    }
+
+
+def seal_global_nonprivate_event(item: Mapping[str, Any]) -> dict[str, Any]:
+    """Persist an exact content seal for one allowlisted ownerless event."""
+    stored = dict(item)
+    stored["owner_classification"] = "global_nonprivate"
+    stored["classification_contract"] = GLOBAL_NONPRIVATE_CONTRACT_ID
+    if not validate_global_nonprivate_event(stored, require_digest=False):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "global delivery classification is invalid"
+        )
+    stored["classification_digest"] = _delivery_digest(
+        _global_classification_facts(stored)
+    )
+    return stored
+
+
+def validate_global_nonprivate_event(
+    item: Mapping[str, Any], *, require_digest: bool = True
+) -> bool:
+    contract_id = item.get("classification_contract")
+    contract = GLOBAL_NONPRIVATE_DELIVERY_CONTRACTS.get(str(contract_id or ""))
+    version = item.get("event_version")
+    metadata = item.get("metadata")
+    if (
+        contract is None
+        or item.get("owner_classification") != "global_nonprivate"
+        or type(version) is not int
+        or version <= 0
+        or item.get("event_type") not in contract["event_types"]
+        or item.get("target_type") not in contract["target_types"]
+        or not isinstance(item.get("event_id"), str)
+        or not str(item.get("event_id") or "").strip()
+        or not isinstance(item.get("target_id"), str)
+        or not str(item.get("target_id") or "").strip()
+        or not isinstance(item.get("title"), str)
+        or not isinstance(item.get("summary"), str)
+        or not isinstance(metadata, Mapping)
+        or set(metadata) - set(contract["metadata_keys"])
+    ):
+        return False
+    if any(
+        item.get(field) not in {None, ""}
+        for field in (
+            "owner_id",
+            "account_fence_generation",
+            "recipient_id",
+            "actor_id",
+            "actor_role",
+        )
+    ):
+        return False
+    if not require_digest:
+        return True
+    digest = item.get("classification_digest")
+    return bool(
+        isinstance(digest, str)
+        and len(digest) == 64
+        and digest == _delivery_digest(_global_classification_facts(item))
+    )
 
 
 def update_event(event_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:

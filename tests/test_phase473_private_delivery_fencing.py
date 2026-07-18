@@ -100,6 +100,8 @@ def test_private_push_rejects_missing_malformed_or_stale_persisted_generation(
         lambda _event_id: deepcopy(persisted),
         raising=False,
     )
+    monkeypatch.setattr(notification_repo, "get_event", lambda _event_id: deepcopy(persisted))
+    monkeypatch.setattr(notification_repo, "update_event", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         notification_repo,
         "list_push_tokens",
@@ -246,6 +248,7 @@ def test_mixed_owner_digest_is_refused_before_email_provider(
     monkeypatch.setattr(notification_service, "settings", _ready_settings())
     monkeypatch.setattr(notification_repo, "list_events", lambda **_kwargs: list(events.values()))
     monkeypatch.setattr(notification_repo, "get_preferences", lambda _user_id: {"preferences": preferences})
+    monkeypatch.setattr(notification_repo, "get_event", lambda event_id: deepcopy(events[event_id]))
     monkeypatch.setattr(notification_repo, "update_event", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         notification_repo,

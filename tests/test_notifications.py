@@ -19,7 +19,13 @@ def _install_notification_repo(monkeypatch):
     preferences: dict[str, dict] = {}
 
     def put_event(item):
-        events[item["event_id"]] = dict(item)
+        stored = dict(item)
+        if stored.get("owner_classification") == "private_owner":
+            stored["account_fence_generation"] = int(
+                stored.get("account_fence_generation") or 1
+            )
+        events[item["event_id"]] = stored
+        return stored
 
     def get_event(event_id):
         return events.get(event_id)
@@ -39,10 +45,39 @@ def _install_notification_repo(monkeypatch):
 
     monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
     monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
+    monkeypatch.setattr(
+        notification_service.notification_repo,
+        "load_delivery_event_strong",
+        get_event,
+    )
     monkeypatch.setattr(notification_service.notification_repo, "list_events", list_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
     monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
     monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
+    monkeypatch.setattr(
+        notification_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda _owner_id, generation=None, **_kwargs: {
+            "status": "active",
+            "generation": int(generation or 1),
+        },
+    )
+
+    def run_authoritative_delivery(**kwargs):
+        try:
+            kwargs["provider_call"]()
+        except Exception:
+            return {
+                "status": "provider_acceptance_unknown",
+                "delivery_id": "delivery-test",
+            }
+        return {"status": "accepted", "delivery_id": "delivery-test"}
+
+    monkeypatch.setattr(
+        notification_service,
+        "run_authoritative_delivery",
+        run_authoritative_delivery,
+    )
     return events, preferences
 
 
@@ -112,6 +147,7 @@ def test_notifications_list_read_and_archive_visible_events(monkeypatch):
         target_id="case-1",
         title="Moderation",
         summary="Case updated.",
+        owner_id="admin-1",
         created_at="2026-06-08T09:00:00+00:00",
     )
 
@@ -163,6 +199,7 @@ def test_admin_can_list_operational_notifications(monkeypatch):
         target_id="subreq-1",
         title="Subscription request updated",
         summary="Subscription request status is requested.",
+        owner_id="admin-1",
     )
 
     client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
@@ -254,6 +291,7 @@ def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
         target_id="case-1",
         title="Moderation",
         summary="Case updated.",
+        owner_id="admin-1",
     )
     client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
 
@@ -475,7 +513,7 @@ def test_digest_send_selects_enabled_items_and_redacts_provider_result(monkeypat
     assert sent[0]["recipientEmail"] == "student@example.com"
     assert events[created["eventId"]]["metadata"]["email_digest_delivery_attempts"][0]["status"] == "sent"
     assert "provider-secret" not in str(result)
-    assert result["providerResult"]["apiKey"] == "configured"
+    assert result["providerResult"] == {}
 
 
 def test_digest_send_honors_email_digest_opt_out(monkeypatch):
@@ -637,8 +675,8 @@ def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch
     )
 
     failure_attempt = events[failed["eventId"]]["metadata"]["push_delivery_attempts"][0]
-    assert failure_attempt["status"] == "failed"
-    assert failure_attempt["provider_result"] == {"error": "RuntimeError"}
+    assert failure_attempt["status"] == "provider_acceptance_unknown"
+    assert failure_attempt["provider_result"] == {}
     assert "provider-token-secret" not in str(failure_attempt)
 
 

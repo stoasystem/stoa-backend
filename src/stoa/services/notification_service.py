@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, Mapping
 from urllib import request
 from uuid import uuid4
 
@@ -62,6 +63,190 @@ _SEALED_GLOBAL_NONPRIVATE_EVENT_TYPES = frozenset(
 )
 
 
+class DeliveryOwnershipError(Exception):
+    """Provider-neutral failure to establish one persisted delivery scope."""
+
+    def __init__(self, status: str) -> None:
+        self.status = status
+        super().__init__(status)
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoritativeDeliveryOwnership:
+    kind: str
+    digest: str
+    owner_id: str | None = None
+    generation: int | None = None
+    classification_seal: str | None = None
+
+    @classmethod
+    def private_owner(
+        cls, *, owner_id: str, generation: int
+    ) -> AuthoritativeDeliveryOwnership:
+        scope = notification_repo.DeliveryIntentScope.private_owner(
+            owner_id=owner_id, generation=generation
+        )
+        return cls(
+            kind=scope.kind,
+            digest=scope.digest,
+            owner_id=scope.owner_id,
+            generation=scope.generation,
+        )
+
+    @classmethod
+    def global_nonprivate(
+        cls, *, classification_seal: str
+    ) -> AuthoritativeDeliveryOwnership:
+        scope = notification_repo.DeliveryIntentScope.global_nonprivate(
+            classification_seal=classification_seal
+        )
+        return cls(
+            kind=scope.kind,
+            digest=scope.digest,
+            classification_seal=scope.classification_seal,
+        )
+
+    def intent_scope(self) -> notification_repo.DeliveryIntentScope:
+        if self.kind == "private_owner":
+            return notification_repo.DeliveryIntentScope.private_owner(
+                owner_id=str(self.owner_id or ""), generation=int(self.generation or 0)
+            )
+        return notification_repo.DeliveryIntentScope.global_nonprivate(
+            classification_seal=str(self.classification_seal or "")
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoritativeDeliveryBatch:
+    events: tuple[dict[str, Any], ...]
+    ownership: AuthoritativeDeliveryOwnership
+    event_set_digest: str
+
+
+LegacyOwnerResolver = Callable[
+    [Mapping[str, Any], Any], tuple[str, int | None] | None
+]
+
+
+def _strong_target(
+    table: Any, *, pk: str, sk: str
+) -> dict[str, Any] | None:
+    response = table.get_item(Key={"PK": pk, "SK": sk}, ConsistentRead=True)
+    item = response.get("Item") if isinstance(response, Mapping) else None
+    return dict(item) if isinstance(item, Mapping) else None
+
+
+def _unique_owner(
+    row: Mapping[str, Any], fields: tuple[str, ...]
+) -> str | None:
+    owners = {
+        value.strip()
+        for field in fields
+        if isinstance((value := row.get(field)), str) and value.strip()
+    }
+    return next(iter(owners)) if len(owners) == 1 else None
+
+
+def _owner_generation(
+    row: Mapping[str, Any], *, owner_fields: tuple[str, ...]
+) -> tuple[str, int | None] | None:
+    owner = _unique_owner(row, owner_fields)
+    if not owner:
+        return None
+    raw_generations = {
+        value
+        for field in (
+            "account_fence_generation",
+            "privacy_generation",
+            "owner_deletion_generation",
+        )
+        if (value := row.get(field)) is not None
+    }
+    if any(type(value) is not int or value <= 0 for value in raw_generations):
+        return None
+    if len(raw_generations) > 1:
+        return None
+    return owner, next(iter(raw_generations), None)
+
+
+def _resolve_question_target(
+    event: Mapping[str, Any], table: Any
+) -> tuple[str, int | None] | None:
+    row = _strong_target(
+        table,
+        pk=f"QUESTION#{event.get('target_id') or ''}",
+        sk="META",
+    )
+    return _owner_generation(row or {}, owner_fields=("student_id", "owner_id"))
+
+
+def _resolve_moderation_target(
+    event: Mapping[str, Any], table: Any
+) -> tuple[str, int | None] | None:
+    summary = _strong_target(
+        table,
+        pk=f"MODERATION#{event.get('target_id') or ''}",
+        sk="SUMMARY",
+    )
+    question_id = str((summary or {}).get("question_id") or "")
+    if not question_id:
+        return None
+    question = _strong_target(table, pk=f"QUESTION#{question_id}", sk="META")
+    resolved = _owner_generation(
+        question or {}, owner_fields=("student_id", "owner_id")
+    )
+    declared = _owner_generation(
+        summary or {}, owner_fields=("student_id", "owner_id")
+    )
+    if declared is not None and resolved is not None and declared != resolved:
+        return None
+    return resolved
+
+
+def _base_row_resolver(
+    *, prefix: str, sk: str, owner_fields: tuple[str, ...]
+) -> LegacyOwnerResolver:
+    def resolve(
+        event: Mapping[str, Any], table: Any
+    ) -> tuple[str, int | None] | None:
+        row = _strong_target(
+            table, pk=f"{prefix}{event.get('target_id') or ''}", sk=sk
+        )
+        return _owner_generation(row or {}, owner_fields=owner_fields)
+
+    return resolve
+
+
+LEGACY_NOTIFICATION_OWNER_RESOLVERS: dict[str, LegacyOwnerResolver] = {
+    "question": _resolve_question_target,
+    "moderation_case": _resolve_moderation_target,
+    "report": _base_row_resolver(
+        prefix="REPORT#", sk="SUMMARY", owner_fields=("student_id", "owner_id")
+    ),
+    "weekly_report": _base_row_resolver(
+        prefix="REPORT#", sk="SUMMARY", owner_fields=("student_id", "owner_id")
+    ),
+    "assignment": _base_row_resolver(
+        prefix="ASSIGNMENT#", sk="META", owner_fields=("student_id", "owner_id")
+    ),
+    "learning_profile": _base_row_resolver(
+        prefix="LEARNING_PROFILE#",
+        sk="META",
+        owner_fields=("student_id", "owner_id"),
+    ),
+    "recommendation": _base_row_resolver(
+        prefix="RECOMMENDATION#",
+        sk="META",
+        owner_fields=("student_id", "owner_id"),
+    ),
+    "subscription_request": _base_row_resolver(
+        prefix="SUBSCRIPTION_REQUEST#",
+        sk="SUMMARY",
+        owner_fields=("student_id", "parent_id", "owner_id"),
+    ),
+}
+
+
 def classify_notification_owner(
     *,
     recipient_id: str | None,
@@ -110,6 +295,153 @@ def _canonical_payload_digest(payload: Any) -> str:
         payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True, default=str
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def resolve_legacy_delivery_owner(
+    event: Mapping[str, Any], *, table: Any | None = None
+) -> AuthoritativeDeliveryOwnership:
+    """Resolve an old event only through its closed authoritative target family."""
+    target = table or notification_repo.get_table()
+    resolver = LEGACY_NOTIFICATION_OWNER_RESOLVERS.get(
+        str(event.get("target_type") or "")
+    )
+    if resolver is None:
+        raise DeliveryOwnershipError("delivery_owner_unresolved")
+    resolved = resolver(event, target)
+    if resolved is None:
+        raise DeliveryOwnershipError("delivery_owner_unresolved")
+    owner_id, row_generation = resolved
+    try:
+        fence = account_deletion_repo.require_active_account_fence(
+            owner_id, row_generation, table=target
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise DeliveryOwnershipError("canceled_account_deletion") from exc
+    current_generation = fence.get("generation")
+    if (
+        type(current_generation) is not int
+        or current_generation <= 0
+        or (row_generation is not None and current_generation != row_generation)
+    ):
+        raise DeliveryOwnershipError("delivery_owner_unresolved")
+    return AuthoritativeDeliveryOwnership.private_owner(
+        owner_id=owner_id, generation=current_generation
+    )
+
+
+def resolve_delivery_ownership(
+    event: Mapping[str, Any], *, table: Any | None = None
+) -> AuthoritativeDeliveryOwnership:
+    """Return one closed scope derived only from the canonical persisted event."""
+    classification = event.get("owner_classification")
+    if classification == "private_owner":
+        owner_id = event.get("owner_id")
+        generation = event.get("account_fence_generation")
+        version = event.get("event_version")
+        if (
+            not isinstance(owner_id, str)
+            or not owner_id.strip()
+            or type(generation) is not int
+            or generation <= 0
+            or type(version) is not int
+            or version <= 0
+        ):
+            raise DeliveryOwnershipError("delivery_scope_mismatch")
+        try:
+            fence = account_deletion_repo.require_active_account_fence(
+                owner_id.strip(), generation, table=table
+            )
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise DeliveryOwnershipError("canceled_account_deletion") from exc
+        if fence.get("generation") != generation:
+            raise DeliveryOwnershipError("delivery_scope_mismatch")
+        return AuthoritativeDeliveryOwnership.private_owner(
+            owner_id=owner_id.strip(), generation=generation
+        )
+    if classification == "global_nonprivate":
+        if not notification_repo.validate_global_nonprivate_event(event):
+            raise DeliveryOwnershipError("delivery_classification_invalid")
+        return AuthoritativeDeliveryOwnership.global_nonprivate(
+            classification_seal=str(event["classification_digest"])
+        )
+    if classification not in {None, ""}:
+        raise DeliveryOwnershipError("delivery_classification_invalid")
+    return resolve_legacy_delivery_owner(event, table=table)
+
+
+def load_authoritative_delivery_events(
+    event_ids: list[str], *, table: Any | None = None
+) -> AuthoritativeDeliveryBatch:
+    if not event_ids or len(event_ids) != len(set(event_ids)):
+        raise DeliveryOwnershipError("delivery_scope_mismatch")
+    events: list[dict[str, Any]] = []
+    ownership: AuthoritativeDeliveryOwnership | None = None
+    facts: list[dict[str, Any]] = []
+    for event_id in event_ids:
+        event = (
+            notification_repo.load_delivery_event_strong(event_id, table=table)
+            if table is not None
+            else notification_repo.load_delivery_event_strong(event_id)
+        )
+        if event is None:
+            raise DeliveryOwnershipError("delivery_owner_unresolved")
+        current = resolve_delivery_ownership(event, table=table)
+        if ownership is not None and current.digest != ownership.digest:
+            raise DeliveryOwnershipError("delivery_scope_mismatch")
+        ownership = current
+        events.append(event)
+        facts.append(
+            {
+                "event_id": event_id,
+                "event_version": event.get("event_version", 0),
+                "classification_digest": current.digest,
+            }
+        )
+    if ownership is None:
+        raise DeliveryOwnershipError("delivery_owner_unresolved")
+    return AuthoritativeDeliveryBatch(
+        events=tuple(events),
+        ownership=ownership,
+        event_set_digest=_canonical_payload_digest(facts),
+    )
+
+
+def authoritative_delivery_operation_id(
+    *, channel: str, batch: AuthoritativeDeliveryBatch, discriminator: str = ""
+) -> str:
+    identity = _canonical_payload_digest(
+        {
+            "domain": "stoa.authoritative-delivery.v1",
+            "channel": channel,
+            "event_set_digest": batch.event_set_digest,
+            "scope_digest": batch.ownership.digest,
+            "discriminator": discriminator,
+        }
+    )
+    return f"{channel}-{identity[:40]}"
+
+
+def run_authoritative_delivery(
+    *,
+    channel: str,
+    batch: AuthoritativeDeliveryBatch,
+    payload: Any,
+    provider_call: Any,
+    discriminator: str = "",
+) -> dict[str, Any]:
+    """Run one strongly resolved channel effect through the Plan 473-37 CAS."""
+    operation_id = authoritative_delivery_operation_id(
+        channel=channel, batch=batch, discriminator=discriminator
+    )
+    result = run_delivery_intent(
+        scope=batch.ownership.intent_scope(),
+        operation_id=operation_id,
+        channel=channel,
+        event_ids=[str(event["event_id"]) for event in batch.events],
+        payload=payload,
+        provider_call=provider_call,
+    )
+    return {"delivery_id": operation_id, "status": str(result.get("status") or "")}
 
 
 def run_delivery_intent(
@@ -294,7 +626,7 @@ def create_event(
             "target_id": target_id,
             "classification": "private_owner",
         }
-    elif global_nonprivate or event_type in _SEALED_GLOBAL_NONPRIVATE_EVENT_TYPES:
+    elif global_nonprivate:
         ownership = {
             "owner_id": None,
             "account_fence_generation": None,
@@ -318,6 +650,8 @@ def create_event(
 
     item = {
         "entity_type": notification_repo.NOTIFICATION_ENTITY,
+        "schema_version": "notification-event.v3",
+        "event_version": 1,
         "event_id": f"notif-{uuid4().hex}",
         "recipient_id": recipient_id,
         "recipient_role": recipient_role,
@@ -330,19 +664,26 @@ def create_event(
         "created_at": created_at or now_iso(),
         "read_at": now_iso() if event_status == "archived" else None,
         "archived_at": now_iso() if event_status == "archived" else None,
-        "metadata": {
-            **_clean_metadata(raw_metadata),
-            "delivery_decision": delivery,
-        },
+        "metadata": (
+            {}
+            if ownership["classification"] == "global_nonprivate"
+            else {
+                **_clean_metadata(raw_metadata),
+                "delivery_decision": delivery,
+            }
+        ),
         "actor_id": actor_id,
         "actor_role": actor_role,
         "category": category,
         "owner_id": ownership["owner_id"],
         "account_fence_generation": ownership["account_fence_generation"],
         "owner_classification": ownership["classification"],
-        "owner_target_type": ownership["target_type"],
-        "owner_target_id": ownership["target_id"],
     }
+    if ownership["classification"] == "private_owner":
+        item.update(
+            owner_target_type=ownership["target_type"],
+            owner_target_id=ownership["target_id"],
+        )
     persisted = notification_repo.put_event(item)
     if isinstance(persisted, dict):
         item = persisted
@@ -797,25 +1138,54 @@ def send_digest(
     elif not settings.notification_email_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
-        payload = {
-            "deliveryId": delivery_id,
-            "recipientEmail": recipient_email,
-            "subject": "STOA notification digest",
-            "html": _digest_email_html(preview["items"]),
-            "items": preview["items"],
-            "template": settings.notification_email_digest_template,
-        }
-        owner_event = notification_repo.get_event(event_ids[0]) if event_ids else None
-        owner_id = str((owner_event or {}).get("owner_id") or "")
-        generation = (owner_event or {}).get("account_fence_generation")
-        if owner_id and type(generation) is int and generation > 0:
-            result = run_delivery_intent(
-                owner_id=owner_id,
-                generation=generation,
-                operation_id=delivery_id,
+        try:
+            batch = load_authoritative_delivery_events(event_ids)
+            if (
+                batch.ownership.kind == "private_owner"
+                and batch.ownership.owner_id != _user_id(user)
+            ):
+                raise DeliveryOwnershipError("delivery_scope_mismatch")
+        except DeliveryOwnershipError as exc:
+            attempt["status"] = exc.status
+        else:
+            canonical_items = [
+                digest_item(
+                    event,
+                    category=str(
+                        event.get("category")
+                        or category_for_event(
+                            event_type=str(event.get("event_type") or ""),
+                            target_type=str(event.get("target_type") or ""),
+                        )
+                    ),
+                )
+                for event in batch.events
+            ]
+            discriminator = _canonical_payload_digest(
+                {
+                    "recipient_email_hash": attempt["recipient_email_hash"],
+                    "template": settings.notification_email_digest_template,
+                }
+            )
+            delivery_id = authoritative_delivery_operation_id(
                 channel="email_digest",
-                event_ids=event_ids,
+                batch=batch,
+                discriminator=discriminator,
+            )
+            attempt["delivery_id"] = delivery_id
+            payload = {
+                "deliveryId": delivery_id,
+                "recipientEmail": recipient_email,
+                "subject": "STOA notification digest",
+                "html": _digest_email_html(canonical_items),
+                "items": canonical_items,
+                "template": settings.notification_email_digest_template,
+            }
+            result = run_authoritative_delivery(
+                channel="email_digest",
+                batch=batch,
                 payload=payload,
+                discriminator=discriminator,
                 provider_call=lambda: (
                     send_func(payload)
                     if send_func is not None
@@ -827,17 +1197,6 @@ def send_digest(
                 "provider_acceptance_unknown": "provider_acceptance_unknown",
                 "canceled_account_deletion": "canceled_account_deletion",
             }.get(str(result.get("status") or ""), "retryable")
-            attempt["provider_result"] = _redacted_provider_result(
-                result.get("provider_result")
-            )
-        else:
-            try:
-                provider_result = send_func(payload) if send_func is not None else _send_email_digest_provider(payload)
-                attempt["status"] = "sent"
-                attempt["provider_result"] = _redacted_provider_result(provider_result)
-            except Exception as exc:
-                attempt["status"] = "failed"
-                attempt["provider_result"] = {"error": _redacted_error_class(exc)}
 
     _record_event_attempts(event_ids, "email_digest_delivery_attempts", attempt)
     return {
@@ -950,8 +1309,20 @@ def attempt_push_delivery(
 ) -> dict[str, Any]:
     readiness = push_provider_readiness()
     delivery_id = f"push-{uuid4().hex}"
-    recipient_id = str(item.get("recipient_id") or "")
-    tokens = notification_repo.list_push_tokens(recipient_id, status="active") if recipient_id else []
+    event_id = str(item.get("event_id") or "")
+    batch: AuthoritativeDeliveryBatch | None = None
+    ownership_error: DeliveryOwnershipError | None = None
+    try:
+        batch = load_authoritative_delivery_events([event_id])
+    except DeliveryOwnershipError as exc:
+        ownership_error = exc
+    canonical = batch.events[0] if batch is not None else {}
+    recipient_id = str(canonical.get("recipient_id") or "")
+    tokens = (
+        notification_repo.list_push_tokens(recipient_id, status="active")
+        if batch is not None and recipient_id
+        else []
+    )
     token_refs = [
         str(token.get("provider_token_reference") or token.get("token_reference") or "")
         for token in tokens
@@ -970,7 +1341,9 @@ def attempt_push_delivery(
         "provider_result": {},
     }
 
-    if not recipient_id:
+    if ownership_error is not None:
+        attempt["status"] = ownership_error.status
+    elif not recipient_id:
         attempt["status"] = "refused_missing_recipient_id"
     elif not token_refs:
         attempt["status"] = "refused_missing_token"
@@ -979,53 +1352,48 @@ def attempt_push_delivery(
     elif not settings.notification_push_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
+        assert batch is not None
+        discriminator = _canonical_payload_digest(
+            {
+                "token_references": token_refs,
+                "template": settings.notification_push_template,
+            }
+        )
+        delivery_id = authoritative_delivery_operation_id(
+            channel="push", batch=batch, discriminator=discriminator
+        )
+        attempt["delivery_id"] = delivery_id
         payload = {
             "deliveryId": delivery_id,
             "tokenReferences": token_refs,
-            "title": item.get("title"),
-            "body": item.get("summary"),
+            "title": canonical.get("title"),
+            "body": canonical.get("summary"),
             "data": {
-                "eventId": item.get("event_id"),
-                "eventType": item.get("event_type"),
-                "targetType": item.get("target_type"),
-                "targetId": item.get("target_id"),
+                "eventId": canonical.get("event_id"),
+                "eventType": canonical.get("event_type"),
+                "targetType": canonical.get("target_type"),
+                "targetId": canonical.get("target_id"),
             },
             "template": settings.notification_push_template,
         }
-        owner_id = str(item.get("owner_id") or recipient_id)
-        generation = item.get("account_fence_generation")
-        if owner_id and type(generation) is int and generation > 0:
-            result = run_delivery_intent(
-                owner_id=owner_id,
-                generation=generation,
-                operation_id=delivery_id,
-                channel="push",
-                event_ids=[str(item.get("event_id") or "")],
-                payload=payload,
-                provider_call=lambda: (
-                    send_func(payload)
-                    if send_func is not None
-                    else _send_push_provider(payload)
-                ),
-            )
-            attempt["status"] = {
-                "accepted": "sent",
-                "provider_acceptance_unknown": "provider_acceptance_unknown",
-                "canceled_account_deletion": "canceled_account_deletion",
-            }.get(str(result.get("status") or ""), "retryable")
-            attempt["provider_result"] = _redacted_provider_result(
-                result.get("provider_result")
-            )
-        else:
-            try:
-                provider_result = send_func(payload) if send_func is not None else _send_push_provider(payload)
-                attempt["status"] = "sent"
-                attempt["provider_result"] = _redacted_provider_result(provider_result)
-            except Exception as exc:
-                attempt["status"] = "failed"
-                attempt["provider_result"] = {"error": _redacted_error_class(exc)}
+        result = run_authoritative_delivery(
+            channel="push",
+            batch=batch,
+            payload=payload,
+            discriminator=discriminator,
+            provider_call=lambda: (
+                send_func(payload)
+                if send_func is not None
+                else _send_push_provider(payload)
+            ),
+        )
+        attempt["status"] = {
+            "accepted": "sent",
+            "provider_acceptance_unknown": "provider_acceptance_unknown",
+            "canceled_account_deletion": "canceled_account_deletion",
+        }.get(str(result.get("status") or ""), "retryable")
 
-    _record_event_attempts([str(item.get("event_id") or "")], "push_delivery_attempts", attempt)
+    _record_event_attempts([event_id], "push_delivery_attempts", attempt)
     return {
         "deliveryId": delivery_id,
         "status": attempt["status"],
