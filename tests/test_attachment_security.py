@@ -67,6 +67,7 @@ from stoa.services.document_extraction_service import (
     extract_pptx_text,
     extract_xlsx_text,
 )
+from stoa.services.document_parser_worker import ParserResult
 
 
 SENSITIVE_CANARIES = {
@@ -2403,17 +2404,22 @@ def test_message_command_claim_groups_command_quota_operation_and_counter() -> N
         expires_at=2_000_000_000,
     )
     assert [operation.kind for operation in operations] == [
+        attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_PUT,
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
     ]
-    command_item = operations[0]["Put"]["Item"]
+    assert operations[0]["ConditionCheck"]["Key"] == {
+        "PK": "USER#student-1",
+        "SK": "ACCOUNT_FENCE",
+    }
+    command_item = operations[1]["Put"]["Item"]
     assert command_item["fingerprint"] == "f" * 64
     assert command_item["counter_value"] == 5
     assert "content" not in command_item and "attachment_ids" not in command_item
-    quota_item = operations[1]["Put"]["Item"]
+    quota_item = operations[2]["Put"]["Item"]
     assert quota_item["SK"] == "CHAT_QUOTA_OP#opaque-command"
-    assert operations[2]["Update"]["ExpressionAttributeValues"][":next"] == 5
+    assert operations[3]["Update"]["ExpressionAttributeValues"][":next"] == 5
 
 
 class _LeaseTable:
@@ -2422,6 +2428,15 @@ class _LeaseTable:
 
     def get_item(self, **_kwargs):
         return {"Item": dict(self.command)}
+
+    def transact_write_items(self, *, TransactItems):
+        assert TransactItems[0]["ConditionCheck"]["Key"] == {
+            "PK": "USER#student-1",
+            "SK": "ACCOUNT_FENCE",
+        }
+        for operation in TransactItems[1:]:
+            if "Update" in operation:
+                self.update_item(**operation["Update"])
 
     def update_item(self, **kwargs):
         values = kwargs["ExpressionAttributeValues"]
@@ -2469,6 +2484,7 @@ def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> No
     table = _LeaseTable(
         {
             "owner_id": "student-1",
+            "account_fence_generation": 1,
             "status": "message_committed",
             "attempt": 0,
         }
@@ -2658,7 +2674,17 @@ class _PrivateS3:
         return {"Versions": versions, "DeleteMarkers": [], "IsTruncated": False}
 
 
-def test_ai_attachment_context_is_bounded_and_category_safe() -> None:
+def _parse_attachment_text_in_process(data, media_type):
+    data.seek(0)
+    return ParserResult(text=extract_attachment_text(data.read(), media_type))
+
+
+def test_ai_attachment_context_is_bounded_and_category_safe(monkeypatch) -> None:
+    monkeypatch.setattr(
+        attachment_service,
+        "parse_document_isolated",
+        _parse_attachment_text_in_process,
+    )
     text = b"internal extracted canary"
     item = {
         **_saved_attachment(),
@@ -2688,7 +2714,12 @@ def test_ai_attachment_context_is_bounded_and_category_safe() -> None:
     assert broken.error_code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
 
 
-def test_same_key_newer_version_cannot_change_extraction_bytes() -> None:
+def test_same_key_newer_version_cannot_change_extraction_bytes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        attachment_service,
+        "parse_document_isolated",
+        _parse_attachment_text_in_process,
+    )
     old = b"validated immutable text"
     newer = b"different newer content!"
     assert len(old) == len(newer)
