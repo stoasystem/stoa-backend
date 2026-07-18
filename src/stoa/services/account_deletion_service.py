@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
+import json
+from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
 
@@ -33,18 +35,18 @@ ACCOUNT_DELETION_BRANCH_IDS = (
     "capability_scope",
     "question_ocr_session",
     "attachments",
-    "conversations_messages",
-    "practice_attempts",
-    "learning_profiles",
-    "usage_ledgers",
-    "subscriptions_billing",
-    "notifications_reports",
-    "moderation_support",
-    "teacher_ai_drafts",
-    "curriculum_personalization",
-    "provider_objects",
-    "analytics_evidence",
-    "final_identity_accounting",
+    "moderation",
+    "report_records",
+    "report_artifacts",
+    "support_recovery_feed",
+    "conversation_messages",
+    "practice_progress",
+    "adaptive_assignment",
+    "learning_memory",
+    "ai_teacher_draft",
+    "curriculum_signal",
+    "notification_device_realtime",
+    "external_delivery_debt",
 )
 PRIMARY_BRANCH_IDS = {
     "account_profile",
@@ -69,9 +71,183 @@ class BranchResult:
     debt_counts: dict[str, int] | None = None
     quiescent: bool = False
     epoch: int = 0
+    legal_retention_blocked: int = 0
+    external_receipts: tuple[dict[str, Any], ...] = ()
 
-    def persisted(self, updated_at: str) -> dict[str, Any]:
-        return {**asdict(self), "updated_at": updated_at}
+    def persisted(
+        self,
+        updated_at: str,
+        *,
+        generation: int | None = None,
+        handler_version: str | None = None,
+        subfamilies: tuple[str, ...] | list[str] | None = None,
+    ) -> dict[str, Any]:
+        value = {**asdict(self), "updated_at": updated_at}
+        if generation is not None:
+            value["generation"] = generation
+        if handler_version is not None:
+            value["handler_version"] = handler_version
+        if subfamilies is not None:
+            value["subfamilies"] = list(subfamilies)
+        return value
+
+
+def _default_inventory_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "security"
+        / "phase-473-private-store-inventory.json"
+    )
+
+
+def load_private_store_seal(path: Path | str | None = None) -> dict[str, Any]:
+    """Load and strictly validate the immutable runtime branch projection."""
+    inventory_path = Path(path) if path is not None else _default_inventory_path()
+    try:
+        raw = inventory_path.read_bytes()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "private-store inventory unavailable"
+        ) from exc
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != (
+        "phase-473-private-store-inventory.v1"
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "private-store inventory schema mismatch"
+        )
+    branch_ids = payload.get("branch_ids")
+    registry = payload.get("branch_registry")
+    if branch_ids != list(ACCOUNT_DELETION_BRANCH_IDS) or not isinstance(registry, list):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "private-store branch registry mismatch"
+        )
+    branches: list[dict[str, Any]] = []
+    contracts: dict[str, dict[str, Any]] = {}
+    for index, raw_branch in enumerate(registry):
+        if not isinstance(raw_branch, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid private-store branch contract"
+            )
+        branch = dict(raw_branch)
+        branch_id = branch.get("branch_id")
+        version = branch.get("handler_version")
+        roots = branch.get("required_roots")
+        subfamilies = branch.get("subfamilies")
+        if (
+            branch_id != ACCOUNT_DELETION_BRANCH_IDS[index]
+            or not isinstance(version, str)
+            or not version
+            or not isinstance(roots, list)
+            or not roots
+            or any(not isinstance(value, str) or not value for value in roots)
+            or not isinstance(subfamilies, list)
+            or not subfamilies
+            or any(not isinstance(value, str) or not value for value in subfamilies)
+        ):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid private-store branch contract"
+            )
+        branches.append(branch)
+        contracts[str(branch_id)] = {
+            "handler_version": version,
+            "required_roots": list(roots),
+            "subfamilies": list(subfamilies),
+        }
+    return {
+        "inventory_sha256": sha256(raw).hexdigest(),
+        "branches": branches,
+        "branch_contracts": contracts,
+    }
+
+
+def _result_debt_is_zero(result: Mapping[str, Any]) -> bool:
+    debt = result.get("debt_counts")
+    if debt is None:
+        return True
+    if not isinstance(debt, Mapping):
+        return False
+    allowed_nonblocking = {
+        "external_accepted",
+        "external_delivered",
+        "external_unknown",
+        "processed",
+        "pass_dirty",
+    }
+    for key, value in debt.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return False
+        if key not in allowed_nonblocking and value != 0:
+            return False
+        if key == "pass_dirty" and value != 0:
+            return False
+    return True
+
+
+def validate_deletion_seal(
+    *, command: Mapping[str, Any], fence: Mapping[str, Any], seal: Mapping[str, Any]
+) -> bool:
+    """Return true only for one exact current-generation, debt-free seal."""
+    try:
+        generation = command["generation"]
+        command_id = command["command_id"]
+        contracts = seal["branch_contracts"]
+        branches = seal["branches"]
+        results = command["branch_results"]
+    except (KeyError, TypeError):
+        return False
+    if (
+        isinstance(generation, bool)
+        or not isinstance(generation, int)
+        or generation <= 0
+        or command.get("status") not in {"running", "pending"}
+        or command.get("inventory_sha256") != seal.get("inventory_sha256")
+        or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
+        or command.get("branch_contracts") != contracts
+        or fence.get("status") != "deletion_pending"
+        or fence.get("generation") != generation
+        or fence.get("command_id") != command_id
+        or not isinstance(results, Mapping)
+        or set(results) != set(ACCOUNT_DELETION_BRANCH_IDS)
+        or not isinstance(branches, list)
+    ):
+        return False
+    for branch in branches:
+        if not isinstance(branch, Mapping):
+            return False
+        branch_id = branch.get("branch_id")
+        if branch_id not in results or branch_id not in contracts:
+            return False
+        result = results[branch_id]
+        contract = contracts[branch_id]
+        if (
+            not isinstance(result, Mapping)
+            or result.get("status") != "complete"
+            or result.get("quiescent") is not True
+            or type(result.get("epoch")) is not int
+            or int(result["epoch"]) < 2
+            or result.get("generation") != generation
+            or result.get("handler_version") != contract["handler_version"]
+            or result.get("subfamilies") != contract["subfamilies"]
+            or result.get("cursor") not in (None, {})
+            or result.get("legal_retention_blocked", 0) != 0
+            or not _result_debt_is_zero(result)
+        ):
+            return False
+        receipts = result.get("external_receipts", ())
+        if not isinstance(receipts, (list, tuple)):
+            return False
+        for receipt in receipts:
+            if (
+                not isinstance(receipt, Mapping)
+                or receipt.get("status")
+                not in {"accepted", "delivered", "provider_acceptance_unknown"}
+                or receipt.get("claim", "outside_backend_purge_authority")
+                != "outside_backend_purge_authority"
+            ):
+                return False
+    return True
 
 
 def deletion_command_fingerprint(
@@ -115,6 +291,7 @@ def begin_or_replay_deletion(
     command_id: str | None = None,
 ) -> DeletionReceipt:
     """Create or replay one immutable command without constructing an Actor."""
+    seal = load_private_store_seal()
     fence = account_deletion_repo.get_account_fence(user_id, table=table)
     if not fence or type(fence.get("generation")) is not int:
         raise account_deletion_repo.AccountDeletionConflict("missing account fence")
@@ -138,6 +315,9 @@ def begin_or_replay_deletion(
         "method": method.strip().upper(),
         "path": path.strip(),
         "request_body_sha256": sha256(body).hexdigest(),
+        "inventory_sha256": seal["inventory_sha256"],
+        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
+        "branch_contracts": seal["branch_contracts"],
     }
     _fence, persisted = account_deletion_repo.begin_account_deletion(
         user_id=user_id,
@@ -154,23 +334,35 @@ def begin_or_replay_deletion(
         "method": method.strip().upper(),
         "path": path.strip(),
         "request_body_sha256": command["request_body_sha256"],
+        "inventory_sha256": seal["inventory_sha256"],
+        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
+        "branch_contracts": seal["branch_contracts"],
     }
     if any(persisted.get(key) != value for key, value in immutable.items()):
         raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
     return DeletionReceipt(
         command_id=str(persisted["command_id"]),
-        status="deletion_pending",
+        status=("deleted" if persisted.get("status") == "complete" else "deletion_pending"),
         accepted_at=str(persisted["accepted_at"]),
     )
 
 
-def can_finalize_account_deletion(completed: object, *, sealed: bool = False) -> bool:
+def can_finalize_account_deletion(
+    completed: object,
+    *,
+    sealed: bool = False,
+    command: Mapping[str, Any] | None = None,
+    fence: Mapping[str, Any] | None = None,
+    seal: Mapping[str, Any] | None = None,
+) -> bool:
     """Plan 35 is the only caller allowed to set ``sealed=True``."""
-    return bool(
-        sealed
-        and isinstance(completed, (set, frozenset, tuple, list))
-        and set(completed) == set(ACCOUNT_DELETION_BRANCH_IDS)
-    )
+    if not sealed or command is None or fence is None or seal is None:
+        return False
+    if completed is not command.get("branch_results") and completed != command.get(
+        "branch_results"
+    ):
+        return False
+    return validate_deletion_seal(command=command, fence=fence, seal=seal)
 
 
 def _run_base_branch(
@@ -988,17 +1180,73 @@ def _notification_device_realtime_branch(
     )
 
 
+def _external_delivery_debt_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    """Compose backend delivery debt without claiming provider/client erasure."""
+    del previous
+    results = command.get("branch_results")
+    if not isinstance(results, Mapping):
+        return BranchResult("retryable", debt_counts={"missing_branch_results": 1})
+    accepted = delivered = unknown = pending = 0
+    for branch_id, raw_result in results.items():
+        if branch_id == "external_delivery_debt" or not isinstance(raw_result, Mapping):
+            continue
+        debt = raw_result.get("debt_counts")
+        if not isinstance(debt, Mapping):
+            continue
+        accepted += int(debt.get("external_accepted") or 0)
+        delivered += int(debt.get("external_delivered") or 0)
+        unknown += int(debt.get("external_unknown") or 0)
+        for key, value in debt.items():
+            if key in {
+                "external_accepted",
+                "external_delivered",
+                "external_unknown",
+                "processed",
+                "pass_dirty",
+            }:
+                continue
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                pending += value
+    if pending:
+        return BranchResult("retryable", debt_counts={"pending": pending})
+    receipts = tuple(
+        {
+            "channel": channel,
+            "status": status,
+            "count": count,
+            "claim": "outside_backend_purge_authority",
+        }
+        for channel, status, count in (
+            ("provider", "accepted", accepted),
+            ("provider", "delivered", delivered),
+            ("provider", "provider_acceptance_unknown", unknown),
+        )
+        if count
+    )
+    return BranchResult(
+        "complete",
+        debt_counts={
+            "external_accepted": accepted,
+            "external_delivered": delivered,
+            "external_unknown": unknown,
+        },
+        quiescent=True,
+        epoch=2,
+        external_receipts=receipts,
+    )
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
-    # Derived rows must resolve their authoritative question owner before the
-    # primary question branch can replace that question with a tombstone.
-    "moderation_support": _moderation_support_branch,
     "account_profile": _account_profile_branch,
     "identity_cross_account": _identity_cross_account_branch,
     "capability_scope": _capability_scope_branch,
     "question_ocr_session": _question_ocr_session_branch,
     "attachments": _attachments_branch,
-    # The exact Plan 35 registry retains the aggregate notifications_reports
-    # branch. These independently persisted sub-results close its report stores.
+    # Derived rows resolve their question owner before the primary question
+    # branch can replace that question with a tombstone.
+    "moderation": _moderation_support_branch,
     "report_records": _report_records_branch,
     "report_artifacts": _report_artifacts_branch,
     "support_recovery_feed": _support_recovery_feed_branch,
@@ -1009,6 +1257,7 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     "ai_teacher_draft": _ai_teacher_draft_branch,
     "curriculum_signal": _curriculum_signal_branch,
     "notification_device_realtime": _notification_device_realtime_branch,
+    "external_delivery_debt": _external_delivery_debt_branch,
 }
 
 
@@ -1021,16 +1270,37 @@ class AccountDeletionService:
         repository: Any = account_deletion_repo,
         branch_handlers: Mapping[str, Callable[..., BranchResult]] | None = None,
         now: Callable[[], str] | None = None,
+        inventory_path: Path | str | None = None,
     ) -> None:
         self.repository = repository
         self.branch_handlers = dict(branch_handlers or BRANCH_HANDLERS)
         self.now = now or (lambda: "")
+        self.seal = load_private_store_seal(inventory_path)
+        if tuple(self.branch_handlers) != ACCOUNT_DELETION_BRANCH_IDS:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "runtime branch handlers do not match sealed registry"
+            )
 
     def continue_command(self, command_id: str) -> None:
         command = self._load_command(command_id)
         if not command:
             return
-        for branch_id in self.branch_handlers:
+        if command.get("status") == "complete":
+            return
+        if (
+            command.get("inventory_sha256") != self.seal["inventory_sha256"]
+            or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
+            or command.get("branch_contracts") != self.seal["branch_contracts"]
+        ):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "deletion command seal drift"
+            )
+        branch_results = command.setdefault("branch_results", {})
+        if not isinstance(branch_results, dict):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid deletion branch results"
+            )
+        for branch_id in ACCOUNT_DELETION_BRANCH_IDS:
             previous = (command.get("branch_results") or {}).get(branch_id) or {}
             if previous.get("status") == "complete" and previous.get("quiescent") is True:
                 continue
@@ -1039,11 +1309,25 @@ class AccountDeletionService:
                 result = handler(command=command, previous=previous)
             except Exception:
                 result = BranchResult("retryable", debt_counts={"dependency": 1})
-            self.repository.persist_branch_result(
-                command, branch_id, result.persisted(self.now())
+            contract = self.seal["branch_contracts"][branch_id]
+            persisted = result.persisted(
+                self.now(),
+                generation=int(command["generation"]),
+                handler_version=str(contract["handler_version"]),
+                subfamilies=contract["subfamilies"],
             )
-        # Deliberately no aggregate finalizer. Plans 30-34 add the remaining
-        # branches and Plan 35 alone seals the exact registry.
+            self.repository.persist_branch_result(command, branch_id, persisted)
+            branch_results[branch_id] = persisted
+        fence = self._load_fence(str(command["user_id"]))
+        if fence and validate_deletion_seal(
+            command=command, fence=fence, seal=self.seal
+        ):
+            self.repository.finalize_account_deletion(
+                command=command,
+                fence=fence,
+                seal=self.seal,
+                now_iso=self.now(),
+            )
 
     def _load_command(self, command_id: str) -> dict[str, Any] | None:
         loader = getattr(self.repository, "get_command_by_id", None)
@@ -1051,4 +1335,13 @@ class AccountDeletionService:
             return loader(command_id)
         if self.repository is account_deletion_repo:
             return account_deletion_repo.get_command_by_id(command_id)
+        return None
+
+    def _load_fence(self, user_id: str) -> dict[str, Any] | None:
+        loader = getattr(self.repository, "get_account_fence", None)
+        if callable(loader):
+            value = loader(user_id)
+            return dict(value) if value else None
+        if self.repository is account_deletion_repo:
+            return account_deletion_repo.get_account_fence(user_id)
         return None

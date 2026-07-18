@@ -238,6 +238,12 @@ def test_exact_verified_subject_command_replays_without_actor_authority() -> Non
     assert replay == first
     assert set(asdict(replay)) == {"command_id", "status", "accepted_at"}
     assert "actor" not in asdict(replay)
+    assert table.command is not None
+    assert table.command["inventory_sha256"]
+    assert table.command["branch_ids"] == list(service.ACCOUNT_DELETION_BRANCH_IDS)
+    assert set(table.command["branch_contracts"]) == set(
+        service.ACCOUNT_DELETION_BRANCH_IDS
+    )
 
     for values in (
         {"verified": _token(subject="other")},

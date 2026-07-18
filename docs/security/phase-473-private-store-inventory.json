@@ -529,14 +529,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "cc44069f0f623f84e8ab7a02",
+      "row_id": "5372d099ff98a2dfbfe5b80a",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "f66fa6dc1c337e8873741375f07f96ca6e4b345322ea868f831dba22d9da4de7",
         "span": [
-          324,
-          348
+          326,
+          350
         ],
         "symbol": "begin_account_deletion"
       },
@@ -612,14 +612,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "a2ea4c8cc02d687141f36c29",
+      "row_id": "994ad8a34959f53b8e474b8a",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "55d3521db8d9ea1374b320efb06e4f6e3400e0d47fa8d72abcb983e033918559",
         "span": [
-          522,
-          537
+          524,
+          539
         ],
         "symbol": "replace_with_deletion_tombstone"
       },
@@ -695,14 +695,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "9df230ab768061edf3d17ad8",
+      "row_id": "5bc4ac0074275bff310ed24a",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "d05e6cec57e71b98d748ca82b6bd2f359d8e47b46e8ef8873ecdcdfbf277947b",
         "span": [
-          579,
-          590
+          581,
+          592
         ],
         "symbol": "delete_owned_row"
       },
@@ -778,14 +778,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "17fe9215b119426f053e8152",
+      "row_id": "744ae07bddb26b29319e8e43",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "8335c666ada35236df200af1a53900db0aded7c05309db51e2a8b44aebd1b1b8",
         "span": [
-          645,
-          660
+          647,
+          662
         ],
         "symbol": "scrub_parent_profile_child"
       },
@@ -861,14 +861,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "e23e701f1a5fb99360ef2967",
+      "row_id": "9687bde34537468f2e6db325",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "f1f9c77b1037d8651cd88b513e600578c272fbb22b6dd28a0c37a985b887ea01",
         "span": [
-          686,
-          697
+          688,
+          699
         ],
         "symbol": "terminalize_identity_row"
       },
@@ -944,14 +944,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "d07b741a321a0bdb636395a6",
+      "row_id": "b03f9938361eb9002d53b041",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "93e38ac55b5565420dd0c00695dfa4a815ce1ca46fad5c24ca9d8626e4da7026",
         "span": [
-          723,
-          736
+          725,
+          738
         ],
         "symbol": "create_provider_revoke_debt"
       },
@@ -1027,14 +1027,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "5498083cb423c361b6d3e094",
+      "row_id": "2f78febcc2728b57fc2cc5a8",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "8c02af7f8719043805ea7284ddea4e638d0d6032248f30dd3526b8d083ed3649",
         "span": [
-          763,
-          785
+          765,
+          787
         ],
         "symbol": "complete_provider_revoke_debt"
       },
@@ -1110,14 +1110,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "e5640b4df5f505d25cf83426",
+      "row_id": "848b41756dee95c5fc8bb0ba",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "27cd92224a21872975ec64835389bf036364e26f0f1dc634d9fbbb3e400784f0",
         "span": [
-          853,
-          874
+          855,
+          876
         ],
         "symbol": "claim_deletion_command"
       },
@@ -1193,16 +1193,99 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "d116c580aa8fbb7e352cf629",
+      "row_id": "6b5cf226e93ed5d50d2bb6ea",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "17c283f9fb5d80bfd0fc26da4cbaceca6c80aff78fafa450147d899ab7eec98d",
         "span": [
-          899,
-          910
+          913,
+          924
         ],
         "symbol": "persist_branch_result"
+      },
+      "store": {
+        "pk_schema": "source-declared owner partition",
+        "roots": [
+          "USER#/PROFILE",
+          "USER#/ACCOUNT_FENCE"
+        ],
+        "sk_or_object_prefix": "profile"
+      },
+      "subfamily": "profile",
+      "tombstone_allowlist": [
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "status",
+        "privacy_generation",
+        "created_at",
+        "deleted_at"
+      ]
+    },
+    {
+      "branch_id": "account_profile",
+      "classification": "private_store",
+      "client_method": "transact",
+      "cursor_schema": {
+        "complete_scan_required": true,
+        "fields": [
+          "PK",
+          "SK"
+        ],
+        "type": "strong_base_table"
+      },
+      "debt_schema": {
+        "item": "opaque row/operation identity",
+        "ordinary_zero_required": true,
+        "policy_debt_separate": true
+      },
+      "decision_ids": [
+        "D-10",
+        "T-473-35-01",
+        "T-473-35-03"
+      ],
+      "fence_checkpoint": "USER#{owner_id}/ACCOUNT_FENCE:active:generation",
+      "field_scrub_allowlist": [
+        "opaque_id",
+        "status",
+        "created_at",
+        "deleted_at",
+        "privacy_generation"
+      ],
+      "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:finalize_account_deletion:transact",
+      "no_resurrection_selector": "tests/test_phase473_account_deletion.py::test_every_primary_writer_uses_the_same_active_fence_and_exact_generation",
+      "owner_resolver": "authoritative strong source row or immutable owner manifest",
+      "policy_class": null,
+      "private_value_provenance": [
+        "student",
+        "question",
+        "conversation",
+        "model",
+        "teacher",
+        "report"
+      ],
+      "purge_selector": "tests/test_phase473_account_deletion.py::test_tombstone_replacement_retains_only_declared_noncontent_keys",
+      "quiescence": {
+        "authoritative_zero_epochs": 2,
+        "current_generation_only": true
+      },
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "row_id": "56e3b1fdb03b222b6b56327e",
+      "sink_kind": "dynamodb_mutation",
+      "source": {
+        "file": "src/stoa/db/repositories/account_deletion_repo.py",
+        "normalized_ast_sha256": "05d2933e2f51057370b3060b289c6c85407563d56000e6a8b87d8a57dadb803f",
+        "span": [
+          1047,
+          1090
+        ],
+        "symbol": "finalize_account_deletion"
       },
       "store": {
         "pk_schema": "source-declared owner partition",
@@ -1276,14 +1359,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "db4ce2c1386a14101bfd0562",
+      "row_id": "3b0c5a16df07ead2a3a020b7",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "80739a3c8bf0b0e5b1409034e3eb5c92bd09e7eae4bb84d15324c6ddb531ee6f",
         "span": [
-          933,
-          946
+          1128,
+          1141
         ],
         "symbol": "create_teacher_escalation_intent"
       },
@@ -1359,14 +1442,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "80f38442fe6110ec9b08e3da",
+      "row_id": "aa6d2d86e41c5f610721ef79",
       "sink_kind": "dynamodb_mutation",
       "source": {
         "file": "src/stoa/db/repositories/account_deletion_repo.py",
         "normalized_ast_sha256": "1ed38beb332fd52eb0d856494d03fc954cf50ecf3325c47d50b07be1b67291bb",
         "span": [
-          961,
-          966
+          1156,
+          1161
         ],
         "symbol": "transact"
       },
@@ -14929,14 +15012,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "6ca9b9dd2364c8c46d1db074",
+      "row_id": "1f40ce520aaf831bdd6bc2d3",
       "sink_kind": "cognito_mutation",
       "source": {
         "file": "src/stoa/services/account_deletion_service.py",
         "normalized_ast_sha256": "0cc503e538c8995f8d0e443c2e23157f6e3c1e7627a52f6591e595a959ab0eda",
         "span": [
-          311,
-          313
+          503,
+          505
         ],
         "symbol": "_revoke_provider_identity"
       },
@@ -15013,14 +15096,14 @@
         "V9PRIV-02",
         "V9PRIV-03"
       ],
-      "row_id": "788718f3d8ea9a29abb8da0d",
+      "row_id": "3c9fd4a33cf776e2aae64695",
       "sink_kind": "cognito_mutation",
       "source": {
         "file": "src/stoa/services/account_deletion_service.py",
         "normalized_ast_sha256": "e13bc50bf430bc729cae69dd1070d3385f018a3c99f1709ae737677a46c768c1",
         "span": [
-          315,
-          317
+          507,
+          509
         ],
         "symbol": "_revoke_provider_identity"
       },
@@ -19047,7 +19130,7 @@
   "source_files": [
     {
       "file": "src/stoa/db/repositories/account_deletion_repo.py",
-      "sha256": "9686fdf821ac0d8d2f0d50d4aa2c7ffd6fa4fa52c269d2f05cb7d3650c555c49"
+      "sha256": "f0b69bd45e9d618448fa2184252a55785dcad34be2454ab3f59027d5ed7eeadb"
     },
     {
       "file": "src/stoa/db/repositories/adaptive_learning_repo.py",
@@ -19143,7 +19226,7 @@
     },
     {
       "file": "src/stoa/services/account_deletion_service.py",
-      "sha256": "d939fb6b4a596f9cdcbf8509a8739b5ae0be8e199ca0345f8ca852971c0057da"
+      "sha256": "3aa18e5ce7123dca1118cc4dca0c19dd938cf57b5ca04344b7b935278a9680c6"
     },
     {
       "file": "src/stoa/services/ai_service.py",

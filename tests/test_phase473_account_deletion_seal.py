@@ -75,21 +75,46 @@ def test_runtime_registry_is_exactly_the_source_sealed_seventeen_branches():
 def test_finalizer_rejects_every_incomplete_or_dishonest_seal(mutation: str):
     seal, command, fence = _ready_fixture()
     _loader, validator = _seal_api()
-    if mutation == "missing_branch": command["branch_results"].pop(EXPECTED_BRANCHES[0])
-    elif mutation == "extra_branch": command["branch_results"]["surprise"] = deepcopy(command["branch_results"][EXPECTED_BRANCHES[0]])
-    elif mutation == "duplicate_branch_binding": command["branch_ids"][-1] = command["branch_ids"][0]
-    elif mutation == "stale_generation": command["branch_results"][EXPECTED_BRANCHES[0]]["generation"] -= 1
-    elif mutation == "stale_handler": command["branch_results"][EXPECTED_BRANCHES[0]]["handler_version"] = "old"
+    if mutation == "missing_branch":
+        command["branch_results"].pop(EXPECTED_BRANCHES[0])
+    elif mutation == "extra_branch":
+        command["branch_results"]["surprise"] = deepcopy(
+            command["branch_results"][EXPECTED_BRANCHES[0]]
+        )
+    elif mutation == "duplicate_branch_binding":
+        command["branch_ids"][-1] = command["branch_ids"][0]
+    elif mutation == "stale_generation":
+        command["branch_results"][EXPECTED_BRANCHES[0]]["generation"] -= 1
+    elif mutation == "stale_handler":
+        command["branch_results"][EXPECTED_BRANCHES[0]]["handler_version"] = "old"
     elif mutation == "incomplete_subfamily":
         branch = next(item for item in seal["branches"] if item["subfamilies"])
         command["branch_results"][branch["branch_id"]]["subfamilies"] = []
-    elif mutation == "cursor_remaining": command["branch_results"][EXPECTED_BRANCHES[0]]["cursor"] = {"PK": "x", "SK": "y"}
-    elif mutation == "ordinary_debt": command["branch_results"][EXPECTED_BRANCHES[0]]["debt_counts"] = {"dependency": 1}
-    elif mutation == "legal_hold": command["branch_results"]["report_artifacts"]["legal_retention_blocked"] = 1
-    elif mutation == "pending_external_delivery": command["branch_results"]["external_delivery_debt"]["debt_counts"] = {"pending": 1}
-    elif mutation == "one_zero_epoch": command["branch_results"][EXPECTED_BRANCHES[0]]["epoch"] = 1
-    elif mutation == "accepted_mislabeled_purged": command["branch_results"]["external_delivery_debt"]["external_receipts"] = [{"status": "purged"}]
-    elif mutation == "inventory_drift": command["inventory_sha256"] = "0" * 64
+    elif mutation == "cursor_remaining":
+        command["branch_results"][EXPECTED_BRANCHES[0]]["cursor"] = {
+            "PK": "x",
+            "SK": "y",
+        }
+    elif mutation == "ordinary_debt":
+        command["branch_results"][EXPECTED_BRANCHES[0]]["debt_counts"] = {
+            "dependency": 1
+        }
+    elif mutation == "legal_hold":
+        command["branch_results"]["report_artifacts"][
+            "legal_retention_blocked"
+        ] = 1
+    elif mutation == "pending_external_delivery":
+        command["branch_results"]["external_delivery_debt"]["debt_counts"] = {
+            "pending": 1
+        }
+    elif mutation == "one_zero_epoch":
+        command["branch_results"][EXPECTED_BRANCHES[0]]["epoch"] = 1
+    elif mutation == "accepted_mislabeled_purged":
+        command["branch_results"]["external_delivery_debt"][
+            "external_receipts"
+        ] = [{"status": "purged"}]
+    elif mutation == "inventory_drift":
+        command["inventory_sha256"] = "0" * 64
     assert validator(command=command, fence=fence, seal=seal) is False
 
 
@@ -100,6 +125,58 @@ def test_full_current_generation_seal_is_the_only_finalizable_state():
     assert account_deletion_service.can_finalize_account_deletion(
         command["branch_results"], sealed=True, command=command, fence=fence, seal=seal
     ) is True
+
+
+class _ServiceRepository:
+    def __init__(self, command: dict, fence: dict):
+        self.command = deepcopy(command)
+        self.fence = deepcopy(fence)
+        self.finalized = 0
+
+    def get_command_by_id(self, _command_id: str):
+        return deepcopy(self.command)
+
+    def get_account_fence(self, _user_id: str):
+        return deepcopy(self.fence)
+
+    def persist_branch_result(self, *_args):
+        raise AssertionError("already sealed branches must not be rewritten")
+
+    def finalize_account_deletion(self, *, command: dict, fence: dict, seal: dict, now_iso: str):
+        self.finalized += 1
+        self.command, self.fence = account_deletion_repo.finalize_account_deletion(
+            command=command,
+            fence=fence,
+            seal=seal,
+            now_iso=now_iso,
+            table=_FinalizerTable(command, fence),
+        )
+        return deepcopy(self.command), deepcopy(self.fence)
+
+
+def test_worker_revalidates_the_runtime_projection_and_invokes_only_plan35_finalizer():
+    _seal, command, fence = _ready_fixture()
+    repository = _ServiceRepository(command, fence)
+    worker = account_deletion_service.AccountDeletionService(
+        repository=repository,
+        now=lambda: "2026-07-18T01:00:00+00:00",
+        inventory_path=INVENTORY_PATH,
+    )
+    worker.continue_command(command["command_id"])
+    assert repository.finalized == 1
+    assert repository.command["status"] == "complete"
+    assert repository.fence["status"] == "deleted"
+
+    drifted = deepcopy(command)
+    drifted["inventory_sha256"] = "f" * 64
+    repository = _ServiceRepository(drifted, fence)
+    worker = account_deletion_service.AccountDeletionService(
+        repository=repository,
+        inventory_path=INVENTORY_PATH,
+    )
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        worker.continue_command(command["command_id"])
+    assert repository.finalized == 0
 
 
 class _FinalizerTable:

@@ -284,7 +284,9 @@ def begin_account_deletion(
     if not current:
         raise AccountDeletionConflict("missing account fence")
     bound_command_id = current.get("command_id")
-    if current.get("status") == "deletion_pending" and isinstance(bound_command_id, str):
+    if current.get("status") in {"deletion_pending", "deleted"} and isinstance(
+        bound_command_id, str
+    ):
         persisted = get_deletion_command(user_id, bound_command_id, table=target)
         if persisted and persisted.get("fingerprint") == command.get("fingerprint"):
             return current, persisted
@@ -894,7 +896,19 @@ def persist_branch_result(
     safe_result = {
         key: value
         for key, value in result.items()
-        if key in {"status", "cursor", "debt_counts", "quiescent", "epoch"}
+        if key
+        in {
+            "status",
+            "cursor",
+            "debt_counts",
+            "quiescent",
+            "epoch",
+            "generation",
+            "handler_version",
+            "subfamilies",
+            "legal_retention_blocked",
+            "external_receipts",
+        }
     }
     target.update_item(
         Key={"PK": command["PK"], "SK": command["SK"]},
@@ -908,6 +922,187 @@ def persist_branch_result(
             ":now": result.get("updated_at", ""),
         },
     )
+
+
+def finalize_account_deletion(
+    *,
+    command: Mapping[str, Any],
+    fence: Mapping[str, Any],
+    seal: Mapping[str, Any],
+    now_iso: str,
+    table: Any | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Permanently terminalize one fully sealed command and fence exactly once."""
+    if (
+        command.get("status") == "complete"
+        and fence.get("status") == "deleted"
+        and command.get("command_id") == fence.get("command_id")
+        and command.get("generation") == fence.get("generation")
+        and command.get("inventory_sha256") == seal.get("inventory_sha256")
+    ):
+        return dict(command), dict(fence)
+
+    # Local import avoids a repository/service import cycle while still making
+    # the lower transactional boundary independently reject a weak caller.
+    from stoa.services import account_deletion_service
+
+    if not account_deletion_service.validate_deletion_seal(
+        command=command, fence=fence, seal=seal
+    ):
+        raise AccountDeletionConflict("account deletion seal is incomplete")
+    user_id = _required(command.get("user_id"), "user_id")
+    command_id = _required(command.get("command_id"), "command_id")
+    generation = command.get("generation")
+    command_version = command.get("version")
+    fence_version = fence.get("version")
+    if (
+        isinstance(generation, bool)
+        or not isinstance(generation, int)
+        or generation <= 0
+        or isinstance(command_version, bool)
+        or not isinstance(command_version, int)
+        or command_version <= 0
+        or isinstance(fence_version, bool)
+        or not isinstance(fence_version, int)
+        or fence_version <= 0
+    ):
+        raise AccountDeletionConflict("invalid terminal lifecycle version")
+
+    external_result = command["branch_results"]["external_delivery_debt"]
+    receipts = external_result.get("external_receipts") or []
+    minimal_receipts = [
+        {
+            key: receipt[key]
+            for key in ("channel", "status", "count", "claim")
+            if key in receipt
+        }
+        for receipt in receipts
+        if isinstance(receipt, Mapping)
+    ]
+    terminal_command: dict[str, Any] = {
+        "PK": command["PK"],
+        "SK": command["SK"],
+        "entity_type": "account_deletion_command",
+        "schema_version": "account-deletion-command.v2",
+        "command_id": command_id,
+        "user_id": user_id,
+        "generation": generation,
+        "status": "complete",
+        "accepted_at": command.get("accepted_at", ""),
+        "completed_at": now_iso,
+        "inventory_sha256": seal["inventory_sha256"],
+        "receipt": {
+            "command_id": command_id,
+            "status": "deleted",
+            "completed_at": now_iso,
+        },
+        "accounting_identity": command.get("accounting_identity")
+        or f"DELETE_ACCOUNTING#{command_id}",
+        "external_receipts": minimal_receipts,
+        "evidence_references": list(command.get("evidence_references") or []),
+        "version": command_version + 1,
+    }
+    for field in (
+        "issuer_hash",
+        "subject_hash",
+        "fingerprint",
+        "method",
+        "path",
+        "request_body_sha256",
+    ):
+        if field in command:
+            terminal_command[field] = command[field]
+    terminal_fence = {
+        "PK": fence["PK"],
+        "SK": fence["SK"],
+        "entity_type": "account_fence",
+        "schema_version": "account-fence.v2",
+        "user_id": user_id,
+        "status": "deleted",
+        "generation": generation,
+        "command_id": command_id,
+        "inventory_sha256": seal["inventory_sha256"],
+        "deletion_accepted_at": fence.get("deletion_accepted_at")
+        or command.get("accepted_at", ""),
+        "deleted_at": now_iso,
+        "updated_at": now_iso,
+        "version": fence_version + 1,
+    }
+    expected = {
+        "user_id": user_id,
+        "command_id": command_id,
+        "generation": generation,
+        "inventory_sha256": seal["inventory_sha256"],
+        "command_version": command_version,
+        "fence_version": fence_version,
+    }
+    target = table or get_table()
+    hook = getattr(target, "finalize_account_deletion", None)
+    if callable(hook):
+        persisted_command, persisted_fence = hook(
+            expected, terminal_command, terminal_fence
+        )
+        return dict(persisted_command), dict(persisted_fence)
+    try:
+        transact(
+            [
+                {
+                    "Put": {
+                        "Item": terminal_command,
+                        "ConditionExpression": (
+                            "#status IN (:pending,:running) AND generation=:generation "
+                            "AND #version=:command_version AND inventory_sha256=:inventory"
+                        ),
+                        "ExpressionAttributeNames": {
+                            "#status": "status",
+                            "#version": "version",
+                        },
+                        "ExpressionAttributeValues": {
+                            ":pending": "pending",
+                            ":running": "running",
+                            ":generation": generation,
+                            ":command_version": command_version,
+                            ":inventory": seal["inventory_sha256"],
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "Item": terminal_fence,
+                        "ConditionExpression": (
+                            "#status=:pending AND generation=:generation AND "
+                            "#version=:fence_version AND command_id=:command"
+                        ),
+                        "ExpressionAttributeNames": {
+                            "#status": "status",
+                            "#version": "version",
+                        },
+                        "ExpressionAttributeValues": {
+                            ":pending": "deletion_pending",
+                            ":generation": generation,
+                            ":fence_version": fence_version,
+                            ":command": command_id,
+                        },
+                    }
+                },
+            ],
+            table=target,
+        )
+    except AccountDeletionConflict:
+        replay_command = get_deletion_command(user_id, command_id, table=target)
+        replay_fence = get_account_fence(user_id, table=target)
+        if (
+            replay_command
+            and replay_fence
+            and replay_command.get("status") == "complete"
+            and replay_fence.get("status") == "deleted"
+            and replay_command.get("inventory_sha256") == seal["inventory_sha256"]
+            and replay_command.get("command_id") == command_id
+            and replay_fence.get("command_id") == command_id
+        ):
+            return replay_command, replay_fence
+        raise
+    return terminal_command, terminal_fence
 
 
 def create_teacher_escalation_intent(

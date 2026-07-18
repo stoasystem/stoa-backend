@@ -123,7 +123,7 @@ def test_moderation_source_registry_closes_rows_fields_writers_and_branch() -> N
         "assigned_admin_id",
     } <= private_fields
     assert writers == {"put_case", "update_case", "put_event"}
-    assert "moderation_support" in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
+    assert "moderation" in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
 
 
 def test_moderation_create_binds_authoritative_owner_generation_and_handoff(

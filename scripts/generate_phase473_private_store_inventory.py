@@ -52,7 +52,7 @@ WRAPPER_NAMES = frozenset({"transact", "_transact", "urlopen"})
 # changed or newly mutating file requires an explicit code review and a change
 # to this table, which is why isolated source mutations fail on generation too.
 REVIEWED_MUTATING_FILES = {
-    "src/stoa/db/repositories/account_deletion_repo.py": "9686fdf821ac0d8d2f0d50d4aa2c7ffd6fa4fa52c269d2f05cb7d3650c555c49",
+    "src/stoa/db/repositories/account_deletion_repo.py": "f0b69bd45e9d618448fa2184252a55785dcad34be2454ab3f59027d5ed7eeadb",
     "src/stoa/db/repositories/adaptive_learning_repo.py": "a7524e930c78946fa5e44af96f5bc32c0123ebb8a0843fe42dd22c749a14b497",
     "src/stoa/db/repositories/ai_teacher_tools_repo.py": "8c5a14ea3446954b25594f661e5ce1d3025bc1bb22ac53f0f4b1f3ec74e99d60",
     "src/stoa/db/repositories/attachment_repo.py": "1b411f62169aae75f7ee182118e2970733cd6e160de8dda912d18d5f89de6c49",
@@ -76,7 +76,7 @@ REVIEWED_MUTATING_FILES = {
     "src/stoa/routers/auth.py": "a647a2bad20c013504101211eeed483b48740a1e817c9ef3f933dfea5a123f06",
     "src/stoa/routers/conversations.py": "04c2fdef6178a03531f215ca29c71ca88204099c09264c9400abc98f216c0ecd",
     "src/stoa/routers/teachers.py": "3419083f653a219eea22ca7c8833095f466d0a81ca07a50ac5aaf396c19ec823",
-    "src/stoa/services/account_deletion_service.py": "d939fb6b4a596f9cdcbf8509a8739b5ae0be8e199ca0345f8ca852971c0057da",
+    "src/stoa/services/account_deletion_service.py": "3aa18e5ce7123dca1118cc4dca0c19dd938cf57b5ca04344b7b935278a9680c6",
     "src/stoa/services/ai_service.py": "0f918d706c2c14768fa90ae571a11ba41e6d912460f7d80c56cc3719f80dacc8",
     "src/stoa/services/attachment_service.py": "1f4784374d16d84f3c04d047af9a3195d65598cac0f91413a01bb7e3c76a0cc9",
     "src/stoa/services/notification_service.py": "bcc7902a03b9510f5f463427216996d9cdc1871c9b5095dcadb90012662f7032",
