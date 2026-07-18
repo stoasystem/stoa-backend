@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-35-PLAN.md
-last_updated: "2026-07-18T10:44:56.045Z"
+stopped_at: Completed 473-27-PLAN.md
+last_updated: "2026-07-18T11:08:06.009Z"
 last_activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store registry and account deletion finalizer
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 57
-  completed_plans: 55
-  percent: 96
+  completed_plans: 56
+  percent: 10
 ---
 
 # Project State
@@ -112,8 +112,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 
 ## Session
 
-**Last Date:** 2026-07-18T10:44:56.039Z
-**Stopped At:** Completed 473-35-PLAN.md
+**Last Date:** 2026-07-18T11:08:06.003Z
+**Stopped At:** Completed 473-27-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -175,6 +175,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 | Phase 473 P33 | 19 min | 3 tasks | 14 files |
 | Phase 473 P34 | 14 min | 3 tasks | 7 files |
 | Phase 473 P35 | 27 min | 3 tasks | 9 files |
+| Phase 473 P27 | 13min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -286,3 +287,6 @@ Last activity: 2026-07-18 -- Completed Plan 473-35 source-sealed private-store r
 - [Phase 473]: The account deletion runtime registry is exactly 17 ordered branch IDs bound to handler, root, subfamily, generation, and inventory digest. — Missing, duplicated, stale, or smaller branch sets must fail closed.
 - [Phase 473]: Only a same-table conditional command-and-fence transition can terminalize deletion, and replay preserves the permanent fence. — Prevents partial completion, resurrection, and duplicate terminal effects.
 - [Phase 473]: Accepted, delivered, and acceptance-unknown external receipts remain minimized facts outside backend purge authority; pending work and legal holds block. — Backend completion must not overclaim provider/client erasure or lawful-retention absence.
+- [Phase 473]: Plan 27 owns only the untrusted-read registry; Plan 35 remains the sole owner of private-write rows and is invoked semantically on every composed check. — Preserves single ownership while making the combined gate fail on write drift.
+- [Phase 473]: Read authorization is per consumed field/body operation and always re-runs taint semantics. — Refreshing a source-symbol digest cannot bless raw response use.
+- [Phase 473]: Runtime evidence is joined by exact pytest node and lower-fake target across regular, SSE, and all 17 deletion branches. — Collected high-level tests alone do not prove the declared lower boundary executed.
