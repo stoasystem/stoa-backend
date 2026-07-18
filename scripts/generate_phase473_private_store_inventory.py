@@ -52,7 +52,7 @@ WRAPPER_NAMES = frozenset({"transact", "_transact", "urlopen"})
 # changed or newly mutating file requires an explicit code review and a change
 # to this table, which is why isolated source mutations fail on generation too.
 REVIEWED_MUTATING_FILES = {
-    "src/stoa/db/repositories/account_deletion_repo.py": "f0b69bd45e9d618448fa2184252a55785dcad34be2454ab3f59027d5ed7eeadb",
+    "src/stoa/db/repositories/account_deletion_repo.py": "fa7b0e3cb93a59af276dac81a3154ccee0170bfc9e91b63a73b154f48bbcf7cd",
     "src/stoa/db/repositories/adaptive_learning_repo.py": "a7524e930c78946fa5e44af96f5bc32c0123ebb8a0843fe42dd22c749a14b497",
     "src/stoa/db/repositories/ai_teacher_tools_repo.py": "8c5a14ea3446954b25594f661e5ce1d3025bc1bb22ac53f0f4b1f3ec74e99d60",
     "src/stoa/db/repositories/attachment_repo.py": "1b411f62169aae75f7ee182118e2970733cd6e160de8dda912d18d5f89de6c49",
@@ -61,7 +61,7 @@ REVIEWED_MUTATING_FILES = {
     "src/stoa/db/repositories/curriculum_ops_repo.py": "23f5bb6799ca1fd03a5343b415f0c2917442b8f217fa5600a2e93b3588179196",
     "src/stoa/db/repositories/identity_repo.py": "da94ed8c9926f591af0ff24cac34b2a045369ce0aed132c84c7667b715dd77cf",
     "src/stoa/db/repositories/moderation_repo.py": "a84aa5c5e76dff449999520c26406869733471c4598cdf04ac90bc0dbf27db40",
-    "src/stoa/db/repositories/notification_repo.py": "a1dbb532582ca7941e39ccb362b1871dd36e25649ba37ee836f23869ef1f696c",
+    "src/stoa/db/repositories/notification_repo.py": "10e02e2df0b97b5226d2c160c46c4e6412c00b4fc560accc0875b8b7644363a3",
     "src/stoa/db/repositories/practice_repo.py": "824447145dfb7b4922fb92fd86900db459216581b473f525734d1cbc95a820a9",
     "src/stoa/db/repositories/privileged_identity_repo.py": "a59e0f3cc7619a92b1484e227dbcf6521b951ecd3952c15844d8f32fea18c925",
     "src/stoa/db/repositories/public_identity_repo.py": "454c9f20e08009c0b276478f2fe1c30adad5272feaa6e77da5203dd9f9755b4b",
@@ -76,10 +76,10 @@ REVIEWED_MUTATING_FILES = {
     "src/stoa/routers/auth.py": "a647a2bad20c013504101211eeed483b48740a1e817c9ef3f933dfea5a123f06",
     "src/stoa/routers/conversations.py": "04c2fdef6178a03531f215ca29c71ca88204099c09264c9400abc98f216c0ecd",
     "src/stoa/routers/teachers.py": "3419083f653a219eea22ca7c8833095f466d0a81ca07a50ac5aaf396c19ec823",
-    "src/stoa/services/account_deletion_service.py": "3aa18e5ce7123dca1118cc4dca0c19dd938cf57b5ca04344b7b935278a9680c6",
+    "src/stoa/services/account_deletion_service.py": "aaa841a1a2b7726fca268b66eda3b685dfa1ecdfa5187db83de7d58659e658af",
     "src/stoa/services/ai_service.py": "0f918d706c2c14768fa90ae571a11ba41e6d912460f7d80c56cc3719f80dacc8",
     "src/stoa/services/attachment_service.py": "1f4784374d16d84f3c04d047af9a3195d65598cac0f91413a01bb7e3c76a0cc9",
-    "src/stoa/services/notification_service.py": "bcc7902a03b9510f5f463427216996d9cdc1871c9b5095dcadb90012662f7032",
+    "src/stoa/services/notification_service.py": "df01a49f7df86ccb780678df18fab6e766db1d71666041b7fb02e7a688832f2d",
     "src/stoa/services/notify_service.py": "cde3ec6b7cb87e07c8fec1a65d1333562b3ce2334bd8aaa3d0e0ccf87df275d3",
     "src/stoa/services/privileged_identity_service.py": "86f1f8052aafef008b4976008f49935c0b4eda6def35ee6396a8955b249b4381",
     "src/stoa/services/public_identity_service.py": "7825a3a80ae09b43b15c3da19457a0e9f31e3b7ccedf11fab90188e9b6e2c38c",
@@ -89,7 +89,150 @@ REVIEWED_MUTATING_FILES = {
     "src/stoa/services/report_service.py": "4f632a8077e89d06920107cd442ed62f50341ed5b8428e0d1fac622fdc9f6b59",
     "src/stoa/services/subscription_service.py": "8cfd9183ef9c0894220478ed8fc6de141d9450e2e6d1c7a4b22dd9b2f8e89cd6",
     "src/stoa/services/teacher_application_service.py": "ec90df94082878d91386800fa0bebc4150e8a01aba2a3e602ba0a02386676216",
-    "src/stoa/services/websocket_service.py": "288468ae0758217e455f8cae3c82ab94f2755b52d5b111ab5101c77a0422ac0d",
+    "src/stoa/services/websocket_service.py": "00061ca91d389d9d1990fdfd2fad5255ddcfeaeabb36c91ce6d0ab371694de4a",
+}
+
+
+FINDING_REGISTRY = (
+    {
+        "finding_id": "CR-01",
+        "source_symbols": [
+            "account_deletion_repo.claim_deletion_command",
+            "account_deletion_repo.renew_deletion_command_claim",
+            "account_deletion_repo.persist_branch_result",
+            "account_deletion_repo.finalize_account_deletion",
+        ],
+        "required_semantics": [
+            "current-epoch lease comparison",
+            "opaque owner/version/digest CAS",
+            "strong durable exact-set finalization",
+        ],
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+    },
+    {
+        "finding_id": "CR-02",
+        "source_symbols": [
+            "notification_service.load_authoritative_delivery_events",
+            "notification_service.run_authoritative_delivery",
+            "websocket_service.fanout_notification_event",
+        ],
+        "required_semantics": [
+            "strong canonical owner resolution",
+            "no direct private provider fallback",
+            "one durable intent before every provider effect",
+        ],
+        "lower_fake_target": "src/stoa/services/notification_service.py:provider_call",
+        "runtime_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+    },
+    {
+        "finding_id": "WR-01",
+        "source_symbols": [
+            "account_deletion_repo._valid_lifecycle_timestamp",
+            "account_deletion_service.AccountDeletionService.__init__",
+        ],
+        "required_semantics": ["nonblank timezone-aware UTC lifecycle validation"],
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+    },
+    {
+        "finding_id": "WR-02",
+        "source_symbols": ["account_deletion_repo.scrub_parent_profile_child"],
+        "required_semantics": ["narrow legacy normalization", "parent row-version CAS"],
+        "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+    },
+    {
+        "finding_id": "WR-03",
+        "source_symbols": [
+            "notification_repo.claim_delivery_intent",
+            "notification_repo.begin_delivery_effect",
+            "notification_repo.recover_delivery_intent",
+        ],
+        "required_semantics": [
+            "expired pre-effect takeover only",
+            "inflight ambiguity is terminal",
+            "intent version and payload/scope digest CAS",
+        ],
+        "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
+        "runtime_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+    },
+)
+
+for _finding in FINDING_REGISTRY:
+    _finding["privacy_surface"] = "bounded_noncontent_lifecycle_facts"
+
+
+SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "src/stoa/db/repositories/account_deletion_repo.py": {
+        "claim_deletion_command": ("lease_expires_at<:now_epoch", ":now_epoch", ":expiry"),
+        "renew_deletion_command_claim": (
+            "lease_owner=:owner",
+            "command_version=:command_version",
+            "branch_results_digest=:branch_results_digest",
+            "lease_expires_at>=:now_epoch",
+        ),
+        "persist_branch_result": (
+            "lease_owner=:owner",
+            "command_version=:command_version",
+            "branch_results_digest=:branch_results_digest",
+            "lease_expires_at>=:now_epoch",
+            "result_version",
+        ),
+        "finalize_account_deletion": (
+            "get_deletion_command",
+            "branch_results_digest(durable_results)",
+            "claim.branch_results_digest",
+            "lease_owner",
+            "command_version",
+        ),
+        "scrub_parent_profile_child": (
+            "attribute_not_exists(#version)",
+            "user_id=:parent AND #version=:expected_version",
+        ),
+    },
+    "src/stoa/db/repositories/notification_repo.py": {
+        "claim_delivery_intent": (
+            "(#effect=:registered OR (#effect=:pre_effect AND ",
+            "lease_expires_at < :now_epoch",
+            "intent_version=:version",
+            "scope_digest=:scope",
+            "payload_digest=:payload",
+        ),
+        "begin_delivery_effect": (
+            "#effect=:pre_effect",
+            "lease_owner=:lease",
+            "intent_version=:version",
+            "scope_digest=:scope",
+            "payload_digest=:payload",
+            "active_fence_condition",
+            "classification_digest=:classification_seal",
+        ),
+        "recover_delivery_intent": (
+            "state != \"effect_inflight\"",
+            "provider_acceptance_unknown",
+            "intent_version=:version",
+        ),
+    },
+    "src/stoa/services/notification_service.py": {
+        "resolve_delivery_ownership": (
+            "classification = event.get(\"owner_classification\")",
+            "return resolve_legacy_delivery_owner(event, table=table)",
+        ),
+        "run_delivery_intent": (
+            "delivery_intent_sendable",
+            "begin_delivery_effect",
+            "provider_call()",
+        ),
+        "attempt_push_delivery": ("load_authoritative_delivery_events", "run_authoritative_delivery"),
+        "send_digest": ("load_authoritative_delivery_events", "run_authoritative_delivery"),
+    },
+    "src/stoa/services/websocket_service.py": {
+        "fanout_notification_event": (
+            "batch = notification_service.load_authoritative_delivery_events([event_id])",
+            "notification_service.run_authoritative_delivery",
+        ),
+    },
 }
 
 
@@ -181,6 +324,74 @@ class _SinkVisitor(ast.NodeVisitor):
                 )
             )
         self.generic_visit(node)
+
+
+def _function_sources(path: Path) -> dict[str, str]:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=path.as_posix())
+    return {
+        node.name: ast.get_source_segment(source, node) or ""
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _assigned_call(source: str, *, target: str, function: str) -> bool:
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        value = node.value
+        if not isinstance(value, ast.Call):
+            continue
+        called = value.func
+        name = called.attr if isinstance(called, ast.Attribute) else (
+            called.id if isinstance(called, ast.Name) else ""
+        )
+        if name == function and any(
+            isinstance(item, ast.Name) and item.id == target for item in targets
+        ):
+            return True
+    return False
+
+
+def validate_private_store_semantics(root: Path | str) -> None:
+    """Reject reviewed race/privacy weakening independently of source digests."""
+    root_path = Path(root).resolve()
+    for relative, symbol_requirements in SEMANTIC_REQUIREMENTS.items():
+        path = root_path / relative
+        if not path.is_file():
+            continue
+        functions = _function_sources(path)
+        if relative.endswith("account_deletion_repo.py") and path.read_text(
+            encoding="utf-8"
+        ).count("_valid_lifecycle_timestamp(now_iso)") < 9:
+            raise ValueError(
+                "reviewed private-store semantic missing: lifecycle timestamp validation"
+            )
+        for symbol, required in symbol_requirements.items():
+            body = functions.get(symbol)
+            if body is None or any(token not in body for token in required):
+                raise ValueError(
+                    f"reviewed private-store semantic missing: {relative}:{symbol}"
+                )
+        if relative.endswith("notification_service.py") and not _assigned_call(
+            functions["run_delivery_intent"],
+            target="inflight_claim",
+            function="begin_delivery_effect",
+        ):
+            raise ValueError(
+                "reviewed private-store semantic missing: durable delivery begin"
+            )
+        if relative.endswith("websocket_service.py") and not _assigned_call(
+            functions["fanout_notification_event"],
+            target="batch",
+            function="load_authoritative_delivery_events",
+        ):
+            raise ValueError(
+                "reviewed private-store semantic missing: authoritative websocket load"
+            )
 
 
 def discover_mutation_sinks(root: Path | str) -> list[MutationSink]:
@@ -287,6 +498,7 @@ def _sink_kind(method: str) -> str:
 
 def build_inventory(root: Path | str) -> dict[str, Any]:
     root_path = Path(root).resolve()
+    validate_private_store_semantics(root_path)
     sinks = discover_mutation_sinks(root_path)
     rows: list[dict[str, Any]] = []
     exclusions: dict[str, set[str]] = {name: set() for name in EXCLUSION_RULES}
@@ -330,6 +542,30 @@ def build_inventory(root: Path | str) -> dict[str, Any]:
                 "purge_selector": purge_selector,
                 "no_resurrection_selector": no_resurrection_selector,
                 "lower_fake_target": f"{sink.file}:{sink.symbol}:{sink.method}",
+                "mutation_contract": {
+                    "owner_scope": "authoritative persisted owner or immutable sealed global classification",
+                    "cas_facts": [
+                        "account_fence_generation",
+                        "lease_owner",
+                        "command_or_intent_version",
+                        "scope_or_result_digest",
+                    ],
+                    "lifecycle_facts": [
+                        "status",
+                        "lease_expires_at",
+                        "updated_at",
+                        "effect_state",
+                    ],
+                    "payload_policy": "digests/counts/status only; no event payload, identifier, endpoint, token, provider response, or exception",
+                    "finding_ids": [
+                        finding["finding_id"]
+                        for finding in FINDING_REGISTRY
+                        if any(
+                            symbol.rsplit(".", 1)[-1] in sink.symbol
+                            for symbol in finding["source_symbols"]
+                        )
+                    ],
+                },
                 "requirement_ids": ["V9PRIV-01", "V9PRIV-02", "V9PRIV-03"],
                 "decision_ids": ["D-10", "T-473-35-01", "T-473-35-03"],
             }
@@ -357,6 +593,7 @@ def build_inventory(root: Path | str) -> dict[str, Any]:
         "branch_ids": list(BRANCH_IDS),
         "branch_registry": registry,
         "source_files": source_files,
+        "finding_registry": [dict(finding) for finding in FINDING_REGISTRY],
         "rows": rows,
         "exclusions": [
             {"exclusion_class": name, "source_files": sorted(files), "review": "non-student principal/content source semantics"}

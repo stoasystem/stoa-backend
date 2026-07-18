@@ -212,8 +212,12 @@ def test_all_five_findings_have_exact_lower_source_seals_and_selectors():
         ),
         (
             "src/stoa/services/notification_service.py",
-            "inflight_claim = notification_repo.begin_delivery_effect(",
-            "inflight_claim = claimed\n    # unsafe omitted durable begin\n    if False: notification_repo.begin_delivery_effect(",
+            "inflight_claim = notification_repo.begin_delivery_effect(\n"
+            "            scope=scope,\n"
+            "            claim=claimed,\n"
+            "            now_iso=now_iso(),\n"
+            "        )",
+            "inflight_claim = claimed",
         ),
         (
             "src/stoa/services/websocket_service.py",
