@@ -1,21 +1,21 @@
 {
   "artifacts": [
     {
-      "bytes": 3385254,
+      "bytes": 3386828,
       "path": "docs/security/phase-473-evidence-results.json",
-      "sha256": "e9433408c276363adb036e38d3424d83cad19f3da150e899c68296c372d5dcf5"
+      "sha256": "92a57bf50ac70b61d6845a0d8bf4d2b2386f12528db6edec91a7820a6cba2480"
     },
     {
       "bytes": 41629,
       "path": "docs/security/phase-473-evidence.md",
-      "sha256": "161ebc81b59f9321c6cdde6e19c2a9424ccad9cc411b8ba92620a71f76d4f24b"
+      "sha256": "92a93375f0e43570a4fa87ccc211552e6cdfa5cb0a97d034c96572ba91ed3aa4"
     },
     {
       "bytes": 1497,
       "path": ".planning/phases/473-student-content-privacy-and-practice-integrity/473-VALIDATION.md",
-      "sha256": "80350ea12a27c10cab72bc52626b71aef41819b0f06fcf5d0ed9b88d5f124f2a"
+      "sha256": "3ed930417db14cbad81e8a0901c56e812fd67e5bc3f4a17270ce7bddea01cb69"
     }
   ],
-  "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+  "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
   "schema_version": "phase-473-evidence-manifest.v2"
 }

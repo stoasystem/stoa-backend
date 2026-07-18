@@ -1,5 +1,5 @@
 {
-  "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+  "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
   "candidate_snapshot": [
     {
       "bytes": 14960,
@@ -247,9 +247,9 @@
       "sha256": "441746d10092af227ba0ae3c195f34931599f26dc6e2a110da95bb852aa631c1"
     },
     {
-      "bytes": 943,
+      "bytes": 1497,
       "path": ".planning/phases/473-student-content-privacy-and-practice-integrity/473-VALIDATION.md",
-      "sha256": "6ec0ae0db042c3d3219b6808ab48e210ce66cfccde36c25b1d795b93880b0c61"
+      "sha256": "80350ea12a27c10cab72bc52626b71aef41819b0f06fcf5d0ed9b88d5f124f2a"
     },
     {
       "bytes": 19253,
@@ -262,19 +262,19 @@
       "sha256": "8f05ce4f7be6df15b915ffcda8c21fb982d0125bd43b4ea24bd44c8e5aaa2a12"
     },
     {
-      "bytes": 713,
+      "bytes": 715,
       "path": "docs/security/phase-473-evidence-manifest.json",
-      "sha256": "fd2cea2553bf0cfc0c4f66313a713be067244fd5ecc65d09e53178085c8bac08"
+      "sha256": "97f45ae328d8ea5e255d56f7b12ac632e44d5446fe7ebaf85256bf3aacf05634"
     },
     {
-      "bytes": 3110943,
+      "bytes": 3385254,
       "path": "docs/security/phase-473-evidence-results.json",
-      "sha256": "11f133a7fd0e0703c2caa409d974803405219dc62e3375f56410617deda91419"
+      "sha256": "e9433408c276363adb036e38d3424d83cad19f3da150e899c68296c372d5dcf5"
     },
     {
-      "bytes": 6880,
+      "bytes": 41629,
       "path": "docs/security/phase-473-evidence.md",
-      "sha256": "64d7b65529a82af22680b9156a9802851f0bdcef73219df9c1b574972456928b"
+      "sha256": "161ebc81b59f9321c6cdde6e19c2a9424ccad9cc411b8ba92620a71f76d4f24b"
     },
     {
       "bytes": 743842,
@@ -312,9 +312,9 @@
       "sha256": "b925cadf506ecb643b641350f5c420024fd9b971ce035292396c3a95f4a52ed3"
     },
     {
-      "bytes": 62078,
+      "bytes": 62427,
       "path": "scripts/verify_phase473_evidence.py",
-      "sha256": "0bd0c09a81e1cccb430dd0747c3f0cc007de9a68dd7aa379ad243798a35763ab"
+      "sha256": "025cdd9f4acf718236672b482319b31103e9e6ce7d61f3557a2125b9a41cd109"
     },
     {
       "bytes": 58869,
@@ -702,9 +702,9 @@
       "sha256": "0ce9c19e4a83128400d7d96854b9b6b749e362da4a4affa869959887cfb491ce"
     },
     {
-      "bytes": 24524,
+      "bytes": 25835,
       "path": "tests/test_phase473_evidence_verifier.py",
-      "sha256": "dc251febfce10340571f3f372a5fc1cf4e8d5755f7fea6af0c22d492ea684c81"
+      "sha256": "f23fde6cb01a67704d55ca371f34f7bf205b6408747393cc2f41337e24529632"
     },
     {
       "bytes": 22612,
@@ -4311,9 +4311,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELETION-CLAIM-FENCING.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELETION-CLAIM-FENCING.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELETION-CLAIM-FENCING.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELETION-CLAIM-FENCING.json",
         "tests/test_phase473_account_deletion_claim_fencing.py"
       ],
       "gate_id": "P473-DELETION-CLAIM-FENCING"
@@ -4329,9 +4329,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
         "tests/test_phase473_delivery_intent_recovery.py"
       ],
       "gate_id": "P473-DELIVERY-INTENT-RECOVERY"
@@ -4347,9 +4347,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
         "tests/test_phase473_private_delivery_fencing.py"
       ],
       "gate_id": "P473-PRIVATE-DELIVERY-FENCING"
@@ -4365,9 +4365,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-FINAL-GAP-REGRESSION.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-FINAL-GAP-REGRESSION.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-FINAL-GAP-REGRESSION.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-FINAL-GAP-REGRESSION.json",
         "tests/test_phase473_account_deletion_claim_fencing.py",
         "tests/test_phase473_account_deletion.py",
         "tests/test_phase473_account_deletion_seal.py",
@@ -4390,9 +4390,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-NEW-CLOSED.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-NEW-CLOSED.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-NEW-CLOSED.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-NEW-CLOSED.json",
         "tests/test_adaptive_learning.py",
         "tests/test_admin_report_ops.py",
         "tests/test_ai_teacher_tools.py",
@@ -4444,9 +4444,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-INHERITED-9.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-INHERITED-9.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-INHERITED-9.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-INHERITED-9.json",
         "tests/test_files.py",
         "tests/test_attachment_security.py",
         "tests/test_questions.py",
@@ -4470,9 +4470,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P472-REGRESSION-21.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P472-REGRESSION-21.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P472-REGRESSION-21.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P472-REGRESSION-21.json",
         "tests/test_auth_security.py",
         "tests/test_identity_authorization.py",
         "tests/test_client_error_actions.py",
@@ -4508,9 +4508,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/FULL-PYTEST.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/FULL-PYTEST.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/FULL-PYTEST.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/FULL-PYTEST.json"
       ],
       "gate_id": "FULL-PYTEST"
     },
@@ -4631,7 +4631,7 @@
         "diff",
         "--check",
         "8badde886ca2c9a6fa8baada0e387977ec7f99f6",
-        "9b44494915e284e7a3c88aed467512acac4be47c"
+        "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       ],
       "gate_id": "DIFF-CHECK-PHASE"
     },
@@ -4641,7 +4641,7 @@
         "show",
         "--check",
         "--format=",
-        "9b44494915e284e7a3c88aed467512acac4be47c"
+        "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       ],
       "gate_id": "SHOW-CHECK-CANDIDATE"
     },
@@ -4650,7 +4650,7 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_boundary_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-a.json"
       ],
       "gate_id": "READ-BOUNDARY-GENERATE-A"
     },
@@ -4659,7 +4659,7 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_boundary_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-b.json"
       ],
       "gate_id": "READ-BOUNDARY-GENERATE-B"
     },
@@ -4676,9 +4676,9 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_private_store_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-a.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-a.json",
         "--evidence-output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-a.json"
       ],
       "gate_id": "PRIVATE-STORE-GENERATE-A"
     },
@@ -4687,9 +4687,9 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_private_store_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-b.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-b.json",
         "--evidence-output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-b.json"
       ],
       "gate_id": "PRIVATE-STORE-GENERATE-B"
     },
@@ -4706,7 +4706,7 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_route_authorization_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-a.json"
       ],
       "gate_id": "ROUTE-GENERATE-A"
     },
@@ -4715,7 +4715,7 @@
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_route_authorization_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-b.json"
       ],
       "gate_id": "ROUTE-GENERATE-B"
     },
@@ -4733,7 +4733,7 @@
         "/Users/zhdeng/stoa-backend/scripts/verify_phase473_evidence.py",
         "privacy-denial",
         "--capture-root",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
         "--denylist",
         "/Users/zhdeng/stoa-backend/tests/fixtures/phase473_evidence_denylist.txt"
       ],
@@ -4743,12 +4743,12 @@
   "inventory_artifacts": {
     "boundary_a": {
       "bytes": 109948,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-a.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-a.json",
       "sha256": "8f05ce4f7be6df15b915ffcda8c21fb982d0125bd43b4ea24bd44c8e5aaa2a12"
     },
     "boundary_b": {
       "bytes": 109948,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-b.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-b.json",
       "sha256": "8f05ce4f7be6df15b915ffcda8c21fb982d0125bd43b4ea24bd44c8e5aaa2a12"
     },
     "boundary_checked": {
@@ -4758,12 +4758,12 @@
     },
     "policy_a": {
       "bytes": 2370,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-a.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-a.json",
       "sha256": "2fb9c0c7e3b3fdf8ac965e7d18146fe7fc8e2b2ce9dbb72875f7a1f0135ec56f"
     },
     "policy_b": {
       "bytes": 2370,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-b.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-b.json",
       "sha256": "2fb9c0c7e3b3fdf8ac965e7d18146fe7fc8e2b2ce9dbb72875f7a1f0135ec56f"
     },
     "policy_checked": {
@@ -4773,12 +4773,12 @@
     },
     "private_a": {
       "bytes": 743842,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-a.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-a.json",
       "sha256": "30d6788378d16c7f0a3a1f50bde0398be76b884214bc44f6366cb69a84c84e06"
     },
     "private_b": {
       "bytes": 743842,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-b.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-b.json",
       "sha256": "30d6788378d16c7f0a3a1f50bde0398be76b884214bc44f6366cb69a84c84e06"
     },
     "private_checked": {
@@ -4788,12 +4788,12 @@
     },
     "route_a": {
       "bytes": 108099,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-a.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-a.json",
       "sha256": "80dc564f0f7efacd41dbb0e54418fba7835b17b4030dec165df6d509f3d00c94"
     },
     "route_b": {
       "bytes": 108099,
-      "path": "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-b.json",
+      "path": "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-b.json",
       "sha256": "80dc564f0f7efacd41dbb0e54418fba7835b17b4030dec165df6d509f3d00c94"
     },
     "route_checked": {
@@ -4802,7 +4802,7 @@
       "sha256": "80dc564f0f7efacd41dbb0e54418fba7835b17b4030dec165df6d509f3d00c94"
     }
   },
-  "observed_full_suite_count": 2008,
+  "observed_full_suite_count": 2009,
   "phase_base_sha": "8badde886ca2c9a6fa8baada0e387977ec7f99f6",
   "privacy": {
     "denylist_sha256": "9622f5f0dab6f1d74cb04a0117619f6ce2d47d7cf46940eaedbb736537c83d7b",
@@ -4813,7 +4813,7 @@
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -4825,36 +4825,36 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELETION-CLAIM-FENCING.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELETION-CLAIM-FENCING.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELETION-CLAIM-FENCING.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELETION-CLAIM-FENCING.json",
         "tests/test_phase473_account_deletion_claim_fencing.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 2517,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELETION-CLAIM-FENCING.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELETION-CLAIM-FENCING.xml",
           "logical_path": "junit/P473-DELETION-CLAIM-FENCING.xml",
-          "sha256": "7c2fe3e1493b4b8d74805dc92d6a93b6eb217aba256a5146a547679c19b3c5e5"
+          "sha256": "5feaa936cedfb6c103955b2a84473674ce7c1cef0fbce6c2352024d01052486d"
         },
         "log": {
           "bytes": 136,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-DELETION-CLAIM-FENCING.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-DELETION-CLAIM-FENCING.log",
           "logical_path": "raw/P473-DELETION-CLAIM-FENCING.log",
-          "sha256": "824644555b8f85b98311e3b9f08228414060c6079b7222e21cfa4c96eb89962e"
+          "sha256": "171d64fe6db715e971f314519b8aee043762dac086c2f64bdb7013dab777cd31"
         },
         "node_manifest": {
           "bytes": 8962,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELETION-CLAIM-FENCING.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELETION-CLAIM-FENCING.json",
           "logical_path": "nodes/P473-DELETION-CLAIM-FENCING.json",
           "sha256": "9634e949ed2163473787f9b32316ab9a61e494ecfe23559b309ba441a0700c37"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -4864,7 +4864,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:33:55.671760Z",
+      "ended_at": "2026-07-18T16:39:23.728023Z",
       "exit_code": 0,
       "gate_id": "P473-DELETION-CLAIM-FENCING",
       "nodes": [
@@ -5210,12 +5210,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:33:55.160340Z"
+      "started_at": "2026-07-18T16:39:23.261651Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -5227,36 +5227,36 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
         "tests/test_phase473_delivery_intent_recovery.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 1854,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-DELIVERY-INTENT-RECOVERY.xml",
           "logical_path": "junit/P473-DELIVERY-INTENT-RECOVERY.xml",
-          "sha256": "45c584cfbb2e59c4d871e4f50816cd4e6d33e9afdcaf22e3296e54c2e5fb34d9"
+          "sha256": "5ecb7a255fb5f14f62e0ef6288be5e2d81de4caf0509fa0503e70ceaa474d4ca"
         },
         "log": {
           "bytes": 138,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-DELIVERY-INTENT-RECOVERY.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-DELIVERY-INTENT-RECOVERY.log",
           "logical_path": "raw/P473-DELIVERY-INTENT-RECOVERY.log",
-          "sha256": "cfcd13cb7d97e97e6490f1903d59a2229a90a75be30fd10a486669e8078784ed"
+          "sha256": "ee1338bd47a44247f898a80c07b4be81e0440ea3a049aecd632d134039be39c3"
         },
         "node_manifest": {
           "bytes": 6443,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-DELIVERY-INTENT-RECOVERY.json",
           "logical_path": "nodes/P473-DELIVERY-INTENT-RECOVERY.json",
           "sha256": "f809531048040e8fc959d19908befa852840833413441f5264bfee1fedab236f"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -5266,7 +5266,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:33:56.230481Z",
+      "ended_at": "2026-07-18T16:39:24.235087Z",
       "exit_code": 0,
       "gate_id": "P473-DELIVERY-INTENT-RECOVERY",
       "nodes": [
@@ -5516,12 +5516,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:33:55.726189Z"
+      "started_at": "2026-07-18T16:39:23.778432Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -5533,36 +5533,36 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
         "tests/test_phase473_private_delivery_fencing.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 2186,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-PRIVATE-DELIVERY-FENCING.xml",
           "logical_path": "junit/P473-PRIVATE-DELIVERY-FENCING.xml",
-          "sha256": "5a8d7b804cbaacb13582b0f398679ae68094cb1a4c9707cb80c80a7d535e4ff1"
+          "sha256": "2b7036cf189b30392ffbe00a29508c5beaab3ec6df945a051c1ba56416516d96"
         },
         "log": {
           "bytes": 138,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-PRIVATE-DELIVERY-FENCING.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-PRIVATE-DELIVERY-FENCING.log",
           "logical_path": "raw/P473-PRIVATE-DELIVERY-FENCING.log",
-          "sha256": "09c97909cb7d118b47e77b1cec78424b935c5432c5035434ea58a310487b9ec4"
+          "sha256": "46a940a03b2e7cbe0b14c1ab6a1cb30d2342563d5e8ed3169289d69475446fca"
         },
         "node_manifest": {
           "bytes": 7703,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-PRIVATE-DELIVERY-FENCING.json",
           "logical_path": "nodes/P473-PRIVATE-DELIVERY-FENCING.json",
           "sha256": "6452d01abdc8bc730d033c6c23c97200caf38c18bb0435044fc2076f565698cb"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -5572,7 +5572,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:33:56.788507Z",
+      "ended_at": "2026-07-18T16:39:24.766713Z",
       "exit_code": 0,
       "gate_id": "P473-PRIVATE-DELIVERY-FENCING",
       "nodes": [
@@ -5870,12 +5870,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:33:56.283601Z"
+      "started_at": "2026-07-18T16:39:24.288910Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -5887,9 +5887,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-FINAL-GAP-REGRESSION.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-FINAL-GAP-REGRESSION.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-FINAL-GAP-REGRESSION.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-FINAL-GAP-REGRESSION.json",
         "tests/test_phase473_account_deletion_claim_fencing.py",
         "tests/test_phase473_account_deletion.py",
         "tests/test_phase473_account_deletion_seal.py",
@@ -5902,28 +5902,28 @@
       "artifacts": {
         "junit": {
           "bytes": 16614,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-FINAL-GAP-REGRESSION.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-FINAL-GAP-REGRESSION.xml",
           "logical_path": "junit/P473-FINAL-GAP-REGRESSION.xml",
-          "sha256": "06f602b7f8f60033186d5a3c38fdcd088845d419d46186eba5ffad16da62fe85"
+          "sha256": "164259062121c9cee067b5e1908a3ec4469ea15ef8a4bedd9c77dfabf242e083"
         },
         "log": {
           "bytes": 215,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-FINAL-GAP-REGRESSION.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-FINAL-GAP-REGRESSION.log",
           "logical_path": "raw/P473-FINAL-GAP-REGRESSION.log",
-          "sha256": "306daae5ddf54eabf3369a7ef1e8a5273de757e55c748e42fb7f1dbbbaf826ff"
+          "sha256": "3525010dc41e400d09ca8a065cf39bf9354b8b2a3bfe742c642f7409e1590529"
         },
         "node_manifest": {
           "bytes": 67140,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-FINAL-GAP-REGRESSION.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-FINAL-GAP-REGRESSION.json",
           "logical_path": "nodes/P473-FINAL-GAP-REGRESSION.json",
           "sha256": "b89696f76aa7ca2f54be5c66b2692b0ed950af83390ae85ef44df800dd6d9abe"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -5933,7 +5933,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:33:58.049826Z",
+      "ended_at": "2026-07-18T16:39:25.918142Z",
       "exit_code": 0,
       "gate_id": "P473-FINAL-GAP-REGRESSION",
       "nodes": [
@@ -8559,12 +8559,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:33:56.841137Z"
+      "started_at": "2026-07-18T16:39:24.819412Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -8576,9 +8576,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-NEW-CLOSED.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-NEW-CLOSED.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-NEW-CLOSED.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-NEW-CLOSED.json",
         "tests/test_adaptive_learning.py",
         "tests/test_admin_report_ops.py",
         "tests/test_ai_teacher_tools.py",
@@ -8619,39 +8619,39 @@
       ],
       "artifacts": {
         "junit": {
-          "bytes": 148788,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-NEW-CLOSED.xml",
+          "bytes": 148942,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-NEW-CLOSED.xml",
           "logical_path": "junit/P473-NEW-CLOSED.xml",
-          "sha256": "d5a4316a6b4fd7e28ee629fe9102a20ce065a9f8c8ba1b349b08dc544421f19a"
+          "sha256": "3c528cec91bdbd32407a7c80c34f0f0ed27b43176a1bdd0f4a371771fa3c6b55"
         },
         "log": {
           "bytes": 1166,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-NEW-CLOSED.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-NEW-CLOSED.log",
           "logical_path": "raw/P473-NEW-CLOSED.log",
-          "sha256": "ee3d66a21b249d0b414e4086d91752e0397daa66afa9a23b01d37d6529851e1c"
+          "sha256": "84ea2629309ff0e5ab6dd3de6907672b8af0ca6de67764886a7362b5dddb511f"
         },
         "node_manifest": {
-          "bytes": 583671,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-NEW-CLOSED.json",
+          "bytes": 584289,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-NEW-CLOSED.json",
           "logical_path": "nodes/P473-NEW-CLOSED.json",
-          "sha256": "4f159f44e69add888379d4dae2b6b00e09dbf211c53956790ba584acddaa5f39"
+          "sha256": "341fa318c5587ee78e5a030c2ee2ece9b7741bb776b1b38b3558d53d5e435134"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 938,
+        "passed": 939,
         "skipped": 0,
-        "total": 938,
+        "total": 939,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:34:53.233786Z",
+      "ended_at": "2026-07-18T16:40:21.446004Z",
       "exit_code": 0,
       "gate_id": "P473-NEW-CLOSED",
       "nodes": [
@@ -18857,6 +18857,30 @@
         },
         {
           "node_id": "tests/test_phase473_document_boundary.py::test_xml_doctype_and_entity_events_are_rejected_without_content_leak[\\xff\\xfe<\\x00?\\x00x\\x00m\\x00l\\x00 \\x00v\\x00e\\x00r\\x00s\\x00i\\x00o\\x00n\\x00=\\x00\"\\x001\\x00.\\x000\\x00\"\\x00 \\x00e\\x00n\\x00c\\x00o\\x00d\\x00i\\x00n\\x00g\\x00=\\x00\"\\x00U\\x00T\\x00F\\x00-\\x001\\x006\\x00\"\\x00?\\x00>\\x00<\\x00!\\x00D\\x00O\\x00C\\x00T\\x00Y\\x00P\\x00E\\x00 \\x00x\\x00 \\x00S\\x00Y\\x00S\\x00T\\x00E\\x00M\\x00 \\x00\"\\x00f\\x00i\\x00l\\x00e\\x00:\\x00/\\x00/\\x00/\\x00p\\x00r\\x00i\\x00v\\x00a\\x00t\\x00e\\x00\"\\x00>\\x00<\\x00R\\x00e\\x00l\\x00a\\x00t\\x00i\\x00o\\x00n\\x00s\\x00h\\x00i\\x00p\\x00s\\x00/\\x00>\\x00]",
+          "outcome": "passed",
+          "phases": [
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "setup"
+            },
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "call"
+            },
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "teardown"
+            }
+          ]
+        },
+        {
+          "node_id": "tests/test_phase473_evidence_verifier.py::test_candidate_snapshot_reads_immutable_git_blobs_not_publication_child",
           "outcome": "passed",
           "phases": [
             {
@@ -31173,12 +31197,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:33:58.109482Z"
+      "started_at": "2026-07-18T16:39:25.974166Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -31190,9 +31214,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-INHERITED-9.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-INHERITED-9.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-INHERITED-9.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-INHERITED-9.json",
         "tests/test_files.py",
         "tests/test_attachment_security.py",
         "tests/test_questions.py",
@@ -31205,29 +31229,29 @@
       ],
       "artifacts": {
         "junit": {
-          "bytes": 79476,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P473-INHERITED-9.xml",
+          "bytes": 79530,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P473-INHERITED-9.xml",
           "logical_path": "junit/P473-INHERITED-9.xml",
-          "sha256": "97b2d3c858ea4294ca169bdae3188596610f1dd8aa200139afa7aa68b995d6b9"
+          "sha256": "644e6c72db8301eab0000fb29f646f3e760bb3bfca69889e446d7aa6be885a69"
         },
         "log": {
           "bytes": 606,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P473-INHERITED-9.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P473-INHERITED-9.log",
           "logical_path": "raw/P473-INHERITED-9.log",
-          "sha256": "f7e5f7451038b96c4a203690244585392ab12adf76cb220ce4b9d6f04ec753ce"
+          "sha256": "8c3264873b361978ba36a1f57f7b7e74e30a28d0c6aa7c8f6c57a8b23cfcd8ea"
         },
         "node_manifest": {
-          "bytes": 292077,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P473-INHERITED-9.json",
+          "bytes": 292149,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P473-INHERITED-9.json",
           "logical_path": "nodes/P473-INHERITED-9.json",
-          "sha256": "4c10232811f3d43b8ce726d4bb1e6db33c241489b120d9a01ad2bd26dfa47c5e"
+          "sha256": "c694379f1b284104cf38fc4c2bd26cfcfd616da9cf90011d06fecd29bf2f5f17"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -31237,7 +31261,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:34:58.565546Z",
+      "ended_at": "2026-07-18T16:40:27.072393Z",
       "exit_code": 0,
       "gate_id": "P473-INHERITED-9",
       "nodes": [
@@ -36162,7 +36186,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml=\\x8eA\\x0e\\xc20\\x0c\\x04\\xbfR\\xe5\\x8aH>\\xd0\\xf6\\xc2\\x1d8\\xf0\\x01+q\\x90\\xa5\\xd8\\x8e\\x9cP\\xe0\\xf74B\\xeaq\\xb5;\\xa3\\x9d\\x1f\\xdf\\x8am\\x9do\\x1b\\x9aQ\\xc2\\xe9\\x0e\\xd6\\xaf\\xc0\\xb8\\xb8\\xf0VK!i|1J\\xf7\\x1f.n\\xba\\xa8\\xf4=\\x0chqPk\\xa1\\x08\\x9dT\\xc2&\\xc9kE\\xd9WY\\x8d\\xa1\\xb7\\xb3\\xe6L\\x11\\x0f~\\xd8\\xaai\\xc4\\xd6H\\x9e\\\\xfc\\xd10\\x90\\x9c\\x86>\\xacs\\xf8\\xff\\xf9\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\xecsl)\\xf6Y\\xe7\\x8b\\x80\\xdf\\xe3\\x82\"P\\xcej5\\xbb\\xfa\\x8e\\x9b\\x95D\\xa5\\xc5T\\xdb\\xac\\x8f8,\\xde(^\\xfcI\\r\\x8fwE\\xa3\\xa2H\\xbd\\x024\\x171\\xdb6R\\xc5\\xf2\\xca[ \\xceV:\\xf2\\n\\x14Brx#\\xb7g,\\x02\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x1a\\xddlyE1\\xeaI\\xec\\xc1\\x7f\\xe3\\xb1k\\x15\\xcc\\x1a~\\xdf}\\x00PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa8\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01J\\x01\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb9\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.wordprocessingml.document]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml=\\x8eA\\x0e\\xc20\\x0c\\x04\\xbfR\\xe5\\x8aH>\\xd0\\xf6\\xc2\\x1d8\\xf0\\x01+q\\x90\\xa5\\xd8\\x8e\\x9cP\\xe0\\xf74B\\xeaq\\xb5;\\xa3\\x9d\\x1f\\xdf\\x8am\\x9do\\x1b\\x9aQ\\xc2\\xe9\\x0e\\xd6\\xaf\\xc0\\xb8\\xb8\\xf0VK!i|1J\\xf7\\x1f.n\\xba\\xa8\\xf4=\\x0chqPk\\xa1\\x08\\x9dT\\xc2&\\xc9kE\\xd9WY\\x8d\\xa1\\xb7\\xb3\\xe6L\\x11\\x0f~\\xd8\\xaai\\xc4\\xd6H\\x9e\\\\xfc\\xd10\\x90\\x9c\\x86>\\xacs\\xf8\\xff\\xf9\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\xecsl)\\xf6Y\\xe7\\x8b\\x80\\xdf\\xe3\\x82\"P\\xcej5\\xbb\\xfa\\x8e\\x9b\\x95D\\xa5\\xc5T\\xdb\\xac\\x8f8,\\xde(^\\xfcI\\r\\x8fwE\\xa3\\xa2H\\xbd\\x024\\x171\\xdb6R\\xc5\\xf2\\xca[ \\xceV:\\xf2\\n\\x14Brx#\\xb7g,\\x02\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x1a\\xddlyE1\\xeaI\\xec\\xc1\\x7f\\xe3\\xb1k\\x15\\xcc\\x1a~\\xdf}\\x00PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa8\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01J\\x01\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb9\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.wordprocessingml.document]",
           "outcome": "passed",
           "phases": [
             {
@@ -36282,7 +36306,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.pptx-application/vnd.openxmlformats-officedocument.presentationml.presentation-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xmlUNK\\x0e\\xc2 \\x10\\xbdJ\\xc3\\xd6\\x08\\x17\\xa0\\xdd\\xb8W\\x17^`\\x02CB\\xc2|\\x02ccoo\\xab\\x1b]\\xbe\\xff\\x8b\\x8fMq,\\xf1\\xb6b\\xef5\\xe3t\\x87nW \\x9c]P\\xb5\\xa0\\x1d\\x07\\xb2\\x81Ua\\xff\\xa2\\xe6\\xa6\\x8b\\xb0\\xed\\xcc\\x91\\x9b\\x1d\\xa8\\xb6\\x9a>jX9{Q\\xe4\\xddU\\xa4\\x13\\xd88K)5a\\x96\\xf4\\xa4=\\xe2\\x7f\\xcb\\xa8\\xfdAOP\\xf9t\\x0c\\x84%\\x86\\xef\\xa97PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\x9csl)\\xb6Ow\\x87\\x04\\xbf\\xc7\\xa2\\n\\x94\\xbb\\x1a\\xcd\\xae\\xbd\\xe3\\xee5\\xb7*)\\x93\\xcc\\xf6\\x18\\x87eu\\x86\\x97\\xf5d\\x86\\xc7\\x9b\\xd0\\x99\\xa4JW\\x00\\t\\t\\x8b\\x97\\xb1\\x11\\xd6W\\xd9c\\xe3\\xe2\\xb5G\\xde\\xa0\\xc5\\x98\\x03\\xdeZx\\x16\\xac\\n\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x88n\\xf6\\xbc\\xa1:C\\xa4@\\x8c\\xd2\\xcb/=v\\xb3\\x81\\xd9\\xc2\\xef\\xc1\\x0fPK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00ppt/presentation.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa3\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01F\\x01\\x00\\x00ppt/presentation.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xbc\\x00\\x00\\x00\\x81\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.presentationml.presentation]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.pptx-application/vnd.openxmlformats-officedocument.presentationml.presentation-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xmlUNK\\x0e\\xc2 \\x10\\xbdJ\\xc3\\xd6\\x08\\x17\\xa0\\xdd\\xb8W\\x17^`\\x02CB\\xc2|\\x02ccoo\\xab\\x1b]\\xbe\\xff\\x8b\\x8fMq,\\xf1\\xb6b\\xef5\\xe3t\\x87nW \\x9c]P\\xb5\\xa0\\x1d\\x07\\xb2\\x81Ua\\xff\\xa2\\xe6\\xa6\\x8b\\xb0\\xed\\xcc\\x91\\x9b\\x1d\\xa8\\xb6\\x9a>jX9{Q\\xe4\\xddU\\xa4\\x13\\xd88K)5a\\x96\\xf4\\xa4=\\xe2\\x7f\\xcb\\xa8\\xfdAOP\\xf9t\\x0c\\x84%\\x86\\xef\\xa97PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\x9csl)\\xb6Ow\\x87\\x04\\xbf\\xc7\\xa2\\n\\x94\\xbb\\x1a\\xcd\\xae\\xbd\\xe3\\xee5\\xb7*)\\x93\\xcc\\xf6\\x18\\x87eu\\x86\\x97\\xf5d\\x86\\xc7\\x9b\\xd0\\x99\\xa4JW\\x00\\t\\t\\x8b\\x97\\xb1\\x11\\xd6W\\xd9c\\xe3\\xe2\\xb5G\\xde\\xa0\\xc5\\x98\\x03\\xdeZx\\x16\\xac\\n\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x88n\\xf6\\xbc\\xa1:C\\xa4@\\x8c\\xd2\\xcb/=v\\xb3\\x81\\xd9\\xc2\\xef\\xc1\\x0fPK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00ppt/presentation.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa3\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01F\\x01\\x00\\x00ppt/presentation.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xbc\\x00\\x00\\x00\\x81\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.presentationml.presentation]",
           "outcome": "passed",
           "phases": [
             {
@@ -36330,7 +36354,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml%\\x8e1\\x0e\\xc20\\x0cE\\xafReE$\\x17H\\xbb\\xb0\\x03\\x03\\x170\\x89#\\xa2\\xc6v\\x94\\xb8\\xa5\\xdc\\x9e\\x16\\xa6\\xb7\\xfc\\xf7\\xf5\\xfc\\xe3S\\xb1O\\xfe\\xb6bk9\\xe2p\\x87\\xa6W \\x1c\\x8d\\xdb\\x8a{K\\x9b\\x9f\"\\xb3\\xdd\\xa8\\x98\\xe1\"\\xac\\xc8z(\\xa3\\x81ZK\\x0e\\xa0Y\\xd8\\xad\\x1c\\xadT\\xe4}\\x95\\xa4\\x11h?KJ9`\\x94\\xb0\\xd0\\xae\\xd8^\\x1bB\\xec/D\\xa5b\\x7f\\xb4\\x04\\x99O\\xc7\\xb1\\x9b\\xbc\\xfbw|\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8eA\\x0e\\xc2 \\x10E\\xaf\\xd2p\\x80Nu\\xe1\\xc2@Wn\\xba5^\\x00\\xe9PH\\xa1C\\x861\\xd6\\xdb\\xcb\\xb2\\xba|\\xc9\\xcf{_\\xdf1Y\\x89\\xb4\\xd5\\x10K\\x1d\\xf5\\x11\\xbbi6\\x8a\\xa7\\xf9\\xa4\\xba\\xc7\\xa7\\xa0QA\\xa4\\\\x01\\xaa\\x0b\\x98m\\xed\\xa9\\xe0\\xb6\\xe7\\xe4\\x89\\xb3\\x95\\x86\\xbc\\x00y\\x1f\\x1d\\xde\\xc8\\xbd2n\\x02\\xe7a\\xb8\\x00\\x1f\\x0b\\x7f\\x8bf\\xb6\\xbc\\xa0\\x18\\xb5'x\\x13\\xafO\\xa2\\xb5oR\\x05\\xa3\\x86\\xdfo_PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/workbook.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xaa\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00Z\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01L\\x01\\x00\\x00xl/workbook.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb7\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml%\\x8e1\\x0e\\xc20\\x0cE\\xafReE$\\x17H\\xbb\\xb0\\x03\\x03\\x170\\x89#\\xa2\\xc6v\\x94\\xb8\\xa5\\xdc\\x9e\\x16\\xa6\\xb7\\xfc\\xf7\\xf5\\xfc\\xe3S\\xb1O\\xfe\\xb6bk9\\xe2p\\x87\\xa6W \\x1c\\x8d\\xdb\\x8a{K\\x9b\\x9f\"\\xb3\\xdd\\xa8\\x98\\xe1\"\\xac\\xc8z(\\xa3\\x81ZK\\x0e\\xa0Y\\xd8\\xad\\x1c\\xadT\\xe4}\\x95\\xa4\\x11h?KJ9`\\x94\\xb0\\xd0\\xae\\xd8^\\x1bB\\xec/D\\xa5b\\x7f\\xb4\\x04\\x99O\\xc7\\xb1\\x9b\\xbc\\xfbw|\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8eA\\x0e\\xc2 \\x10E\\xaf\\xd2p\\x80Nu\\xe1\\xc2@Wn\\xba5^\\x00\\xe9PH\\xa1C\\x861\\xd6\\xdb\\xcb\\xb2\\xba|\\xc9\\xcf{_\\xdf1Y\\x89\\xb4\\xd5\\x10K\\x1d\\xf5\\x11\\xbbi6\\x8a\\xa7\\xf9\\xa4\\xba\\xc7\\xa7\\xa0QA\\xa4\\\\x01\\xaa\\x0b\\x98m\\xed\\xa9\\xe0\\xb6\\xe7\\xe4\\x89\\xb3\\x95\\x86\\xbc\\x00y\\x1f\\x1d\\xde\\xc8\\xbd2n\\x02\\xe7a\\xb8\\x00\\x1f\\x0b\\x7f\\x8bf\\xb6\\xbc\\xa0\\x18\\xb5'x\\x13\\xafO\\xa2\\xb5oR\\x05\\xa3\\x86\\xdfo_PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/workbook.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xaa\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x0b\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01L\\x01\\x00\\x00xl/workbook.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb7\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]",
           "outcome": "passed",
           "phases": [
             {
@@ -42167,12 +42191,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:34:53.297792Z"
+      "started_at": "2026-07-18T16:40:21.512382Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -42184,9 +42208,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P472-REGRESSION-21.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P472-REGRESSION-21.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P472-REGRESSION-21.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P472-REGRESSION-21.json",
         "tests/test_auth_security.py",
         "tests/test_identity_authorization.py",
         "tests/test_client_error_actions.py",
@@ -42212,28 +42236,28 @@
       "artifacts": {
         "junit": {
           "bytes": 103479,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/P472-REGRESSION-21.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/P472-REGRESSION-21.xml",
           "logical_path": "junit/P472-REGRESSION-21.xml",
-          "sha256": "7a64ccaa47eed881dde4e01519dd56fbb9082aa01c3cfe923fc31fa989304687"
+          "sha256": "12f2899a7d0120a5efab6b047c4d20be3cfd8dbc10a82a68d21fe5071ff99d1e"
         },
         "log": {
           "bytes": 768,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/P472-REGRESSION-21.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/P472-REGRESSION-21.log",
           "logical_path": "raw/P472-REGRESSION-21.log",
-          "sha256": "f89422b11445291eaaf260531667fed357846fa91c86827781f75d570411916c"
+          "sha256": "4085195c733b164c04d856b7fc8741bf1f20de56b912cc3d650b494e76898ca3"
         },
         "node_manifest": {
           "bytes": 398492,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/P472-REGRESSION-21.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/P472-REGRESSION-21.json",
           "logical_path": "nodes/P472-REGRESSION-21.json",
           "sha256": "fd1e96a3a445f979e03bab5223889e1091b02a0f588a6f8eca065d223016748e"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -42243,7 +42267,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:35:07.959423Z",
+      "ended_at": "2026-07-18T16:40:36.571583Z",
       "exit_code": 0,
       "gate_id": "P472-REGRESSION-21",
       "nodes": [
@@ -57517,12 +57541,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:34:58.621425Z"
+      "started_at": "2026-07-18T16:40:27.135776Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -57534,45 +57558,45 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/FULL-PYTEST.xml",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/FULL-PYTEST.xml",
         "--phase473-node-manifest",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/FULL-PYTEST.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/FULL-PYTEST.json"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 325249,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/FULL-PYTEST.xml",
+          "bytes": 325457,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/FULL-PYTEST.xml",
           "logical_path": "junit/FULL-PYTEST.xml",
-          "sha256": "1e981ba5648095cdcbc4975ce46e0756c6c2f416ebd2cce891d9f755c6533424"
+          "sha256": "56f0a973bb5b522cb2b83f88f606d446d577c17752c29bddd3c79701d3bd5954"
         },
         "log": {
           "bytes": 2293,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/FULL-PYTEST.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/FULL-PYTEST.log",
           "logical_path": "raw/FULL-PYTEST.log",
-          "sha256": "00ac092d4991039a3d77e2e1e1880b2e3c8125570dd6b3258728828383247461"
+          "sha256": "2345912e8c1e22aab2b0ebb22ca5eb3cca4054d861e13ad792e6e997f7472739"
         },
         "node_manifest": {
-          "bytes": 1258102,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/FULL-PYTEST.json",
+          "bytes": 1258792,
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/FULL-PYTEST.json",
           "logical_path": "nodes/FULL-PYTEST.json",
-          "sha256": "af0356f5cc23147241a28f786a3997e07b6aa508a246503232f0cae38465ffee"
+          "sha256": "6653a4d963e027dd8906933af4f44e5011b9a51d0e2b91d7f829d29a98a8aa1b"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 2008,
+        "passed": 2009,
         "skipped": 0,
-        "total": 2008,
+        "total": 2009,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:18.721358Z",
+      "ended_at": "2026-07-18T16:41:48.557789Z",
       "exit_code": 0,
       "gate_id": "FULL-PYTEST",
       "nodes": [
@@ -70465,7 +70489,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml=\\x8eA\\x0e\\xc20\\x0c\\x04\\xbfR\\xe5\\x8aH>\\xd0\\xf6\\xc2\\x1d8\\xf0\\x01+q\\x90\\xa5\\xd8\\x8e\\x9cP\\xe0\\xf74B\\xeaq\\xb5;\\xa3\\x9d\\x1f\\xdf\\x8am\\x9do\\x1b\\x9aQ\\xc2\\xe9\\x0e\\xd6\\xaf\\xc0\\xb8\\xb8\\xf0VK!i|1J\\xf7\\x1f.n\\xba\\xa8\\xf4=\\x0chqPk\\xa1\\x08\\x9dT\\xc2&\\xc9kE\\xd9WY\\x8d\\xa1\\xb7\\xb3\\xe6L\\x11\\x0f~\\xd8\\xaai\\xc4\\xd6H\\x9e\\\\xfc\\xd10\\x90\\x9c\\x86>\\xacs\\xf8\\xff\\xf9\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\xecsl)\\xf6Y\\xe7\\x8b\\x80\\xdf\\xe3\\x82\"P\\xcej5\\xbb\\xfa\\x8e\\x9b\\x95D\\xa5\\xc5T\\xdb\\xac\\x8f8,\\xde(^\\xfcI\\r\\x8fwE\\xa3\\xa2H\\xbd\\x024\\x171\\xdb6R\\xc5\\xf2\\xca[ \\xceV:\\xf2\\n\\x14Brx#\\xb7g,\\x02\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x1a\\xddlyE1\\xeaI\\xec\\xc1\\x7f\\xe3\\xb1k\\x15\\xcc\\x1a~\\xdf}\\x00PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa8\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01J\\x01\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb9\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.wordprocessingml.document]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.docx-application/vnd.openxmlformats-officedocument.wordprocessingml.document-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml=\\x8eA\\x0e\\xc20\\x0c\\x04\\xbfR\\xe5\\x8aH>\\xd0\\xf6\\xc2\\x1d8\\xf0\\x01+q\\x90\\xa5\\xd8\\x8e\\x9cP\\xe0\\xf74B\\xeaq\\xb5;\\xa3\\x9d\\x1f\\xdf\\x8am\\x9do\\x1b\\x9aQ\\xc2\\xe9\\x0e\\xd6\\xaf\\xc0\\xb8\\xb8\\xf0VK!i|1J\\xf7\\x1f.n\\xba\\xa8\\xf4=\\x0chqPk\\xa1\\x08\\x9dT\\xc2&\\xc9kE\\xd9WY\\x8d\\xa1\\xb7\\xb3\\xe6L\\x11\\x0f~\\xd8\\xaai\\xc4\\xd6H\\x9e\\\\xfc\\xd10\\x90\\x9c\\x86>\\xacs\\xf8\\xff\\xf9\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\xecsl)\\xf6Y\\xe7\\x8b\\x80\\xdf\\xe3\\x82\"P\\xcej5\\xbb\\xfa\\x8e\\x9b\\x95D\\xa5\\xc5T\\xdb\\xac\\x8f8,\\xde(^\\xfcI\\r\\x8fwE\\xa3\\xa2H\\xbd\\x024\\x171\\xdb6R\\xc5\\xf2\\xca[ \\xceV:\\xf2\\n\\x14Brx#\\xb7g,\\x02\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x1a\\xddlyE1\\xeaI\\xec\\xc1\\x7f\\xe3\\xb1k\\x15\\xcc\\x1a~\\xdf}\\x00PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00word/document.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x93\\xf84\\x8cw\\x00\\x00\\x00\\x97\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xd8\\x8c+\\x9fy\\x00\\x00\\x00\\xad\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa8\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x11\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01J\\x01\\x00\\x00word/document.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb9\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.wordprocessingml.document]",
           "outcome": "passed",
           "phases": [
             {
@@ -70585,7 +70609,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.pptx-application/vnd.openxmlformats-officedocument.presentationml.presentation-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xmlUNK\\x0e\\xc2 \\x10\\xbdJ\\xc3\\xd6\\x08\\x17\\xa0\\xdd\\xb8W\\x17^`\\x02CB\\xc2|\\x02ccoo\\xab\\x1b]\\xbe\\xff\\x8b\\x8fMq,\\xf1\\xb6b\\xef5\\xe3t\\x87nW \\x9c]P\\xb5\\xa0\\x1d\\x07\\xb2\\x81Ua\\xff\\xa2\\xe6\\xa6\\x8b\\xb0\\xed\\xcc\\x91\\x9b\\x1d\\xa8\\xb6\\x9a>jX9{Q\\xe4\\xddU\\xa4\\x13\\xd88K)5a\\x96\\xf4\\xa4=\\xe2\\x7f\\xcb\\xa8\\xfdAOP\\xf9t\\x0c\\x84%\\x86\\xef\\xa97PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\x9csl)\\xb6Ow\\x87\\x04\\xbf\\xc7\\xa2\\n\\x94\\xbb\\x1a\\xcd\\xae\\xbd\\xe3\\xee5\\xb7*)\\x93\\xcc\\xf6\\x18\\x87eu\\x86\\x97\\xf5d\\x86\\xc7\\x9b\\xd0\\x99\\xa4JW\\x00\\t\\t\\x8b\\x97\\xb1\\x11\\xd6W\\xd9c\\xe3\\xe2\\xb5G\\xde\\xa0\\xc5\\x98\\x03\\xdeZx\\x16\\xac\\n\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x88n\\xf6\\xbc\\xa1:C\\xa4@\\x8c\\xd2\\xcb/=v\\xb3\\x81\\xd9\\xc2\\xef\\xc1\\x0fPK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00ppt/presentation.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa3\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01F\\x01\\x00\\x00ppt/presentation.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xbc\\x00\\x00\\x00\\x81\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.presentationml.presentation]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.pptx-application/vnd.openxmlformats-officedocument.presentationml.presentation-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xmlUNK\\x0e\\xc2 \\x10\\xbdJ\\xc3\\xd6\\x08\\x17\\xa0\\xdd\\xb8W\\x17^`\\x02CB\\xc2|\\x02ccoo\\xab\\x1b]\\xbe\\xff\\x8b\\x8fMq,\\xf1\\xb6b\\xef5\\xe3t\\x87nW \\x9c]P\\xb5\\xa0\\x1d\\x07\\xb2\\x81Ua\\xff\\xa2\\xe6\\xa6\\x8b\\xb0\\xed\\xcc\\x91\\x9b\\x1d\\xa8\\xb6\\x9a>jX9{Q\\xe4\\xddU\\xa4\\x13\\xd88K)5a\\x96\\xf4\\xa4=\\xe2\\x7f\\xcb\\xa8\\xfdAOP\\xf9t\\x0c\\x84%\\x86\\xef\\xa97PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8e1\\x0e\\xc20\\x10\\x04\\xbf\\x12\\xf9\\x01\\xb9@A\\x81\\xecT4i\\x11\\x1f\\xb0\\x9csl)\\xb6Ow\\x87\\x04\\xbf\\xc7\\xa2\\n\\x94\\xbb\\x1a\\xcd\\xae\\xbd\\xe3\\xee5\\xb7*)\\x93\\xcc\\xf6\\x18\\x87eu\\x86\\x97\\xf5d\\x86\\xc7\\x9b\\xd0\\x99\\xa4JW\\x00\\t\\t\\x8b\\x97\\xb1\\x11\\xd6W\\xd9c\\xe3\\xe2\\xb5G\\xde\\xa0\\xc5\\x98\\x03\\xdeZx\\x16\\xac\\n\\xe7i\\xba\\x00\\x1f\\x17\\xfe\\x88n\\xf6\\xbc\\xa1:C\\xa4@\\x8c\\xd2\\xcb/=v\\xb3\\x81\\xd9\\xc2\\xef\\xc1\\x0fPK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00ppt/presentation.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x82 e\\xfar\\x00\\x00\\x00\\x9c\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x0f\\xedA\\xbez\\x00\\x00\\x00\\xb0\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xa3\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x14\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01F\\x01\\x00\\x00ppt/presentation.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xbc\\x00\\x00\\x00\\x81\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.presentationml.presentation]",
           "outcome": "passed",
           "phases": [
             {
@@ -70633,7 +70657,7 @@
           ]
         },
         {
-          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml%\\x8e1\\x0e\\xc20\\x0cE\\xafReE$\\x17H\\xbb\\xb0\\x03\\x03\\x170\\x89#\\xa2\\xc6v\\x94\\xb8\\xa5\\xdc\\x9e\\x16\\xa6\\xb7\\xfc\\xf7\\xf5\\xfc\\xe3S\\xb1O\\xfe\\xb6bk9\\xe2p\\x87\\xa6W \\x1c\\x8d\\xdb\\x8a{K\\x9b\\x9f\"\\xb3\\xdd\\xa8\\x98\\xe1\"\\xac\\xc8z(\\xa3\\x81ZK\\x0e\\xa0Y\\xd8\\xad\\x1c\\xadT\\xe4}\\x95\\xa4\\x11h?KJ9`\\x94\\xb0\\xd0\\xae\\xd8^\\x1bB\\xec/D\\xa5b\\x7f\\xb4\\x04\\x99O\\xc7\\xb1\\x9b\\xbc\\xfbw|\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8eA\\x0e\\xc2 \\x10E\\xaf\\xd2p\\x80Nu\\xe1\\xc2@Wn\\xba5^\\x00\\xe9PH\\xa1C\\x861\\xd6\\xdb\\xcb\\xb2\\xba|\\xc9\\xcf{_\\xdf1Y\\x89\\xb4\\xd5\\x10K\\x1d\\xf5\\x11\\xbbi6\\x8a\\xa7\\xf9\\xa4\\xba\\xc7\\xa7\\xa0QA\\xa4\\\\x01\\xaa\\x0b\\x98m\\xed\\xa9\\xe0\\xb6\\xe7\\xe4\\x89\\xb3\\x95\\x86\\xbc\\x00y\\x1f\\x1d\\xde\\xc8\\xbd2n\\x02\\xe7a\\xb8\\x00\\x1f\\x0b\\x7f\\x8bf\\xb6\\xbc\\xa0\\x18\\xb5'x\\x13\\xafO\\xa2\\xb5oR\\x05\\xa3\\x86\\xdfo_PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/workbook.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xaa\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00d\\x94\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01L\\x01\\x00\\x00xl/workbook.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb7\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]",
+          "node_id": "tests/test_attachment_security.py::test_validate_supported_bytes[x.xlsx-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet-PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00[Content_Types].xml%\\x8e1\\x0e\\xc20\\x0cE\\xafReE$\\x17H\\xbb\\xb0\\x03\\x03\\x170\\x89#\\xa2\\xc6v\\x94\\xb8\\xa5\\xdc\\x9e\\x16\\xa6\\xb7\\xfc\\xf7\\xf5\\xfc\\xe3S\\xb1O\\xfe\\xb6bk9\\xe2p\\x87\\xa6W \\x1c\\x8d\\xdb\\x8a{K\\x9b\\x9f\"\\xb3\\xdd\\xa8\\x98\\xe1\"\\xac\\xc8z(\\xa3\\x81ZK\\x0e\\xa0Y\\xd8\\xad\\x1c\\xadT\\xe4}\\x95\\xa4\\x11h?KJ9`\\x94\\xb0\\xd0\\xae\\xd8^\\x1bB\\xec/D\\xa5b\\x7f\\xb4\\x04\\x99O\\xc7\\xb1\\x9b\\xbc\\xfbw|\\x01PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00_rels/.rels]\\x8eA\\x0e\\xc2 \\x10E\\xaf\\xd2p\\x80Nu\\xe1\\xc2@Wn\\xba5^\\x00\\xe9PH\\xa1C\\x861\\xd6\\xdb\\xcb\\xb2\\xba|\\xc9\\xcf{_\\xdf1Y\\x89\\xb4\\xd5\\x10K\\x1d\\xf5\\x11\\xbbi6\\x8a\\xa7\\xf9\\xa4\\xba\\xc7\\xa7\\xa0QA\\xa4\\\\x01\\xaa\\x0b\\x98m\\xed\\xa9\\xe0\\xb6\\xe7\\xe4\\x89\\xb3\\x95\\x86\\xbc\\x00y\\x1f\\x1d\\xde\\xc8\\xbd2n\\x02\\xe7a\\xb8\\x00\\x1f\\x0b\\x7f\\x8bf\\xb6\\xbc\\xa0\\x18\\xb5'x\\x13\\xafO\\xa2\\xb5oR\\x05\\xa3\\x86\\xdfo_PK\\x03\\x04\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00xl/workbook.xml\\xb3)\\xca\\xcf/\\xd1\\xb7\\x03\\x00PK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xc4\\xbc\\xb5\\xe9y\\x00\\x00\\x00\\x8f\\x00\\x00\\x00\\x13\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\x00\\x00\\x00\\x00[Content_Types].xmlPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\xd8\\x88u\\x85y\\x00\\x00\\x00\\xab\\x00\\x00\\x00\\x0b\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01\\xaa\\x00\\x00\\x00_rels/.relsPK\\x01\\x02\\x14\\x03\\x14\\x00\\x00\\x00\\x08\\x00\\x12\\x95\\xf2\\\\x11^\\xe7L\\t\\x00\\x00\\x00\\x07\\x00\\x00\\x00\\x0f\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80\\x01L\\x01\\x00\\x00xl/workbook.xmlPK\\x05\\x06\\x00\\x00\\x00\\x00\\x03\\x00\\x03\\x00\\xb7\\x00\\x00\\x00\\x82\\x01\\x00\\x00\\x00\\x00-application/vnd.openxmlformats-officedocument.spreadsheetml.sheet]",
           "outcome": "passed",
           "phases": [
             {
@@ -85058,6 +85082,30 @@
         },
         {
           "node_id": "tests/test_phase473_document_boundary.py::test_xml_doctype_and_entity_events_are_rejected_without_content_leak[\\xff\\xfe<\\x00?\\x00x\\x00m\\x00l\\x00 \\x00v\\x00e\\x00r\\x00s\\x00i\\x00o\\x00n\\x00=\\x00\"\\x001\\x00.\\x000\\x00\"\\x00 \\x00e\\x00n\\x00c\\x00o\\x00d\\x00i\\x00n\\x00g\\x00=\\x00\"\\x00U\\x00T\\x00F\\x00-\\x001\\x006\\x00\"\\x00?\\x00>\\x00<\\x00!\\x00D\\x00O\\x00C\\x00T\\x00Y\\x00P\\x00E\\x00 \\x00x\\x00 \\x00S\\x00Y\\x00S\\x00T\\x00E\\x00M\\x00 \\x00\"\\x00f\\x00i\\x00l\\x00e\\x00:\\x00/\\x00/\\x00/\\x00p\\x00r\\x00i\\x00v\\x00a\\x00t\\x00e\\x00\"\\x00>\\x00<\\x00R\\x00e\\x00l\\x00a\\x00t\\x00i\\x00o\\x00n\\x00s\\x00h\\x00i\\x00p\\x00s\\x00/\\x00>\\x00]",
+          "outcome": "passed",
+          "phases": [
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "setup"
+            },
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "call"
+            },
+            {
+              "outcome": "passed",
+              "strict_xpass": false,
+              "wasxfail": null,
+              "when": "teardown"
+            }
+          ]
+        },
+        {
+          "node_id": "tests/test_phase473_evidence_verifier.py::test_candidate_snapshot_reads_immutable_git_blobs_not_publication_child",
           "outcome": "passed",
           "phases": [
             {
@@ -105774,12 +105822,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:35:08.020578Z"
+      "started_at": "2026-07-18T16:40:36.638630Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/ruff",
@@ -105892,28 +105940,28 @@
       "artifacts": {
         "junit": {
           "bytes": 255,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/RUFF-PHASE-DIFF.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/RUFF-PHASE-DIFF.xml",
           "logical_path": "junit/RUFF-PHASE-DIFF.xml",
           "sha256": "50bf180521ae76287be5454eea9348be7b674401ce59499e8aa6b143cc9247ce"
         },
         "log": {
           "bytes": 44,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/RUFF-PHASE-DIFF.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/RUFF-PHASE-DIFF.log",
           "logical_path": "raw/RUFF-PHASE-DIFF.log",
           "sha256": "ad54b906db2185fb1021fa4a93ccaeed5b150b0ffcc286d09a39a06dbbdb3ca5"
         },
         "node_manifest": {
           "bytes": 415,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/RUFF-PHASE-DIFF.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/RUFF-PHASE-DIFF.json",
           "logical_path": "nodes/RUFF-PHASE-DIFF.json",
           "sha256": "eb3c24ab9e1bd9d06fe1ad8e331aae51e16981c29da2e33255a09203fccfdf8e"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -105923,7 +105971,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:18.807404Z",
+      "ended_at": "2026-07-18T16:41:48.648316Z",
       "exit_code": 0,
       "gate_id": "RUFF-PHASE-DIFF",
       "nodes": [
@@ -105944,45 +105992,45 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:18.795181Z"
+      "started_at": "2026-07-18T16:41:48.637626Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "git",
         "diff",
         "--check",
         "8badde886ca2c9a6fa8baada0e387977ec7f99f6",
-        "9b44494915e284e7a3c88aed467512acac4be47c"
+        "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       ],
       "artifacts": {
         "junit": {
           "bytes": 256,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/DIFF-CHECK-PHASE.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/DIFF-CHECK-PHASE.xml",
           "logical_path": "junit/DIFF-CHECK-PHASE.xml",
           "sha256": "57658b24da896c00cfb0ebe93e85b36932171103a4918a139c9488a0df911dee"
         },
         "log": {
           "bytes": 26,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/DIFF-CHECK-PHASE.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/DIFF-CHECK-PHASE.log",
           "logical_path": "raw/DIFF-CHECK-PHASE.log",
           "sha256": "900f7c10bc471fd7d93f4a82bd15724a8927d33c2cff9922466ef572fcf37d94"
         },
         "node_manifest": {
           "bytes": 416,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/DIFF-CHECK-PHASE.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/DIFF-CHECK-PHASE.json",
           "logical_path": "nodes/DIFF-CHECK-PHASE.json",
           "sha256": "f2b94b5b84794ef737f8431a9486a0c45c3c4cf297a04742ecbe3d17d6b17d45"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -105992,7 +106040,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:18.893849Z",
+      "ended_at": "2026-07-18T16:41:48.741123Z",
       "exit_code": 0,
       "gate_id": "DIFF-CHECK-PHASE",
       "nodes": [
@@ -106013,45 +106061,45 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:18.855848Z"
+      "started_at": "2026-07-18T16:41:48.706306Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "git",
         "show",
         "--check",
         "--format=",
-        "9b44494915e284e7a3c88aed467512acac4be47c"
+        "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       ],
       "artifacts": {
         "junit": {
           "bytes": 260,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/SHOW-CHECK-CANDIDATE.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/SHOW-CHECK-CANDIDATE.xml",
           "logical_path": "junit/SHOW-CHECK-CANDIDATE.xml",
           "sha256": "fcfaa4a92d69c597ef813ac79f214de5c49330b2de477594827bb19ac1fa0ad9"
         },
         "log": {
           "bytes": 30,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/SHOW-CHECK-CANDIDATE.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/SHOW-CHECK-CANDIDATE.log",
           "logical_path": "raw/SHOW-CHECK-CANDIDATE.log",
           "sha256": "6ee0dc3aece3a9cbb63fdc665f62d916720b6927f996dcb16de808f601bb4b30"
         },
         "node_manifest": {
           "bytes": 420,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/SHOW-CHECK-CANDIDATE.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/SHOW-CHECK-CANDIDATE.json",
           "logical_path": "nodes/SHOW-CHECK-CANDIDATE.json",
           "sha256": "8b5bdd416a4a8a4c48df867c0023ec5d30de54bbbc68f5b3a5c395778e7e453d"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106061,7 +106109,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:18.950102Z",
+      "ended_at": "2026-07-18T16:41:48.822854Z",
       "exit_code": 0,
       "gate_id": "SHOW-CHECK-CANDIDATE",
       "nodes": [
@@ -106082,44 +106130,44 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:18.942498Z"
+      "started_at": "2026-07-18T16:41:48.814225Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_boundary_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-a.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 264,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/READ-BOUNDARY-GENERATE-A.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/READ-BOUNDARY-GENERATE-A.xml",
           "logical_path": "junit/READ-BOUNDARY-GENERATE-A.xml",
           "sha256": "2760a892e72dc8d7b31b6e5eb730f7351bb8548aa61cc8da1e743fa9e959589c"
         },
         "log": {
           "bytes": 34,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/READ-BOUNDARY-GENERATE-A.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/READ-BOUNDARY-GENERATE-A.log",
           "logical_path": "raw/READ-BOUNDARY-GENERATE-A.log",
           "sha256": "f9514431fc3724723e47a65f4fd06fa75231a491d3b533ae702b6b141f8496de"
         },
         "node_manifest": {
           "bytes": 424,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/READ-BOUNDARY-GENERATE-A.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/READ-BOUNDARY-GENERATE-A.json",
           "logical_path": "nodes/READ-BOUNDARY-GENERATE-A.json",
           "sha256": "a609c1526e53355745e91c6f62126d10b9df57e068dc2d756082a6eb950408f5"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106129,7 +106177,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:21.213256Z",
+      "ended_at": "2026-07-18T16:41:51.147054Z",
       "exit_code": 0,
       "gate_id": "READ-BOUNDARY-GENERATE-A",
       "nodes": [
@@ -106150,44 +106198,44 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:18.998357Z"
+      "started_at": "2026-07-18T16:41:48.877796Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_boundary_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/boundary-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/boundary-b.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 264,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/READ-BOUNDARY-GENERATE-B.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/READ-BOUNDARY-GENERATE-B.xml",
           "logical_path": "junit/READ-BOUNDARY-GENERATE-B.xml",
           "sha256": "02518be53029c88531d5452a7fcf688ab933c36ae104189eaf6370fb8a39fda1"
         },
         "log": {
           "bytes": 34,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/READ-BOUNDARY-GENERATE-B.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/READ-BOUNDARY-GENERATE-B.log",
           "logical_path": "raw/READ-BOUNDARY-GENERATE-B.log",
           "sha256": "2384e5a67d94507cd87ce5abbf973cf9b31983ac650f7933ef4b3ba1018d56a6"
         },
         "node_manifest": {
           "bytes": 424,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/READ-BOUNDARY-GENERATE-B.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/READ-BOUNDARY-GENERATE-B.json",
           "logical_path": "nodes/READ-BOUNDARY-GENERATE-B.json",
           "sha256": "9400f7227b8e089e5729675324d3c9c14b484cc52c782efa9b78756010ae6125"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106197,7 +106245,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:23.490835Z",
+      "ended_at": "2026-07-18T16:41:53.485262Z",
       "exit_code": 0,
       "gate_id": "READ-BOUNDARY-GENERATE-B",
       "nodes": [
@@ -106218,12 +106266,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:21.264784Z"
+      "started_at": "2026-07-18T16:41:51.204203Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -106233,28 +106281,28 @@
       "artifacts": {
         "junit": {
           "bytes": 259,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/READ-BOUNDARY-CHECK.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/READ-BOUNDARY-CHECK.xml",
           "logical_path": "junit/READ-BOUNDARY-CHECK.xml",
           "sha256": "bab3121a2585f576deaaa3341106cd1942a79572aaa09241f56fbf16a6197af4"
         },
         "log": {
           "bytes": 29,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/READ-BOUNDARY-CHECK.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/READ-BOUNDARY-CHECK.log",
           "logical_path": "raw/READ-BOUNDARY-CHECK.log",
           "sha256": "d2b3cc11e87df41346e1994b5c7dc063ae578c305e520e9ca0a21a7099a0ecc3"
         },
         "node_manifest": {
           "bytes": 419,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/READ-BOUNDARY-CHECK.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/READ-BOUNDARY-CHECK.json",
           "logical_path": "nodes/READ-BOUNDARY-CHECK.json",
           "sha256": "f89b40dea952c3fd23d7393b81353a446e58621e4682adca8dc51daa9b1803cd"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106264,7 +106312,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:25.783678Z",
+      "ended_at": "2026-07-18T16:41:55.829367Z",
       "exit_code": 0,
       "gate_id": "READ-BOUNDARY-CHECK",
       "nodes": [
@@ -106285,46 +106333,46 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:23.541929Z"
+      "started_at": "2026-07-18T16:41:53.553549Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_private_store_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-a.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-a.json",
         "--evidence-output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-a.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 264,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/PRIVATE-STORE-GENERATE-A.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/PRIVATE-STORE-GENERATE-A.xml",
           "logical_path": "junit/PRIVATE-STORE-GENERATE-A.xml",
           "sha256": "b241ca5a914cf68c25ee71ae7da42a6ba1b145f45a1b2b9ced4fbbd111944217"
         },
         "log": {
           "bytes": 34,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/PRIVATE-STORE-GENERATE-A.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/PRIVATE-STORE-GENERATE-A.log",
           "logical_path": "raw/PRIVATE-STORE-GENERATE-A.log",
           "sha256": "ac183057b1c5ea20d75994a11be0592f785aaef445beb8b4c7ab4ad43d7bfe22"
         },
         "node_manifest": {
           "bytes": 424,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/PRIVATE-STORE-GENERATE-A.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/PRIVATE-STORE-GENERATE-A.json",
           "logical_path": "nodes/PRIVATE-STORE-GENERATE-A.json",
           "sha256": "1629b557ff4eb8664016efb23cbb8a12806fe0489a7f86796ec206947d4b760c"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106334,7 +106382,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:26.459253Z",
+      "ended_at": "2026-07-18T16:41:56.517697Z",
       "exit_code": 0,
       "gate_id": "PRIVATE-STORE-GENERATE-A",
       "nodes": [
@@ -106355,46 +106403,46 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:25.842825Z"
+      "started_at": "2026-07-18T16:41:55.891327Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_phase473_private_store_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/private-b.json",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/private-b.json",
         "--evidence-output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/policy-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/policy-b.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 264,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/PRIVATE-STORE-GENERATE-B.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/PRIVATE-STORE-GENERATE-B.xml",
           "logical_path": "junit/PRIVATE-STORE-GENERATE-B.xml",
           "sha256": "72878bdc744a5745902d7fabf952aeb4c60a1465b424eb298fb0c611040a95db"
         },
         "log": {
           "bytes": 34,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/PRIVATE-STORE-GENERATE-B.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/PRIVATE-STORE-GENERATE-B.log",
           "logical_path": "raw/PRIVATE-STORE-GENERATE-B.log",
           "sha256": "d602f80d21c9c43c1addfcb7867e35489669e1cd4d91d9da66d62f5b6fe002ed"
         },
         "node_manifest": {
           "bytes": 424,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/PRIVATE-STORE-GENERATE-B.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/PRIVATE-STORE-GENERATE-B.json",
           "logical_path": "nodes/PRIVATE-STORE-GENERATE-B.json",
           "sha256": "d125e38e0165b18ecd56c358d1f1c135e1871afa22ca82c8d4962ebf4d404263"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106404,7 +106452,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:27.122649Z",
+      "ended_at": "2026-07-18T16:41:57.222111Z",
       "exit_code": 0,
       "gate_id": "PRIVATE-STORE-GENERATE-B",
       "nodes": [
@@ -106425,12 +106473,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:26.511665Z"
+      "started_at": "2026-07-18T16:41:56.572914Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -106440,28 +106488,28 @@
       "artifacts": {
         "junit": {
           "bytes": 259,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/PRIVATE-STORE-CHECK.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/PRIVATE-STORE-CHECK.xml",
           "logical_path": "junit/PRIVATE-STORE-CHECK.xml",
           "sha256": "07c9c8ae7f6b13d244bac91f5211719b57eb4b2cfa19b607224478d9e051c38e"
         },
         "log": {
           "bytes": 29,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/PRIVATE-STORE-CHECK.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/PRIVATE-STORE-CHECK.log",
           "logical_path": "raw/PRIVATE-STORE-CHECK.log",
           "sha256": "209b092a47470f460ae4cbb64060ae527da3d2d15ff9ead0e7653f84863fd515"
         },
         "node_manifest": {
           "bytes": 419,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/PRIVATE-STORE-CHECK.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/PRIVATE-STORE-CHECK.json",
           "logical_path": "nodes/PRIVATE-STORE-CHECK.json",
           "sha256": "91fc53bc360e8662cd78617b2c137c3f62007339e0f5b66d4929ce4f5e2445a8"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106471,7 +106519,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:27.782173Z",
+      "ended_at": "2026-07-18T16:41:57.924867Z",
       "exit_code": 0,
       "gate_id": "PRIVATE-STORE-CHECK",
       "nodes": [
@@ -106492,44 +106540,44 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:27.173449Z"
+      "started_at": "2026-07-18T16:41:57.278561Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_route_authorization_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-a.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-a.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 256,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/ROUTE-GENERATE-A.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/ROUTE-GENERATE-A.xml",
           "logical_path": "junit/ROUTE-GENERATE-A.xml",
           "sha256": "b826d08cca1f6b61c32842f4a61a489565e15fea1b12b8bd9bca65c83f93b49e"
         },
         "log": {
           "bytes": 26,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/ROUTE-GENERATE-A.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/ROUTE-GENERATE-A.log",
           "logical_path": "raw/ROUTE-GENERATE-A.log",
           "sha256": "662e549256c2d0211c95469d81db383626454dc001ea12ab97ca791e96df5eff"
         },
         "node_manifest": {
           "bytes": 416,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/ROUTE-GENERATE-A.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/ROUTE-GENERATE-A.json",
           "logical_path": "nodes/ROUTE-GENERATE-A.json",
           "sha256": "a332966cdad239a19fae3469b425e45bc1e140cff590cf60269ba40b266e0cf5"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106539,7 +106587,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:28.807887Z",
+      "ended_at": "2026-07-18T16:41:58.974015Z",
       "exit_code": 0,
       "gate_id": "ROUTE-GENERATE-A",
       "nodes": [
@@ -106560,44 +106608,44 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:27.833309Z"
+      "started_at": "2026-07-18T16:41:57.978643Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "scripts/generate_route_authorization_inventory.py",
         "--output",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/generated/route-b.json"
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/generated/route-b.json"
       ],
       "artifacts": {
         "junit": {
           "bytes": 256,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/ROUTE-GENERATE-B.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/ROUTE-GENERATE-B.xml",
           "logical_path": "junit/ROUTE-GENERATE-B.xml",
           "sha256": "9d04cb0b8c2841b9c3908c27f2bb59c9137a02410902071156e2d71d76d8cb75"
         },
         "log": {
           "bytes": 26,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/ROUTE-GENERATE-B.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/ROUTE-GENERATE-B.log",
           "logical_path": "raw/ROUTE-GENERATE-B.log",
           "sha256": "1232cb3cec240b99c1bfd9d8ed561b26311fdd98db96471bda5a2ccd94f8ab4f"
         },
         "node_manifest": {
           "bytes": 416,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/ROUTE-GENERATE-B.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/ROUTE-GENERATE-B.json",
           "logical_path": "nodes/ROUTE-GENERATE-B.json",
           "sha256": "2eb46fe930ba8a1f22f15c93223872361ebe18e8b94c75a433bf7b6448d8504b"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106607,7 +106655,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:29.810633Z",
+      "ended_at": "2026-07-18T16:42:00.032532Z",
       "exit_code": 0,
       "gate_id": "ROUTE-GENERATE-B",
       "nodes": [
@@ -106628,12 +106676,12 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:28.859532Z"
+      "started_at": "2026-07-18T16:41:59.029304Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -106643,28 +106691,28 @@
       "artifacts": {
         "junit": {
           "bytes": 251,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/ROUTE-CHECK.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/ROUTE-CHECK.xml",
           "logical_path": "junit/ROUTE-CHECK.xml",
           "sha256": "fd706aaadd9cbb000d334fae015a248699e8b11912423872ff90866d8e321371"
         },
         "log": {
           "bytes": 21,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/ROUTE-CHECK.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/ROUTE-CHECK.log",
           "logical_path": "raw/ROUTE-CHECK.log",
           "sha256": "bfa302000fa8e702aa079e417e285b4ee57e620ef1c48af01858dcc6d9d79d34"
         },
         "node_manifest": {
           "bytes": 411,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/ROUTE-CHECK.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/ROUTE-CHECK.json",
           "logical_path": "nodes/ROUTE-CHECK.json",
           "sha256": "2a5475ed9c036bb70d4358dc46b47e81fa57b4982a6dc6991cf0e96b90911a4c"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106674,7 +106722,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:30.822900Z",
+      "ended_at": "2026-07-18T16:42:01.085612Z",
       "exit_code": 0,
       "gate_id": "ROUTE-CHECK",
       "nodes": [
@@ -106695,47 +106743,47 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:29.865829Z"
+      "started_at": "2026-07-18T16:42:00.088247Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
         "/Users/zhdeng/stoa-backend/scripts/verify_phase473_evidence.py",
         "privacy-denial",
         "--capture-root",
-        "/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c",
+        "/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
         "--denylist",
         "/Users/zhdeng/stoa-backend/tests/fixtures/phase473_evidence_denylist.txt"
       ],
       "artifacts": {
         "junit": {
           "bytes": 254,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/junit/PRIVACY-DENIAL.xml",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/junit/PRIVACY-DENIAL.xml",
           "logical_path": "junit/PRIVACY-DENIAL.xml",
           "sha256": "9eaaff4240679d4c3e46e4fcf09cee4837bb63b50b35855f63d8c02289034aa2"
         },
         "log": {
           "bytes": 24,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/raw/PRIVACY-DENIAL.log",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/raw/PRIVACY-DENIAL.log",
           "logical_path": "raw/PRIVACY-DENIAL.log",
           "sha256": "8721bc347aa174def65b7570ea366bef7ab00357c338e8049834002e666e0de3"
         },
         "node_manifest": {
           "bytes": 414,
-          "captured_path": "/private/tmp/phase473-evidence/9b44494915e284e7a3c88aed467512acac4be47c/nodes/PRIVACY-DENIAL.json",
+          "captured_path": "/private/tmp/phase473-evidence/b43c71bdebf948e1ced024e309af1cfd5b4d5b50/nodes/PRIVACY-DENIAL.json",
           "logical_path": "nodes/PRIVACY-DENIAL.json",
           "sha256": "addebc875bb54348fab15b6f65bd0450fe3e5f990686be65e980381e14aa8b92"
         }
       },
       "before": {
         "clean": true,
-        "head": "9b44494915e284e7a3c88aed467512acac4be47c"
+        "head": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50"
       },
-      "candidate_sha": "9b44494915e284e7a3c88aed467512acac4be47c",
+      "candidate_sha": "b43c71bdebf948e1ced024e309af1cfd5b4d5b50",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -106745,7 +106793,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-18T16:36:30.942432Z",
+      "ended_at": "2026-07-18T16:42:01.212390Z",
       "exit_code": 0,
       "gate_id": "PRIVACY-DENIAL",
       "nodes": [
@@ -106766,7 +106814,7 @@
         "entry_count": 10,
         "match_count": 0
       },
-      "started_at": "2026-07-18T16:36:30.874516Z"
+      "started_at": "2026-07-18T16:42:01.142063Z"
     }
   ],
   "schema_version": "phase-473-evidence-results.v1"

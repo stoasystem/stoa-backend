@@ -3,12 +3,12 @@ phase: 473
 slug: student-content-privacy-and-practice-integrity
 status: local_gates_complete
 nyquist_compliant: true
-testedSourceSha: 9b44494915e284e7a3c88aed467512acac4be47c
+testedSourceSha: b43c71bdebf948e1ced024e309af1cfd5b4d5b50
 ---
 
 # Phase 473 — checked final validation
 
-All local observations derive from immutable candidate `9b44494915e284e7a3c88aed467512acac4be47c`. The strict full suite observed 2008 nodes.
+All local observations derive from immutable candidate `b43c71bdebf948e1ced024e309af1cfd5b4d5b50`. The strict full suite observed 2009 nodes.
 
 Dedicated final-gap receipts observed 14 deletion-claim nodes, 10 delivery-recovery nodes, 12 private-delivery nodes, and 109 combined regression nodes. CR-01, CR-02, WR-01, WR-02, and WR-03 map to exact runtime lower fakes.
 
