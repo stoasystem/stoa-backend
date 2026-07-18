@@ -1,0 +1,105 @@
+{
+  "classes": [
+    {
+      "access_policy": "admin_capability_and_audited_service_only",
+      "allowed_fields": [
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "operation_id",
+        "action",
+        "period",
+        "count",
+        "status",
+        "created_at",
+        "expires_at",
+        "ttl",
+        "legal_basis"
+      ],
+      "class_id": "usage_accounting",
+      "legal_basis": "legitimate_security_and_accounting_operations",
+      "mutable": false,
+      "roots": [
+        "USAGE#",
+        "USAGE_LEDGER#"
+      ],
+      "ttl_seconds": 31536000,
+      "unbounded_retention": false
+    },
+    {
+      "access_policy": "admin_capability_and_audited_service_only",
+      "allowed_fields": [
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "keyed_actor_fingerprint",
+        "keyed_resource_fingerprint",
+        "action",
+        "decision",
+        "category",
+        "correlation_id",
+        "created_at",
+        "expires_at",
+        "ttl",
+        "legal_basis"
+      ],
+      "class_id": "security_audit",
+      "legal_basis": "legitimate_security_and_accounting_operations",
+      "mutable": false,
+      "roots": [
+        "SECURITY_AUDIT#"
+      ],
+      "ttl_seconds": 31536000,
+      "unbounded_retention": false
+    },
+    {
+      "access_policy": "admin_capability_and_audited_service_only",
+      "allowed_fields": [
+        "category",
+        "class",
+        "size_bucket",
+        "count",
+        "correlation_id",
+        "created_at",
+        "expires_at",
+        "ttl",
+        "legal_basis"
+      ],
+      "class_id": "category_only_logs",
+      "legal_basis": "legitimate_security_and_accounting_operations",
+      "mutable": false,
+      "roots": [
+        "application_log"
+      ],
+      "ttl_seconds": 31536000,
+      "unbounded_retention": false
+    }
+  ],
+  "external_receipt_claim": "outside_backend_purge_authority",
+  "external_receipt_statuses": [
+    "accepted",
+    "delivered",
+    "provider_acceptance_unknown"
+  ],
+  "forbidden_field_markers": [
+    "answer",
+    "name",
+    "email",
+    "subject",
+    "note",
+    "content",
+    "hash",
+    "bucket",
+    "key",
+    "etag",
+    "version",
+    "upload_id",
+    "token",
+    "endpoint",
+    "address",
+    "body"
+  ],
+  "schema_version": "phase-473-retained-evidence-policy.v1"
+}
