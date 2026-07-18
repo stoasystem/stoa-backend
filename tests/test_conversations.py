@@ -908,14 +908,18 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
                 "ContentLength": len(data),
             }
 
-    if case == "parser":
-        monkeypatch.setattr(
-            conversations.attachment_service,
-            "parse_document_isolated",
-            lambda *_args, **_kwargs: __import__(
-                "stoa.services.document_parser_worker", fromlist=["ParserResult"]
-            ).ParserResult(category="invalid_document"),
-        )
+    parser_result = __import__(
+        "stoa.services.document_parser_worker", fromlist=["ParserResult"]
+    ).ParserResult
+    monkeypatch.setattr(
+        conversations.attachment_service,
+        "parse_document_isolated",
+        lambda *_args, **_kwargs: (
+            parser_result(category="invalid_document")
+            if case == "parser"
+            else parser_result(text=data.decode())
+        ),
+    )
     checksum = hashlib.sha256(data).hexdigest()
     if case == "checksum":
         checksum = "0" * 64
