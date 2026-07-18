@@ -26,6 +26,19 @@ ASSIGNMENT_COMPLETED_ACTION = "assignment_completed"
 ASSIGNMENT_SKIPPED_ACTION = "assignment_skipped"
 ASSIGNMENT_ARCHIVED_ACTION = "assignment_archived"
 REVIEWED_ASSIGNMENT_GENERATION_ACTION = "reviewed_assignment_generation"
+PRIVATE_LEARNING_ACTIONS = frozenset(
+    {
+        HINT_REQUEST_ACTION,
+        PRACTICE_TEACHER_HELP_ACTION,
+        PRACTICE_ANSWER_ACTION,
+        PRACTICE_LESSON_COMPLETION_ACTION,
+        ASSIGNMENT_STARTED_ACTION,
+        ASSIGNMENT_COMPLETED_ACTION,
+        ASSIGNMENT_SKIPPED_ACTION,
+        ASSIGNMENT_ARCHIVED_ACTION,
+        REVIEWED_ASSIGNMENT_GENERATION_ACTION,
+    }
+)
 
 _FORBIDDEN_METADATA_KEYS = {
     "answer",
@@ -422,6 +435,7 @@ def record_usage_event(
     source and response compatibility matters.
     """
     definition = get_usage_action_definition(action)
+    private_learning_action = action in PRIVATE_LEARNING_ACTIONS
     effective_entitlement = entitlement or {}
     event_parent_id = parent_id if parent_id is not None else effective_entitlement.get("parentId")
     event = {
@@ -441,17 +455,29 @@ def record_usage_event(
             if account_fence_generation is not None
             else {}
         ),
-        "parent_id": event_parent_id,
+        "parent_id": None if private_learning_action else event_parent_id,
         "action": action,
         "quantity": int(quantity if quantity is not None else definition.default_quantity),
         "quota_period": quota_period,
         "counter_key": counter_key,
         "counter_value_after": counter_value,
         "idempotency_key": idempotency_key,
-        "request_correlation_id": request_correlation_id,
-        "effective_plan": effective_entitlement.get("effectivePlan"),
-        "entitlement_source": effective_entitlement.get("source"),
-        "entitlement_snapshot": _entitlement_snapshot(effective_entitlement) if effective_entitlement else {},
+        "request_correlation_id": (
+            None if private_learning_action else request_correlation_id
+        ),
+        "effective_plan": (
+            None if private_learning_action else effective_entitlement.get("effectivePlan")
+        ),
+        "entitlement_source": (
+            None if private_learning_action else effective_entitlement.get("source")
+        ),
+        "entitlement_snapshot": (
+            {}
+            if private_learning_action
+            else _entitlement_snapshot(effective_entitlement)
+            if effective_entitlement
+            else {}
+        ),
         "privacy": {
             **usage_privacy_flags(),
         },
@@ -460,11 +486,12 @@ def record_usage_event(
             "summary_group": definition.summary_group,
             "quota_enforced": definition.quota_enforced,
             "support_visible": definition.support_visible,
-            **safe_usage_metadata(metadata),
+            **({} if private_learning_action else safe_usage_metadata(metadata)),
         },
         "created_at": created_at,
         "updated_at": created_at,
         "expires_at": counter_ttl(),
+        "retention_basis": "usage_accounting",
     }
     created = (
         usage_ledger_repo.put_usage_event(

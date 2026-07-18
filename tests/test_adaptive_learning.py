@@ -278,7 +278,7 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
 
     assert started["status"] == "started"
     assert ledger_calls[0]["action"] == "reviewed_assignment_generation"
-    assert ledger_calls[0]["metadata"]["assignment_id"] == assignment_id
+    assert ledger_calls[0]["metadata"] == {"status": "assigned"}
     assert ledger_calls[1]["action"] == "assignment_started"
     assert ledger_calls[1]["metadata"]["status"] == "started"
     assert assignment_id in assignments

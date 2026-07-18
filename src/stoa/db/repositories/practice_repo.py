@@ -1,13 +1,15 @@
 """DynamoDB access patterns for practice content and student progress."""
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Mapping
 import uuid
 
 from boto3.dynamodb.conditions import Key
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_deletion_repo
 
 
 CHALLENGE_POINTER_PK = "PRACTICE_CHALLENGE_LOOKUP"
@@ -31,6 +33,139 @@ _POINTER_FIELDS = {
     "challenge_content_hash",
 }
 _MAX_CHALLENGE_PAGES = 1000
+
+PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
+    {"progress", "attempt", "legacy_mistake", "usage"}
+)
+PRACTICE_WRITER_REGISTRY = frozenset(
+    {"mark_lesson_completed", "put_attempt", "record_attempt", "usage_counter"}
+)
+PRACTICE_PRIVATE_FIELDS = frozenset(
+    {
+        "student_id",
+        "user_id",
+        "lesson_id",
+        "subject_id",
+        "topic_id",
+        "unit_id",
+        "challenge_id",
+        "student_answer",
+        "submitted_answer",
+        "correct",
+        "result",
+        "standard_answer",
+        "explanation",
+        "feedback",
+        "correct_feedback",
+        "incorrect_feedback",
+        "next_challenge_id",
+        "prompt",
+        "options",
+        "challenge_type",
+        "metadata",
+        "request_correlation_id",
+        "question_id",
+        "entitlement_snapshot",
+        "parent_id",
+        "actor_id",
+    }
+)
+PRACTICE_TOMBSTONE_ALLOWLIST = frozenset(
+    {
+        "PK",
+        "SK",
+        "entity_type",
+        "schema_version",
+        "status",
+        "action",
+        "quantity",
+        "count",
+        "quota_period",
+        "expires_at",
+        "retention_basis",
+        "owner_deletion_generation",
+        "created_at",
+        "deleted_at",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PracticePrivatePage:
+    items: tuple[dict[str, Any], ...]
+    cursor: dict[str, str] | None = None
+
+
+def _atomic_table(table: Any) -> bool:
+    return callable(getattr(table, "transact_account_deletion", None)) or bool(
+        getattr(getattr(table, "meta", None), "client", None)
+        and getattr(table, "name", None)
+    )
+
+
+def _write_generation(
+    owner_id: str, generation: int | None, table: Any
+) -> int:
+    if generation is not None:
+        if type(generation) is not int or generation <= 0:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid account fence generation"
+            )
+        return generation
+    if _atomic_table(table):
+        fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
+        return int(fence["generation"])
+    # Unit fakes without a transaction surface cannot model the permanent fence.
+    return 1
+
+
+def build_practice_write_transaction(
+    *,
+    item: Mapping[str, Any],
+    owner_id: str,
+    generation: int,
+    mode: str = "put",
+    updates: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build one same-table practice mutation behind the canonical fence."""
+    stored = {
+        **dict(item),
+        "owner_id": owner_id,
+        "account_fence_generation": generation,
+    }
+    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    if mode == "put":
+        operations.append(
+            {
+                "Put": {
+                    "Item": stored,
+                    "ConditionExpression": (
+                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    ),
+                }
+            }
+        )
+        return operations
+    if mode != "update" or not updates:
+        raise ValueError("practice write mode is invalid")
+    names = {f"#{key}": key for key in updates}
+    values = {f":{key}": value for key, value in updates.items()}
+    values[":owner"] = owner_id
+    operations.append(
+        {
+            "Update": {
+                "Key": {"PK": stored["PK"], "SK": stored["SK"]},
+                "UpdateExpression": "SET "
+                + ", ".join(f"#{key}=:{key}" for key in updates),
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND owner_id=:owner"
+                ),
+                "ExpressionAttributeNames": names,
+                "ExpressionAttributeValues": values,
+            }
+        }
+    )
+    return operations
 
 
 def _canonical_json_value(value: Any) -> Any:
@@ -292,19 +427,50 @@ def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
     return items
 
 
-def mark_lesson_completed(user_id: str, lesson: dict) -> None:
+def mark_lesson_completed(
+    user_id: str,
+    lesson: dict,
+    *,
+    account_fence_generation: int | None = None,
+) -> dict[str, Any]:
     from datetime import datetime, timezone
     table = get_table()
-    table.put_item(Item={
+    generation = _write_generation(user_id, account_fence_generation, table)
+    item = {
         "PK": f"PROGRESS#{user_id}",
         "SK": f"LESSON#{lesson['lesson_id']}",
+        "entity_type": "practice_progress",
+        "student_id": user_id,
         "lesson_id": lesson["lesson_id"],
         "subject_id": lesson.get("subject_id", ""),
         "topic_id": lesson.get("topic_id", ""),
         "unit_id": lesson.get("unit_id", ""),
         "status": "completed",
         "completed_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }
+    existing = None
+    if _atomic_table(table):
+        existing = table.get_item(
+            Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
+        ).get("Item")
+    operations = build_practice_write_transaction(
+        item=item,
+        owner_id=user_id,
+        generation=generation,
+        mode="update" if existing else "put",
+        updates={key: value for key, value in item.items() if key not in {"PK", "SK"}}
+        if existing
+        else None,
+    )
+    if _atomic_table(table):
+        account_deletion_repo.transact(operations, table=table)
+    else:
+        table.put_item(Item=operations[1]["Put"]["Item"])
+    item.update(
+        owner_id=user_id,
+        account_fence_generation=generation,
+    )
+    return item
 
 
 def put_attempt(
@@ -330,9 +496,11 @@ def put_attempt(
     challenge_type: str = "",
     attempt_id: str | None = None,
     created_at: str | None = None,
+    account_fence_generation: int | None = None,
 ) -> dict:
     """Immutably record every answer and return its durable owner receipt."""
     table = get_table()
+    generation = _write_generation(student_id, account_fence_generation, table)
     attempt_key = attempt_id or str(uuid.uuid4())
     item = {
         "PK": f"ATTEMPTS#{student_id}",
@@ -365,10 +533,17 @@ def put_attempt(
     }
     if any(value not in (None, "", []) for value in snapshot_fields.values()):
         item.update(snapshot_fields)
-    table.put_item(
-        Item=item,
-        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    operations = build_practice_write_transaction(
+        item=item, owner_id=student_id, generation=generation
     )
+    if _atomic_table(table):
+        account_deletion_repo.transact(operations, table=table)
+    else:
+        table.put_item(
+            Item=operations[1]["Put"]["Item"],
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+    item.update(owner_id=student_id, account_fence_generation=generation)
     return item
 
 
@@ -433,3 +608,125 @@ def get_mistakes(user_id: str) -> list[dict]:
         not in known_attempt_ids
     )
     return attempts
+
+
+def scan_practice_private_rows(
+    owner_id: str,
+    *,
+    cursor: Mapping[str, Any] | None = None,
+    maximum_pages: int = 1,
+    table: Any | None = None,
+) -> PracticePrivatePage:
+    """Strongly scan current and legacy practice/usage rows owned by one student."""
+    target = table or get_table()
+    if maximum_pages <= 0:
+        raise account_deletion_repo.AccountDeletionConflict("invalid page bound")
+    marker = _practice_cursor(cursor) if cursor is not None else None
+    found: list[dict[str, Any]] = []
+    for _ in range(maximum_pages):
+        kwargs: dict[str, Any] = {"ConsistentRead": True}
+        if marker is not None:
+            kwargs["ExclusiveStartKey"] = marker
+        response = target.scan(**kwargs)
+        items = response.get("Items", [])
+        if not isinstance(items, list):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed practice deletion page"
+            )
+        found.extend(
+            dict(item)
+            for item in items
+            if isinstance(item, Mapping) and _practice_owned(item, owner_id)
+        )
+        raw_next = response.get("LastEvaluatedKey")
+        if raw_next is None:
+            return PracticePrivatePage(tuple(found))
+        next_marker = _practice_cursor(raw_next)
+        if next_marker == marker:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "practice deletion cursor did not advance"
+            )
+        marker = next_marker
+    return PracticePrivatePage(tuple(found), marker)
+
+
+def scrub_practice_private_row(
+    item: Mapping[str, Any],
+    *,
+    owner_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Replace practice content with a strict noncontent/TTL tombstone."""
+    if not _practice_owned(item, owner_id):
+        raise account_deletion_repo.AccountDeletionConflict("practice row owner changed")
+    is_usage = str(item.get("PK") or "").startswith(("USAGE#", "USAGE_LEDGER#"))
+    retained: dict[str, Any] = {
+        "PK": item["PK"],
+        "SK": item["SK"],
+        "entity_type": "practice_accounting_tombstone" if is_usage else "practice_deletion_tombstone",
+        "schema_version": "practice-deletion-tombstone.v1",
+        "status": "deleted",
+        "owner_deletion_generation": generation,
+        "deleted_at": now_iso,
+    }
+    if is_usage and item.get("expires_at") and item.get("action"):
+        retained.update(
+            action=item.get("action"),
+            quantity=int(item.get("quantity") or 0),
+            count=int(item.get("count") or 0),
+            quota_period=item.get("quota_period"),
+            expires_at=int(item["expires_at"]),
+            retention_basis=str(item.get("retention_basis") or "usage_accounting"),
+        )
+    if item.get("created_at"):
+        retained["created_at"] = item["created_at"]
+    tombstone = {
+        key: value
+        for key, value in retained.items()
+        if key in PRACTICE_TOMBSTONE_ALLOWLIST and value is not None
+    }
+    target = table or get_table()
+    hook = getattr(target, "replace_learning_tombstone", None)
+    if callable(hook):
+        hook(dict(item), tombstone, owner_id, generation)
+    else:
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.deletion_fence_condition(owner_id, generation),
+                {
+                    "Put": {
+                        "Item": tombstone,
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND attribute_exists(SK)"
+                        ),
+                    }
+                },
+            ],
+            table=target,
+        )
+    return tombstone
+
+
+def _practice_cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"PK", "SK"}
+        or any(not isinstance(value.get(key), str) or not value.get(key) for key in ("PK", "SK"))
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "invalid practice deletion cursor"
+        )
+    return {"PK": str(value["PK"]), "SK": str(value["SK"])}
+
+
+def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
+    pk = str(item.get("PK") or "")
+    return owner_id in {item.get("student_id"), item.get("user_id"), item.get("owner_id")} or pk in {
+        f"PROGRESS#{owner_id}",
+        f"ATTEMPTS#{owner_id}",
+        f"MISTAKES#{owner_id}",
+        f"USAGE#{owner_id}",
+        f"USAGE_LEDGER#{owner_id}",
+    }

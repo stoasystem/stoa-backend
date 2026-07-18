@@ -468,20 +468,12 @@ def _record_assignment_generation_usage(item: dict[str, Any]) -> None:
             ),
             request_correlation_id=assignment_id,
             created_at=str(item.get("created_at") or now_iso()),
-            metadata={
-                "assignment_id": assignment_id,
-                "source_type": item.get("source_type"),
-                "source": item.get("source_type"),
-                "resource_id": item.get("source_id"),
-                "subject": item.get("subject"),
-                "lesson_id": item.get("lesson_id"),
-                "exercise_id": item.get("exercise_id"),
-                "status": item.get("status"),
-                "batch_id": item.get("automation_batch_id"),
-                "candidate_id": item.get("automation_candidate_id"),
-                "policy_id": item.get("automation_policy_id"),
-                "delivery_state": item.get("delivery_state"),
-            },
+            account_fence_generation=(
+                int(item["account_fence_generation"])
+                if type(item.get("account_fence_generation")) is int
+                else None
+            ),
+            metadata={"status": item.get("status")},
         )
     except Exception:  # noqa: BLE001
         return
@@ -515,16 +507,12 @@ def _record_assignment_transition_usage(
             ),
             request_correlation_id=assignment_id,
             created_at=str(item.get(f"{side_effect}_at") or item.get("updated_at") or now_iso()),
-            metadata={
-                "assignment_id": assignment_id,
-                "source_type": item.get("source_type"),
-                "source": item.get("source_type"),
-                "resource_id": item.get("source_id"),
-                "subject": item.get("subject"),
-                "lesson_id": item.get("lesson_id"),
-                "exercise_id": item.get("exercise_id"),
-                "status": item.get("status"),
-            },
+            account_fence_generation=(
+                int(item["account_fence_generation"])
+                if type(item.get("account_fence_generation")) is int
+                else None
+            ),
+            metadata={"status": item.get("status")},
         )
     except Exception:  # noqa: BLE001
         return

@@ -684,19 +684,19 @@ async def complete_lesson(
 ):
     lesson = dict(authorized_lesson.value)
 
-    practice_repo.mark_lesson_completed(actor.user_id, lesson)
+    progress_row = practice_repo.mark_lesson_completed(actor.user_id, lesson)
     curriculum_analytics_service.record_lesson_completed(student_id=actor.user_id, lesson=lesson)
     _record_practice_usage(
         student_id=actor.user_id,
         action=usage_ledger_service.PRACTICE_LESSON_COMPLETION_ACTION,
         resource_id=lesson_id,
-        metadata={
-            "lesson_id": lesson_id,
-            "subject": lesson.get("subject_id"),
-            "topic_id": lesson.get("topic_id"),
-            "unit_id": lesson.get("unit_id"),
-            "status": "completed",
-        },
+        metadata={"status": "completed"},
+        account_fence_generation=(
+            int(progress_row["account_fence_generation"])
+            if isinstance(progress_row, dict)
+            and type(progress_row.get("account_fence_generation")) is int
+            else None
+        ),
     )
     all_lessons = sorted(
         practice_repo.get_lessons(topic_id=lesson.get("topic_id")),
@@ -813,14 +813,12 @@ async def submit_answer(
         student_id=user_id,
         action=usage_ledger_service.PRACTICE_ANSWER_ACTION,
         resource_id=challenge_id,
-        metadata={
-            "challenge_id": challenge_id,
-            "lesson_id": lesson_id,
-            "subject": challenge.get("subject_id"),
-            "topic_id": challenge.get("topic_id"),
-            "attempt_result": "correct" if correct else "incorrect",
-            "status": "submitted",
-        },
+        metadata={"status": "submitted"},
+        account_fence_generation=(
+            int(recorded_attempt["account_fence_generation"])
+            if type(recorded_attempt.get("account_fence_generation")) is int
+            else None
+        ),
     )
 
     return result
@@ -886,13 +884,7 @@ async def get_hint(
         action=usage_ledger_service.HINT_REQUEST_ACTION,
         resource_id=challenge_id,
         usage_counter=usage_counter,
-        metadata={
-            "challenge_id": challenge_id,
-            "lesson_id": challenge.get("lesson_id"),
-            "subject": challenge.get("subject_id"),
-            "topic_id": challenge.get("topic_id"),
-            "status": "returned" if hint else "unavailable",
-        },
+        metadata={"status": "returned" if hint else "unavailable"},
     )
 
     return PracticeHintResponse(
@@ -910,21 +902,13 @@ async def request_teacher_help(
 ):
     import uuid
     challenge_id = str(body.get("challengeId") or "").strip()
-    challenge = dict(authorized_challenge.value)
 
     request_id = str(uuid.uuid4())
     _record_practice_usage(
         student_id=actor.user_id,
         action=usage_ledger_service.PRACTICE_TEACHER_HELP_ACTION,
         resource_id=challenge_id,
-        metadata={
-            "challenge_id": challenge_id,
-            "request_id": request_id,
-            "lesson_id": body.get("lessonId") or challenge.get("lesson_id"),
-            "subject": body.get("subjectId") or challenge.get("subject_id"),
-            "topic_id": body.get("topicId") or challenge.get("topic_id"),
-            "status": "ready",
-        },
+        metadata={"status": "ready"},
     )
     return {
         "requestId": request_id,
@@ -940,6 +924,7 @@ def _record_practice_usage(
     resource_id: str,
     metadata: dict[str, Any],
     usage_counter: dict | None = None,
+    account_fence_generation: int | None = None,
 ) -> None:
     try:
         usage_ledger_service.record_usage_event(
@@ -953,9 +938,10 @@ def _record_practice_usage(
             ),
             counter_key=(usage_counter or {}).get("counterKey"),
             counter_value=(usage_counter or {}).get("counterValue"),
-            request_correlation_id=resource_id,
+            request_correlation_id=None,
             created_at=datetime.now(timezone.utc).isoformat(),
             metadata=metadata,
+            account_fence_generation=account_fence_generation,
         )
     except Exception:  # noqa: BLE001
         logger.warning("Practice usage ledger write failed", exc_info=True)

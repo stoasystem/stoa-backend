@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -30,8 +29,9 @@ def record_practice_attempt(
     challenge: dict[str, Any],
     correct: bool,
 ) -> None:
-    metadata = {"correct": correct, "studentHash": _stable_subject_hash(student_id)}
+    metadata = {"correct": correct}
     _safe_record(
+        student_id=student_id,
         signal_type="practice_attempt",
         public_id=str(challenge.get("challenge_id") or ""),
         content_type="exercise",
@@ -43,6 +43,7 @@ def record_practice_attempt(
     )
     if not correct:
         _safe_record(
+            student_id=student_id,
             signal_type="wrong_answer",
             public_id=str(challenge.get("challenge_id") or ""),
             content_type="exercise",
@@ -56,6 +57,7 @@ def record_practice_attempt(
 
 def record_lesson_completed(*, student_id: str, lesson: dict[str, Any]) -> None:
     _safe_record(
+        student_id=student_id,
         signal_type="lesson_completed",
         public_id=str(lesson.get("lesson_id") or ""),
         content_type="lesson",
@@ -63,7 +65,7 @@ def record_lesson_completed(*, student_id: str, lesson: dict[str, Any]) -> None:
         subject_id=lesson.get("subject_id"),
         topic_id=lesson.get("topic_id"),
         source_type="lesson_completion",
-        metadata={"studentHash": _stable_subject_hash(student_id)},
+        metadata={},
     )
 
 
@@ -211,6 +213,7 @@ def operator_dashboard(
 
 def _safe_record(
     *,
+    student_id: str | None = None,
     signal_type: str,
     public_id: str,
     content_type: str,
@@ -235,8 +238,15 @@ def _safe_record(
         "created_at": datetime.now(UTC).isoformat(),
     }
     try:
-        curriculum_analytics_repo.put_signal(item)
-        curriculum_analytics_repo.increment_metric(item)
+        if student_id:
+            curriculum_analytics_repo.record_student_signal(
+                item,
+                student_id=student_id,
+                account_fence_generation=None,
+            )
+        else:
+            curriculum_analytics_repo.put_signal(item)
+            curriculum_analytics_repo.increment_metric(item)
     except Exception:  # noqa: BLE001
         return
 
@@ -403,6 +413,7 @@ def _record_assignment_targets(
 ) -> None:
     for target in _assignment_targets(item):
         _safe_record(
+            student_id=str(item.get("student_id") or "") or None,
             signal_type=signal_type,
             public_id=target["public_id"],
             content_type=target["content_type"],
@@ -433,7 +444,6 @@ def _assignment_metadata(
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {
         "event": event,
-        "studentHash": _stable_subject_hash(str(item.get("student_id") or "")),
         "sourceType": item.get("source_type"),
         "topicIds": [str(topic_id) for topic_id in item.get("topic_ids", [])],
     }
@@ -445,8 +455,3 @@ def _assignment_metadata(
 def _first_topic(item: dict[str, Any]) -> str:
     values = item.get("topic_ids") or []
     return str(values[0]) if values else ""
-
-
-def _stable_subject_hash(value: str) -> str:
-    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-    return f"student:{digest}"

@@ -20,6 +20,11 @@ def _install_analytics_repo(monkeypatch, metrics=None):
     increments: list[dict] = []
     repo = curriculum_analytics_service.curriculum_analytics_repo
     monkeypatch.setattr(repo, "put_signal", lambda item: signals.append(dict(item)))
+    monkeypatch.setattr(
+        repo,
+        "record_student_signal",
+        lambda item, **_kwargs: signals.append(dict(item)),
+    )
     monkeypatch.setattr(repo, "increment_metric", lambda item: increments.append(dict(item)))
     monkeypatch.setattr(repo, "list_metrics", lambda **kwargs: list(metrics or []))
     return {"signals": signals, "increments": increments}
@@ -64,10 +69,8 @@ def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
     assert response.status_code == 200
     assert [item["signal_type"] for item in state["signals"]] == ["practice_attempt", "wrong_answer"]
     assert state["signals"][0]["source_type"] == "catalog_self_practice"
-    assert state["signals"][0]["metadata"] == {
-        "correct": False,
-        "studentHash": "student:600bf3b15689",
-    }
+    assert state["signals"][0]["metadata"] == {"correct": False}
+    assert "studentHash" not in str(state["signals"])
     assert "x = 3" not in str(state["signals"])
     assert len(attempts) == 1
 
@@ -140,7 +143,7 @@ def test_practice_answer_records_usage_ledger_without_raw_answer(monkeypatch):
 
     assert response.status_code == 200
     assert ledger_calls[0]["action"] == "practice_answer"
-    assert ledger_calls[0]["metadata"]["attempt_result"] == "incorrect"
+    assert ledger_calls[0]["metadata"] == {"status": "submitted"}
     assert "x = 3" not in str(ledger_calls[0])
     assert "x = 1" not in str(ledger_calls[0])
 
@@ -171,8 +174,7 @@ def test_lesson_completion_records_usage_ledger(monkeypatch):
 
     assert response.status_code == 200
     assert ledger_calls[0]["action"] == "practice_lesson_completion"
-    assert ledger_calls[0]["metadata"]["lesson_id"] == "lesson-1"
-    assert ledger_calls[0]["metadata"]["status"] == "completed"
+    assert ledger_calls[0]["metadata"] == {"status": "completed"}
 
 
 def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
@@ -218,7 +220,7 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
     assert response.status_code == 200
     assert ledger_calls[0]["action"] == "hint_request"
     assert ledger_calls[0]["counter_value"] == 1
-    assert ledger_calls[0]["metadata"]["challenge_id"] == "exercise-1"
+    assert ledger_calls[0]["metadata"] == {"status": "unavailable"}
     assert "Try subtracting" not in str(ledger_calls[0])
 
 
@@ -259,10 +261,9 @@ def test_practice_teacher_help_records_usage_ledger_without_raw_context(monkeypa
     body = response.json()
     assert ledger_calls[0]["action"] == "practice_teacher_help_request"
     assert ledger_calls[0]["student_id"] == "student-1"
-    assert ledger_calls[0]["request_correlation_id"] == "exercise-1"
-    assert ledger_calls[0]["metadata"]["challenge_id"] == "exercise-1"
-    assert ledger_calls[0]["metadata"]["request_id"] == body["requestId"]
-    assert ledger_calls[0]["metadata"]["status"] == "ready"
+    assert ledger_calls[0]["request_correlation_id"] is None
+    assert ledger_calls[0]["metadata"] == {"status": "ready"}
+    assert body["requestId"] not in str(ledger_calls[0])
     assert "raw help request" not in str(ledger_calls[0])
     assert "private prompt" not in str(ledger_calls[0])
     assert "private answer" not in str(ledger_calls[0])

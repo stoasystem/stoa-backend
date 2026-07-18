@@ -11,6 +11,28 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
+PRIVATE_LEARNING_ACTIONS = frozenset(
+    {
+        "hint_request",
+        "practice_teacher_help_request",
+        "practice_answer",
+        "practice_lesson_completion",
+        "assignment_started",
+        "assignment_completed",
+        "assignment_skipped",
+        "assignment_archived",
+        "reviewed_assignment_generation",
+    }
+)
+
+
+def _atomic_table(table: Any) -> bool:
+    return callable(getattr(table, "transact_account_deletion", None)) or bool(
+        getattr(getattr(table, "meta", None), "client", None)
+        and getattr(table, "name", None)
+    )
+
+
 def put_usage_event(
     event: dict[str, Any],
     *,
@@ -19,6 +41,17 @@ def put_usage_event(
 ) -> bool:
     """Persist one usage ledger event, returning False when it already exists."""
     target = table or get_table()
+    if account_fence_generation is None and event.get("action") in PRIVATE_LEARNING_ACTIONS:
+        owner_id = str(event.get("student_id") or "")
+        if not owner_id:
+            raise ValueError("student_id is required for private learning usage")
+        if _atomic_table(target):
+            fence = account_deletion_repo.require_active_account_fence(
+                owner_id, table=target
+            )
+            account_fence_generation = int(fence["generation"])
+        else:
+            account_fence_generation = 1
     if account_fence_generation is not None:
         owner_id = str(event.get("student_id") or "")
         if not owner_id:
@@ -28,6 +61,17 @@ def put_usage_event(
             "owner_id": owner_id,
             "account_fence_generation": account_fence_generation,
         }
+        if not _atomic_table(target):
+            try:
+                target.put_item(
+                    Item=event,
+                    ConditionExpression="attribute_not_exists(PK)",
+                )
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                    return False
+                raise
+            return True
         try:
             account_deletion_repo.transact(
                 [
