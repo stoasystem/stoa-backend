@@ -8,7 +8,7 @@
 
 Phase 474 establishes one deterministic, release-blocking verification and artifact path for the STOA Python backend and the real Web frontend in `/Users/zhdeng/stoa-frontend`. It owns clean target-runtime bootstrap, hermetic and repeated tests, lint and typing closure, dependency policy, cross-repository release identity, immutable build provenance, CI gate enforcement, staging promotion, owner-approved production promotion, and rollback evidence.
 
-STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobile/` skeleton are not part of the v9.0 release path. Native client work is deferred until the Web App has launched for testing and is stable. Phase 474 establishes the trustworthy delivery baseline; later replanned v9.0 phases complete the remaining Web features, known reachable defects, and student/parent Web journeys.
+STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobile/` skeleton are not part of the v9.0 release path. Native client work is deferred until the Web App has launched for testing and is stable. Phase 474 establishes the trustworthy delivery baseline; later replanned v9.0 phases complete every retained production Web route, all student/parent/teacher/admin-operator journeys, and every known reachable backend/Web defect.
 
 </domain>
 
@@ -45,8 +45,8 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 
 ### v9.0 Web-First Product Correction
 
-- **D-17:** v9.0 exists to complete the Web App and backend for early real testing: close every known audit defect, test-discovered defect, and launch-blocking defect that is reachable in the core Web product. “Fix all bugs” is not an unbounded claim about undiscovered theoretical defects, but known core defects cannot be silently deferred.
-- **D-18:** The current Phase 477/478 native-mobile roadmap is invalid for the product direction and must be replaced with Web foundation/contract convergence and student/parent core Web journey completion. All later phases and the final reality gate must use Web evidence rather than Expo, iOS, Android, or device evidence.
+- **D-17:** v9.0 exists to complete the Web App and backend for early real testing: close every known audit defect, test-discovered defect, Phase 473 follow-up, and launch-blocking defect reachable through any retained production Web route. “Fix all bugs” is not an unbounded claim about undiscovered theoretical defects, but known Web/backend defects cannot be silently deferred.
+- **D-18:** The current Phase 477/478 native-mobile roadmap is invalid for the product direction and must be replaced with Web foundation/contract convergence plus complete student, parent, teacher, and admin/operator journeys. A bounded executable route inventory must prove every retained production Web route works against real services or is intentionally removed/disabled. All later phases and the final reality gate use Web/browser evidence rather than Expo, iOS, Android, or device evidence.
 
 ### the agent's Discretion
 
@@ -118,7 +118,7 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 <specifics>
 ## Specific Ideas
 
-- The project owner explicitly rejected native mobile as a current product goal: “网页端测试通过，开始稳定运行后，才去考虑推进客户端 app 的开发.”
+- The project owner explicitly rejected native mobile as a current product goal: “网页端测试通过，开始稳定运行后，才去考虑推进客户端 app 的开发.” The owner also required completion of all Web App functionality and all known reachable bugs before early testing, including teacher/admin/operator routes rather than only student and parent journeys.
 - The desired operational flow is: verify both repositories → build once → automatically deploy staging → run smoke → owner approval → promote identical bytes → automatically roll back on failed production smoke.
 - The current one-person team must not be blocked by artificial two-person approval policy, but production still requires an explicit protected-environment approval action.
 

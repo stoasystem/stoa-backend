@@ -47,7 +47,7 @@
 | Client dependency scope | Web-first; backend-only; retain native mobile | Backend plus real Web frontend; remove native mobile from v9.0 |
 
 **User's choice:** First attempt to repair every mypy error. If that genuinely fails, return with specific evidence before the owner considers a temporary freeze.
-**Notes:** The user clarified that STOA's current product is the Web App. All known reachable Web/backend bugs and launch blockers must be closed for early testing; native client development begins only after the Web product is stable.
+**Notes:** The user clarified that STOA's current product is the Web App. All known reachable Web/backend bugs and launch blockers must be closed for early testing, every retained production route must be real-service functional or intentionally disabled, and student, parent, teacher, and admin/operator journeys are all in scope. Native client development begins only after the Web product is stable.
 
 ---
 

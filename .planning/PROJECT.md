@@ -144,35 +144,44 @@ The v8.0-v8.4 sequence is complete as local gated operations contracts. The 2026
 
 ## Core Value
 
-Students and parents can complete real learning, account, and paid-access journeys against authorized backend data without hidden demo fallbacks, placeholder screens, privilege escalation, or silent state divergence.
+Students, parents, teachers, and admin/operators can complete every retained Web workflow against authorized backend data, with nonfunctional routes intentionally removed and no hidden demo fallback, placeholder success, privilege escalation, or silent state divergence.
 
 ## Current State
 
 **Production-verified shipped version:** v3.2 Content Moderation And Internal Operations on 2026-06-08
 **Latest completed milestone:** v8.4 Strategic Scale Reliability And Next-Version Decision on 2026-07-09 (local gated operations contracts only)
 **Reality audit baseline:** commit `de3bf1e4133550e1c679bf611b026437336bd219`, documented in `docs/audit/full-project-audit.md` with 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
-**Residual release gate:** external beta, broader production rollout, paid marketing, and uncontrolled provider writes remain blocked until v9.0 closes reachable authorization/data defects, restores trustworthy verification, and proves installable core user journeys.
-**Active milestone:** v9.0 Product Reality, Authorization And Core Journey Completion
+**Residual release gate:** early real Web testing, external beta, broader production rollout, paid marketing, and uncontrolled provider writes remain blocked until v9.0 closes reachable backend/Web defects, restores trustworthy verification, and proves every retained production Web route plus the student, parent, teacher, and admin/operator journeys on one traceable release candidate.
+**Active milestone:** v9.0 Web Product Reality, Authorization And Web Functionality Completion
 **Next milestone:** not committed; v9.1 scope must be selected from v9.0 live evidence rather than more local readiness contracts.
 **Phase 472:** complete and independently verified on 2026-07-15 — 8/8 requirements and all six final identity/authorization review findings closed locally; external Cognito checks remain explicitly not run, and the exact 23 strict Settings fixture failures remain owned by Phase 474.
+**Phase 473:** complete and independently verified on 2026-07-18 — 3/3 mapped requirements and 40/40 plans complete with source-bound privacy/practice evidence.
+**Product correction:** STOA is Web-first for the remainder of v9.0. The production surface is the Vite/React application in `/Users/zhdeng/stoa-frontend`; native client work is deferred until that Web App has launched for testing and is stable.
 
-## Current Milestone: v9.0 Product Reality, Authorization And Core Journey Completion
+## Current Milestone: v9.0 Web Product Reality, Authorization And Web Functionality Completion
 
-**Goal:** Convert STOA's broad local backend contracts into a trustworthy, installable product by closing reachable authorization and consistency defects, restoring gated verification, and completing real student/parent mobile journeys with versioned infrastructure and release evidence.
+**Goal:** Convert STOA's broad local contracts into a trustworthy Web product by closing every known launch-blocking backend/Web defect, making every retained production Web route functional against real services, and proving the student, parent, teacher, and admin/operator journeys through deterministic cross-repository delivery and browser evidence so early real testing can begin.
 
 **Target features:**
 - Privileged identity provisioning and complete student-resource authorization boundaries.
 - Upload/privacy/practice integrity and transactional usage, teacher, relationship, and billing operations.
-- Deterministic Python 3.12 verification, dependency/runtime hygiene, and gated immutable deployment artifacts.
-- Installable Expo client with backend-authoritative auth and functional student/parent learning and paid-access journeys.
-- Versioned infrastructure, full WebSocket delivery, operational observability, staging/rollback, and end-to-end evidence.
+- One deterministic backend/Web verification gate with fresh Python 3.12 runs, locked Web checks, dependency/runtime hygiene, and immutable cross-repository release artifacts.
+- Backend-authoritative Web identity/API contracts and complete student/parent account, question, practice, learning, and paid-access browser journeys without hidden demo fallback.
+- Complete teacher queue/assignment/takeover/conversation/help/authorized-answer journeys and admin/operator identity, support/account, curriculum, report/recovery, billing, and notification journeys.
+- A bounded executable route inventory that either proves every production Web route against real services or removes/disables it intentionally; no placeholder, demo, or static-success route remains enabled.
+- Versioned infrastructure, full browser WebSocket delivery, operational observability, build-once staging/promotion/rollback, and end-to-end Web evidence.
 
 ## Active Requirements
 
-- Close every P0 and P1 audit finding before v9.0 completion; no risk acceptance may silently downgrade them.
+- Close every P0/P1 audit finding reachable in the backend/Web release before v9.0 completion; native-only P1 findings receive an explicit future-milestone disposition under the owner-approved product correction and are never presented as fixed.
 - Resolve release-blocking P2 findings or record an explicit owner, evidence-based disposition, and target milestone.
 - Keep curriculum mutation restricted to explicitly capability-authorized operators; being a teacher alone is not sufficient.
-- Treat Python 3.12 tests, mobile clean install/build, authorization matrices, provider failure tests, and staging evidence as product acceptance, not optional security polish.
+- Close every known audit, test-discovered, and launch-blocking defect reachable through the backend or retained production Web route inventory; newly confirmed defects become milestone inputs instead of weakened tests or silent deferrals.
+- Close the four documented Phase 473 follow-up defects without reopening its completed goal: shared parent-profile version/CAS, transient notification delivery-begin dependency classification, completed deletion-receipt replay, and final-HEAD publication reverification.
+- Treat fresh Python 3.12 verification, locked Web install/lint/type/build/browser tests, authorization matrices, provider failure tests, and staging evidence as product acceptance, not optional polish.
+- Use one formal cross-repository gate: build backend and Web artifacts once, automatically deploy the exact release set to staging, implement protected owner approval for byte-identical production promotion, prohibit bypass, and implement automatic rollback for failed production smoke; prove those semantics through staging and a controlled non-production failure exercise.
+- Treat the owner's selected approval policy as design authority only, not authorization for a Phase 474 production mutation. Actual production promotion/smoke requires a later explicit operational approval; otherwise record exact `NOT RUN` evidence without weakening Phase 474.
+- Defer native client implementation and native-only audit remediation until the Web App has launched for testing and is stable; those findings remain explicit dispositions, not claimed fixes.
 - Do not expand into paid marketing, new markets, enterprise automation, or broader AI autonomy during v9.0.
 
 ## Completed Milestone: v6.6 First Cohort Live Operations And Fix Sprint
@@ -1214,7 +1223,7 @@ Known current resources:
 | Plan v8.2 revenue growth acquisition and paid marketing gate | Growth and paid marketing require healthy rollout, revenue, support, learning, and incident evidence | Complete as a local gated contract; paid marketing remains blocked |
 | Plan v8.3 learning outcomes scale and AI curriculum improvement | Learning outcomes must hold as growth increases, with curriculum and AI quality improvements from real cohorts | Complete as a local gated contract; real cohort scale remains unproven |
 | Plan v8.4 strategic scale reliability and next-version decision | Strategic scale, market expansion, enterprise readiness, or v9 should be based on live product and business evidence | Complete locally; the 2026-07-14 reality audit selected v9.0 product completion |
-| Start v9.0 from the full-project reality audit | The audit found two reachable P0 authorization defects, nine P1 blockers, a red test baseline, and a non-buildable placeholder mobile app; the next milestone must complete real product journeys before adding more readiness contracts | Active - Phase 472 identity and resource authorization closure is complete; Phase 473 is next |
+| Start v9.0 from the full-project reality audit | The audit found two reachable P0 authorization defects, nine P1 blockers, a red test baseline, unsafe direct deployment, and a gap between contract breadth and usable journeys; the next milestone must complete real product behavior before adding more readiness contracts | Active - Phases 472 and 473 are complete; the 2026-07-18 owner correction makes the remaining milestone Web-first and defers native client work until Web testing is launched and stable |
 
 ## Evolution
 
@@ -1234,4 +1243,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-15 after independent completion of Phase 472 identity and resource authorization closure*
+*Last updated: 2026-07-18 for the v9.0 Web-first replan after independent completion of Phases 472 and 473*

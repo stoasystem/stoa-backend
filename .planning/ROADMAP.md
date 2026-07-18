@@ -1,28 +1,31 @@
-# Roadmap: v9.0 Product Reality, Authorization And Core Journey Completion
+# Roadmap: v9.0 Web Product Reality, Authorization And Web Functionality Completion
 
 - **Status:** Planned
 - **Created:** 2026-07-14
+- **Replanned:** 2026-07-18 after the owner's Web-first product correction
 - **Prior milestone:** v8.4 Strategic Scale Reliability And Next-Version Decision
 - **Audit baseline:** `de3bf1e4133550e1c679bf611b026437336bd219`
-- **Requirements:** 44 across 10 phases
+- **Requirements:** 51 across 10 phases
 - **Phase range:** 472-481
 
 ## Goal
 
-Turn STOA's broad local contracts into a trustworthy, installable internal product. v9.0 first closes reachable privilege escalation and cross-student access, then restores deterministic verification and data consistency, completes paid access and mobile core journeys, integrates versioned infrastructure/WebSocket operations, and finishes with traceable release evidence.
+Turn STOA's broad local contracts into a trustworthy Web product that can begin early real testing. v9.0 closes reachable privilege escalation and cross-student access, restores deterministic cross-repository verification, fixes every known audit/test/follow-up consistency and billing defect, completes the actual student, parent, teacher, and admin/operator Web journeys, closes or intentionally removes every production route, integrates versioned infrastructure and browser realtime delivery, and finishes with one traceable release decision.
 
 ## Why This Milestone Exists
 
-The full-project audit found that implementation breadth and planning volume overstate real product maturity. The backend contains meaningful functionality, but two P0 authorization failures, nine P1 blockers, twelve failing tests, non-atomic business writes, a direct-to-production deployment workflow, and a non-buildable placeholder mobile client prevent an honest beta or production expansion claim.
+The full-project audit found that implementation breadth and planning volume overstate real product maturity. The backend contains meaningful functionality, but two P0 authorization failures, nine P1 blockers, twelve failing tests, non-atomic business writes, and direct-to-production backend/frontend workflows prevent an honest beta or production expansion claim. The audit also found a non-buildable placeholder native client; the owner has explicitly deferred that separate product surface until the Web App has launched for testing and is stable.
 
-v9.0 is therefore a product-completion milestone, not another readiness-contract milestone. It does not add broad new business scope. It makes the existing account, learning, teacher, billing, notification, and mobile promises work together under real contracts and failure conditions.
+v9.0 is therefore a Web product-completion milestone, not another readiness-contract milestone. It does not add broad new business scope. It makes the existing account, learning, teacher, admin/operator, billing, and notification behavior work together through the real Vite/React Web application and backend under real contracts and failure conditions, and it disables any route that cannot honestly meet that boundary.
 
 ## Release Boundary
 
-- P0 and P1 findings are mandatory closure items. They cannot be accepted as normal residual risk.
+- Backend/Web-reachable P0 and P1 findings are mandatory closure items. Native-only findings are explicitly deferred under the owner-approved product correction and cannot be presented as fixed.
 - Release-blocking P2 findings must be fixed or receive explicit, time-bounded owner acceptance supported by reachability evidence.
+- Every known audit, test-discovered, Phase 473 follow-up, or launch-blocking defect reachable through the backend or retained production Web route inventory is milestone scope; undiscovered theoretical defects are not implied by this bounded commitment.
 - Curriculum editing remains capability-authorized; the milestone must not grant all teachers mutation rights.
 - Production writes, real charging, bulk notification, and user expansion require separate approved operational execution even after code completion.
+- One formal gate owns both repositories: build once, deploy the exact set automatically to staging, implement protected owner approval for unchanged production promotion, prohibit bypass, retain evidence, and implement automatic rollback for failed production smoke. Phase 474 proves these semantics through staging and a controlled non-production failure; actual production mutation requires later explicit operational approval or remains exact `NOT RUN`.
 - Public launch, paid marketing, new markets, enterprise automation, and expanded AI autonomy remain out of scope.
 
 ## Execution Order
@@ -31,27 +34,27 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
+| 474 | Deterministic Verification And Gated Delivery | One deterministic backend/Web gate plus the minimum immutable staged release infrastructure | Phases 472 and 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
-| 477 | Installable Mobile Foundation And Contract Convergence | Clean Expo build with authoritative auth/API contracts | Phases 472 and 474 |
-| 478 | Student Parent Core Mobile Journey Completion | Functional account, learning, practice, and paid-access journeys | Phases 473, 475, 476, 477 |
-| 479 | Versioned Infrastructure And Full WebSocket Integration | Reproducible cloud resources and realtime delivery | Phases 474 and 477 |
-| 480 | Operational Observability Pagination And Release Resilience | Detectable, complete, staged, rollback-capable operations | Phases 474 and 479 |
-| 481 | Product Reality Gate And Milestone Audit | Reconcile evidence and make an honest release decision | Phases 478 and 480 |
+| 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
+| 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
+| 479 | Broader Versioned Infrastructure And Browser WebSocket Integration | Audit/extend cloud resources and deliver browser realtime without deferring Phase 474 prerequisites | Phases 474 and 477 |
+| 480 | Operational Observability Pagination And Release Resilience | Detectable, complete operations exercised through the common release set | Phases 475, 476, and 479 |
+| 481 | Web Product Reality Gate And Milestone Audit | Reconcile backend/Web/infra evidence and make an honest early-testing decision | Phases 478 and 480 |
 
 ## Phases
 
-- [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified)
-- [ ] **Phase 474: Deterministic Verification And Gated Delivery**
-- [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
-- [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
-- [ ] **Phase 477: Installable Mobile Foundation And Contract Convergence**
-- [ ] **Phase 478: Student Parent Core Mobile Journey Completion**
-- [ ] **Phase 479: Versioned Infrastructure And Full WebSocket Integration**
-- [ ] **Phase 480: Operational Observability Pagination And Release Resilience**
-- [ ] **Phase 481: Product Reality Gate And Milestone Audit**
+- [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15) - Privileged identity and student-resource access fail closed.
+- [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified) - Uploads, private content, and practice answers respect the completed safety boundary.
+- [ ] **Phase 474: Deterministic Verification And Gated Delivery** - One formal backend/Web gate and its minimum CDK release topology control one immutable staged release set.
+- [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency.
+- [ ] **Phase 476: Billing Idempotency And Paid Access Recovery** - One Web checkout produces one recoverable provider and entitlement outcome.
+- [ ] **Phase 477: Web Foundation And Contract Convergence** - Web identity, API, and release configuration match authoritative backend contracts.
+- [ ] **Phase 478: Complete Web Role Journeys And Route Closure** - Every retained route works for real student, parent, teacher, and admin/operator accounts or is intentionally disabled.
+- [ ] **Phase 479: Broader Versioned Infrastructure And Browser WebSocket Integration** - Broader versioned cloud resources deliver authorized realtime browser notifications without owning Phase 474 prerequisites.
+- [ ] **Phase 480: Operational Observability Pagination And Release Resilience** - Critical failures are detectable, reads are complete, and rollback behavior is exercised.
+- [ ] **Phase 481: Web Product Reality Gate And Milestone Audit** - One evidence index produces an honest early-testing or hold decision.
 
 ## Phase Details
 
@@ -59,7 +62,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Goal:** Close unauthenticated privileged provisioning and cross-student authorization defects before any additional product integration.
 
-**Why now:** `SEC-001` and `SEC-002` are reachable P0 issues. Continuing feature work while these paths remain open would expand the blast radius and invalidate later browser/mobile evidence.
+**Why now:** `SEC-001` and `SEC-002` are reachable P0 issues. Continuing feature work while these paths remain open would expand the blast radius and invalidate later browser evidence.
 
 **Depends on:** Full-project audit at `de3bf1e`.
 
@@ -147,13 +150,15 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Goal:** Ensure student uploads and exercise previews cannot expose another user's content or answers.
 
-**Why now:** Mobile question upload and practice work cannot be completed safely while server-side ownership and response boundaries are missing.
+**Why now:** Web question upload and practice work cannot be completed safely while server-side ownership and response boundaries are missing.
 
 **Depends on:** Phase 472 actor identity and resource-authorization policy.
 
 **Requirements:** V9PRIV-01, V9PRIV-02, V9PRIV-03.
 
 **Audit findings:** SEC-003, SEC-005, BUG-001.
+
+**Plans:** 40/40 plans complete
 
 **Likely plan slices:**
 
@@ -324,68 +329,79 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Required evidence:** Upload/object ownership matrix, content validation fixtures, S3 error redaction test, OpenAPI response checks, and student preview snapshots.
 
-**Exit gate:** Question upload and practice preview contracts are safe enough for mobile implementation.
+**Exit gate:** Question upload and practice preview contracts are safe enough for Web journey implementation.
 
 ### Phase 474: Deterministic Verification And Gated Delivery
 
-**Goal:** Replace the red, environment-dependent baseline with repeatable Python 3.12 verification and a CI path that cannot deploy unverified source.
+**Goal:** Make it impossible for unverified backend or Web source to reach staging or production, while preserving one reproducible release identity and the minimum versioned release infrastructure from clean verification through rollback.
 
-**Why now:** Data, billing, and mobile changes cannot be trusted while twelve tests fail and the current workflow deploys every main push without quality gates.
+**Why now:** The backend workflow updates production Lambda functions on every `main` push, the Web workflow rebuilds and syncs production S3/CloudFront directly, frontend CI omits Playwright, the audited backend baseline is runtime/time/cloud dependent, and the current CDK stack lacks the minimum staging, immutable artifact, Lambda alias, Web release-pointer, protected-promotion, and rollback primitives that this gate must exercise. Later fixes cannot produce trustworthy evidence until both repositories share one formal gate and its minimum substrate.
 
-**Depends on:** Phase 472 security behavior and focused regressions; may proceed in parallel with Phase 473 after P0 fixes land.
+**Depends on:** Completed Phases 472 and 473.
 
-**Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06.
+**Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
+**Plans:** TBD
+**UI hint:** yes
+
 **Likely plan slices:**
 
-1. Python 3.12 pin, clean `uv` bootstrap, deny-network/AWS fixture, injected clock, and repair of the twelve failing tests.
-2. Ruff zero, classified mypy baseline, vulnerable dependency upgrades/removals, and Linux-arm64 package import validation.
-3. Verify/build separation, immutable artifact manifest/digest, protected deploy prerequisites, and intentional-failure CI tests.
+1. One authoritative local/CI entry point, clean Python 3.12 `uv.lock` bootstrap, fixed/future clocks, deterministic seed/collection receipts, and centralized ambient AWS/network denial.
+2. Repair the complete suite without weakened assertions; enforce zero skip/xfail/xpass; reach Ruff zero; attempt full mypy zero with narrow typed provider boundaries before any owner baseline decision.
+3. Add locked Web install, ESLint, TypeScript build, focused OpenAPI/adapter checks, Playwright, and backend/Web dependency policy to the common gate.
+4. Define the minimum release substrate in CDK: isolated staging and production release roles, immutable artifact/evidence storage, Lambda versions and aliases, immutable Web release prefixes plus an atomic release pointer or equivalent, protected environments, and authorized rollback controls. Deploy and exercise staging/controlled non-production resources; prove production definitions with synth/diff and policy tests unless a later explicit operational approval authorizes their mutation.
+5. Build Linux-arm64 backend and production Web artifacts once; emit one manifest containing exact commits, source/lock identities, artifact digests, runtimes, verification runs, and gate results; verify the eventual publication commit from a later metadata HEAD by reading release artifacts as Git blobs and proving unchanged ancestry.
+6. Replace direct production deploys with automatic staging deploy/smoke, sole-owner protected production approval, unchanged promotion, no bypass, automatic rollback, retention, and intentional-failure/tamper exercises; prove promotion/rollback through controlled non-production execution without treating the owner's policy selection as production-mutation authorization.
 
 **Success criteria:**
 
-1. A clean checkout creates the target environment with one documented command.
-2. The full Python suite passes twice with no AWS credentials/network and with a future frozen date.
-3. Ruff is clean; mypy records a non-increasing baseline and touched critical modules pass their configured strict level.
-4. Dependency scans have no unaccepted release blocker and every exception has reachability evidence and expiry.
-5. A stale source hash, failed test, failed lint/type baseline, or failed dependency check prevents deploy jobs from receiving an artifact.
-6. The fresh Linux-arm64 Lambda package imports/boots in a compatible runtime and its digest is tied to source SHA.
+1. From clean checkouts, one documented command recreates fresh locked backend and Web environments and returns the same formal gate result as CI; an existing developer environment cannot issue release evidence.
+2. Two separate fresh Python 3.12 runs—fixed standard time and explicit future time—pass the complete collection with zero skip/xfail/xpass while assertions prove ambient AWS credentials and non-allowlisted network are unavailable; unavailable external obligations are exact `NOT RUN` records, never passes.
+3. Ruff, the recorded full-mypy-zero attempt or explicit owner-approved temporary decision, Web lint/type/build/Playwright, Linux-arm64 boot smoke, and backend/Web dependency policy all pass without broad suppression.
+4. CDK synth/diff and staging evidence prove that the repository owns the minimum release substrate needed by the gate: isolated release roles, immutable artifact/evidence storage, Lambda versions and aliases, immutable Web release prefixes plus an atomic pointer or equivalent, protected promotion, and authorized rollback.
+5. One manifest binds the exact tested backend/Web source and lock identities to byte-addressed artifacts; the Phase 473 publication verifier accepts a later metadata HEAD only when the publication commit is the candidate's direct child, current HEAD descends from it, and all four Phase 473 publication-artifact Git blobs are unchanged; intentional failures block promotion, staging receives only the bound bytes, and a controlled non-production failure proves both pointers restore known-good backend and Web bytes without rebuilding. The configured production gate requires protected owner approval and applies the same rollback semantics, but real production promotion/smoke remains exact `NOT RUN` unless later explicitly authorized.
 
-**Required evidence:** Exact commands/results, repeated test logs, dependency report, Linux artifact smoke, CI run IDs, artifact digest, and a deliberately failed gate.
+**Required evidence:** Authoritative command identity; fixed/future run receipts with Python version, `uv.lock` hash, collection hash, seed, clock, outcome counts, AWS/network denial; Ruff/mypy repair report and any owner decision; `package-lock.json` hash plus Web lint/type/build/Playwright reports; both dependency scans and exception ledger; Linux-arm64 import/handler smoke; CDK outputs and synth/diff proving the minimum release roles, immutable stores, Lambda aliases, Web release prefixes/pointer, protected environments, and rollback authority; protected-owner gate configuration and policy-denial tests; cross-repository manifest; backend/Web artifact digests; publication-verifier tests for a later metadata HEAD, mutated blobs, non-direct-child publication, and invalid ancestry; staging deploy/smoke IDs; controlled non-production failed-promotion and automatic two-pointer rollback IDs; retention inventory; intentional-failure CI run IDs. Actual protected-owner approval, production deploy, production smoke, and production rollback evidence are required only if a later explicit operational approval authorizes that mutation; otherwise each is recorded exactly as `NOT RUN` and does not weaken or block Phase 474.
 
-**Exit gate:** All subsequent implementation uses this baseline; direct unverified main-to-production deployment is disabled.
+**Known follow-up defect closed:** `final-head-publication-reverification` from Phase 473.
+
+**Exit gate:** Direct main-to-production backend and Web deployment is disabled, and the minimum release substrate, protected approval policy, controlled non-production rollback, plus publication verifier are proven. A real production mutation is not a Phase 474 prerequisite and requires later explicit operational approval; otherwise it remains exact `NOT RUN`. Every later phase must extend, not bypass or reimplement, this common gate; Phase 479 cannot own a prerequisite needed to pass this gate.
 
 ### Phase 475: Transactional Usage Assignment And Relationship Consistency
 
 **Goal:** Make the core learning and relationship writes converge under partial failure, retry, and concurrency.
 
-**Why now:** Incorrect quota/ledger state, duplicate teacher sessions, asymmetric parent binding, and inflated rate counters damage product behavior even when requests return normal-looking responses.
+**Why now:** Incorrect quota/ledger state, duplicate teacher sessions, asymmetric parent binding, and inflated rate counters damage product behavior even when requests return normal-looking responses. Phase 473 also left three explicit nonblocking runtime follow-ups: a stale parent-profile scrub can overwrite concurrent profile updates, transient delivery-begin dependency failures can be mislabeled and permanently canceled, and completed account deletion cannot replay its stored receipt after a lost response.
 
 **Depends on:** Phase 474 deterministic failure-injection baseline.
 
-**Requirements:** V9DATA-01, V9DATA-02, V9DATA-03, V9DATA-04, V9DATA-05.
+**Requirements:** V9DATA-01, V9DATA-02, V9DATA-03, V9DATA-04, V9DATA-05, V9DATA-06, V9DATA-07, V9DATA-08.
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
+
+**Plans:** TBD
 
 **Likely plan slices:**
 
 1. Transactional question quota/idempotency/ledger/upload/question state plus reconciliation of historical partial records.
-2. Conditional teacher claim/session/notification and transactional parent-child binding with repair tooling.
-3. Capped/idempotent rate-limit semantics and complete practice-attempt answer persistence.
+2. Conditional teacher claim/session/notification and transactional parent-child binding with repair tooling; one shared CAS/version discipline for normal parent-profile writes and child scrubs.
+3. Capped/idempotent rate-limit semantics, typed delivery-begin dependency/business outcomes, complete practice-attempt answer persistence, and stored terminal account-deletion receipt replay.
 
 **Success criteria:**
 
 1. Identical question retries create one question, consume one quota unit, and emit one ledger event after any tested timeout/failure point.
 2. Two concurrent teacher takeovers produce one successful owner, one session, one notification, and a deterministic 409 loser.
-3. Parent/student forward and reverse bindings cannot commit one-sided; historical repair is dry-run capable and idempotent.
-4. Repeated 429 responses do not increase counters beyond the configured limit and provider failure behavior is explicit.
-5. Mistake review returns the submitted wrong answer and safely represents historical unknown answers.
+3. Parent/student forward and reverse bindings cannot commit one-sided; historical repair is dry-run capable and idempotent; a child scrub racing the real ordinary profile writer preserves unrelated locale and preference bytes.
+4. Repeated 429 responses do not increase counters beyond the configured limit; a transient dependency failure injected below delivery begin remains recoverable, and the healthy retry reserves and completes exactly once without false account-deletion cancellation.
+5. Mistake review returns the submitted wrong answer and safely represents historical unknown answers; an identical completed account-deletion request replays the stored terminal receipt with zero additional cleanup effects.
 
-**Required evidence:** DynamoDB transaction/failure-injection tests, barrier concurrency tests, reconciliation dry-run/apply fixtures, quota boundary tests, and mistake round trips.
+**Required evidence:** DynamoDB transaction/failure-injection tests; barrier concurrency tests; reconciliation dry-run/apply fixtures; a real profile-writer-versus-scrub race preserving exact locale/preference bytes; quota boundary tests; delivery-begin dependency-failure injection followed by healthy retry, typed-outcome, exactly-once reservation/completion, and no-false-cancellation evidence; mistake round trips; completed-deletion receipt replay through the real terminal projection with zero additional cleanup calls.
 
-**Exit gate:** Usage and relationship state are trustworthy enough for paid access and mobile UI.
+**Known follow-up defects closed:** `profile-version-cas`, `delivery-begin-dependency-classification`, and `completed-deletion-replay` from Phase 473.
+
+**Exit gate:** Usage and relationship state are trustworthy enough for paid access and the real Web journeys.
 
 ### Phase 476: Billing Idempotency And Paid Access Recovery
 
@@ -393,7 +409,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Why now:** Paid access is a core business journey and cannot rely on optimistic provider success followed by unrelated local writes.
 
-**Depends on:** Phase 474 verification; uses Phase 475 idempotency/transaction conventions. May be implemented in parallel with Phase 475 after conventions are fixed.
+**Depends on:** Phase 474 verification. It may overlap Phase 475, while reusing compatible idempotency/transaction conventions once those conventions are fixed.
 
 **Requirements:** V9BILL-01, V9BILL-02, V9BILL-03, V9BILL-04.
 
@@ -401,90 +417,101 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Likely plan slices:**
 
-1. Durable checkout command/idempotency key and deterministic Stripe idempotency propagation.
+1. Durable checkout command/idempotency key, exact Web request contract, and deterministic Stripe idempotency propagation.
 2. Ambiguous provider/local failure reconciliation, delayed/duplicate event behavior, and support-visible state.
-3. Exact callback origin allowlist and Stripe test-mode entitlement/quota end-to-end verification.
+3. Exact Web callback origin allowlist and Stripe test-mode browser-to-entitlement/quota verification.
 
 **Success criteria:**
 
-1. Concurrent or retried identical checkout requests return/recover one provider session.
+1. Concurrent or retried identical Web checkout requests return/recover one provider session.
 2. Provider success followed by local failure is discoverable and reconciles without a second customer charge/session.
 3. Delayed, duplicate, and out-of-order signed webhooks cannot regress active entitlement.
 4. Lookalike, encoded, credential-bearing, wrong-port, and arbitrary HTTPS callback URLs are refused.
-5. A Stripe test-mode checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in bounded support views.
+5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
-**Required evidence:** Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API result, and no live charge.
+**Plans:** TBD
+**UI hint:** yes
 
-**Exit gate:** Paid access has an end-to-end sandbox proof suitable for the real mobile parent journey.
+**Required evidence:** Web request payload and idempotency proof, Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API and browser results, exact-origin negative matrix, and no live charge.
 
-### Phase 477: Installable Mobile Foundation And Contract Convergence
+**Exit gate:** Paid access has an end-to-end sandbox proof suitable for the real parent Web journey.
 
-**Goal:** Establish a reproducible Expo application that uses the same identity and API contracts as the backend.
+### Phase 477: Web Foundation And Contract Convergence
 
-**Why now:** The current mobile client cannot install, typecheck, or provision a backend-compatible account; screen work on that foundation would be throwaway.
+**Goal:** Make the actual Web application use the authoritative backend identity, API, and environment contracts without demo data or static success masking release-path behavior.
 
-**Depends on:** Phases 472 and 474.
+**Why now:** `/Users/zhdeng/stoa-frontend` is a real Vite/React application with a committed lockfile, TypeScript, ESLint, and Playwright, but current evidence shows public tutor registration is still offered, core services carry demo fallbacks, the student dashboard imports static mock truth, production deploy is independent of backend identity, and accepted Web E2E commonly uses demo login or route interception.
 
-**Requirements:** V9MOB-01, V9MOB-02, V9MOB-03.
+**Depends on:** Completed Phases 472 and 473, plus Phase 474.
 
-**Audit findings:** FEATURE-001, BUG-003, BUG-005, TEST-002.
+**Requirements:** V9AUTH-06, V9WEB-01, V9WEB-02, V9WEB-03.
 
-**Likely plan slices:**
+**Audit findings:** FEATURE-003. Current Web gaps are grounded in the inspected frontend repository and are not relabeled native findings.
 
-1. Supported Expo SDK/version matrix, missing assets, lockfile, clean install, doctor, TypeScript, and native build baseline.
-2. Backend-authoritative registration/verification/sign-in/restore/sign-out and normalized role/client behavior.
-3. Generated/OpenAPI-validated client types, casing convergence, strict write models, and runtime adapter tests.
-
-**Success criteria:**
-
-1. Clean locked install and `expo-doctor` pass on documented Node/npm versions.
-2. TypeScript, iOS, and Android internal builds pass without generated files or undeclared local dependencies.
-3. A sandbox student and parent register/verify/sign in and restore the correct role/profile through the backend contract.
-4. Mobile question idempotency and push-device fields arrive under the exact server model names.
-5. Contract tests import and execute adapters; source-string checks are retained only as a cheap supplementary layer.
-
-**Required evidence:** Lockfile, environment matrix, build IDs, auth request IDs, `/auth/me` results, OpenAPI compatibility report, and redacted internal build artifacts.
-
-**Exit gate:** Mobile is installable and contract-correct before functional journey work starts.
-
-### Phase 478: Student Parent Core Mobile Journey Completion
-
-**Goal:** Replace placeholder routes with complete student and parent account, learning, practice, and paid-access workflows.
-
-**Why now:** This is the main product-value phase. Previous milestones produced adapters and readiness contracts, but users still cannot complete the real journeys in the native client.
-
-**Depends on:** Phases 473, 475, 476, and 477.
-
-**Requirements:** V9AUTH-06, V9MOB-04, V9MOB-05, V9MOB-06, V9MOB-07.
-
-**Audit findings:** FEATURE-003 and the functional completion portion of FEATURE-001.
+**Plans:** TBD
+**UI hint:** yes
 
 **Likely plan slices:**
 
-1. Real login-code backend/provider flow plus registration, verification, resend, reset, session, and recovery UI.
-2. Student dashboard, upload/question/AI/teacher-help, practice/answer/mistake, and retry/offline states.
-3. Parent bound-child, learning/usage/entitlement, checkout/billing-state, and denied-access states.
-4. Component/navigation/API/device E2E matrix on iOS and Android.
+1. Generate or automatically validate Web adapters against backend OpenAPI, converge casing/enums/errors/idempotency, and reject unexpected write fields.
+2. Restrict public Web registration to approved roles; converge verification/resend, password login, restore/logout, forgot/reset, role navigation, and session expiry; implement real login-code request and confirmation through the authoritative custom-auth/provider flow with anti-enumeration, replay/expiry, attempt/resend, and provider-failure controls.
+3. Make staging/production configuration fail closed; remove demo/static/virtual-success truth from core student/parent release paths while retaining isolated development fixtures.
+4. Add component and adapter-contract coverage that imports and executes real code, then make those checks additive to Phase 474's single gate.
 
 **Success criteria:**
 
-1. Login code produces a real authenticated session with expiry, anti-replay, attempt-limit, anti-enumeration, and provider-failure tests.
-2. A student completes the question and practice journeys on both platforms without placeholder cards or demo fallback.
-3. A parent sees only bound children and completes the Stripe test-mode paid-access journey with updated entitlement/quota.
-4. Loading, empty, offline, retry, expired-session, permission-denied, provider-blocked, and partial-failure states are actionable and do not hide errors.
-5. Device E2E proves state across app restart, network interruption, duplicate submit, and session refresh.
+1. A student and parent can register through approved Web roles, verify email, sign in with a password, request and confirm a real login code into an authoritative authenticated session, restore a session, sign out, and recover a password through the backend contract; expired, replayed, rate-limited, unknown-account, and provider-failure cases stay fail-closed and non-enumerating.
+2. Public Web pages cannot offer self-service privileged onboarding, and restored tokens always route to the backend-authoritative role/profile without fabricating a demo identity.
+3. Every core Web write serializes fields, enums, idempotency keys, and errors accepted by the current OpenAPI contract; incompatible or unexpected fields fail the contract check before deployment.
+4. With staging/production configuration, a backend failure produces an explicit loading/error/retry/denied/session state and never swaps in mock student, parent, billing, notification, or practice truth.
+5. The core student dashboard and account/billing entry points render backend state rather than `mockDashboard`, static plan success, or virtual checkout success.
 
-**Required evidence:** iOS/Android build IDs, device screenshots/video where useful, API/provider request IDs, redacted account IDs, component results, and end-to-end run logs.
+**Required evidence:** OpenAPI/adapter compatibility report; negative unexpected-field tests; approved-role registration snapshots; real sandbox auth/verification/password/recovery request IDs and `/auth/me` results; login-code request/challenge/confirm/provider IDs followed by a real token and `/auth/me`; login-code expiry, replay, resend/attempt-limit, anti-enumeration, and provider-failure matrix; configuration matrix; demo-fallback absence tests for core release paths; component results; backend-backed dashboard/account/billing browser captures.
 
-**Exit gate:** Core mobile product can be used internally by real sandbox accounts without hidden fallback behavior.
+**Exit gate:** Web identity, API, and configuration behavior is authoritative and fail-closed before journey completion begins.
 
-### Phase 479: Versioned Infrastructure And Full WebSocket Integration
+### Phase 478: Complete Web Role Journeys And Route Closure
 
-**Goal:** Make the cloud resources and realtime delivery path reproducible from versioned definitions and functional end to end.
+**Goal:** Let real student, parent, teacher, and admin/operator accounts complete their retained Web journeys, while proving every production route is real-service functional or intentionally removed.
 
-**Why now:** Backend WebSocket services cannot become a product feature without API Gateway route handlers, authorization, scalable connection access patterns, and a reconnecting client.
+**Why now:** This is the main product-value phase. The Web repository contains student, parent, tutor/teacher, admin/operator, organization, and public routes, but the student dashboard is mock-backed, core services retain demo-first modes, admin includes placeholder routes, organization routes use demo surfaces, upload tests prove browser previews rather than authoritative completion, and most current journey tests replace backend boundaries with demo auth or intercepted responses.
 
-**Depends on:** Phases 474 and 477; coordinates with the mobile notification surface from Phase 478.
+**Depends on:** Phases 475, 476, and 477; completed Phase 473 supplies the privacy/practice boundary.
+
+**Requirements:** V9WEB-04, V9WEB-05, V9WEB-06, V9WEB-07, V9WEB-08, V9WEB-09, V9WEB-10.
+
+**Audit findings:** No original audit finding is relabeled here. This phase closes the actual Web completion gaps found by repository inspection and all defects confirmed while exercising the bounded production route inventory.
+
+**Plans:** TBD
+**UI hint:** yes
+
+**Likely plan slices:**
+
+1. Backend-backed student dashboard plus upload/question/idempotency, AI result, teacher-help, real practice, lesson completion, mistake round trip, answer/result separation, duplicate-submit, dependency failure, and retry behavior.
+2. Parent bound-child, learning/usage/report/entitlement, checkout/billing-state, denied-child, and provider-failure behavior.
+3. Teacher queue, assignment/takeover, conversation, help/reply/resolve, and authorized answer-review behavior, including denied, stale, and concurrent ownership cases.
+4. Admin/operator identity review, support/account, curriculum, reporting, recovery, billing, moderation, and notification operations with real service responses, authorization, and durable audit evidence.
+5. Generate a bounded executable inventory of every production Web route—including public, organization, student, parent, teacher, and admin/operator routes—and either prove its real-service happy/error/denied behavior or remove/disable it intentionally; close with responsive/accessibility checks and integrated Playwright against a real backend and approved provider sandboxes.
+
+**Success criteria:**
+
+1. A real student sees current backend state, submits one validated upload/question idempotently, receives the AI result, requests teacher help, and completes a real practice lesson and mistake review without pre-submission answer disclosure; duplicate/retry produces one usage outcome and the stored wrong answer returns exactly.
+2. A real parent sees only bound children and their current learning, usage, report, and entitlement state, completes a Stripe test-mode checkout, and sees the signed entitlement/quota change exactly once; denied-child and provider-failure states remain explicit.
+3. A real teacher claims or receives authorized work, handles the conversation/help/reply/resolve path, and reviews answers only within assignment/capability boundaries; stale, denied, and concurrent takeover cases remain deterministic.
+4. A real admin/operator completes the retained identity-review, support/account, curriculum, reporting, recovery, billing, moderation, and notification operations with capability-correct responses and durable audit records.
+5. The executable route inventory has no unclassified production route: every enabled public/protected route proves real-service happy/error/denied behavior and every nonfunctional/demo/placeholder route is intentionally removed or disabled; integrated browser E2E covers all four roles without route interception while loading, empty, dependency-down, retry, expired-session, denied-resource, provider-blocked, and ambiguous-response states never show demo success.
+
+**Required evidence:** Versioned executable route inventory with every public, organization, student, parent, teacher, and admin/operator route classified and exercised or intentionally disabled; redacted real account IDs for all four roles; browser run IDs and traces; accessibility/responsive results; backend request/correlation IDs; upload intent/question/usage IDs; practice attempt/mistake IDs; teacher assignment/session/help/reply/resolve IDs; admin/operator action and audit IDs; Stripe checkout/event/entitlement IDs; disabled-route snapshots; no-demo/no-placeholder assertions; failure-state captures; integrated non-intercepted E2E logs bound to the Phase 474 manifest.
+
+**Exit gate:** Every retained production Web route is accounted for, and student, parent, teacher, and admin/operator journeys are usable by real sandbox accounts for staging-based early testing without hidden fallback behavior.
+
+### Phase 479: Broader Versioned Infrastructure And Browser WebSocket Integration
+
+**Goal:** Make the backend/Web cloud resources and browser realtime notification path reproducible from versioned definitions and functional end to end.
+
+**Why now:** Phase 474 already owns and proves the minimum staging, release-role, immutable-artifact, Lambda-alias, Web release-pointer, protected-promotion, and rollback topology. The broader infrastructure still needs resource reconciliation/import, explicit non-release runtime definitions, DynamoDB access-pattern and lifecycle coverage, backup/restore ownership, and a real WebSocket API. The Web client already has optional reconnect/polling code but no deployed transport evidence.
+
+**Depends on:** Phases 474 and 477; may overlap Phase 478 after the Web notification contract is stable.
 
 **Requirements:** V9INFRA-01, V9INFRA-02, V9INFRA-03.
 
@@ -492,29 +519,31 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Likely plan slices:**
 
-1. Import/define authoritative AWS resources, DynamoDB access patterns, Cognito clients/groups, S3 lifecycle, queues, alarms, and backup configuration in IaC.
+1. Audit and preserve the Phase 474 minimum release topology while reconciling/importing authoritative AWS resources and extending CDK coverage for DynamoDB access patterns, Cognito clients/groups, S3 lifecycle, queues, alarms, non-release runtime resources, and backup/restore configuration.
 2. Authenticated WebSocket connect/disconnect/subscribe/refresh handlers, indexed/paginated fanout, stale cleanup, and delivery evidence.
-3. Mobile reconnect/resubscribe/dedupe/out-of-order/fallback behavior and deployed notification smoke.
+3. Browser reconnect/resubscribe/dedupe/out-of-order/polling fallback behavior and deployed notification smoke.
 
 **Success criteria:**
 
-1. A clean staging environment can be synthesized/diffed and all v9.0 runtime resource assumptions are represented or explicitly imported.
+1. A clean staging environment can be synthesized/diffed and all broader v9.0 runtime resource assumptions are represented or explicitly imported, while compatibility checks prove the Phase 474 release roles, immutable stores, aliases, Web pointer, protected environments, and rollback path remain intact.
 2. Unauthorized connection/channel access is denied; owner subscriptions survive token refresh/reconnect without broad fanout.
 3. More than 500 connections and multiple pages are handled without silent omission.
-4. A durable notification event reaches the intended mobile account once after reconnect and duplicate/out-of-order delivery attempts.
+4. A durable notification event reaches the intended browser account once after visibility/network reconnect and duplicate/out-of-order delivery attempts.
 5. Unused uploads, stale connections, backup configuration, and restore ownership are visible in versioned infrastructure/runbooks.
 
-**Required evidence:** IaC synth/diff/deploy IDs, resource contract tests, WebSocket connection/request IDs, multi-page load fixture, mobile reconnect smoke, and rollback plan.
+**Plans:** TBD
 
-**Exit gate:** Full WebSocket is either demonstrably integrated or the milestone remains incomplete; a local service contract is not sufficient.
+**Required evidence:** Infra/backend/Web SHAs; Phase 474 topology/manifest compatibility record; CDK synth/diff/deploy IDs; imported-versus-defined resource inventory; broader staging/production runtime topology and role policy; table/index/bucket/lifecycle/backup/restore contract results; WebSocket connection/subscription/fanout/disconnect request IDs; unauthorized-channel matrix; multi-page/>500 fixture; browser visibility/network reconnect trace; polling fallback evidence; rollback plan.
+
+**Exit gate:** Full WebSocket is demonstrably integrated and the broader infrastructure audit is closed without deferring or weakening any Phase 474 release prerequisite; a local service contract is not sufficient.
 
 ### Phase 480: Operational Observability Pagination And Release Resilience
 
-**Goal:** Make critical failures detectable and critical reads complete, then prove staged promotion and rollback of the tested artifact.
+**Goal:** Make critical failures detectable and critical reads complete, then exercise those controls through the immutable backend/Web release set.
 
 **Why now:** Final product evidence is not credible if health is static, logs leak content, reads truncate at page limits, or deployment cannot promote/rollback the exact tested artifact.
 
-**Depends on:** Phases 474 and 479.
+**Depends on:** Phases 475, 476, and 479; consumes the Phase 474 delivery path.
 
 **Requirements:** V9PRIV-04, V9OPS-01, V9OPS-02, V9OPS-03.
 
@@ -524,7 +553,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 1. Liveness/readiness, request/trace correlation, structured redacted logging, metrics, provider timeouts, and alarms.
 2. Exact-key/index and pagination correction for audited practice, WebSocket, teacher, and admin paths with load/cost evidence.
-3. Staging/versioned Lambda deployment, API/provider/mobile smoke, alias promotion, and rollback using one immutable digest.
+3. Backend/Web staging probes, synthetic failure/alarm evidence, and a controlled non-production promotion-failure exercise of the Phase 474 release-set rollback path.
 
 **Success criteria:**
 
@@ -532,39 +561,45 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 2. Readiness fails appropriately during dependency degradation while liveness remains semantically correct.
 3. Multi-page fixtures return complete stable results and no audited path silently truncates at DynamoDB's first page or a hard fanout limit.
 4. Synthetic auth/question/billing/notification failures produce actionable metrics/alarms and link to a runbook.
-5. The exact tested artifact moves through staging smoke and alias promotion and can be rolled back without rebuild.
+5. The exact tested backend/Web release set passes staging probes; a controlled non-production promotion failure produces alerts and rolls both pointers back without rebuild or digest change, and the workflow applies that same fail-closed action to any failed production smoke.
 
-**Required evidence:** Log-redaction captures, correlation IDs, metrics/alarm synthetic IDs, pagination/load results, deploy run IDs, artifact digest, smoke request IDs, and rollback run.
+**Plans:** TBD
+**UI hint:** yes
+
+**Required evidence:** Backend/Web log-redaction captures; liveness/readiness degradation results; request/trace/provider correlation IDs; metrics/alarm synthetic IDs; exact-key/index inventory; >1-page/>500 pagination/load results; staging API/browser/provider smoke IDs; Phase 474 manifest/digests; controlled failed-smoke and automatic two-pointer rollback run.
 
 **Exit gate:** Operational evidence supports the final product-reality audit.
 
-### Phase 481: Product Reality Gate And Milestone Audit
+### Phase 481: Web Product Reality Gate And Milestone Audit
 
-**Goal:** Reconcile source, tests, builds, infrastructure, API, browser/device, provider, and finding evidence into one honest v9.0 release decision.
+**Goal:** Reconcile backend/Web/infra source, tests, artifacts, the complete production route inventory, all-role staging/API/provider/browser results, rollback, and finding dispositions into one honest early-testing or hold decision.
 
-**Why now:** The prior completion illusion came from equating local contracts with live product behavior. v9.0 closes only when the integrated journeys and release mechanics are proven.
+**Why now:** The prior completion illusion came from equating local contracts and intercepted UI checks with live product behavior. v9.0 closes only when the actual Web journeys and release mechanics are proven on one immutable candidate and native-only audit findings are clearly deferred rather than relabeled.
 
-**Depends on:** Phases 478 and 480; all earlier phase verifications must be current for the same release candidate.
+**Depends on:** Phases 478 and 480; therefore transitively all Phases 472-480. Every verification must be current for the same release candidate.
 
 **Requirements:** V9CLOSE-01, V9CLOSE-02, V9CLOSE-03.
 
-**Audit findings:** ARCH-001, ARCH-002, DOC-001; disposition verification for all 31 audit findings.
+**Audit findings:** ARCH-001, ARCH-002, DOC-001; native-only FEATURE-001, BUG-003, BUG-005, TEST-002 receive explicit post-Web-stability deferral; disposition verification covers all 31 findings.
+
+**Plans:** TBD
+**UI hint:** yes
 
 **Likely plan slices:**
 
-1. Documentation/configuration/architecture truth reconciliation and clean-checkout proof.
+1. Documentation/configuration/architecture/Web release truth reconciliation and clean-checkout proof.
 2. Bounded critical-path boundary cleanup, residual debt register, and cross-module regression review.
-3. Final audit, release checklist, read-only production smoke where approved, rollback evidence, and milestone archive/decision.
+3. Final finding audit, immutable evidence index, staging/browser/provider proof, controlled non-production rollback evidence, and explicit early-testing/hold decision; consume real production promotion/smoke only when separately authorized, otherwise record exact `NOT RUN`.
 
 **Success criteria:**
 
-1. README, environment template, architecture maps, mobile docs, requirements, roadmap, and state match the executable system and use honest completion vocabulary.
+1. README, environment template, architecture maps, Web release docs, requirements, roadmap, and state match the executable system and use honest completion vocabulary.
 2. Critical v9.0 policy/use-case/repository boundaries are testable without a broad unrelated rewrite; remaining oversized-module work has owner, trigger, and priority.
-3. Every one of the 31 audit findings is closed, explicitly accepted with evidence/expiry, or deferred to a named future milestone; no P0/P1 remains open.
-4. One evidence index ties source/deploy SHA, artifact digest, test/build/dependency results, infrastructure deploy IDs, API/provider request IDs, and redacted browser/device results.
-5. Final decision is explicit: internal-only continuation, limited beta, production hold, or production-ready. Missing evidence produces hold, not a completion claim.
+3. Every one of the 31 audit findings is closed, explicitly accepted with owner/evidence/expiry, or deferred to a named future milestone; no backend/Web-reachable P0/P1 remains open, and all four native-only findings are visibly deferred rather than marked fixed.
+4. One evidence index ties exact backend/Web/infra SHAs, cross-repository manifest, artifact digests, fixed/future tests, lint/type/dependency results, the complete executable route inventory, all-role staging/API/provider request IDs, redacted browser results, protected-gate configuration, and controlled rollback evidence; separately authorized production approval/results or their exact `NOT RUN` records are explicit.
+5. The final decision is explicit: start early Web testing, internal-only continuation, limited beta, or hold. Missing, stale, route-intercepted, mismatched-candidate, or failed mandatory evidence produces hold rather than completion; absent production mutation evidence is acceptable only as exact `NOT RUN` alongside complete staging and controlled rollback evidence and cannot justify a production-readiness claim.
 
-**Required evidence:** `481-VERIFICATION.md`, v9.0 milestone audit, release checklist, clean-checkout log, evidence index, current `findings.json` disposition, and updated project/roadmap/state/milestone archive.
+**Required evidence:** `481-VERIFICATION.md`; v9.0 milestone audit; clean-checkout log; release checklist; immutable evidence index; current `findings.json` disposition for all 31 findings; exact manifest and digests; complete executable route inventory; student/parent/teacher/admin-operator staging/browser/provider/correlation IDs; intentionally disabled-route evidence; controlled non-production promotion-failure and automatic rollback evidence; if separately authorized, the actual protected-owner approval plus production deploy/smoke/rollback evidence, otherwise exact `NOT RUN` for each; updated project/requirements/roadmap/state/milestone archive.
 
 **Exit gate:** v9.0 is archived only after the final audit and decision are complete.
 
@@ -574,15 +609,15 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | --- | --- | ---: |
 | 472 | V9AUTH-01..05, V9ACCESS-01..03 | 8 |
 | 473 | V9PRIV-01..03 | 3 |
-| 474 | V9QUAL-01..06 | 6 |
-| 475 | V9DATA-01..05 | 5 |
+| 474 | V9QUAL-01..07 | 7 |
+| 475 | V9DATA-01..08 | 8 |
 | 476 | V9BILL-01..04 | 4 |
-| 477 | V9MOB-01..03 | 3 |
-| 478 | V9AUTH-06, V9MOB-04..07 | 5 |
+| 477 | V9AUTH-06, V9WEB-01..03 | 4 |
+| 478 | V9WEB-04..10 | 7 |
 | 479 | V9INFRA-01..03 | 3 |
 | 480 | V9PRIV-04, V9OPS-01..03 | 4 |
 | 481 | V9CLOSE-01..03 | 3 |
-| **Total** | **All milestone requirements mapped exactly once** | **44** |
+| **Total** | **All milestone requirements mapped exactly once** | **51** |
 
 ## Audit Finding Coverage
 
@@ -593,31 +628,58 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | 474 | TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001 | 5 |
 | 475 | DATA-001, BUG-002, DATA-003, BUG-006, BUG-004 | 5 |
 | 476 | DATA-002, SEC-008 | 2 |
-| 477 | FEATURE-001, BUG-003, BUG-005, TEST-002 | 4 |
-| 478 | FEATURE-003 | 1 |
+| 477 | FEATURE-003 | 1 |
+| 478 | No original audit ID; current Web repository gaps | 0 |
 | 479 | FEATURE-002, OPS-003 | 2 |
 | 480 | SEC-006, PERF-001, OPS-004 | 3 |
-| 481 | ARCH-001, ARCH-002, DOC-001 | 3 |
+| 481 | ARCH-001, ARCH-002, DOC-001; deferred native-only FEATURE-001, BUG-003, BUG-005, TEST-002 | 7 |
 | **Total** | **All audit findings assigned one primary phase** | **31** |
+
+## Known Follow-Up Defect Coverage
+
+Phase 473 remains complete; its four nonblocking verification findings have one explicit owner each in the remaining milestone:
+
+| Defect | Requirement | Phase | Closure evidence |
+| --- | --- | --- | --- |
+| `final-head-publication-reverification` | V9QUAL-07 | 474 | Reverify the direct publication commit and four immutable artifact blobs from a later metadata HEAD; reject mutation or invalid ancestry. |
+| `profile-version-cas` | V9DATA-06 | 475 | Race the real profile writer with child scrub and preserve unrelated locale/preference bytes under one CAS/version contract. |
+| `delivery-begin-dependency-classification` | V9DATA-07 | 475 | Inject transient failure below delivery begin, retain recoverable state, then prove one successful retry without false deletion cancellation. |
+| `completed-deletion-replay` | V9DATA-08 | 475 | Replay identical completed deletion through the real endpoint and return the stored receipt with zero new cleanup effects. |
 
 ## Milestone Risks
 
 | Risk | Response |
 | --- | --- |
-| Scope is large | P0/P1 closure and real core journeys are mandatory; unrelated features and broad refactors are explicitly excluded. |
+| Scope is large | Backend/Web-reachable P0/P1 closure and real core journeys are mandatory; native-only work, unrelated features, and broad refactors are explicitly deferred or excluded. |
 | Existing tests reveal more defects | Treat newly confirmed correctness/security defects as milestone inputs; do not weaken tests to preserve schedule. |
-| Mobile Expo versions require migration | Lock one supported matrix in Phase 477 before implementing screens; do not code against an unbuildable manifest. |
+| Native-only audit P1 findings remain open | Keep them explicitly deferred until the Web App has launched for testing and is stable; never count them as Web fixes or hide them from the final 31-finding disposition. |
 | IaC lives outside this repository | Import or link the authoritative source and record cross-repository SHAs; do not claim reproducibility from prose. |
 | Provider approvals block live proof | Use approved sandbox/test-mode evidence and produce an explicit production hold; never fabricate live evidence. |
 | P0 fixes affect existing accounts | Inventory and reconcile existing Cognito groups/profiles with reversible scripts and dry-run evidence. |
-| Full WebSocket scope expands operations | Keep it in one bounded phase with a hard end-to-end gate; local service tests alone do not close it. |
+| Current Web breadth hides demo/static truth | Treat only staging/production fail-closed paths and integrated browser/backend/provider evidence as phase-closing; keep demo fixtures isolated to development and focused UI-state tests. |
+| Full WebSocket scope expands operations | Keep it in one bounded phase with a hard browser-to-deployed-handler gate; local service or mocked-socket tests alone do not close it. |
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+| --- | --- | --- | --- |
+| 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
+| 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
+| 474. Deterministic Verification And Gated Delivery | 0/TBD | Not started | - |
+| 475. Transactional Usage Assignment And Relationship Consistency | 0/TBD | Not started | - |
+| 476. Billing Idempotency And Paid Access Recovery | 0/TBD | Not started | - |
+| 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
+| 478. Complete Web Role Journeys And Route Closure | 0/TBD | Not started | - |
+| 479. Broader Versioned Infrastructure And Browser WebSocket Integration | 0/TBD | Not started | - |
+| 480. Operational Observability Pagination And Release Resilience | 0/TBD | Not started | - |
+| 481. Web Product Reality Gate And Milestone Audit | 0/TBD | Not started | - |
 
 ## Next Command
 
-Start with Phase 472 context and planning:
+Plan the already-discussed Phase 474 against its locked Web-first context:
 
-`$gsd-discuss-phase 472`
+`$gsd-plan-phase 474`
 
-Then create executable plans:
+After Phase 474 is implemented and verified, discuss Phase 475:
 
-`$gsd-plan-phase 472`
+`$gsd-discuss-phase 475`
