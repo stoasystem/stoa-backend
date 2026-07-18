@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-36-PLAN.md
-last_updated: "2026-07-18T14:55:40.757Z"
-last_activity: 2026-07-18 -- Phase 473 execution started
+stopped_at: Completed 473-37-PLAN.md
+last_updated: "2026-07-18T15:14:20.360Z"
+last_activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent state machine
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 62
-  completed_plans: 58
-  percent: 10
+  completed_plans: 59
+  percent: 95
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 37 of 40
-Status: Ready to execute Plan 473-37
-Last activity: 2026-07-18 -- Phase 473 execution started
+Plan: 38 of 40
+Status: Ready to execute Plan 473-38
+Last activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent state machine
 
 ## Accumulated Context
 
@@ -112,8 +112,8 @@ Last activity: 2026-07-18 -- Phase 473 execution started
 
 ## Session
 
-**Last Date:** 2026-07-18T14:55:40.751Z
-**Stopped At:** Completed 473-36-PLAN.md
+**Last Date:** 2026-07-18T15:14:20.355Z
+**Stopped At:** Completed 473-37-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -178,6 +178,7 @@ Last activity: 2026-07-18 -- Phase 473 execution started
 | Phase 473 P27 | 13min | 3 tasks | 3 files |
 | Phase 473 P28 | 26min | 3 tasks | 11 files |
 | Phase 473 P36 | 16min | 3 tasks | 6 files |
+| Phase 473 P37 | 13min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -298,3 +299,6 @@ Last activity: 2026-07-18 -- Phase 473 execution started
 - [Phase 473]: Every deletion mutation carries one opaque owner/generation/version/digest claim; renewal happens before branch work and claim loss stops the worker immediately. — Stale workers must lose before any later provider or repository mutation.
 - [Phase 473]: Each durable branch result advances its result version and command proof digest; terminalization reloads the exact current 17-branch set. — In-memory completion cannot substitute for the current durable proof.
 - [Phase 473]: Legacy parent profiles receive a narrow version normalization and rescan; versioned profiles scrub under both account fences plus row-version CAS. — Concurrent active-parent fields must never be overwritten by a stale deletion scan.
+- [Phase 473]: Only expired claimed_pre_effect delivery work may be taken over; effect_inflight is terminalized as provider_acceptance_unknown and never becomes claimable. — This separates safely recoverable worker crashes from ambiguous external effects.
+- [Phase 473]: The final provider gate binds scope, payload, opaque lease owner, intent version, and the private account fence or sealed-global classification in one durable CAS. — Stale workers and classification drift cannot begin or finish an effect.
+- [Phase 473]: Delivery replay exposes only provider-neutral closed statuses and never provider payloads or exceptions. — Ambiguity remains safe under D-16 and D-17.

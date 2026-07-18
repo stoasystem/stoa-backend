@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | 36/40 plans executed; gap closure in progress | Independent aggregate review pending |
+| 473 | Student Content Privacy And Practice Integrity | 37/40 plans executed; gap closure in progress | Independent aggregate review pending |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -43,7 +43,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 ## Phases
 
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15)
-- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (35/40 plans executed; final verification gaps planned)
+- [ ] **Phase 473: Student Content Privacy And Practice Integrity** (37/40 plans executed; final verification gaps planned)
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery**
 - [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency**
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery**
@@ -288,7 +288,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 **Wave 30** *(gap closure; blocked on Wave 29 completion)*
 
 - [x] `473-36` — Fence account-deletion claims, branch evidence, finalization, lifecycle timestamps, and parent-profile scrubbing with exact CAS.
-- [ ] `473-37` — Add a crash-safe delivery-intent state machine that separates recoverable pre-effect claims from ambiguous provider acceptance.
+- [x] `473-37` — Add a crash-safe delivery-intent state machine that separates recoverable pre-effect claims from ambiguous provider acceptance.
 
 **Wave 31** *(blocked on Wave 30 completion)*
 
