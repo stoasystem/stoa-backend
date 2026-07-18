@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-38-PLAN.md
-last_updated: "2026-07-18T15:59:09.011Z"
-last_activity: 2026-07-18 -- Completed Plan 473-38 authoritative private delivery fencing
+stopped_at: Completed 473-39-PLAN.md
+last_updated: "2026-07-18T16:19:01.968Z"
+last_activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race inventories
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 62
-  completed_plans: 60
-  percent: 97
+  completed_plans: 61
+  percent: 98
 ---
 
 # Project State
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 39 of 40
-Status: Ready to execute Plan 473-39
-Last activity: 2026-07-18 -- Completed Plan 473-38 authoritative private delivery fencing
+Plan: 40 of 40
+Status: Ready to execute Plan 473-40
+Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race inventories
 
 ## Accumulated Context
 
+- The checked private-store and boundary inventories now seal all Plan 36-38 source changes with independent semantic mutation guards, 232 exact write rows, 66 strict read rows, five lower-bound finding selectors, and the unchanged ordered 17 deletion branches.
 - Every reviewed private mutation now maps to a deterministic source-sealed inventory row, narrow retained-evidence class, or one of four reviewed non-student exclusions; exact current-generation results for all 17 ordered branches, two zero epochs, zero blocking debt, and one same-table CAS are required to permanently terminalize deletion.
 - Private notification broadcasts, assistance summaries, preferences, push credentials, WebSocket endpoints, and outbound delivery intents now share the permanent account fence; provider mutation rechecks immediately before effect, accepted/unknown external copies are not overclaimed, and the branch requires two later clean scans.
 - Practice receipts/progress, adaptive assignments/memories, AI drafts, learning usage, and curriculum signals now share the permanent account fence; opaque owner manifests replace deterministic hashes, exact aggregate reversal is retry-safe, and five branches require two later clean scans.
@@ -107,13 +108,13 @@ Last activity: 2026-07-18 -- Completed Plan 473-38 authoritative private deliver
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 473 --gaps-only` when ready to implement the verified Plans 473-18 through 473-35.
+- Execute Plan 473-40 to capture the final immutable candidate and independently revalidate every remaining Phase 473 finding.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-18T15:59:09.005Z
-**Stopped At:** Completed 473-38-PLAN.md
+**Last Date:** 2026-07-18T16:19:01.963Z
+**Stopped At:** Completed 473-39-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -180,6 +181,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-38 authoritative private deliver
 | Phase 473 P36 | 16min | 3 tasks | 6 files |
 | Phase 473 P37 | 13min | 3 tasks | 4 files |
 | Phase 473 P38 | 21min | 3 tasks | 6 files |
+| Phase 473 P39 | 32min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -306,3 +308,5 @@ Last activity: 2026-07-18 -- Completed Plan 473-38 authoritative private deliver
 - [Phase 473]: Provider delivery trusts only the strongly loaded persisted event — Caller owner, generation, recipient, actor, role, metadata, and booleans never broaden delivery scope.
 - [Phase 473]: Ownerless delivery requires an immutable repository-sealed global row — The exact contract, payload allowlist, event version, and classification digest are rechecked in the begin transaction.
 - [Phase 473]: WebSocket fanout uses one stable intent per canonical event and redacted connection identity — Every provider post has an independent crash-safe ambiguity boundary.
+- [Phase 473]: Whole-file digest review and independent function-level semantic guards jointly prevent regenerated inventory from blessing weakened privacy races. — A checked JSON or digest refresh alone is not semantic approval.
+- [Phase 473]: All five findings map to exact source fields, lower fakes, runtime nodes, and observed assertions over the unchanged 17-branch registry. — Final evidence must execute the declared lower boundary rather than a high-level mock.

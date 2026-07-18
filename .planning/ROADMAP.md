@@ -30,7 +30,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 | Phase | Name | Primary outcome | Depends on |
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
-| 473 | Student Content Privacy And Practice Integrity | 38/40 plans executed; gap closure in progress | Independent aggregate review pending |
+| 473 | Student Content Privacy And Practice Integrity | 39/40 plans executed; final immutable evidence pending | Independent aggregate review pending |
 | 474 | Deterministic Verification And Gated Delivery | Green Python 3.12 baseline and pre-deploy gates | Phase 472; can overlap 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
@@ -296,7 +296,7 @@ v9.0 is therefore a product-completion milestone, not another readiness-contract
 
 **Wave 32** *(blocked on Wave 31 completion)*
 
-- [ ] `473-39` — Refresh source-sealed inventories and lower-bound selectors for deletion leases, delivery ownership, timestamps, parent CAS, and intent recovery.
+- [x] `473-39` — Refresh source-sealed inventories and lower-bound selectors for deletion leases, delivery ownership, timestamps, parent CAS, and intent recovery.
 
 **Wave 33** *(final evidence; blocked on Wave 32 completion)*
 
