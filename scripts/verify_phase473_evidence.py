@@ -89,7 +89,7 @@ def _run(argv: Sequence[str], *, root: Path = ROOT, check: bool = True) -> str:
             f"command failed ({completed.returncode}): {list(argv)!r}: "
             f"{completed.stderr.strip()}"
         )
-    return completed.stdout.strip()
+    return completed.stdout.rstrip("\n")
 
 
 def _git(root: Path, *args: str) -> str:

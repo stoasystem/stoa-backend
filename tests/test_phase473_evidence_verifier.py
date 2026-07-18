@@ -277,7 +277,7 @@ def _commit(repo: Path, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
-def _publication_repo(tmp_path: Path) -> tuple[Path, str]:
+def _publication_repo(tmp_path: Path, *, commit: bool = True) -> tuple[Path, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -286,11 +286,17 @@ def _publication_repo(tmp_path: Path) -> tuple[Path, str]:
     (repo / "source.py").write_text("VALUE = 1\n", encoding="utf-8")
     _git(repo, "add", "source.py")
     _git(repo, "commit", "-m", "candidate")
-    candidate = _git(repo, "rev-parse", "HEAD")
     results = repo / "docs/security/phase-473-evidence-results.json"
     evidence = repo / "docs/security/phase-473-evidence.md"
     validation = repo / ".planning/phases/473-test/473-VALIDATION.md"
     manifest = repo / "docs/security/phase-473-evidence-manifest.json"
+    _json(results, {"schema_version": "stale"})
+    evidence.write_text("stale evidence\n", encoding="utf-8")
+    validation.parent.mkdir(parents=True, exist_ok=True)
+    validation.write_text("stale validation\n", encoding="utf-8")
+    _json(manifest, {"schema_version": "stale"})
+    _commit(repo, "candidate evidence baseline")
+    candidate = _git(repo, "rev-parse", "HEAD")
     _json(results, {"schema_version": "phase-473-test-results.v1", "candidate_sha": candidate})
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(f"candidate `{candidate}`\n", encoding="utf-8")
@@ -314,7 +320,8 @@ def _publication_repo(tmp_path: Path) -> tuple[Path, str]:
             "artifacts": artifacts,
         },
     )
-    _commit(repo, "publication")
+    if commit:
+        _commit(repo, "publication")
     return repo, candidate
 
 
@@ -351,3 +358,9 @@ def test_publication_accepts_exact_direct_four_path_child(tmp_path: Path) -> Non
     verifier = _load_verifier()
     repo, candidate = _publication_repo(tmp_path)
     verifier.verify_publication(repo, candidate, dirty=False)
+
+
+def test_publication_accepts_exact_dirty_four_path_draft(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate = _publication_repo(tmp_path, commit=False)
+    verifier.verify_publication(repo, candidate, dirty=True)
