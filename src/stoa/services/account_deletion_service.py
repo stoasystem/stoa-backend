@@ -13,8 +13,12 @@ import boto3
 from stoa.config import get_settings
 from stoa.db.repositories import (
     account_deletion_repo,
+    adaptive_learning_repo,
+    ai_teacher_tools_repo,
     attachment_repo,
+    curriculum_analytics_repo,
     moderation_repo,
+    practice_repo,
     report_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
@@ -697,6 +701,161 @@ def _conversation_messages_branch(
     )
 
 
+def _run_learning_scrub_branch(
+    *,
+    command: Mapping[str, Any],
+    previous: Mapping[str, Any],
+    scan: Callable[..., Any],
+    scrub: Callable[..., Any],
+    scan_kwargs: Mapping[str, Any] | None = None,
+) -> BranchResult:
+    """Advance one learning family with item debt and two later clean scans."""
+    owner_id = str(command["user_id"])
+    generation = int(command["generation"])
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = scan(
+        owner_id,
+        cursor=cursor,
+        maximum_pages=1,
+        **dict(scan_kwargs or {}),
+    )
+    debt: dict[str, int] = {}
+    processed = 0
+    now_iso = datetime.now(UTC).isoformat()
+    for item in page.items:
+        identity = f"{item.get('PK')}|{item.get('SK')}"
+        try:
+            scrub(
+                item,
+                owner_id=owner_id,
+                generation=generation,
+                now_iso=now_iso,
+            )
+            processed += 1
+        except Exception:
+            debt[identity] = 1
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult("retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch)
+    if debt.keys() - {"pass_dirty", "processed"}:
+        return BranchResult("retryable", debt_counts=debt, epoch=0)
+    if dirty:
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": processed},
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
+def _practice_progress_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_learning_scrub_branch(
+        command=command,
+        previous=previous,
+        scan=practice_repo.scan_practice_private_rows,
+        scrub=practice_repo.scrub_practice_private_row,
+    )
+
+
+def _adaptive_assignment_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_learning_scrub_branch(
+        command=command,
+        previous=previous,
+        scan=adaptive_learning_repo.scan_adaptive_private_rows,
+        scrub=adaptive_learning_repo.scrub_adaptive_private_row,
+        scan_kwargs={"family": "assignment"},
+    )
+
+
+def _learning_memory_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_learning_scrub_branch(
+        command=command,
+        previous=previous,
+        scan=adaptive_learning_repo.scan_adaptive_private_rows,
+        scrub=adaptive_learning_repo.scrub_adaptive_private_row,
+        scan_kwargs={"family": "learning_memory"},
+    )
+
+
+def _ai_teacher_draft_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    return _run_learning_scrub_branch(
+        command=command,
+        previous=previous,
+        scan=ai_teacher_tools_repo.scan_ai_draft_private_rows,
+        scrub=ai_teacher_tools_repo.scrub_ai_draft_private_row,
+    )
+
+
+def _curriculum_signal_branch(
+    *, command: Mapping[str, Any], previous: Mapping[str, Any]
+) -> BranchResult:
+    owner_id = str(command["user_id"])
+    generation = int(command["generation"])
+    raw_cursor = previous.get("cursor")
+    cursor = dict(raw_cursor) if isinstance(raw_cursor, Mapping) else None
+    page = curriculum_analytics_repo.scan_curriculum_signal_manifests(
+        owner_id, cursor=cursor, maximum_pages=1
+    )
+    debt: dict[str, int] = {}
+    processed = 0
+    now_iso = datetime.now(UTC).isoformat()
+    for manifest in page.items:
+        signal_id = str(manifest.get("signal_id") or "unknown")
+        try:
+            curriculum_analytics_repo.reconcile_curriculum_signal(
+                manifest,
+                owner_id=owner_id,
+                generation=generation,
+                now_iso=now_iso,
+            )
+            processed += 1
+        except Exception:
+            debt[f"signal:{signal_id}"] = 1
+    prior_debt = previous.get("debt_counts")
+    dirty = bool(
+        isinstance(prior_debt, Mapping) and prior_debt.get("pass_dirty")
+    ) or bool(page.items) or bool(debt)
+    epoch = int(previous.get("epoch") or 0)
+    debt.update({"pass_dirty": int(dirty), "processed": processed})
+    if page.cursor is not None:
+        return BranchResult("retryable", cursor=page.cursor, debt_counts=debt, epoch=epoch)
+    if debt.keys() - {"pass_dirty", "processed"}:
+        return BranchResult("retryable", debt_counts=debt, epoch=0)
+    if dirty:
+        return BranchResult(
+            "retryable",
+            debt_counts={"pass_dirty": 0, "processed": processed},
+            epoch=0,
+        )
+    epoch += 1
+    return BranchResult(
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
+        epoch=epoch,
+    )
+
+
 BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     # Derived rows must resolve their authoritative question owner before the
     # primary question branch can replace that question with a tombstone.
@@ -712,6 +871,11 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
     "report_artifacts": _report_artifacts_branch,
     "support_recovery_feed": _support_recovery_feed_branch,
     "conversation_messages": _conversation_messages_branch,
+    "practice_progress": _practice_progress_branch,
+    "adaptive_assignment": _adaptive_assignment_branch,
+    "learning_memory": _learning_memory_branch,
+    "ai_teacher_draft": _ai_teacher_draft_branch,
+    "curriculum_signal": _curriculum_signal_branch,
 }
 
 

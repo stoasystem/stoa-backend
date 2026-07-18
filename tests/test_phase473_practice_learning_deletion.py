@@ -201,6 +201,7 @@ def test_private_scans_are_strong_paginated_and_scrubs_are_strict_allowlists() -
             {
                 "PK": "AI_TEACHER_DRAFT#a",
                 "SK": "META",
+                "entity_type": "ai_teacher_draft",
                 "student_id": STUDENT_ID,
                 "session_summary": "private-summary-canary",
                 "answer_key": [{"answer": "private-draft-key"}],
