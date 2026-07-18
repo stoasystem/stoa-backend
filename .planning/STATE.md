@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-39-PLAN.md
-last_updated: "2026-07-18T16:19:01.968Z"
-last_activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race inventories
+stopped_at: Completed 473-40-PLAN.md; awaiting independent aggregate verification
+last_updated: "2026-07-18T16:45:35.893Z"
+last_activity: 2026-07-18 -- Completed Plan 473-40 immutable final-gap evidence publication
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 62
-  completed_plans: 61
-  percent: 98
+  completed_plans: 62
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
 Plan: 40 of 40
-Status: Ready to execute Plan 473-40
-Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race inventories
+Status: Plan 473-40 execution complete; awaiting independent aggregate verification
+Last activity: 2026-07-18 -- Completed Plan 473-40 immutable final-gap evidence publication
 
 ## Accumulated Context
 
@@ -46,7 +46,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race in
 - Exact validated staging-version bytes are hashed and promoted from one bounded spool to a fresh server-only immutable version; OCR, extraction, association, release, purge, cleanup, and deletion use the full immutable tuple.
 - Conversation sends now use an exact versioned fingerprint, atomic command/chat-quota claim, deterministic effects, and a fenced expiring AI lease; regular and SSE retries replay one original result.
 - AI, title, conversation, replay, and OCR-fed question logs now use closed category/class/size/count/correlation telemetry with cross-service private-canary coverage.
-- Final checked evidence is bound to immutable candidate `cf3549ad799843fd91bb7494064a02d57227c953`: 889 deep Phase 473 nodes, 455 inherited Phase 473 nodes, 636 Phase 472 authorization nodes, and the 1,923-node full suite pass with exact receipts, coverage, hashes, and zero privacy matches. External S3, deployed cleanup/IaC, and production log capture remain NOT RUN.
+- Final checked evidence is bound to immutable candidate `b43c71bdebf948e1ced024e309af1cfd5b4d5b50`: 14 deletion-claim, 10 delivery-recovery, 12 private-delivery, 109 combined final-gap, 939 deep Phase 473, 455 inherited Phase 473, 636 Phase 472, and 2,009 full-suite nodes pass with exact receipts, five-finding lower-node coverage, reproducible hashes, and zero privacy matches. External S3, deployed cleanup/IaC, and production log capture remain NOT RUN.
 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
@@ -84,17 +84,11 @@ Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race in
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
 - Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
 - All six final review findings pass together in 321 source-bound adversarial/positive controls; the extended Phase 472 gate passes 610 tests, while the full suite retains exactly 23 Phase 474-owned Settings fixture failures.
-- Phase 473 implemented student upload ownership, durable attachment history/reuse, question OCR isolation, answer-free previews, attempt-gated results, and scoped privileged answer reads, but independent verification scored 68/100 (2/3 requirements and 15/22 decisions fully verified).
-- Expired, invalid, and abandoned unconsumed upload cleanup now uses bounded versioned claims, consistent rechecks, resumable durable-reference scans, non-consumable retry tombstones, and coordinate-free summaries.
-- The full suite reports 1232 passing tests, but verification found one critical mutable-object TOCTOU gap and five stable-error/redaction/replay gaps; real S3 POST behavior and deployed cleanup schedule/IaC remain explicitly NOT RUN.
-- Plans 473-08 through 473-11 close those gaps through an authenticated chunk gateway, server-only immutable promotion, category-stable transaction outcomes, replayable conversation commands, private-safe telemetry, and one final source-bound evidence gate.
-- Plans 473-15 through 473-17 now cover CR-009 and WR-009 through WR-011 with strict provider-coordinate invariants, per-candidate cleanup isolation, provider-body ownership, conversation transport normalization, and a final immutable source-bound evidence gate.
-- Post-execution verification confirmed those targeted fixes but reproduced four adjacent blockers: malformed UploadPart/ListParts ETags, swallowed completion transport failures, partial BatchGetItem replay, and first-page-only attachment deletion; deterministic bind errors and OOXML external relationships remain warnings.
-- Plans 473-18 through 473-35 form the final source-backed closure plan: strict provider/replay/retention/parser/practice fixes, a permanent account-content fence covering 17 durable private-store families, deterministic read/write boundary inventories, and final immutable evidence. Planning is complete only; none of these fixes has been executed.
+- Plans 473-18 through 473-40 have executed the source-backed provider, replay, retention, parser, practice, permanent-account-fence, inventory, deletion/delivery race, and immutable-evidence closure. The last independent Phase 473 report predates Plans 36-40 and must be rerun before phase or requirement completion is accepted.
 
 ### Pending Todos
 
-- Execute Plans 473-18 through 473-35, then independently re-verify every local gate before marking Phase 473 or V9PRIV-02 complete.
+- Independently re-verify the complete Phase 473 aggregate before marking Phase 473 or V9PRIV-02 complete.
 - Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
 - Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
 
@@ -108,13 +102,13 @@ Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race in
 
 ## Operator Next Steps
 
-- Execute Plan 473-40 to capture the final immutable candidate and independently revalidate every remaining Phase 473 finding.
+- Run the independent aggregate Phase 473 verification against publication `5da6936095c2b5647a8f992c280d371837f35b0f` before changing phase status.
 - Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
 
 ## Session
 
-**Last Date:** 2026-07-18T16:19:01.963Z
-**Stopped At:** Completed 473-39-PLAN.md
+**Last Date:** 2026-07-18T16:45:35.887Z
+**Stopped At:** Completed 473-40-PLAN.md; awaiting independent aggregate verification
 **Resume File:** None
 
 ## Performance Metrics
@@ -182,6 +176,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race in
 | Phase 473 P37 | 13min | 3 tasks | 4 files |
 | Phase 473 P38 | 21min | 3 tasks | 6 files |
 | Phase 473 P39 | 32min | 3 tasks | 6 files |
+| Phase 473 P40 | 21min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -310,3 +305,6 @@ Last activity: 2026-07-18 -- Completed Plan 473-39 source-sealed privacy race in
 - [Phase 473]: WebSocket fanout uses one stable intent per canonical event and redacted connection identity — Every provider post has an independent crash-safe ambiguity boundary.
 - [Phase 473]: Whole-file digest review and independent function-level semantic guards jointly prevent regenerated inventory from blessing weakened privacy races. — A checked JSON or digest refresh alone is not semantic approval.
 - [Phase 473]: All five findings map to exact source fields, lower fakes, runtime nodes, and observed assertions over the unchanged 17-branch registry. — Final evidence must execute the declared lower boundary rather than a high-level mock.
+- [Phase 473]: Final-gap evidence counts only exact observed runtime nodes joined to both checked finding registries and declared lower fakes. — Collection, source strings, or broad high-level tests cannot substitute for the reviewed boundary.
+- [Phase 473]: V9PRIV-02 and D-10/D-16/D-17 retain checked inventory coverage and additionally require exact deletion, crash-recovery, and delivery-denial nodes. — Earlier coverage cannot mask a missing current concurrency or provider-effect observation.
+- [Phase 473]: Candidate snapshots are recomputed from immutable candidate Git blobs. — A direct-child publication cannot change tested-source hashes or byte counts during post-commit capture verification.
