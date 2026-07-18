@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 473-37-PLAN.md
-last_updated: "2026-07-18T15:14:20.360Z"
-last_activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent state machine
+stopped_at: Completed 473-38-PLAN.md
+last_updated: "2026-07-18T15:59:09.011Z"
+last_activity: 2026-07-18 -- Completed Plan 473-38 authoritative private delivery fencing
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 62
-  completed_plans: 59
-  percent: 95
+  completed_plans: 60
+  percent: 97
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
-Plan: 38 of 40
-Status: Ready to execute Plan 473-38
-Last activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent state machine
+Plan: 39 of 40
+Status: Ready to execute Plan 473-39
+Last activity: 2026-07-18 -- Completed Plan 473-38 authoritative private delivery fencing
 
 ## Accumulated Context
 
@@ -112,8 +112,8 @@ Last activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent st
 
 ## Session
 
-**Last Date:** 2026-07-18T15:14:20.355Z
-**Stopped At:** Completed 473-37-PLAN.md
+**Last Date:** 2026-07-18T15:59:09.005Z
+**Stopped At:** Completed 473-38-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -179,6 +179,7 @@ Last activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent st
 | Phase 473 P28 | 26min | 3 tasks | 11 files |
 | Phase 473 P36 | 16min | 3 tasks | 6 files |
 | Phase 473 P37 | 13min | 3 tasks | 4 files |
+| Phase 473 P38 | 21min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -302,3 +303,6 @@ Last activity: 2026-07-18 -- Completed Plan 473-37 crash-safe delivery intent st
 - [Phase 473]: Only expired claimed_pre_effect delivery work may be taken over; effect_inflight is terminalized as provider_acceptance_unknown and never becomes claimable. — This separates safely recoverable worker crashes from ambiguous external effects.
 - [Phase 473]: The final provider gate binds scope, payload, opaque lease owner, intent version, and the private account fence or sealed-global classification in one durable CAS. — Stale workers and classification drift cannot begin or finish an effect.
 - [Phase 473]: Delivery replay exposes only provider-neutral closed statuses and never provider payloads or exceptions. — Ambiguity remains safe under D-16 and D-17.
+- [Phase 473]: Provider delivery trusts only the strongly loaded persisted event — Caller owner, generation, recipient, actor, role, metadata, and booleans never broaden delivery scope.
+- [Phase 473]: Ownerless delivery requires an immutable repository-sealed global row — The exact contract, payload allowlist, event version, and classification digest are rechecked in the begin transaction.
+- [Phase 473]: WebSocket fanout uses one stable intent per canonical event and redacted connection identity — Every provider post has an independent crash-safe ambiguity boundary.
