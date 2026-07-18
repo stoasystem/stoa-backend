@@ -1,0 +1,2354 @@
+{
+  "private_store_composition": {
+    "branch_ids": [
+      "account_profile",
+      "identity_cross_account",
+      "capability_scope",
+      "question_ocr_session",
+      "attachments",
+      "moderation",
+      "report_records",
+      "report_artifacts",
+      "support_recovery_feed",
+      "conversation_messages",
+      "practice_progress",
+      "adaptive_assignment",
+      "learning_memory",
+      "ai_teacher_draft",
+      "curriculum_signal",
+      "notification_device_realtime",
+      "external_delivery_debt"
+    ],
+    "inventory_sha256": "8a31e68770e43deca4b83a7e11a4ca8f8262af528b7daa989ecb544eaba7ee47",
+    "row_count": 226,
+    "schema_version": "phase-473-private-store-inventory.v1",
+    "source_digests": [
+      "03a7a756e13656486cc8ac9a719c2435d8d5fe7b64b09a5840b8850c67597859",
+      "03ad70b4b75625a5b5038c08354c11d7ab1833bf6cab41e9f8b091cdb3265da1",
+      "04a9d2820e8d2a9c9beb6123e3841f6de3b3ca736a400743ae0a1fef3a3bcf07",
+      "04afcdabfe5020ab39cda0053098687550c0d819857e07dd86781b71296e0165",
+      "04d0f124f2010380f20ddf75643df3470d701582d6918cc53f48fc7d42339ee6",
+      "05d2933e2f51057370b3060b289c6c85407563d56000e6a8b87d8a57dadb803f",
+      "070f2f4631f3a0f2ae692918c4a7f1ebb1af8635fa021bcb8762ad42b6f8834d",
+      "08db68cf73642391914a6a60b2764bd0ece6d2600ba65bfd3b1d060444ca6869",
+      "09cae62e6c2d66b17190dcc1a7e8c30b422b4e049279f2a41169f575f53626ab",
+      "0cc503e538c8995f8d0e443c2e23157f6e3c1e7627a52f6591e595a959ab0eda",
+      "0d380fbdc5ce65f59f10e672a7a95be056e22efddad20b9b55523be23a41b1f1",
+      "0dd2c6bb1b517379617334796bdc9a44f3e175f0c749c9d6894dcf8145491580",
+      "0e541b69eeceb49d5ae6288802f920ce0a623b32921bfcfef40b2a3b71571309",
+      "0f374f08b6ae3d4df9233b127cc1cfe83a1f5178b8df8229abccd7a1b47c671e",
+      "1050a48083e995279eeed59cc7fcc89a715f924f071d48938e3bdb16a121035a",
+      "120111f7d6e8e356eca7bdb149504a37e05a42e8d7f31d8bb116226187a1d3df",
+      "13b9b6f4f48417a674f4fb8270632f75a9f9c7a3a500f4901fdebe4c325c7b60",
+      "13ffa4a9765ffdd3d6ea671852d714d981182f91d6f8d2c17ad47cdeab2ef55d",
+      "15847d5ed0482b80dcea0aabd037a5746d1360dfdd7f30886cc5f6b007068bad",
+      "178cac4ee96c72b88f7ccf7c56faee40b193cdd8efaaaf7d27ef0210275e27a9",
+      "17c283f9fb5d80bfd0fc26da4cbaceca6c80aff78fafa450147d899ab7eec98d",
+      "19d24c39d20c2662c925cac10f41edb0c99ef91c782ffeda985323e33b0596ac",
+      "19ead2d1c11851f92a57eec0c5b18579dea71ab13cf1a0d39b2996e1c4c665a1",
+      "1ed38beb332fd52eb0d856494d03fc954cf50ecf3325c47d50b07be1b67291bb",
+      "21b80a121fd4832bc6deeb617713f25b87c774515cfe493641c811e045fc2501",
+      "261ae6c45c1a967094716f6f7778b71872fa4ae097a7899c988e8f88e1170972",
+      "26dafc6d17db7c5627d8c0602fa6ebba69a92e0e7c2921a2d35ee98fe5bf8a9c",
+      "27cd92224a21872975ec64835389bf036364e26f0f1dc634d9fbbb3e400784f0",
+      "282510cfcfa39bc7ac3323d2b72e0cba749cf450ca7103165ca8af60a163d656",
+      "293e3a8b62a56ca589d02c035e907baed582f8e9c4cc67c5fd6044e0d8378987",
+      "2a41aed834e62729fb96be57923b8b023c005f10ca18089e5f75a266081878f0",
+      "2bcdd8b3fe63b9d78b528279beafa65b80155b84d69386f9a9a5b09a2e8d9a95",
+      "2bd835156b3caeb8a8703b8fd29be5ec38006ec9affeed67b18b21368060694c",
+      "2c84b9eaade813a81f1ed49abe7813b5bd8af8491335f6520c2818cc974e48a3",
+      "300364e4dba14c206f4c0c41d74107e2e7fd7074d0584ac52154b472465c2788",
+      "313720790e37783c3fea5767e490a7a9e327b67083aff701ff369aa0ca6a7241",
+      "34f5b5421d304ca819d738f9e2aec322632bc91ec98c7c76f5016f6b8bf5d195",
+      "35e4be39b0eda57251716b050aaaada015f711b79fcd1534df0c3b85063e94df",
+      "38cc97d080fb71e62a77157211143deae998a878b89c0070003fdf8fcac9ef44",
+      "3ad6a3d31b1be7becac7b058c05c079736c2f541119f542f8eacde7dffc3a365",
+      "3af04af6539203b04ee11684ba3e79c77fa30ee1381b44c6ae1c714a6b8e36b2",
+      "3b7716747a358b9279099a33d0338baf5b810bccb4c8de85a90fcfd5fc7a8286",
+      "3e22d050e5db3b91c47111dfcb01f97d6b6f9246ea11f4fae40a15e5483fcb57",
+      "422e6fde8ff132e64d2506b135575104414a05f29bdbf77de62ee5226a91febe",
+      "4b70a1780e5d75370451e079881ae2469689e220888bf692538671375d3f376a",
+      "4c5463ea77cd57cadd7c088c771e2cc6c6ee587c5d2effc68513f37c099c2f6f",
+      "4cf6eb5446320b0bc7dde9ce3b5dce0201891488206aaa3b9277c2c77243c258",
+      "4de817901f3bfec57d4bdf64b4d3310c38e72fdc8cd6793611e1ef60fb146cdb",
+      "51394cd9f1ab2ed7cfbb3e62de75448696a0f4202c0b99c8d2188b9a239ea006",
+      "51b81484e7d4c7305727be7008168316c6aacb8491d8f13910128b865723b4b2",
+      "546d2547c4c3392640b81ef12e956e0c3152d79b2012f66d4dfb83e3117700ab",
+      "55d3521db8d9ea1374b320efb06e4f6e3400e0d47fa8d72abcb983e033918559",
+      "55fd04c3f2c040853e037cf2445739a143523f02f122a78d82ac9eb9712887ea",
+      "5abdbecb5c04a2438a14af3a94d99a5538e7b3375fbeb73f2104e374989eae07",
+      "5ae286d19163ae3410aa3b9d2ddcc2a72715d5f6298981e4bd220797d3909405",
+      "5c78bb19538232b8f75b7b08df99b0a091fc1e374519e552579038e152a1e0ad",
+      "6085410e93b7283b87b9ee0adca1e82a86606be83455d9d88666697011543273",
+      "618a4f3b50dda41745f335f1daf279228a2a306a52cb1dfa8e61dbd9b1e6d5a7",
+      "62a117e6957a827504fac103d39413934987b332ebf5c190f880bcffb08db77a",
+      "6435e894d1aab66fd29fc01f95258d0a0fd20b43d82ec41fdc358e40c0bc18a9",
+      "6596ba98f05f940cdb3cb467130390adf1a87ff21b0c257e8896a48a2a1a28cd",
+      "67e2ca8f8332b7f0feca01f735fbdd5906fcdc7709e2777bfad28e55fafe20ea",
+      "681a7359a58949b7234d86b54a9f4e89aa1fdb5a67268a1d72ee639601c908e9",
+      "6833a164f0013c163c9ee736a7c68fe853e3b3c3d6adc2122c09edd551253500",
+      "6a5893e996107d981371b59eff7c9101797022fdd9766acef4b76a7abab32360",
+      "6bb99afdb9f2f91044c784244e6374aeaa0bbc6eb749d0d480b419305c7fe72f",
+      "6c38d4c012adea5b6e714588bfc582c3a56992bda899e8764f268338ead4380f",
+      "6da3254ef8a3ef82d1f5c314a08cf5d7a6f0ce8afb4c94f0c4a7ac642b237e26",
+      "6e537a82d85ecf65a78b57f9d5676a7bfdc6cd4e78bf093ce5b869d9645edc80",
+      "70c1e492396f524513bad64095f1fcb542966bef6349bd73edb96034e4ed8780",
+      "70d7034f46353171053ddfc4a8216dc7e8c5b237f8c7664796bdcbdb5319e3d5",
+      "71302950dce262f458c32b4d956aa0821a1dab4b2b01391351d29a95236bd373",
+      "7274f41c6ec3c297919d7d74fbee4b0f5e272b984cf7f0236e4e045975da05f2",
+      "72bdf9dcfaf6a19fc5fbdac6a0eaf19041419ceec4c024176218a3a695bbdeac",
+      "73b989044da88350708bc206504fd4d349ed140a8563b3e1ff0c50af4bfc682a",
+      "750a3f5e78df049795f8134133fb1696d88b4b421009db313255b8d99994856d",
+      "755f90fda3ef342eab9bd8c71b01e6cd85dc95610e44a2fb4e4e14fa06941946",
+      "779b0ab31ea1fa08cde3884bb06010aaed31f0b183a3efaae0f542c3561e1d9b",
+      "783ee75df739d5ea7bccfe070ce21aa7ab26747d34c73d7a399053eb6508b9f6",
+      "7b7354ed718ba2ab6db701b31ecbde6eb0abe1f2e0ba6787118438a23a52867b",
+      "7ba5c07a38c663ad85a793c099d27fb428a7d66974c8244baca0effaaefa9271",
+      "7c94e2380deccdb27f4df29e2d8c111b526b2936cc709219b6131fe7b02e7e9d",
+      "7f924392c7d3f891f1f46d02c4e0d27aa7556cad8d589f60564a44d181757f99",
+      "7ff36f79c8230413a78ac695fd45e7978df2e8b688c92475c2c650ebd8d9f011",
+      "800e9dd08e7319fec30a0c3a14f6c82dfa859b41d712a78e37a38404cac4fd59",
+      "804a117bbfee005d7587e9015e2e583f74c7410f25664de85f566133e7df7582",
+      "80739a3c8bf0b0e5b1409034e3eb5c92bd09e7eae4bb84d15324c6ddb531ee6f",
+      "8335c666ada35236df200af1a53900db0aded7c05309db51e2a8b44aebd1b1b8",
+      "83900c0fdd25161237341590c6140a4bbba6e226b18e4d8be7505371b48a2f6a",
+      "83aaae2458bf6b13172ef2afaf8fda96ebc741bf30caab70e73ec73a288371ee",
+      "88c1d1ce67131bfaedf0efcaa6617cbebfa336776ebaecdb799c7b24c52b1e06",
+      "8a3dd4f0fa45891f2dfb01427b495957d3b9280dc133fbb3ed1e80aad9fa6634",
+      "8a5a9efbd084a9e771f7818f46406efe8318645d939110089d8bb3445022bb4c",
+      "8abd49089515073f4e4089a00e2ab38fa40c3815a2a7169de3de564c4fc78764",
+      "8ade34aae5dbe00f1978259d4a89222f6b19fec2bf07cf390e54f2e36097db5f",
+      "8c02af7f8719043805ea7284ddea4e638d0d6032248f30dd3526b8d083ed3649",
+      "8c334a7dba090dbba7ea1730d50ed658b61432fd3f39c8ee6eec7350fc65bd3e",
+      "8e197bb5a7b80eaed673b20e9de0c952046634d69ee9054884241c1299db843f",
+      "90cb5d435c4b1a3a997b68245b487b60bfdecf4e9e73c29f8dca04e1271c9b9b",
+      "934e0592511fb50d3c3984577cb45aa1aea708532363b999e64201910a8fc327",
+      "93e38ac55b5565420dd0c00695dfa4a815ce1ca46fad5c24ca9d8626e4da7026",
+      "9422f6600438b845671079293b00f23ff124c9f5dd8e0316d7e283fd50b92900",
+      "94f008fab33fd1ca62a33e8d619f121ac04f6042830cd8b1cf69f0ceb3c930c8",
+      "982554976198624fc32e81c7bf7b84b43aaa051ce21b0df90d63b069683976de",
+      "99293fedc0f98454916e3cdd4b274136ee431427370b19d0c6d27562ca64df76",
+      "9a47769cc118f0c9f56daffd3243048d39d6442805531694a92a2eb6c3558a19",
+      "9c40a33ef0f098cdc2402ca153e968fd9dd3a642f85e8f87355a3778cfa26134",
+      "9cd0d2cb8e2fd9497895d60d90f3b9711f7afad6e7c3038285922839f10b2240",
+      "9d078569dcc194eb8b281e879b2daffec2705b3959e9fc6f9e8ce0501a29e016",
+      "9d5543ce8ce2faa4fe9fa53ca88f1120cf83017163548d17a8adfa99c219ce6a",
+      "a080917424ee43d4ef1c53147ffcebfaa5930c0e07946302836b0dbd9b230d96",
+      "a0e4379b399f9ab2ee4824a56970e9c7cf7fd1aa56105d0ad253ebd258035b41",
+      "a103055a7b1d7e2ee6f4892f76888b7c8639c7e220f397b89150f5fc88bb57aa",
+      "a24399fd97b655f46f645821073470a9f971a449031541c1a3d85f8e28d2c429",
+      "a2fcfe2765887d7a61ced6df4cf93070f55135da6d94c0ea67d950769bc379a6",
+      "a3f6b07bbbc5e900cf98721e9b2c30bc2b17ddb8f69f1b27dba7d5f282a5e926",
+      "a51bd830cb2b30235f5611ab37b38e378fc3c0a4abd1efecb1a9daf530b94b48",
+      "a53cc4838fad9f80cfd52a868906d991c25c7ee845266f1ac8ccdc72da14da56",
+      "a6cddeb9fabff9f963d89f72c4d5fd10763eb2547a927d2dd41649787d2c1974",
+      "a9026f46e3ef9fd5a0f7af5bb46621ed2fb7b9e62c4cc69a2a722a1cda18479c",
+      "adee95a56edddbf7bc46120dfb3a64303390ed4fb3cabfbaa753644a390f4318",
+      "b161a145c6cf9bdfa0f95dadda75586f4194202dd239dcfa675afae7d717252b",
+      "b21d7510d9e26ca55cdb33df76dbcb2d7dfd51dd86f185afeef0e0405aa83abf",
+      "b45b2178497d28fbca0eb2daf4fa3edf64f011714efbf9892fb620715463792b",
+      "b5a15e6dc3bca973697fef027179c5d3c5afb817f701f77b8170c55893b3e6d8",
+      "b91bd2f1a87d1cd6939e9b75f6886cae59242a18565427159c98443cc51fd2ec",
+      "b98ca8d1d3d039c37e4f3db31a7d061501a0fb6e1c5119d1b84a30bd7c7f0f67",
+      "bae4875a57e473f41f548f5e467a33c6fa3a36736113e8913f9cdf52a3d8966f",
+      "baf269d5ad286db197f5686d35b4d5fb39aff7d7db4d54c2bfdb1831f03e7f8e",
+      "bdabaf766738e6b22680b10961560fe50fd6449383a873f6fe5bd7e2202c0f0c",
+      "bfb8b87901d99c4be72497de4525aeb98a3e023a1b3cdb1a59ab616621a5d44c",
+      "c09a30ef6dd9887ecaededfdd1c465f3bf18f343f067a7285590994119b19b17",
+      "c3e17cf7c25de8c1030e156e7505524335030d6a1c67d09df2ff614e68355040",
+      "c51b783791568d3066c059c1195f4131d15ed1d69e049dfd5cf33cb740bf4603",
+      "c53bddb6937e24058424042b8a97bfe69bffae01decccf6038923cd1c010d125",
+      "c53f0f0c770aa71ce1139c37ab0ce8d97392e00498069ff3cd4a48d90976ee4f",
+      "c7aef86419e52bf2f0522e0a329d0f6463ebad103c4f80c66631c21e15137870",
+      "ca1b7fbad28c9f0ee6d1f03eb2b030dff587f1b211e6af67f6e51f62d5592978",
+      "cbe88765bb3d71d0ce3272cebd948dcb1a9c59ce9a17ce81ff25b638c190b33a",
+      "cdabcca66947c26d7cf7599b6dcfed027e5be6b85f1b4b915b8a077c27c7ad0e",
+      "ce19ee4d2608bbd5545968784a733ca415504b3b34515f8ad1fe90cb06ce2992",
+      "d05e6cec57e71b98d748ca82b6bd2f359d8e47b46e8ef8873ecdcdfbf277947b",
+      "d0f6f0ba94f3a590ea76095e3122a0eab24623163c68a9a8835a3b2489397f5e",
+      "d264a99cc049de6d369e844b77dc8be60aeb687d6e58737e0c47efd3a5fc7625",
+      "d440437a909d83616992448c6b8997bde116f1b3987726a9cd933d984b622a5c",
+      "d572def9d44254f3b5d515751d8940fc2bdfc99496468a1afd3ef4ace713e0b1",
+      "d6f97bad80fb8dcdffbe775b6a60238fc4afbfeca1da97c0ce64fd0b0f56c476",
+      "d707cce97731b0cfd0da7fc982c0a9e877f1238058ad770d5cc668ba711d0a8e",
+      "d9073b7a6cbf46352d9fc544dbf8a794296711053071cbf13b71fde512479dff",
+      "da1dc07306ed64b64dce3a8eddb6e7383cbdf4bc57789eb7f000a4db0b22ee80",
+      "da3b3b20a5330752ad53de6927b6107ad8d59b2284cb3732a91acdd4552d604a",
+      "dcf1c14eb9aca09753663888c785e383deec60e3e5a2bd6d526cceb002719e60",
+      "df01eff09da0d84b48e65d643d411e88fe08902f57e526cc1ddc22d762569499",
+      "df754de73045626474ba49c6dd079b5a3ef96aef668ce36e7e32055980b7853e",
+      "e13bc50bf430bc729cae69dd1070d3385f018a3c99f1709ae737677a46c768c1",
+      "e3749312d3e383509ad90ad3e3b9f1fdc6cae1793a49e4088af689bdd74c470c",
+      "e3bca04f49e44efcfb174224120789ec66016ba9e0ef9cabb9702c284a687dd8",
+      "e4882c27a33e08682a5321527d15bf4750dedfe4caff84f92d357657f953a275",
+      "e6fedd122f926127566a3fc2991e846a336c6f6fbe2ec1e6aa712844f41c2245",
+      "e7ef9c807f417033eb2139d90276d1391c1fb4dd6c58d9ec234545d223ba2c0c",
+      "e8da432fc481b950001729ef3af6de6778b6eb820e1de4e3d18dcf6a69fde723",
+      "e9c78afdf5da0cef3b69e378462ba1413755a3230aadfaf13cb61fa2b276962f",
+      "ec2799cf4dc58c2f06af924326cd939dd00aea887575fc1c558d02ad46d4d99c",
+      "ed0969619aae5676fbddd57b6c382fa4575560eaf5e7edd886a292b3fad39845",
+      "ed4e5400daa214bcda5feabc76f5c2e948432857e88c0fe2a28877fe437887df",
+      "ed8b61c5b59df11a3a354c269037270d24c5a5ca05843cfd9b21aefa4d265e39",
+      "eddc5e0021623fc69a84ee91ed5fc79cb3d35ad1dd6e8a8610e7d2e8e57c6194",
+      "efadc1317bbe0626c891c123be7056f5fb612412d18fb4d8d5a81d4080ff7f0f",
+      "f0336aca193f3db73430e1949a770c2cb8cda0c6db3d3c7c64646ca9ab1c8c71",
+      "f18338fee5edca5bf621fecc3984bd010a696724b145b59d00e82eefca537e2f",
+      "f1f9c77b1037d8651cd88b513e600578c272fbb22b6dd28a0c37a985b887ea01",
+      "f25764468cf49600b10105146999c4d7ec33c4d4dad5a3e913b40206d19b8d27",
+      "f288f537c59c5bcc4fa9c07c73b546ad74f150604e5929efcdf9b0ea5a54ab5a",
+      "f2b2184b9cf76da9b30b5b1ebaf308fe8d96c05993bc5a691e60ee7abfd94372",
+      "f3832517ef74186d2dd58faa303660bbc7ea509cf919a388b7a9f126f14a3c00",
+      "f3a35393de3a25a86fe677d8e45cf82c33aa37e09b98819b21bf2f491b79c847",
+      "f66fa6dc1c337e8873741375f07f96ca6e4b345322ea868f831dba22d9da4de7",
+      "f7304416802b06b629a9d237e6be6c80bbfd21afe8bd6d14a78f7d7e3c03918d",
+      "f8eb5179d02751018033d159b45f99743febae20dbbc2fafd3e0ecd3ba6becf8",
+      "f9e5273ad5641442fe591a4902d6d5a1f082ed8476f656f01717c31246580265",
+      "fa18611ffb3b3ea624443519ada355fd684e59c4396d941ef02be7c00bcec523",
+      "fb5458283401d59dd5d0fc8b4b457a1401288ffa55b70c7115a4d240b24479e8",
+      "fc25c9dce9c83d17302a02b5511f494366013ed537be23edd5c66a9d52d044da",
+      "fc7bb56c22ff3495a17edaacaf88d8cb47e5e3d063f4ecbac9a00d1bc8ce9888",
+      "fc9f1f4554e0ef0f249b9afd7d376c677f934daf20a9c3d58868d61e66b83555",
+      "fe35b24b62ec0250ca6b91e01168ca60c0ca9a9750217a1288510eb752ffadde",
+      "fe5010ada5ca8fd5d5d30a627f5d04e9439f651f42563e5ff712bc803f9c7b91"
+    ],
+    "write_ids": [
+      "00c868432fe07cc577a0b9bd",
+      "01f730ada3ac8b10137a9004",
+      "020d257f59aec0845542992a",
+      "020e89318b58dc8f46eda215",
+      "021527974cf1a28da3f7fbbb",
+      "02f1e3a32710957243ecd6a1",
+      "0395bb8529d2b94cdb95b540",
+      "039afdbc8fbe06475c078a21",
+      "0400fb41e289ee7d24bc7584",
+      "049729469b1fb56a5c8a50c3",
+      "04b21210b56e7dc6f1bab46f",
+      "0510dbd19d55085caaa5d416",
+      "0587f81870719fdb12ef9b80",
+      "071a74044b30b10af11ff7fd",
+      "0897f04ae5ec30dae1807e20",
+      "08b349e7fab08ee827cd99c6",
+      "08d554f5c99c2b3708774170",
+      "09b7e1db8998906347034d5b",
+      "0a38cf1d00277f5dfc827a4b",
+      "0bb28579dc17cf656e4ec677",
+      "0ca42dc8eafb3698c0cf8103",
+      "0ce52fb9a0931be2852dc0fb",
+      "0efb86d2e690b7c1bac21ca8",
+      "109d59a8dbf6567a763840c5",
+      "113120282c7262580e317d8a",
+      "12d67a56580df01f5e0ac75c",
+      "13f6dcdfc5c60cffd139705a",
+      "140b2312f1da4a1dddb77287",
+      "14b1421e7295b8ca21b69f0e",
+      "1648fe17cde84d46353822f3",
+      "17a9caba5d8ac4d88473e379",
+      "1b9f24583726ad2753f36559",
+      "1f40ce520aaf831bdd6bc2d3",
+      "2059702f392cd85a8df2ab4c",
+      "21aa7d5663e96d9fe3d942ec",
+      "227614c02a2d2e626725c7f0",
+      "22e1f7deaa96399465ac1072",
+      "234cbf9df45ea508f2247d8f",
+      "2407f3f71ffbd261845bbfc8",
+      "267cafd3817a400fe9757912",
+      "2b98d9811f7a8ff63c8bed30",
+      "2bafa95aa7074e734ada2615",
+      "2f78febcc2728b57fc2cc5a8",
+      "2fa8c702830c4a5737ae3798",
+      "31340ec715cd6fbce237c53e",
+      "332cde2a832f7559c4ccb0a0",
+      "336f1d623e85dbf87c15a76e",
+      "34b76b7d6dadd0761d855bd2",
+      "35d4eacdaef2881c8d087210",
+      "37823f1752de27861b788fe5",
+      "37a1c10410592dc71eb5bd01",
+      "39327970c8de5ec23a8ab17c",
+      "396347df4f5967dfa6051366",
+      "3b0c5a16df07ead2a3a020b7",
+      "3bf5bc300b399a8e35ea34c2",
+      "3c08a78619b976d1a756bad6",
+      "3c72545d9f7b8cca8a9db85a",
+      "3c8a2e9cb8c972b75ae79f5e",
+      "3c9fd4a33cf776e2aae64695",
+      "3dad8e8c8cb80acbf8a24e2b",
+      "3e7e24cef3b2d2ea5a8b0092",
+      "3eafa19a9b17c8c9f93e5c6d",
+      "41b09cbdaef1724be5caaa69",
+      "42f75b43791a0a3989faaa8f",
+      "43bf3ec3b3ac437e4e03e85f",
+      "483e33249af1c2bc4503884e",
+      "48561ce8875f7d08ca8eb16d",
+      "4b4ea1fea622b8f9d5ad6ae8",
+      "4c354dd5ab1f9e227e269734",
+      "4ee51ae20ba34e9fb3283371",
+      "510ca386b3c52c44d90a1072",
+      "511622a7f846bdbcbcccb8e7",
+      "51a0352b457e3518d9d05ad8",
+      "51f51ffc47d996b3418a47de",
+      "523fe5e96719e7d6f397c17a",
+      "5372d099ff98a2dfbfe5b80a",
+      "542dedc7171e67d1df64974d",
+      "556f47772b4ba5450168e82f",
+      "55ebf62b1ad77ac2770640a3",
+      "561c3bf8fa01fee733dde775",
+      "56e3b1fdb03b222b6b56327e",
+      "572e2fc4f52273b3260adf69",
+      "57acba34f093c761ec6a98c6",
+      "5b39c4008bf68e0b3ad409d3",
+      "5b9e96a4add6a9735ad73daa",
+      "5bc4ac0074275bff310ed24a",
+      "5d0082d94dcff67f65323b07",
+      "5d3e166be4c082a182456c43",
+      "5e943ebfc341ee831945ae61",
+      "5ebd9de6ae87b0705fae99c4",
+      "6040d552916aac481e0f5007",
+      "61bdad6af8961e7983395aaa",
+      "6243c5e766d708599293e16c",
+      "6327f752f51d6bd2ba6013db",
+      "63e9d65a53cee21aa23d6df3",
+      "65e7a9d263787b7107002465",
+      "65fa2a7e03d8c4691cb2d7b7",
+      "67d36f2f63378815072df54e",
+      "6b5cf226e93ed5d50d2bb6ea",
+      "6dc6844798c73e6f41eac160",
+      "6df5029d7e0607cb94ca5b90",
+      "6eab7e21df7d51eeae467342",
+      "700041b2fc00b9dfba87a43d",
+      "728d74584a1f3384c1783c9f",
+      "72a2851df043e4118f01a230",
+      "732fd473484945f0ca7a52fe",
+      "744ae07bddb26b29319e8e43",
+      "74aa63847a5db827301254a0",
+      "7523699a0453084869d9686d",
+      "75a7907772c2c11378d5fd58",
+      "765c866acfe8876f378d99bf",
+      "77ca332a5366feb4f3d06791",
+      "77e6f5f86f6536440f641f08",
+      "7840c12d5e26f294e84b6741",
+      "792e91376395b2cc274b8465",
+      "7a88aed618422ee10262f005",
+      "7b55618bcc918473951027b9",
+      "7c99ef943f559c1a1c027715",
+      "7fafb147cfd646125968fd41",
+      "7fe7398fa7b7fb73f8a5f2be",
+      "8251eb5f2156fa0f2a6d6e47",
+      "848b41756dee95c5fc8bb0ba",
+      "852cbf24753fb2f8a3ba3216",
+      "88449dc26cdb74bebe23565c",
+      "8857e4c2133bee11725f710e",
+      "8906d4e13dde9bd9c5103ac6",
+      "8926c50750aceeac25882aa0",
+      "89a5cf035e3827b6bfa2403a",
+      "8dd7e201f03d5a101c197f3b",
+      "8ea7d0a9fc153e0390477a01",
+      "9201a38ca3433480798bdc8f",
+      "9255cdbbf2c95294a621786e",
+      "93b7e8f0006e9efaf8428ede",
+      "94bf8bff926deaec2101c0f1",
+      "94c8c74d7034f6d56fac861e",
+      "9687bde34537468f2e6db325",
+      "994ad8a34959f53b8e474b8a",
+      "9a384f80df04ce41cd80cd3a",
+      "9aac84da5519bd7385a39343",
+      "9be5f6d9835c1daccdde0a60",
+      "9c581bb15326555c60544fb1",
+      "9c67f416dea0beaad85a76ef",
+      "9d4ce2b2f80449cc4564f43d",
+      "9e63eb5925959f0c6edd0e72",
+      "9f87366f69b8eddeb654b0d2",
+      "a08d4b7c6bb8d3db572ea219",
+      "a1352d6a98fecb813ba89fcb",
+      "a295bb396d7e0365d1491ce7",
+      "a4def3097a83310314f6f08d",
+      "a5120eff1d39cf23e9d45aff",
+      "a520a0d0fe0e8099797574a4",
+      "a5f71b230a46fff835542521",
+      "a684c25c855f0e3c3a0e5fa1",
+      "aa3ecdba2b3c895edd9f15ce",
+      "aa47ede2ee3eb3beaf81a5cd",
+      "aa6d2d86e41c5f610721ef79",
+      "aaab0dd258ef77356783e11f",
+      "ab77327d3a71d901ffcc2ff9",
+      "ae52984b61682cc0914527f4",
+      "ae6e694887fff7de8178e2f6",
+      "aeb2a5a8481ebb8da1e475e4",
+      "af60562bc84d474685432f71",
+      "afa3427f723573ed7b2f8d9b",
+      "b03f9938361eb9002d53b041",
+      "b27842dea1379722ae23229f",
+      "b5753287c502560ea22c8df9",
+      "b744c102916161f5e5e68312",
+      "b82e8c1b7da94a3bf22f9c9b",
+      "b863a8e0b88458599aac8e64",
+      "b897738343ea2ba4744de623",
+      "b990c161ce0790c841163c6a",
+      "b9a32f2f2c4dd54c93f410fd",
+      "ba60679fcd0975bc4c0870d4",
+      "bacf9db03a24f1014790866d",
+      "bda139ffbedace76aa73d72e",
+      "c0b436ae9877f231b510e47a",
+      "c44891e1657cde9f2e736218",
+      "c6c274da9d6c933c7aca7d23",
+      "c71d8ccb22941162ddb97ca0",
+      "c8b8e555cb911333203fb0d0",
+      "c932e283c10c02298bc6d666",
+      "cb5c3b11faa60c4b3ca1b8cc",
+      "cceffd7587c8ff1c292b5467",
+      "cf315fa3f61312bdbf12f528",
+      "cfc0569974d8a3ed1904fdf1",
+      "cfcdad238a8cee253314aef5",
+      "d115cc41d2e4ebb1b5d0109c",
+      "d1b82a50797ca6457e72db2f",
+      "d28e5401b83c86d6858ec203",
+      "d2ce07c12d481dcd8d3e6f8b",
+      "d32ce3a688cf5c1f0ca1b847",
+      "d4678298b0c3857fe29215a6",
+      "d5c41e5bc617d557fd516859",
+      "d6a177638647b6c8ed6d0f44",
+      "d7b2b60b2a55b2d1ba24bee1",
+      "ded897060c7d4bfa47ef7b0a",
+      "e1cc31ebcc8ee02b8afb8e0b",
+      "e46896f433189e0bdf0f2944",
+      "e481f44488d242425b52579f",
+      "e4859eb5f6879fa72321bdc6",
+      "e4a482fdb7b1d67b84d5f77a",
+      "e7c54301760ee9e5b9932eda",
+      "e8db026d1eee40f672c74062",
+      "ea86dea973a583cc3799b742",
+      "ebaef87559fcc28ff1fb7c20",
+      "ebb37ec91703b7bafe1afc93",
+      "ec940df553c253b4c19a3bb6",
+      "ee37eb8a1f5e66cf6f919e22",
+      "ee506b5280675e4f8c20b3ea",
+      "eecdd3591c2f8d1408ef8abf",
+      "eed15cd8554f89833d31d898",
+      "efb971dc86493f7162dde1bc",
+      "f0347a1f103214176f4566eb",
+      "f15ba72e26f52439fcceac3e",
+      "f258caad9ae6f4c2e0119f15",
+      "f4554374e40efb502cb64985",
+      "f537a32c7218fd2f318f53b7",
+      "f5a095755036d9729fd30381",
+      "f6045178658adda5495d0123",
+      "f791fd77eb517fb1cd7e35d1",
+      "f7b51809051fe85309679da4",
+      "fa35a7f88bf05a31f3fa7b07",
+      "fa85b7bbcd590c6758addc8b",
+      "fc755ab22b258a4a357f21f6",
+      "fcf0871df50fa69926d1fac8",
+      "fd2f83d6107c356b6ee31776"
+    ]
+  },
+  "rows": [
+    {
+      "alias_chain": [
+        "raw_response",
+        "_coerce_command_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "07147c7877b477a096b9070f",
+      "client_call": "attachment_repo.read_message_command_result",
+      "consumed_field_path": "status",
+      "decision_ids": [
+        "D-07",
+        "D-08",
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "closed_disposition",
+      "lower_fake_target": "src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_regular_and_sse_share_one_closed_executor_boundary",
+      "named_parser": "_coerce_command_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/routers/conversations.py",
+        "normalized_ast_sha256": "4fd40a2a25a23bfb812443a4b711549ff83077e3fc216f34855da5cbd1670c81",
+        "span": [
+          690,
+          757
+        ],
+        "symbol": "stream_message"
+      },
+      "strict_validator": "typed_command_state",
+      "tainted_response_root": "raw_response",
+      "transport": "sse",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_attempt_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "0796a55d27a1fda58b2b11aa",
+      "client_call": "practice_repo.get_attempt_receipt",
+      "consumed_field_path": "standard_answer",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20",
+        "D-22"
+      ],
+      "expected_type": "str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "named_parser": "build_attempt_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "span": [
+          127,
+          179
+        ],
+        "symbol": "build_attempt_result"
+      },
+      "strict_validator": "snapshot_only_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "185069fc8a6cd8e50ba854f8",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "Versions[].VersionId",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "load_private_store_seal"
+      ],
+      "body_operation": null,
+      "boundary_id": "1d8d9c6d394c4271d0be9b1d",
+      "client_call": "json.loads",
+      "consumed_field_path": "schema_version",
+      "decision_ids": [
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "literal",
+      "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
+      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "named_parser": "load_private_store_seal",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/account_deletion_service.py",
+        "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
+        "span": [
+          104,
+          162
+        ],
+        "symbol": "load_private_store_seal"
+      },
+      "strict_validator": "exact_schema_version",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "20391a5e68d09eeb60fe6825",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "Uploads[].Key",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "22c25ef3da89062646a592db",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "NextKeyMarker",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "250c68694e9517abbc4469bf",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "Parts[].ETag",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_positive_provider_integer"
+      ],
+      "body_operation": null,
+      "boundary_id": "279437d272dc077cdf15b9e2",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "NextPartNumberMarker",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_positive_provider_integer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "type_is_int_not_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_privileged_answer"
+      ],
+      "body_operation": null,
+      "boundary_id": "2d3e769226235ca6c013e05f",
+      "client_call": "practice authorization dependency",
+      "consumed_field_path": "explanation",
+      "decision_ids": [
+        "D-18",
+        "D-20",
+        "D-21",
+        "D-22"
+      ],
+      "expected_type": "str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
+      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "named_parser": "build_privileged_answer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "a5d849a9e92f701c5127392c5e91709fe79653bd3c959e572ef6928a32d9fa5d",
+        "span": [
+          182,
+          197
+        ],
+        "symbol": "build_privileged_answer"
+      },
+      "strict_validator": "privileged_read_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_attempt_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "36cff80b447d02588794a91b",
+      "client_call": "practice_repo.get_attempt_receipt",
+      "consumed_field_path": "explanation",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20",
+        "D-22"
+      ],
+      "expected_type": "str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "named_parser": "build_attempt_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "span": [
+          127,
+          179
+        ],
+        "symbol": "build_attempt_result"
+      },
+      "strict_validator": "snapshot_only_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "380be8d11b77cc9cb2ee684e",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "Versions[].ETag",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_mapping"
+      ],
+      "body_operation": "Body.read+Body.close",
+      "boundary_id": "38781d8948a519540d8aebcf",
+      "client_call": "s3.get_object",
+      "consumed_field_path": null,
+      "decision_ids": [
+        "D-01",
+        "D-02",
+        "D-03",
+        "D-04",
+        "D-05",
+        "D-11",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "bounded_byte_stream",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.get_object.Body",
+      "malformed_selector": "tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body",
+      "named_parser": "_provider_mapping",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "af1a95528432395e9ff6eb50a8a7270cca9c7240e93ffe03b5c9f519d9179873",
+        "span": [
+          1347,
+          1388
+        ],
+        "symbol": "_exact_object_digest"
+      },
+      "strict_validator": "bounded_stream_with_best_effort_close",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_privileged_answer"
+      ],
+      "body_operation": null,
+      "boundary_id": "3914fc448fbcb7a8bbdb552c",
+      "client_call": "practice authorization dependency",
+      "consumed_field_path": "correct_answer",
+      "decision_ids": [
+        "D-18",
+        "D-20",
+        "D-21",
+        "D-22"
+      ],
+      "expected_type": "str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
+      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "named_parser": "build_privileged_answer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "a5d849a9e92f701c5127392c5e91709fe79653bd3c959e572ef6928a32d9fa5d",
+        "span": [
+          182,
+          197
+        ],
+        "symbol": "build_privileged_answer"
+      },
+      "strict_validator": "privileged_read_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_validated_payload"
+      ],
+      "body_operation": null,
+      "boundary_id": "3c1ab2f63654ae2cdc5f619c",
+      "client_call": "multiprocessing.Connection.recv",
+      "consumed_field_path": "text",
+      "decision_ids": [
+        "D-03",
+        "D-04",
+        "D-05",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "str_or_none",
+      "lower_fake_target": "src/stoa/services/document_parser_worker.py:Connection.recv",
+      "malformed_selector": "tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only",
+      "named_parser": "_validated_payload",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/document_parser_worker.py",
+        "normalized_ast_sha256": "ce676520a1a10fcfe9c0520638e80306d302c3af82f8acd8843fdb0cf63afe67",
+        "span": [
+          223,
+          234
+        ],
+        "symbol": "_validated_payload"
+      },
+      "strict_validator": "exact_closed_payload_shape",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "425311b790616ec2c5fc2a37",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "NextUploadIdMarker",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "get_attachments"
+      ],
+      "body_operation": null,
+      "boundary_id": "496a3e58427ef01ac8c8df77",
+      "client_call": "dynamodb.batch_get_item",
+      "consumed_field_path": "Responses[].SK",
+      "decision_ids": [
+        "D-07",
+        "D-10",
+        "D-12",
+        "D-13",
+        "D-14",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "named_parser": "get_attachments",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/attachment_repo.py",
+        "normalized_ast_sha256": "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e",
+        "span": [
+          1879,
+          1970
+        ],
+        "symbol": "get_attachments"
+      },
+      "strict_validator": "exact_requested_key",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_positive_provider_integer"
+      ],
+      "body_operation": null,
+      "boundary_id": "4abc91e9fcac66ecfc8ce94e",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "Parts[].Size",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_positive_provider_integer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "type_is_int_not_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "get_attachments"
+      ],
+      "body_operation": null,
+      "boundary_id": "4c9245fb7d1338d87612322b",
+      "client_call": "dynamodb.batch_get_item",
+      "consumed_field_path": "UnprocessedKeys",
+      "decision_ids": [
+        "D-07",
+        "D-10",
+        "D-12",
+        "D-13",
+        "D-14",
+        "D-17"
+      ],
+      "expected_type": "mapping",
+      "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "named_parser": "get_attachments",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/attachment_repo.py",
+        "normalized_ast_sha256": "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e",
+        "span": [
+          1879,
+          1970
+        ],
+        "symbol": "get_attachments"
+      },
+      "strict_validator": "bounded_exact_retry_set",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_truncation"
+      ],
+      "body_operation": null,
+      "boundary_id": "4f968766aebfb3b950acd5e4",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "IsTruncated",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "bool",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_provider_truncation",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "type_is_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "parse_report_object_ack"
+      ],
+      "body_operation": null,
+      "boundary_id": "5913af14cbcdc92999ffad65",
+      "client_call": "s3.put_object",
+      "consumed_field_path": "VersionId",
+      "decision_ids": [
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/db/repositories/report_repo.py:s3.put_object",
+      "malformed_selector": "tests/test_phase473_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
+      "named_parser": "parse_report_object_ack",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/report_repo.py",
+        "normalized_ast_sha256": "7f2f4b1e4e7ff21c30bfb2aa9a8e659d1a229f1d9b612bac9e2ea9d905b58d11",
+        "span": [
+          1729,
+          1735
+        ],
+        "symbol": "parse_report_object_ack"
+      },
+      "strict_validator": "_required_private_string",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_parse_ai_response"
+      ],
+      "body_operation": null,
+      "boundary_id": "5b14ee728d7b036cea35ef03",
+      "client_call": "bedrock.invoke_model.Body.read",
+      "consumed_field_path": "steps",
+      "decision_ids": [
+        "D-03",
+        "D-05",
+        "D-10",
+        "D-17"
+      ],
+      "expected_type": "list[str]",
+      "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "named_parser": "_parse_ai_response",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/ai_service.py",
+        "normalized_ast_sha256": "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c",
+        "span": [
+          151,
+          175
+        ],
+        "symbol": "_parse_ai_response"
+      },
+      "strict_validator": "closed_ai_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "load_private_store_seal"
+      ],
+      "body_operation": null,
+      "boundary_id": "5c7ee4df2bba282798590bb7",
+      "client_call": "json.loads",
+      "consumed_field_path": "branch_ids",
+      "decision_ids": [
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "exact_list[str]",
+      "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
+      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "named_parser": "load_private_store_seal",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/account_deletion_service.py",
+        "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
+        "span": [
+          104,
+          162
+        ],
+        "symbol": "load_private_store_seal"
+      },
+      "strict_validator": "exact_17_branch_order",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "get_attachments"
+      ],
+      "body_operation": null,
+      "boundary_id": "5d9cd1fabcf36647c54464f4",
+      "client_call": "dynamodb.batch_get_item",
+      "consumed_field_path": "Responses",
+      "decision_ids": [
+        "D-07",
+        "D-10",
+        "D-12",
+        "D-13",
+        "D-14",
+        "D-17"
+      ],
+      "expected_type": "mapping[str,list[object]]",
+      "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "named_parser": "get_attachments",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/attachment_repo.py",
+        "normalized_ast_sha256": "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e",
+        "span": [
+          1879,
+          1970
+        ],
+        "symbol": "get_attachments"
+      },
+      "strict_validator": "exact_batch_response_mapping",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_attempt_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "658d73efe32a2cde719db118",
+      "client_call": "practice_repo.get_attempt_receipt",
+      "consumed_field_path": "student_id",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20",
+        "D-22"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "named_parser": "build_attempt_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "span": [
+          127,
+          179
+        ],
+        "symbol": "build_attempt_result"
+      },
+      "strict_validator": "complete_receipt_required_text",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "66fd87ea66a6e340520ececd",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "NextKeyMarker",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_validated_payload"
+      ],
+      "body_operation": null,
+      "boundary_id": "6a416bab2f698d999ce88f22",
+      "client_call": "multiprocessing.Connection.recv",
+      "consumed_field_path": "category",
+      "decision_ids": [
+        "D-03",
+        "D-04",
+        "D-05",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "closed_category",
+      "lower_fake_target": "src/stoa/services/document_parser_worker.py:Connection.recv",
+      "malformed_selector": "tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only",
+      "named_parser": "_validated_payload",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/document_parser_worker.py",
+        "normalized_ast_sha256": "ce676520a1a10fcfe9c0520638e80306d302c3af82f8acd8843fdb0cf63afe67",
+        "span": [
+          223,
+          234
+        ],
+        "symbol": "_validated_payload"
+      },
+      "strict_validator": "closed_category_or_none",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "load_private_store_seal"
+      ],
+      "body_operation": null,
+      "boundary_id": "74d15835ed931ad1ebcd2ece",
+      "client_call": "json.loads",
+      "consumed_field_path": "branch_registry",
+      "decision_ids": [
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
+      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "named_parser": "load_private_store_seal",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/account_deletion_service.py",
+        "normalized_ast_sha256": "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7",
+        "span": [
+          104,
+          162
+        ],
+        "symbol": "load_private_store_seal"
+      },
+      "strict_validator": "closed_branch_contract",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_truncation"
+      ],
+      "body_operation": null,
+      "boundary_id": "78cd5bf28c1d776a52806f1a",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "IsTruncated",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "bool",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_provider_truncation",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_truncation"
+      ],
+      "body_operation": null,
+      "boundary_id": "8681d1473d6d4add50d06e5f",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "IsTruncated",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "bool",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_provider_truncation",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "type_is_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_privileged_answer"
+      ],
+      "body_operation": null,
+      "boundary_id": "91a252511baa6e4da25c5177",
+      "client_call": "practice authorization dependency",
+      "consumed_field_path": "class_id",
+      "decision_ids": [
+        "D-18",
+        "D-20",
+        "D-21",
+        "D-22"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
+      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "named_parser": "build_privileged_answer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "a5d849a9e92f701c5127392c5e91709fe79653bd3c959e572ef6928a32d9fa5d",
+        "span": [
+          182,
+          197
+        ],
+        "symbol": "build_privileged_answer"
+      },
+      "strict_validator": "exact_loaded_challenge_scope",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_query_all_challenge_pages"
+      ],
+      "body_operation": null,
+      "boundary_id": "9891647f5a924b14f77ec8b8",
+      "client_call": "dynamodb.query",
+      "consumed_field_path": "LastEvaluatedKey",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20"
+      ],
+      "expected_type": "mapping_or_none",
+      "lower_fake_target": "src/stoa/db/repositories/practice_repo.py:dynamodb.query",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
+      "named_parser": "_query_all_challenge_pages",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/practice_repo.py",
+        "normalized_ast_sha256": "378f2d96b0f69822b75a2ef0be789eae85e025ba4e7b2a74890f4c42ba2b907b",
+        "span": [
+          247,
+          265
+        ],
+        "symbol": "_query_all_challenge_pages"
+      },
+      "strict_validator": "progressing_exact_cursor",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "parse_report_object_ack"
+      ],
+      "body_operation": null,
+      "boundary_id": "9e1cba021ac8b3f7331bf647",
+      "client_call": "s3.put_object",
+      "consumed_field_path": "ETag",
+      "decision_ids": [
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/db/repositories/report_repo.py:s3.put_object",
+      "malformed_selector": "tests/test_phase473_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
+      "named_parser": "parse_report_object_ack",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/report_repo.py",
+        "normalized_ast_sha256": "7f2f4b1e4e7ff21c30bfb2aa9a8e659d1a229f1d9b612bac9e2ea9d905b58d11",
+        "span": [
+          1729,
+          1735
+        ],
+        "symbol": "parse_report_object_ack"
+      },
+      "strict_validator": "_required_private_string",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_attempt_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "9f30ac0d21c5b9a5e868aa7b",
+      "client_call": "practice_repo.get_attempt_receipt",
+      "consumed_field_path": "correct",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20",
+        "D-22"
+      ],
+      "expected_type": "bool",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "named_parser": "build_attempt_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "span": [
+          127,
+          179
+        ],
+        "symbol": "build_attempt_result"
+      },
+      "strict_validator": "type_is_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_parse_ai_response"
+      ],
+      "body_operation": null,
+      "boundary_id": "a12cb4b2ce7e856248d9a401",
+      "client_call": "bedrock.invoke_model.Body.read",
+      "consumed_field_path": "answer",
+      "decision_ids": [
+        "D-03",
+        "D-05",
+        "D-10",
+        "D-17"
+      ],
+      "expected_type": "str",
+      "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "named_parser": "_parse_ai_response",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/ai_service.py",
+        "normalized_ast_sha256": "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c",
+        "span": [
+          151,
+          175
+        ],
+        "symbol": "_parse_ai_response"
+      },
+      "strict_validator": "closed_ai_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_attempt_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "a4b65a53c85213895ee4a390",
+      "client_call": "practice_repo.get_attempt_receipt",
+      "consumed_field_path": "challenge_id",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20",
+        "D-22"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "named_parser": "build_attempt_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "span": [
+          127,
+          179
+        ],
+        "symbol": "build_attempt_result"
+      },
+      "strict_validator": "complete_receipt_required_text",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_mapping"
+      ],
+      "body_operation": null,
+      "boundary_id": "ac125ab0e333adaa28bc70f3",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "Versions",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_provider_mapping",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "exact_list_of_mappings",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "get_attachments"
+      ],
+      "body_operation": null,
+      "boundary_id": "bf6ba82b656ccaf1ad23539b",
+      "client_call": "dynamodb.batch_get_item",
+      "consumed_field_path": "Responses[].PK",
+      "decision_ids": [
+        "D-07",
+        "D-10",
+        "D-12",
+        "D-13",
+        "D-14",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "named_parser": "get_attachments",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/attachment_repo.py",
+        "normalized_ast_sha256": "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e",
+        "span": [
+          1879,
+          1970
+        ],
+        "symbol": "get_attachments"
+      },
+      "strict_validator": "exact_requested_key",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_mapping"
+      ],
+      "body_operation": null,
+      "boundary_id": "c1d11db9f1ed44d929aa88c2",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "DeleteMarkers",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_provider_mapping",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "exact_list_of_mappings",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_positive_provider_integer"
+      ],
+      "body_operation": null,
+      "boundary_id": "d80081a6e5ca74f579e6e606",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "Parts[].PartNumber",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "positive_int",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_positive_provider_integer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "type_is_int_not_bool",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_mapping"
+      ],
+      "body_operation": null,
+      "boundary_id": "dae6076ec9e133d3033f6a15",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "Uploads",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_provider_mapping",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "exact_list_of_mappings",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_query_all_challenge_pages"
+      ],
+      "body_operation": null,
+      "boundary_id": "de5e8494a2d3e20fdb07a58f",
+      "client_call": "dynamodb.query",
+      "consumed_field_path": "Items",
+      "decision_ids": [
+        "D-18",
+        "D-19",
+        "D-20"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/db/repositories/practice_repo.py:dynamodb.query",
+      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
+      "named_parser": "_query_all_challenge_pages",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/db/repositories/practice_repo.py",
+        "normalized_ast_sha256": "378f2d96b0f69822b75a2ef0be789eae85e025ba4e7b2a74890f4c42ba2b907b",
+        "span": [
+          247,
+          265
+        ],
+        "symbol": "_query_all_challenge_pages"
+      },
+      "strict_validator": "exact_list",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "e02a8c347e2be8de04eed3e4",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "Versions[].Key",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "e2adcc31b9d001670c8e107c",
+      "client_call": "s3.list_object_versions",
+      "consumed_field_path": "NextVersionIdMarker",
+      "decision_ids": [
+        "D-07",
+        "D-09",
+        "D-10",
+        "D-12",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "span": [
+          685,
+          735
+        ],
+        "symbol": "_exact_version_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_coerce_command_result"
+      ],
+      "body_operation": null,
+      "boundary_id": "e691b174def0bb55021f5275",
+      "client_call": "attachment_repo.read_message_command_result",
+      "consumed_field_path": "status",
+      "decision_ids": [
+        "D-07",
+        "D-08",
+        "D-10",
+        "D-13",
+        "D-17"
+      ],
+      "expected_type": "closed_disposition",
+      "lower_fake_target": "src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
+      "malformed_selector": "tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
+      "named_parser": "_coerce_command_result",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/routers/conversations.py",
+        "normalized_ast_sha256": "7ae80286c02cdf84dc70148ead11fae2e74e61b8fadc6d320191d26ed639d138",
+        "span": [
+          659,
+          686
+        ],
+        "symbol": "send_message"
+      },
+      "strict_validator": "typed_command_state",
+      "tainted_response_root": "raw_response",
+      "transport": "regular",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "build_privileged_answer"
+      ],
+      "body_operation": null,
+      "boundary_id": "ed291aaccb8608121c328950",
+      "client_call": "practice authorization dependency",
+      "consumed_field_path": "course_id",
+      "decision_ids": [
+        "D-18",
+        "D-20",
+        "D-21",
+        "D-22"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
+      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "named_parser": "build_privileged_answer",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/practice_projection_service.py",
+        "normalized_ast_sha256": "a5d849a9e92f701c5127392c5e91709fe79653bd3c959e572ef6928a32d9fa5d",
+        "span": [
+          182,
+          197
+        ],
+        "symbol": "build_privileged_answer"
+      },
+      "strict_validator": "exact_loaded_challenge_scope",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_mapping"
+      ],
+      "body_operation": null,
+      "boundary_id": "f1a2abbe51250a0494aaed10",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "Parts",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "list[object]",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_provider_mapping",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "exact_list_of_mappings",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_provider_sha256"
+      ],
+      "body_operation": null,
+      "boundary_id": "f7e61d017012add9cb0d2b72",
+      "client_call": "s3.list_parts",
+      "consumed_field_path": "Parts[].ChecksumSHA256",
+      "decision_ids": [
+        "D-05",
+        "D-08",
+        "D-16",
+        "D-17"
+      ],
+      "expected_type": "canonical_base64_sha256",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
+      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "named_parser": "_provider_sha256",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb",
+        "span": [
+          1045,
+          1122
+        ],
+        "symbol": "_reconcile_provider_part"
+      },
+      "strict_validator": "strict_base64_sha256",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_parse_ai_response"
+      ],
+      "body_operation": null,
+      "boundary_id": "fea3a584cf2fe193125ec6fc",
+      "client_call": "bedrock.invoke_model.Body.read",
+      "consumed_field_path": "suggest_teacher",
+      "decision_ids": [
+        "D-03",
+        "D-05",
+        "D-10",
+        "D-17"
+      ],
+      "expected_type": "bool",
+      "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "named_parser": "_parse_ai_response",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/ai_service.py",
+        "normalized_ast_sha256": "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c",
+        "span": [
+          151,
+          175
+        ],
+        "symbol": "_parse_ai_response"
+      },
+      "strict_validator": "closed_ai_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
+        "_required_provider_coordinate"
+      ],
+      "body_operation": null,
+      "boundary_id": "fff8b065648a784af0d0dec9",
+      "client_call": "s3.list_multipart_uploads",
+      "consumed_field_path": "Uploads[].UploadId",
+      "decision_ids": [
+        "D-06",
+        "D-08",
+        "D-09",
+        "D-15",
+        "D-17"
+      ],
+      "expected_type": "nonblank_str",
+      "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
+      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "named_parser": "_required_provider_coordinate",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/attachment_service.py",
+        "normalized_ast_sha256": "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "span": [
+          601,
+          645
+        ],
+        "symbol": "_exact_multipart_absence"
+      },
+      "strict_validator": "type_is_str_nonblank",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    }
+  ],
+  "schema_version": "phase-473-boundary-inventory.v1",
+  "source_files": [
+    {
+      "boundary_count": 4,
+      "file": "src/stoa/db/repositories/attachment_repo.py",
+      "symbol_digests": [
+        "a859b8df7fc83542e65e5c2452cad51168671fef673bcbb4d2e3137505c70a8e"
+      ]
+    },
+    {
+      "boundary_count": 2,
+      "file": "src/stoa/db/repositories/practice_repo.py",
+      "symbol_digests": [
+        "378f2d96b0f69822b75a2ef0be789eae85e025ba4e7b2a74890f4c42ba2b907b"
+      ]
+    },
+    {
+      "boundary_count": 2,
+      "file": "src/stoa/db/repositories/report_repo.py",
+      "symbol_digests": [
+        "7f2f4b1e4e7ff21c30bfb2aa9a8e659d1a229f1d9b612bac9e2ea9d905b58d11"
+      ]
+    },
+    {
+      "boundary_count": 2,
+      "file": "src/stoa/routers/conversations.py",
+      "symbol_digests": [
+        "4fd40a2a25a23bfb812443a4b711549ff83077e3fc216f34855da5cbd1670c81",
+        "7ae80286c02cdf84dc70148ead11fae2e74e61b8fadc6d320191d26ed639d138"
+      ]
+    },
+    {
+      "boundary_count": 3,
+      "file": "src/stoa/services/account_deletion_service.py",
+      "symbol_digests": [
+        "ff2c3a0b16e62302eccd895a2ea7a07a069872feb690d20cef232eb0662e48b7"
+      ]
+    },
+    {
+      "boundary_count": 3,
+      "file": "src/stoa/services/ai_service.py",
+      "symbol_digests": [
+        "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c"
+      ]
+    },
+    {
+      "boundary_count": 22,
+      "file": "src/stoa/services/attachment_service.py",
+      "symbol_digests": [
+        "34b83bf35188506063e3f316b96cc245d8e6eb91499398afddbd5932dfbb5468",
+        "5fd2aa86df105c236509e2b3ae28053d8a2a765877b48ad82c43a49356f3522a",
+        "af1a95528432395e9ff6eb50a8a7270cca9c7240e93ffe03b5c9f519d9179873",
+        "f02260b62efc7cfc67d386c10139e79df8e1bdc70e105d586b8d32de2da963eb"
+      ]
+    },
+    {
+      "boundary_count": 2,
+      "file": "src/stoa/services/document_parser_worker.py",
+      "symbol_digests": [
+        "ce676520a1a10fcfe9c0520638e80306d302c3af82f8acd8843fdb0cf63afe67"
+      ]
+    },
+    {
+      "boundary_count": 9,
+      "file": "src/stoa/services/practice_projection_service.py",
+      "symbol_digests": [
+        "519f9e70e2f14255a859834faf0d875983fcadb89f94cea018a7d7ff321ea307",
+        "a5d849a9e92f701c5127392c5e91709fe79653bd3c959e572ef6928a32d9fa5d"
+      ]
+    }
+  ]
+}
