@@ -1,6 +1,6 @@
 ---
 phase: 473-student-content-privacy-and-practice-integrity
-verified: 2026-07-17T09:30:53Z
+verified: 2026-07-18T12:02:00Z
 status: gaps_found
 score: 4/5 must-haves verified
 overrides_applied: 0
@@ -10,102 +10,83 @@ requirements:
   blocked:
     - V9PRIV-02
 decision_coverage:
-  honored: 18
+  honored: 19
   total: 22
   not_honored:
-    - D-07
-    - D-08
     - D-10
     - D-16
+    - D-17
 re_verification:
   previous_status: gaps_found
   previous_score: 4/5
   gaps_closed:
-    - "CR-009: issuance, staging-completion, and immutable-promotion coordinates are now strict nonblank strings at service and repository boundaries"
-    - "WR-009: upload cleanup now isolates candidate-local failures and continues later bounded candidates"
-    - "WR-010: staging validation and conversation extraction own a non-None provider Body before readable-shape inspection and close best-effort in finally"
+    - "UploadPart/ListParts acknowledgements now require exact ETag/checksum facts before ledger completion"
+    - "Conversation completion preserves typed outcomes and reconciles ambiguous commits"
+    - "Committed conversation replay requires a complete exact attachment set"
+    - "Owner attachment retention and purge use exhaustive authoritative pagination"
+    - "Deterministic bind errors retain their stable rejection outcome"
+    - "OOXML admission parses and rejects external relationships through the semantic package boundary"
   gaps_remaining:
-    - "WR-011 remains incomplete at complete_message_command, which swallows typed retryable transaction failure into False"
+    - "Deletion-command claims compare an active lease with the new future expiry, and branch persistence is not bound to the returned claim"
+    - "Private notification delivery calls providers directly when authoritative owner-generation metadata is missing or malformed"
   regressions: []
 gaps:
-  - truth: "Upload part success and restart reconciliation require a usable provider ETag before the part ledger becomes completed"
+  - truth: "Only one current deletion-command lease may mutate or finalize the durable 17-branch account-deletion proof"
     status: failed
-    reason: "UploadPart and ListParts coerce absent or malformed ETags to strings, while complete_upload_part accepts them, marks the ledger completed, and removes the retry lease."
+    reason: "An unexpired running command is eligible for immediate takeover because its stored expiry is compared with the claimant's future expiry; the returned lease owner/version is discarded and branch writes condition only on generation and running status."
     artifacts:
-      - path: "src/stoa/services/attachment_service.py"
-        issue: "put_upload_chunk and _reconcile_provider_part pass str(value or '') instead of validating a nonblank string."
-      - path: "src/stoa/db/repositories/attachment_repo.py"
-        issue: "complete_upload_part has no defense-in-depth coordinate guard before REMOVE lease_expires_at."
+      - path: "src/stoa/jobs/account_deletion.py"
+        issue: "The job passes only a future lease expiry and then calls continue_command by command ID, discarding the returned claim identity."
+      - path: "src/stoa/db/repositories/account_deletion_repo.py"
+        issue: "Claim uses lease_expires_at < :expiry rather than current time; branch persistence has no lease-owner or command-version CAS."
+      - path: "src/stoa/services/account_deletion_service.py"
+        issue: "Continuation reloads mutable command state without an opaque claim token and may persist/finalize stale branch evidence."
     missing:
-      - "Apply the strict required-coordinate validator to UploadPart and ListParts ETags before ledger completion."
-      - "Reject malformed ETags inside complete_upload_part without changing status or removing the lease."
-      - "Add absent/non-string/empty/whitespace matrices and restart adoption proving assembly succeeds without a blind second upload."
-  - truth: "Conversation completion dependency failures retain typed retry semantics and explicitly reconcile an ambiguous committed response"
+      - "Compare stored lease expiry with an explicit current epoch."
+      - "Thread an opaque lease owner/version token through continuation, branch persistence, renewal, and finalization."
+      - "Advance a CAS version/digest for branch writes and validate the durable branch-result set in the terminal transaction."
+      - "Add two-worker unexpired, expired-takeover, stale-write, and stale-finalization tests."
+  - truth: "Every private notification, push, and realtime provider effect is owner/fence/lease bound or explicitly sealed global non-private data"
     status: failed
-    reason: "complete_message_command catches every AttachmentTransactionError and returns False, so RETRYABLE_DEPENDENCY never reaches the structured adapter and the router polls toward message_in_progress instead of an explicit committed-state reread or safe 503."
+    reason: "Email digest, push, and WebSocket delivery bypass the delivery-intent fence when owner-generation metadata is missing or invalid; direct probes delivered private payloads on those fallback paths."
     artifacts:
-      - path: "src/stoa/db/repositories/attachment_repo.py"
-        issue: "complete_message_command collapses semantic transaction outcomes to bool."
-      - path: "src/stoa/routers/conversations.py"
-        issue: "False completion is treated as an ordinary race and immediately enters bounded polling."
+      - path: "src/stoa/services/notification_service.py"
+        issue: "Digest and push fall back to direct provider calls when a positive account-fence generation is absent."
+      - path: "src/stoa/services/websocket_service.py"
+        issue: "Missing/invalid generation sets leased=False and fanout proceeds without an account-fence recheck."
     missing:
-      - "Preserve typed completion outcomes across the repository boundary."
-      - "After possible commit/lost response, reread the same fingerprinted command and replay completed state; otherwise return upload_service_unavailable."
-      - "Inject endpoint/timeout/generic SDK failures below transact_write_items for regular and SSE, including commit-then-raise."
-  - truth: "A resumed committed conversation loads the exact complete stored attachment set before extraction or AI"
-    status: failed
-    reason: "get_attachments ignores DynamoDB UnprocessedKeys and missing requested IDs, and resume code silently builds prepared from the returned subset."
-    artifacts:
-      - path: "src/stoa/db/repositories/attachment_repo.py"
-        issue: "get_attachments performs one BatchGetItem and returns a partial dictionary without completeness enforcement."
-      - path: "src/stoa/routers/conversations.py"
-        issue: "message_committed/ai_running recovery filters missing attachment IDs out and continues to extraction and AI."
-    missing:
-      - "Retry UnprocessedKeys with a bounded policy and redacted dependency failure."
-      - "Require the returned active owner-bound immutable IDs to equal the stored requested IDs before claiming/running AI."
-      - "Add multi-round unprocessed and permanently missing item tests with zero extraction/AI/completion effects."
-  - truth: "Conversation deletion and account purge exhaustively process every owner attachment and association page"
-    status: failed
-    reason: "list_owner_attachment_items discards LastEvaluatedKey; release and purge treat the first page as exhaustive, including joins between association and attachment metadata."
-    artifacts:
-      - path: "src/stoa/db/repositories/attachment_repo.py"
-        issue: "The GSI query has no pagination loop or continuation contract."
-      - path: "src/stoa/services/attachment_service.py"
-        issue: "release_resource_attachments and purge_student_attachments cannot resume or join records across pages."
-    missing:
-      - "Exhaustively paginate or persist a bounded deletion continuation until all pages are processed."
-      - "Join association and attachment metadata safely across page boundaries."
-      - "Add split-page conversation deletion and account purge tests proving all references and the exact last physical version are removed."
+      - "Fail closed for private rows without authoritative owner and generation metadata."
+      - "Resolve legacy ownership through a strongly consistent authoritative join before delivery."
+      - "Permit an ownerless path only for a persisted sealed global_nonprivate classification."
+      - "Route every other provider effect through the same intent/lease primitive and add deletion-race tests for missing, malformed, and stale generation metadata."
 deferred:
   - truth: "Real S3 multipart, version, promotion, overwrite, and restart-recovery behavior is observed in an approved non-production environment"
     addressed_in: "Phase 479"
-    evidence: "Phase 479 defines/imports authoritative S3 lifecycle and policies and requires staging infrastructure evidence."
+    evidence: "The checked evidence records P479-REAL-S3-MULTIPART-VERSIONING as NOT RUN."
   - truth: "The cleanup scheduler, retries, alarms, and IaC are deployed and observed"
-    addressed_in: "Phase 479"
-    evidence: "Phase 479 success criteria require unused uploads and lifecycle ownership to be visible in versioned infrastructure and runbooks."
+    addressed_in: "Phase 480"
+    evidence: "The checked evidence records P480-DEPLOYED-CLEANUP-SCHEDULER-IAC as NOT RUN."
   - truth: "Production/deployed log redaction is captured from the promoted artifact"
     addressed_in: "Phase 480"
-    evidence: "Phase 480 V9PRIV-04 requires captured logs without student/model text, keys, or provider payloads."
+    evidence: "The checked evidence records P480-PRODUCTION-LOGS as NOT RUN."
 ---
 
 # Phase 473: Student Content Privacy And Practice Integrity Verification Report
 
 **Phase Goal:** Ensure student uploads and exercise previews cannot expose another user's content or answers.
-**Verified:** 2026-07-17T09:30:53Z
+**Verified:** 2026-07-18T12:02:00Z
 **Status:** `gaps_found`
-**Re-verification:** Yes — after Plans 473-15 through 473-17
-**Tested candidate checked:** `bc61107b920b158201ce4927485986d43aac59c8`
+**Re-verification:** Yes — after Plans 473-18 through 473-35
+**Checked HEAD:** `1c661c9ea88cb56ee9294320ef4e08687befaab7`
 
 ## Verdict
 
-Phase 473 is not ready to close. The practice-answer boundary and question OCR ownership remain locally sound, and Plans 15/16 did close strict issuance/assembly/promotion coordinates, candidate-local cleanup isolation, provider Body ownership, and most conversation transport adapters. However, four independently reproduced code paths remain ship-blocking:
+Phase 473 is not ready to close. The prior upload, conversation, retention, document-validation, and practice-answer blockers are closed, and the full repository suite passes **1,923 tests**. However, both critical findings in the current code review reproduce against production boundaries:
 
-1. multipart UploadPart/ListParts success accepts an unusable ETag and removes the retry lease;
-2. the real message-completion repository boundary swallows typed retryable failure;
-3. committed conversation replay can continue with a partial attachment set;
-4. conversation deletion/account purge stop at the first owner GSI page.
+1. active account-deletion leases are immediately stealable and stale workers are not fenced from branch writes/finalization;
+2. private digest, push, and WebSocket payloads can bypass the account fence when owner-generation metadata is absent or malformed.
 
-The exact nine-module Phase 473 matrix still passes **445 tests**, but those tests replace or omit the disputed lower boundaries. Passing broad tests therefore does not falsify the direct probes below. V9PRIV-02 remains blocked and the phase status is `gaps_found`.
+The second defect is a direct private-content delivery path after deletion begins. The first can corrupt the durable proof intended to prevent private rows or provider effects from surviving account closure. Either is sufficient to block V9PRIV-02 and Phase 473 closure. The three review warnings also reproduce, but are recorded separately because they do not independently demonstrate cross-user content disclosure.
 
 ## Goal Achievement
 
@@ -113,207 +94,143 @@ The exact nine-module Phase 473 matrix still passes **445 tests**, but those tes
 
 | # | ROADMAP observable truth | Status | Evidence |
 |---|---|---|---|
-| 1 | A student can upload a supported bounded file and use it once in their own question. | ✓ VERIFIED LOCALLY | Public question input is an opaque `AttachmentReference`; owner/type/status reservation precedes OCR; the conditional question/attachment transaction remains implemented and its positive/negative controls pass. |
-| 2 | Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors. | ✗ FAILED | Malformed UploadPart/ListParts ETags are accepted as success; message completion retryable dependency is masked as `False`/polling; deterministic bind errors can also be masked as `message_in_progress`. |
-| 3 | No student preview/overview/path/lesson response contains answers or answer-derived explanation before submission. | ✓ VERIFIED LOCALLY | Typed preview allowlists contain no answer fields; route projections use them; the recursive practice matrix passes. |
-| 4 | Authorized teacher/admin tooling retains an explicit answer-bearing contract separate from the student contract. | ✓ VERIFIED LOCALLY | `PrivilegedPracticeAnswer` and the centrally scoped curriculum-answer dependency remain distinct from preview and mutation contracts. |
-| 5 | Existing question responses hide object keys and raw OCR text. | ✓ VERIFIED LOCALLY | `QuestionResponse` exposes safe attachment/OCR metadata only; request models forbid storage coordinates; response/log canary controls pass locally. |
+| 1 | A student can upload a supported bounded file and use it once in their own question. | ✓ VERIFIED LOCALLY | Opaque owner-bound attachment references, exact provider acknowledgements, post-upload validation, conditional question association, and positive/negative controls are substantive and wired. |
+| 2 | Foreign, malformed, missing, expired, oversized, mismatched, and reused uploads are denied with stable redacted errors. | ✗ FAILED AT EXPANDED PRIVATE-LIFECYCLE BOUNDARY | Upload-specific denial paths are now sound, but missing notification owner-generation facts result in direct private delivery rather than a stable fail-closed decision; deletion-command concurrency can also invalidate safe failure cleanup/account closure. |
+| 3 | No student preview/overview/path/lesson response contains answers or answer-derived explanation before submission. | ✓ VERIFIED LOCALLY | Typed answer-free projections, immutable attempt receipts, and constant reviewed hint templates pass recursive route tests. |
+| 4 | Authorized teacher/admin tooling retains an explicit answer-bearing contract separate from the student contract. | ✓ VERIFIED LOCALLY | Exact course/class teacher scope and narrow admin READ remain distinct from student preview/result contracts. |
+| 5 | Existing question responses hide object keys and raw OCR text. | ✓ VERIFIED LOCALLY | Public models and response/log canaries expose only opaque identifiers and safe OCR metadata. |
 
 **Score:** 4/5 roadmap truths verified.
 
-The score does not soften the verdict: any one blocker prevents goal closure, and blockers 3/4 invalidate additional Plan 03/10 conversation and retention must-haves not fully expressed by the five roadmap rows.
-
 ## Re-verification Result
 
-The previous report's strict-coordinate CR-009, cleanup-isolation WR-009, and Body-ownership WR-010 gaps are closed in the source. The prior WR-011 conversation transport concern is only partially closed: `_conversation_repository_call` covers connected calls, but `complete_message_command` erases the typed outcome before the adapter sees it.
+All four blockers and both warnings from the 2026-07-17 report are closed:
 
-The four blockers below are newly discovered adjacent paths, not evidence of a source change after candidate `bc61107`; current implementation source/tests are byte-identical to that candidate. They demonstrate that the candidate's selected tests were incomplete.
+- Plan 18 enforces nonblank exact part ETag/checksum acknowledgements and repository invariants.
+- Plans 20/21 preserve typed conversation dispositions, reconcile ambiguous completion, and require exact complete attachment/history snapshots.
+- Plans 22/23 replace the one-page owner GSI assumption with authoritative exhaustive retention and purge contracts.
+- Plan 20 preserves deterministic post-claim rejection instead of converting it to `message_in_progress`.
+- Plan 24 establishes semantic OOXML identity and parses relationship attributes, rejecting external/escaping targets.
 
-## Mandatory Review Finding Adjudication
+The focused provider/conversation/retention/document/practice regression set passed **231 tests**. The two current blockers arise in the account-deletion and outbound-notification scope introduced by Plans 29–35.
 
-### 1. UploadPart/ListParts ETag invariant — BLOCKER, reproduced
+## Current Review Finding Adjudication
 
-- Service path: `put_upload_chunk` passes `str(result.get("ETag") or "")` to repository completion; restart reconciliation does the same for `ListParts` (`attachment_service.py:539-559`, `575-619`).
-- Repository path: `complete_upload_part` accepts any runtime value, persists it, changes status to `completed`, and removes `lease_expires_at` (`attachment_repo.py:410-440`).
-- Assembly trusts every completed row and forwards `provider_etag` to `CompleteMultipartUpload` (`attachment_service.py:684-724`).
-- Direct service probes returned an accepted receipt and `ledger completed etag ''` for both UploadPart success and ListParts adoption without ETag.
-- Direct repository probes accepted `None`, `""`, whitespace, and `123`, returning `True` and storing each value.
+### CR-01 — BLOCKER, reproduced
 
-This falsifies the Plan 15 claim that every fence-removing provider success coordinate is strict. Issuance `UploadId`, staging `VersionId`/ETag, and immutable `VersionId`/ETag are strict; part ETag is not.
+`run_pending_deletions` creates an expiry two minutes in the future and passes it to `claim_deletion_command` (`account_deletion.py:76-98`). The repository takeover predicate is `lease_expires_at < :expiry` (`account_deletion_repo.py:836-881`), not `lease_expires_at < now_epoch`. A direct lower-boundary probe recorded no current-epoch value and the exact future-expiry predicate.
 
-### 2. `complete_message_command` typed retry — BLOCKER, reproduced
+The claim returns a new owner and version, but the job discards them and calls `continue_command(command_id)`. `persist_branch_result` conditions only on generation and `status == running` (`account_deletion_repo.py:884-924`), while continuation accepts only a command ID (`account_deletion_service.py:1284-1330`). The probe confirmed no lease-owner/version fields in the branch CAS. A stale worker can therefore overwrite cursor, debt, epoch, or quiescence evidence and may race terminalization.
 
-`transact` correctly converts generic described-transaction transport to `AttachmentTransactionError(RETRYABLE_DEPENDENCY)`, but `complete_message_command` catches all `AttachmentTransactionError` values and returns `False` (`attachment_repo.py:1141-1191`). The router then enters `_wait_for_message_command` (`conversations.py:908-922`).
+### CR-02 — BLOCKER, reproduced
 
-The direct below-boundary probe forced `RETRYABLE_DEPENDENCY` from `transact`; actual `complete_message_command` returned `False`. Existing completion transport tests monkeypatch `complete_message_command` itself, so they never test this behavior. This leaves prior WR-011 incomplete and violates stable dependency/error and explicit lost-response convergence claims.
+Email digest and push use `run_delivery_intent` only for a positive owner generation, otherwise they call the provider directly (`notification_service.py:747-779`, `934-965`). WebSocket fanout similarly makes `leased=False` for invalid metadata and posts without a fence check (`websocket_service.py:193-277`).
 
-### 3. Partial `BatchGetItem` replay — BLOCKER, reproduced
+Direct probes supplied private-looking push/WebSocket rows with no generation. Push returned `sent` with one provider call; WebSocket returned `delivered` with one provider call. No explicit sealed `global_nonprivate` classification was required. This contradicts Plan 34/35's fail-closed private-delivery and external-debt contract and can disclose private notification content after the permanent deletion fence is installed.
 
-`get_attachments` performs exactly one high- or low-level `BatchGetItem`, ignores `UnprocessedKeys`, and returns whatever `Responses` contains (`attachment_repo.py:901-936`). During committed recovery, the router constructs `prepared` only for IDs present in the partial dictionary and continues (`conversations.py:678-689`).
+### WR-01 — WARNING, reproduced
 
-The direct fake returned attachment `a`, left `b` under `UnprocessedKeys`, and the repository returned one call/one ID with `missing_b=True`. No completeness check failed. A normal partial DynamoDB response can therefore alter the attachment context used for the final assistant result under the same command fingerprint.
+`AccountDeletionService` defaults `now` to `lambda: ""` (`account_deletion_service.py:1264-1278`), and production construction in the scheduled job injects no clock. A direct production-constructor probe returned `''`; `BranchResult.persisted` consequently stored blank `updated_at`, and finalization receives the same blank value. Audit/fence lifecycle timestamps are therefore not trustworthy on the production path.
 
-### 4. Owner attachment pagination — BLOCKER, reproduced
+### WR-02 — WARNING, reproduced
 
-`list_owner_attachment_items` issues one `GSI-StudentId` query and discards `LastEvaluatedKey` (`attachment_repo.py:1473-1484`). `release_resource_attachments` and `purge_student_attachments` consume the result as exhaustive (`attachment_service.py:1571-1676`).
+Parent-profile scrubbing deep-copies the scanned row and replaces the full item (`account_deletion_repo.py:595-662`). The transaction checks both account fences and row existence/parent ID, but neither the original image nor a row version. The probe showed the complete stale profile—including its unchanged version and unrelated preference fields—being supplied as the replacement. A concurrent active-parent update can be lost.
 
-The direct fake returned a `LastEvaluatedKey`; the repository made one call and never sent `ExclusiveStartKey`. Later-page associations/metadata are unreachable, including when the two halves of a join land on different pages. This violates the explicit deletion/account-closure retention contract in D-10.
+### WR-03 — WARNING, reproduced
 
-### 5. Deterministic bind errors masked after claim — WARNING, reproduced
+`claim_delivery_intent` accepts only `status == registered` (`notification_repo.py:361-387`). Its recorded condition contains no expired-claimed takeover and no current-time comparison. A crash after claim leaves the same intent returning `retryable_claim_conflict` forever, potentially retaining deletion debt indefinitely.
 
-After command/quota claim, the bind block catches every `AttachmentDecisionError`, rereads a same-fingerprint `claimed` command, and polls (`conversations.py:754-776`). A direct command probe injected `storage_quota_exceeded`; the observed public decision became `message_in_progress`. The daily chat quota claim also remains charged.
-
-This is a real stable-error/recovery defect, but it does not independently expose another user's content. It should be fixed with outcome-aware ambiguity handling; broader rejected-counter convergence also intersects Phase 475's V9DATA-04 ownership.
-
-### 6. External OOXML relationship guard — WARNING, reproduced
-
-`_passive_archive` lowercases archive names but compares them to mixed-case `"externalLinks/"`, and scans relationship XML only for the exact bytes `targetmode="external"` (`document_extraction_service.py:19-26`, `180-197`). Direct XLSX and DOCX probes showed that `xl/externalLinks/externalLink1.xml` and `TargetMode = "External"` were accepted and extracted.
-
-The extractor reads only allowlisted internal XML and does not fetch the external target, so this is not evidence of cross-user disclosure. It does violate the plan's no-active/no-external-content safety contract and must be hardened by lowercased markers plus parsed `.rels` attributes.
-
-## Plans 15/16 Exact-Path Check
-
-| Claimed closure | Status | Actual evidence |
-|---|---|---|
-| Strict required issuance/staging/promotion coordinates before fence removal | ✓ CLOSED for named Plan 15 paths | `_required_provider_coordinate` rejects non-string/blank values; repository `_require_provider_coordinate` defends multipart issuance, staging completion, and immutable success. UploadPart ETag is a separate uncovered blocker. |
-| Truthful crash recovery/no false cleanup completion | ✓ CLOSED for the Plan 15 malformed issuance/assembly/promotion matrix | Restart/no-false-completion tests pass; exact provider coordinates remain durable on malformed major transitions. Part-ledger repair is not closed. |
-| Per-candidate cleanup isolation | ✓ CLOSED | `cleanup_expired_uploads` catches candidate-local failures inside the loop and continues, while global listing remains outside the boundary (`upload_cleanup.py:70-87`). |
-| Provider Body ownership before read inspection and exact-once close offer | ✓ CLOSED LOCALLY | Both staging validation and immutable extraction place `getattr(body, "read")` inside an outer `try/finally`; malformed Body matrices pass. Real connection-pool behavior remains NOT RUN. |
-| Normalized conversation repository transport with regular/SSE parity | ⚠ PARTIAL | Stage A, claim, polling, lease and direct adapter paths are normalized; actual completion transaction semantics are swallowed inside `complete_message_command`. |
-
-## Required Artifacts
+## Required Artifacts And Wiring
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `src/stoa/models/attachment.py` | Opaque coordinate-free upload/attachment contracts | ✓ VERIFIED | Substantive and wired into files/questions/conversations. |
-| `src/stoa/services/file_validation_service.py` | Bounded supported-file validation | ✓ VERIFIED | Format/size/magic/container validators are substantive; boundary tests pass. |
-| `src/stoa/db/repositories/attachment_repo.py` | Conditional lifecycle, transactions, batch reads and retention queries | ✗ PARTIAL/BLOCKING | Core implementation exists, but UploadPart coordinate, BatchGet completeness, completion outcome, and owner pagination are defective. |
-| `src/stoa/services/attachment_service.py` | Owner lifecycle/association/extraction/cleanup orchestration | ✗ PARTIAL/BLOCKING | Major coordinates/Body ownership are fixed; part completion and paginated retention wiring are incomplete. |
-| `src/stoa/routers/conversations.py` | Exact command replay with full attachment set and structured dependencies | ✗ PARTIAL/BLOCKING | Regular/SSE share the executor, but completion and partial committed-recovery paths are hollow at lower boundaries. |
-| `src/stoa/models/practice.py` | Separate preview/result/privileged schemas | ✓ VERIFIED | Preview schema structurally excludes answer-bearing fields; result requires attempt ID. |
-| `src/stoa/services/practice_projection_service.py` | Central answer-free/result/hint projection | ✓ VERIFIED | Wired across practice/curriculum routes; no answer toggle enters preview builders. |
-| `src/stoa/jobs/upload_cleanup.py` | Bounded, isolated, coordinate-free cleanup job | ✓ VERIFIED LOCALLY | Candidate isolation is substantive and tested; deployed scheduling is deferred. |
-| `docs/security/phase-473-evidence.md` and manifest | Source-bound honest evidence | ⚠ STRUCTURALLY VALID, SUBSTANTIVELY STALE | Candidate binding, hashes and NOT RUN statements reproduce, but local closure claims omit four real source paths. |
+| `src/stoa/services/attachment_service.py` + `attachment_repo.py` | Exact owner/provider lifecycle, recovery, retention, and purge | ✓ VERIFIED LOCALLY | Prior acknowledgement, partial-replay, and pagination blockers are closed; focused tests pass. |
+| `src/stoa/services/document_extraction_service.py` + semantic validators | Bounded no-active/no-external document use | ✓ VERIFIED LOCALLY | Plan 24's semantic package/parser isolation replaces the earlier byte/case heuristic. |
+| `src/stoa/routers/conversations.py` + command repository | Exact replay and typed dependency behavior | ✓ VERIFIED LOCALLY | Complete attachment/history set and stale-worker AI fences are substantive and tested. |
+| Practice models/projections/routes | Answer-free preview and immutable post-attempt result | ✓ VERIFIED LOCALLY | Preview, hint, receipt, and privileged scope contracts remain separate and wired. |
+| `account_deletion_repo.py` + `account_deletion_service.py` | One lease-fenced, source-sealed, exact-once 17-branch deletion proof | ✗ PARTIAL/BLOCKING | Registry/seal logic exists, but claim ownership does not fence branch persistence/finalization. |
+| `notification_service.py` + `websocket_service.py` | Every private provider effect owner/fence/intent bound | ✗ FAILED | Missing generation bypasses the intent and directly invokes push/email/WebSocket providers. |
+| Checked boundary/private-store inventories | Deterministic source-bound coverage | ⚠ STRUCTURALLY VALID, INCOMPLETE BEHAVIORAL COVERAGE | Both `--check` commands pass, but their selected tests do not falsify the five reproduced paths. |
+| Immutable Phase 473 evidence and manifest | Candidate-bound local receipts and honest external scope | ⚠ HASH-VALID, SUBSTANTIVELY STALE | All three manifest hashes/byte counts reproduce and current source matches candidate `cf3549a`; the 1,923 green nodes omit the unsafe lower-bound cases. |
 
 ## Key Link Verification
 
-| From | To | Via | Status | Details |
-|---|---|---|---|---|
-| Files gateway | upload part ledger | UploadPart/ListParts -> `complete_upload_part` | ✗ NOT SAFE | Malformed ETag can permanently complete the ledger row. |
-| Part ledger | multipart assembly | completed rows -> provider ETag list | ✗ NOT SAFE | Assembly forwards stored empty ETag. |
-| Conversation completion | transaction classifier | `complete_message_command` -> `transact` | ✗ BROKEN | Typed retryable dependency is collapsed to `False`. |
-| Committed message | immutable attachment context | stored IDs -> `get_attachments` -> extraction | ✗ HOLLOW/PARTIAL | Missing/unprocessed IDs are silently filtered out. |
-| Conversation/account deletion | all owner attachments | GSI query -> release/purge | ✗ TRUNCATED | Only the first page is processed. |
-| Student practice preview | allowlist projection | practice/curriculum routes -> preview builders | ✓ WIRED | Recursive answer-canary tests pass. |
-| Student answer | result projection | `put_attempt` receipt -> `build_attempt_result` | ✓ WIRED | Result construction follows durable attempt persistence. |
-| Privileged answer route | central authorization | load-once challenge -> assignment/admin policy | ✓ WIRED | Scoped route and mutation-negative controls pass. |
-
-## Data-Flow Trace (Level 4)
-
-| Artifact | Data variable | Source | Produces complete/real data | Status |
-|---|---|---|---|---|
-| Question OCR | resolved attachment record | Actor-owned upload/saved-attachment repository record | Yes; immutable tuple reaches OCR only after authorization | ✓ FLOWING |
-| Conversation replay | `prepared` attachment records | one `BatchGetItem` over stored attachment IDs | No; unprocessed/missing IDs are discarded | ✗ HOLLOW PARTIAL FLOW |
-| Conversation retention | owner attachment/association rows | one GSI query | No; later pages are discarded | ✗ TRUNCATED FLOW |
-| Practice previews | challenge/lesson/curriculum records | repository -> typed allowlist builders | Yes; answer fields are not copied | ✓ FLOWING |
-| Practice result | `recorded_attempt` | conditional `put_attempt` receipt | Yes; missing receipt fails result construction | ✓ FLOWING |
-
-## Behavioral Spot-Checks
-
-| Behavior | Command/probe | Result | Status |
+| From | To | Via | Status |
 |---|---|---|---|
-| Exact Phase 473 matrix | nine-module pytest command from Plan 17 | `445 passed in 5.70s` | ✓ PASS, but insufficient coverage |
-| Existing remediation/review-adjacent controls | seven exact test selectors | `34 passed in 0.26s` | ✓ PASS, demonstrates mocked-boundary blind spot |
-| Repository UploadPart ETag guard | direct `complete_upload_part` fake-table probe | Accepted/stored `None`, empty, whitespace, and integer; returned `True` | ✗ FAIL |
-| UploadPart service path | direct `put_upload_chunk` fake provider with missing ETag | `receipt accepted`, ledger `completed`, ETag `''` | ✗ FAIL |
-| ListParts restart adoption | direct `_reconcile_provider_part` fake without ETag | `adopted True`, ledger `completed`, ETag `''` | ✗ FAIL |
-| Message completion typed retry | direct `complete_message_command` with `RETRYABLE_DEPENDENCY` | Returned `False` | ✗ FAIL |
-| Batch attachment completeness | direct `get_attachments` with `UnprocessedKeys` | One call; returned only `a`; silently missed `b` | ✗ FAIL |
-| Owner pagination | direct GSI fake with `LastEvaluatedKey` | One query; no `ExclusiveStartKey` | ✗ FAIL |
-| Deterministic bind error | direct command probe with storage quota error | Original `storage_quota_exceeded`; observed `message_in_progress` | ⚠ WARNING |
-| OOXML external content | direct XLSX/DOCX archive probes | External-link member and whitespace relationship accepted | ⚠ WARNING |
-| Evidence manifest | independent SHA-256/byte reproduction | PASS | ✓ PASS |
-| Authorization inventory | generator `--check` | PASS | ✓ PASS |
+| deletion scanner | one current command worker | claim expiry + returned claim token | ✗ BROKEN |
+| branch handler result | durable branch proof | lease/version-bound conditional persist | ✗ BROKEN |
+| durable 17-branch proof | permanent fence finalization | durable current claim/result validation | ✗ UNSAFE UNDER CONCURRENCY |
+| private notification row | provider effect | owner/generation intent and final fence recheck | ✗ BYPASSABLE |
+| upload/provider acknowledgement | durable part/object ledger | closed parser + checksum + conditional transition | ✓ WIRED |
+| committed conversation command | exact attachment/history context | complete consistent set + fingerprint anchor | ✓ WIRED |
+| student practice route | answer-free projection | typed preview/hint builders | ✓ WIRED |
+| recorded attempt | answer-bearing result | create-only immutable receipt | ✓ WIRED |
 
-## Probe Execution
+## Behavioral Verification
 
-No phase-declared or conventional `scripts/*/tests/probe-*.sh` probes exist. Direct repository/provider probes above were run in isolated Python processes from the repository root.
+| Check | Result | Status |
+|---|---|---|
+| Full repository pytest | `1923 passed in 64.79s` | ✓ PASS, insufficient for five review paths |
+| Focused provider/conversation/retention/document/practice matrix | `231 passed in 2.58s` | ✓ PASS |
+| Current deletion/seal/notification suites | `46 passed in 0.28s` | ✓ PASS, demonstrates lower-boundary blind spot |
+| Deletion claim probe | Predicate used future `:expiry`; no `:now_epoch` | ✗ FAIL |
+| Branch persist probe | Predicate had generation/status only; no lease owner/version | ✗ FAIL |
+| Missing-generation private push | `sent`, provider called once | ✗ FAIL |
+| Missing-generation private WebSocket | `delivered`, provider called once | ✗ FAIL |
+| Production deletion clock | `repr(now()) == ''`; persisted timestamp blank | ⚠ WARNING |
+| Parent scrub replacement | Full stale profile and unchanged version supplied to replacement hook | ⚠ WARNING |
+| Delivery-intent recovery | Claim predicate registered-only; no current-time/expired takeover | ⚠ WARNING |
+| Boundary/private-store/route inventories | All `--check` commands pass | ✓ PASS |
+| Targeted Ruff and `git diff --check` | Pass | ✓ PASS |
+| Evidence manifest SHA-256 and byte counts | All three artifacts reproduce | ✓ PASS |
+
+No phase-declared `probe-*.sh` exists. The failing checks above were run as isolated direct Python lower-boundary probes without modifying source or tests.
 
 ## Requirements Coverage
 
-| Requirement | Source plans | Status | Evidence |
-|---|---|---|---|
-| V9PRIV-01 | 01, 02, 04, 08–10, 12–17 | ✓ SATISFIED LOCALLY | Actor-owned opaque question upload, immutable OCR input, conditional reservation/association and ownership concealment remain implemented/tested. |
-| V9PRIV-02 | 01–03, 07–17 | ✗ BLOCKED | UploadPart malformed success, structured completion dependency, partial committed attachment recovery, and exhaustive retention cleanup are incomplete. |
-| V9PRIV-03 | 01, 05–07, 10–11, 13–14, 17 | ✓ SATISFIED LOCALLY | Preview allowlists, attempt-before-result, safe hints and scoped privileged reads remain intact. |
+| Requirement | Status | Evidence |
+|---|---|---|
+| V9PRIV-01 | ✓ SATISFIED LOCALLY | Question OCR accepts only an active owner attachment and conditionally associates the exact immutable object with the created question; foreign/missing remain concealed. |
+| V9PRIV-02 | ✗ BLOCKED | Core upload validation/lifecycle is fixed, but safe account-closure cleanup and private provider delivery are not lease/fence complete. |
+| V9PRIV-03 | ✓ SATISFIED LOCALLY | Student previews remain answer-free; hints are closed reviewed constants; answer/explanation reads require an immutable recorded attempt or exact privileged scope. |
 
-No orphaned Phase 473 requirement IDs were found: ROADMAP, plans and REQUIREMENTS all map V9PRIV-01/02/03 to this phase. REQUIREMENTS' checklist still shows V9PRIV-02 unchecked even though its traceability table says Complete; this verification resolves the conflict as **blocked**.
+REQUIREMENTS marks all three complete, but this independent verification resolves V9PRIV-02 as blocked. No orphaned Phase 473 requirement IDs were found.
 
 ## Decision Coverage
 
-| Decision | Status | Adjudication |
+| Decision group | Status | Adjudication |
 |---|---|---|
-| D-01 | ✓ HONORED | Question images remain JPEG/PNG only. |
-| D-02 | ✓ HONORED | 10 MiB and 4096-edge enforcement remains tested. |
-| D-03 | ✓ HONORED WITH WARNING | Supported conversation formats remain available; external OOXML active-content rejection is incomplete (WR-02). |
-| D-04 | ✓ HONORED | Non-image documents retain the 50 MiB bound. |
-| D-05 | ✓ HONORED | Extension/MIME/magic/container validation remains wired before durable use. |
-| D-06 | ✓ HONORED | Unbound intent expiry remains 1,800 seconds. |
-| D-07 | ✗ NOT HONORED | Completion retry ambiguity and partial attachment reload do not guarantee replay of the original complete result. |
-| D-08 | ✗ NOT HONORED | Malformed part success removes the retry lease and returns accepted instead of preserving bounded transient repair. |
-| D-09 | ✓ HONORED LOCALLY | Plans 15/16 preserve non-consumable cleanup state and candidate isolation; live scheduler/S3 remains deferred. |
-| D-10 | ✗ NOT HONORED | Deletion/account closure does not process attachment rows beyond the first page. |
-| D-11 | ✓ HONORED WITH WARNING | 5/15 GiB limits and no auto-deletion remain; a transaction-time quota error can be masked after chat command claim (WR-01). |
-| D-12 | ✓ HONORED | Owner saved-attachment reuse remains a logical association without duplicate storage charge. |
-| D-13 | ✓ HONORED | Verified Actor remains authoritative; public contracts reject owner/storage coordinates. |
-| D-14 | ✓ HONORED | Missing and foreign resources retain the same redacted external behavior. |
-| D-15 | ✓ HONORED | Owner-visible expiry remains `upload_expired`. |
-| D-16 | ✗ NOT HONORED | Malformed part success and swallowed completion dependency do not produce the required stable actionable error; deterministic bind errors may become `message_in_progress`. |
-| D-17 | ✓ HONORED LOCALLY | Public models/log telemetry/evidence remain coordinate/content redacted; production capture is Phase 480-owned. |
-| D-18 | ✓ HONORED | Answer reveal follows a durable attempt receipt. |
-| D-19 | ✓ HONORED | Only explicitly approved non-answer hints are returned before submission. |
-| D-20 | ✓ HONORED | Student preview families remain answer-free; result is a separate owner attempt contract. |
-| D-21 | ✓ HONORED | Assigned teachers and active admins use a narrow read-only answer policy. |
-| D-22 | ✓ HONORED | Anonymous/student/parent/unassigned/stale/wrong-scope teacher cases are denied. |
+| D-01–D-09 | ✓ HONORED LOCALLY | Supported formats/bounds, semantic validation, expiry, exact consumption/replay, retry recovery, and cleanup fences are implemented and tested; live S3 remains deferred. |
+| D-10 | ✗ NOT HONORED | Account closure can run concurrent stale deletion workers, and private outbound effects can bypass the deletion fence. |
+| D-11–D-15 | ✓ HONORED LOCALLY | Quotas, owner reuse, Actor authority, concealment, and `upload_expired` behavior remain intact. |
+| D-16 | ✗ NOT HONORED | Missing private delivery metadata becomes direct delivery instead of a stable fail-closed/retryable action. |
+| D-17 | ✗ NOT HONORED | Private notification content may be delivered after deletion without authoritative owner/fence validation. |
+| D-18–D-22 | ✓ HONORED LOCALLY | Attempt-before-answer, non-derivable hints, answer-free student contracts, exact teacher/admin scope, and negative actor matrix pass. |
 
-**Decision coverage:** 18/22 honored; D-07, D-08, D-10 and D-16 fail.
+**Decision coverage:** 19/22 honored.
 
-## Anti-Patterns Found
+## Anti-Patterns And Planning Drift
 
-| File | Line | Pattern | Severity | Impact |
-|---|---|---|---|---|
-| `src/stoa/routers/conversations.py` | 1011 | Existing “structured placeholder” comment in legacy initial-message path | ℹ INFO | Not a debt marker and not involved in the four blockers; initial conversation creation still uses the legacy helper without attachments. |
+No `TBD`, `FIXME`, `XXX`, `NotImplementedError`, or bare `pass` debt markers were found in the six files implicated by the current review. No project-local skill overrides or verification overrides exist.
 
-No unreferenced `TBD`, `FIXME`, or `XXX` markers were found in phase-modified production files. The scanned `return {}`/`return []` matches are legitimate empty-input/optional-member results, not user-visible stubs.
+All 35 plan/summary pairs exist and were reviewed. ROADMAP completion checkboxes remain stale for several executed plans (including 22/23, 29–32, 27, and 28), despite committed summaries and checked evidence. This is documentation drift, not the reason for `gaps_found`.
 
-## Evidence Integrity And External Boundaries
+## External Boundaries
 
-The evidence mechanics are reproducible:
-
-- candidate `bc61107b920b158201ce4927485986d43aac59c8` exists;
-- current source/tests differ from it only in planning/evidence/review artifacts, not implementation;
-- the evidence manifest hashes and byte sizes reproduce;
-- route authorization inventory `--check` passes;
-- real S3, deployed scheduler/IaC and production logs are explicitly `NOT RUN`.
-
-Those facts prove source binding and honest external scope. They do not prove that the selected local tests covered every relevant source path. The evidence and VALIDATION documents are therefore structurally valid but substantively stale wherever they claim complete local closure of V9PRIV-02, D-07, D-08, D-10, D-16 and conversation/retention replay behavior.
-
-External real-provider/deployment/log observations remain deferred to Phases 479/480 and do not cause this status. The four locally observable blockers do.
+Real S3 behavior, deployed scheduler/IaC, and production logs remain explicitly `NOT RUN` under Phases 479/480. They are not counted as failures here. The current status is caused solely by locally observable production-code defects.
 
 ## Gaps Summary
 
-Four blockers prevent goal closure:
+Two blockers prevent closure:
 
-1. require and preserve a usable UploadPart/ListParts ETag before ledger completion;
-2. preserve typed message-completion outcomes and explicitly reread ambiguous commits;
-3. require the exact complete stored attachment set before resumed extraction/AI;
-4. exhaustively paginate and resume owner attachment deletion/purge.
+1. make deletion claims compare against current time and thread a claim/version token through every branch write and finalization;
+2. fail closed on unresolved private delivery ownership and route every private email/push/WebSocket effect through a fence-bound delivery intent.
 
-Two additional warnings should be fixed alongside those blockers: preserve deterministic attachment errors after command claim, and parse OOXML external relationships case/whitespace/quoting independently.
+Three warnings should be repaired alongside them: use valid production lifecycle timestamps, CAS parent-profile scrub writes, and add a safe delivery-intent crash-recovery state machine.
 
-The gaps are structured in frontmatter for the next gap-closure planning pass. No implementation files were modified and no commit was created.
+No implementation file was modified and no commit was created.
 
 ---
 
-_Verified: 2026-07-17T09:30:53Z_
-_Verifier: the agent (gsd-verifier)_
+_Verified: 2026-07-18T12:02:00Z_
+_Verifier: Codex (gsd-verifier)_
