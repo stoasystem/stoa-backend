@@ -343,7 +343,35 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** TBD
+**Plans:** 26 plans
+
+Plans:
+- [ ] 474-01-PLAN.md — Define the authoritative local/CI gate and fail-closed receipt contract.
+- [ ] 474-02-PLAN.md — Implement fresh Python 3.12 two-clock hermetic verification.
+- [ ] 474-03-PLAN.md — Reverify Phase 473 publication from immutable Git blobs and later HEAD.
+- [ ] 474-04-PLAN.md — Enforce backend/Web dependency policy and repair runtime advisories.
+- [ ] 474-05-PLAN.md — Define the immutable cross-repository manifest and backend artifact.
+- [ ] 474-06-PLAN.md — Repair authorization and identity typing foundations.
+- [ ] 474-07-PLAN.md — Repair privileged repository typing.
+- [ ] 474-08-PLAN.md — Repair remaining repository type boundaries.
+- [ ] 474-09-PLAN.md — Repair report, document, OCR, and AI service typing.
+- [ ] 474-10-PLAN.md — Repair remaining operational and business service typing.
+- [ ] 474-11-PLAN.md — Repair routers and background-job typing.
+- [ ] 474-12-PLAN.md — Repair security, scripts, and high-error test typing.
+- [ ] 474-13-PLAN.md — Repair remaining domain and Phase 473 test typing.
+- [ ] 474-14-PLAN.md — Prove Ruff zero and the full-repository mypy-zero attempt.
+- [ ] 474-15-PLAN.md — Repair Web dependency baseline and runtime configuration separation.
+- [ ] 474-16-PLAN.md — Add locked Web and real backend/OpenAPI verification to the common gate.
+- [ ] 474-17-PLAN.md — Repair Web tests and add strict real-staging browser acceptance.
+- [ ] 474-18-PLAN.md — Create immutable release stores, transaction state, and scoped roles.
+- [ ] 474-19-PLAN.md — Add Lambda aliases, Web pointers, and release bypass removal.
+- [ ] 474-20-PLAN.md — Implement durable two-pointer delivery and compensation.
+- [ ] 474-21-PLAN.md — Harden frontend workflows as thin common-gate and delivery callers.
+- [ ] 474-22-PLAN.md — Harden infrastructure workflow for staging-only substrate deployment.
+- [ ] 474-23-PLAN.md — Assemble and test the integrated cross-repository delivery DAG.
+- [ ] 474-24-PLAN.md — Configure protected environments and bootstrap the staging substrate.
+- [ ] 474-25-PLAN.md — Execute live staging and controlled non-production rollback proofs.
+- [ ] 474-26-PLAN.md — Seal failure-matrix, later-HEAD, final-evidence, and source-audit proof.
 **UI hint:** yes
 
 **Likely plan slices:**
