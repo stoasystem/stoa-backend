@@ -366,7 +366,7 @@ def _warehouse_source_schemas() -> dict[str, dict[str, Any]]:
     return {
         "learning_memory": {
             "rowState": "schema-only",
-            "fields": ["studentHash", "subjectId", "topicId", "freshnessStatus", "lastEvidenceAt"],
+            "fields": ["subjectId", "topicId", "freshnessBucket", "memoryCount"],
         },
         "assignment_outcomes": {
             "rowState": "schema-only",
@@ -374,7 +374,7 @@ def _warehouse_source_schemas() -> dict[str, dict[str, Any]]:
         },
         "curriculum_progress": {
             "rowState": "schema-only",
-            "fields": ["studentHash", "subjectId", "topicId", "lessonId", "status", "completedAt"],
+            "fields": ["subjectId", "topicId", "lessonId", "status", "completionCount"],
         },
         "content_quality_metrics": {
             "rowState": "exported",

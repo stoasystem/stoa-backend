@@ -75,6 +75,16 @@ def test_practice_answer_records_attempt_and_wrong_answer_signals(monkeypatch):
     assert len(attempts) == 1
 
 
+def test_warehouse_schema_exposes_no_deterministic_student_linkage(monkeypatch):
+    monkeypatch.setattr(
+        curriculum_analytics_service.curriculum_analytics_repo,
+        "list_metrics",
+        lambda **_kwargs: [],
+    )
+    readiness = curriculum_analytics_service.warehouse_readiness()
+    assert "studentHash" not in str(readiness)
+
+
 def test_lesson_completion_records_aggregate_signal(monkeypatch):
     state = _install_analytics_repo(monkeypatch)
     lesson = {
