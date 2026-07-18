@@ -976,9 +976,20 @@ def _candidate_snapshot(base: str, candidate: str) -> list[dict[str, Any]]:
     paths = sorted(set(paths) | required)
     snapshot = []
     for relative in paths:
-        path = ROOT / relative
-        if path.is_file():
-            snapshot.append(_artifact_meta(path))
+        completed = subprocess.run(
+            ["git", "show", f"{candidate}:{relative}"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            snapshot.append(
+                {
+                    "path": relative,
+                    "bytes": len(completed.stdout),
+                    "sha256": sha256(completed.stdout).hexdigest(),
+                }
+            )
     return snapshot
 
 

@@ -486,6 +486,45 @@ def _commit(repo: Path, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
+def test_candidate_snapshot_reads_immutable_git_blobs_not_publication_child(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_verifier()
+    repo = tmp_path / "snapshot-repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "phase473@example.invalid")
+    _git(repo, "config", "user.name", "Phase 473 Test")
+    source = repo / "source.py"
+    source.write_text("VALUE = 0\n", encoding="utf-8")
+    _git(repo, "add", "source.py")
+    _git(repo, "commit", "-m", "base")
+    base = _git(repo, "rev-parse", "HEAD")
+    candidate_bytes = b"VALUE = 1\n"
+    source.write_bytes(candidate_bytes)
+    _git(repo, "add", "source.py")
+    _git(repo, "commit", "-m", "candidate")
+    candidate = _git(repo, "rev-parse", "HEAD")
+    source.write_text("VALUE = 2\n", encoding="utf-8")
+    _git(repo, "add", "source.py")
+    _git(repo, "commit", "-m", "publication child")
+    verifier.ROOT = repo
+    verifier.BOUNDARY_PATH = source
+    verifier.PRIVATE_PATH = source
+    verifier.POLICY_PATH = source
+    verifier.ROUTE_PATH = source
+
+    snapshot = verifier._candidate_snapshot(base, candidate)
+
+    assert snapshot == [
+        {
+            "path": "source.py",
+            "bytes": len(candidate_bytes),
+            "sha256": sha256(candidate_bytes).hexdigest(),
+        }
+    ]
+
+
 def _publication_repo(tmp_path: Path, *, commit: bool = True) -> tuple[Path, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
