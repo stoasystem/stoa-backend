@@ -74,6 +74,224 @@ PHASE472_REGRESSION = (
     "tests/test_adaptive_learning.py",
     "tests/test_curriculum_ops.py",
 )
+FINAL_GAP_GATE_MODULES = {
+    "P473-DELETION-CLAIM-FENCING": (
+        "tests/test_phase473_account_deletion_claim_fencing.py",
+    ),
+    "P473-DELIVERY-INTENT-RECOVERY": (
+        "tests/test_phase473_delivery_intent_recovery.py",
+    ),
+    "P473-PRIVATE-DELIVERY-FENCING": (
+        "tests/test_phase473_private_delivery_fencing.py",
+    ),
+    "P473-FINAL-GAP-REGRESSION": (
+        "tests/test_phase473_account_deletion_claim_fencing.py",
+        "tests/test_phase473_account_deletion.py",
+        "tests/test_phase473_account_deletion_seal.py",
+        "tests/test_phase473_delivery_intent_recovery.py",
+        "tests/test_phase473_notification_deletion.py",
+        "tests/test_phase473_private_delivery_fencing.py",
+        "tests/test_notifications.py",
+        "tests/test_websocket_notifications.py",
+    ),
+}
+
+CLAIM_FENCE_CONTRACTS = (
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+        "account_deletion_repo.claim_deletion_command:table.update_item",
+        "stored expiry is compared with explicit now_epoch, not proposed expiry",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_two_workers_cannot_steal_active_lease_and_only_one_wins_after_expiry",
+        "account_deletion_repo:_LeaseStateTable",
+        "unexpired rejection, one expired takeover, and stale mutation denial",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        "account_deletion_repo.persist_branch_result:table.update_item",
+        "owner, command version, result digest, and current lease all participate in CAS",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_service_invokes_no_branch_or_later_write_after_claim_renewal_loss",
+        "account_deletion_service.continue_command:repository fake",
+        "claim loss stops every branch handler, result write, and finalizer",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_forged_in_memory_complete_map_cannot_terminalize_durable_incomplete_set",
+        "account_deletion_repo.finalize_account_deletion:strong durable fake",
+        "terminalization requires the strongly loaded exact durable result set and digest",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        "account_deletion_repo._valid_lifecycle_timestamp",
+        "blank, naive, malformed, non-string, and missing timestamps are rejected",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_production_service_clock_is_nonblank_timezone_aware_utc",
+        "account_deletion_service.AccountDeletionService.__init__",
+        "the production constructor emits a nonblank timezone-aware UTC timestamp",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "account_deletion_repo.scrub_parent_profile_child:table.transact",
+        "parent row-version conflict preserves concurrent preferences",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_fresh_parent_rescan_removes_only_child_and_advances_row_version",
+        "account_deletion_repo.scrub_parent_profile_child:current-row fake",
+        "fresh narrow scrub removes only the target child and advances row version",
+    ),
+    (
+        "tests/test_phase473_account_deletion_claim_fencing.py::test_account_profile_row_conflict_stays_retryable_debt",
+        "account_deletion_service._account_profile_branch:repository fake",
+        "parent CAS conflict remains retryable debt and cannot count as a clean epoch",
+    ),
+)
+
+DELIVERY_SCOPE_CONTRACTS = (
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_strong_event_loader_uses_exact_base_key_and_consistent_read",
+        "notification_repo.load_delivery_event_strong:table.get_item",
+        "canonical event ownership is loaded by exact base key with ConsistentRead",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        "notification_service.attempt_push_delivery:provider counter",
+        "missing, malformed, and stale private generation produce zero provider calls",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_legacy_question_owner_resolution_uses_closed_strong_target_join",
+        "notification_service.resolve_delivery_ownership:strong target fake",
+        "legacy ownership comes only from a closed strongly consistent target join",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_legacy_metadata_only_owner_fails_closed_without_target",
+        "notification_service.resolve_delivery_ownership:empty target fake",
+        "recipient, actor, and metadata owner claims cannot replace authoritative legacy state",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+        "notification_repo.seal_global_nonprivate_event",
+        "ownerless delivery requires the exact persisted sealed-global contract digest",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_mixed_owner_digest_is_refused_before_email_provider",
+        "notification_service.send_digest:provider counter",
+        "mixed authoritative owners are refused with zero email provider calls",
+    ),
+    (
+        "tests/test_phase473_private_delivery_fencing.py::test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothing",
+        "websocket_service.fanout_notification_event:connection/provider counters",
+        "invalid persisted scope lists no connections and performs zero provider posts",
+    ),
+)
+
+CRASH_STATE_CONTRACTS = (
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        "notification_repo.claim_delivery_intent:table.update_item",
+        "only an expired pre-effect claim relative to explicit now_epoch is takeable",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_unexpired_pre_effect_claim_and_inflight_are_never_takeover_eligible",
+        "notification_repo.claim_delivery_intent:conditional fake",
+        "unexpired pre-effect and inflight states are never takeover eligible",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_begin_private_claim_is_one_fence_plus_exact_version_cas",
+        "notification_repo.begin_delivery_effect:transaction fake",
+        "begin uses one account fence plus lease, version, scope, and payload digest CAS",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_crash_pre_effect_recovers_only_after_actual_time_passes",
+        "notification_service.run_delivery_intent:memory intent store",
+        "pre-effect crash is reclaimable only after actual lease expiry and calls provider once",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_crash_after_durable_transition_terminalizes_unknown_without_provider_call",
+        "notification_service.run_delivery_intent:memory intent store",
+        "durable inflight ambiguity terminalizes without a blind provider call",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_provider_acceptance_lost_response_replays_unknown_without_blind_retry",
+        "notification_service.run_delivery_intent:provider counter",
+        "provider acceptance with lost response is never blindly retried",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_terminal_completion_lost_response_replays_accepted_without_provider_payload",
+        "notification_service.run_delivery_intent:memory intent store",
+        "post-acceptance terminal replay is accepted and provider-neutral",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+        "notification_repo:stale claim fake",
+        "stale intent versions cannot begin, complete, cancel, or recover newer work",
+    ),
+    (
+        "tests/test_phase473_delivery_intent_recovery.py::test_provider_effect_order_is_recover_fence_transition_call_and_complete",
+        "notification_service.run_delivery_intent:ordered fake",
+        "provider invocation follows durable begin and precedes only the terminal CAS",
+    ),
+)
+
+FINAL_GAP_NODE_CONTRACTS = {
+    "claim_fence_nodes": CLAIM_FENCE_CONTRACTS,
+    "delivery_scope_nodes": DELIVERY_SCOPE_CONTRACTS,
+    "crash_state_nodes": CRASH_STATE_CONTRACTS,
+}
+
+GAP_TRUTH_CONTRACTS = (
+    ("current_epoch_claim", CLAIM_FENCE_CONTRACTS[0]),
+    ("two_worker_takeover", CLAIM_FENCE_CONTRACTS[1]),
+    ("stale_write_and_finalization", CLAIM_FENCE_CONTRACTS[4]),
+    ("production_utc_timestamp", CLAIM_FENCE_CONTRACTS[6]),
+    ("parent_row_cas", CLAIM_FENCE_CONTRACTS[7]),
+    ("pre_effect_crash_recovery", CRASH_STATE_CONTRACTS[3]),
+    ("inflight_ambiguity_terminalization", CRASH_STATE_CONTRACTS[4]),
+    ("legacy_malformed_delivery_denial", DELIVERY_SCOPE_CONTRACTS[3]),
+    ("sealed_global_validation", DELIVERY_SCOPE_CONTRACTS[4]),
+    ("deletion_race_zero_provider_effects", DELIVERY_SCOPE_CONTRACTS[6]),
+)
+
+FINAL_IDENTIFIER_SELECTORS = {
+    "V9PRIV-02": (
+        CLAIM_FENCE_CONTRACTS[2][0],
+        CRASH_STATE_CONTRACTS[3][0],
+        DELIVERY_SCOPE_CONTRACTS[1][0],
+    ),
+    "D-10": (CLAIM_FENCE_CONTRACTS[1][0], DELIVERY_SCOPE_CONTRACTS[6][0]),
+    "D-16": (CRASH_STATE_CONTRACTS[4][0], DELIVERY_SCOPE_CONTRACTS[3][0]),
+    "D-17": (DELIVERY_SCOPE_CONTRACTS[1][0], DELIVERY_SCOPE_CONTRACTS[6][0]),
+}
+
+FINDING_CONTRACTS = {
+    "CR-01": (
+        CLAIM_FENCE_CONTRACTS[2][0],
+        "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+        "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
+    ),
+    "CR-02": (
+        DELIVERY_SCOPE_CONTRACTS[1][0],
+        "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
+        "src/stoa/services/notification_service.py:provider_call",
+    ),
+    "WR-01": (
+        CLAIM_FENCE_CONTRACTS[5][0],
+        "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
+        "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
+    ),
+    "WR-02": (
+        CLAIM_FENCE_CONTRACTS[7][0],
+        "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+        "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
+    ),
+    "WR-03": (
+        CRASH_STATE_CONTRACTS[0][0],
+        "src/stoa/db/repositories/notification_repo.py:table.update_item",
+        "src/stoa/db/repositories/notification_repo.py:table.update_item",
+    ),
+}
 
 
 class EvidenceError(ValueError):
@@ -285,6 +503,79 @@ def _selector_node(selector: str, observed_nodes: set[str]) -> str:
     return matches[0]
 
 
+def _final_gap_rows(
+    contracts: Sequence[tuple[str, str, str]],
+    observed_nodes: set[str],
+    *,
+    source_inventory_row: str,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "selector": selector,
+            "node_id": _selector_node(selector, observed_nodes),
+            "lower_fake_target": lower_fake_target,
+            "observed_condition": observed_condition,
+            "source_inventory_row": source_inventory_row,
+            "result": "PASS",
+        }
+        for selector, lower_fake_target, observed_condition in contracts
+    ]
+
+
+def _finding_coverage(
+    boundary: dict[str, Any],
+    private: dict[str, Any],
+    observed_nodes: set[str],
+) -> list[dict[str, Any]]:
+    boundary_rows = {
+        row.get("finding_id"): row
+        for row in boundary.get("finding_registry", [])
+        if isinstance(row, dict)
+    }
+    private_rows = {
+        row.get("finding_id"): row
+        for row in private.get("finding_registry", [])
+        if isinstance(row, dict)
+    }
+    if set(boundary_rows) != set(FINDING_CONTRACTS) or set(private_rows) != set(
+        FINDING_CONTRACTS
+    ):
+        raise EvidenceError("finding registry ID drift")
+    rows: list[dict[str, Any]] = []
+    for finding_id, (
+        selector,
+        boundary_lower_fake,
+        private_lower_fake,
+    ) in FINDING_CONTRACTS.items():
+        boundary_row = boundary_rows[finding_id]
+        private_row = private_rows[finding_id]
+        if (
+            boundary_row.get("runtime_selector") != selector
+            or private_row.get("runtime_selector") != selector
+            or boundary_row.get("lower_fake_target") != boundary_lower_fake
+            or private_row.get("lower_fake_target") != private_lower_fake
+            or not boundary_row.get("observed_assertion")
+            or not private_row.get("required_semantics")
+        ):
+            raise EvidenceError(f"finding registry drift: {finding_id}")
+        rows.append(
+            {
+                "id": finding_id,
+                "selector": selector,
+                "node_id": _selector_node(selector, observed_nodes),
+                "lower_fake_targets": [boundary_lower_fake, private_lower_fake],
+                "observed_condition": boundary_row["observed_assertion"],
+                "required_semantics": private_row["required_semantics"],
+                "source_inventory_rows": [
+                    f"boundary.finding_registry.{finding_id}",
+                    f"private.finding_registry.{finding_id}",
+                ],
+                "result": "PASS",
+            }
+        )
+    return rows
+
+
 def derive_coverage(
     boundary: dict[str, Any],
     private: dict[str, Any],
@@ -348,11 +639,20 @@ def derive_coverage(
             if not selectors:
                 raise EvidenceError(f"no inventory selector for {identifier}")
             selector = selectors[0]
+            required_lower_nodes = [
+                {
+                    "selector": required_selector,
+                    "node_id": _selector_node(required_selector, observed_nodes),
+                }
+                for required_selector in FINAL_IDENTIFIER_SELECTORS.get(identifier, ())
+            ]
             rows.append(
                 {
                     "id": identifier,
                     "selector": selector,
                     "node_id": _selector_node(selector, observed_nodes),
+                    "inventory_selector": selector,
+                    "required_lower_nodes": required_lower_nodes,
                     "result": "PASS",
                 }
             )
@@ -367,6 +667,29 @@ def derive_coverage(
         }
         for row in policy.get("classes", [])
     ]
+    final_gap_groups = {
+        section: _final_gap_rows(
+            contracts,
+            observed_nodes,
+            source_inventory_row=(
+                "boundary/private finding registries"
+                if section != "crash_state_nodes"
+                else "private finding registry WR-03"
+            ),
+        )
+        for section, contracts in FINAL_GAP_NODE_CONTRACTS.items()
+    }
+    gap_truths = [
+        {
+            "id": identifier,
+            **_final_gap_rows(
+                (contract,),
+                observed_nodes,
+                source_inventory_row="Plan 473-40 gap truth",
+            )[0],
+        }
+        for identifier, contract in GAP_TRUTH_CONTRACTS
+    ]
     return {
         "requirements": identifier_rows(REQUIREMENTS, 1),
         "decisions": identifier_rows(DECISIONS, 2),
@@ -374,6 +697,9 @@ def derive_coverage(
         "private_writes": write_coverage,
         "branches": branches,
         "retained_policy": retained,
+        "review_findings": _finding_coverage(boundary, private, observed_nodes),
+        "gap_truths": gap_truths,
+        **final_gap_groups,
     }
 
 
@@ -474,6 +800,13 @@ def gate_registry(candidate: str, capture_root: Path) -> list[dict[str, Any]]:
     base = _phase_base_sha()
     generated = capture_root / "generated"
     registry: list[dict[str, Any]] = [
+        {
+            "id": gate_id,
+            "kind": "pytest",
+            "argv": _pytest_argv(gate_id, modules, capture_root),
+        }
+        for gate_id, modules in FINAL_GAP_GATE_MODULES.items()
+    ] + [
         {"id": "P473-NEW-CLOSED", "kind": "pytest", "argv": _pytest_argv("P473-NEW-CLOSED", _deep_suite_modules(), capture_root)},
         {"id": "P473-INHERITED-9", "kind": "pytest", "argv": _pytest_argv("P473-INHERITED-9", INHERITED_PHASE473, capture_root)},
         {"id": "P472-REGRESSION-21", "kind": "pytest", "argv": _pytest_argv("P472-REGRESSION-21", PHASE472_REGRESSION, capture_root)},
@@ -649,28 +982,6 @@ def _candidate_snapshot(base: str, candidate: str) -> list[dict[str, Any]]:
     return snapshot
 
 
-def _finding_rows(observed: set[str]) -> list[dict[str, str]]:
-    selectors = {
-        "CR-01": "tests/test_phase473_provider_state_machine.py::test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_unequal_checksum",
-        "CR-02": "tests/test_phase473_message_command.py::test_completion_transport_is_typed_and_commit_then_raise_reconciles",
-        "CR-03": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
-        "CR-04": "tests/test_phase473_retention_reconciliation.py::test_strong_owner_enumeration_joins_metadata_and_associations_across_pages",
-        "WR-01": "tests/test_phase473_message_command.py::test_deterministic_prebind_rejection_is_terminal_and_compensates_once",
-        "WR-02": "tests/test_phase473_document_boundary.py::test_relationship_external_detection_is_encoding_and_spelling_independent",
-    }
-    rows = []
-    for item, selector in selectors.items():
-        try:
-            node = _selector_node(selector, observed)
-        except EvidenceError:
-            matching = sorted(node for node in observed if selector.rsplit("::", 1)[0] in node)
-            if not matching:
-                raise
-            node = matching[0]
-        rows.append({"id": item, "selector": selector, "node_id": node, "result": "PASS"})
-    return rows
-
-
 def verify_capture(candidate: str, capture_root: Path) -> dict[str, Any]:
     capture = _read_json(capture_root / "capture.json")
     if capture.get("candidate_sha") != candidate or capture.get("phase_base_sha") != _phase_base_sha():
@@ -714,7 +1025,7 @@ def verify_capture(candidate: str, capture_root: Path) -> dict[str, Any]:
         "observed_full_suite_count": full_receipt["counts"]["total"],
         "inventory_artifacts": inventory_meta,
         "coverage": coverage,
-        "finding_adjudications": _finding_rows(set(observed)),
+        "finding_adjudications": coverage["review_findings"],
         "external_obligations": obligations,
         "candidate_snapshot": _candidate_snapshot(base, candidate),
         "privacy": {
@@ -811,13 +1122,26 @@ def verify_publication(root: Path, candidate: str, *, dirty: bool) -> None:
         for key, expected in (
             ("requirements", set(REQUIREMENTS)),
             ("decisions", set(DECISIONS)),
+            ("review_findings", set(FINDING_CONTRACTS)),
+            ("gap_truths", {identifier for identifier, _ in GAP_TRUTH_CONTRACTS}),
         ):
             rows = coverage.get(key, [])
             if len(rows) != len(expected) or {row.get("id") for row in rows} != expected:
                 raise EvidenceError(f"publication {key} cardinality drift")
+        for key, contracts in FINAL_GAP_NODE_CONTRACTS.items():
+            rows = coverage.get(key, [])
+            expected_selectors = {selector for selector, _, _ in contracts}
+            if (
+                len(rows) != len(expected_selectors)
+                or {row.get("selector") for row in rows} != expected_selectors
+            ):
+                raise EvidenceError(f"publication {key} cardinality drift")
+        local_gate_ids = {row["gate_id"] for row in results.get("receipts", [])}
+        if not set(FINAL_GAP_GATE_MODULES) <= local_gate_ids:
+            raise EvidenceError("publication final-gap gate registry missing")
         verify_external_obligations(
             results.get("external_obligations", []),
-            local_gate_ids={row["gate_id"] for row in results.get("receipts", [])},
+            local_gate_ids=local_gate_ids,
         )
         if results.get("privacy", {}).get("match_count") != 0:
             raise EvidenceError("results privacy claim drift")
