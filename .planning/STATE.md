@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: planned
-stopped_at: Planned 473-36 through 473-40 verification gap closure; ready to execute
-last_updated: "2026-07-18T13:45:22.615Z"
-last_activity: 2026-07-18 -- Completed Plan 473-28 checked immutable evidence capture and publication
+status: executing
+stopped_at: Completed 473-36-PLAN.md
+last_updated: "2026-07-18T14:55:40.757Z"
+last_activity: 2026-07-18 -- Phase 473 execution started
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 62
-  completed_plans: 57
+  completed_plans: 58
   percent: 10
 ---
 
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 473 — Student Content Privacy and Practice Integrity
-Plan: 35 of 40
-Status: Ready to execute
-Last activity: 2026-07-18 -- Planned five final Phase 473 verification gap-closure plans
+Phase: 473 (Student Content Privacy And Practice Integrity) — EXECUTING
+Plan: 37 of 40
+Status: Ready to execute Plan 473-37
+Last activity: 2026-07-18 -- Phase 473 execution started
 
 ## Accumulated Context
 
@@ -112,8 +112,8 @@ Last activity: 2026-07-18 -- Planned five final Phase 473 verification gap-closu
 
 ## Session
 
-**Last Date:** 2026-07-18T11:42:05.392Z
-**Stopped At:** Completed 473-28-PLAN.md; awaiting aggregate phase verification
+**Last Date:** 2026-07-18T14:55:40.751Z
+**Stopped At:** Completed 473-36-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -177,6 +177,7 @@ Last activity: 2026-07-18 -- Planned five final Phase 473 verification gap-closu
 | Phase 473 P35 | 27 min | 3 tasks | 9 files |
 | Phase 473 P27 | 13min | 3 tasks | 3 files |
 | Phase 473 P28 | 26min | 3 tasks | 11 files |
+| Phase 473 P36 | 16min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -294,3 +295,6 @@ Last activity: 2026-07-18 -- Planned five final Phase 473 verification gap-closu
 - [Phase 473]: A gate counts only when its exact argv, raw log, JUnit, node manifest, candidate state, hashes, counts, and privacy facts independently reproduce.
 - [Phase 473]: Any Phase 473 capture or publication failure invalidates the observation set and requires a new immutable candidate plus a complete registry rerun.
 - [Phase 473]: Real S3, deployed scheduler/IaC, and production logs remain exact NOT RUN obligations owned by Phases 479 and 480.
+- [Phase 473]: Every deletion mutation carries one opaque owner/generation/version/digest claim; renewal happens before branch work and claim loss stops the worker immediately. — Stale workers must lose before any later provider or repository mutation.
+- [Phase 473]: Each durable branch result advances its result version and command proof digest; terminalization reloads the exact current 17-branch set. — In-memory completion cannot substitute for the current durable proof.
+- [Phase 473]: Legacy parent profiles receive a narrow version normalization and rescan; versioned profiles scrub under both account fences plus row-version CAS. — Concurrent active-parent fields must never be overwritten by a stale deletion scan.
