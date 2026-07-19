@@ -55,6 +55,26 @@ _PYTEST_MANIFEST_KEYS = {
     "counts",
 }
 _PYTEST_COUNT_KEYS = {"total", "passed", "failed", "error", "skipped", "xfail", "xpass"}
+_PYTHON_MATRIX_KEYS = {
+    "schema",
+    "seed",
+    "clocks",
+    "source",
+    "suite_argv",
+    "status",
+    "reason_code",
+    "runs",
+}
+_PYTHON_MATRIX_RUN_KEYS = {
+    "run",
+    "environment",
+    "clock",
+    "seed",
+    "runtime",
+    "lock_sha256",
+    "collection_sha256",
+    "counts",
+}
 
 _CANDIDATE_KEYS = {
     "schema",
@@ -93,6 +113,7 @@ _RECEIPT_KEYS = {
     "runtime",
     "inputs",
     "result",
+    "gate_evidence",
     "privacy",
     "started_at",
     "ended_at",
@@ -433,6 +454,126 @@ def _validate_pytest_manifest(
     }
 
 
+def _load_python_matrix_output(stdout: bytes) -> dict[str, Any]:
+    try:
+        text = stdout.decode("utf-8", errors="strict")
+        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    except GatePolicyError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise GatePolicyError("Python matrix output is malformed") from exc
+    if not isinstance(value, dict):
+        raise GatePolicyError("Python matrix output must be an object")
+    return value
+
+
+def _validate_registered_python_run(
+    value: Any,
+    *,
+    index: int,
+    clock: str,
+    lock_sha256: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise GatePolicyError("Python matrix run is malformed")
+    _require_exact_keys(value, _PYTHON_MATRIX_RUN_KEYS, "Python matrix run")
+    if value.get("run") != index or value.get("environment") != f"fresh-{index}":
+        raise GatePolicyError("Python matrix fresh environment identity is invalid")
+    if value.get("clock") != clock or value.get("seed") != PYTHON_MATRIX_SEED:
+        raise GatePolicyError("Python matrix clock or seed identity is invalid")
+    runtime = value.get("runtime")
+    if not isinstance(runtime, str) or re.fullmatch(r"3\.12\.[0-9]+", runtime) is None:
+        raise GatePolicyError("Python matrix runtime is invalid")
+    if value.get("lock_sha256") != lock_sha256:
+        raise GatePolicyError("Python matrix lock identity is invalid")
+    _require_sha(value.get("collection_sha256"), "Python matrix collection digest")
+
+    counts = value.get("counts")
+    if not isinstance(counts, dict):
+        raise GatePolicyError("Python matrix counts are malformed")
+    _require_exact_keys(counts, _PYTEST_COUNT_KEYS, "Python matrix counts")
+    if any(
+        not isinstance(item, int) or isinstance(item, bool) or item < 0
+        for item in counts.values()
+    ):
+        raise GatePolicyError("Python matrix count is invalid")
+    if counts["total"] != sum(
+        counts[name] for name in _PYTEST_COUNT_KEYS if name != "total"
+    ):
+        raise GatePolicyError("Python matrix counts do not total")
+    if counts["total"] < 1 or counts["passed"] != counts["total"]:
+        raise GatePolicyError("Python matrix run is not complete-pass")
+    return value
+
+
+def _validate_registered_python_matrix(matrix: Mapping[str, Any]) -> None:
+    status = matrix.get("status")
+    expected_keys = set(_PYTHON_MATRIX_KEYS)
+    if status == "REJECTED":
+        expected_keys.add("diagnostic")
+    _require_exact_keys(matrix, expected_keys, "Python matrix")
+    if matrix.get("schema") != PYTHON_MATRIX_SCHEMA:
+        raise GatePolicyError("Python matrix schema is invalid")
+    if matrix.get("seed") != PYTHON_MATRIX_SEED:
+        raise GatePolicyError("Python matrix seed is invalid")
+    if matrix.get("clocks") != list(PYTHON_MATRIX_CLOCKS):
+        raise GatePolicyError("Python matrix clocks are invalid")
+    if matrix.get("suite_argv") != list(PYTHON_SUITE_ARGV):
+        raise GatePolicyError("Python matrix suite command is invalid")
+    if matrix.get("source") != _matrix_source_identity(ROOT):
+        raise GatePolicyError("Python matrix source identity is invalid")
+
+    runs = matrix.get("runs")
+    if status == "NOT RUN":
+        if (
+            matrix.get("reason_code") != "OS_NETWORK_BOUNDARY_UNAVAILABLE"
+            or runs != []
+        ):
+            raise GatePolicyError("Python matrix NOT RUN evidence is invalid")
+        return
+    if status not in {"PASS", "REJECTED"}:
+        raise GatePolicyError("Python matrix status is invalid")
+    expected_reason = None if status == "PASS" else "COLLECTION_IDENTITY_DRIFT"
+    if matrix.get("reason_code") != expected_reason:
+        raise GatePolicyError("Python matrix reason is invalid")
+    if not isinstance(runs, list) or len(runs) != len(PYTHON_MATRIX_CLOCKS):
+        raise GatePolicyError("Python matrix requires exactly two runs")
+
+    lock_sha256 = matrix["source"]["uv.lock"]["sha256"]
+    validated_runs = [
+        _validate_registered_python_run(
+            run,
+            index=index,
+            clock=clock,
+            lock_sha256=lock_sha256,
+        )
+        for index, (run, clock) in enumerate(
+            zip(runs, PYTHON_MATRIX_CLOCKS, strict=True),
+            start=1,
+        )
+    ]
+    if validated_runs[0]["runtime"] != validated_runs[1]["runtime"]:
+        raise GatePolicyError("Python matrix runtime identity drifted")
+    if validated_runs[0]["counts"] != validated_runs[1]["counts"]:
+        raise GatePolicyError("Python matrix outcome counts drifted")
+
+    first_collection = validated_runs[0]["collection_sha256"]
+    second_collection = validated_runs[1]["collection_sha256"]
+    if status == "PASS":
+        if first_collection != second_collection:
+            raise GatePolicyError("Python matrix collection identity drifted")
+        return
+    if first_collection == second_collection:
+        raise GatePolicyError("Python matrix rejection lacks collection drift")
+    expected_diagnostic = {
+        "field": "collection_sha256",
+        "run_1": first_collection,
+        "run_2": second_collection,
+    }
+    if matrix.get("diagnostic") != expected_diagnostic:
+        raise GatePolicyError("Python matrix rejection diagnostic is invalid")
+
+
 def run_python_matrix(
     *,
     root: Path,
@@ -711,13 +852,60 @@ def run_registered_gate(
     started_at = operations.now_utc()
     stdout = b""
     stderr = b""
+    gate_evidence: dict[str, Any] | None = None
     try:
         for repository in candidate["repositories"]:
             operations.git(Path(repository["root"]), ("cat-file", "-e", f"{repository['head']}^{{commit}}"))
         completed = operations.run_process(spec.argv, spec.timeout_seconds)
         stdout = completed.stdout
         stderr = completed.stderr
-        if completed.returncode == 0:
+        if gate_id == "backend-python-hermetic":
+            try:
+                matrix = _load_python_matrix_output(stdout)
+                _validate_registered_python_matrix(matrix)
+                valid_exit_status = (completed.returncode, matrix["status"]) in {
+                    (0, "PASS"),
+                    (POLICY_EXIT, "NOT RUN"),
+                    (POLICY_EXIT, "REJECTED"),
+                }
+                if not valid_exit_status:
+                    raise GatePolicyError("Python matrix exit and status disagree")
+            except GatePolicyError:
+                result = {
+                    "status": "FAIL",
+                    "classification": "POLICY_REJECTION",
+                    "exit_code": POLICY_EXIT,
+                    "reason_code": "GATE_EVIDENCE_INVALID",
+                    "outcomes": _counts(failed=1),
+                }
+            else:
+                gate_evidence = matrix
+                if matrix["status"] == "PASS":
+                    passed = matrix["runs"][0]["counts"]["passed"]
+                    result = {
+                        "status": "PASS",
+                        "classification": "COMPLETE_PASS",
+                        "exit_code": 0,
+                        "reason_code": None,
+                        "outcomes": _counts(passed=passed),
+                    }
+                elif matrix["status"] == "NOT RUN":
+                    result = {
+                        "status": "NOT RUN",
+                        "classification": "NOT_RUN_OBLIGATION",
+                        "exit_code": POLICY_EXIT,
+                        "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
+                        "outcomes": _counts(),
+                    }
+                else:
+                    result = {
+                        "status": "FAIL",
+                        "classification": "POLICY_REJECTION",
+                        "exit_code": POLICY_EXIT,
+                        "reason_code": "COLLECTION_IDENTITY_DRIFT",
+                        "outcomes": _counts(failed=1),
+                    }
+        elif completed.returncode == 0:
             result = {
                 "status": "PASS",
                 "classification": "COMPLETE_PASS",
@@ -725,32 +913,6 @@ def run_registered_gate(
                 "reason_code": None,
                 "outcomes": _counts(passed=1),
             }
-        elif gate_id == "backend-python-hermetic" and completed.returncode == POLICY_EXIT:
-            try:
-                matrix = json.loads(stdout)
-            except (UnicodeError, json.JSONDecodeError):
-                matrix = None
-            if (
-                isinstance(matrix, dict)
-                and matrix.get("status") == "NOT RUN"
-                and matrix.get("reason_code") == "OS_NETWORK_BOUNDARY_UNAVAILABLE"
-                and matrix.get("runs") == []
-            ):
-                result = {
-                    "status": "NOT RUN",
-                    "classification": "NOT_RUN_OBLIGATION",
-                    "exit_code": POLICY_EXIT,
-                    "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
-                    "outcomes": _counts(),
-                }
-            else:
-                result = {
-                    "status": "FAIL",
-                    "classification": "POLICY_REJECTION",
-                    "exit_code": POLICY_EXIT,
-                    "reason_code": "GATE_COMMAND_FAILED",
-                    "outcomes": _counts(failed=1),
-                }
         else:
             result = {
                 "status": "FAIL",
@@ -781,6 +943,7 @@ def run_registered_gate(
         },
         "inputs": inputs,
         "result": result,
+        "gate_evidence": gate_evidence,
         "privacy": {
             "passed": True,
             "scanned_field_count": len(_RECEIPT_KEYS),
@@ -905,6 +1068,33 @@ def validate_receipt(
             _validate_identity(value, _file_identity(path))
 
     _validate_result(receipt.get("result"))
+    result = receipt["result"]
+    gate_evidence = receipt.get("gate_evidence")
+    if spec.gate_id == "backend-python-hermetic":
+        if gate_evidence is None:
+            if not (
+                result["classification"] in {"POLICY_REJECTION", "EXECUTION_FAILURE"}
+                and result["reason_code"]
+                in {"GATE_EVIDENCE_INVALID", "GATE_EXECUTION_ERROR"}
+            ):
+                raise GatePolicyError("hermetic receipt lacks matrix evidence")
+        else:
+            if not isinstance(gate_evidence, dict):
+                raise GatePolicyError("hermetic receipt matrix evidence is malformed")
+            _validate_registered_python_matrix(gate_evidence)
+            expected_shape = {
+                "PASS": ("COMPLETE_PASS", None),
+                "NOT RUN": ("NOT_RUN_OBLIGATION", "EXTERNAL_CHECK_UNAVAILABLE"),
+                "REJECTED": ("POLICY_REJECTION", "COLLECTION_IDENTITY_DRIFT"),
+            }[gate_evidence["status"]]
+            if (result["classification"], result["reason_code"]) != expected_shape:
+                raise GatePolicyError("hermetic receipt result and matrix disagree")
+            if gate_evidence["status"] == "PASS":
+                passed = gate_evidence["runs"][0]["counts"]["passed"]
+                if result["outcomes"] != _counts(passed=passed):
+                    raise GatePolicyError("hermetic receipt outcomes mismatch")
+    elif gate_evidence is not None:
+        raise GatePolicyError("non-hermetic receipt has unexpected gate evidence")
     expected_privacy = {
         "passed": True,
         "scanned_field_count": len(_RECEIPT_KEYS),

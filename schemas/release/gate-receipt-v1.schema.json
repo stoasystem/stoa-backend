@@ -12,6 +12,7 @@
     "runtime",
     "inputs",
     "result",
+    "gate_evidence",
     "privacy",
     "started_at",
     "ended_at",
@@ -22,6 +23,7 @@
     "gate_id": {
       "enum": [
         "gate-self-test",
+        "backend-python-hermetic",
         "candidate-source",
         "backend-python-standard",
         "backend-python-future",
@@ -51,6 +53,12 @@
     "runtime": {"$ref": "#/$defs/runtime"},
     "inputs": {"$ref": "#/$defs/inputs"},
     "result": {"$ref": "#/$defs/result"},
+    "gate_evidence": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/python_matrix_evidence"}
+      ]
+    },
     "privacy": {"$ref": "#/$defs/privacy"},
     "started_at": {"$ref": "#/$defs/utc"},
     "ended_at": {"$ref": "#/$defs/utc"},
@@ -242,6 +250,207 @@
           "items": {"$ref": "#/$defs/identity"}
         }
       }
+    },
+    "python_matrix_input_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "sha256"],
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "python_matrix_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pyproject.toml", "uv.lock", "requirements.txt"],
+      "properties": {
+        "pyproject.toml": {"$ref": "#/$defs/python_matrix_input_identity"},
+        "uv.lock": {"$ref": "#/$defs/python_matrix_input_identity"},
+        "requirements.txt": {"$ref": "#/$defs/python_matrix_input_identity"}
+      }
+    },
+    "python_matrix_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "error", "skipped", "xfail", "xpass"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 1},
+        "passed": {"type": "integer", "minimum": 1},
+        "failed": {"const": 0},
+        "error": {"const": 0},
+        "skipped": {"const": 0},
+        "xfail": {"const": 0},
+        "xpass": {"const": 0}
+      }
+    },
+    "python_matrix_run_1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "environment", "clock", "seed", "runtime", "lock_sha256", "collection_sha256", "counts"],
+      "properties": {
+        "run": {"const": 1},
+        "environment": {"const": "fresh-1"},
+        "clock": {"const": "2026-07-01T12:00:00Z"},
+        "seed": {"const": 4740718},
+        "runtime": {"type": "string", "pattern": "^3\\.12\\.[0-9]+$"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "collection_sha256": {"$ref": "#/$defs/sha256"},
+        "counts": {"$ref": "#/$defs/python_matrix_counts"}
+      }
+    },
+    "python_matrix_run_2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "environment", "clock", "seed", "runtime", "lock_sha256", "collection_sha256", "counts"],
+      "properties": {
+        "run": {"const": 2},
+        "environment": {"const": "fresh-2"},
+        "clock": {"const": "2035-01-15T12:00:00Z"},
+        "seed": {"const": 4740718},
+        "runtime": {"type": "string", "pattern": "^3\\.12\\.[0-9]+$"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "collection_sha256": {"$ref": "#/$defs/sha256"},
+        "counts": {"$ref": "#/$defs/python_matrix_counts"}
+      }
+    },
+    "python_matrix_runs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/python_matrix_run_1"},
+        {"$ref": "#/$defs/python_matrix_run_2"}
+      ],
+      "items": false
+    },
+    "python_matrix_pass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "seed", "clocks", "source", "suite_argv", "status", "reason_code", "runs"],
+      "properties": {
+        "schema": {"const": "stoa.phase474.python-matrix.v1"},
+        "seed": {"const": 4740718},
+        "clocks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"const": "2026-07-01T12:00:00Z"},
+            {"const": "2035-01-15T12:00:00Z"}
+          ],
+          "items": false
+        },
+        "source": {"$ref": "#/$defs/python_matrix_source"},
+        "suite_argv": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"const": "python"},
+            {"const": "-m"},
+            {"const": "pytest"},
+            {"const": "-q"},
+            {"const": "-p"},
+            {"const": "no:socket"}
+          ],
+          "items": false
+        },
+        "status": {"const": "PASS"},
+        "reason_code": {"const": null},
+        "runs": {"$ref": "#/$defs/python_matrix_runs"}
+      }
+    },
+    "python_matrix_not_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "seed", "clocks", "source", "suite_argv", "status", "reason_code", "runs"],
+      "properties": {
+        "schema": {"const": "stoa.phase474.python-matrix.v1"},
+        "seed": {"const": 4740718},
+        "clocks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"const": "2026-07-01T12:00:00Z"},
+            {"const": "2035-01-15T12:00:00Z"}
+          ],
+          "items": false
+        },
+        "source": {"$ref": "#/$defs/python_matrix_source"},
+        "suite_argv": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"const": "python"},
+            {"const": "-m"},
+            {"const": "pytest"},
+            {"const": "-q"},
+            {"const": "-p"},
+            {"const": "no:socket"}
+          ],
+          "items": false
+        },
+        "status": {"const": "NOT RUN"},
+        "reason_code": {"const": "OS_NETWORK_BOUNDARY_UNAVAILABLE"},
+        "runs": {"type": "array", "maxItems": 0}
+      }
+    },
+    "python_matrix_rejected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "seed", "clocks", "source", "suite_argv", "status", "reason_code", "runs", "diagnostic"],
+      "properties": {
+        "schema": {"const": "stoa.phase474.python-matrix.v1"},
+        "seed": {"const": 4740718},
+        "clocks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"const": "2026-07-01T12:00:00Z"},
+            {"const": "2035-01-15T12:00:00Z"}
+          ],
+          "items": false
+        },
+        "source": {"$ref": "#/$defs/python_matrix_source"},
+        "suite_argv": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"const": "python"},
+            {"const": "-m"},
+            {"const": "pytest"},
+            {"const": "-q"},
+            {"const": "-p"},
+            {"const": "no:socket"}
+          ],
+          "items": false
+        },
+        "status": {"const": "REJECTED"},
+        "reason_code": {"const": "COLLECTION_IDENTITY_DRIFT"},
+        "runs": {"$ref": "#/$defs/python_matrix_runs"},
+        "diagnostic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "run_1", "run_2"],
+          "properties": {
+            "field": {"const": "collection_sha256"},
+            "run_1": {"$ref": "#/$defs/sha256"},
+            "run_2": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "python_matrix_evidence": {
+      "oneOf": [
+        {"$ref": "#/$defs/python_matrix_pass"},
+        {"$ref": "#/$defs/python_matrix_not_run"},
+        {"$ref": "#/$defs/python_matrix_rejected"}
+      ]
     },
     "pass_counts": {
       "type": "object",
