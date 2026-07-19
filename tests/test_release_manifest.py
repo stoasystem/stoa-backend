@@ -72,7 +72,7 @@ def _inputs() -> dict[str, Any]:
         "gates": [
             {
                 "gate_id": gate_id,
-                "receipt_sha256": chr(ord("d") + index) * 64,
+                "receipt_sha256": f"{index + 4:064x}",
                 "run_id": f"run-474-{index + 1:02d}",
                 "status": "PASS",
             }
