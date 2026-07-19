@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-40-PLAN.md
-last_updated: "2026-07-19T17:54:23.834Z"
+stopped_at: Completed 474-41-PLAN.md
+last_updated: "2026-07-19T18:10:49.495Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 75
+  completed_plans: 76
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 14 of 80
+Plan: 15 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T17:54:23.829Z
-**Stopped At:** Completed 474-40-PLAN.md
+**Last Date:** 2026-07-19T18:10:49.490Z
+**Stopped At:** Completed 474-41-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -190,6 +190,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P09 | 16m | 1 tasks | 4 files |
 | Phase 474 P10 | 9 min | 1 tasks | 3 files |
 | Phase 474 P40 | 7 min | 1 tasks | 3 files |
+| Phase 474 P41 | 10 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -354,3 +355,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Privileged lifecycle repositories validate only the DynamoDB operation each path invokes and keep provider responses object-valued until string-keyed mapping checks pass.
 - [Phase 474]: Malformed privileged and audit provider responses fail through stable repository exceptions without exposing coordinates or restoring broad typing.
 - [Phase 474]: The unavailable authorization-audit sink retains its no-argument fail-closed diagnostic probe while accepting object-valued keyword inputs.
+- [Phase 474]: Report persistence keeps the central table object-valued and narrows only the operation used by each path. — Operation-specific Protocols preserve central diagnostics and least-capability test fakes.
+- [Phase 474]: Provider mappings and collections are validated before report lifecycle decisions. — Malformed pagination, recovery, retention, and deletion inputs fail through stable redacted conflicts.
+- [Phase 474]: Opaque report pagination tokens retain the exact Invalid pagination token contract. — Decoded JSON is narrowed to string-keyed records without changing the public recovery behavior.
