@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-09-PLAN.md
-last_updated: "2026-07-19T17:28:53.959Z"
+stopped_at: Completed 474-10-PLAN.md
+last_updated: "2026-07-19T17:43:27.115Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 73
+  completed_plans: 74
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 12 of 80
+Plan: 13 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T17:28:53.954Z
-**Stopped At:** Completed 474-09-PLAN.md
+**Last Date:** 2026-07-19T17:43:27.110Z
+**Stopped At:** Completed 474-10-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -188,6 +188,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P23 | 6 min | 1 tasks | 1 files |
 | Phase 474 P08 | 16 min | 1 tasks | 4 files |
 | Phase 474 P09 | 16m | 1 tasks | 4 files |
+| Phase 474 P10 | 9 min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -346,3 +347,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Keep DynamoDB records object-valued until exact runtime narrowing establishes safe use. — Prevents provider-originated values from becoming trusted through annotation alone.
 - [Phase 474]: Use per-operation runtime Protocols for DynamoDB table capabilities. — Preserves minimal test fakes while validating only the method each path invokes.
 - [Phase 474]: Validate and separate high-level attachment transaction descriptions from raw DynamoDB items. — Closes nested provider mappings without casts, ignores, or behavior changes.
+- [Phase 474]: Curriculum and AI draft provider records remain object-valued until exact mapping, string, integer, list, and cursor checks establish safe use. — This preserves provider input as untrusted without restoring Any.
+- [Phase 474]: Each DynamoDB path validates only the get, put, query, scan, update, or tombstone capability it invokes. — Operation-specific Protocols preserve minimal focused fakes while checking the actual capability used.
+- [Phase 474]: Malformed curriculum and AI provider data fails through stable redacted repository errors. — Fail-closed validation preserves account fences, transaction identity, privacy, and pagination semantics.
