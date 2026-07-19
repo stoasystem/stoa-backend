@@ -6,8 +6,10 @@ from hashlib import sha256
 import importlib.util
 import json
 from pathlib import Path
+import re
 import tomllib
 
+from packaging.version import Version
 import pytest
 
 
@@ -361,21 +363,31 @@ def test_supported_backend_advisory_fixes_are_present_in_frozen_runtime_lock():
         in {"cryptography", "pydantic-settings", "python-multipart", "starlette"}
     }
 
-    assert versions == {
+    minimums = {
         "cryptography": "48.0.1",
         "pydantic-settings": "2.14.2",
         "python-multipart": "0.0.31",
         "starlette": "1.3.1",
     }
+    assert set(versions) == set(minimums)
+    assert all(Version(versions[name]) >= Version(minimum) for name, minimum in minimums.items())
 
 
 def test_supported_backend_advisory_fixes_are_present_in_frozen_export():
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    for requirement in (
-        "cryptography==48.0.1 \\",
-        "pydantic-settings==2.14.2 \\",
-        "python-multipart==0.0.31 \\",
-        "starlette==1.3.1 \\",
-    ):
-        assert requirement in requirements
+    pins = dict(
+        re.findall(
+            r"^(cryptography|pydantic-settings|python-multipart|starlette)==([^ ]+) \\\\?$",
+            requirements,
+            re.MULTILINE,
+        )
+    )
+    minimums = {
+        "cryptography": "48.0.1",
+        "pydantic-settings": "2.14.2",
+        "python-multipart": "0.0.31",
+        "starlette": "1.3.1",
+    }
+    assert set(pins) == set(minimums)
+    assert all(Version(pins[name]) >= Version(minimum) for name, minimum in minimums.items())
