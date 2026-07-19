@@ -353,6 +353,52 @@ def test_backend_python_matrix_is_a_checked_in_registered_gate() -> None:
     assert spec.timeout_seconds >= 3600
 
 
+def test_formal_python_suite_assigns_socket_denial_to_the_session_fixture() -> None:
+    gate = _load_release_gate()
+
+    assert gate.PYTHON_SUITE_ARGV == (
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:socket",
+    )
+
+
+@pytest.fixture
+def _formal_socket_lifecycle() -> object:
+    if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
+        yield
+        return
+
+    import socket
+
+    from pytest_socket import SocketBlockedError
+
+    with pytest.raises(SocketBlockedError):
+        socket.socket()
+    yield
+    with pytest.raises(SocketBlockedError):
+        socket.socket()
+
+
+@pytest.mark.parametrize("probe", (1, 2))
+def test_formal_runtime_denies_sockets_through_fixture_finalizers(
+    _formal_socket_lifecycle: object, probe: int
+) -> None:
+    if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
+        return
+
+    import socket
+
+    from pytest_socket import SocketBlockedError
+
+    assert probe in {1, 2}
+    with pytest.raises(SocketBlockedError):
+        socket.socket()
+
+
 def test_formal_runtime_uses_the_declared_frozen_clock() -> None:
     if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
         return

@@ -387,7 +387,11 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
         action_id="revoke-command-1",
     )
     assert revoked["version"] == 2
-    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert capability_repo.get_current_grants(
+        "admin-1",
+        now=datetime.fromisoformat("2026-07-14T12:03:00+00:00"),
+        table_factory=lambda: table,
+    ) == []
     with pytest.raises(capability_repo.CapabilityVersionConflict):
         capability_repo.revoke_capability(
             user_id="admin-1",

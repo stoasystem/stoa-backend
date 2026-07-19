@@ -35,7 +35,14 @@ PYTHON_MATRIX_CLOCKS = (
     "2035-01-15T12:00:00Z",
 )
 PYTHON_MATRIX_SEED = 4740718
-PYTHON_SUITE_ARGV = ("python", "-m", "pytest", "-q")
+PYTHON_SUITE_ARGV = (
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:socket",
+)
 _PYTHON_MATRIX_SOURCE_FILES = ("pyproject.toml", "uv.lock", "requirements.txt")
 _PYTEST_MANIFEST_KEYS = {
     "schema_version",

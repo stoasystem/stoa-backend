@@ -18,6 +18,9 @@ from stoa.security.reconciliation import (
 )
 
 
+GRANT_OBSERVATION_TIME = datetime(2026, 7, 15, 13, 0, tzinfo=UTC)
+
+
 class CapabilityTable:
     """Atomic in-memory table for the capability repository contract."""
 
@@ -400,7 +403,12 @@ def test_lineage_current_pointer_is_the_only_authority_and_history_cannot_revive
         expected_generation=0, table_factory=lambda: table,
     )
     assert active["generation"] == 1
-    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-1"]
+    assert [
+        row["grant_id"]
+        for row in capability_repo.get_current_grants(
+            "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+        )
+    ] == ["grant-1"]
 
     revoked = capability_repo.revoke_capability(
         user_id="admin-1", grant_id="grant-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
@@ -409,7 +417,9 @@ def test_lineage_current_pointer_is_the_only_authority_and_history_cannot_revive
         table_factory=lambda: table,
     )
     assert revoked["version"] == 2
-    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert capability_repo.get_current_grants(
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+    ) == []
     assert len([row for row in table.items.values() if row.get("entity_type") == "capability_grant_revision"]) == 2
 
     replacement = capability_repo.grant_capability(
@@ -419,7 +429,12 @@ def test_lineage_current_pointer_is_the_only_authority_and_history_cannot_revive
         expected_generation=1, table_factory=lambda: table,
     )
     assert (replacement["generation"], replacement["version"]) == (2, 1)
-    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-2"]
+    assert [
+        row["grant_id"]
+        for row in capability_repo.get_current_grants(
+            "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+        )
+    ] == ["grant-2"]
 
 
 def test_lineage_stale_revoke_cannot_touch_replacement_and_ids_cannot_be_reused():
@@ -451,7 +466,11 @@ def test_legacy_migration_is_atomic_retry_safe_and_duplicates_fail_closed():
     from stoa.db.repositories import capability_repo
 
     table = CapabilityTable([_legacy_grant()])
-    assert len(capability_repo.get_current_grants("admin-1", table_factory=lambda: table)) == 1
+    assert len(
+        capability_repo.get_current_grants(
+            "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+        )
+    ) == 1
     revoked = capability_repo.revoke_capability(
         user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
         scope="global", expected_generation=1, expected_version=1, actor_id="manager",
@@ -459,7 +478,9 @@ def test_legacy_migration_is_atomic_retry_safe_and_duplicates_fail_closed():
         table_factory=lambda: table,
     )
     assert revoked["status"] == "revoked"
-    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert capability_repo.get_current_grants(
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+    ) == []
     before = dict(table.items)
     capability_repo.revoke_capability(
         user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
@@ -470,7 +491,9 @@ def test_legacy_migration_is_atomic_retry_safe_and_duplicates_fail_closed():
     assert table.items == before
 
     duplicates = CapabilityTable([_legacy_grant(), _legacy_grant(grant_id="legacy-2")])
-    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: duplicates) == []
+    assert capability_repo.get_current_grants(
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: duplicates
+    ) == []
     with pytest.raises(capability_repo.CapabilityVersionConflict):
         capability_repo.revoke_capability(
             user_id="admin-1", grant_id="legacy-1", capability=capability_repo.ADMIN_IDENTITY_MANAGER,
@@ -554,7 +577,9 @@ def test_concrete_adapter_replay_after_audit_failure_revokes_and_audits_exactly_
     )
     with pytest.raises(RuntimeError, match="audit unavailable"):
         reconcile_inventory([snapshot], **kwargs)
-    assert capability_repo.get_current_grants("admin-1", table_factory=lambda: table) == []
+    assert capability_repo.get_current_grants(
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+    ) == []
     assert len([row for row in table.items.values() if row.get("entity_type") == "capability_grant_revision"]) == 2
 
     reconcile_inventory([snapshot], **kwargs)
@@ -630,7 +655,7 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
     replay = reconcile_inventory([snapshot], **kwargs)
 
     assert capability_repo.get_current_grants(
-        "admin-1", table_factory=lambda: table
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
     ) == []
     remove_ids = {
         action_id
@@ -709,7 +734,7 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
     assert profiles["admin-1"]["account_status"] == "active"
     assert table.transactions == before_restore_transactions
     assert capability_repo.get_current_grants(
-        "admin-1", table_factory=lambda: table
+        "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
     ) == []
 
     replacement = capability_repo.grant_capability(
@@ -728,7 +753,7 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
     assert [
         row["grant_id"]
         for row in capability_repo.get_current_grants(
-            "admin-1", table_factory=lambda: table
+            "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
         )
     ] == ["new-grant-identity"]
 
@@ -756,7 +781,12 @@ def test_stale_reconciliation_action_cannot_revoke_later_regrant(monkeypatch):
     )
     with pytest.raises(capability_repo.CapabilityVersionConflict):
         adapter.revoke_grant("admin-1", old, action_id="old-action")
-    assert [row["grant_id"] for row in capability_repo.get_current_grants("admin-1", table_factory=lambda: table)] == ["grant-2"]
+    assert [
+        row["grant_id"]
+        for row in capability_repo.get_current_grants(
+            "admin-1", now=GRANT_OBSERVATION_TIME, table_factory=lambda: table
+        )
+    ] == ["grant-2"]
 
 
 def test_restore_is_mutation_free_and_regrant_requires_manager_new_command(monkeypatch):

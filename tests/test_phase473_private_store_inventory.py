@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -195,8 +196,17 @@ def test_runtime_selectors_are_real_collected_lower_boundary_tests():
     payload = json.loads(INVENTORY.read_text())
     selectors = {selector for row in payload["rows"] for selector in (row["purge_selector"], row["no_resurrection_selector"])}
     assert selectors
+    collection_environment = dict(os.environ)
+    collection_environment.pop("STOA_PHASE474_MANIFEST", None)
     for selector in sorted(selectors):
-        result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", selector], cwd=ROOT, text=True, capture_output=True, check=False)
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q", selector],
+            cwd=ROOT,
+            env=collection_environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         assert selector in result.stdout
 
