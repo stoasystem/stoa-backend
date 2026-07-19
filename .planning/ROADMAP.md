@@ -34,7 +34,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | Deterministic Verification And Gated Delivery | One deterministic backend/Web gate plus the minimum immutable staged release infrastructure | Phases 472 and 473 |
+| 474 | Deterministic Verification And Gated Delivery | In Progress — 1/80 plans executed | Phases 472 and 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 80 plans
+**Plans:** 1/80 plans executed
 
 Plans:
 
@@ -501,6 +501,7 @@ Plans:
 **Wave 25**
 
 - [ ] `474-38` — Final evidence sealing and later-HEAD reverification.
+
 **Success criteria:**
 
 1. One authoritative command verifies exact clean backend/Web/infra identities; Python runs twice in fresh 3.12 frozen environments with zero skip/xfail/xpass and ambient AWS/network denial.
