@@ -3,18 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 import time
-from typing import Any, Callable, Protocol
+from typing import Callable, Protocol
 
 import httpx
-from jose.backends import RSAKey
+from jose.backends import RSAKey as _RSAKey
+from jose.backends.base import Key
 
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 
 
 class JwksTransport(Protocol):
-    async def fetch(self, issuer: str) -> dict[str, Any]: ...
+    async def fetch(self, issuer: str) -> Mapping[str, object]: ...
+
+
+def _string_keyed_object(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if isinstance(key, str):
+            result[key] = item
+    return result
 
 
 class HttpxJwksTransport:
@@ -26,19 +38,19 @@ class HttpxJwksTransport:
             pool=connect_timeout,
         )
 
-    async def fetch(self, issuer: str) -> dict[str, Any]:
+    async def fetch(self, issuer: str) -> dict[str, object]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.get(f"{issuer.rstrip('/')}/.well-known/jwks.json")
             response.raise_for_status()
-            payload = response.json()
-        if not isinstance(payload, dict):
+            payload = _string_keyed_object(response.json())
+        if payload is None:
             raise ValueError("JWKS response is not an object")
         return payload
 
 
 @dataclass(frozen=True, slots=True)
 class _CachedKey:
-    key: RSAKey
+    key: Key
     fetched_at: float
 
 
@@ -63,7 +75,7 @@ class JwksKeyProvider:
         self._refresh_tasks: dict[str, asyncio.Task[None]] = {}
         self._task_lock = asyncio.Lock()
 
-    async def get_key(self, issuer: str, kid: str) -> RSAKey:
+    async def get_key(self, issuer: str, kid: str) -> Key:
         if not issuer or not kid:
             raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
         now = self._monotonic()
@@ -107,14 +119,18 @@ class JwksKeyProvider:
         fetched_at = self._monotonic()
         parsed: dict[str, _CachedKey] = {}
         for raw_key in raw_keys:
-            if not isinstance(raw_key, dict):
+            key_data = _string_keyed_object(raw_key)
+            if key_data is None:
                 continue
-            kid = raw_key.get("kid")
+            kid = key_data.get("kid")
             if not isinstance(kid, str) or not kid:
                 continue
-            if raw_key.get("kty") != "RSA" or raw_key.get("alg") not in {None, "RS256"}:
+            if key_data.get("kty") != "RSA" or key_data.get("alg") not in {None, "RS256"}:
                 continue
-            parsed[kid] = _CachedKey(RSAKey(raw_key, algorithm="RS256"), fetched_at)
+            key_type = _RSAKey
+            if key_type is None:
+                raise ValueError("RS256 key support is unavailable")
+            parsed[kid] = _CachedKey(key_type(key_data, algorithm="RS256"), fetched_at)
         if not parsed:
             raise ValueError("JWKS contains no usable RS256 keys")
         self._keys[issuer] = parsed

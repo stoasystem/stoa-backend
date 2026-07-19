@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Mapping, Protocol
+from typing import Mapping, Protocol, SupportsInt
 
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.tokens import VerifiedAccessToken
@@ -72,13 +72,13 @@ class Actor:
 
 
 class IdentityRepository(Protocol):
-    async def get_binding(self, issuer: str, subject: str) -> Mapping[str, Any] | None: ...
+    async def get_binding(self, issuer: str, subject: str) -> Mapping[str, object] | None: ...
 
-    async def get_account_fence(self, user_id: str) -> Mapping[str, Any] | None: ...
+    async def get_account_fence(self, user_id: str) -> Mapping[str, object] | None: ...
 
-    async def get_account(self, user_id: str) -> Mapping[str, Any] | None: ...
+    async def get_account(self, user_id: str) -> Mapping[str, object] | None: ...
 
-    async def get_current_grants(self, user_id: str) -> list[Mapping[str, Any]]: ...
+    async def get_current_grants(self, user_id: str) -> list[Mapping[str, object]]: ...
 
 
 _GROUP_ROLES = {
@@ -87,6 +87,33 @@ _GROUP_ROLES = {
     "teachers": CanonicalRole.TEACHER,
     "admins": CanonicalRole.ADMIN,
 }
+
+
+def _positive_version(value: object) -> int | None:
+    """Preserve integer-compatible provider values while rejecting opaque objects."""
+    if not value:
+        return None
+    if not isinstance(value, (str, bytes, bytearray, SupportsInt)):
+        raise TypeError("grant version is not integer-compatible")
+    parsed = int(value)
+    return parsed if parsed > 0 else None
+
+
+def _active_grant(record: Mapping[str, object]) -> CapabilityGrant | None:
+    if record.get("status") != "active":
+        return None
+    capability = record.get("capability")
+    scope = record.get("scope")
+    if not capability or not scope:
+        return None
+    version = _positive_version(record.get("version"))
+    if version is None:
+        return None
+    return CapabilityGrant(
+        capability=str(capability),
+        scope=str(scope),
+        version=version,
+    )
 
 
 async def resolve_actor(
@@ -103,11 +130,12 @@ async def resolve_actor(
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
         fence = await repository.get_account_fence(user_id)
+        fence_generation = fence.get("generation") if fence else None
         if (
             not fence
             or fence.get("status") != "active"
-            or type(fence.get("generation")) is not int
-            or int(fence["generation"]) <= 0
+            or type(fence_generation) is not int
+            or fence_generation <= 0
         ):
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
@@ -128,18 +156,8 @@ async def resolve_actor(
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
         raw_grants = await repository.get_current_grants(user_id)
-        grants = tuple(
-            CapabilityGrant(
-                capability=str(grant["capability"]),
-                scope=str(grant["scope"]),
-                version=int(grant["version"]),
-            )
-            for grant in raw_grants
-            if grant.get("status") == "active"
-            and grant.get("capability")
-            and grant.get("scope")
-            and int(grant.get("version") or 0) > 0
-        )
+        narrowed_grants = (_active_grant(grant) for grant in raw_grants)
+        grants = tuple(grant for grant in narrowed_grants if grant is not None)
         return Actor(
             user_id=user_id,
             issuer=token.issuer,
@@ -148,7 +166,7 @@ async def resolve_actor(
             account_status=account_status,
             cognito_group=local_role.value,
             current_grants=grants,
-            auth_context={"token_use": "access", "client_id": token.client_id},
+            auth_context=(("token_use", "access"), ("client_id", token.client_id)),
         )
     except SecurityDecisionError:
         raise
