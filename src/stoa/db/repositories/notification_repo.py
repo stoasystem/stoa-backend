@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, ConditionBase
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
@@ -118,9 +119,123 @@ EXTERNAL_DELIVERY_RETENTION_BOUNDARY = {
 _EXTERNAL_RECEIPT_STATES = frozenset({"accepted", "provider_acceptance_unknown"})
 
 
+type NotificationItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _SupportsInt(Protocol):
+    def __int__(self) -> int: ...
+
+
+def _dependency_mapping(value: object) -> NotificationItem:
+    if not isinstance(value, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed notification dependency response"
+        )
+    result: NotificationItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed notification dependency response"
+            )
+        result[key] = member
+    return result
+
+
+def _optional_item(value: object) -> NotificationItem | None:
+    if value is None:
+        return None
+    return _dependency_mapping(value)
+
+
+def _response_items(response: Mapping[str, object]) -> list[NotificationItem]:
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed notification dependency response"
+        )
+    return [_dependency_mapping(item) for item in raw_items]
+
+
+def _get_item(table: object, **kwargs: object) -> NotificationItem:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification dependency unavailable"
+        )
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification dependency unavailable"
+        )
+    return table.put_item(**kwargs)
+
+
+def _scan(table: object, **kwargs: object) -> NotificationItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification dependency unavailable"
+        )
+    return _dependency_mapping(table.scan(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> NotificationItem:
+    if not isinstance(table, _UpdateTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification dependency unavailable"
+        )
+    return _dependency_mapping(table.update_item(**kwargs))
+
+
+def _required_text(
+    item: Mapping[str, object], field: str, error_message: str
+) -> str:
+    value = item.get(field)
+    if not isinstance(value, str) or not value:
+        raise account_deletion_repo.AccountDeletionConflict(error_message)
+    return value
+
+
+def _positive_integer(
+    item: Mapping[str, object], field: str, error_message: str
+) -> int:
+    value = item.get(field)
+    if not isinstance(value, (str, bytes, bytearray, _SupportsInt)):
+        raise account_deletion_repo.AccountDeletionConflict(error_message)
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as exc:
+        raise account_deletion_repo.AccountDeletionConflict(error_message) from exc
+    if result <= 0:
+        raise account_deletion_repo.AccountDeletionConflict(error_message)
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class NotificationPrivatePage:
-    items: tuple[dict[str, Any], ...]
+    items: tuple[NotificationItem, ...]
     cursor: dict[str, str] | None = None
     scanned: int = 0
 
@@ -184,7 +299,7 @@ _DELIVERY_TERMINAL_STATES = frozenset(
 )
 
 
-def _delivery_digest(value: Mapping[str, Any]) -> str:
+def _delivery_digest(value: Mapping[str, object]) -> str:
     encoded = json.dumps(
         dict(value), ensure_ascii=True, separators=(",", ":"), sort_keys=True
     ).encode("utf-8")
@@ -219,7 +334,7 @@ def _delivery_key(scope: DeliveryIntentScope, operation_id: str) -> dict[str, st
 
 
 def _delivery_identity_matches(
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     *,
     scope: DeliveryIntentScope,
     operation_id: str,
@@ -244,20 +359,25 @@ def _delivery_identity_matches(
     )
 
 
-def _intent_claim(item: Mapping[str, Any]) -> DeliveryIntentClaim:
-    try:
-        claim = DeliveryIntentClaim(
-            operation_id=str(item["operation_id"]),
-            lease_owner=str(item["lease_owner"]),
-            intent_version=int(item["intent_version"]),
-            lease_expires_at=int(item["lease_expires_at"]),
-            scope_digest=str(item["scope_digest"]),
-            payload_digest=str(item["payload_digest"]),
-        )
-    except (KeyError, TypeError, ValueError) as exc:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "delivery claim is malformed"
-        ) from exc
+def _intent_claim(item: Mapping[str, object]) -> DeliveryIntentClaim:
+    claim = DeliveryIntentClaim(
+        operation_id=_required_text(
+            item, "operation_id", "delivery claim is malformed"
+        ),
+        lease_owner=_required_text(item, "lease_owner", "delivery claim is malformed"),
+        intent_version=_positive_integer(
+            item, "intent_version", "delivery claim is malformed"
+        ),
+        lease_expires_at=_positive_integer(
+            item, "lease_expires_at", "delivery claim is malformed"
+        ),
+        scope_digest=_required_text(
+            item, "scope_digest", "delivery claim is malformed"
+        ),
+        payload_digest=_required_text(
+            item, "payload_digest", "delivery claim is malformed"
+        ),
+    )
     if (
         not claim.operation_id
         or not claim.lease_owner
@@ -309,12 +429,12 @@ def delivery_intent_sk(operation_id: str) -> str:
 
 def build_notification_write_transaction(
     *,
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     owner_id: str,
     generation: int,
     mode: str = "put",
-    updates: Mapping[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+    updates: Mapping[str, object] | None = None,
+) -> list[NotificationItem]:
     """Build one owner-bound write behind the canonical permanent fence."""
     if not owner_id or type(generation) is not int or generation <= 0:
         raise account_deletion_repo.AccountDeletionConflict("notification owner is invalid")
@@ -358,7 +478,7 @@ def build_notification_write_transaction(
     return operations
 
 
-def _generation(owner_id: str, generation: int | None, table: Any) -> int:
+def _generation(owner_id: str, generation: object, table: object) -> int:
     if type(generation) is int and generation > 0:
         return generation
     atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
@@ -372,7 +492,12 @@ def _generation(owner_id: str, generation: int | None, table: Any) -> int:
     return 1
 
 
-def _persist_private(item: dict[str, Any], *, mode: str = "put", updates: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def _persist_private(
+    item: NotificationItem,
+    *,
+    mode: str = "put",
+    updates: Mapping[str, object] | None = None,
+) -> NotificationItem:
     target = get_table()
     owner_id = str(item.get("owner_id") or item.get("student_id") or item.get("user_id") or "")
     if not owner_id:
@@ -392,12 +517,14 @@ def _persist_private(item: dict[str, Any], *, mode: str = "put", updates: Mappin
     return stored
 
 
-def put_event(item: dict[str, Any]) -> dict[str, Any]:
-    stored = {**item, "PK": notification_pk(item["event_id"]), "SK": "META"}
+def put_event(item: NotificationItem) -> NotificationItem:
+    event_id = _required_text(item, "event_id", "notification identity is invalid")
+    stored = {**item, "PK": notification_pk(event_id), "SK": "META"}
     if stored.get("owner_classification") == "global_nonprivate":
         stored = seal_global_nonprivate_event(stored)
         target = get_table()
-        target.put_item(
+        _put_item(
+            target,
             Item=stored,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -405,25 +532,28 @@ def put_event(item: dict[str, Any]) -> dict[str, Any]:
     return _persist_private(stored)
 
 
-def get_event(event_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key={"PK": notification_pk(event_id), "SK": "META"})
-    return response.get("Item")
+def get_event(event_id: str) -> NotificationItem | None:
+    response = _get_item(
+        get_table(), Key={"PK": notification_pk(event_id), "SK": "META"}
+    )
+    return _optional_item(response.get("Item"))
 
 
 def load_delivery_event_strong(
-    event_id: str, *, table: Any | None = None
-) -> dict[str, Any] | None:
+    event_id: str, *, table: object | None = None
+) -> NotificationItem | None:
     """Load the canonical event row by base key for provider delivery."""
     canonical_id = str(event_id).strip()
     if not canonical_id:
         return None
     target = table or get_table()
-    response = target.get_item(
+    response = _get_item(
+        target,
         Key={"PK": notification_pk(canonical_id), "SK": "META"},
         ConsistentRead=True,
     )
-    item = response.get("Item") if isinstance(response, Mapping) else None
-    if not isinstance(item, Mapping):
+    item = _optional_item(response.get("Item"))
+    if item is None:
         return None
     if (
         item.get("PK") != notification_pk(canonical_id)
@@ -435,7 +565,7 @@ def load_delivery_event_strong(
     return dict(item)
 
 
-def _global_classification_facts(item: Mapping[str, Any]) -> dict[str, Any]:
+def _global_classification_facts(item: Mapping[str, object]) -> NotificationItem:
     return {
         "classification_contract": item.get("classification_contract"),
         "event_id": item.get("event_id"),
@@ -452,7 +582,7 @@ def _global_classification_facts(item: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def seal_global_nonprivate_event(item: Mapping[str, Any]) -> dict[str, Any]:
+def seal_global_nonprivate_event(item: Mapping[str, object]) -> NotificationItem:
     """Persist an exact content seal for one allowlisted ownerless event."""
     stored = dict(item)
     stored["owner_classification"] = "global_nonprivate"
@@ -468,7 +598,7 @@ def seal_global_nonprivate_event(item: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def validate_global_nonprivate_event(
-    item: Mapping[str, Any], *, require_digest: bool = True
+    item: Mapping[str, object], *, require_digest: bool = True
 ) -> bool:
     contract_id = item.get("classification_contract")
     contract = GLOBAL_NONPRIVATE_DELIVERY_CONTRACTS.get(str(contract_id or ""))
@@ -512,7 +642,9 @@ def validate_global_nonprivate_event(
     )
 
 
-def update_event(event_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+def update_event(
+    event_id: str, updates: NotificationItem
+) -> NotificationItem | None:
     existing = get_event(event_id)
     if not existing:
         return None
@@ -526,34 +658,42 @@ def update_event(event_id: str, updates: dict[str, Any]) -> dict[str, Any] | Non
     return {**existing, **updates}
 
 
-def list_events(limit: int = 100) -> list[dict[str, Any]]:
-    response = get_table().scan(
+def list_events(limit: int = 100) -> list[NotificationItem]:
+    response = _scan(
+        get_table(),
         FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY), Limit=limit
     )
-    return response.get("Items", [])
+    return _response_items(response)
 
 
-def put_preferences(item: dict[str, Any]) -> dict[str, Any]:
-    stored = {**item, "PK": preference_pk(item["user_id"]), "SK": "META"}
-    existing = get_preferences(str(item["user_id"]))
+def put_preferences(item: NotificationItem) -> NotificationItem:
+    user_id = _required_text(item, "user_id", "notification identity is invalid")
+    stored = {**item, "PK": preference_pk(user_id), "SK": "META"}
+    existing = get_preferences(user_id)
     if existing:
         values = {key: value for key, value in stored.items() if key not in {"PK", "SK"}}
         return {**existing, **values} if _persist_private(existing, mode="update", updates=values) else stored
     return _persist_private(stored)
 
 
-def get_preferences(user_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key={"PK": preference_pk(user_id), "SK": "META"})
-    return response.get("Item")
+def get_preferences(user_id: str) -> NotificationItem | None:
+    response = _get_item(
+        get_table(), Key={"PK": preference_pk(user_id), "SK": "META"}
+    )
+    return _optional_item(response.get("Item"))
 
 
-def put_push_token(item: dict[str, Any]) -> dict[str, Any]:
+def put_push_token(item: NotificationItem) -> NotificationItem:
+    user_id = _required_text(item, "user_id", "notification identity is invalid")
+    token_reference = _required_text(
+        item, "token_reference", "notification identity is invalid"
+    )
     stored = {
         **item,
-        "PK": push_token_pk(item["user_id"], item["token_reference"]),
+        "PK": push_token_pk(user_id, token_reference),
         "SK": "META",
     }
-    existing = get_push_token(str(item["user_id"]), str(item["token_reference"]))
+    existing = get_push_token(user_id, token_reference)
     if existing:
         updates = {key: value for key, value in stored.items() if key not in {"PK", "SK"}}
         _persist_private(existing, mode="update", updates=updates)
@@ -561,29 +701,32 @@ def put_push_token(item: dict[str, Any]) -> dict[str, Any]:
     return _persist_private(stored)
 
 
-def get_push_token(user_id: str, token_reference: str) -> dict[str, Any] | None:
-    response = get_table().get_item(
+def get_push_token(user_id: str, token_reference: str) -> NotificationItem | None:
+    response = _get_item(
+        get_table(),
         Key={"PK": push_token_pk(user_id, token_reference), "SK": "META"}
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
 def list_push_tokens(
     user_id: str | None = None, *, status: str | None = None, limit: int = 100
-) -> list[dict[str, Any]]:
+) -> list[NotificationItem]:
     filters = [Attr("entity_type").eq(PUSH_TOKEN_ENTITY)]
     if user_id is not None:
         filters.append(Attr("user_id").eq(user_id))
     if status is not None:
         filters.append(Attr("status").eq(status))
-    expression = filters[0]
+    expression: ConditionBase = filters[0]
     for filter_expression in filters[1:]:
         expression = expression & filter_expression
-    response = get_table().scan(FilterExpression=expression, Limit=limit)
-    return response.get("Items", [])
+    response = _scan(get_table(), FilterExpression=expression, Limit=limit)
+    return _response_items(response)
 
 
-def update_push_token(user_id: str, token_reference: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+def update_push_token(
+    user_id: str, token_reference: str, updates: NotificationItem
+) -> NotificationItem | None:
     existing = get_push_token(user_id, token_reference)
     if not existing:
         return None
@@ -592,8 +735,11 @@ def update_push_token(user_id: str, token_reference: str, updates: dict[str, Any
     return {**existing, **updates}
 
 
-def put_summary_seed(item: dict[str, Any]) -> dict[str, Any]:
-    stored = {**item, "PK": summary_seed_pk(item["summary_id"]), "SK": "META"}
+def put_summary_seed(item: NotificationItem) -> NotificationItem:
+    summary_id = _required_text(
+        item, "summary_id", "notification identity is invalid"
+    )
+    stored = {**item, "PK": summary_seed_pk(summary_id), "SK": "META"}
     return _persist_private(stored)
 
 
@@ -607,12 +753,14 @@ def register_delivery_intent(
     event_ids: list[str],
     payload_digest: str,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> NotificationItem:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
     key = _delivery_key(scope, operation_id)
-    existing = target.get_item(Key=key, ConsistentRead=True).get("Item")
+    existing = _optional_item(
+        _get_item(target, Key=key, ConsistentRead=True).get("Item")
+    )
     if existing:
         if not _delivery_identity_matches(
             existing,
@@ -622,7 +770,7 @@ def register_delivery_intent(
         ) or existing.get("channel") != channel or existing.get("event_ids") != event_ids:
             raise account_deletion_repo.AccountDeletionConflict("delivery intent identity changed")
         return dict(existing)
-    item = {
+    item: NotificationItem = {
         **key,
         "entity_type": DELIVERY_INTENT_ENTITY,
         "schema_version": "notification-delivery-intent.v2",
@@ -648,7 +796,8 @@ def register_delivery_intent(
         item["classification_seal"] = scope.classification_seal
     hook = getattr(target, "register_delivery_intent", None)
     if callable(hook):
-        return dict(hook(item) or item)
+        persisted = hook(item)
+        return item if not persisted else _dependency_mapping(persisted)
     if scope.kind == "private_owner":
         account_deletion_repo.transact(
             build_notification_write_transaction(
@@ -660,7 +809,8 @@ def register_delivery_intent(
             table=target,
         )
     else:
-        target.put_item(
+        _put_item(
+            target,
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -678,13 +828,15 @@ def claim_delivery_intent(
     lease_expires_at: int,
     lease_owner: str | None = None,
     now_iso: str | None = None,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> DeliveryIntentClaim | None:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
     key = _delivery_key(scope, operation_id)
-    current = target.get_item(Key=key, ConsistentRead=True).get("Item")
-    if not isinstance(current, Mapping):
+    current = _optional_item(
+        _get_item(target, Key=key, ConsistentRead=True).get("Item")
+    )
+    if current is None:
         return None
     digest = str(payload_digest or current.get("payload_digest") or "")
     if not _delivery_identity_matches(
@@ -722,7 +874,11 @@ def claim_delivery_intent(
             str(scope.owner_id), int(scope.generation or 0), table=target
         )
     try:
-        response = target.update_item(
+        current_version = _positive_integer(
+            current, "intent_version", "delivery claim is malformed"
+        )
+        response = _update_item(
+            target,
             Key=key,
             UpdateExpression=(
                 "SET #effect=:pre_effect, #status=:pre_effect, "
@@ -740,7 +896,7 @@ def claim_delivery_intent(
                 ":pre_effect": "claimed_pre_effect",
                 ":scope": scope.digest,
                 ":payload": digest,
-                ":version": int(current.get("intent_version") or 0),
+                ":version": current_version,
                 ":lease": opaque_owner,
                 ":expiry": lease_expires_at,
                 ":now_epoch": now_epoch,
@@ -755,11 +911,14 @@ def claim_delivery_intent(
         raise
     attributes = response.get("Attributes")
     if not isinstance(attributes, Mapping):
+        current_version = _positive_integer(
+            current, "intent_version", "delivery claim is malformed"
+        )
         attributes = {
             **dict(current),
             "lease_owner": opaque_owner,
             "lease_expires_at": lease_expires_at,
-            "intent_version": int(current.get("intent_version") or 0) + 1,
+            "intent_version": current_version + 1,
         }
     return _intent_claim(attributes)
 
@@ -772,7 +931,7 @@ def delivery_intent_sendable(
     generation: int | None = None,
     operation_id: str | None = None,
     lease_owner: str | None = None,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> bool:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     operation = claim.operation_id if claim is not None else str(operation_id or "")
@@ -784,11 +943,14 @@ def delivery_intent_sendable(
             )
         except account_deletion_repo.AccountDeletionConflict:
             return False
-    item = target.get_item(
-        Key=_delivery_key(scope, operation),
-        ConsistentRead=True,
-    ).get("Item")
-    if not isinstance(item, Mapping):
+    item = _optional_item(
+        _get_item(
+            target,
+            Key=_delivery_key(scope, operation),
+            ConsistentRead=True,
+        ).get("Item")
+    )
+    if item is None:
         return False
     if claim is not None:
         return bool(
@@ -809,7 +971,7 @@ def begin_delivery_effect(
     scope: DeliveryIntentScope,
     claim: DeliveryIntentClaim,
     now_iso: str,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> DeliveryIntentClaim:
     """Durably cross the final exact CAS immediately before provider mutation."""
     scope = _delivery_scope(scope)
@@ -820,56 +982,48 @@ def begin_delivery_effect(
     if callable(hook):
         value = hook(scope, claim, now_iso)
         return value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
-    update = {
-        "Update": {
-            "Key": _delivery_key(scope, claim.operation_id),
-            "UpdateExpression": (
-                "SET #effect=:inflight, #status=:inflight, effect_started_at=:now, "
-                "intent_version=intent_version + :one"
-            ),
-            "ConditionExpression": (
-                "#effect=:pre_effect AND lease_owner=:lease AND "
-                "intent_version=:version AND scope_digest=:scope AND "
-                "payload_digest=:payload"
-            ),
-            "ExpressionAttributeNames": {
-                "#effect": "effect_state",
-                "#status": "status",
-            },
-            "ExpressionAttributeValues": {
-                ":pre_effect": "claimed_pre_effect",
-                ":inflight": "effect_inflight",
-                ":lease": claim.lease_owner,
-                ":version": claim.intent_version,
-                ":scope": claim.scope_digest,
-                ":payload": claim.payload_digest,
-                ":now": now_iso,
-                ":one": 1,
-            },
-        }
+    condition_expression = (
+        "#effect=:pre_effect AND lease_owner=:lease AND "
+        "intent_version=:version AND scope_digest=:scope AND "
+        "payload_digest=:payload"
+    )
+    expression_values: NotificationItem = {
+        ":pre_effect": "claimed_pre_effect",
+        ":inflight": "effect_inflight",
+        ":lease": claim.lease_owner,
+        ":version": claim.intent_version,
+        ":scope": claim.scope_digest,
+        ":payload": claim.payload_digest,
+        ":now": now_iso,
+        ":one": 1,
     }
-    operations = [update]
+    event_checks: list[NotificationItem] = []
     if scope.kind == "private_owner":
-        operations.insert(
-            0,
+        event_checks.append(
             account_deletion_repo.active_fence_condition(
                 str(scope.owner_id), int(scope.generation or 0)
-            ),
+            )
         )
     else:
-        intent = target.get_item(
-            Key=_delivery_key(scope, claim.operation_id), ConsistentRead=True
-        ).get("Item")
-        event_ids = intent.get("event_ids") if isinstance(intent, Mapping) else None
-        if (
-            not isinstance(event_ids, list)
-            or not event_ids
-            or any(not isinstance(event_id, str) or not event_id for event_id in event_ids)
-        ):
+        intent = _optional_item(
+            _get_item(
+                target,
+                Key=_delivery_key(scope, claim.operation_id),
+                ConsistentRead=True,
+            ).get("Item")
+        )
+        raw_event_ids = intent.get("event_ids") if intent is not None else None
+        if not isinstance(raw_event_ids, list) or not raw_event_ids:
             raise account_deletion_repo.AccountDeletionConflict(
                 "global delivery event set is invalid"
             )
-        event_checks: list[dict[str, Any]] = []
+        event_ids: list[str] = []
+        for raw_event_id in raw_event_ids:
+            if not isinstance(raw_event_id, str) or not raw_event_id:
+                raise account_deletion_repo.AccountDeletionConflict(
+                    "global delivery event set is invalid"
+                )
+            event_ids.append(raw_event_id)
         for event_id in event_ids:
             event = load_delivery_event_strong(event_id, table=target)
             if (
@@ -899,17 +1053,30 @@ def begin_delivery_effect(
                     }
                 }
             )
-        operations = [*event_checks, update]
-        update_details = update["Update"]
-        update_details["ConditionExpression"] += (
+        condition_expression += (
             " AND scope_kind=:global_kind AND classification_seal=:classification_seal"
         )
-        update_details["ExpressionAttributeValues"].update(
+        expression_values.update(
             {
                 ":global_kind": "global_nonprivate",
                 ":classification_seal": scope.classification_seal,
             }
         )
+    update_details: NotificationItem = {
+        "Key": _delivery_key(scope, claim.operation_id),
+        "UpdateExpression": (
+            "SET #effect=:inflight, #status=:inflight, effect_started_at=:now, "
+            "intent_version=intent_version + :one"
+        ),
+        "ConditionExpression": condition_expression,
+        "ExpressionAttributeNames": {
+            "#effect": "effect_state",
+            "#status": "status",
+        },
+        "ExpressionAttributeValues": expression_values,
+    }
+    update: NotificationItem = {"Update": update_details}
+    operations = [*event_checks, update]
     try:
         account_deletion_repo.transact(operations, table=target)
     except Exception as exc:
@@ -936,14 +1103,16 @@ def recover_delivery_intent(
     now_epoch: int,
     expected_claim: DeliveryIntentClaim | None = None,
     now_iso: str | None = None,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> NotificationItem:
     """Classify replay and terminalize an observed ambiguous inflight effect."""
     scope = _delivery_scope(scope)
     target = table or get_table()
     key = _delivery_key(scope, operation_id)
-    item = target.get_item(Key=key, ConsistentRead=True).get("Item")
-    if not isinstance(item, Mapping) or not _delivery_identity_matches(
+    item = _optional_item(
+        _get_item(target, Key=key, ConsistentRead=True).get("Item")
+    )
+    if item is None or not _delivery_identity_matches(
         item,
         scope=scope,
         operation_id=operation_id,
@@ -961,7 +1130,8 @@ def recover_delivery_intent(
         return dict(item)
     observed = _intent_claim(item)
     try:
-        response = target.update_item(
+        response = _update_item(
+            target,
             Key=key,
             UpdateExpression=(
                 "SET #effect=:unknown, #status=:unknown, outcome_status=:unknown, "
@@ -992,7 +1162,7 @@ def recover_delivery_intent(
             ) from exc
         raise
     attributes = response.get("Attributes")
-    return dict(attributes) if isinstance(attributes, Mapping) else {
+    return _dependency_mapping(attributes) if isinstance(attributes, Mapping) else {
         "status": "provider_acceptance_unknown"
     }
 
@@ -1002,8 +1172,8 @@ def cancel_delivery_intent(
     scope: DeliveryIntentScope,
     claim: DeliveryIntentClaim,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> NotificationItem:
     return _finish_delivery_intent(
         scope=scope,
         claim=claim,
@@ -1024,30 +1194,35 @@ def complete_delivery_intent(
     lease_owner: str | None = None,
     status: str,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> NotificationItem:
     legacy = claim is None
     if status not in _DELIVERY_TERMINAL_STATES and not (legacy and status == "rejected"):
         raise account_deletion_repo.AccountDeletionConflict("invalid delivery completion")
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     target = table or get_table()
+    item: NotificationItem | None = None
     if claim is None:
-        item = target.get_item(
-            Key=_delivery_key(scope, str(operation_id or "")), ConsistentRead=True
-        ).get("Item")
-        if not isinstance(item, Mapping) or item.get("lease_owner") != lease_owner:
+        item = _optional_item(
+            _get_item(
+                target,
+                Key=_delivery_key(scope, str(operation_id or "")),
+                ConsistentRead=True,
+            ).get("Item")
+        )
+        if item is None or item.get("lease_owner") != lease_owner:
             raise account_deletion_repo.AccountDeletionConflict("stale delivery claim")
         claim = _intent_claim(item)
     hook = getattr(target, "complete_delivery_intent", None)
     if callable(hook):
-        return dict(hook(scope, claim, status, now_iso))
+        return _dependency_mapping(hook(scope, claim, status, now_iso))
     return _finish_delivery_intent(
         scope=scope,
         claim=claim,
         status=status,
         expected_state=(
             str(item.get("effect_state") or item.get("status") or "")
-            if legacy
+            if legacy and item is not None
             else "effect_inflight"
         ),
         now_iso=now_iso,
@@ -1062,8 +1237,8 @@ def _finish_delivery_intent(
     status: str,
     expected_state: str,
     now_iso: str,
-    table: Any | None,
-) -> dict[str, Any]:
+    table: object | None,
+) -> NotificationItem:
     target = table or get_table()
     hook_name = (
         "cancel_delivery_intent"
@@ -1072,8 +1247,9 @@ def _finish_delivery_intent(
     )
     hook = getattr(target, hook_name, None) if hook_name else None
     if callable(hook):
-        return dict(hook(scope, claim, now_iso))
-    response = target.update_item(
+        return _dependency_mapping(hook(scope, claim, now_iso))
+    response = _update_item(
+        target,
         Key=_delivery_key(scope, claim.operation_id),
         UpdateExpression=(
             "SET #effect=:status, #status=:status, outcome_status=:status, "
@@ -1097,7 +1273,12 @@ def _finish_delivery_intent(
         },
         ReturnValues="ALL_NEW",
     )
-    return dict(response.get("Attributes") or {"status": status})
+    attributes = response.get("Attributes")
+    return (
+        {"status": status}
+        if not attributes
+        else _dependency_mapping(attributes)
+    )
 
 
 def scan_notification_private_rows(
@@ -1105,19 +1286,19 @@ def scan_notification_private_rows(
     *,
     cursor: Mapping[str, str] | None = None,
     maximum_pages: int = 1,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> NotificationPrivatePage:
     target = table or get_table()
     current = _cursor(cursor) if cursor is not None else None
     seen: set[tuple[str, str]] = set()
-    found: list[dict[str, Any]] = []
+    found: list[NotificationItem] = []
     scanned = 0
     for _ in range(max(maximum_pages, 1)):
-        kwargs: dict[str, Any] = {"ConsistentRead": True, "Limit": 100}
+        kwargs: dict[str, object] = {"ConsistentRead": True, "Limit": 100}
         if current is not None:
             kwargs["ExclusiveStartKey"] = current
-        response = target.scan(**kwargs)
-        items = response.get("Items") or []
+        response = _scan(target, **kwargs)
+        items = _response_items(response)
         scanned += len(items)
         found.extend(
             dict(item)
@@ -1129,7 +1310,7 @@ def scan_notification_private_rows(
         raw = response.get("LastEvaluatedKey")
         if raw is None:
             return NotificationPrivatePage(tuple(found), None, scanned)
-        current = _cursor(raw)
+        current = _cursor(_dependency_mapping(raw))
         identity = (current["PK"], current["SK"])
         if identity in seen:
             raise account_deletion_repo.AccountDeletionConflict("repeated notification cursor")
@@ -1138,8 +1319,12 @@ def scan_notification_private_rows(
 
 
 def scrub_notification_private_row(
-    item: Mapping[str, Any], *, owner_id: str, generation: int, now_iso: str,
-    table: Any | None = None
+    item: Mapping[str, object],
+    *,
+    owner_id: str,
+    generation: int,
+    now_iso: str,
+    table: object | None = None,
 ) -> None:
     if not _targets_owner(item, owner_id):
         raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
@@ -1178,7 +1363,7 @@ def scrub_notification_private_row(
     )
 
 
-def _targets_owner(item: Mapping[str, Any], owner_id: str) -> bool:
+def _targets_owner(item: Mapping[str, object], owner_id: str) -> bool:
     if owner_id in {item.get("owner_id"), item.get("student_id"), item.get("user_id")}:
         return True
     metadata = item.get("metadata")
@@ -1187,11 +1372,11 @@ def _targets_owner(item: Mapping[str, Any], owner_id: str) -> bool:
     }
 
 
-def _already_scrubbed(item: Mapping[str, Any]) -> bool:
+def _already_scrubbed(item: Mapping[str, object]) -> bool:
     return str(item.get("entity_type") or "").endswith("_deletion_tombstone")
 
 
-def _cursor(value: Mapping[str, Any]) -> dict[str, str]:
+def _cursor(value: Mapping[str, object]) -> dict[str, str]:
     if set(value) != {"PK", "SK"} or any(
         not isinstance(value.get(field), str) or not value[field] for field in ("PK", "SK")
     ):

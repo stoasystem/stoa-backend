@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
@@ -34,9 +35,95 @@ WEBSOCKET_PRIVATE_FIELDS = frozenset(
 )
 
 
+type ConnectionItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _DeleteTable(Protocol):
+    def delete_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _SupportsInt(Protocol):
+    def __int__(self) -> int: ...
+
+
+def _integer_or_zero(value: object) -> int:
+    if not isinstance(value, (str, bytes, bytearray, _SupportsInt)):
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _dependency_mapping(value: object) -> ConnectionItem:
+    if not isinstance(value, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed connection dependency response"
+        )
+    result: ConnectionItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed connection dependency response"
+            )
+        result[key] = member
+    return result
+
+
+def _optional_item(value: object) -> ConnectionItem | None:
+    if value is None:
+        return None
+    return _dependency_mapping(value)
+
+
+def _response_items(response: Mapping[str, object]) -> list[ConnectionItem]:
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed connection dependency response"
+        )
+    return [_dependency_mapping(item) for item in raw_items]
+
+
+def _get_item(table: object, **kwargs: object) -> ConnectionItem:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "connection dependency unavailable"
+        )
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _delete_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _DeleteTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "connection dependency unavailable"
+        )
+    return table.delete_item(**kwargs)
+
+
+def _scan(table: object, **kwargs: object) -> ConnectionItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "connection dependency unavailable"
+        )
+    return _dependency_mapping(table.scan(**kwargs))
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectionPrivatePage:
-    items: tuple[dict[str, Any], ...]
+    items: tuple[ConnectionItem, ...]
     cursor: dict[str, str] | None = None
     scanned: int = 0
 
@@ -47,12 +134,12 @@ def connection_pk(connection_id: str) -> str:
 
 def build_connection_write_transaction(
     *,
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     owner_id: str,
     generation: int,
     mode: str = "put",
-    updates: Mapping[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+    updates: Mapping[str, object] | None = None,
+) -> list[ConnectionItem]:
     if not owner_id or type(generation) is not int or generation <= 0:
         raise account_deletion_repo.AccountDeletionConflict("connection owner is invalid")
     stored = {
@@ -93,7 +180,7 @@ def build_connection_write_transaction(
     return operations
 
 
-def _generation(owner_id: str, generation: Any, table: Any) -> int:
+def _generation(owner_id: str, generation: object, table: object) -> int:
     if type(generation) is int and generation > 0:
         return generation
     atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
@@ -105,13 +192,18 @@ def _generation(owner_id: str, generation: Any, table: Any) -> int:
     return 1
 
 
-def put_connection(item: dict[str, Any]) -> dict[str, Any]:
+def put_connection(item: ConnectionItem) -> ConnectionItem:
     target = get_table()
     owner_id = str(item.get("owner_id") or item.get("user_id") or "")
     generation = _generation(owner_id, item.get("account_fence_generation"), target)
+    connection_id = item.get("connection_id")
+    if not isinstance(connection_id, str) or not connection_id:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "connection identity is invalid"
+        )
     stored = {
         **item,
-        "PK": connection_pk(item["connection_id"]),
+        "PK": connection_pk(connection_id),
         "SK": "META",
         "owner_id": owner_id,
         "account_fence_generation": generation,
@@ -125,12 +217,16 @@ def put_connection(item: dict[str, Any]) -> dict[str, Any]:
     return stored
 
 
-def get_connection(connection_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key={"PK": connection_pk(connection_id), "SK": "META"})
-    return response.get("Item")
+def get_connection(connection_id: str) -> ConnectionItem | None:
+    response = _get_item(
+        get_table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
+    )
+    return _optional_item(response.get("Item"))
 
 
-def update_connection(connection_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+def update_connection(
+    connection_id: str, updates: ConnectionItem
+) -> ConnectionItem | None:
     existing = get_connection(connection_id)
     if not existing:
         return None
@@ -153,14 +249,17 @@ def update_connection(connection_id: str, updates: dict[str, Any]) -> dict[str, 
 
 
 def delete_connection(connection_id: str) -> None:
-    get_table().delete_item(Key={"PK": connection_pk(connection_id), "SK": "META"})
+    _delete_item(
+        get_table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
+    )
 
 
-def list_connections(limit: int = 200) -> list[dict[str, Any]]:
-    response = get_table().scan(
+def list_connections(limit: int = 200) -> list[ConnectionItem]:
+    response = _scan(
+        get_table(),
         FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY), Limit=limit
     )
-    return response.get("Items", [])
+    return _response_items(response)
 
 
 def delete_stale_connections(*, now_epoch: int, limit: int = 200) -> list[str]:
@@ -169,10 +268,7 @@ def delete_stale_connections(*, now_epoch: int, limit: int = 200) -> list[str]:
         connection_id = str(item.get("connection_id") or "")
         if not connection_id:
             continue
-        try:
-            expires_at = int(item.get("expires_at") or 0)
-        except (TypeError, ValueError):
-            expires_at = 0
+        expires_at = _integer_or_zero(item.get("expires_at"))
         if expires_at <= now_epoch:
             delete_connection(connection_id)
             removed.append(connection_id)
@@ -184,19 +280,19 @@ def scan_account_connections(
     *,
     cursor: Mapping[str, str] | None = None,
     maximum_pages: int = 1,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> ConnectionPrivatePage:
     target = table or get_table()
     current = _cursor(cursor) if cursor is not None else None
     seen: set[tuple[str, str]] = set()
-    found: list[dict[str, Any]] = []
+    found: list[ConnectionItem] = []
     scanned = 0
     for _ in range(max(maximum_pages, 1)):
-        kwargs: dict[str, Any] = {"ConsistentRead": True, "Limit": 100}
+        kwargs: dict[str, object] = {"ConsistentRead": True, "Limit": 100}
         if current is not None:
             kwargs["ExclusiveStartKey"] = current
-        response = target.scan(**kwargs)
-        items = response.get("Items") or []
+        response = _scan(target, **kwargs)
+        items = _response_items(response)
         scanned += len(items)
         found.extend(
             dict(item)
@@ -207,7 +303,7 @@ def scan_account_connections(
         raw = response.get("LastEvaluatedKey")
         if raw is None:
             return ConnectionPrivatePage(tuple(found), None, scanned)
-        current = _cursor(raw)
+        current = _cursor(_dependency_mapping(raw))
         identity = (current["PK"], current["SK"])
         if identity in seen:
             raise account_deletion_repo.AccountDeletionConflict("repeated connection cursor")
@@ -216,7 +312,11 @@ def scan_account_connections(
 
 
 def revoke_account_connection(
-    item: Mapping[str, Any], *, owner_id: str, generation: int, table: Any | None = None
+    item: Mapping[str, object],
+    *,
+    owner_id: str,
+    generation: int,
+    table: object | None = None,
 ) -> None:
     if owner_id not in {item.get("owner_id"), item.get("user_id")}:
         raise account_deletion_repo.AccountDeletionConflict("connection owner changed")
@@ -243,7 +343,7 @@ def revoke_account_connection(
     )
 
 
-def _cursor(value: Mapping[str, Any]) -> dict[str, str]:
+def _cursor(value: Mapping[str, object]) -> dict[str, str]:
     if set(value) != {"PK", "SK"} or any(
         not isinstance(value.get(field), str) or not value[field] for field in ("PK", "SK")
     ):
