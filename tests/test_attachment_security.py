@@ -308,6 +308,7 @@ def _ooxml(root: str) -> bytes:
         ("x.txt", "text/plain", b"safe text", "text/plain"),
         ("x.md", "text/markdown", b"# safe", "text/markdown"),
     ],
+    ids=["jpeg", "png", "pdf", "docx", "pptx", "xlsx", "text", "markdown"],
 )
 def test_validate_supported_bytes(filename: str, mime: str, data: bytes, canonical: str) -> None:
     detected = validate_uploaded_file(data, filename, mime)
