@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_phase473_boundary_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "phase-473-boundary-inventory.json"
 PRIVATE_INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
+MANIFEST = ROOT / "docs" / "security" / "phase-473-evidence-manifest.json"
+PRIVATE_GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
 
 EXPECTED_BRANCHES = (
     "account_profile",
@@ -100,6 +102,25 @@ def _run(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
+
+
+def _historical_candidate_root(tmp_path: Path) -> Path:
+    candidate = json.loads(MANIFEST.read_text())["candidate_sha"]
+    archive = subprocess.run(
+        ["git", "archive", candidate], cwd=ROOT, capture_output=True, check=True
+    )
+    candidate_root = tmp_path / "candidate"
+    candidate_root.mkdir()
+    subprocess.run(
+        ["tar", "-x", "-C", str(candidate_root)],
+        input=archive.stdout,
+        check=True,
+    )
+    shutil.copy2(
+        PRIVATE_GENERATOR,
+        candidate_root / "scripts" / "generate_phase473_private_store_inventory.py",
+    )
+    return candidate_root
 
 
 def test_schema_is_per_consumption_and_source_relative():
@@ -276,12 +297,15 @@ def test_lower_fake_observation_rejects_high_level_only_monkeypatch():
 
 
 def test_generation_and_route_inventory_are_byte_deterministic(tmp_path: Path):
+    module = _generator_module()
+    candidate_root = _historical_candidate_root(tmp_path)
     first = tmp_path / "boundary-a.json"
     second = tmp_path / "boundary-b.json"
-    assert _run("--root", str(ROOT), "--output", str(first)).returncode == 0
-    assert _run("--root", str(ROOT), "--output", str(second)).returncode == 0
+    assert _run("--root", str(candidate_root), "--output", str(first)).returncode == 0
+    assert _run("--root", str(candidate_root), "--output", str(second)).returncode == 0
     assert first.read_bytes() == second.read_bytes() == INVENTORY.read_bytes()
-    assert _run("--root", str(ROOT), "--check").returncode == 0
+    assert _run("--root", str(candidate_root), "--check").returncode == 0
+    module.validate_taint_semantics(ROOT)
 
 
 def test_decision_requirement_regular_sse_and_parser_coverage_is_closed():

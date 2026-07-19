@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
 EVIDENCE = ROOT / "docs" / "security" / "phase-473-retained-evidence-policy.json"
+MANIFEST = ROOT / "docs" / "security" / "phase-473-evidence-manifest.json"
 
 EXPECTED_BRANCHES = (
     "account_profile",
@@ -86,15 +87,32 @@ def _run(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _historical_candidate_root(tmp_path: Path) -> Path:
+    candidate = json.loads(MANIFEST.read_text())["candidate_sha"]
+    archive = subprocess.run(
+        ["git", "archive", candidate], cwd=ROOT, capture_output=True, check=True
+    )
+    candidate_root = tmp_path / "candidate"
+    candidate_root.mkdir()
+    subprocess.run(
+        ["tar", "-x", "-C", str(candidate_root)],
+        input=archive.stdout,
+        check=True,
+    )
+    return candidate_root
+
+
 def test_checked_inventory_is_deterministic_complete_and_source_relative(tmp_path: Path):
     module = _generator_module()
+    candidate_root = _historical_candidate_root(tmp_path)
     first, second = tmp_path / "inventory-a.json", tmp_path / "inventory-b.json"
     evidence_first, evidence_second = tmp_path / "evidence-a.json", tmp_path / "evidence-b.json"
-    assert _run("--root", str(ROOT), "--output", str(first), "--evidence-output", str(evidence_first)).returncode == 0
-    assert _run("--root", str(ROOT), "--output", str(second), "--evidence-output", str(evidence_second)).returncode == 0
+    assert _run("--root", str(candidate_root), "--output", str(first), "--evidence-output", str(evidence_first)).returncode == 0
+    assert _run("--root", str(candidate_root), "--output", str(second), "--evidence-output", str(evidence_second)).returncode == 0
     assert first.read_bytes() == second.read_bytes() == INVENTORY.read_bytes()
     assert evidence_first.read_bytes() == evidence_second.read_bytes() == EVIDENCE.read_bytes()
-    assert _run("--root", str(ROOT), "--check").returncode == 0
+    assert _run("--root", str(candidate_root), "--check").returncode == 0
+    module.validate_private_store_semantics(ROOT)
 
     payload = json.loads(first.read_text())
     assert tuple(payload["branch_ids"]) == EXPECTED_BRANCHES
