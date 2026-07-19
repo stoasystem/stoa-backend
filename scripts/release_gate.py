@@ -105,6 +105,10 @@ _IDENTITY_KEYS = {"path", "bytes", "sha256"}
 class GatePolicyError(ValueError):
     """A stable, redacted rejection of untrusted release evidence."""
 
+    def __init__(self, message: str, *, result: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.result = result
+
 
 @dataclass(frozen=True)
 class ProcessResult:
@@ -535,7 +539,20 @@ def run_python_matrix(
         )
 
     if runs[0]["collection_sha256"] != runs[1]["collection_sha256"]:
-        raise GatePolicyError("Python matrix collection identity drifted")
+        raise GatePolicyError(
+            "Python matrix collection identity drifted",
+            result={
+                **base,
+                "status": "REJECTED",
+                "reason_code": "COLLECTION_IDENTITY_DRIFT",
+                "runs": runs,
+                "diagnostic": {
+                    "field": "collection_sha256",
+                    "run_1": runs[0]["collection_sha256"],
+                    "run_2": runs[1]["collection_sha256"],
+                },
+            },
+        )
     return {
         **base,
         "status": "PASS",
@@ -551,6 +568,13 @@ def python_matrix_exit_code(result: Mapping[str, Any]) -> int:
         result.get("status") == "NOT RUN"
         and result.get("reason_code") == "OS_NETWORK_BOUNDARY_UNAVAILABLE"
         and result.get("runs") == []
+    ):
+        return POLICY_EXIT
+    if (
+        result.get("status") == "REJECTED"
+        and result.get("reason_code") == "COLLECTION_IDENTITY_DRIFT"
+        and isinstance(result.get("runs"), list)
+        and len(result["runs"]) == len(PYTHON_MATRIX_CLOCKS)
     ):
         return POLICY_EXIT
     return EXECUTION_EXIT
@@ -922,14 +946,19 @@ def _execute(args: argparse.Namespace, command_name: str) -> int:
 
 
 def _execute_python_matrix(args: argparse.Namespace) -> int:
-    with tempfile.TemporaryDirectory(prefix="stoa-phase474-python-") as temporary_root:
-        parent = Path(temporary_root)
-        result = run_python_matrix(
-            root=ROOT,
-            environment_paths=(parent / "standard", parent / "future"),
-            operations=system_python_matrix_operations(),
-            source_environment=os.environ,
-        )
+    try:
+        with tempfile.TemporaryDirectory(prefix="stoa-phase474-python-") as temporary_root:
+            parent = Path(temporary_root)
+            result = run_python_matrix(
+                root=ROOT,
+                environment_paths=(parent / "standard", parent / "future"),
+                operations=system_python_matrix_operations(),
+                source_environment=os.environ,
+            )
+    except GatePolicyError as exc:
+        if exc.result is None:
+            raise
+        result = exc.result
     write_json(result, Path(args.output) if args.output else None)
     return python_matrix_exit_code(result)
 

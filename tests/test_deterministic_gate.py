@@ -209,7 +209,13 @@ def _matrix_project(tmp_path: Path) -> Path:
     return project
 
 
-def _matrix_operations(gate: Any, project: Path, *, mismatch: bool = False) -> tuple[Any, list[Any]]:
+def _matrix_operations(
+    gate: Any,
+    project: Path,
+    *,
+    mismatch: bool = False,
+    passed: int = 1,
+) -> tuple[Any, list[Any]]:
     calls: list[Any] = []
 
     def run_process(
@@ -227,6 +233,14 @@ def _matrix_operations(gate: Any, project: Path, *, mismatch: bool = False) -> t
         manifest_path = Path(environment["STOA_PHASE474_MANIFEST"])
         clock = environment["STOA_PHASE474_CLOCK"]
         collection = "b" * 64 if mismatch and clock.startswith("2035") else "a" * 64
+        nodes = [
+            {
+                "node_id": f"tests/test_generated.py::test_{index:04d}",
+                "outcome": "passed",
+                "phases": [],
+            }
+            for index in range(passed)
+        ]
         manifest_path.write_text(
             json.dumps(
                 {
@@ -236,10 +250,10 @@ def _matrix_operations(gate: Any, project: Path, *, mismatch: bool = False) -> t
                     "runtime": "3.12.13",
                     "lock_sha256": sha256((project / "uv.lock").read_bytes()).hexdigest(),
                     "collection_sha256": collection,
-                    "nodes": [{"node_id": "tests/test_ok.py::test_ok", "outcome": "passed", "phases": []}],
+                    "nodes": nodes,
                     "counts": {
-                        "total": 1,
-                        "passed": 1,
+                        "total": passed,
+                        "passed": passed,
                         "failed": 0,
                         "error": 0,
                         "skipped": 0,
@@ -343,6 +357,64 @@ def test_python_matrix_rejects_collection_drift(tmp_path: Path) -> None:
             operations=operations,
             source_environment=os.environ,
         )
+
+
+def test_python_matrix_cli_overwrites_stale_pass_with_closed_collection_drift_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    gate = _load_release_gate()
+    project = _matrix_project(tmp_path)
+    operations, _ = _matrix_operations(gate, project, mismatch=True, passed=2124)
+    monkeypatch.setattr(gate, "ROOT", project)
+    monkeypatch.setattr(gate, "system_python_matrix_operations", lambda: operations)
+
+    output = tmp_path / "matrix-result.json"
+    output.write_text('{"status":"PASS","stale":true}\n', encoding="utf-8")
+
+    assert gate.main(["python-hermetic", "--output", str(output)]) == 2
+    result = json.loads(output.read_text(encoding="utf-8"))
+    assert capsys.readouterr() == ("", "")
+    assert set(result) == {
+        "schema",
+        "seed",
+        "clocks",
+        "source",
+        "suite_argv",
+        "status",
+        "reason_code",
+        "runs",
+        "diagnostic",
+    }
+    assert result["schema"] == "stoa.phase474.python-matrix.v1"
+    assert result["status"] == "REJECTED"
+    assert result["reason_code"] == "COLLECTION_IDENTITY_DRIFT"
+    assert [run["counts"] for run in result["runs"]] == [
+        {
+            "total": 2124,
+            "passed": 2124,
+            "failed": 0,
+            "error": 0,
+            "skipped": 0,
+            "xfail": 0,
+            "xpass": 0,
+        }
+    ] * 2
+    assert result["diagnostic"] == {
+        "field": "collection_sha256",
+        "run_1": "a" * 64,
+        "run_2": "b" * 64,
+    }
+    assert "nodes" not in json.dumps(result)
+    assert "node_id" not in json.dumps(result)
+    assert "stale" not in result
+
+    assert gate.main(["python-hermetic"]) == 2
+    captured = capsys.readouterr()
+    stdout_result = json.loads(captured.out)
+    assert captured.err == ""
+    assert stdout_result == result
 
 
 def test_backend_python_matrix_is_a_checked_in_registered_gate() -> None:
