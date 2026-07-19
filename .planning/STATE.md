@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-03-PLAN.md
-last_updated: "2026-07-19T08:07:06.157Z"
+stopped_at: Completed 474-06-PLAN.md
+last_updated: "2026-07-19T08:27:10.781Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 66
-  percent: 46
+  completed_plans: 67
+  percent: 47
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 5 of 80
+Plan: 6 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T08:07:06.152Z
-**Stopped At:** Completed 474-03-PLAN.md
+**Last Date:** 2026-07-19T08:27:10.776Z
+**Stopped At:** Completed 474-06-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -181,6 +181,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P02 | 12 min | 2 tasks | 3 files |
 | Phase 474 P04 | 6 min | 1 tasks | 2 files |
 | Phase 474 P03 | 18min | 2 tasks | 10 files |
+| Phase 474 P06 | 15 min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -324,3 +325,5 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Dependency acquisition precedes formal isolation; pytest receives no proxy or AWS credential paths and requires a proved OS network-none boundary. — This permits reviewed package acquisition without allowing the release test process or its children to escape hermetic execution.
 - [Phase 474]: Hosts without a proved Linux network namespace emit exact NOT RUN with zero run counts and never fall back to plugin-only isolation. — A Python plugin cannot constrain arbitrary child processes, so unavailable OS isolation cannot count as PASS.
 - [Phase 474]: Phase 473 AST source seals reproduce the existing reviewed Python 3.14 canonical bytes on Python 3.12 without regenerating evidence. — Interpreter-version defaults must not change mutation identity for identical source.
+- [Phase 474]: Release ID binds only execution-receipted source, lock, and runtime identities; final manifest SHA-256 binds gates, artifacts, configs, and production NOT RUN. — This avoids circular pre-build identity while making final byte substitution detectable.
+- [Phase 474]: Lambda promotion must consume the one normalized frozen-lock ZIP digest; staging or production may never rebuild it. — Build-once promotion is required by D-14.
