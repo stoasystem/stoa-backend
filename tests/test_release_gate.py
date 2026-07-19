@@ -400,3 +400,11 @@ def test_candidate_validation_preserves_exact_plan_01_identity_and_not_run_field
     tampered["repositories"][2]["root"] = "/tmp/stoa-infra"
     with pytest.raises(gate.GatePolicyError, match="infra repository identity"):
         gate.validate_candidate(tampered)
+
+
+def test_duplicate_json_fields_fail_before_candidate_or_receipt_use(tmp_path: Path) -> None:
+    gate = _load_gate()
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text('{"schema":"first","schema":"second"}\n', encoding="utf-8")
+    with pytest.raises(gate.GatePolicyError, match="duplicate JSON field: schema"):
+        gate.load_json(duplicate)
