@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-07-PLAN.md
-last_updated: "2026-07-19T16:15:52.355Z"
+stopped_at: Completed 474-39-PLAN.md
+last_updated: "2026-07-19T16:29:25.559Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 69
+  completed_plans: 70
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 8 of 80
+Plan: 9 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T16:15:52.349Z
-**Stopped At:** Completed 474-07-PLAN.md
+**Last Date:** 2026-07-19T16:29:25.554Z
+**Stopped At:** Completed 474-39-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -184,6 +184,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P06 | 15 min | 2 tasks | 5 files |
 | Phase 474 P05 | 30min | 2 tasks | 7 files |
 | Phase 474 P07 | 7 min | 1 tasks | 2 files |
+| Phase 474 P39 | 12 min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -331,3 +332,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Lambda promotion must consume the one normalized frozen-lock ZIP digest; staging or production may never rebuild it. — Build-once promotion is required by D-14.
 - [Phase 474]: Untrusted identity and JWKS provider records remain object-valued mappings until authority-bearing fields are explicitly narrowed. — This keeps malformed provider input untrusted without Any, casts, or authorization broadening.
 - [Phase 474]: Cached RS256 keys use python-jose's stable Key base while optional RSA construction fails closed when unavailable. — The maintained stub models RSAKey as an optional runtime-selected factory rather than a valid annotation.
+- [Phase 474]: Dynamic FastAPI authorization metadata is attached through one typed helper while inventory consumers continue to validate the runtime metadata fail closed.
+- [Phase 474]: Administrator provider values remain object-typed until explicit mapping, positive-integer, string-sequence, and authorization-context narrowing succeeds.
+- [Phase 474]: Reconciliation collaborators expose only the mutation methods and exact grant coordinates required by the tightening workflow.
