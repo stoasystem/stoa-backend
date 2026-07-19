@@ -19,11 +19,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.2.0",
-    "pytest-asyncio>=0.23.0",
-    "moto[dynamodb,s3,sqs,ses,rekognition]>=5.0.0",
-    "ruff>=0.4.0",
-    "mypy>=1.10.0",
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
+    "moto[dynamodb,s3,sqs,ses,rekognition]==5.2.1",
+    "ruff==0.15.14",
+    "mypy==2.1.0",
+    "pip-audit==2.10.1",
+    "time-machine==3.2.0",
+    "pytest-socket==0.8.0",
+    "boto3-stubs==1.43.16",
+    "types-python-jose==3.5.0.20260408",
 ]
 
 [build-system]
