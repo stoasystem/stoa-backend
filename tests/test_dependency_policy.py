@@ -6,6 +6,7 @@ from hashlib import sha256
 import importlib.util
 import json
 from pathlib import Path
+import tomllib
 
 import pytest
 
@@ -349,3 +350,32 @@ def test_duplicate_json_fields_are_rejected(tmp_path):
 
     with pytest.raises(policy.DependencyPolicyError, match="duplicate"):
         policy.load_json(path)
+
+
+def test_supported_backend_advisory_fixes_are_present_in_frozen_runtime_lock():
+    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    versions = {
+        item["name"]: item["version"]
+        for item in lock["package"]
+        if item["name"]
+        in {"cryptography", "pydantic-settings", "python-multipart", "starlette"}
+    }
+
+    assert versions == {
+        "cryptography": "48.0.1",
+        "pydantic-settings": "2.14.2",
+        "python-multipart": "0.0.31",
+        "starlette": "1.3.1",
+    }
+
+
+def test_supported_backend_advisory_fixes_are_present_in_frozen_export():
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+    for requirement in (
+        "cryptography==48.0.1 \\",
+        "pydantic-settings==2.14.2 \\",
+        "python-multipart==0.0.31 \\",
+        "starlette==1.3.1 \\",
+    ):
+        assert requirement in requirements
