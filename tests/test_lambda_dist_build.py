@@ -24,7 +24,10 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "uv.lock").write_text("version = 1\nrevision = 3\n", encoding="utf-8")
     (root / "pyproject.toml").write_text("[project]\nname = 'stoa-backend'\n", encoding="utf-8")
     (root / "src" / "stoa" / "__init__.py").write_text("", encoding="utf-8")
-    (root / "src" / "stoa" / "main.py").write_text("handler = object()\n", encoding="utf-8")
+    (root / "src" / "stoa" / "main.py").write_text(
+        "def handler(event, context):\n    return {'ok': True}\n",
+        encoding="utf-8",
+    )
     (root / "src" / "stoa" / "jobs" / "__init__.py").write_text("", encoding="utf-8")
     (root / "src" / "stoa" / "jobs" / "weekly_reports.py").write_text(
         "def handler(event, context):\n    return {'ok': True}\n",
@@ -114,6 +117,34 @@ def test_requirements_must_equal_fresh_locked_export(tmp_path, monkeypatch):
         builder.build_dist(tmp_path, tmp_path / "dist", skip_install=True)
 
 
+def test_locked_export_accepts_only_uv_output_destination_header_drift(tmp_path, monkeypatch):
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    body = b"fastapi==0.115.0\n"
+    committed = (
+        builder.UV_HEADER
+        + next(line for line in builder.UV_EXPORT_COMMANDS if b"--output-file" in line)
+        + body
+    )
+    exported = (
+        builder.UV_HEADER
+        + next(line for line in builder.UV_EXPORT_COMMANDS if b"--output-file" not in line)
+        + body
+    )
+    (tmp_path / "requirements.txt").write_bytes(committed)
+    monkeypatch.setattr(builder, "export_locked_requirements", lambda repo_root: exported)
+
+    assert builder.verify_locked_requirements(tmp_path) == exported
+
+    monkeypatch.setattr(
+        builder,
+        "export_locked_requirements",
+        lambda repo_root: b"# generated some other way\n" + body,
+    )
+    with pytest.raises(builder.DistVerificationError, match="locked export"):
+        builder.verify_locked_requirements(tmp_path)
+
+
 def test_locked_export_uses_closed_uv_command(tmp_path, monkeypatch):
     builder = _load_builder()
     _write_minimal_repo(tmp_path)
@@ -162,6 +193,25 @@ def test_repeated_normalized_zip_is_byte_identical(tmp_path):
         for info in archive.infolist():
             assert info.date_time == builder.ZIP_TIMESTAMP
             assert stat.S_IMODE(info.external_attr >> 16) == 0o644
+
+
+def test_repeated_builds_from_same_source_and_lock_are_byte_identical(tmp_path, monkeypatch):
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+
+    first_dist = tmp_path / "first-dist"
+    second_dist = tmp_path / "second-dist"
+    first_manifest = builder.build_dist(tmp_path, first_dist, skip_install=True)
+    second_manifest = builder.build_dist(tmp_path, second_dist, skip_install=True)
+    first_zip = tmp_path / "first-build.zip"
+    second_zip = tmp_path / "second-build.zip"
+    first_identity = builder.zip_dist(first_dist, first_zip)
+    second_identity = builder.zip_dist(second_dist, second_zip)
+
+    assert first_manifest == second_manifest
+    assert first_identity == second_identity
+    assert first_zip.read_bytes() == second_zip.read_bytes()
 
 
 def test_zip_rejects_symlink_and_validates_normalized_archive(tmp_path):
