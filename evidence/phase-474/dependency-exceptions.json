@@ -1,0 +1,24 @@
+{
+  "schema": "stoa.release.dependency-exceptions.v1",
+  "exceptions": [
+    {
+      "ecosystem": "backend-python",
+      "package": "ecdsa",
+      "advisory": "PYSEC-2026-1325",
+      "advisory_aliases": [
+        "CVE-2024-23342",
+        "GHSA-wj6h-64fc-37mp"
+      ],
+      "installed_version": "0.19.2",
+      "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+      "dependency_scope": "runtime",
+      "severity": "unavailable",
+      "reachability": "proven-unreachable",
+      "reachability_evidence": "src/stoa/security/tokens.py enforces RS256 and algorithms RS256 only. src/stoa/security/jwks.py accepts RSA kty and constructs RSAKey only. Runtime code has no ecdsa signing keygen or ECDH invocation.",
+      "owner": "project-owner",
+      "approval_evidence": "Owner approved option 2 in Codex conversation on 2026-07-19 for exact 30-day D-11 exception",
+      "expires_at": "2026-08-18T09:00:00Z",
+      "target": "remove exception immediately when an upstream fixed release exists or replace python-jose/ecdsa through a separately reviewed auth-library/crypto-boundary change no later than expiry"
+    }
+  ]
+}

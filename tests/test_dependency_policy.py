@@ -53,7 +53,7 @@ def _backend_audit(*, package: str = "demo", version: str = "1.2.3", advisory: s
                     {
                         "id": advisory,
                         "fix_versions": ["1.2.4"],
-                        "aliases": ["CVE-2026-1000"],
+                        "aliases": ["GHSA-alias-1234-wxyz", "CVE-2026-1000"],
                         "description": "not retained in policy output",
                     }
                 ],
@@ -72,6 +72,7 @@ def _exception(lock: Path, **overrides: object):
         "ecosystem": "backend-python",
         "package": "demo",
         "advisory": "GHSA-abcd-1234-wxyz",
+        "advisory_aliases": ["CVE-2026-1000", "GHSA-alias-1234-wxyz"],
         "installed_version": "1.2.3",
         "lock_sha256": sha256(lock.read_bytes()).hexdigest(),
         "dependency_scope": "runtime",
@@ -79,6 +80,7 @@ def _exception(lock: Path, **overrides: object):
         "reachability": "production-reachable",
         "reachability_evidence": "runtime export and public request path review DEP-474-05-001",
         "owner": "project-owner",
+        "approval_evidence": "Owner approved exact exception in conversation DEP-474-05-001",
         "expires_at": "2026-08-19T09:00:00Z",
         "target": "upgrade demo to 1.2.4",
     }
@@ -138,6 +140,7 @@ def test_backend_unaccepted_advisory_blocks(tmp_path):
             "ecosystem": "backend-python",
             "package": "demo",
             "advisory": "GHSA-abcd-1234-wxyz",
+            "advisory_aliases": ["CVE-2026-1000", "GHSA-alias-1234-wxyz"],
             "installed_version": "1.2.3",
             "dependency_scope": "runtime",
             "severity": "unavailable",
@@ -168,18 +171,20 @@ def test_one_exact_unexpired_exception_matches_only_bound_advisory_version_and_l
             "ecosystem": "backend-python",
             "package": "demo",
             "advisory": "GHSA-abcd-1234-wxyz",
+            "advisory_aliases": ["CVE-2026-1000", "GHSA-alias-1234-wxyz"],
             "installed_version": "1.2.3",
             "lock_sha256": sha256(lock.read_bytes()).hexdigest(),
+            "reachability": "production-reachable",
             "expires_at": "2026-08-19T09:00:00Z",
         }
     ]
 
     mutations = {
         "advisory": "GHSA-other-1234-wxyz",
+        "advisory_aliases": ["CVE-2026-9999", "GHSA-alias-1234-wxyz"],
         "installed_version": "1.2.2",
         "lock_sha256": "f" * 64,
         "dependency_scope": "development",
-        "reachability": "proven-unreachable",
         "expires_at": "2026-07-19T08:59:59Z",
     }
     for field, replacement in mutations.items():
@@ -333,6 +338,7 @@ def test_exception_json_schema_is_closed_and_required_fields_match_runtime_valid
         "ecosystem",
         "package",
         "advisory",
+        "advisory_aliases",
         "installed_version",
         "lock_sha256",
         "dependency_scope",
@@ -340,9 +346,132 @@ def test_exception_json_schema_is_closed_and_required_fields_match_runtime_valid
         "reachability",
         "reachability_evidence",
         "owner",
+        "approval_evidence",
         "expires_at",
         "target",
     }
+
+
+def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_supported():
+    policy = _load_policy()
+    ledger = policy.load_json(ROOT / "evidence" / "phase-474" / "dependency-exceptions.json")
+    validated = policy.validate_exception_ledger(ledger, now=NOW)
+
+    assert validated == (
+        {
+            "ecosystem": "backend-python",
+            "package": "ecdsa",
+            "advisory": "PYSEC-2026-1325",
+            "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
+            "installed_version": "0.19.2",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "dependency_scope": "runtime",
+            "severity": "unavailable",
+            "reachability": "proven-unreachable",
+            "reachability_evidence": (
+                "src/stoa/security/tokens.py enforces RS256 and algorithms RS256 only. "
+                "src/stoa/security/jwks.py accepts RSA kty and constructs RSAKey only. "
+                "Runtime code has no ecdsa signing keygen or ECDH invocation."
+            ),
+            "owner": "project-owner",
+            "approval_evidence": (
+                "Owner approved option 2 in Codex conversation on 2026-07-19 for exact "
+                "30-day D-11 exception"
+            ),
+            "expires_at": "2026-08-18T09:00:00Z",
+            "target": (
+                "remove exception immediately when an upstream fixed release exists or replace "
+                "python-jose/ecdsa through a separately reviewed auth-library/crypto-boundary "
+                "change no later than expiry"
+            ),
+        },
+    )
+
+    tokens = (ROOT / "src" / "stoa" / "security" / "tokens.py").read_text(encoding="utf-8")
+    jwks = (ROOT / "src" / "stoa" / "security" / "jwks.py").read_text(encoding="utf-8")
+    runtime = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "src").rglob("*.py"))
+    ).casefold()
+    assert 'headers.get("alg") != "RS256"' in tokens
+    assert 'algorithms=["RS256"]' in tokens
+    assert 'raw_key.get("kty") != "RSA"' in jwks
+    assert 'RSAKey(raw_key, algorithm="RS256")' in jwks
+    assert "from ecdsa" not in runtime
+    assert "import ecdsa" not in runtime
+    assert "signingkey" not in runtime
+    assert "sign_digest" not in runtime
+    assert "ecdh" not in runtime
+
+
+def test_backend_cli_defaults_to_the_committed_exception_ledger():
+    policy = _load_policy()
+    args = policy._parser().parse_args(["check-backend"])
+
+    assert args.exceptions == ROOT / "evidence" / "phase-474" / "dependency-exceptions.json"
+
+
+def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
+    policy = _load_policy()
+    lock = ROOT / "uv.lock"
+    requirements = ROOT / "requirements.txt"
+    runtime = policy._parse_runtime_requirements(requirements)
+    audit = {
+        "dependencies": [
+            {
+                "name": package,
+                "version": version,
+                "vulns": [
+                    {
+                        "id": "PYSEC-2026-1325",
+                        "fix_versions": [],
+                        "aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
+                        "description": "not retained",
+                    }
+                ]
+                if package == "ecdsa"
+                else [],
+            }
+            for package, version in runtime.items()
+        ],
+        "fixes": [],
+    }
+    ledger = policy.load_json(ROOT / "evidence" / "phase-474" / "dependency-exceptions.json")
+
+    accepted = policy.evaluate_backend(
+        audit=audit,
+        lock_path=lock,
+        requirements_path=requirements,
+        exceptions=ledger,
+        now=NOW,
+    )
+
+    assert accepted["status"] == "PASS"
+    assert accepted["blockers"] == []
+    assert accepted["accepted_exceptions"] == [
+        {
+            "ecosystem": "backend-python",
+            "package": "ecdsa",
+            "advisory": "PYSEC-2026-1325",
+            "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
+            "installed_version": "0.19.2",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "reachability": "proven-unreachable",
+            "expires_at": "2026-08-18T09:00:00Z",
+        }
+    ]
+
+    audit["dependencies"][next(
+        index for index, item in enumerate(audit["dependencies"]) if item["name"] == "ecdsa"
+    )]["vulns"][0]["aliases"] = ["CVE-2024-23342"]
+    with pytest.raises(policy.DependencyPolicyError, match="unmatched"):
+        policy.evaluate_backend(
+            audit=audit,
+            lock_path=lock,
+            requirements_path=requirements,
+            exceptions=ledger,
+            now=NOW,
+        )
 
 
 def test_duplicate_json_fields_are_rejected(tmp_path):

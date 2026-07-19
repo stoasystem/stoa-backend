@@ -19,6 +19,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_ROOT = Path("/Users/zhdeng/stoa-frontend")
 FRONTEND_LOCK = FRONTEND_ROOT / "package-lock.json"
+DEFAULT_EXCEPTIONS = ROOT / "evidence" / "phase-474" / "dependency-exceptions.json"
 SCHEMA_VERSION = "stoa.release.dependency-exceptions.v1"
 POLICY_RESULT_SCHEMA = "stoa.release.dependency-policy-result.v1"
 POLICY_EXIT = 2
@@ -42,6 +43,7 @@ EXCEPTION_KEYS = {
     "ecosystem",
     "package",
     "advisory",
+    "advisory_aliases",
     "installed_version",
     "lock_sha256",
     "dependency_scope",
@@ -49,6 +51,7 @@ EXCEPTION_KEYS = {
     "reachability",
     "reachability_evidence",
     "owner",
+    "approval_evidence",
     "expires_at",
     "target",
 }
@@ -138,6 +141,18 @@ def validate_exception_ledger(
             raise DependencyPolicyError("dependency exception ecosystem is invalid")
         exception["package"] = _require_string(exception["package"], PACKAGE_RE, "package")
         exception["advisory"] = _require_string(exception["advisory"], ADVISORY_RE, "advisory")
+        aliases = exception["advisory_aliases"]
+        if (
+            not isinstance(aliases, list)
+            or len(aliases) > 16
+            or any(
+                not isinstance(alias, str) or not ADVISORY_RE.fullmatch(alias)
+                for alias in aliases
+            )
+            or aliases != sorted(set(aliases))
+            or exception["advisory"] in aliases
+        ):
+            raise DependencyPolicyError("advisory aliases are malformed or non-canonical")
         exception["installed_version"] = _require_string(
             exception["installed_version"], VERSION_RE, "installed version"
         )
@@ -158,6 +173,9 @@ def validate_exception_ledger(
             exception["reachability_evidence"], EVIDENCE_RE, "reachability evidence"
         )
         exception["owner"] = _require_string(exception["owner"], OWNER_RE, "exception owner")
+        exception["approval_evidence"] = _require_string(
+            exception["approval_evidence"], EVIDENCE_RE, "approval evidence"
+        )
         expires_at = _parse_utc(exception["expires_at"], "exception expiry")
         if expires_at <= now.astimezone(timezone.utc):
             raise DependencyPolicyError("dependency exception is expired")
@@ -258,13 +276,19 @@ def _backend_blockers(
                 isinstance(item, str) and VERSION_RE.fullmatch(item) for item in fix_versions
             ):
                 raise DependencyPolicyError("backend advisory fixes are malformed")
-            if not isinstance(aliases, list) or not all(isinstance(item, str) for item in aliases):
+            if not isinstance(aliases, list) or not all(
+                isinstance(item, str) and ADVISORY_RE.fullmatch(item) for item in aliases
+            ):
                 raise DependencyPolicyError("backend advisory aliases are malformed")
+            canonical_aliases = sorted(set(aliases))
+            if advisory in canonical_aliases:
+                raise DependencyPolicyError("backend advisory aliases repeat the primary advisory")
             blockers.append(
                 {
                     "ecosystem": "backend-python",
                     "package": normalized,
                     "advisory": advisory,
+                    "advisory_aliases": canonical_aliases,
                     "installed_version": version,
                     "dependency_scope": "runtime",
                     "severity": "unavailable",
@@ -282,11 +306,11 @@ def _exception_identity(blocker: Mapping[str, Any], lock_sha256: str) -> tuple[A
         blocker["ecosystem"],
         blocker["package"],
         blocker["advisory"],
+        tuple(blocker["advisory_aliases"]),
         blocker["installed_version"],
         lock_sha256,
         blocker["dependency_scope"],
         blocker["severity"],
-        blocker["reachability"],
     )
 
 
@@ -302,11 +326,11 @@ def _apply_exceptions(
             exception["ecosystem"],
             _normalize_package(exception["package"]),
             exception["advisory"],
+            tuple(exception["advisory_aliases"]),
             exception["installed_version"],
             exception["lock_sha256"],
             exception["dependency_scope"],
             exception["severity"],
-            exception["reachability"],
         )
         exception_map[identity] = exception
     remaining: list[dict[str, Any]] = []
@@ -324,8 +348,10 @@ def _apply_exceptions(
                 "ecosystem": exception["ecosystem"],
                 "package": _normalize_package(exception["package"]),
                 "advisory": exception["advisory"],
+                "advisory_aliases": exception["advisory_aliases"],
                 "installed_version": exception["installed_version"],
                 "lock_sha256": exception["lock_sha256"],
+                "reachability": exception["reachability"],
                 "expires_at": exception["expires_at"],
             }
         )
@@ -448,6 +474,7 @@ def _frontend_blockers(
                     "ecosystem": "frontend-npm",
                     "package": key,
                     "advisory": advisory,
+                    "advisory_aliases": [],
                     "installed_version": version,
                     "dependency_scope": scope,
                     "severity": severity,
@@ -530,7 +557,7 @@ def _parser() -> argparse.ArgumentParser:
     backend.add_argument("--lock", type=Path, default=ROOT / "uv.lock")
     backend.add_argument("--requirements", type=Path, default=ROOT / "requirements.txt")
     backend.add_argument("--audit", type=Path)
-    backend.add_argument("--exceptions", type=Path)
+    backend.add_argument("--exceptions", type=Path, default=DEFAULT_EXCEPTIONS)
     backend.add_argument("--now")
     frontend = subparsers.add_parser("check-frontend")
     frontend.add_argument("--lock", type=Path, default=FRONTEND_LOCK)

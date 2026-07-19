@@ -17,6 +17,7 @@
           "ecosystem",
           "package",
           "advisory",
+          "advisory_aliases",
           "installed_version",
           "lock_sha256",
           "dependency_scope",
@@ -24,6 +25,7 @@
           "reachability",
           "reachability_evidence",
           "owner",
+          "approval_evidence",
           "expires_at",
           "target"
         ],
@@ -40,6 +42,17 @@
             "minLength": 3,
             "maxLength": 120,
             "pattern": "^(?!.*[*?])[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "advisory_aliases": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 120,
+              "pattern": "^(?!.*[*?])[A-Za-z0-9][A-Za-z0-9._:-]*$"
+            }
           },
           "installed_version": {
             "type": "string",
@@ -64,6 +77,12 @@
             "minLength": 3,
             "maxLength": 80,
             "pattern": "^(?!.*[*?])[A-Za-z0-9][A-Za-z0-9._@-]*$"
+          },
+          "approval_evidence": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 400,
+            "pattern": "^(?!.*[*?])[A-Za-z0-9][A-Za-z0-9 ./_:#()-]*$"
           },
           "expires_at": {"$ref": "#/$defs/utc"},
           "target": {
