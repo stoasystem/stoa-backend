@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-04-PLAN.md
-last_updated: "2026-07-19T07:16:07.639Z"
+stopped_at: Completed 474-03-PLAN.md
+last_updated: "2026-07-19T08:07:06.157Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 65
+  completed_plans: 66
   percent: 46
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 4 of 80
+Plan: 5 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T07:16:07.634Z
-**Stopped At:** Completed 474-04-PLAN.md
+**Last Date:** 2026-07-19T08:07:06.152Z
+**Stopped At:** Completed 474-03-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -180,6 +180,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P01 | 9 min | 1 tasks | 3 files |
 | Phase 474 P02 | 12 min | 2 tasks | 3 files |
 | Phase 474 P04 | 6 min | 1 tasks | 2 files |
+| Phase 474 P03 | 18min | 2 tasks | 10 files |
 
 ## Decisions
 
@@ -320,3 +321,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Phase 473 reverification accepts only explicit full lowercase candidate and publication commit SHAs; refs, abbreviations, branch names, and dirty drafts are rejected.
 - [Phase 474]: The publication must have exactly one parent equal to the candidate, and current HEAD must descend from it with identical artifact blob OIDs and bytes.
 - [Phase 474]: Publication artifact truth comes only from immutable Git objects; the mutable worktree is used solely for the fail-closed cleanliness check.
+- [Phase 474]: Dependency acquisition precedes formal isolation; pytest receives no proxy or AWS credential paths and requires a proved OS network-none boundary. — This permits reviewed package acquisition without allowing the release test process or its children to escape hermetic execution.
+- [Phase 474]: Hosts without a proved Linux network namespace emit exact NOT RUN with zero run counts and never fall back to plugin-only isolation. — A Python plugin cannot constrain arbitrary child processes, so unavailable OS isolation cannot count as PASS.
+- [Phase 474]: Phase 473 AST source seals reproduce the existing reviewed Python 3.14 canonical bytes on Python 3.12 without regenerating evidence. — Interpreter-version defaults must not change mutation identity for identical source.
