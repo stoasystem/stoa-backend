@@ -24,8 +24,7 @@ REPOSITORY_CONTRACTS = (
 )
 REQUIRED_GATE_IDS = (
     "candidate-source",
-    "backend-python-standard",
-    "backend-python-future",
+    "backend-python-hermetic",
     "backend-ruff",
     "backend-mypy",
     "backend-dependencies",
@@ -153,6 +152,7 @@ def _validate_gates(value: Any) -> list[Mapping[str, Any]]:
         raise ManifestPolicyError("gate inventory is incomplete")
     receipt_ids: set[str] = set()
     run_ids: set[str] = set()
+    validated: list[Mapping[str, Any]] = []
     for gate, expected_id in zip(gates, REQUIRED_GATE_IDS, strict=True):
         if not isinstance(gate, dict):
             raise ManifestPolicyError("gate inventory is malformed")
@@ -170,7 +170,8 @@ def _validate_gates(value: Any) -> list[Mapping[str, Any]]:
             raise ManifestPolicyError("gate inventory contains duplicate or malformed receipts")
         receipt_ids.add(receipt)
         run_ids.add(run_id)
-    return gates
+        validated.append(gate)
+    return validated
 
 
 def _validate_byte_identities(value: Any, names: tuple[str, ...], label: str) -> None:

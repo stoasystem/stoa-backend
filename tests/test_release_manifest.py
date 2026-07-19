@@ -14,6 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "scripts" / "release_manifest.py"
 SCHEMA_PATH = ROOT / "schemas" / "release" / "release-manifest-v1.schema.json"
+GATE_RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "release" / "gate-receipt-v1.schema.json"
 SHA256_A = "a" * 64
 SHA256_B = "b" * 64
 SHA256_C = "c" * 64
@@ -79,8 +80,7 @@ def _inputs() -> dict[str, Any]:
             for index, gate_id in enumerate(
                 (
                     "candidate-source",
-                    "backend-python-standard",
-                    "backend-python-future",
+                    "backend-python-hermetic",
                     "backend-ruff",
                     "backend-mypy",
                     "backend-dependencies",
@@ -136,6 +136,7 @@ def _manifest() -> tuple[Any, dict[str, Any]]:
 
 def test_schema_is_closed_versioned_and_requires_every_identity() -> None:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    receipt_schema = json.loads(GATE_RECEIPT_SCHEMA_PATH.read_text(encoding="utf-8"))
 
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["additionalProperties"] is False
@@ -143,6 +144,23 @@ def test_schema_is_closed_versioned_and_requires_every_identity() -> None:
     for definition in schema["$defs"].values():
         if definition.get("type") == "object":
             assert definition["additionalProperties"] is False
+
+    expected_gate_ids = [gate["gate_id"] for gate in _inputs()["gates"]]
+    gates = schema["properties"]["gates"]
+    assert gates["minItems"] == len(expected_gate_ids) == gates["maxItems"]
+    assert [
+        schema["$defs"][item["$ref"].removeprefix("#/$defs/")]["properties"][
+            "gate_id"
+        ]["const"]
+        for item in gates["prefixItems"]
+    ] == expected_gate_ids
+    assert schema["$defs"]["gate"]["properties"]["gate_id"]["enum"] == expected_gate_ids
+    assert set(expected_gate_ids) <= set(receipt_schema["properties"]["gate_id"]["enum"])
+    assert "gate_backend_standard" not in schema["$defs"]
+    assert "gate_backend_future" not in schema["$defs"]
+    assert schema["$defs"]["gate_backend_hermetic"]["properties"]["gate_id"] == {
+        "const": "backend-python-hermetic"
+    }
 
 
 def test_stable_inputs_produce_one_release_id_and_manifest_digest() -> None:
@@ -204,6 +222,56 @@ def test_build_rejects_duplicate_or_missing_receipts() -> None:
     missing["gates"].pop()
     with pytest.raises(module.ManifestPolicyError, match="gate inventory"):
         module.build_manifest(missing)
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        (
+            "legacy standard and future receipts",
+            lambda gates: gates.__setitem__(
+                slice(1, 2),
+                [
+                    {
+                        "gate_id": "backend-python-standard",
+                        "receipt_sha256": "d" * 64,
+                        "run_id": "run-474-legacy-standard",
+                        "status": "PASS",
+                    },
+                    {
+                        "gate_id": "backend-python-future",
+                        "receipt_sha256": "e" * 64,
+                        "run_id": "run-474-legacy-future",
+                        "status": "PASS",
+                    },
+                ],
+            ),
+        ),
+        ("missing hermetic receipt", lambda gates: gates.pop(1)),
+        ("duplicate hermetic receipt", lambda gates: gates.insert(2, deepcopy(gates[1]))),
+        ("reordered hermetic receipt", lambda gates: gates.insert(2, gates.pop(1))),
+        (
+            "extra gate receipt",
+            lambda gates: gates.append(
+                {
+                    "gate_id": "backend-python-standard",
+                    "receipt_sha256": "f" * 64,
+                    "run_id": "run-474-extra-standard",
+                    "status": "PASS",
+                }
+            ),
+        ),
+    ],
+)
+def test_build_requires_exactly_one_canonical_hermetic_python_receipt(
+    label: str, mutate: Callable[[list[dict[str, Any]]], None]
+) -> None:
+    module = _load_manifest_module()
+    value = _inputs()
+    mutate(value["gates"])
+
+    with pytest.raises(module.ManifestPolicyError, match="gate inventory"):
+        module.build_manifest(value)
 
 
 @pytest.mark.parametrize(

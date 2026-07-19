@@ -36,12 +36,11 @@
     "runtime": {"$ref": "#/$defs/runtime"},
     "gates": {
       "type": "array",
-      "minItems": 15,
-      "maxItems": 15,
+      "minItems": 14,
+      "maxItems": 14,
       "prefixItems": [
         {"$ref": "#/$defs/gate_candidate"},
-        {"$ref": "#/$defs/gate_backend_standard"},
-        {"$ref": "#/$defs/gate_backend_future"},
+        {"$ref": "#/$defs/gate_backend_hermetic"},
         {"$ref": "#/$defs/gate_backend_ruff"},
         {"$ref": "#/$defs/gate_backend_mypy"},
         {"$ref": "#/$defs/gate_backend_dependencies"},
@@ -145,15 +144,31 @@
       "additionalProperties": false,
       "required": ["gate_id", "receipt_sha256", "run_id", "status"],
       "properties": {
-        "gate_id": {"type": "string"},
+        "gate_id": {
+          "enum": [
+            "candidate-source",
+            "backend-python-hermetic",
+            "backend-ruff",
+            "backend-mypy",
+            "backend-dependencies",
+            "frontend-locked-install",
+            "frontend-eslint",
+            "frontend-typecheck",
+            "frontend-build",
+            "frontend-dependencies",
+            "frontend-contract",
+            "frontend-playwright",
+            "release-provenance",
+            "artifact-integrity"
+          ]
+        },
         "receipt_sha256": {"$ref": "#/$defs/sha256"},
         "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
         "status": {"const": "PASS"}
       }
     },
     "gate_candidate": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "candidate-source"}}},
-    "gate_backend_standard": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-python-standard"}}},
-    "gate_backend_future": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-python-future"}}},
+    "gate_backend_hermetic": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-python-hermetic"}}},
     "gate_backend_ruff": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-ruff"}}},
     "gate_backend_mypy": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-mypy"}}},
     "gate_backend_dependencies": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-dependencies"}}},
