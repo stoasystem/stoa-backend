@@ -313,7 +313,7 @@ class _SinkVisitor(ast.NodeVisitor):
         elif isinstance(node.func, ast.Name) and node.func.id in WRAPPER_NAMES:
             method = node.func.id
         if method:
-            normalized = ast.dump(node, annotate_fields=True, include_attributes=False)
+            normalized = _stable_ast_dump(node)
             self.sinks.append(
                 MutationSink(
                     self.relative_file,
@@ -324,6 +324,29 @@ class _SinkVisitor(ast.NodeVisitor):
                 )
             )
         self.generic_visit(node)
+
+
+def _stable_ast_dump(value: Any) -> str:
+    """Serialize ASTs identically across Python 3.12 and 3.13+.
+
+    Python 3.13 added ``show_empty=False`` to :func:`ast.dump` and changed its
+    default output by omitting empty optional fields.  Phase 473 evidence was
+    sealed with that representation, while Phase 474's formal runtime is
+    Python 3.12.  Keep the already-reviewed bytes without making interpreter
+    version part of a mutation identity.
+    """
+    if isinstance(value, ast.AST):
+        fields: list[str] = []
+        for name in value._fields:
+            field = getattr(value, name, None)
+            literal_none = isinstance(value, (ast.Constant, ast.MatchSingleton)) and name == "value"
+            if (field is None and not literal_none) or (isinstance(field, list) and not field):
+                continue
+            fields.append(f"{name}={_stable_ast_dump(field)}")
+        return f"{type(value).__name__}({', '.join(fields)})"
+    if isinstance(value, list):
+        return "[" + ", ".join(_stable_ast_dump(item) for item in value) + "]"
+    return repr(value)
 
 
 def _function_sources(path: Path) -> dict[str, str]:

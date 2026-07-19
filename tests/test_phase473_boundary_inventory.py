@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -123,6 +124,19 @@ def test_schema_is_per_consumption_and_source_relative():
         assert row["decision_ids"]
     assert callable(module.discover_dataflows)
     assert callable(module.validate_taint_semantics)
+
+
+def test_boundary_source_seal_is_stable_on_the_phase474_python_312_runtime():
+    module = _generator_module()
+    tree = ast.parse("client.put_item(Item={'student_id': private_value})")
+    call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+    assert module._stable_ast_dump(call) == (
+        "Call(func=Attribute(value=Name(id='client', ctx=Load()), "
+        "attr='put_item', ctx=Load()), keywords=[keyword(arg='Item', "
+        "value=Dict(keys=[Constant(value='student_id')], "
+        "values=[Name(id='private_value', ctx=Load())]))])"
+    )
 
 
 def test_one_response_with_multiple_fields_has_one_exact_row_per_consumption():

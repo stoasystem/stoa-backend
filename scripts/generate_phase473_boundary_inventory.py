@@ -417,8 +417,24 @@ def _symbol_nodes(tree: ast.AST) -> dict[str, ast.FunctionDef | ast.AsyncFunctio
     }
 
 
+def _stable_ast_dump(value: Any) -> str:
+    """Match Python 3.13+'s reviewed ``ast.dump(show_empty=False)`` bytes."""
+    if isinstance(value, ast.AST):
+        fields: list[str] = []
+        for name in value._fields:
+            field = getattr(value, name, None)
+            literal_none = isinstance(value, (ast.Constant, ast.MatchSingleton)) and name == "value"
+            if (field is None and not literal_none) or (isinstance(field, list) and not field):
+                continue
+            fields.append(f"{name}={_stable_ast_dump(field)}")
+        return f"{type(value).__name__}({', '.join(fields)})"
+    if isinstance(value, list):
+        return "[" + ", ".join(_stable_ast_dump(item) for item in value) + "]"
+    return repr(value)
+
+
 def _normalized_digest(node: ast.AST) -> str:
-    return sha256(ast.dump(node, annotate_fields=True, include_attributes=False).encode()).hexdigest()
+    return sha256(_stable_ast_dump(node).encode()).hexdigest()
 
 
 def _boundary_id(flow: ReviewedFlow) -> str:
