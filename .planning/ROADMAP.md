@@ -34,7 +34,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | 16/80 | In Progress|  |
+| 474 | 16/84 | In Progress|  |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 16/80 plans executed
+**Plans:** 16/84 plans executed
 
 Plans:
 
@@ -385,7 +385,6 @@ Plans:
 - [ ] `474-44` — Mypy-zero closure for adaptive-learning and practice repositories.
 - [ ] `474-45` — Mypy-zero closure for moderation repository.
 - [ ] `474-72` — Closed Web runtime-configuration contract.
-- [ ] `474-78` — Actually served immutable Web release pointer.
 
 **Wave 7**
 
@@ -403,10 +402,12 @@ Plans:
 - [ ] `474-51` — Mypy-zero closure for account-deletion orchestration service.
 - [ ] `474-52` — Mypy-zero closure for teacher-application router.
 - [ ] `474-59` — Mypy-zero closure for identity authorization and privileged-reconciliation tests.
-- [ ] `474-73` — Web runtime configuration bootstrap.
+- [ ] `474-73` — Single served-release descriptor client trust contract.
 
 **Wave 8**
 
+- [ ] `474-78` — Actually served immutable Web descriptor and selected-object pointer.
+- [ ] `474-81` — Runtime environment projection from validated configuration.
 - [ ] `474-16` — Mypy-zero closure for practice and student routers.
 - [ ] `474-17` — Mypy-zero closure for parent and conversation routers.
 - [ ] `474-18` — Mypy-zero closure for weekly-report upload-cleanup and deletion jobs.
@@ -424,6 +425,7 @@ Plans:
 
 **Wave 9**
 
+- [ ] `474-82` — Descriptor/config startup barrier before Web services.
 - [ ] `474-20` — Mypy-zero closure for conversation and parent route tests.
 - [ ] `474-56` — Mypy-zero closure for operator and practice-seed scripts.
 - [ ] `474-57` — Mypy-zero closure for Phase 473 inventory generators.
@@ -436,6 +438,8 @@ Plans:
 
 **Wave 10**
 
+- [ ] `474-83` — Frontend monitoring runtime feature flag.
+- [ ] `474-84` — Remove browser EmailJS contact fallback.
 - [ ] `474-22` — Automated repository-wide mypy-zero gate and report.
 
 **Wave 11**
@@ -513,7 +517,7 @@ Plans:
 
 **Required evidence:** Three repository source receipts; two-clock gate receipts; quality/dependency/Web/CDK/workflow results; protected-environment owner verification; `staging-substrate.json`; live staging delivery/smoke; controlled rollback; failure matrix; source audit; final evidence index.
 
-**Exit gate:** All 89 task rows and the full gate pass, staging and rollback evidence are live and source-bound, production mutation remains exact `NOT RUN`, and zero source-audit item is missing.
+**Exit gate:** All 93 task rows and the full gate pass, staging and rollback evidence are live and source-bound, production mutation remains exact `NOT RUN`, and zero source-audit item is missing.
 
 ### Phase 475: Transactional Usage Assignment And Relationship Consistency
 
