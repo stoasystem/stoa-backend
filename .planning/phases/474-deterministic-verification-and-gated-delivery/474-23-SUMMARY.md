@@ -74,7 +74,7 @@ The RED gate used the existing machine-readable npm audit and backend policy aga
 
 - Applied supported fixes for every measured advisory, including non-blocking development findings, because fixes existed and an exception was neither necessary nor permitted by D-11.
 - Kept declared dependency ranges unchanged; the lock-only update records patched releases and their compatible transitive dependency closure.
-- Used the implemented backend authority command `check-frontend`; the plan text's `check-web` name is not present in the committed policy CLI.
+- Used the implemented backend authority command `check-frontend`; the plan text used at execution time named the unavailable `check-web` command, and the stored plan was corrected after execution so future reruns use the shipped CLI.
 
 ## Deviations from Plan
 
@@ -83,7 +83,7 @@ The RED gate used the existing machine-readable npm audit and backend policy aga
 **1. [Rule 3 - Blocking] Used the shipped authoritative Web-policy subcommand**
 
 - **Found during:** Task 1 RED verification
-- **Issue:** The plan verification names `check-web`, but `scripts/dependency_policy.py` exposes `check-backend` and `check-frontend`; the named command exits at argument parsing before evaluating evidence.
+- **Issue:** The plan verification used at execution time named `check-web`, but `scripts/dependency_policy.py` exposes `check-backend` and `check-frontend`; the named command exits at argument parsing before evaluating evidence.
 - **Fix:** Ran the existing source-backed `check-frontend` subcommand against the exact authoritative Web root lock and machine audit. No backend policy source was changed outside this plan's ownership.
 - **Files modified:** None
 - **Verification:** Final `check-frontend` returned `PASS`, zero blockers, zero accepted exceptions, and the exact repaired lock SHA-256.
