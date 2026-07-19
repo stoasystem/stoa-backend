@@ -530,6 +530,7 @@ def _publication_repo(
     *,
     extra_publication_path: bool = False,
     intermediate_parent: bool = False,
+    manifest_mutation: str | None = None,
 ) -> tuple[Path, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -575,6 +576,15 @@ def _publication_repo(
             "artifacts": artifacts,
         },
     )
+    if manifest_mutation:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        if manifest_mutation == "hash":
+            payload["artifacts"][0]["sha256"] = "0" * 64
+        elif manifest_mutation == "duplicate":
+            payload["artifacts"].append(deepcopy(payload["artifacts"][0]))
+        else:
+            raise AssertionError(f"unknown manifest mutation: {manifest_mutation}")
+        _json(manifest, payload)
     if extra_publication_path:
         (repo / "extra.txt").write_text("extra\n", encoding="utf-8")
         _git(repo, "add", "extra.txt")
@@ -603,6 +613,19 @@ def test_publication_rejects_later_mutation_of_immutable_artifact(
     _git(repo, "commit", "-m", "mutate publication artifact")
 
     with pytest.raises(verifier.EvidenceError, match="blob|artifact|changed"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+@pytest.mark.parametrize("manifest_mutation", ["hash", "duplicate"])
+def test_publication_rejects_manifest_artifact_ambiguity(
+    tmp_path: Path, manifest_mutation: str
+) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(
+        tmp_path, manifest_mutation=manifest_mutation
+    )
+
+    with pytest.raises(verifier.EvidenceError, match="manifest|artifact|hash"):
         verifier.verify_publication(repo, candidate, publication)
 
 

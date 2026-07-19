@@ -9,6 +9,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any, Iterable, Sequence
@@ -1074,57 +1075,168 @@ def capture(candidate: str, capture_root: Path) -> dict[str, Any]:
     return result
 
 
-def _publication_paths(root: Path) -> tuple[set[str], str]:
+def _exact_commit(root: Path, value: str, *, label: str) -> str:
+    if re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise EvidenceError(f"{label} must be an explicit full lowercase commit SHA")
+    try:
+        resolved = _git(root, "rev-parse", "--verify", f"{value}^{{commit}}")
+    except EvidenceError as exc:
+        raise EvidenceError(f"{label} commit is missing") from exc
+    if resolved != value:
+        raise EvidenceError(f"{label} must resolve to the exact supplied commit SHA")
+    return resolved
+
+
+def _publication_paths(root: Path, publication: str) -> tuple[set[str], str]:
     validation = ".planning/phases/473-student-content-privacy-and-practice-integrity/473-VALIDATION.md"
-    if not (root / validation).exists():
-        matches = sorted((root / ".planning/phases").glob("*/473-VALIDATION.md"))
+    tree_paths = set(
+        _git(
+            root,
+            "ls-tree",
+            "-r",
+            "--name-only",
+            publication,
+            "--",
+            ".planning/phases",
+        ).splitlines()
+    )
+    if validation not in tree_paths:
+        matches = sorted(
+            path for path in tree_paths if path.endswith("/473-VALIDATION.md")
+        )
         if len(matches) != 1:
             raise EvidenceError("publication validation path is ambiguous")
-        validation = matches[0].relative_to(root).as_posix()
+        validation = matches[0]
     return PUBLICATION_FIXED_PATHS | {validation}, validation
 
 
-def _status_paths(root: Path) -> set[str]:
-    lines = _git(root, "status", "--porcelain").splitlines()
-    return {line[3:].split(" -> ")[-1] for line in lines if len(line) >= 4}
+def _is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode not in (0, 1):
+        raise EvidenceError("unable to verify publication ancestry")
+    return completed.returncode == 0
 
 
-def verify_publication(root: Path, candidate: str, *, dirty: bool) -> None:
-    expected_paths, validation_relative = _publication_paths(root)
-    if dirty:
-        if _head(root) != candidate or _status_paths(root) != expected_paths:
-            raise EvidenceError("dirty publication must change exactly four paths on candidate")
-    else:
-        if not _clean(root) or _git(root, "rev-parse", "HEAD^") != candidate:
-            raise EvidenceError("publication must be a clean direct candidate child")
-        changed = set(_git(root, "diff", "--name-only", candidate, "HEAD").splitlines())
-        if changed != expected_paths:
-            raise EvidenceError("publication child changed paths outside exact four documents")
-    manifest_path = root / "docs/security/phase-473-evidence-manifest.json"
-    manifest = _read_json(manifest_path)
+def _git_blob_oid(root: Path, commit: str, path: str) -> str:
+    try:
+        oid = _git(root, "rev-parse", "--verify", f"{commit}:{path}")
+        if _git(root, "cat-file", "-t", oid) != "blob":
+            raise EvidenceError(f"publication path is not a blob: {path}")
+    except EvidenceError as exc:
+        raise EvidenceError(f"missing immutable Git blob: {commit}:{path}") from exc
+    return oid
+
+
+def _git_blob_bytes(root: Path, oid: str, *, path: str) -> bytes:
+    completed = subprocess.run(
+        ["git", "cat-file", "blob", oid],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode:
+        raise EvidenceError(f"unable to read immutable Git blob: {path}")
+    return completed.stdout
+
+
+def _blob_json(data: bytes, *, path: str) -> dict[str, Any]:
+    try:
+        value = json.loads(data)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"invalid JSON publication blob: {path}") from exc
+    if not isinstance(value, dict):
+        raise EvidenceError(f"publication JSON blob must be an object: {path}")
+    return value
+
+
+def _privacy_match_count_bytes(payloads: Iterable[bytes], denylist_path: Path) -> int:
+    needles = [entry.casefold() for entry in _denylist(denylist_path)]
+    return sum(
+        data.decode("utf-8", errors="replace").casefold().count(needle)
+        for data in payloads
+        for needle in needles
+    )
+
+
+def verify_publication(root: Path, candidate: str, publication: str) -> None:
+    candidate = _exact_commit(root, candidate, label="candidate")
+    publication = _exact_commit(root, publication, label="publication")
+    if not _clean(root):
+        raise EvidenceError("publication reverification requires a clean worktree")
+
+    parents = _git(root, "rev-list", "--parents", "-n", "1", publication).split()
+    if len(parents) != 2:
+        raise EvidenceError("publication must have exactly one parent; merge publication rejected")
+    if parents[1] != candidate:
+        raise EvidenceError("publication must be the direct child of the explicit candidate")
+    if not _is_ancestor(root, publication, "HEAD"):
+        raise EvidenceError("current HEAD must descend from the explicit publication")
+
+    expected_paths, validation_relative = _publication_paths(root, publication)
+    changed = set(
+        _git(
+            root,
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            publication,
+        ).splitlines()
+    )
+    if changed != expected_paths:
+        raise EvidenceError("publication commit must change exactly the four evidence paths")
+
+    publication_bytes: dict[str, bytes] = {}
+    for path in sorted(expected_paths):
+        publication_oid = _git_blob_oid(root, publication, path)
+        head_oid = _git_blob_oid(root, "HEAD", path)
+        if publication_oid != head_oid:
+            raise EvidenceError(f"publication blob changed at later HEAD: {path}")
+        published = _git_blob_bytes(root, publication_oid, path=path)
+        current = _git_blob_bytes(root, head_oid, path=path)
+        if published != current:
+            raise EvidenceError(f"publication blob bytes changed at later HEAD: {path}")
+        publication_bytes[path] = published
+
+    manifest_relative = "docs/security/phase-473-evidence-manifest.json"
+    manifest = _blob_json(publication_bytes[manifest_relative], path=manifest_relative)
     if manifest.get("schema_version") != MANIFEST_SCHEMA or manifest.get("candidate_sha") != candidate:
         raise EvidenceError("publication manifest identity drift")
-    expected_artifacts = expected_paths - {"docs/security/phase-473-evidence-manifest.json"}
+    expected_artifacts = expected_paths - {manifest_relative}
     artifacts = manifest.get("artifacts")
-    if not isinstance(artifacts, list) or {row.get("path") for row in artifacts} != expected_artifacts:
+    if (
+        not isinstance(artifacts, list)
+        or not all(isinstance(row, dict) for row in artifacts)
+        or len(artifacts) != len(expected_artifacts)
+        or {row.get("path") for row in artifacts} != expected_artifacts
+    ):
         raise EvidenceError("manifest must hash results, evidence, and validation only")
-    if any(row.get("path") == manifest_path.relative_to(root).as_posix() for row in artifacts):
+    if any(row.get("path") == manifest_relative for row in artifacts):
         raise EvidenceError("manifest cannot hash itself")
     for row in artifacts:
-        path = root / row["path"]
-        data = path.read_bytes()
+        data = publication_bytes[row["path"]]
         if row.get("bytes") != len(data) or row.get("sha256") != sha256(data).hexdigest():
             raise EvidenceError("publication artifact hash drift")
-    results = _read_json(root / "docs/security/phase-473-evidence-results.json")
+    results_relative = "docs/security/phase-473-evidence-results.json"
+    results = _blob_json(publication_bytes[results_relative], path=results_relative)
     if results.get("candidate_sha") != candidate:
         raise EvidenceError("results candidate drift")
     for path in (
-        root / "docs/security/phase-473-evidence.md",
-        root / validation_relative,
+        "docs/security/phase-473-evidence.md",
+        validation_relative,
     ):
-        if candidate not in path.read_text(encoding="utf-8"):
+        try:
+            narrative = publication_bytes[path].decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise EvidenceError(f"publication narrative is not UTF-8: {path}") from exc
+        if candidate not in narrative:
             raise EvidenceError("narrative candidate binding missing")
-    if _privacy_match_count((root / path for path in expected_paths), DENYLIST_PATH):
+    if _privacy_match_count_bytes(publication_bytes.values(), DENYLIST_PATH):
         raise EvidenceError("publication privacy denylist match")
     if results.get("schema_version") == RESULT_SCHEMA:
         coverage = results.get("coverage")
@@ -1398,7 +1510,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--capture-root", required=True, type=Path)
     publication = subparsers.add_parser("verify-publication")
     publication.add_argument("--candidate", required=True)
-    publication.add_argument("--dirty", action="store_true")
+    publication.add_argument("--publication", required=True)
     denial = subparsers.add_parser("privacy-denial")
     denial.add_argument("--capture-root", required=True, type=Path)
     denial.add_argument("--denylist", required=True, type=Path)
@@ -1411,7 +1523,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "publish":
             publish(args.candidate, args.capture_root)
         elif args.command == "verify-publication":
-            verify_publication(ROOT, args.candidate, dirty=args.dirty)
+            verify_publication(ROOT, args.candidate, args.publication)
         else:
             privacy_denial(args.capture_root, args.denylist)
     except (EvidenceError, OSError, subprocess.SubprocessError, ValueError) as exc:
