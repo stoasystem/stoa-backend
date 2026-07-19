@@ -22,7 +22,7 @@ from stoa.security.errors import (
     safe_error_response,
 )
 from stoa.security.events import SecurityEvent, project_security_event
-from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 
 
 POLICY_VERSION = "472.v1"
@@ -797,11 +797,9 @@ async def authorize_and_resolve(
             resolved = AuthorizedResource(
                 ResourceRef(spec.resource_type, resource_id, student_id), loaded
             )
-        facts = fact_repository.facts_for(
+        facts = await fact_repository.facts_for(
             actor, resolved.ref, spec.action, spec.purpose, resolved.value
         )
-        if isawaitable(facts):
-            facts = await facts
         resolved = AuthorizedResource(resolved.ref, resolved.value, facts)
         decision = (policy or AuthorizationPolicy()).evaluate(
             actor, resolved, spec.action, spec.purpose, correlation_id=correlation_id
@@ -1042,17 +1040,15 @@ def evaluate_matrix_case(
     )
     parent = _matrix_parent_facts(relation, student_id)
     teacher = _matrix_teacher_facts(relation, student_id, ref.resource_id)
-    grants = ()
+    grants: tuple[CapabilityGrant, ...] = ()
     if relation == "scoped_grant":
-        from stoa.security.identity import CapabilityGrant
-
         grants = (CapabilityGrant("student_support_lookup", f"student:{student_id}", 1),)
     principal = Actor(
         actor_id,
         "https://identity.test",
         f"{actor}-subject",
         role,
-        __import__("stoa.security.identity", fromlist=["AccountStatus"]).AccountStatus.ACTIVE,
+        AccountStatus.ACTIVE,
         role.value,
         grants,
     )

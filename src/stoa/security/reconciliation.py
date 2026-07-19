@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Any, Iterable, Mapping, Protocol
+from collections.abc import Callable, Iterable, Mapping
+from typing import Protocol
 
 
 CANONICAL_ROLES = frozenset({"student", "parent", "teacher", "admin"})
@@ -118,8 +119,8 @@ class ReconciliationItem:
     item_id: str
     classification: str
     reason: str
-    before: Mapping[str, Any]
-    after: Mapping[str, Any]
+    before: Mapping[str, object]
+    after: Mapping[str, object]
     actions: tuple[ReconciliationAction, ...]
     checkpoint: str
     manual_approval_required: bool = False
@@ -139,7 +140,7 @@ class ReconciliationReport:
     def actions(self) -> tuple[str, ...]:
         return tuple(action.action for item in self.items for action in item.actions)
 
-    def safe_projection(self) -> dict[str, Any]:
+    def safe_projection(self) -> dict[str, object]:
         return {
             "runId": self.run_id,
             "mode": self.mode,
@@ -174,17 +175,49 @@ class TighteningAdapter(Protocol):
     def append_audit(self, item_id: str, action: str, *, action_id: str) -> None: ...
 
 
+class LocalAccountTightening(Protocol):
+    def suspend_local(self, user_id: str, *, action_id: str) -> None: ...
+
+
+class ProviderGroupTightening(Protocol):
+    def remove_group(self, provider_subject: str, group: str, *, action_id: str) -> None: ...
+    def global_sign_out(self, provider_subject: str, *, action_id: str) -> None: ...
+
+
+class CapabilityGrantTightening(Protocol):
+    def revoke_capability(
+        self,
+        *,
+        user_id: str,
+        grant_id: str,
+        capability: str,
+        scope: str,
+        expected_generation: int,
+        expected_version: int,
+        actor_id: str,
+        reason: str,
+        changed_at: str,
+        action_id: str,
+    ) -> object: ...
+
+
+class ReconciliationAuditRepository(Protocol):
+    DuplicateSecurityAuditEvent: type[Exception] | tuple[type[Exception], ...]
+
+    def append_event(self, item_id: str, event: Mapping[str, object]) -> object: ...
+
+
 class RepositoryTighteningAdapter:
     """Concrete conditional adapter for explicitly authorized tightening runs."""
 
     def __init__(
         self,
         *,
-        local_account: Any,
-        provider: Any,
-        capability_repository: Any,
-        audit_repository: Any,
-        clock: Any | None = None,
+        local_account: LocalAccountTightening,
+        provider: ProviderGroupTightening,
+        capability_repository: CapabilityGrantTightening,
+        audit_repository: ReconciliationAuditRepository,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         required = (local_account, provider, capability_repository, audit_repository)
         if any(collaborator is None for collaborator in required):
@@ -207,7 +240,7 @@ class RepositoryTighteningAdapter:
     def revoke_grant(self, user_id: str, grant: GrantCoordinate, *, action_id: str) -> None:
         grant.validate()
         instant = self._clock()
-        changed_at = instant.isoformat() if hasattr(instant, "isoformat") else str(instant)
+        changed_at = instant.isoformat()
         self._capabilities.revoke_capability(
             user_id=user_id,
             grant_id=grant.grant_id,
@@ -223,7 +256,7 @@ class RepositoryTighteningAdapter:
 
     def append_audit(self, item_id: str, action: str, *, action_id: str) -> None:
         instant = self._clock()
-        created_at = instant.isoformat() if hasattr(instant, "isoformat") else str(instant)
+        created_at = instant.isoformat()
         event = {
             "event_id": action_id,
             "event_type": "privileged_capability_quarantined",
@@ -237,8 +270,8 @@ class RepositoryTighteningAdapter:
         try:
             self._audit.append_event(item_id, event)
         except Exception as exc:
-            duplicate = getattr(self._audit, "DuplicateSecurityAuditEvent", ())
-            if duplicate and isinstance(exc, duplicate):
+            duplicate = self._audit.DuplicateSecurityAuditEvent
+            if isinstance(exc, duplicate):
                 return
             raise
 
@@ -254,7 +287,7 @@ class MemoryCheckpointStore:
         self.completed.add(action_id)
 
 
-def _safe_state(snapshot: IdentitySnapshot) -> dict[str, Any]:
+def _safe_state(snapshot: IdentitySnapshot) -> dict[str, object]:
     recognized_groups = sorted(group for group in snapshot.groups if group in PRIVILEGED_GROUPS)
     return {
         "groupCount": len(snapshot.groups),
@@ -390,9 +423,12 @@ def reconcile_inventory(
             elif action.action == "global_sign_out":
                 adapter.global_sign_out(snapshot.provider_subject, action_id=action_id)
             elif action.action == "remove_grant" and snapshot.user_id:
+                coordinate = action.grant_coordinate
+                if coordinate is None:
+                    raise ValueError("remove_grant requires one full grant coordinate")
                 adapter.revoke_grant(
                     snapshot.user_id,
-                    action.grant_coordinate,
+                    coordinate,
                     action_id=action_id,
                 )
             else:

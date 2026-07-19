@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Awaitable, Callable, Literal
+from typing import Literal, ParamSpec, Protocol, TypeVar, runtime_checkable
 
 from fastapi import Depends, HTTPException, Request
 
@@ -24,9 +25,28 @@ from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
 
 
-async def _record_admin_decision(**kwargs) -> PolicyDecision:
+async def _record_admin_decision(
+    *,
+    actor: Actor,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+    decision: PolicyDecision,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
+    decision_kind: str,
+) -> PolicyDecision:
     try:
-        return await record_authorization_decision(**kwargs)
+        return await record_authorization_decision(
+            actor=actor,
+            resource=resource,
+            action=action,
+            purpose=purpose,
+            decision=decision,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            decision_kind=decision_kind,
+        )
     except SecurityDecisionError as error:
         raise HTTPException(
             error.status_code,
@@ -67,6 +87,24 @@ class AdminTargetProvider:
     resolver: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class AdminAuthorizationContext:
+    request: Request
+    policy: AdminRoutePolicy
+    actor: Actor
+    correlation_id: str
+    audit_sink: AuthorizationAuditSink
+
+
+@runtime_checkable
+class _ModelDump(Protocol):
+    def model_dump(self) -> dict[str, object]: ...
+
+
+EndpointParams = ParamSpec("EndpointParams")
+EndpointResult = TypeVar("EndpointResult")
+
+
 class _ResolvedTargetNotFound(Exception):
     """Internal marker converted to the standard correlated 404 projection."""
 
@@ -76,11 +114,47 @@ def _read_typed_path(value: object, path: str) -> object:
     for part in path.split("."):
         if current is None:
             return None
-        if isinstance(current, dict):
+        if isinstance(current, Mapping):
             current = current.get(part)
         else:
             current = getattr(current, part, None)
     return current
+
+
+def _mapping_value(value: object, *, field: str) -> dict[str, object]:
+    if isinstance(value, _ModelDump):
+        return value.model_dump()
+    if isinstance(value, Mapping) and all(isinstance(key, str) for key in value):
+        return {str(key): item for key, item in value.items()}
+    if value is None:
+        return {}
+    raise ValueError(f"{field} must be an object")
+
+
+def _positive_limit(value: object, *, default: int = 25) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValueError("max_targets must be a positive integer")
+    if isinstance(value, int):
+        limit = value
+    elif isinstance(value, str) and value.isdigit():
+        limit = int(value)
+    else:
+        raise ValueError("max_targets must be a positive integer")
+    if limit < 1:
+        raise ValueError("max_targets must be a positive integer")
+    return limit
+
+
+def _string_sequence(value: object, *, field: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError(f"{field} must be a string collection")
+    if not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{field} must contain only strings")
+    return list(value)
 
 
 def _canonical_coordinate(values: tuple[tuple[str, str], ...]) -> str:
@@ -102,9 +176,10 @@ def _provider_refs(
     if provider.resolver == "report_recovery_filters":
         from stoa.services import report_recovery_job_service
 
-        filters = _read_typed_path(body, "filters")
-        filter_values = filters.model_dump() if hasattr(filters, "model_dump") else dict(filters or {})
-        max_targets = int(_read_typed_path(body, "max_targets") or 25)
+        filter_values = _mapping_value(
+            _read_typed_path(body, "filters"), field="filters"
+        )
+        max_targets = _positive_limit(_read_typed_path(body, "max_targets"))
         job_type = (
             report_recovery_job_service.GENERATION_RETRY_JOB_TYPE
             if "retry-generation" in request.url.path
@@ -115,8 +190,8 @@ def _provider_refs(
         )
         # The resolver materializes identity only.  Preview-token/business-state
         # validation remains in the endpoint service after exact authorization.
-        refs = []
-        seen = set()
+        resolved_refs: list[ResourceRef] = []
+        resolved_seen: set[str] = set()
         for target in targets:
             coordinates = tuple(
                 (field, str(target[field]))
@@ -126,27 +201,27 @@ def _provider_refs(
             if not coordinates:
                 raise ValueError("resolved target is malformed")
             coordinate = _canonical_coordinate(coordinates)
-            if coordinate in seen:
+            if coordinate in resolved_seen:
                 raise ValueError("duplicate canonical target")
-            seen.add(coordinate)
-            refs.append(ResourceRef(
+            resolved_seen.add(coordinate)
+            resolved_refs.append(ResourceRef(
                 policy.resource_type,
                 coordinate,
                 str(target.get("student_id") or target.get("parent_id") or actor.user_id),
                 relationship_known=True,
             ))
-        if not refs and provider.required:
+        if not resolved_refs and provider.required:
             raise ValueError("resolved target collection is required")
-        if not refs:
-            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
-        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+        if not resolved_refs:
+            resolved_refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(resolved_refs, key=lambda ref: (ref.resource_id, ref.student_id)))
     if provider.resolver == "report_recovery_resume":
         from stoa.db.repositories import report_repo
         from stoa.services import report_recovery_job_service
 
         job_id = str(request_values.get("job_id") or "")
-        max_targets = int(_read_typed_path(body, "max_targets") or 25)
-        results = list(_read_typed_path(body, "results") or ())
+        max_targets = _positive_limit(_read_typed_path(body, "max_targets"))
+        results = _string_sequence(_read_typed_path(body, "results"), field="results")
         normalized = report_recovery_job_service._normalized_resume_results(results)  # noqa: SLF001
         source_job = report_repo.get_recovery_job(job_id)
         if not source_job:
@@ -172,8 +247,8 @@ def _provider_refs(
         targets = report_recovery_job_service._collect_resume_targets(  # noqa: SLF001
             job_id, result_filters=normalized, max_targets=max_targets
         )
-        refs = []
-        seen = set()
+        resume_refs: list[ResourceRef] = []
+        resume_seen: set[str] = set()
         for target in targets:
             coordinates = tuple(
                 (field, str(target[field]))
@@ -181,19 +256,19 @@ def _provider_refs(
                 if target.get(field) not in (None, "")
             )
             coordinate = _canonical_coordinate(coordinates)
-            if not coordinates or coordinate in seen:
+            if not coordinates or coordinate in resume_seen:
                 raise ValueError("malformed or duplicate resolved target")
-            seen.add(coordinate)
-            refs.append(ResourceRef(
+            resume_seen.add(coordinate)
+            resume_refs.append(ResourceRef(
                 policy.resource_type, coordinate,
                 str(target.get("student_id") or target.get("parent_id") or actor.user_id),
                 relationship_known=True,
             ))
-        if not refs and provider.required:
+        if not resume_refs and provider.required:
             raise ValueError("resolved target collection is required")
-        if not refs:
-            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
-        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+        if not resume_refs:
+            resume_refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(resume_refs, key=lambda ref: (ref.resource_id, ref.student_id)))
     if provider.resolver == "support_handoff":
         from stoa.db.repositories import report_repo
 
@@ -202,7 +277,9 @@ def _provider_refs(
         consumes_recovery_evidence = destination in {
             "preview", "copy", "download", "internal_queue", "third_party_support",
         }
-        for job_id in list(_read_typed_path(body, "recovery_job_ids") or ()):
+        for job_id in _string_sequence(
+            _read_typed_path(body, "recovery_job_ids"), field="recovery_job_ids"
+        ):
             if not consumes_recovery_evidence:
                 coordinate_maps.append({"job_id": str(job_id)})
                 continue
@@ -226,22 +303,22 @@ def _provider_refs(
             }
             if fixture_values:
                 coordinate_maps.append(fixture_values)
-        refs = []
-        seen = set()
+        handoff_refs: list[ResourceRef] = []
+        handoff_seen: set[str] = set()
         for values in coordinate_maps:
             coordinates = tuple((key, values[key]) for key in ("job_id", "parent_id", "student_id", "week_start") if key in values)
             coordinate = _canonical_coordinate(coordinates)
-            if coordinate in seen:
+            if coordinate in handoff_seen:
                 raise ValueError("duplicate canonical target")
-            seen.add(coordinate)
-            refs.append(ResourceRef(
+            handoff_seen.add(coordinate)
+            handoff_refs.append(ResourceRef(
                 policy.resource_type, coordinate,
                 values.get("student_id") or values.get("parent_id") or actor.user_id,
                 relationship_known=True,
             ))
-        if not refs:
-            refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
-        return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+        if not handoff_refs:
+            handoff_refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+        return tuple(sorted(handoff_refs, key=lambda ref: (ref.resource_id, ref.student_id)))
     items: list[object]
     if provider.collection_path:
         raw = _read_typed_path(body, provider.collection_path)
@@ -253,10 +330,10 @@ def _provider_refs(
     if provider.required and not items:
         raise ValueError("target collection is required")
 
-    refs: list[ResourceRef] = []
-    seen: set[str] = set()
+    provider_refs: list[ResourceRef] = []
+    provider_seen: set[str] = set()
     for item in items:
-        coordinates: list[tuple[str, str]] = []
+        provider_coordinates: list[tuple[str, str]] = []
         for field in provider.tuple_fields:
             body_path = field
             if provider.collection_path and body_path.startswith(provider.collection_path + "."):
@@ -267,92 +344,118 @@ def _provider_refs(
                 raise ValueError("conflicting target coordinates")
             selected = body_value if body_value not in (None, "") else request_value
             if selected not in (None, ""):
-                coordinates.append((field, str(selected)))
+                provider_coordinates.append((field, str(selected)))
         # Path/query coordinates enrich the same scalar tuple.
         if provider.cardinality == "scalar":
-            present = {key for key, _ in coordinates}
+            present = {key for key, _ in provider_coordinates}
             for field in policy.target_keys:
                 selected = request_values.get(field)
                 if selected not in (None, "") and field not in present:
-                    coordinates.append((field, str(selected)))
-        if not coordinates:
+                    provider_coordinates.append((field, str(selected)))
+        if not provider_coordinates:
             if provider.required:
                 raise ValueError("target coordinate is required")
             continue
-        coordinate = _canonical_coordinate(tuple(coordinates))
-        if coordinate in seen:
+        coordinate = _canonical_coordinate(tuple(provider_coordinates))
+        if coordinate in provider_seen:
             raise ValueError("duplicate canonical target")
-        seen.add(coordinate)
-        values = dict(coordinates)
-        leaf_values = {key.rsplit(".", 1)[-1]: value for key, value in coordinates}
+        provider_seen.add(coordinate)
+        leaf_values = {
+            key.rsplit(".", 1)[-1]: value for key, value in provider_coordinates
+        }
         student_id = str(
             leaf_values.get("student_id")
             or leaf_values.get("user_id")
             or leaf_values.get("parent_id")
             or actor.user_id
         )
-        refs.append(ResourceRef(policy.resource_type, coordinate, student_id, relationship_known=True))
-    if not refs and not provider.required:
-        refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
-    return tuple(sorted(refs, key=lambda ref: (ref.resource_id, ref.student_id)))
+        provider_refs.append(ResourceRef(policy.resource_type, coordinate, student_id, relationship_known=True))
+    if not provider_refs and not provider.required:
+        provider_refs.append(ResourceRef(policy.resource_type, "global", actor.user_id, relationship_known=True))
+    return tuple(sorted(provider_refs, key=lambda ref: (ref.resource_id, ref.student_id)))
 
 
-def admin_target_provider(provider: AdminTargetProvider):
+def _exception_status(error: Exception) -> int:
+    value = getattr(error, "status_code", 500)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 500
+
+
+def admin_target_provider(
+    provider: AdminTargetProvider,
+) -> Callable[
+    [Callable[EndpointParams, Awaitable[EndpointResult]]],
+    Callable[EndpointParams, Awaitable[EndpointResult]],
+]:
     """Wrap a registered endpoint so validated typed targets are authorized first."""
 
-    def decorate(endpoint: Callable[..., Awaitable[Any]]):
+    def decorate(
+        endpoint: Callable[EndpointParams, Awaitable[EndpointResult]],
+    ) -> Callable[EndpointParams, Awaitable[EndpointResult]]:
         @wraps(endpoint)
-        async def wrapped(*args, **kwargs):
+        async def wrapped(
+            *args: EndpointParams.args, **kwargs: EndpointParams.kwargs
+        ) -> EndpointResult:
             user = kwargs.get("user")
             if not isinstance(user, dict) or "_admin_authorization" not in user:
                 raise RuntimeError("typed admin target provider lacks authorization context")
             context = user["_admin_authorization"]
+            if not isinstance(context, AdminAuthorizationContext):
+                raise RuntimeError("typed admin target provider has invalid authorization context")
             body = kwargs.get(provider.body_parameter)
             try:
                 refs = _provider_refs(
                     provider,
                     body,
-                    context["request"],
-                    context["policy"],
-                    context["actor"],
+                    context.request,
+                    context.policy,
+                    context.actor,
                 )
             except HTTPException:
                 raise
             except _ResolvedTargetNotFound as exc:
                 raise _admin_http_error(
-                    SecurityDecisionError(
-                        SecurityErrorCode.RESOURCE_NOT_FOUND,
-                        context["correlation_id"],
+                        SecurityDecisionError(
+                            SecurityErrorCode.RESOURCE_NOT_FOUND,
+                            context.correlation_id,
                     )
                 ) from exc
             except (TypeError, ValueError) as exc:
                 error = SecurityDecisionError(
                     SecurityErrorCode.ACTION_NOT_ALLOWED,
-                    context["correlation_id"],
+                    context.correlation_id,
                     internal_detail=type(exc).__name__,
                 )
                 raise _admin_http_error(error) from exc
             except Exception as exc:
-                if int(getattr(exc, "status_code", 500)) == 422:
+                status_code = _exception_status(exc)
+                if status_code == 422:
+                    detail = getattr(exc, "detail", "Invalid recovery target selection")
                     raise HTTPException(
                         status_code=422,
-                        detail=str(getattr(exc, "detail", "Invalid recovery target selection")),
+                        detail=str(detail),
                     ) from exc
                 code = (
                     SecurityErrorCode.ACTION_NOT_ALLOWED
-                    if 400 <= int(getattr(exc, "status_code", 500)) < 500
+                    if 400 <= status_code < 500
                     else SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
                 )
                 error = SecurityDecisionError(
                     code,
-                    context["correlation_id"],
+                    context.correlation_id,
                     internal_detail=type(exc).__name__,
                 )
                 raise _admin_http_error(error) from exc
-            await _authorize_admin_refs(refs=refs, **context)
+            await _authorize_admin_refs(
+                refs=refs,
+                request=context.request,
+                policy=context.policy,
+                actor=context.actor,
+                correlation_id=context.correlation_id,
+                audit_sink=context.audit_sink,
+            )
             return await endpoint(*args, **kwargs)
 
-        wrapped.admin_target_provider = provider  # type: ignore[attr-defined]
+        setattr(wrapped, "admin_target_provider", provider)
         return wrapped
 
     return decorate
@@ -672,13 +775,13 @@ async def admin_operation(
             "role": actor.role.value,
             "account_status": actor.account_status.value,
             "capabilities": {grant.capability: "granted" for grant in actor.current_grants},
-            "_admin_authorization": {
-                "request": request,
-                "policy": policy,
-                "actor": actor,
-                "correlation_id": correlation_id,
-                "audit_sink": audit_sink,
-            },
+            "_admin_authorization": AdminAuthorizationContext(
+                request=request,
+                policy=policy,
+                actor=actor,
+                correlation_id=correlation_id,
+                audit_sink=audit_sink,
+            ),
         }
     try:
         resource_id, student_id = await _target(request, policy, actor, correlation_id)
@@ -735,4 +838,4 @@ async def admin_operation(
     }
 
 
-admin_operation.admin_policy_classifier = classify_admin_route  # type: ignore[attr-defined]
+setattr(admin_operation, "admin_policy_classifier", classify_admin_route)

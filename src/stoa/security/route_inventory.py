@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from types import UnionType
-from typing import Annotated, Any, Callable, Iterable, Literal, Union, get_args, get_origin
+from typing import (
+    Annotated,
+    Callable,
+    Iterable,
+    Literal,
+    ParamSpec,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from fastapi import FastAPI
 from fastapi.dependencies.models import Dependant
@@ -18,6 +28,8 @@ from stoa.security.authorization import AuthorizationSpec, ResourceType
 
 RouteAccess = Literal["public", "authenticated-global"]
 IdentifierScope = Literal["command-local", "self-only"]
+EndpointParams = ParamSpec("EndpointParams")
+EndpointResult = TypeVar("EndpointResult")
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,14 +57,14 @@ class RouteInventoryItem:
     identifiers: tuple[str, ...]
     authorization_specs: tuple[InventorySpec, ...]
     sensitive: bool
-    admin_target: dict[str, Any] | None = None
+    admin_target: dict[str, object] | None = None
 
     @property
     def authorization_spec(self) -> InventorySpec | None:
         return self.authorization_specs[0] if self.authorization_specs else None
 
-    def projection(self) -> dict[str, Any]:
-        projection = {
+    def projection(self) -> dict[str, object]:
+        projection: dict[str, object] = {
             "method": self.method,
             "path": self.path,
             "family": self.family,
@@ -85,14 +97,17 @@ def explicit_route_classification(
     if not reason.strip():
         raise ValueError("route classification reason is required")
 
-    def decorate(endpoint: Callable[..., Any]) -> Callable[..., Any]:
-        endpoint.stoa_route_classification = ExplicitRouteClassification(  # type: ignore[attr-defined]
+    def decorate(
+        endpoint: Callable[EndpointParams, EndpointResult],
+    ) -> Callable[EndpointParams, EndpointResult]:
+        classification = ExplicitRouteClassification(
             access,
             reason.strip(),
             tuple(allowed_identifiers),
             identifier_scope,
         )
-        endpoint.__route_auth_classification__ = endpoint.stoa_route_classification  # type: ignore[attr-defined]
+        setattr(endpoint, "stoa_route_classification", classification)
+        setattr(endpoint, "__route_auth_classification__", classification)
         return endpoint
 
     return decorate
@@ -111,7 +126,7 @@ def _walk_dependants(root: Dependant) -> Iterable[Dependant]:
 
 
 def _field_aliases(
-    annotation: Any,
+    annotation: object,
     *,
     prefix: str = "",
     model_path: frozenset[type[BaseModel]] = frozenset(),
@@ -207,7 +222,7 @@ def _route_body_aliases(route: APIRoute) -> tuple[str, ...]:
     return tuple(sorted(aliases))
 
 
-def _target_projection(provider: AdminTargetProvider | None) -> dict[str, Any] | None:
+def _target_projection(provider: AdminTargetProvider | None) -> dict[str, object] | None:
     if provider is None:
         return None
     return {
@@ -569,14 +584,14 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
     )
 
 
-def inventory_projection(app: FastAPI) -> list[dict[str, Any]]:
+def inventory_projection(app: FastAPI) -> list[dict[str, object]]:
     return [item.projection() for item in inventory_application(app)]
 
 
 def install_authorization_openapi(app: FastAPI) -> None:
     """Install one OpenAPI projection backed by the same validated inventory."""
 
-    def custom_openapi() -> dict[str, Any]:
+    def custom_openapi() -> dict[str, object]:
         if app.openapi_schema is not None:
             return app.openapi_schema
         schema = get_openapi(
@@ -584,7 +599,7 @@ def install_authorization_openapi(app: FastAPI) -> None:
         )
         for item in inventory_application(app):
             operation = schema["paths"][item.path][item.method.lower()]
-            extension = {
+            extension: dict[str, object] = {
                 "classification": item.classification,
                 "identifiers": list(item.identifiers),
                 "authorization": [asdict(spec) for spec in item.authorization_specs],
@@ -595,4 +610,4 @@ def install_authorization_openapi(app: FastAPI) -> None:
         app.openapi_schema = schema
         return schema
 
-    app.openapi = custom_openapi  # type: ignore[method-assign]
+    setattr(app, "openapi", custom_openapi)

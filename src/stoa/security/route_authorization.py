@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from inspect import isawaitable
+from typing import NoReturn
 
 from fastapi import Depends, HTTPException, Query
 
@@ -20,6 +21,7 @@ from stoa.security.authorization import (
     CurrentAuthorizationFactRepository,
     PolicyDecision,
     ResourceRef,
+    ResourceResolver,
     ResourceType,
     authorize_and_resolve,
     operator_capability_decision,
@@ -46,15 +48,14 @@ def safe_public_dependency(resource_type: ResourceType):
     ) -> Actor:
         return actor
 
-    dependency.safe_public = True  # type: ignore[attr-defined]
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             resource_type,
             AuthorizationAction.READ,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         ),
-    )
+    ), safe_public=True)
     return dependency
 
 
@@ -67,7 +68,7 @@ def get_authorization_policy() -> AuthorizationPolicy:
     return AuthorizationPolicy()
 
 
-def _raise_http(error: SecurityDecisionError) -> None:
+def _raise_http(error: SecurityDecisionError) -> NoReturn:
     headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
     raise HTTPException(
         status_code=error.status_code,
@@ -76,9 +77,28 @@ def _raise_http(error: SecurityDecisionError) -> None:
     ) from error
 
 
-async def _record_or_raise(**kwargs) -> PolicyDecision:
+async def _record_or_raise(
+    *,
+    actor: Actor,
+    resource: ResourceRef,
+    action: AuthorizationAction,
+    purpose: AuthorizationPurpose,
+    decision: PolicyDecision,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
+    decision_kind: str,
+) -> PolicyDecision:
     try:
-        return await record_authorization_decision(**kwargs)
+        return await record_authorization_decision(
+            actor=actor,
+            resource=resource,
+            action=action,
+            purpose=purpose,
+            decision=decision,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            decision_kind=decision_kind,
+        )
     except SecurityDecisionError as error:
         _raise_http(error)
 
@@ -93,9 +113,24 @@ def _metadata_spec(
     resource_type: ResourceType,
     action: AuthorizationAction,
     purpose: AuthorizationPurpose,
-    resolver: Callable,
+    resolver: ResourceResolver,
 ) -> AuthorizationSpec:
     return AuthorizationSpec(resource_type, action, purpose, resolver)
+
+
+def _set_dependency_metadata(
+    dependency: object,
+    authorization_specs: tuple[AuthorizationSpec, ...],
+    *,
+    safe_public: bool = False,
+    required_capability: str | None = None,
+) -> None:
+    """Attach the runtime metadata inspected by the route inventory."""
+    setattr(dependency, "authorization_specs", authorization_specs)
+    if safe_public:
+        setattr(dependency, "safe_public", True)
+    if required_capability is not None:
+        setattr(dependency, "required_capability", required_capability)
 
 
 def authorized_student_dependency(
@@ -165,10 +200,10 @@ def authorized_student_dependency(
 
     dependency = query_dependency if query_alias else path_dependency
 
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, tuple(
         _metadata_spec(ResourceType.STUDENT, action, purpose, resolve)
         for purpose in purposes.values()
-    )
+    ))
     return dependency
 
 
@@ -219,10 +254,10 @@ def authorized_student_resource_dependency(
         except SecurityDecisionError as error:
             _raise_http(error)
 
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, tuple(
         _metadata_spec(resource_type, action, purpose, resolve)
         for purpose in purposes.values()
-    )
+    ))
     return dependency
 
 
@@ -269,10 +304,10 @@ def authorized_question_dependency(
         except SecurityDecisionError as error:
             _raise_http(error)
 
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, tuple(
         _metadata_spec(ResourceType.QUESTION, action, purpose, resolve)
         for purpose in purposes.values()
-    )
+    ))
     return dependency
 
 
@@ -326,14 +361,14 @@ def authorized_curriculum_answer_dependency():
         except SecurityDecisionError as error:
             _raise_http(error)
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.CURRICULUM_ANSWER,
             AuthorizationAction.READ,
             AuthorizationPurpose.CURRICULUM_ANSWER_READ,
             resolve,
         ),
-    )
+    ))
     return dependency
 
 
@@ -407,14 +442,14 @@ def student_actor_dependency(
             _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
         return actor
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             resource_type,
             action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         ),
-    )
+    ))
     return dependency
 
 
@@ -453,14 +488,14 @@ def notification_self_dependency(
         except SecurityDecisionError as error:
             _raise_http(error)
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             resource_type,
             action,
             AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
             resolve,
         ),
-    )
+    ))
     return dependency
 
 
@@ -506,14 +541,14 @@ def authorized_notification_event_dependency(action: AuthorizationAction):
         except SecurityDecisionError as error:
             _raise_http(error)
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.NOTIFICATION_EVENT,
             action,
             AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
             resolve,
         ),
-    )
+    ))
     return dependency
 
 
@@ -562,14 +597,14 @@ def authorized_notification_push_token_dependency(action: AuthorizationAction):
     async def metadata_resolver(resource_id: str):
         return {"resource_id": resource_id}
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.NOTIFICATION_PUSH_TOKEN,
             action,
             AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
             metadata_resolver,
         ),
-    )
+    ))
     return dependency
 
 
@@ -621,14 +656,14 @@ def teacher_portal_self_dependency(
             _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
         return actor
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.TEACHER_PORTAL,
             action,
             AuthorizationPurpose.SELF_SERVICE,
             resolve,
         ),
-    )
+    ))
     return dependency
 
 
@@ -676,18 +711,17 @@ def teacher_capability_dependency(
             _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
         return actor
 
-    dependency.required_capability = {  # type: ignore[attr-defined]
-        AuthorizationPurpose.TEACHER_DISPATCH: "teacher_dispatch_operator",
-        AuthorizationPurpose.AI_TEACHER_TOOLS: "ai_teacher_tools_operator",
-    }[capability_purpose]
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.TEACHER_PORTAL,
             action,
             capability_purpose,
             resolve,
         ),
-    )
+    ), required_capability={
+        AuthorizationPurpose.TEACHER_DISPATCH: "teacher_dispatch_operator",
+        AuthorizationPurpose.AI_TEACHER_TOOLS: "ai_teacher_tools_operator",
+    }[capability_purpose])
     return dependency
 
 
@@ -744,15 +778,14 @@ def teacher_application_reviewer_dependency(action: AuthorizationAction):
             },
         }
 
-    dependency.required_capability = "teacher_identity_reviewer"  # type: ignore[attr-defined]
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.OPERATOR_RESOURCE,
             action,
             AuthorizationPurpose.IDENTITY_MANAGEMENT,
             resolve,
         ),
-    )
+    ), required_capability="teacher_identity_reviewer")
     return dependency
 
 
@@ -830,10 +863,10 @@ def authorized_conversation_dependency(
     async def metadata_resolver(resource_id: str):
         return resolver(resource_id)
 
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, tuple(
         _metadata_spec(ResourceType.CONVERSATION, action, purpose, metadata_resolver)
         for purpose in purposes.values()
-    )
+    ))
     return dependency
 
 
@@ -928,14 +961,14 @@ def authorized_teacher_resource_dependency(
     async def metadata_resolver(resource_id: str):
         return resolver(resource_id)
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, (
         _metadata_spec(
             resource_type,
             action,
             AuthorizationPurpose.TEACHER_HELP,
             metadata_resolver,
         ),
-    )
+    ))
     return dependency
 
 
@@ -997,13 +1030,13 @@ def authorized_ai_teacher_draft_dependency(
     async def metadata_resolver(resource_id: str):
         return resolver(resource_id)
 
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    _set_dependency_metadata(dependency, tuple(
         _metadata_spec(ResourceType.AI_TEACHER_DRAFT, action, purpose, metadata_resolver)
         for purpose in (
             AuthorizationPurpose.TEACHER_HELP,
             AuthorizationPurpose.AI_TEACHER_TOOLS,
         )
-    )
+    ))
     return dependency
 
 
