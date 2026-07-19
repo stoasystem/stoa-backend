@@ -1,0 +1,45 @@
+{
+  "schema": "stoa.release.candidate-identity.v1",
+  "status": "CLEAN",
+  "identity_source": "execution-time-live-repository-state",
+  "execution_identity": "0ce6ef7946e87ca41d05cb0c395ee58eea66dd61c41a100ede11ba06e9a3582c",
+  "repositories": [
+    {
+      "name": "backend",
+      "root": "/Users/zhdeng/stoa-backend",
+      "head": "feeda5524d65dfe1c624aaedc0bcc6353dcb9746",
+      "tree": "1089bf218cb0d59ddd5cb4dcc870f269ce0e8ce9",
+      "lock_path": "uv.lock",
+      "lock_sha256": "f9f3de7dc008d791eeb29f154abf699ede27d47a95fe4bd6c1661f81b76c600b",
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "clean": true
+    },
+    {
+      "name": "frontend",
+      "root": "/Users/zhdeng/stoa-frontend",
+      "head": "0d0df6fa2a505bca372c5ddfc23e9a1fe3031387",
+      "tree": "b31a21c9bf7480d4312b17b1aa0c32ff6357979f",
+      "lock_path": "package-lock.json",
+      "lock_sha256": "7549be39bf202adaff1f9dd056ba863707b95811b53191b552bbf826296e17e0",
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "clean": true
+    },
+    {
+      "name": "infra",
+      "root": "/Users/zhdeng/stoa-infra",
+      "head": "a4d5cfeb22163d6d7f8f70016a0f98be4732a7a9",
+      "tree": "e2ba82492a63e03237a3f6e36aaf1b7f5aed8fd2",
+      "lock_path": "uv.lock",
+      "lock_sha256": "77605e95bd0bd4e609fd68732855ad596a6c06ef054717646673611b9f581e9e",
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "clean": true
+    }
+  ],
+  "candidate_issued": true,
+  "mutation_count": 0,
+  "repository_mutation": "NOT RUN",
+  "production_infrastructure": "NOT RUN",
+  "production_deploy": "NOT RUN",
+  "production_smoke": "NOT RUN",
+  "production_rollback": "NOT RUN"
+}
