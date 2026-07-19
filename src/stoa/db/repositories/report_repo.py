@@ -1,12 +1,16 @@
 """DynamoDB access patterns for the WeeklyReport entity."""
+
+from __future__ import annotations
+
 import base64
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-from typing import Any, Mapping
+from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -146,14 +150,190 @@ REPORT_TOMBSTONE_ALLOWLIST = frozenset(
 )
 
 
+type ReportItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ReportObjectReconciliationClient(Protocol):
+    def list_object_versions(self, **kwargs: object) -> object: ...
+
+    def head_object(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ReportObjectDeletionClient(Protocol):
+    def delete_object(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ReportObjectVersionLister(Protocol):
+    def list_object_versions(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _RegisterObjectIntentHook(Protocol):
+    def register_report_object_intent(self, item: ReportItem) -> object: ...
+
+
+@runtime_checkable
+class _RecordObjectCoordinateHook(Protocol):
+    def record_report_object_coordinate(
+        self,
+        intent: ReportItem,
+        coordinate: dict[str, str],
+        now_iso: str,
+    ) -> object: ...
+
+
+@runtime_checkable
+class _RegisterEmailIntentHook(Protocol):
+    def register_report_email_intent(self, item: ReportItem) -> object: ...
+
+
+@runtime_checkable
+class _ClaimEmailIntentHook(Protocol):
+    def claim_report_email_intent(
+        self,
+        key: dict[str, str],
+        generation: int,
+        lease_id: str,
+    ) -> object: ...
+
+
+@runtime_checkable
+class _ScrubPrivateRowHook(Protocol):
+    def scrub_report_private_row(
+        self,
+        original: ReportItem,
+        tombstone: ReportItem,
+        owner_id: str,
+        generation: int,
+    ) -> object: ...
+
+
+def _dependency_mapping(value: object) -> ReportItem:
+    if not isinstance(value, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed report dependency response"
+        )
+    result: ReportItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed report dependency response"
+            )
+        result[key] = member
+    return result
+
+
+def _optional_item(value: object) -> ReportItem | None:
+    if value is None:
+        return None
+    return _dependency_mapping(value)
+
+
+def _response_items(response: Mapping[str, object]) -> list[ReportItem]:
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed report dependency response"
+        )
+    return [_dependency_mapping(item) for item in raw_items]
+
+
+def _provider_rows(value: object, error_message: str) -> list[ReportItem]:
+    if not isinstance(value, list):
+        raise account_deletion_repo.AccountDeletionConflict(error_message)
+    try:
+        return [_dependency_mapping(item) for item in value]
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise account_deletion_repo.AccountDeletionConflict(error_message) from exc
+
+
+def _pagination_mapping(value: object) -> ReportItem:
+    if not isinstance(value, Mapping):
+        raise ValueError("Invalid pagination token")
+    result: ReportItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise ValueError("Invalid pagination token")
+        result[key] = member
+    return result
+
+
+def _get_item(table: object, **kwargs: object) -> ReportItem:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        )
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        )
+    return table.put_item(**kwargs)
+
+
+def _query(table: object, **kwargs: object) -> ReportItem:
+    if not isinstance(table, _QueryTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        )
+    return _dependency_mapping(table.query(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> ReportItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        )
+    return _dependency_mapping(table.scan(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        )
+    return table.update_item(**kwargs)
+
+
 @dataclass(frozen=True, slots=True)
 class ReportPrivatePage:
-    items: tuple[dict[str, Any], ...]
+    items: tuple[ReportItem, ...]
     cursor: dict[str, str] | None = None
     unresolved: int = 0
 
 
-def put_report(item: dict) -> None:
+def put_report(item: ReportItem) -> None:
     table = get_table()
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
@@ -171,10 +351,10 @@ def put_report(item: dict) -> None:
             table=table,
         )
         return
-    table.put_item(Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item})
+    _put_item(table, Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item})
 
 
-def try_claim_report_generation(item: dict) -> bool:
+def try_claim_report_generation(item: ReportItem) -> bool:
     table = get_table()
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
@@ -196,7 +376,8 @@ def try_claim_report_generation(item: dict) -> bool:
             return False
         return True
     try:
-        table.put_item(
+        _put_item(
+            table,
             Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
             ConditionExpression="attribute_not_exists(PK)",
         )
@@ -207,12 +388,13 @@ def try_claim_report_generation(item: dict) -> bool:
     return True
 
 
-def update_report_status(report_id: str, status: str, **fields) -> None:
+def update_report_status(report_id: str, status: str, **fields: object) -> None:
     table = get_table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
-    table.update_item(
+    _update_item(
+        table,
         Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
         UpdateExpression="SET " + ", ".join(
             f"{name} = :v{index}" for index, name in enumerate(names)
@@ -227,7 +409,7 @@ def try_apply_report_edit(
     *,
     expected_updated_at: str | None,
     status: str,
-    fields: dict,
+    fields: ReportItem,
 ) -> bool:
     table = get_table()
     update_fields = {"status": status, **fields}
@@ -239,7 +421,8 @@ def try_apply_report_edit(
         condition = "updated_at = :expected_updated_at"
         values[":expected_updated_at"] = expected_updated_at
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names)
@@ -255,9 +438,10 @@ def try_apply_report_edit(
     return True
 
 
-def put_report_edit_draft(report_id: str, draft: dict) -> None:
+def put_report_edit_draft(report_id: str, draft: ReportItem) -> None:
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT#{report_id}",
             "SK": f"EDIT_DRAFT#{draft['draft_id']}",
@@ -268,12 +452,13 @@ def put_report_edit_draft(report_id: str, draft: dict) -> None:
     )
 
 
-def get_report_edit_draft(report_id: str, draft_id: str) -> dict | None:
+def get_report_edit_draft(report_id: str, draft_id: str) -> ReportItem | None:
     table = get_table()
-    response = table.get_item(
+    response = _get_item(
+        table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"}
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
 def mark_report_edit_draft_applied(
@@ -285,7 +470,8 @@ def mark_report_edit_draft_applied(
 ) -> bool:
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"},
             UpdateExpression=(
                 "SET #status = :applied, applied_at = :applied_at, "
@@ -307,9 +493,10 @@ def mark_report_edit_draft_applied(
     return True
 
 
-def put_report_artifact_edit_draft(report_id: str, draft: dict) -> None:
+def put_report_artifact_edit_draft(report_id: str, draft: ReportItem) -> None:
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT#{report_id}",
             "SK": f"ARTIFACT_EDIT_DRAFT#{draft['draft_id']}",
@@ -320,12 +507,13 @@ def put_report_artifact_edit_draft(report_id: str, draft: dict) -> None:
     )
 
 
-def get_report_artifact_edit_draft(report_id: str, draft_id: str) -> dict | None:
+def get_report_artifact_edit_draft(report_id: str, draft_id: str) -> ReportItem | None:
     table = get_table()
-    response = table.get_item(
+    response = _get_item(
+        table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"}
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
 def mark_report_artifact_edit_draft_applied(
@@ -338,7 +526,8 @@ def mark_report_artifact_edit_draft_applied(
 ) -> bool:
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"},
             UpdateExpression=(
                 "SET #status = :applied, applied_at = :applied_at, "
@@ -362,9 +551,10 @@ def mark_report_artifact_edit_draft_applied(
     return True
 
 
-def put_report_artifact_rollback_preview(report_id: str, preview: dict) -> None:
+def put_report_artifact_rollback_preview(report_id: str, preview: ReportItem) -> None:
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT#{report_id}",
             "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview['preview_id']}",
@@ -375,12 +565,15 @@ def put_report_artifact_rollback_preview(report_id: str, preview: dict) -> None:
     )
 
 
-def get_report_artifact_rollback_preview(report_id: str, preview_id: str) -> dict | None:
+def get_report_artifact_rollback_preview(
+    report_id: str, preview_id: str
+) -> ReportItem | None:
     table = get_table()
-    response = table.get_item(
+    response = _get_item(
+        table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"}
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
 def mark_report_artifact_rollback_preview_applied(
@@ -406,7 +599,8 @@ def mark_report_artifact_rollback_preview_applied(
         update_expression += ", artifact_version_id = :artifact_version_id"
         values[":artifact_version_id"] = artifact_version_id
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"},
             UpdateExpression=update_expression,
             ConditionExpression="#status = :draft",
@@ -428,7 +622,7 @@ def try_apply_report_artifact_edit(
     expected_json_s3_key: str | None,
     expected_html_s3_key: str | None,
     status: str,
-    fields: dict,
+    fields: ReportItem,
 ) -> bool:
     table = get_table()
     update_fields = {"status": status, **fields}
@@ -452,7 +646,8 @@ def try_apply_report_artifact_edit(
         conditions.append("html_s3_key = :expected_html_s3_key")
         values[":expected_html_s3_key"] = expected_html_s3_key
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names)
@@ -468,10 +663,11 @@ def try_apply_report_artifact_edit(
     return True
 
 
-def put_report_audit_event(report_id: str, event: dict) -> None:
+def put_report_audit_event(report_id: str, event: ReportItem) -> None:
     """Append one immutable report audit event."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT#{report_id}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -482,10 +678,11 @@ def put_report_audit_event(report_id: str, event: dict) -> None:
     )
 
 
-def put_recovery_job_audit_event(job_id: str, event: dict) -> None:
+def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
     """Append one immutable recovery job audit event."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT_RECOVERY_JOB#{job_id}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -496,10 +693,11 @@ def put_recovery_job_audit_event(job_id: str, event: dict) -> None:
     )
 
 
-def put_support_handoff_audit_event(package_id: str, event: dict) -> None:
+def put_support_handoff_audit_event(package_id: str, event: ReportItem) -> None:
     """Append one immutable support handoff audit event."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"SUPPORT_HANDOFF#{package_id}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -510,17 +708,18 @@ def put_support_handoff_audit_event(package_id: str, event: dict) -> None:
     )
 
 
-def get_support_handoff_delivery_record(delivery_id: str) -> dict | None:
+def get_support_handoff_delivery_record(delivery_id: str) -> ReportItem | None:
     """Return the current support handoff delivery summary, if present."""
     table = get_table()
-    response = table.get_item(
+    response = _get_item(
+        table,
         Key={"PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
-def _support_handoff_delivery_feed_item(delivery: dict) -> dict:
+def _support_handoff_delivery_feed_item(delivery: ReportItem) -> ReportItem:
     created_at = delivery.get("created_at") or delivery.get("updated_at") or ""
     delivery_id = delivery["delivery_id"]
     return {
@@ -531,11 +730,15 @@ def _support_handoff_delivery_feed_item(delivery: dict) -> dict:
     }
 
 
-def _put_support_handoff_delivery_feed_item(table, delivery: dict) -> None:
-    table.put_item(Item=_support_handoff_delivery_feed_item(delivery))
+def _put_support_handoff_delivery_feed_item(
+    table: object, delivery: ReportItem
+) -> None:
+    _put_item(table, Item=_support_handoff_delivery_feed_item(delivery))
 
 
-def put_support_handoff_delivery_record(delivery_id: str, delivery: dict) -> tuple[dict, bool]:
+def put_support_handoff_delivery_record(
+    delivery_id: str, delivery: ReportItem
+) -> tuple[ReportItem, bool]:
     """Persist one provider-neutral support handoff delivery summary.
 
     Returns `(record, created)`. Duplicate deterministic delivery IDs reuse the
@@ -549,7 +752,8 @@ def put_support_handoff_delivery_record(delivery_id: str, delivery: dict) -> tup
         **delivery,
     }
     try:
-        table.put_item(
+        _put_item(
+            table,
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -575,8 +779,8 @@ def update_support_handoff_delivery_status(
     retryable: bool | None = None,
     refusal_reasons: list[str] | None = None,
     failure_reasons: list[str] | None = None,
-    extra_updates: dict | None = None,
-) -> dict | None:
+    extra_updates: ReportItem | None = None,
+) -> ReportItem | None:
     """Update one delivery lifecycle status and keep its feed row current."""
     existing = get_support_handoff_delivery_record(delivery_id)
     if not existing:
@@ -596,7 +800,8 @@ def update_support_handoff_delivery_status(
     if extra_updates:
         updated.update(extra_updates)
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             **updated,
             "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
@@ -608,10 +813,13 @@ def update_support_handoff_delivery_status(
     return updated
 
 
-def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> None:
+def put_support_handoff_delivery_audit_event(
+    delivery_id: str, event: ReportItem
+) -> None:
     """Append one immutable support handoff delivery lifecycle event."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -622,7 +830,7 @@ def put_support_handoff_delivery_audit_event(delivery_id: str, event: dict) -> N
     )
 
 
-def put_support_crm_message_event(delivery_id: str, event: dict) -> None:
+def put_support_crm_message_event(delivery_id: str, event: ReportItem) -> None:
     """Persist one metadata-only support CRM/customer message outcome."""
     table = get_table()
     item = {
@@ -631,8 +839,13 @@ def put_support_crm_message_event(delivery_id: str, event: dict) -> None:
         "entity_type": "SUPPORT_CRM_MESSAGE_EVENT",
         **event,
     }
-    table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)")
-    table.put_item(
+    _put_item(
+        table,
+        Item=item,
+        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+    )
+    _put_item(
+        table,
         Item={
             **item,
             "PK": "SUPPORT_CRM_MESSAGE_FEED",
@@ -642,7 +855,9 @@ def put_support_crm_message_event(delivery_id: str, event: dict) -> None:
     )
 
 
-def list_support_crm_message_events(*, limit: int = 100, last_key: dict | None = None) -> dict:
+def list_support_crm_message_events(
+    *, limit: int = 100, last_key: ReportItem | None = None
+) -> ReportItem:
     """List recent metadata-only support CRM/customer message outcomes."""
     table = get_table()
     kwargs = {
@@ -652,7 +867,7 @@ def list_support_crm_message_events(*, limit: int = 100, last_key: dict | None =
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def list_support_handoff_delivery_summaries(
@@ -663,8 +878,8 @@ def list_support_handoff_delivery_summaries(
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq("SUPPORT_HANDOFF_DELIVERY_FEED")
@@ -683,8 +898,8 @@ def list_support_handoff_delivery_summaries(
         kwargs["FilterExpression"] = filter_expr
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    result = table.query(**kwargs)
-    items = result.get("Items", [])
+    result = _query(table, **kwargs)
+    items = _response_items(result)
     if last_key is None and len(items) < limit:
         fallback = _scan_support_handoff_delivery_summaries(
             status=status,
@@ -695,7 +910,7 @@ def list_support_handoff_delivery_summaries(
             limit=limit - len(items),
         )
         existing_ids = {item.get("delivery_id") for item in items}
-        for item in fallback.get("Items", []):
+        for item in _response_items(fallback):
             if item.get("delivery_id") in existing_ids:
                 continue
             _put_support_handoff_delivery_feed_item(table, item)
@@ -709,8 +924,8 @@ def list_support_handoff_delivery_audit_events(
     delivery_id: str,
     *,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}")
@@ -720,13 +935,14 @@ def list_support_handoff_delivery_audit_events(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
-def put_audit_retention_audit_event(manifest_id: str, event: dict) -> None:
+def put_audit_retention_audit_event(manifest_id: str, event: ReportItem) -> None:
     """Append one metadata-only audit retention event."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"AUDIT_RETENTION#{manifest_id}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -737,11 +953,12 @@ def put_audit_retention_audit_event(manifest_id: str, event: dict) -> None:
     )
 
 
-def put_audit_retention_manifest(manifest_id: str, manifest: dict) -> bool:
+def put_audit_retention_manifest(manifest_id: str, manifest: ReportItem) -> bool:
     """Persist one immutable-evidence manifest reference without overwriting."""
     table = get_table()
     try:
-        table.put_item(
+        _put_item(
+            table,
             Item={
                 "PK": f"AUDIT_RETENTION#{manifest_id}",
                 "SK": "IMMUTABLE_MANIFEST",
@@ -757,17 +974,18 @@ def put_audit_retention_manifest(manifest_id: str, manifest: dict) -> bool:
     return True
 
 
-def get_audit_retention_manifest(manifest_id: str) -> dict | None:
+def get_audit_retention_manifest(manifest_id: str) -> ReportItem | None:
     """Read one persisted immutable-evidence manifest reference."""
-    response = get_table().get_item(
+    response = _get_item(
+        get_table(),
         Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"}
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
 def update_audit_retention_manifest_status(
     manifest_id: str,
-    fields: dict,
+    fields: ReportItem,
     *,
     expected_status: str,
 ) -> bool:
@@ -778,7 +996,8 @@ def update_audit_retention_manifest_status(
     names["#status"] = "status"
     values[":expected_status"] = expected_status
     try:
-        get_table().update_item(
+        _update_item(
+            get_table(),
             Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names) if name != "#status"
@@ -796,13 +1015,13 @@ def update_audit_retention_manifest_status(
 
 def put_legal_hold_metadata(
     scope_key: str,
-    hold: dict,
+    hold: ReportItem,
     *,
     expected_hold_version: int | None = None,
     expected_updated_at: str | None = None,
 ) -> bool:
     """Conditionally store current metadata-only legal hold state for an evidence scope."""
-    values = {}
+    values: dict[str, object] = {}
     if expected_hold_version is not None:
         condition = "hold_version = :expected_hold_version"
         values[":expected_hold_version"] = expected_hold_version
@@ -823,7 +1042,7 @@ def put_legal_hold_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        get_table().put_item(**put_kwargs)
+        _put_item(get_table(), **put_kwargs)
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             return False
@@ -831,18 +1050,20 @@ def put_legal_hold_metadata(
     return True
 
 
-def get_legal_hold_metadata(scope_key: str) -> dict | None:
+def get_legal_hold_metadata(scope_key: str) -> ReportItem | None:
     """Read current metadata-only legal hold state for an evidence scope."""
-    response = get_table().get_item(
+    response = _get_item(
+        get_table(),
         Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
-def put_legal_hold_audit_event(scope_key: str, event: dict) -> None:
+def put_legal_hold_audit_event(scope_key: str, event: ReportItem) -> None:
     """Append one metadata-only legal hold audit event."""
-    get_table().put_item(
+    _put_item(
+        get_table(),
         Item={
             "PK": f"LEGAL_HOLD#{scope_key}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -855,7 +1076,7 @@ def put_legal_hold_audit_event(scope_key: str, event: dict) -> None:
 
 def put_retention_approval_metadata(
     policy_version: str,
-    approval: dict,
+    approval: ReportItem,
     *,
     expected_approval_version: int | None = None,
 ) -> bool:
@@ -878,7 +1099,7 @@ def put_retention_approval_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        get_table().put_item(**put_kwargs)
+        _put_item(get_table(), **put_kwargs)
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             return False
@@ -886,18 +1107,22 @@ def put_retention_approval_metadata(
     return True
 
 
-def get_retention_approval_metadata(policy_version: str) -> dict | None:
+def get_retention_approval_metadata(policy_version: str) -> ReportItem | None:
     """Read current metadata-only retention approval state."""
-    response = get_table().get_item(
+    response = _get_item(
+        get_table(),
         Key={"PK": f"RETENTION_APPROVAL#{policy_version}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
-def put_retention_approval_audit_event(policy_version: str, event: dict) -> None:
+def put_retention_approval_audit_event(
+    policy_version: str, event: ReportItem
+) -> None:
     """Append one metadata-only retention approval audit event."""
-    get_table().put_item(
+    _put_item(
+        get_table(),
         Item={
             "PK": f"RETENTION_APPROVAL#{policy_version}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -910,7 +1135,7 @@ def put_retention_approval_audit_event(policy_version: str, event: dict) -> None
 
 def put_legal_hold_review_metadata(
     scope_key: str,
-    review: dict,
+    review: ReportItem,
     *,
     expected_review_version: int | None = None,
 ) -> bool:
@@ -933,7 +1158,7 @@ def put_legal_hold_review_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        get_table().put_item(**put_kwargs)
+        _put_item(get_table(), **put_kwargs)
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             return False
@@ -941,19 +1166,21 @@ def put_legal_hold_review_metadata(
     return True
 
 
-def get_legal_hold_review_metadata(scope_key: str) -> dict | None:
+def get_legal_hold_review_metadata(scope_key: str) -> ReportItem | None:
     """Read latest metadata-only legal-hold review state for an evidence scope."""
-    response = get_table().get_item(
+    response = _get_item(
+        get_table(),
         Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "REVIEW_SUMMARY"},
         ConsistentRead=True,
     )
-    return response.get("Item")
+    return _optional_item(response.get("Item"))
 
 
-def put_recovery_job(job: dict, targets: list[dict]) -> None:
+def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = get_table()
-    table.put_item(
+    _put_item(
+        table,
         Item={
             "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
             "SK": "SUMMARY",
@@ -963,7 +1190,8 @@ def put_recovery_job(job: dict, targets: list[dict]) -> None:
         ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
     )
     for index, target in enumerate(targets):
-        table.put_item(
+        _put_item(
+            table,
             Item={
                 "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
                 "SK": f"TARGET#{index:05d}#{target['target_id']}",
@@ -976,13 +1204,18 @@ def put_recovery_job(job: dict, targets: list[dict]) -> None:
         )
 
 
-def get_recovery_job(job_id: str) -> dict | None:
+def get_recovery_job(job_id: str) -> ReportItem | None:
     table = get_table()
-    response = table.get_item(Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"})
-    return response.get("Item")
+    response = _get_item(
+        table,
+        Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
+    )
+    return _optional_item(response.get("Item"))
 
 
-def list_recovery_jobs(*, limit: int = 50, last_key: dict | None = None) -> dict:
+def list_recovery_jobs(
+    *, limit: int = 50, last_key: ReportItem | None = None
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "FilterExpression": Attr("PK").begins_with("REPORT_RECOVERY_JOB#") & Attr("SK").eq("SUMMARY"),
@@ -990,10 +1223,15 @@ def list_recovery_jobs(*, limit: int = 50, last_key: dict | None = None) -> dict
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.scan(**kwargs)
+    return _scan(table, **kwargs)
 
 
-def list_recovery_job_targets(job_id: str, *, limit: int = 50, last_key: dict | None = None) -> dict:
+def list_recovery_job_targets(
+    job_id: str,
+    *,
+    limit: int = 50,
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}") & Key("SK").begins_with("TARGET#"),
@@ -1001,13 +1239,14 @@ def list_recovery_job_targets(job_id: str, *, limit: int = 50, last_key: dict | 
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def try_claim_recovery_job(job_id: str, *, started_at: str) -> bool:
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
             UpdateExpression="SET #status = :running, started_at = if_not_exists(started_at, :started_at), updated_at = :started_at",
             ConditionExpression="#status = :queued",
@@ -1028,7 +1267,8 @@ def try_claim_recovery_job(job_id: str, *, started_at: str) -> bool:
 def request_recovery_job_cancellation(job_id: str, *, requested_by: str, requested_at: str) -> bool:
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :cancellation_requested, "
@@ -1053,12 +1293,13 @@ def request_recovery_job_cancellation(job_id: str, *, requested_by: str, request
     return True
 
 
-def update_recovery_job_status(job_id: str, status: str, **fields) -> None:
+def update_recovery_job_status(job_id: str, status: str, **fields: object) -> None:
     table = get_table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
-    table.update_item(
+    _update_item(
+        table,
         Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
         UpdateExpression="SET " + ", ".join(
             f"{name} = :v{index}" for index, name in enumerate(names)
@@ -1071,7 +1312,8 @@ def update_recovery_job_status(job_id: str, status: str, **fields) -> None:
 def try_claim_recovery_job_target(job_id: str, target_sk: str, *, attempted_at: str) -> bool:
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": target_sk},
             UpdateExpression="SET #result = :in_progress, attempted_at = :attempted_at, updated_at = :attempted_at",
             ConditionExpression="#result = :pending",
@@ -1089,12 +1331,18 @@ def try_claim_recovery_job_target(job_id: str, target_sk: str, *, attempted_at: 
     return True
 
 
-def update_recovery_job_target(job_id: str, target_sk: str, result: str, **fields) -> None:
+def update_recovery_job_target(
+    job_id: str,
+    target_sk: str,
+    result: str,
+    **fields: object,
+) -> None:
     table = get_table()
     update_fields = {"result": result, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
-    table.update_item(
+    _update_item(
+        table,
         Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": target_sk},
         UpdateExpression="SET " + ", ".join(
             f"{name} = :v{index}" for index, name in enumerate(names)
@@ -1108,8 +1356,8 @@ def list_report_audit_events(
     report_id: str,
     *,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT#{report_id}") & Key("SK").begins_with("AUDIT#"),
@@ -1118,15 +1366,15 @@ def list_report_audit_events(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def list_recovery_job_audit_events(
     job_id: str,
     *,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}")
@@ -1136,15 +1384,15 @@ def list_recovery_job_audit_events(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def list_support_handoff_audit_events(
     package_id: str,
     *,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"SUPPORT_HANDOFF#{package_id}")
@@ -1154,14 +1402,15 @@ def list_support_handoff_audit_events(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: str) -> bool:
     """Atomically claim a generation-failed report for one admin retry."""
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :retrying, "
@@ -1194,7 +1443,8 @@ def try_claim_report_resend(report_id: str, *, operator: str, attempted_at: str)
     """Atomically claim a failed email report before resend side effects."""
     table = get_table()
     try:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :resending, "
@@ -1224,30 +1474,38 @@ def try_claim_report_resend(report_id: str, *, operator: str, attempted_at: str)
     return True
 
 
-def get_report_by_week(parent_id: str, week_start: str) -> dict | None:
+def get_report_by_week(parent_id: str, week_start: str) -> ReportItem | None:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         IndexName="GSI-ParentId",
         KeyConditionExpression=Key("parent_id").eq(parent_id) & Key("week_start").eq(week_start),
         Limit=1,
     )
-    items = resp.get("Items", [])
+    items = _response_items(resp)
     return items[0] if items else None
 
 
-def get_report_for_child_by_week(parent_id: str, student_id: str, week_start: str) -> dict | None:
-    last_key = None
+def get_report_for_child_by_week(
+    parent_id: str, student_id: str, week_start: str
+) -> ReportItem | None:
+    last_key: ReportItem | None = None
     while True:
         result = list_reports_for_parent_week(parent_id, week_start, last_key=last_key)
-        for item in result.get("Items", []):
+        for item in _response_items(result):
             if item.get("SK") == "SUMMARY" and item.get("student_id") == student_id:
                 return item
-        last_key = result.get("LastEvaluatedKey")
-        if not last_key:
+        raw_last_key = result.get("LastEvaluatedKey")
+        if raw_last_key is None:
             return None
+        if not isinstance(raw_last_key, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed report dependency response"
+            )
+        last_key = _dependency_mapping(raw_last_key)
 
 
-def encode_page_token(last_key: dict | None) -> str | None:
+def encode_page_token(last_key: ReportItem | None) -> str | None:
     """Encode a DynamoDB LastEvaluatedKey as an opaque API token."""
     if not last_key:
         return None
@@ -1255,23 +1513,21 @@ def encode_page_token(last_key: dict | None) -> str | None:
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_page_token(token: str | None) -> dict | None:
+def decode_page_token(token: str | None) -> ReportItem | None:
     """Decode an opaque API token into a DynamoDB ExclusiveStartKey."""
     if not token:
         return None
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = json.loads(raw)
+        decoded = _pagination_mapping(json.loads(raw))
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
-    if not isinstance(decoded, dict):
-        raise ValueError("Invalid pagination token")
     if not _is_valid_report_page_key(decoded):
         raise ValueError("Invalid pagination token")
     return decoded
 
 
-def encode_admin_page_token(last_key: dict | None) -> str | None:
+def encode_admin_page_token(last_key: ReportItem | None) -> str | None:
     """Encode an admin report-ops page token.
 
     Cross-parent admin listing uses DynamoDB Scan with a FilterExpression. Scan
@@ -1289,25 +1545,25 @@ def encode_admin_page_token(last_key: dict | None) -> str | None:
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_admin_page_token(token: str | None) -> dict | None:
+def decode_admin_page_token(token: str | None) -> ReportItem | None:
     """Decode an admin report-ops page token into an ExclusiveStartKey."""
     if not token:
         return None
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = json.loads(raw)
+        decoded = _pagination_mapping(json.loads(raw))
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_admin_page_payload(decoded):
-        return decoded["key"]
+        return _pagination_mapping(decoded.get("key"))
     # Backward compatibility for older admin report tokens that encoded the
     # report LastEvaluatedKey directly.
-    if isinstance(decoded, dict) and _is_valid_report_page_key(decoded):
+    if _is_valid_report_page_key(decoded):
         return decoded
     raise ValueError("Invalid pagination token")
 
 
-def encode_audit_page_token(last_key: dict | None) -> str | None:
+def encode_audit_page_token(last_key: ReportItem | None) -> str | None:
     """Encode an audit timeline page token."""
     if not last_key:
         return None
@@ -1319,21 +1575,21 @@ def encode_audit_page_token(last_key: dict | None) -> str | None:
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_audit_page_token(token: str | None) -> dict | None:
+def decode_audit_page_token(token: str | None) -> ReportItem | None:
     """Decode an audit timeline page token into an ExclusiveStartKey."""
     if not token:
         return None
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = json.loads(raw)
+        decoded = _pagination_mapping(json.loads(raw))
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_audit_page_payload(decoded):
-        return decoded["key"]
+        return _pagination_mapping(decoded.get("key"))
     raise ValueError("Invalid pagination token")
 
 
-def encode_recovery_job_page_token(last_key: dict | None) -> str | None:
+def encode_recovery_job_page_token(last_key: ReportItem | None) -> str | None:
     """Encode recovery job list/result pagination keys."""
     if not last_key:
         return None
@@ -1345,21 +1601,23 @@ def encode_recovery_job_page_token(last_key: dict | None) -> str | None:
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_recovery_job_page_token(token: str | None) -> dict | None:
+def decode_recovery_job_page_token(token: str | None) -> ReportItem | None:
     """Decode recovery job pagination token into an ExclusiveStartKey."""
     if not token:
         return None
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = json.loads(raw)
+        decoded = _pagination_mapping(json.loads(raw))
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_recovery_job_page_payload(decoded):
-        return decoded["key"]
+        return _pagination_mapping(decoded.get("key"))
     raise ValueError("Invalid pagination token")
 
 
-def encode_support_handoff_delivery_page_token(last_key: dict | None) -> str | None:
+def encode_support_handoff_delivery_page_token(
+    last_key: ReportItem | None,
+) -> str | None:
     """Encode support handoff delivery list/audit pagination keys."""
     if not last_key:
         return None
@@ -1371,17 +1629,19 @@ def encode_support_handoff_delivery_page_token(last_key: dict | None) -> str | N
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_support_handoff_delivery_page_token(token: str | None) -> dict | None:
+def decode_support_handoff_delivery_page_token(
+    token: str | None,
+) -> ReportItem | None:
     """Decode support handoff delivery pagination token into an ExclusiveStartKey."""
     if not token:
         return None
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = json.loads(raw)
+        decoded = _pagination_mapping(json.loads(raw))
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_support_handoff_delivery_page_payload(decoded):
-        return decoded["key"]
+        return _pagination_mapping(decoded.get("key"))
     raise ValueError("Invalid pagination token")
 
 
@@ -1392,8 +1652,8 @@ def list_reports_for_admin(
     parent_id: str | None = None,
     student_id: str | None = None,
     limit: int = 50,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     """List report summary rows for admin operations.
 
     Parent-filtered access uses the existing parent/week GSI where possible.
@@ -1425,10 +1685,10 @@ def _list_reports_for_admin_parent_query(
     week_start: str | None,
     student_id: str | None,
     limit: int,
-    last_key: dict | None,
-) -> dict:
+    last_key: ReportItem | None,
+) -> ReportItem:
     table = get_table()
-    key_expr = Key("parent_id").eq(parent_id)
+    key_expr: ConditionBase = Key("parent_id").eq(parent_id)
     if week_start:
         key_expr = key_expr & Key("week_start").eq(week_start)
 
@@ -1443,7 +1703,7 @@ def _list_reports_for_admin_parent_query(
         kwargs["FilterExpression"] = filter_expr
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def _list_reports_for_admin_scan(
@@ -1452,8 +1712,8 @@ def _list_reports_for_admin_scan(
     week_start: str | None,
     student_id: str | None,
     limit: int,
-    last_key: dict | None,
-) -> dict:
+    last_key: ReportItem | None,
+) -> ReportItem:
     table = get_table()
     filter_expr = Attr("PK").begins_with("REPORT#") & Attr("SK").eq("SUMMARY")
     extra_filter = _admin_report_filter_expression(
@@ -1469,7 +1729,7 @@ def _list_reports_for_admin_scan(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.scan(**kwargs)
+    return _scan(table, **kwargs)
 
 
 def _admin_report_filter_expression(
@@ -1477,8 +1737,8 @@ def _admin_report_filter_expression(
     status: str | None = None,
     week_start: str | None = None,
     student_id: str | None = None,
-):
-    filter_expr = None
+) -> ConditionBase | None:
+    filter_expr: ConditionBase | None = None
     if status:
         filter_expr = Attr("status").eq(status)
     if week_start:
@@ -1497,8 +1757,8 @@ def _support_handoff_delivery_filter_expression(
     package_id: str | None,
     date_from: str | None,
     date_to: str | None,
-):
-    filter_expr = None
+) -> ConditionBase | None:
+    filter_expr: ConditionBase | None = None
     if status:
         filter_expr = Attr("status").eq(status)
     if destination_mode:
@@ -1524,7 +1784,7 @@ def _scan_support_handoff_delivery_summaries(
     date_from: str | None,
     date_to: str | None,
     limit: int,
-) -> dict:
+) -> ReportItem:
     if limit <= 0:
         return {"Items": []}
     table = get_table()
@@ -1538,16 +1798,16 @@ def _scan_support_handoff_delivery_summaries(
     )
     if extra_filter is not None:
         filter_expr = filter_expr & extra_filter
-    result = table.scan(FilterExpression=filter_expr, Limit=limit)
+    result = _scan(table, FilterExpression=filter_expr, Limit=limit)
     items = sorted(
-        result.get("Items", []),
+        _response_items(result),
         key=lambda item: (str(item.get("created_at") or ""), str(item.get("delivery_id") or "")),
         reverse=True,
     )
     return {"Items": items[:limit]}
 
 
-def _is_valid_report_page_key(decoded: dict) -> bool:
+def _is_valid_report_page_key(decoded: Mapping[str, object]) -> bool:
     pk = decoded.get("PK")
     sk = decoded.get("SK")
     return (
@@ -1621,8 +1881,8 @@ def _is_valid_support_handoff_delivery_page_payload(decoded: object) -> bool:
 def list_reports_for_parent_week(
     parent_id: str,
     week_start: str,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "IndexName": "GSI-ParentId",
@@ -1631,14 +1891,14 @@ def list_reports_for_parent_week(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def list_reports_for_parent(
     parent_id: str,
     limit: int = 25,
-    last_key: dict | None = None,
-) -> dict:
+    last_key: ReportItem | None = None,
+) -> ReportItem:
     table = get_table()
     kwargs = {
         "IndexName": "GSI-ParentId",
@@ -1649,7 +1909,7 @@ def list_reports_for_parent(
     }
     if last_key:
         kwargs["ExclusiveStartKey"] = last_key
-    return table.query(**kwargs)
+    return _query(table, **kwargs)
 
 
 def _required_private_string(value: object, name: str) -> str:
@@ -1658,7 +1918,7 @@ def _required_private_string(value: object, name: str) -> str:
     return value.strip()
 
 
-def _validated_report_cursor(value: Mapping[str, Any]) -> dict[str, str]:
+def _validated_report_cursor(value: Mapping[str, object]) -> dict[str, str]:
     if set(value) != {"PK", "SK"}:
         raise account_deletion_repo.AccountDeletionConflict("invalid report cursor")
     return {
@@ -1677,9 +1937,9 @@ def register_report_object_intent(
     object_key: str,
     body: bytes,
     now_iso: str,
-    table: Any | None = None,
+    table: object | None = None,
     manifest_id: str | None = None,
-) -> dict[str, Any]:
+) -> ReportItem:
     """Persist exact object identity before a private provider write."""
     if isinstance(generation, bool) or not isinstance(generation, int) or generation <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid report generation")
@@ -1707,10 +1967,9 @@ def register_report_object_intent(
         "updated_at": now_iso,
     }
     target = table or get_table()
-    hook = getattr(target, "register_report_object_intent", None)
-    if callable(hook):
-        persisted = hook(dict(item))
-        return dict(persisted or item)
+    if isinstance(target, _RegisterObjectIntentHook):
+        persisted = target.register_report_object_intent(dict(item))
+        return _dependency_mapping(persisted) if persisted is not None else item
     account_deletion_repo.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
@@ -1726,7 +1985,7 @@ def register_report_object_intent(
     return item
 
 
-def parse_report_object_ack(response: Mapping[str, Any]) -> dict[str, str]:
+def parse_report_object_ack(response: Mapping[str, object]) -> dict[str, str]:
     version_id = _required_private_string(response.get("VersionId"), "VersionId")
     raw_etag = _required_private_string(response.get("ETag"), "ETag")
     etag = raw_etag.strip('"')
@@ -1736,12 +1995,12 @@ def parse_report_object_ack(response: Mapping[str, Any]) -> dict[str, str]:
 
 
 def record_report_object_coordinate(
-    intent: Mapping[str, Any],
+    intent: Mapping[str, object],
     coordinate: Mapping[str, str],
     *,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> ReportItem:
     """Link only an exact registered intent while its owner remains active."""
     owner = _required_private_string(intent.get("owner_id"), "owner_id")
     generation = intent.get("account_fence_generation")
@@ -1757,10 +2016,11 @@ def record_report_object_coordinate(
         "updated_at": now_iso,
     }
     target = table or get_table()
-    hook = getattr(target, "record_report_object_coordinate", None)
-    if callable(hook):
-        persisted = hook(dict(intent), dict(coordinate), now_iso)
-        return dict(persisted or updated)
+    if isinstance(target, _RecordObjectCoordinateHook):
+        persisted = target.record_report_object_coordinate(
+            dict(intent), dict(coordinate), now_iso
+        )
+        return _dependency_mapping(persisted) if persisted is not None else updated
     account_deletion_repo.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
@@ -1795,7 +2055,7 @@ def record_report_object_coordinate(
 
 def reconcile_report_object_version(
     *,
-    s3_client: Any,
+    s3_client: object,
     bucket: str,
     object_key: str,
     operation_id: str,
@@ -1804,18 +2064,28 @@ def reconcile_report_object_version(
     maximum_pages: int = 100,
 ) -> dict[str, str]:
     """Recover one commit-then-raise S3 write from exact metadata and bytes."""
-    request: dict[str, Any] = {"Bucket": bucket, "Prefix": object_key}
+    if not isinstance(s3_client, _ReportObjectReconciliationClient):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report object dependency unavailable"
+        )
+    request: dict[str, object] = {"Bucket": bucket, "Prefix": object_key}
     seen: set[tuple[str, str]] = set()
     for _ in range(maximum_pages):
-        page = s3_client.list_object_versions(**request)
-        if not isinstance(page, Mapping):
-            raise account_deletion_repo.AccountDeletionConflict("malformed object version page")
-        for raw in page.get("Versions", []):
-            if not isinstance(raw, Mapping) or raw.get("Key") != object_key:
+        page = _dependency_mapping(s3_client.list_object_versions(**request))
+        for raw in _provider_rows(
+            page.get("Versions", []), "malformed object version page"
+        ):
+            if raw.get("Key") != object_key:
                 continue
             version_id = _required_private_string(raw.get("VersionId"), "VersionId")
-            head = s3_client.head_object(Bucket=bucket, Key=object_key, VersionId=version_id)
-            metadata = head.get("Metadata") if isinstance(head, Mapping) else None
+            head = _dependency_mapping(
+                s3_client.head_object(
+                    Bucket=bucket,
+                    Key=object_key,
+                    VersionId=version_id,
+                )
+            )
+            metadata = head.get("Metadata")
             if not isinstance(metadata, Mapping):
                 continue
             if (
@@ -1852,8 +2122,8 @@ def register_report_email_intent(
     subject: str,
     body: str,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> ReportItem:
     owner = _required_private_string(owner_id, "owner_id")
     operation = _required_private_string(operation_id, "operation_id")
     recipient_value = _required_private_string(recipient, "recipient")
@@ -1877,10 +2147,9 @@ def register_report_email_intent(
         "updated_at": now_iso,
     }
     target = table or get_table()
-    hook = getattr(target, "register_report_email_intent", None)
-    if callable(hook):
-        persisted = hook(dict(item))
-        return dict(persisted or item)
+    if isinstance(target, _RegisterEmailIntentHook):
+        persisted = target.register_report_email_intent(dict(item))
+        return _dependency_mapping(persisted) if persisted is not None else item
     account_deletion_repo.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
@@ -1897,22 +2166,22 @@ def register_report_email_intent(
 
 
 def claim_report_email_intent(
-    intent: Mapping[str, Any], *, lease_id: str, table: Any | None = None
-) -> dict[str, Any]:
+    intent: Mapping[str, object], *, lease_id: str, table: object | None = None
+) -> ReportItem:
     owner = _required_private_string(intent.get("owner_id"), "owner_id")
     generation = intent.get("account_fence_generation")
     if isinstance(generation, bool) or not isinstance(generation, int):
         raise account_deletion_repo.AccountDeletionConflict("invalid email generation")
     target = table or get_table()
-    hook = getattr(target, "claim_report_email_intent", None)
     key = {"PK": str(intent["PK"]), "SK": str(intent["SK"])}
-    if callable(hook):
-        claimed = hook(key, generation, lease_id)
-        if not isinstance(claimed, Mapping):
+    if isinstance(target, _ClaimEmailIntentHook):
+        claimed = target.claim_report_email_intent(key, generation, lease_id)
+        if claimed is None:
             raise account_deletion_repo.AccountDeletionConflict("email claim unavailable")
-        return dict(claimed)
+        return _dependency_mapping(claimed)
     account_deletion_repo.require_active_account_fence(owner, generation, table=target)
-    response = target.update_item(
+    response = _update_item(
+        target,
         Key=key,
         UpdateExpression="SET #state=:claimed, lease_id=:lease",
         ConditionExpression="#state=:registered AND account_fence_generation=:generation",
@@ -1931,13 +2200,14 @@ def claim_report_email_intent(
 
 
 def classify_report_delivery_outcome(
-    *, response: Mapping[str, Any] | None, error: Exception | None
+    *, response: Mapping[str, object] | None, error: Exception | None
 ) -> str:
     if error is not None:
         return "provider_acceptance_unknown"
-    if not isinstance(response, Mapping) or not isinstance(response.get("MessageId"), str):
+    if not isinstance(response, Mapping):
         raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
-    if not response["MessageId"].strip():
+    message_id = response.get("MessageId")
+    if not isinstance(message_id, str) or not message_id.strip():
         raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
     return "accepted"
 
@@ -1945,8 +2215,8 @@ def classify_report_delivery_outcome(
 def scan_report_private_rows(
     owner_id: str,
     *,
-    table: Any | None = None,
-    cursor: Mapping[str, Any] | None = None,
+    table: object | None = None,
+    cursor: Mapping[str, object] | None = None,
     maximum_pages: int = 20,
     page_limit: int = 100,
 ) -> ReportPrivatePage:
@@ -1956,19 +2226,14 @@ def scan_report_private_rows(
     target = table or get_table()
     current = _validated_report_cursor(cursor) if cursor is not None else None
     seen = {(current["PK"], current["SK"])} if current else set()
-    rows: list[dict[str, Any]] = []
+    rows: list[ReportItem] = []
     unresolved = 0
     for _ in range(maximum_pages):
-        request: dict[str, Any] = {"ConsistentRead": True, "Limit": page_limit}
+        request: dict[str, object] = {"ConsistentRead": True, "Limit": page_limit}
         if current:
             request["ExclusiveStartKey"] = current
-        page = target.scan(**request)
-        if not isinstance(page, Mapping) or not isinstance(page.get("Items", []), list):
-            raise account_deletion_repo.AccountDeletionConflict("malformed report page")
-        for raw in page.get("Items", []):
-            if not isinstance(raw, Mapping):
-                raise account_deletion_repo.AccountDeletionConflict("malformed report row")
-            item = dict(raw)
+        page = _scan(target, **request)
+        for item in _response_items(page):
             pk = str(item.get("PK") or "")
             sk = str(item.get("SK") or "")
             registered = any(
@@ -1984,6 +2249,8 @@ def scan_report_private_rows(
         raw_cursor = page.get("LastEvaluatedKey")
         if raw_cursor is None:
             return ReportPrivatePage(tuple(rows), None, unresolved)
+        if not isinstance(raw_cursor, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict("invalid report cursor")
         next_cursor = _validated_report_cursor(raw_cursor)
         marker = (next_cursor["PK"], next_cursor["SK"])
         if marker in seen:
@@ -1994,13 +2261,13 @@ def scan_report_private_rows(
 
 
 def scrub_report_private_row(
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     *,
     owner_id: str,
     generation: int,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> ReportItem:
     if item.get("student_id") not in {None, owner_id} and item.get("owner_id") != owner_id:
         raise account_deletion_repo.AccountDeletionConflict("report owner mismatch")
     tombstone = {
@@ -2021,9 +2288,8 @@ def scrub_report_private_row(
     if not set(tombstone) <= REPORT_TOMBSTONE_ALLOWLIST:
         raise account_deletion_repo.AccountDeletionConflict("report tombstone allowlist violation")
     target = table or get_table()
-    hook = getattr(target, "scrub_report_private_row", None)
-    if callable(hook):
-        hook(dict(item), tombstone, owner_id, generation)
+    if isinstance(target, _ScrubPrivateRowHook):
+        target.scrub_report_private_row(dict(item), tombstone, owner_id, generation)
         return tombstone
     account_deletion_repo.transact(
         [
@@ -2042,19 +2308,24 @@ def scrub_report_private_row(
 
 def prove_report_object_version_absent(
     *,
-    s3_client: Any,
+    s3_client: object,
     bucket: str,
     object_key: str,
     version_id: str,
     maximum_pages: int = 100,
 ) -> bool:
-    request: dict[str, Any] = {"Bucket": bucket, "Prefix": object_key}
+    if not isinstance(s3_client, _ReportObjectVersionLister):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report object dependency unavailable"
+        )
+    request: dict[str, object] = {"Bucket": bucket, "Prefix": object_key}
     seen: set[tuple[str, str]] = set()
     for _ in range(maximum_pages):
-        page = s3_client.list_object_versions(**request)
-        if not isinstance(page, Mapping):
-            raise account_deletion_repo.AccountDeletionConflict("malformed absence page")
-        candidates = [*page.get("Versions", []), *page.get("DeleteMarkers", [])]
+        page = _dependency_mapping(s3_client.list_object_versions(**request))
+        candidates = [
+            *_provider_rows(page.get("Versions", []), "malformed absence page"),
+            *_provider_rows(page.get("DeleteMarkers", []), "malformed absence page"),
+        ]
         for raw in candidates:
             if (
                 isinstance(raw, Mapping)
@@ -2075,7 +2346,7 @@ def prove_report_object_version_absent(
     raise account_deletion_repo.AccountDeletionConflict("absence scan bound exceeded")
 
 
-def classify_report_retention(manifest: Mapping[str, Any]) -> dict[str, Any]:
+def classify_report_retention(manifest: Mapping[str, object]) -> ReportItem:
     if manifest.get("legal_hold_active") is True:
         return {
             "status": "legal_retention_blocked",
@@ -2089,16 +2360,20 @@ def classify_report_retention(manifest: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def purge_report_object_intent(
-    intent: Mapping[str, Any],
+    intent: Mapping[str, object],
     *,
     owner_id: str,
     generation: int,
     bucket: str,
-    s3_client: Any,
+    s3_client: object,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> ReportItem:
     """Delete one exact purgeable version and retain coordinates until absence."""
+    if not isinstance(s3_client, _ReportObjectDeletionClient):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report object dependency unavailable"
+        )
     if intent.get("owner_id") != owner_id:
         raise account_deletion_repo.AccountDeletionConflict("report object owner mismatch")
     if intent.get("account_fence_generation") != generation:
