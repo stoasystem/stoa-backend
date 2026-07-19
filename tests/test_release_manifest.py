@@ -63,7 +63,7 @@ def _inputs() -> dict[str, Any]:
         "runtime": {
             "backend_python": "3.12.13",
             "lambda_runtime": "python3.12",
-            "lambda_platform": "manylinux2014_aarch64",
+            "lambda_platform": "manylinux_2_28_aarch64",
             "lambda_architecture": "arm64",
             "web_node": "20.19.4",
             "web_npm": "10.8.2",
@@ -204,6 +204,23 @@ def test_build_rejects_duplicate_or_missing_receipts() -> None:
     missing["gates"].pop()
     with pytest.raises(module.ManifestPolicyError, match="gate inventory"):
         module.build_manifest(missing)
+
+
+@pytest.mark.parametrize(
+    "platform",
+    (
+        "manylinux2014_aarch64",
+        "manylinux_2_29_aarch64",
+        "manylinux_2_28_x86_64",
+    ),
+)
+def test_build_rejects_lambda_platform_identity_drift(platform: str) -> None:
+    module = _load_manifest_module()
+    value = _inputs()
+    value["runtime"]["lambda_platform"] = platform
+
+    with pytest.raises(module.ManifestPolicyError, match="runtime target or platform"):
+        module.build_manifest(value)
 
 
 @pytest.mark.parametrize(

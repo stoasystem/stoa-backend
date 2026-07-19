@@ -49,7 +49,7 @@ def test_build_dist_skip_install_writes_verifiable_manifest(tmp_path, monkeypatc
     verified = builder.validate_manifest(tmp_path, tmp_path / "dist")
 
     assert manifest["runtime_target"] == "python3.12"
-    assert manifest["platform"] == "manylinux2014_aarch64"
+    assert manifest["platform"] == "manylinux_2_28_aarch64"
     assert manifest["architecture"] == "arm64"
     assert verified["source_tree_hash"] == manifest["source_tree_hash"]
     assert verified["uv_lock_hash"] == builder.sha256_file(tmp_path / "uv.lock")
@@ -169,6 +169,54 @@ def test_locked_export_uses_closed_uv_command(tmp_path, monkeypatch):
     ]
     assert observed["kwargs"]["cwd"] == tmp_path
     assert observed["kwargs"]["check"] is True
+
+
+def test_dependency_install_uses_closed_al2023_arm64_compatibility_ladder(
+    tmp_path, monkeypatch
+):
+    builder = _load_builder()
+    observed = {}
+
+    def fake_run(argv, **kwargs):
+        observed["argv"] = argv
+        observed["kwargs"] = kwargs
+        return builder.subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(builder.subprocess, "run", fake_run)
+
+    builder.install_dependencies(tmp_path, tmp_path / "dist")
+
+    platforms = [
+        observed["argv"][index + 1]
+        for index, argument in enumerate(observed["argv"])
+        if argument == "--platform"
+    ]
+    assert platforms == [
+        "manylinux_2_28_aarch64",
+        "manylinux_2_27_aarch64",
+        "manylinux_2_26_aarch64",
+        "manylinux_2_25_aarch64",
+        "manylinux_2_24_aarch64",
+        "manylinux_2_23_aarch64",
+        "manylinux_2_22_aarch64",
+        "manylinux_2_21_aarch64",
+        "manylinux_2_20_aarch64",
+        "manylinux_2_19_aarch64",
+        "manylinux_2_18_aarch64",
+        "manylinux_2_17_aarch64",
+        "manylinux2014_aarch64",
+    ]
+    assert "manylinux_2_29_aarch64" not in platforms
+    assert all(platform.endswith("_aarch64") for platform in platforms)
+    assert observed["argv"][0:4] == [
+        builder.sys.executable,
+        "-m",
+        "pip",
+        "install",
+    ]
+    assert observed["argv"][observed["argv"].index("--python-version") + 1] == "3.12"
+    assert observed["argv"][observed["argv"].index("--only-binary") + 1] == ":all:"
+    assert observed["kwargs"] == {"cwd": tmp_path, "check": True}
 
 
 def test_repeated_normalized_zip_is_byte_identical(tmp_path):

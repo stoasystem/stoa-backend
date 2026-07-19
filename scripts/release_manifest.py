@@ -138,7 +138,7 @@ def _validate_runtime(value: Any) -> Mapping[str, Any]:
         raise ManifestPolicyError("Web Node runtime is not 20.x")
     expected = {
         "lambda_runtime": "python3.12",
-        "lambda_platform": "manylinux2014_aarch64",
+        "lambda_platform": "manylinux_2_28_aarch64",
         "lambda_architecture": "arm64",
         "web_platform": "linux-x64",
     }

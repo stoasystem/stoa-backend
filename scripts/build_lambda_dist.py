@@ -20,7 +20,14 @@ import zipfile
 MANIFEST_NAME = ".stoa-build-manifest.json"
 RUNTIME_TARGET = "python3.12"
 PYTHON_VERSION = "3.12"
-PLATFORM = "manylinux2014_aarch64"
+PLATFORM = "manylinux_2_28_aarch64"
+# Lambda Python 3.12 runs on Amazon Linux 2023 (glibc 2.34). Keep the
+# published target identity closed at the AWS-recommended manylinux_2_28
+# baseline while allowing pip to select older, ABI-compatible ARM64 wheels.
+# Explicit --platform targets do not expand this compatibility ladder.
+COMPATIBLE_PLATFORMS = tuple(
+    f"manylinux_2_{minor}_aarch64" for minor in range(28, 16, -1)
+) + ("manylinux2014_aarch64",)
 ARCHITECTURE = "arm64"
 ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 ZIP_FILE_MODE = 0o644
@@ -344,8 +351,10 @@ def install_dependencies(repo_root: Path, dist_dir: Path) -> None:
         "-m",
         "pip",
         "install",
-        "--platform",
-        PLATFORM,
+    ]
+    for compatible_platform in COMPATIBLE_PLATFORMS:
+        cmd.extend(("--platform", compatible_platform))
+    cmd.extend([
         "--implementation",
         "cp",
         "--python-version",
@@ -356,7 +365,7 @@ def install_dependencies(repo_root: Path, dist_dir: Path) -> None:
         str(dist_dir),
         "-r",
         str(repo_root / "requirements.txt"),
-    ]
+    ])
     subprocess.run(cmd, cwd=repo_root, check=True)
 
 
