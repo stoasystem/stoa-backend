@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
 import hmac
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
@@ -65,6 +66,69 @@ class AuthorizationAuditUnavailable(RuntimeError):
     """Durable authorization evidence cannot currently be recorded."""
 
 
+type AuditItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+def _mapping(value: object) -> AuditItem:
+    if not isinstance(value, Mapping):
+        raise AuthorizationAuditUnavailable("malformed authorization audit response")
+    item: AuditItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise AuthorizationAuditUnavailable("malformed authorization audit response")
+        item[key] = member
+    return item
+
+
+def _get_item(table: object, **kwargs: object) -> AuditItem:
+    if not isinstance(table, _GetTable):
+        raise AuthorizationAuditUnavailable("authorization audit dependency unavailable")
+    return _mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise AuthorizationAuditUnavailable("authorization audit dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _optional_item(value: object) -> AuditItem | None:
+    if value is None:
+        return None
+    item = _mapping(value)
+    return item or None
+
+
+def _string_set(value: object) -> set[str]:
+    if value is None:
+        return set()
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, (str, bytes))
+        or any(not isinstance(member, str) for member in value)
+    ):
+        raise AuthorizationAuditUnavailable("malformed authorization audit response")
+    return set(value)
+
+
+def _nonnegative_int(value: object) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise AuthorizationAuditUnavailable("malformed authorization audit response")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class AuthorizationAuditKey:
     key_id: str
@@ -113,16 +177,16 @@ class AuthorizationAuditSink(Protocol):
         result: str,
         policy_version: str,
         created_at: datetime | None = None,
-    ) -> Mapping[str, Any]: ...
+    ) -> Mapping[str, object]: ...
 
 
 class UnavailableAuthorizationAuditSink:
     """Injected fail-closed boundary for absent or invalid key configuration."""
 
-    def persist_authorization_decision(self, **_values):
+    def persist_authorization_decision(self, **_values: object) -> AuthorizationAuditRecord:
         raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable")
 
-    def aggregate_authorization_probe(self, **_values):
+    def aggregate_authorization_probe(self, **_values: object) -> Mapping[str, object]:
         raise AuthorizationAuditUnavailable("authorization_audit_key_unavailable")
 
 
@@ -308,10 +372,12 @@ class DynamoAuthorizationAuditSink:
         ]
         table = get_table()
         for fingerprint, event_id, actor_fingerprint, key in candidates[1:]:
-            existing = table.get_item(
+            response = _get_item(
+                table,
                 Key={"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"EVENT#{event_id}"},
                 ConsistentRead=True,
-            ).get("Item")
+            )
+            existing = _optional_item(response.get("Item"))
             if existing:
                 return AuthorizationAuditRecord(event_id, fingerprint, key.key_id, True)
         fingerprint, event_id, actor_fingerprint, key = candidates[0]
@@ -350,7 +416,7 @@ class DynamoAuthorizationAuditSink:
         result: str,
         policy_version: str,
         created_at: datetime | None = None,
-    ) -> Mapping[str, Any]:
+    ) -> Mapping[str, object]:
         now = created_at or datetime.now(UTC)
         epoch = int(now.timestamp())
         bucket = epoch - (epoch % self._window)
@@ -373,17 +439,19 @@ class DynamoAuthorizationAuditSink:
         key = {"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"PROBE#{aggregate_id}"}
         table = get_table()
         for _attempt in range(3):
-            existing = table.get_item(Key=key, ConsistentRead=True).get("Item") or {}
-            seen = set(existing.get("decision_event_ids") or ())
+            response = _get_item(table, Key=key, ConsistentRead=True)
+            existing = _optional_item(response.get("Item")) or {}
+            seen = _string_set(existing.get("decision_event_ids"))
+            probe_count = _nonnegative_int(existing.get("probe_count"))
             if (
                 record.event_id in seen
                 or len(seen) >= self._id_cap
-                or int(existing.get("probe_count") or 0) >= self._count_cap
+                or probe_count >= self._count_cap
             ):
                 return existing
-            count = min(int(existing.get("probe_count") or 0) + 1, self._count_cap)
+            count = min(probe_count + 1, self._count_cap)
             seen.add(record.event_id)
-            version = int(existing.get("probe_version") or 0) + 1
+            version = _nonnegative_int(existing.get("probe_version")) + 1
             safe = project_audit_event(
                 {
                     "event_id": aggregate_id,
@@ -417,13 +485,13 @@ class DynamoAuthorizationAuditSink:
                 condition = "probe_version = :expected_version"
                 values = {":expected_version": version - 1}
             try:
-                kwargs: dict[str, Any] = {
+                kwargs: dict[str, object] = {
                     "Item": row,
                     "ConditionExpression": condition,
                 }
                 if values:
                     kwargs["ExpressionAttributeValues"] = values
-                table.put_item(**kwargs)
+                _put_item(table, **kwargs)
                 return row
             except ClientError as exc:
                 if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
@@ -431,13 +499,16 @@ class DynamoAuthorizationAuditSink:
         raise AuthorizationAuditUnavailable("authorization_probe_concurrent_update")
 
 
-def project_audit_event(event: Mapping[str, Any]) -> dict[str, Any]:
+def project_audit_event(event: Mapping[str, object]) -> AuditItem:
     """Construct an audit row from safe scalar fields, never by redacting a payload."""
-    projected = {
-        key: event[key]
-        for key in SAFE_AUDIT_FIELDS
-        if key in event and event[key] is not None
-    }
+    projected: AuditItem = {}
+    for key in SAFE_AUDIT_FIELDS:
+        value = event.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, (str, int, bool)):
+            raise ValueError("unsupported security audit field value")
+        projected[key] = value
     if not str(projected.get("event_id") or "").strip():
         raise ValueError("event_id is required")
     if not str(projected.get("event_type") or "").strip():
@@ -445,7 +516,7 @@ def project_audit_event(event: Mapping[str, Any]) -> dict[str, Any]:
     return projected
 
 
-def append_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
+def append_event(stream_id: str, event: Mapping[str, object]) -> AuditItem:
     safe = project_audit_event(event)
     row = {
         "PK": f"SECURITY_AUDIT#{stream_id}",
@@ -454,7 +525,8 @@ def append_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
         **safe,
     }
     try:
-        get_table().put_item(
+        _put_item(
+            get_table(),
             Item=row,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -465,7 +537,7 @@ def append_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
     return row
 
 
-def append_authorization_event(stream_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
+def append_authorization_event(stream_id: str, event: Mapping[str, object]) -> AuditItem:
     """Append one allowlisted policy decision or aggregate probe event."""
     if event.get("event_type") not in AUTHORIZATION_EVENT_TYPES:
         raise ValueError("unsupported authorization event type")
@@ -485,7 +557,7 @@ def append_break_glass_evidence(
     review_reference: str,
     correlation_id: str,
     created_at: str,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[AuditItem, AuditItem]:
     """Record immediate notification and independent-review obligations safely."""
     required = (
         event_id,
