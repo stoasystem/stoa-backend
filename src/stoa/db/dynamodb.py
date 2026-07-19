@@ -5,6 +5,6 @@ from stoa.config import settings
 
 
 @lru_cache
-def get_table():
+def get_table() -> object:
     dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
     return dynamodb.Table(settings.dynamodb_table_name)

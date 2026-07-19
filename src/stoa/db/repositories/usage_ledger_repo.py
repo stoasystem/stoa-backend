@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
@@ -26,7 +26,64 @@ PRIVATE_LEARNING_ACTIONS = frozenset(
 )
 
 
-def _atomic_table(table: Any) -> bool:
+type UsageItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+def _table(candidate: object | None = None) -> object:
+    return candidate or get_table()
+
+
+def _get_item(table: object, **kwargs: object) -> UsageItem:
+    if not isinstance(table, _GetTable):
+        raise ValueError("usage ledger dependency unavailable")
+    return _response(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise ValueError("usage ledger dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _query(table: object, **kwargs: object) -> UsageItem:
+    if not isinstance(table, _QueryTable):
+        raise ValueError("usage ledger dependency unavailable")
+    return _response(table.query(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise ValueError("usage ledger dependency unavailable")
+    return table.update_item(**kwargs)
+
+
+def _response(value: object) -> UsageItem:
+    if not isinstance(value, dict) or any(not isinstance(key, str) for key in value):
+        raise ValueError("usage ledger dependency unavailable")
+    return {key: item for key, item in value.items() if isinstance(key, str)}
+
+
+def _atomic_table(table: object) -> bool:
     return callable(getattr(table, "transact_account_deletion", None)) or bool(
         getattr(getattr(table, "meta", None), "client", None)
         and getattr(table, "name", None)
@@ -34,13 +91,13 @@ def _atomic_table(table: Any) -> bool:
 
 
 def put_usage_event(
-    event: dict[str, Any],
+    event: UsageItem,
     *,
     account_fence_generation: int | None = None,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> bool:
     """Persist one usage ledger event, returning False when it already exists."""
-    target = table or get_table()
+    target = _table(table)
     if account_fence_generation is None and event.get("action") in PRIVATE_LEARNING_ACTIONS:
         owner_id = str(event.get("student_id") or "")
         if not owner_id:
@@ -63,7 +120,7 @@ def put_usage_event(
         }
         if not _atomic_table(target):
             try:
-                target.put_item(
+                _put_item(target,
                     Item=event,
                     ConditionExpression="attribute_not_exists(PK)",
                 )
@@ -93,7 +150,7 @@ def put_usage_event(
         except account_deletion_repo.AccountDeletionConflict:
             return False
     try:
-        target.put_item(
+        _put_item(target,
             Item=event,
             ConditionExpression="attribute_not_exists(PK)",
         )
@@ -110,16 +167,16 @@ def get_usage_event(
     action: str,
     quota_period: str,
     idempotency_key: str,
-) -> dict[str, Any] | None:
+) -> UsageItem | None:
     """Read a usage event by its deterministic idempotency key."""
-    response = get_table().get_item(
+    response = _get_item(_table(),
         Key={
             "PK": f"USAGE_LEDGER#{student_id}",
             "SK": _event_sk(action=action, quota_period=quota_period, idempotency_key=idempotency_key),
         }
     )
     item = response.get("Item")
-    return dict(item) if item else None
+    return _response(item) if item is not None else None
 
 
 def list_usage_events(
@@ -128,35 +185,41 @@ def list_usage_events(
     action: str,
     quota_period: str,
     limit: int = 500,
-) -> list[dict[str, Any]]:
+) -> list[UsageItem]:
     """List usage events for one student/action/period."""
-    table = get_table()
+    table = _table()
     prefix = f"EVENT#{action}#{quota_period}#"
-    kwargs: dict[str, Any] = {
+    kwargs: dict[str, object] = {
         "KeyConditionExpression": Key("PK").eq(f"USAGE_LEDGER#{student_id}")
         & Key("SK").begins_with(prefix),
         "Limit": limit,
     }
-    items: list[dict[str, Any]] = []
+    items: list[UsageItem] = []
     while True:
-        response = table.query(**kwargs)
-        items.extend(dict(item) for item in response.get("Items", []))
+        response = _query(table, **kwargs)
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list) or any(not isinstance(item, dict) for item in raw_items):
+            raise ValueError("usage ledger dependency unavailable")
+        items.extend(_response(item) for item in raw_items)
         last_key = response.get("LastEvaluatedKey")
         if not last_key or len(items) >= limit:
             return items[:limit]
         kwargs["ExclusiveStartKey"] = last_key
 
 
-def get_daily_question_counter(student_id: str, day: str) -> dict[str, Any] | None:
+def get_daily_question_counter(student_id: str, day: str) -> UsageItem | None:
     """Read the existing atomic daily question counter row."""
     return get_daily_usage_counter(student_id=student_id, counter_prefix="QUESTION", day=day)
 
 
-def get_daily_usage_counter(*, student_id: str, counter_prefix: str, day: str) -> dict[str, Any] | None:
+def get_daily_usage_counter(*, student_id: str, counter_prefix: str, day: str) -> UsageItem | None:
     """Read an existing daily usage counter row by counter prefix."""
-    response = get_table().get_item(Key={"PK": f"USAGE#{student_id}", "SK": f"{counter_prefix}#{day}"})
+    response = _get_item(
+        _table(),
+        Key={"PK": f"USAGE#{student_id}", "SK": f"{counter_prefix}#{day}"},
+    )
     item = response.get("Item")
-    return dict(item) if item else None
+    return _response(item) if item is not None else None
 
 
 def set_daily_question_counter(
@@ -167,7 +230,7 @@ def set_daily_question_counter(
     expires_at: int,
 ) -> None:
     """Repair a missing or stale daily question counter from ledger totals."""
-    get_table().update_item(
+    _update_item(_table(),
         Key={"PK": f"USAGE#{student_id}", "SK": f"QUESTION#{day}"},
         UpdateExpression=(
             "SET #c = :count, #ttl = if_not_exists(#ttl, :exp), "
