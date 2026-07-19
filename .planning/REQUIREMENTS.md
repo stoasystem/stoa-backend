@@ -151,10 +151,10 @@ Convert STOA from broad local contracts into a trustworthy Web product that can 
 | V9PRIV-03 | Phase 473 | Complete |
 | V9PRIV-04 | Phase 480 | Pending |
 | V9QUAL-01 | Phase 474 | Complete |
-| V9QUAL-02 | Phase 474 | Pending |
-| V9QUAL-03 | Phase 474 | Pending |
-| V9QUAL-04 | Phase 474 | Pending |
-| V9QUAL-05 | Phase 474 | Pending |
+| V9QUAL-02 | Phase 474 | Complete |
+| V9QUAL-03 | Phase 474 | Complete |
+| V9QUAL-04 | Phase 474 | Complete |
+| V9QUAL-05 | Phase 474 | Complete |
 | V9QUAL-06 | Phase 474 | Complete |
 | V9QUAL-07 | Phase 474 | Complete |
 | V9DATA-01 | Phase 475 | Pending |

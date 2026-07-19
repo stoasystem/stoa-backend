@@ -86,7 +86,20 @@ Each TDD gate and implementation outcome was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Repaired malformed post-plan metadata output**
+- **Found during:** Plan closeout after both tasks passed
+- **Issue:** The roadmap updater replaced the Phase 474 name and dependency columns with a malformed row, and the progress updater returned 45% without persisting that percentage in `STATE.md`.
+- **Fix:** Restored the canonical Phase 474 roadmap row with `2/80` progress and persisted the computed `45%` project progress.
+- **Files modified:** `.planning/ROADMAP.md`, `.planning/STATE.md`
+- **Verification:** Planning diffs retain the existing phase name/dependencies, advance only Plan 474 to `2/80`, and advance STATE to Plan 3 with 64 completed plans.
+- **Committed in:** final metadata closeout commit
+
+---
+
+**Total deviations:** 1 auto-fixed bug.
+**Impact on plan:** Closeout metadata was corrected without changing gate behavior or expanding scope.
 
 ## Issues Encountered
 
