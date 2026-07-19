@@ -1,0 +1,70 @@
+{
+  "clocks": [
+    "2026-07-01T12:00:00Z",
+    "2035-01-15T12:00:00Z"
+  ],
+  "reason_code": null,
+  "runs": [
+    {
+      "clock": "2026-07-01T12:00:00Z",
+      "collection_sha256": "70e9138e8ba8951716ca4f9dad6331497b7fa5e5e566a30805c330ea03aac3ea",
+      "counts": {
+        "error": 0,
+        "failed": 0,
+        "passed": 2139,
+        "skipped": 0,
+        "total": 2139,
+        "xfail": 0,
+        "xpass": 0
+      },
+      "environment": "fresh-1",
+      "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+      "run": 1,
+      "runtime": "3.12.13",
+      "seed": 4740718
+    },
+    {
+      "clock": "2035-01-15T12:00:00Z",
+      "collection_sha256": "70e9138e8ba8951716ca4f9dad6331497b7fa5e5e566a30805c330ea03aac3ea",
+      "counts": {
+        "error": 0,
+        "failed": 0,
+        "passed": 2139,
+        "skipped": 0,
+        "total": 2139,
+        "xfail": 0,
+        "xpass": 0
+      },
+      "environment": "fresh-2",
+      "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+      "run": 2,
+      "runtime": "3.12.13",
+      "seed": 4740718
+    }
+  ],
+  "schema": "stoa.phase474.python-matrix.v1",
+  "seed": 4740718,
+  "source": {
+    "pyproject.toml": {
+      "bytes": 1086,
+      "sha256": "20a9680c89104f77b9987242cf9c91db6825664c31acc71af52e865093f5b426"
+    },
+    "requirements.txt": {
+      "bytes": 32045,
+      "sha256": "4d0506298eeb3b69b52a4bed30dee38e78ecc40045ed7fdb8683d2f89ba9e3c6"
+    },
+    "uv.lock": {
+      "bytes": 274249,
+      "sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa"
+    }
+  },
+  "status": "PASS",
+  "suite_argv": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-p",
+    "no:socket"
+  ]
+}

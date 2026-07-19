@@ -1,0 +1,49 @@
+{
+  "schema": "stoa.phase474.python-hermetic-linux.v1",
+  "status": "PASS",
+  "completed_at": "2026-07-19T22:59:44Z",
+  "tested_source": {
+    "commit": "f0fe24f88cffb4e196eb7a5f3089be3a80d5daaa",
+    "tree": "578028f1503182a84be9fbe49fc79c6a1c9503e9",
+    "bundle_sha256": "b2b58a5ebf0bc1d53c27e77ecbc6f9fae8e1edadcc1d80a3e9a5b3f3e222b7ef"
+  },
+  "matrix": {
+    "path": "evidence/phase-474/python-hermetic-matrix.json",
+    "bytes": 1739,
+    "sha256": "6a554f5c6036fc9830b099db8ac1b5e67ecbc68c2a072595ad18d23c92fed4bd"
+  },
+  "runner": {
+    "operating_system": "Linux",
+    "architecture": "aarch64",
+    "distribution": "Ubuntu 26.04 LTS",
+    "kernel": "7.0.0-27-generic",
+    "virtualization": {
+      "product": "Lima",
+      "version": "2.1.4",
+      "driver": "VZ",
+      "host_mounts": false
+    },
+    "uv": {
+      "version": "0.11.16",
+      "binary_architecture": "aarch64",
+      "binary_sha256": "3d146b4232a025297b7983e1e89282d82c37ec99f4a94c0518ca855ce715c542"
+    }
+  },
+  "network_boundary": {
+    "argv": [
+      "unshare",
+      "--user",
+      "--map-root-user",
+      "--net",
+      "--"
+    ],
+    "probe": "PASS"
+  },
+  "command": "python3 scripts/release_gate.py python-hermetic --output /tmp/phase474-python-matrix-f0fe24f.json",
+  "production_operations": {
+    "infrastructure": "NOT RUN",
+    "deploy": "NOT RUN",
+    "smoke": "NOT RUN",
+    "rollback": "NOT RUN"
+  }
+}
