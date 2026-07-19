@@ -32,6 +32,7 @@ PRIVATE_CANARIES = (
     "provider-upload-id-canary",
     "provider-diagnostic-canary",
 )
+_UPLOAD_NOW = datetime(2026, 7, 17, tzinfo=timezone.utc)
 
 
 def _actor() -> Actor:
@@ -59,7 +60,7 @@ def _pending_upload(*, expected_size: int = 3) -> dict[str, Any]:
         "part_count": 1,
         "status": "pending_upload",
         "version": 2,
-        "expires_at": 2_000_000_000,
+        "expires_at": int(_UPLOAD_NOW.timestamp()) + 1800,
     }
 
 
@@ -116,8 +117,10 @@ class _PartRepository:
 class _UploadPartProvider:
     def __init__(self, response: dict[str, Any]) -> None:
         self.response = response
+        self.calls = 0
 
     def upload_part(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls += 1
         return dict(self.response)
 
 
@@ -161,16 +164,20 @@ def test_put_upload_chunk_part_acknowledgement_commit_then_raise_reconciles_with
             put_upload_chunk(
                 "upload-1", 1, _chunks(data), _actor(), s3=provider,
                 settings=Settings(s3_images_bucket="private-bucket-canary"),
+                now=_UPLOAD_NOW,
                 repository=repository,
             )
         )
     assert first.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert "provider-diagnostic-canary" not in str(first.value)
+    assert repository.claims == 1
+    assert provider.uploads == 1
 
     replay = asyncio.run(
         put_upload_chunk(
             "upload-1", 1, _chunks(data), _actor(), s3=provider,
             settings=Settings(s3_images_bucket="private-bucket-canary"),
+            now=_UPLOAD_NOW,
             repository=repository,
         )
     )
@@ -185,6 +192,7 @@ def test_put_upload_chunk_part_acknowledgement_rejects_nonblank_nonstring_etag(e
     response = {"ChecksumSHA256": _provider_checksum(data)}
     if etag is not None:
         response["ETag"] = etag
+    provider = _UploadPartProvider(response)
 
     with pytest.raises(AttachmentDecisionError) as captured:
         asyncio.run(
@@ -193,13 +201,15 @@ def test_put_upload_chunk_part_acknowledgement_rejects_nonblank_nonstring_etag(e
                 1,
                 _chunks(data),
                 _actor(),
-                s3=_UploadPartProvider(response),
+                s3=provider,
                 settings=Settings(s3_images_bucket="private-bucket-canary"),
+                now=_UPLOAD_NOW,
                 repository=repository,
             )
         )
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert provider.calls == 1
     assert repository.completions == []
     assert all(value not in str(captured.value) for value in PRIVATE_CANARIES)
 
@@ -225,6 +235,7 @@ def test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_uneq
     response: dict[str, Any] = {"ETag": '"provider-etag"'}
     if checksum is not None:
         response["ChecksumSHA256"] = checksum
+    provider = _UploadPartProvider(response)
 
     with pytest.raises(AttachmentDecisionError) as captured:
         asyncio.run(
@@ -233,13 +244,15 @@ def test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_uneq
                 1,
                 _chunks(b"abc"),
                 _actor(),
-                s3=_UploadPartProvider(response),
+                s3=provider,
                 settings=Settings(s3_images_bucket="private-bucket-canary"),
+                now=_UPLOAD_NOW,
                 repository=repository,
             )
         )
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert provider.calls == 1
     assert repository.completions == []
 
 

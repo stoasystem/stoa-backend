@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import UTC, datetime
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from stoa.services import account_deletion_service
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY_PATH = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
+WORKER_NOW = datetime(2026, 7, 18, 1, tzinfo=UTC)
 EXPECTED_BRANCHES = (
     "account_profile", "identity_cross_account", "capability_scope",
     "question_ocr_session", "attachments", "moderation", "report_records",
@@ -175,7 +177,8 @@ def test_worker_revalidates_the_runtime_projection_and_invokes_only_plan35_final
     repository = _ServiceRepository(command, fence)
     worker = account_deletion_service.AccountDeletionService(
         repository=repository,
-        now=lambda: "2026-07-18T01:00:00+00:00",
+        now=lambda: WORKER_NOW.isoformat(),
+        now_epoch=lambda: int(WORKER_NOW.timestamp()),
         inventory_path=INVENTORY_PATH,
     )
     claim = account_deletion_repo._claim_from_command(command)
@@ -189,6 +192,8 @@ def test_worker_revalidates_the_runtime_projection_and_invokes_only_plan35_final
     repository = _ServiceRepository(drifted, fence)
     worker = account_deletion_service.AccountDeletionService(
         repository=repository,
+        now=lambda: WORKER_NOW.isoformat(),
+        now_epoch=lambda: int(WORKER_NOW.timestamp()),
         inventory_path=INVENTORY_PATH,
     )
     with pytest.raises(account_deletion_repo.AccountDeletionConflict):

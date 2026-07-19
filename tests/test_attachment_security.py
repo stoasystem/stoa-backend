@@ -76,6 +76,7 @@ SENSITIVE_CANARIES = {
     "NoSuchKey from Amazon S3 provider-canary",
     "raw OCR extracted-content-canary",
 }
+ATTACHMENT_TEST_NOW = datetime(2026, 7, 16, tzinfo=timezone.utc)
 
 
 MALFORMED_PROVIDER_COORDINATES = [
@@ -501,6 +502,7 @@ def test_chunk_claim_precedes_provider_write_and_receipt_is_safe() -> None:
             _student_actor(),
             s3=s3,
             settings=Settings(s3_images_bucket="bucket"),
+            now=ATTACHMENT_TEST_NOW,
             repository=repository,
         )
     )
@@ -522,6 +524,7 @@ def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
             _student_actor(),
             s3=s3,
             settings=Settings(s3_images_bucket="bucket"),
+            now=ATTACHMENT_TEST_NOW,
             repository=repository,
         )
     )
@@ -535,6 +538,7 @@ def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
                 _student_actor(),
                 s3=s3,
                 settings=Settings(s3_images_bucket="bucket"),
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
         )
@@ -548,7 +552,7 @@ def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() 
     class BlockingS3(_ChunkS3):
         def upload_part(self, **kwargs):
             entered.set()
-            assert release.wait(2)
+            assert release.wait(10)
             return super().upload_part(**kwargs)
 
     repository, s3 = _ChunkRepository(), BlockingS3()
@@ -565,6 +569,7 @@ def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() 
                         _student_actor(),
                         s3=s3,
                         settings=Settings(s3_images_bucket="bucket"),
+                        now=ATTACHMENT_TEST_NOW,
                         repository=repository,
                     )
                 )
@@ -573,14 +578,28 @@ def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() 
             outcomes.append(error.code)
 
     first = threading.Thread(target=worker, args=(b"abc",))
+    second = None
+    second_started = False
     first.start()
-    assert entered.wait(2)
-    second = threading.Thread(target=worker, args=(b"xyz",))
-    second.start()
-    second.join(2)
-    release.set()
-    first.join(2)
-    assert AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT in outcomes
+    try:
+        assert entered.wait(2)
+        second = threading.Thread(target=worker, args=(b"xyz",))
+        second.start()
+        second_started = True
+        second.join(2)
+    finally:
+        release.set()
+        try:
+            if second_started and second is not None:
+                second.join(5)
+        finally:
+            first.join(5)
+    assert second is not None
+    assert not first.is_alive() and not second.is_alive()
+    assert outcomes.count(AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT) == 1
+    assert [
+        outcome["status"] for outcome in outcomes if isinstance(outcome, dict)
+    ] == ["accepted"]
     assert len(s3.uploads) == 1
 
 
@@ -635,6 +654,7 @@ def test_provider_success_ledger_failure_replay_adopts_matching_listed_part() ->
                 _student_actor(),
                 s3=s3,
                 settings=Settings(s3_images_bucket="bucket"),
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
         )
@@ -647,6 +667,7 @@ def test_provider_success_ledger_failure_replay_adopts_matching_listed_part() ->
             _student_actor(),
             s3=s3,
             settings=Settings(s3_images_bucket="bucket"),
+            now=ATTACHMENT_TEST_NOW,
             repository=repository,
         )
     )
@@ -717,6 +738,7 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
         _student_actor(),
         s3=s3,
         settings=Settings(s3_images_bucket="bucket"),
+        now=ATTACHMENT_TEST_NOW,
         repository=repository,
     )
     assert result == {"uploadId": "upload-1", "status": "validated", "attachment": None}
@@ -1723,15 +1745,20 @@ def test_question_missing_foreign_reused_and_non_image_fail_before_effects() -> 
         AttachmentReference(attachmentId="attachment-saved"),
     ]
     for repository, reference in zip(cases, references, strict=True):
+        before_uploads = deepcopy(repository.uploads)
+        before_attachments = deepcopy(repository.attachments)
         with pytest.raises(AttachmentDecisionError) as error:
             reserve_question_attachment(
                 reference,
                 _student_actor(),
                 effective_plan="free",
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
         assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
         assert repository.transactions == []
+        assert repository.uploads == before_uploads
+        assert repository.attachments == before_attachments
 
 
 def test_question_transient_reservation_release_preserves_original_expiry() -> None:
@@ -1778,14 +1805,19 @@ def test_prepare_message_attachments_conceals_missing_foreign_and_invalid_as_no_
             uploads={"upload-1": {**_validated_upload(), "status": "invalid"}}
         ),
     ):
+        before_uploads = deepcopy(repository.uploads)
+        before_attachments = deepcopy(repository.attachments)
         with pytest.raises(AttachmentDecisionError) as error:
             prepare_message_attachments(
                 [AttachmentReference(uploadId="upload-1")],
                 _student_actor(),
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
         assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
         assert repository.transactions == []
+        assert repository.uploads == before_uploads
+        assert repository.attachments == before_attachments
 
 
 def test_association_rejects_legacy_key_only_records_before_effects() -> None:
@@ -1801,14 +1833,19 @@ def test_association_rejects_legacy_key_only_records_before_effects() -> None:
     ):
         legacy.pop(field, None)
     repository = _MessageAttachmentRepository(uploads={"upload-1": legacy})
+    before_uploads = deepcopy(repository.uploads)
+    before_attachments = deepcopy(repository.attachments)
     with pytest.raises(AttachmentDecisionError) as error:
         prepare_message_attachments(
             [AttachmentReference(uploadId="upload-1")],
             _student_actor(),
+            now=ATTACHMENT_TEST_NOW,
             repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert repository.transactions == []
+    assert repository.uploads == before_uploads
+    assert repository.attachments == before_attachments
 
 
 def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> None:
@@ -1820,7 +1857,12 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
         AttachmentReference(uploadId="upload-1"),
         AttachmentReference(attachmentId="attachment-saved"),
     ]
-    prepared = prepare_message_attachments(references, _student_actor(), repository=repository)
+    prepared = prepare_message_attachments(
+        references,
+        _student_actor(),
+        now=ATTACHMENT_TEST_NOW,
+        repository=repository,
+    )
     summaries = bind_message_attachments(
         message={
             "PK": "CONV#conv-1",
@@ -1867,7 +1909,7 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     assert message["attachment_ids"][1] == "attachment-saved"
     public = str([summary.model_dump(by_alias=True) for summary in summaries])
     assert "provider-coordinate" not in public
-    assert "private-version" not in public
+    assert "immutable-version" not in public
 
 
 def _transaction_cancel_error(
@@ -2143,7 +2185,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
             upload = {
                 **repository.uploads["upload-1"],
                 "status": "consuming",
-                "consume_epoch": 2_000_000_000,
+                "consume_epoch": int(ATTACHMENT_TEST_NOW.timestamp()),
             }
             prepared = {
                 "kind": "upload",
@@ -2172,6 +2214,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 prepared=prepared,
                 actor=_student_actor(),
                 effective_plan="free",
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
     else:
@@ -2194,6 +2237,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 actor=_student_actor(),
                 prepared=prepared,
                 effective_plan="free",
+                now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
     with pytest.raises(AttachmentDecisionError) as captured:
@@ -2260,6 +2304,7 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
         prepared=[("upload", first), ("attachment", saved), ("upload", second)],
         effective_plan="free",
         deterministic_attachment_ids=expected,
+        now=ATTACHMENT_TEST_NOW,
         repository=repository,
     )
     assert message["attachment_ids"] == [
@@ -2341,6 +2386,7 @@ def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
         prepared=[("attachment", saved), ("upload", repository.uploads["upload-1"])],
         effective_plan="free",
         deterministic_attachment_ids=["only-fresh-id"],
+        now=ATTACHMENT_TEST_NOW,
         repository=repository,
     )
     assert message["attachment_ids"] == ["attachment-saved", "only-fresh-id"]
