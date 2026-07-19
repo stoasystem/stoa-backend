@@ -82,11 +82,25 @@ The task followed the required RED/GREEN TDD sequence:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Repaired malformed post-plan metadata output**
+- **Found during:** Plan closeout after the task and SUMMARY commits passed
+- **Issue:** The roadmap updater replaced the Phase 474 name and dependency columns with a malformed row, and the tracking updater persisted `20%` despite computing 65/142 summaries as `46%`.
+- **Fix:** Restored the canonical Phase 474 roadmap row at `3/80`, persisted the computed `46%`, and checked only the completed V9QUAL-07 requirement checkbox.
+- **Files modified:** `.planning/ROADMAP.md`, `.planning/STATE.md`, `.planning/REQUIREMENTS.md`
+- **Verification:** Planning diffs preserve the phase name/dependencies, record exactly three completed Phase 474 summaries, retain Plan 474-03 as unexecuted, and advance the sequential completion counter from 3 to 4.
+- **Committed in:** final tracking closeout commit
+
+---
+
+**Total deviations:** 1 auto-fixed bug.
+**Impact on plan:** Closeout metadata was corrected without changing verifier behavior, claiming Plan 474-03, or expanding operational authority.
 
 ## Issues Encountered
 
 - The managed filesystem initially denied Git index writes. Required normal commits were retried with repository write approval; no hook was bypassed and no Git state was reset, checked out, stashed, or destructively cleaned.
+- Plan 474-04 executed before Plan 474-03 by explicit orchestrator assignment. `STATE.md` uses its `Plan: N of 80` field as a sequential completion-count/next-position counter, so it advanced from 3 to 4 while `474-03-SUMMARY.md` remains absent and Plan 474-03 remains unexecuted.
 
 ## Known Stubs
 
