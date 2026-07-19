@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-23-PLAN.md
-last_updated: "2026-07-19T16:40:19.637Z"
+stopped_at: Completed 474-08-PLAN.md
+last_updated: "2026-07-19T17:06:30.511Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 71
+  completed_plans: 72
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 10 of 80
+Plan: 11 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T16:40:19.632Z
-**Stopped At:** Completed 474-23-PLAN.md
+**Last Date:** 2026-07-19T17:06:30.506Z
+**Stopped At:** Completed 474-08-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -186,6 +186,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P07 | 7 min | 1 tasks | 2 files |
 | Phase 474 P39 | 12 min | 1 tasks | 5 files |
 | Phase 474 P23 | 6 min | 1 tasks | 1 files |
+| Phase 474 P08 | 16 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -338,3 +339,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Reconciliation collaborators expose only the mutation methods and exact grant coordinates required by the tightening workflow.
 - [Phase 474]: All measured Web-root advisories were repaired with supported versions inside existing dependency ranges; no D-11 exception was created. — D-11 forbids exceptions while supported fixes exist.
 - [Phase 474]: The frontend manifest remains unchanged while the authoritative lock records the repaired dependency graph. — Existing semver ranges already admit each patched version, so lock-only remediation preserves the public dependency contract.
+- [Phase 474]: DynamoDB repository records remain object-valued until exact text, boolean, integer, mapping, and fingerprint checks establish safe use.
+- [Phase 474]: Capability transaction variants use a closed TypedDict union and narrow runtime-checkable provider protocols without casts or broad Any.
+- [Phase 474]: Malformed durable identity and capability state fails closed with stable coordinate-free repository errors instead of coercion.
