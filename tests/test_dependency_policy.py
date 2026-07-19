@@ -388,20 +388,50 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
     )
 
     tokens = (ROOT / "src" / "stoa" / "security" / "tokens.py").read_text(encoding="utf-8")
-    jwks = (ROOT / "src" / "stoa" / "security" / "jwks.py").read_text(encoding="utf-8")
     runtime = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted((ROOT / "src").rglob("*.py"))
     ).casefold()
     assert 'headers.get("alg") != "RS256"' in tokens
     assert 'algorithms=["RS256"]' in tokens
-    assert 'raw_key.get("kty") != "RSA"' in jwks
-    assert 'RSAKey(raw_key, algorithm="RS256")' in jwks
     assert "from ecdsa" not in runtime
     assert "import ecdsa" not in runtime
     assert "signingkey" not in runtime
     assert "sign_digest" not in runtime
     assert "ecdh" not in runtime
+
+
+@pytest.mark.asyncio
+async def test_committed_ecdsa_exception_jwks_boundary_rejects_ec_keys():
+    from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+    from stoa.security.jwks import JwksKeyProvider
+
+    class EcOnlyTransport:
+        async def fetch(self, issuer: str) -> dict[str, object]:
+            assert issuer == "https://identity.test/ec-only"
+            return {
+                "keys": [
+                    {
+                        "kty": "EC",
+                        "alg": "ES256",
+                        "kid": "ec-key",
+                        "crv": "P-256",
+                        "x": "not-retained",
+                        "y": "not-retained",
+                    }
+                ]
+            }
+
+    provider = JwksKeyProvider(
+        EcOnlyTransport(),
+        ttl_seconds=60,
+        max_stale_seconds=120,
+    )
+
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await provider.get_key("https://identity.test/ec-only", "ec-key")
+
+    assert exc_info.value.code is SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE
 
 
 def test_backend_cli_defaults_to_the_committed_exception_ledger():
