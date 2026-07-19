@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, ConditionBase
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
@@ -46,40 +47,141 @@ AI_DRAFT_TOMBSTONE_ALLOWLIST = frozenset(
 )
 
 
+type AIDraftItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _TombstoneTable(Protocol):
+    def replace_learning_tombstone(
+        self,
+        item: AIDraftItem,
+        tombstone: AIDraftItem,
+        owner_id: str,
+        generation: int,
+    ) -> object: ...
+
+
 @dataclass(frozen=True, slots=True)
 class AIDraftPrivatePage:
-    items: tuple[dict[str, Any], ...]
+    items: tuple[AIDraftItem, ...]
     cursor: dict[str, str] | None = None
 
 
-def _atomic_table(table: Any) -> bool:
+def _mapping(value: object) -> AIDraftItem:
+    if not isinstance(value, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed AI draft dependency response"
+        )
+    item: AIDraftItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed AI draft dependency response"
+            )
+        item[key] = member
+    return item
+
+
+def _items(value: object) -> list[AIDraftItem]:
+    if not isinstance(value, list):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed AI draft dependency response"
+        )
+    return [_mapping(item) for item in value]
+
+
+def _get_item(table: object, **kwargs: object) -> AIDraftItem:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
+    return _mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _scan(table: object, **kwargs: object) -> AIDraftItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
+    return _mapping(table.scan(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
+    return table.update_item(**kwargs)
+
+
+def _positive_int(value: object, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise account_deletion_repo.AccountDeletionConflict(f"invalid AI draft {field}")
+    return value
+
+
+def _required_text(value: object, *, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise account_deletion_repo.AccountDeletionConflict(f"invalid AI draft {field}")
+    return value
+
+
+def _created_at(item: AIDraftItem) -> str:
+    value = item.get("created_at", "")
+    if not isinstance(value, str):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed AI draft dependency response"
+        )
+    return value
+
+
+def _atomic_table(table: object) -> bool:
     return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
+        getattr(getattr(table, "meta", None), "client", None) and getattr(table, "name", None)
     )
 
 
-def _generation(item: Mapping[str, Any], table: Any) -> tuple[str, int]:
+def _generation(item: Mapping[str, object], table: object) -> tuple[str, int]:
     owner = str(item.get("student_id") or item.get("owner_id") or "").strip()
     if not owner:
         raise account_deletion_repo.AccountDeletionConflict("AI draft owner is required")
     supplied = item.get("account_fence_generation")
     if type(supplied) is int and supplied > 0:
-        return owner, int(supplied)
+        return owner, supplied
     if _atomic_table(table):
         fence = account_deletion_repo.require_active_account_fence(owner, table=table)
-        return owner, int(fence["generation"])
+        return owner, _positive_int(fence.get("generation"), field="fence generation")
     return owner, 1
 
 
 def build_ai_draft_write_transaction(
     *,
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     owner_id: str,
     generation: int,
     mode: str = "put",
-    updates: Mapping[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+    updates: Mapping[str, object] | None = None,
+) -> list[AIDraftItem]:
     stored = {
         **dict(item),
         "owner_id": owner_id,
@@ -107,8 +209,7 @@ def build_ai_draft_write_transaction(
         {
             "Update": {
                 "Key": {"PK": stored["PK"], "SK": stored["SK"]},
-                "UpdateExpression": "SET "
-                + ", ".join(f"#{key}=:{key}" for key in updates),
+                "UpdateExpression": "SET " + ", ".join(f"#{key}=:{key}" for key in updates),
                 "ConditionExpression": (
                     "attribute_exists(PK) AND attribute_exists(SK) AND "
                     "owner_id=:owner AND account_fence_generation=:generation"
@@ -125,9 +226,13 @@ def draft_pk(draft_id: str) -> str:
     return f"AI_TEACHER_DRAFT#{draft_id}"
 
 
-def put_draft(item: dict[str, Any]) -> None:
+def put_draft(item: AIDraftItem) -> None:
     table = get_table()
-    stored = {**item, "PK": draft_pk(item["draft_id"]), "SK": "META"}
+    stored = {
+        **item,
+        "PK": draft_pk(_required_text(item.get("draft_id"), field="identifier")),
+        "SK": "META",
+    }
     owner, generation = _generation(stored, table)
     operations = build_ai_draft_write_transaction(
         item=stored, owner_id=owner, generation=generation
@@ -135,21 +240,23 @@ def put_draft(item: dict[str, Any]) -> None:
     if _atomic_table(table):
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.put_item(Item=operations[1]["Put"]["Item"])
+        put = _mapping(operations[1].get("Put"))
+        _put_item(table, Item=_mapping(put.get("Item")))
     item.update(owner_id=owner, account_fence_generation=generation)
 
 
-def get_draft(draft_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key={"PK": draft_pk(draft_id), "SK": "META"})
-    return response.get("Item")
+def get_draft(draft_id: str) -> AIDraftItem | None:
+    response = _get_item(get_table(), Key={"PK": draft_pk(draft_id), "SK": "META"})
+    item = response.get("Item")
+    return _mapping(item) if item is not None else None
 
 
 def update_draft(
     draft_id: str,
-    updates: dict[str, Any],
+    updates: AIDraftItem,
     *,
-    existing: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
+    existing: AIDraftItem | None = None,
+) -> AIDraftItem | None:
     existing = existing or get_draft(draft_id)
     if not existing:
         return None
@@ -169,7 +276,8 @@ def update_draft(
         )
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.update_item(
+        _update_item(
+            table,
             Key={"PK": draft_pk(draft_id), "SK": "META"},
             UpdateExpression="SET " + ", ".join(f"#{key} = :{key}" for key in updates),
             ExpressionAttributeNames=names,
@@ -190,21 +298,21 @@ def list_drafts(
     status: str | None = None,
     draft_type: str | None = None,
     limit: int | None = 100,
-) -> list[dict[str, Any]]:
-    filter_expr = Attr("entity_type").eq(DRAFT_ENTITY)
+) -> list[AIDraftItem]:
+    filter_expr: ConditionBase = Attr("entity_type").eq(DRAFT_ENTITY)
     if student_id is not None:
         filter_expr = filter_expr & Attr("student_id").eq(student_id)
     if status is not None:
         filter_expr = filter_expr & Attr("status").eq(status)
     if draft_type is not None:
         filter_expr = filter_expr & Attr("draft_type").eq(draft_type)
-    scan_kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
+    scan_kwargs: AIDraftItem = {"FilterExpression": filter_expr}
     if limit:
         scan_kwargs["Limit"] = limit
-    items: list[dict[str, Any]] = []
+    items: list[AIDraftItem] = []
     while True:
-        response = get_table().scan(**scan_kwargs)
-        items.extend(response.get("Items", []))
+        response = _scan(get_table(), **scan_kwargs)
+        items.extend(_items(response.get("Items", [])))
         if limit and len(items) >= limit:
             items = items[:limit]
             break
@@ -212,36 +320,36 @@ def list_drafts(
         if not last_key:
             break
         scan_kwargs["ExclusiveStartKey"] = last_key
-    return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
+    return sorted(items, key=_created_at, reverse=True)
 
 
 def scan_ai_draft_private_rows(
     owner_id: str,
     *,
-    cursor: Mapping[str, Any] | None = None,
+    cursor: Mapping[str, object] | None = None,
     maximum_pages: int = 1,
-    table: Any | None = None,
+    table: object | None = None,
 ) -> AIDraftPrivatePage:
     target = table or get_table()
     marker = _cursor(cursor) if cursor is not None else None
-    found: list[dict[str, Any]] = []
+    found: list[AIDraftItem] = []
     for _ in range(maximum_pages):
-        kwargs: dict[str, Any] = {"ConsistentRead": True}
+        kwargs: AIDraftItem = {"ConsistentRead": True}
         if marker:
             kwargs["ExclusiveStartKey"] = marker
-        response = target.scan(**kwargs)
+        response = _scan(target, **kwargs)
         items = response.get("Items", [])
         if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "malformed AI draft deletion page"
-            )
-        found.extend(
-            dict(item)
-            for item in items
-            if isinstance(item, Mapping)
-            and item.get("entity_type") == DRAFT_ENTITY
-            and owner_id in {item.get("student_id"), item.get("owner_id")}
-        )
+            raise account_deletion_repo.AccountDeletionConflict("malformed AI draft deletion page")
+        for raw in items:
+            if not isinstance(raw, Mapping):
+                continue
+            item = _mapping(raw)
+            if item.get("entity_type") == DRAFT_ENTITY and owner_id in {
+                item.get("student_id"),
+                item.get("owner_id"),
+            }:
+                found.append(item)
         raw_next = response.get("LastEvaluatedKey")
         if raw_next is None:
             return AIDraftPrivatePage(tuple(found))
@@ -255,13 +363,13 @@ def scan_ai_draft_private_rows(
 
 
 def scrub_ai_draft_private_row(
-    item: Mapping[str, Any],
+    item: Mapping[str, object],
     *,
     owner_id: str,
     generation: int,
     now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
+    table: object | None = None,
+) -> AIDraftItem:
     if owner_id not in {item.get("student_id"), item.get("owner_id")}:
         raise account_deletion_repo.AccountDeletionConflict("AI draft owner changed")
     candidate = {
@@ -281,9 +389,8 @@ def scrub_ai_draft_private_row(
         if key in AI_DRAFT_TOMBSTONE_ALLOWLIST and value is not None
     }
     target = table or get_table()
-    hook = getattr(target, "replace_learning_tombstone", None)
-    if callable(hook):
-        hook(dict(item), tombstone, owner_id, generation)
+    if isinstance(target, _TombstoneTable):
+        target.replace_learning_tombstone(_mapping(item), tombstone, owner_id, generation)
     else:
         account_deletion_repo.transact(
             [
@@ -291,9 +398,7 @@ def scrub_ai_draft_private_row(
                 {
                     "Put": {
                         "Item": tombstone,
-                        "ConditionExpression": (
-                            "attribute_exists(PK) AND attribute_exists(SK)"
-                        ),
+                        "ConditionExpression": ("attribute_exists(PK) AND attribute_exists(SK)"),
                     }
                 },
             ],
@@ -302,13 +407,11 @@ def scrub_ai_draft_private_row(
     return tombstone
 
 
-def _cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"PK", "SK"}
-        or any(not isinstance(value.get(key), str) or not value.get(key) for key in ("PK", "SK"))
-    ):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid AI draft deletion cursor"
-        )
-    return {"PK": str(value["PK"]), "SK": str(value["SK"])}
+def _cursor(value: object) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"PK", "SK"}:
+        raise account_deletion_repo.AccountDeletionConflict("invalid AI draft deletion cursor")
+    pk = value.get("PK")
+    sk = value.get("SK")
+    if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
+        raise account_deletion_repo.AccountDeletionConflict("invalid AI draft deletion cursor")
+    return {"PK": pk, "SK": sk}
