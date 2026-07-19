@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tomllib
 from types import SimpleNamespace
@@ -350,3 +351,55 @@ def test_backend_python_matrix_is_a_checked_in_registered_gate() -> None:
     assert spec.argv == (sys.executable, "scripts/release_gate.py", "python-hermetic")
     assert spec.artifact_paths == ("pyproject.toml", "uv.lock", "requirements.txt")
     assert spec.timeout_seconds >= 3600
+
+
+def test_formal_runtime_uses_the_declared_frozen_clock() -> None:
+    if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
+        return
+    from datetime import datetime, timezone
+
+    observed = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    assert observed == os.environ["STOA_PHASE474_CLOCK"]
+
+
+def test_formal_runtime_denies_direct_and_subprocess_network() -> None:
+    if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
+        return
+    import socket
+
+    from pytest_socket import SocketBlockedError
+
+    with pytest.raises(SocketBlockedError):
+        socket.create_connection(("1.1.1.1", 443), timeout=1)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import socket; socket.create_connection(('1.1.1.1', 443), timeout=2)",
+        ],
+        check=False,
+        capture_output=True,
+        timeout=5,
+    )
+    assert completed.returncode != 0
+
+
+def test_formal_runtime_denies_ambient_aws_discovery() -> None:
+    if os.environ.get("STOA_PHASE474_HERMETIC") != "1":
+        return
+    import boto3
+
+    for name in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AWS_ROLE_ARN",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+    ):
+        assert name not in os.environ
+    assert os.environ["AWS_EC2_METADATA_DISABLED"] == "true"
+    assert boto3.Session().get_credentials() is None

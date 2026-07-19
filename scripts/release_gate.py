@@ -9,11 +9,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 
@@ -26,6 +29,25 @@ EXECUTION_EXIT = 3
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 UTC_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$")
+PYTHON_MATRIX_SCHEMA = "stoa.phase474.python-matrix.v1"
+PYTHON_MATRIX_CLOCKS = (
+    "2026-07-01T12:00:00Z",
+    "2035-01-15T12:00:00Z",
+)
+PYTHON_MATRIX_SEED = 4740718
+PYTHON_SUITE_ARGV = ("python", "-m", "pytest", "-q")
+_PYTHON_MATRIX_SOURCE_FILES = ("pyproject.toml", "uv.lock", "requirements.txt")
+_PYTEST_MANIFEST_KEYS = {
+    "schema_version",
+    "clock",
+    "seed",
+    "runtime",
+    "lock_sha256",
+    "collection_sha256",
+    "nodes",
+    "counts",
+}
+_PYTEST_COUNT_KEYS = {"total", "passed", "failed", "error", "skipped", "xfail", "xpass"}
 
 _CANDIDATE_KEYS = {
     "schema",
@@ -110,6 +132,12 @@ class GateOperations:
     platform_identity: Callable[[], str]
 
 
+@dataclass(frozen=True)
+class PythonMatrixOperations:
+    run_process: Callable[[tuple[str, ...], dict[str, str], Path, int], ProcessResult]
+    network_boundary: Callable[[], tuple[str, ...] | None]
+
+
 class GateRegistry:
     """Typed registrations are the only executable command graph."""
 
@@ -139,6 +167,13 @@ def default_registry() -> GateRegistry:
                 argv=(sys.executable, "-c", "raise SystemExit(0)"),
                 artifact_paths=("evidence/phase-474/candidate-identity.json",),
                 config_paths=("schemas/release/gate-receipt-v1.schema.json",),
+            ),
+            GateSpec(
+                gate_id="backend-python-hermetic",
+                argv=(sys.executable, "scripts/release_gate.py", "python-hermetic"),
+                artifact_paths=_PYTHON_MATRIX_SOURCE_FILES,
+                config_paths=("scripts/phase474_pytest_guard.py", "tests/conftest.py"),
+                timeout_seconds=7200,
             ),
         )
     )
@@ -290,6 +325,230 @@ def _source(candidate: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _matrix_source_identity(root: Path) -> dict[str, dict[str, Any]]:
+    identities: dict[str, dict[str, Any]] = {}
+    for relative_path in _PYTHON_MATRIX_SOURCE_FILES:
+        path = root / relative_path
+        if path.is_symlink() or not path.is_file():
+            raise GatePolicyError("Python matrix source input is unavailable")
+        content = path.read_bytes()
+        identities[relative_path] = {
+            "bytes": len(content),
+            "sha256": sha256(content).hexdigest(),
+        }
+    return identities
+
+
+def _matrix_hermetic_environment(
+    source: Mapping[str, str], *, nonexistent_root: Path
+) -> dict[str, str]:
+    environment = dict(source)
+    for name in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_SECURITY_TOKEN",
+        "AWS_PROFILE",
+        "AWS_DEFAULT_PROFILE",
+        "AWS_ROLE_ARN",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
+        environment.pop(name, None)
+    environment["AWS_EC2_METADATA_DISABLED"] = "true"
+    environment["AWS_SHARED_CREDENTIALS_FILE"] = str(nonexistent_root / "credentials")
+    environment["AWS_CONFIG_FILE"] = str(nonexistent_root / "config")
+    return environment
+
+
+def _validate_pytest_manifest(
+    manifest: Mapping[str, Any], *, clock: str, lock_sha256: str
+) -> dict[str, Any]:
+    _require_exact_keys(manifest, _PYTEST_MANIFEST_KEYS, "pytest manifest")
+    if manifest.get("schema_version") != "stoa.phase474.pytest-nodes.v1":
+        raise GatePolicyError("pytest manifest schema is invalid")
+    if manifest.get("clock") != clock or manifest.get("seed") != PYTHON_MATRIX_SEED:
+        raise GatePolicyError("pytest clock or seed identity mismatch")
+    runtime = manifest.get("runtime")
+    if not isinstance(runtime, str) or re.fullmatch(r"3\.12\.[0-9]+", runtime) is None:
+        raise GatePolicyError("pytest runtime is not Python 3.12")
+    if manifest.get("lock_sha256") != lock_sha256:
+        raise GatePolicyError("pytest lock identity mismatch")
+    _require_sha(manifest.get("collection_sha256"), "pytest collection digest")
+
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict):
+        raise GatePolicyError("pytest outcome counts are malformed")
+    _require_exact_keys(counts, _PYTEST_COUNT_KEYS, "pytest outcome counts")
+    if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in counts.values()):
+        raise GatePolicyError("pytest outcome count is invalid")
+    if counts["total"] != sum(counts[name] for name in _PYTEST_COUNT_KEYS if name != "total"):
+        raise GatePolicyError("pytest outcome counts do not total")
+    if counts["total"] < 1 or counts["passed"] != counts["total"]:
+        raise GatePolicyError("pytest run contains a non-pass outcome")
+
+    nodes = manifest.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) != counts["total"]:
+        raise GatePolicyError("pytest node evidence is incomplete")
+    node_ids: list[str] = []
+    for node in nodes:
+        if not isinstance(node, dict) or set(node) != {"node_id", "outcome", "phases"}:
+            raise GatePolicyError("pytest node evidence is malformed")
+        node_id = node.get("node_id")
+        if not isinstance(node_id, str) or not node_id or node.get("outcome") != "passed":
+            raise GatePolicyError("pytest node evidence is not passing")
+        if not isinstance(node.get("phases"), list):
+            raise GatePolicyError("pytest node phases are malformed")
+        node_ids.append(node_id)
+    if node_ids != sorted(node_ids) or len(set(node_ids)) != len(node_ids):
+        raise GatePolicyError("pytest node ordering is invalid")
+
+    return {
+        "clock": clock,
+        "seed": PYTHON_MATRIX_SEED,
+        "runtime": runtime,
+        "lock_sha256": lock_sha256,
+        "collection_sha256": manifest["collection_sha256"],
+        "counts": dict(counts),
+    }
+
+
+def run_python_matrix(
+    *,
+    root: Path,
+    environment_paths: Sequence[Path],
+    operations: PythonMatrixOperations,
+    source_environment: Mapping[str, str],
+) -> dict[str, Any]:
+    """Acquire twice, then run the complete suite twice behind network-none isolation."""
+    root = root.resolve()
+    if len(environment_paths) != len(PYTHON_MATRIX_CLOCKS):
+        raise GatePolicyError("Python matrix requires exactly two fresh environments")
+    resolved_environments = tuple(path.resolve() for path in environment_paths)
+    if len(set(resolved_environments)) != len(resolved_environments):
+        raise GatePolicyError("Python matrix environments must be distinct")
+    for environment_path in resolved_environments:
+        if environment_path.exists():
+            raise GatePolicyError("Python matrix environment is not fresh")
+        if environment_path == root or root in environment_path.parents:
+            raise GatePolicyError("Python matrix environment must be outside the source tree")
+
+    source_identity = _matrix_source_identity(root)
+    boundary = operations.network_boundary()
+    base = {
+        "schema": PYTHON_MATRIX_SCHEMA,
+        "seed": PYTHON_MATRIX_SEED,
+        "clocks": list(PYTHON_MATRIX_CLOCKS),
+        "source": source_identity,
+        "suite_argv": list(PYTHON_SUITE_ARGV),
+    }
+    if boundary is None:
+        return {
+            **base,
+            "status": "NOT RUN",
+            "reason_code": "OS_NETWORK_BOUNDARY_UNAVAILABLE",
+            "runs": [],
+        }
+    if not boundary or boundary[-1] != "--":
+        raise GatePolicyError("OS network boundary command is malformed")
+
+    lock_sha256 = source_identity["uv.lock"]["sha256"]
+    runs: list[dict[str, Any]] = []
+    for index, (environment_path, clock) in enumerate(
+        zip(resolved_environments, PYTHON_MATRIX_CLOCKS, strict=True),
+        start=1,
+    ):
+        acquisition_environment = dict(source_environment)
+        acquisition_environment["UV_PROJECT_ENVIRONMENT"] = str(environment_path)
+        sync = operations.run_process(
+            ("uv", "sync", "--frozen", "--python", "3.12", "--extra", "dev"),
+            acquisition_environment,
+            root,
+            1800,
+        )
+        if sync.returncode != 0:
+            raise GatePolicyError("fresh Python environment sync failed")
+        if _matrix_source_identity(root) != source_identity:
+            raise GatePolicyError("source or lock drifted during Python environment sync")
+
+        environment_python = environment_path / "bin" / "python"
+        if not environment_python.is_file():
+            raise GatePolicyError("fresh Python environment is incomplete")
+        credential_root = environment_path / "phase474-no-credentials"
+        manifest_path = environment_path / "phase474-pytest-manifest.json"
+        test_environment = _matrix_hermetic_environment(
+            source_environment,
+            nonexistent_root=credential_root,
+        )
+        existing_path = test_environment.get("PATH", "")
+        test_environment.update(
+            {
+                "PATH": str(environment_path / "bin")
+                + (os.pathsep + existing_path if existing_path else ""),
+                "PYTHONHASHSEED": str(PYTHON_MATRIX_SEED),
+                "STOA_PHASE474_HERMETIC": "1",
+                "STOA_PHASE474_CLOCK": clock,
+                "STOA_PHASE474_SEED": str(PYTHON_MATRIX_SEED),
+                "STOA_PHASE474_LOCK": str(root / "uv.lock"),
+                "STOA_PHASE474_MANIFEST": str(manifest_path),
+                "STOA_PHASE474_CREDENTIAL_ROOT": str(credential_root),
+            }
+        )
+        completed = operations.run_process(
+            (*boundary, *PYTHON_SUITE_ARGV),
+            test_environment,
+            root,
+            1800,
+        )
+        if completed.returncode != 0 or not manifest_path.is_file():
+            raise GatePolicyError("hermetic complete Python suite failed")
+        if _matrix_source_identity(root) != source_identity:
+            raise GatePolicyError("source or lock drifted during Python verification")
+        manifest = load_json(manifest_path)
+        evidence = _validate_pytest_manifest(
+            manifest,
+            clock=clock,
+            lock_sha256=lock_sha256,
+        )
+        runs.append(
+            {
+                "run": index,
+                "environment": f"fresh-{index}",
+                **evidence,
+            }
+        )
+
+    if runs[0]["collection_sha256"] != runs[1]["collection_sha256"]:
+        raise GatePolicyError("Python matrix collection identity drifted")
+    return {
+        **base,
+        "status": "PASS",
+        "reason_code": None,
+        "runs": runs,
+    }
+
+
+def python_matrix_exit_code(result: Mapping[str, Any]) -> int:
+    if result.get("status") == "PASS" and result.get("reason_code") is None:
+        return 0
+    if (
+        result.get("status") == "NOT RUN"
+        and result.get("reason_code") == "OS_NETWORK_BOUNDARY_UNAVAILABLE"
+        and result.get("runs") == []
+    ):
+        return POLICY_EXIT
+    return EXECUTION_EXIT
+
+
 def _counts(*, passed: int = 0, failed: int = 0, errors: int = 0) -> dict[str, int]:
     return {
         "total": passed + failed + errors,
@@ -310,6 +569,71 @@ def _system_run(argv: tuple[str, ...], timeout_seconds: int) -> ProcessResult:
         timeout=timeout_seconds,
     )
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _system_matrix_run(
+    argv: tuple[str, ...],
+    environment: dict[str, str],
+    cwd: Path,
+    timeout_seconds: int,
+) -> ProcessResult:
+    completed = subprocess.run(
+        list(argv),
+        check=False,
+        capture_output=True,
+        cwd=cwd,
+        env=environment,
+        timeout=timeout_seconds,
+    )
+    return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _probe_boundary(argv: tuple[str, ...]) -> bool:
+    try:
+        completed = subprocess.run(
+            [*argv, "true"],
+            check=False,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def detect_network_boundary() -> tuple[str, ...] | None:
+    """Return a proved Linux network-none wrapper or exact local unavailability."""
+    if platform.system() != "Linux":
+        return None
+    if shutil.which("bwrap"):
+        bubblewrap = (
+            "bwrap",
+            "--unshare-net",
+            "--die-with-parent",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev-bind",
+            "/dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "--",
+        )
+        if _probe_boundary(bubblewrap):
+            return bubblewrap
+    if shutil.which("unshare"):
+        unshare = ("unshare", "--user", "--map-root-user", "--net", "--")
+        if _probe_boundary(unshare):
+            return unshare
+    return None
+
+
+def system_python_matrix_operations() -> PythonMatrixOperations:
+    return PythonMatrixOperations(
+        run_process=_system_matrix_run,
+        network_boundary=detect_network_boundary,
+    )
 
 
 def _system_git(root: Path, argv: tuple[str, ...]) -> str:
@@ -370,6 +694,32 @@ def run_registered_gate(
                 "reason_code": None,
                 "outcomes": _counts(passed=1),
             }
+        elif gate_id == "backend-python-hermetic" and completed.returncode == POLICY_EXIT:
+            try:
+                matrix = json.loads(stdout)
+            except (UnicodeError, json.JSONDecodeError):
+                matrix = None
+            if (
+                isinstance(matrix, dict)
+                and matrix.get("status") == "NOT RUN"
+                and matrix.get("reason_code") == "OS_NETWORK_BOUNDARY_UNAVAILABLE"
+                and matrix.get("runs") == []
+            ):
+                result = {
+                    "status": "NOT RUN",
+                    "classification": "NOT_RUN_OBLIGATION",
+                    "exit_code": POLICY_EXIT,
+                    "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
+                    "outcomes": _counts(),
+                }
+            else:
+                result = {
+                    "status": "FAIL",
+                    "classification": "POLICY_REJECTION",
+                    "exit_code": POLICY_EXIT,
+                    "reason_code": "GATE_COMMAND_FAILED",
+                    "outcomes": _counts(failed=1),
+                }
         else:
             result = {
                 "status": "FAIL",
@@ -564,6 +914,19 @@ def _execute(args: argparse.Namespace, command_name: str) -> int:
     return int(receipt["result"]["exit_code"])
 
 
+def _execute_python_matrix(args: argparse.Namespace) -> int:
+    with tempfile.TemporaryDirectory(prefix="stoa-phase474-python-") as temporary_root:
+        parent = Path(temporary_root)
+        result = run_python_matrix(
+            root=ROOT,
+            environment_paths=(parent / "standard", parent / "future"),
+            operations=system_python_matrix_operations(),
+            source_environment=os.environ,
+        )
+    write_json(result, Path(args.output) if args.output else None)
+    return python_matrix_exit_code(result)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -578,6 +941,13 @@ def build_parser() -> argparse.ArgumentParser:
     self_test.add_argument("--candidate", default=str(DEFAULT_CANDIDATE))
     self_test.add_argument("--output")
     self_test.set_defaults(func=lambda args: _execute(args, "self-test"))
+
+    python_hermetic = subparsers.add_parser(
+        "python-hermetic",
+        help="Run the two-environment Python 3.12 matrix",
+    )
+    python_hermetic.add_argument("--output")
+    python_hermetic.set_defaults(func=_execute_python_matrix)
     return parser
 
 
