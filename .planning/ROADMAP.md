@@ -343,13 +343,13 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 38 plans
+**Plans:** 80 plans
 
 Plans:
 
 **Wave 1**
 
-- [ ] `474-01` — Execution-time clean candidate preflight. *(blocking checkpoint)*
+- [ ] `474-01` — Automated execution-time clean candidate preflight.
 
 **Wave 2**
 
@@ -364,93 +364,143 @@ Plans:
 **Wave 4**
 
 - [ ] `474-05` — Dependency policy and measured advisory repair.
-- [ ] `474-26` — Minimum immutable CDK release topology.
+- [ ] `474-26` — Immutable release storage and scoped roles.
 
 **Wave 5**
 
-- [ ] `474-07` — Auth and security roots.
-- [ ] `474-23` — Web dependency and runtime-configuration contract.
+- [ ] `474-07` — Mypy-zero closure for identity, JWKS, token, and public-auth boundaries.
+- [ ] `474-23` — Web dependency remediation.
+- [ ] `474-39` — Mypy-zero closure for authorization metadata, route inventory, and reconciliation.
+- [ ] `474-77` — Published Lambda versions and environment aliases.
 
 **Wave 6**
 
-- [ ] `474-08` — Identity and security repositories.
-- [ ] `474-09` — Content and report repositories.
-- [ ] `474-10` — Domain and delivery repositories.
+- [ ] `474-08` — Mypy-zero closure for identity, capability, and user repositories.
+- [ ] `474-09` — Mypy-zero closure for DynamoDB attachment question and usage repositories.
+- [ ] `474-10` — Mypy-zero closure for curriculum and AI-operations repositories.
+- [ ] `474-40` — Mypy-zero closure for privileged activation and security-audit repositories.
+- [ ] `474-41` — Mypy-zero closure for report persistence.
+- [ ] `474-42` — Mypy-zero closure for notification and realtime repositories.
+- [ ] `474-43` — Mypy-zero closure for account-deletion repository.
+- [ ] `474-44` — Mypy-zero closure for adaptive-learning and practice repositories.
+- [ ] `474-45` — Mypy-zero closure for moderation repository.
+- [ ] `474-72` — Closed Web runtime-configuration contract.
+- [ ] `474-78` — Actually served immutable Web release pointer.
 
 **Wave 7**
 
-- [ ] `474-11` — Report document OCR and recovery services.
-- [ ] `474-12` — AI support moderation and subscription services.
-- [ ] `474-13` — Learning curriculum and teacher services.
-- [ ] `474-14` — Notification and account-deletion services.
+- [ ] `474-11` — Mypy-zero closure for report lifecycle artifact and recovery services.
+- [ ] `474-12` — Mypy-zero closure for AI provider and operations services.
+- [ ] `474-13` — Mypy-zero closure for curriculum adaptive-learning and profile services.
+- [ ] `474-14` — Mypy-zero closure for WebSocket and notification delivery services.
+- [ ] `474-15` — Mypy-zero closure for auth router.
+- [ ] `474-19` — Mypy-zero closure for security fixtures.
+- [ ] `474-46` — Mypy-zero closure for attachment validation extraction and OCR services.
+- [ ] `474-47` — Mypy-zero closure for subscription service.
+- [ ] `474-48` — Mypy-zero closure for support routing and SLA services.
+- [ ] `474-49` — Mypy-zero closure for production-pilot and moderation services.
+- [ ] `474-50` — Mypy-zero closure for AI-teacher and teacher-assistance services.
+- [ ] `474-51` — Mypy-zero closure for account-deletion orchestration service.
+- [ ] `474-52` — Mypy-zero closure for teacher-application router.
+- [ ] `474-59` — Mypy-zero closure for identity authorization and privileged-reconciliation tests.
+- [ ] `474-73` — Web runtime configuration bootstrap.
 
 **Wave 8**
 
-- [ ] `474-15` — Auth admin and teacher routers.
-- [ ] `474-16` — Learning question and file routers.
-- [ ] `474-17` — Parent conversation and notification routers.
+- [ ] `474-16` — Mypy-zero closure for practice and student routers.
+- [ ] `474-17` — Mypy-zero closure for parent and conversation routers.
+- [ ] `474-18` — Mypy-zero closure for weekly-report upload-cleanup and deletion jobs.
+- [ ] `474-21` — Mypy-zero closure for Phase 473 account and notification deletion fixtures.
+- [ ] `474-53` — Mypy-zero closure for admin and teacher routers.
+- [ ] `474-54` — Mypy-zero closure for question and file routers.
+- [ ] `474-55` — Mypy-zero closure for notification router.
+- [ ] `474-60` — Mypy-zero closure for attachment-security tests.
+- [ ] `474-61` — Mypy-zero closure for public identity and auth-boundary tests.
+- [ ] `474-62` — Mypy-zero closure for auth account-lifecycle tests.
+- [ ] `474-63` — Mypy-zero closure for usage-ledger and subscription tests.
+- [ ] `474-68` — Mypy-zero closure for Phase 473 delivery recovery and provider-state fixtures.
+- [ ] `474-69` — Mypy-zero closure for Phase 473 document and saved-attachment fixtures.
+- [ ] `474-71` — Mypy-zero closure for Phase 473 report-deletion fixture.
 
 **Wave 9**
 
-- [ ] `474-18` — Jobs scripts and inventory generators.
-- [ ] `474-19` — Auth security tests and fixtures.
-- [ ] `474-20` — Domain content and route tests.
-- [ ] `474-21` — Phase 473 regression fixtures.
+- [ ] `474-20` — Mypy-zero closure for conversation and parent route tests.
+- [ ] `474-56` — Mypy-zero closure for operator and practice-seed scripts.
+- [ ] `474-57` — Mypy-zero closure for Phase 473 inventory generators.
+- [ ] `474-58` — Mypy-zero closure for authorization audit and route-inventory tests.
+- [ ] `474-64` — Mypy-zero closure for file route tests.
+- [ ] `474-65` — Mypy-zero closure for report and question tests.
+- [ ] `474-66` — Mypy-zero closure for adaptive-learning and practice tests.
+- [ ] `474-67` — Mypy-zero closure for Phase 473 practice authorization and snapshot fixtures.
+- [ ] `474-70` — Mypy-zero closure for Phase 473 conversation and message-command fixtures.
 
 **Wave 10**
 
-- [ ] `474-22` — Full mypy-zero quality gate and conditional owner disposition. *(blocking checkpoint)*
+- [ ] `474-22` — Automated repository-wide mypy-zero gate and report.
 
 **Wave 11**
 
-- [ ] `474-24` — Web verifier Playwright policy and measured repairs.
+- [ ] `474-24` — Subordinate Web and OpenAPI verifier.
 
 **Wave 12**
 
-- [ ] `474-25` — Real-staging Web acceptance and thin frontend workflows.
-- [ ] `474-27` — Durable two-pointer delivery coordinator.
+- [ ] `474-74` — Strict release Playwright result policy.
 
 **Wave 13**
 
-- [ ] `474-28` — Thin exact-ref infrastructure workflow.
-- [ ] `474-29` — Frontend repository source handoff.
+- [ ] `474-75` — Measured Web browser-baseline repair.
 
 **Wave 14**
 
-- [ ] `474-30` — Infrastructure repository source handoff.
+- [ ] `474-25` — Non-intercepted real-staging Web acceptance.
+- [ ] `474-27` — Durable two-pointer delivery coordinator.
 
 **Wave 15**
 
-- [ ] `474-32` — Backend delivery workflow and environment controller.
+- [ ] `474-28` — Thin exact-ref infrastructure workflow.
+- [ ] `474-76` — Thin exact-ref frontend workflows.
 
 **Wave 16**
 
-- [ ] `474-31` — Backend source identity handoff.
+- [ ] `474-29` — Frontend repository source handoff.
+- [ ] `474-30` — Infrastructure repository source handoff.
 
 **Wave 17**
 
-- [ ] `474-33` — Live inventory protected environments and owner authority checkpoint. *(blocking checkpoint)*
+- [ ] `474-32` — Backend delivery workflow and environment controller.
 
 **Wave 18**
 
-- [ ] `474-34` — Immutable staging substrate bootstrap.
+- [ ] `474-31` — Backend source identity handoff.
 
 **Wave 19**
 
-- [ ] `474-35` — Live staging delivery smoke and controlled rollback.
+- [ ] `474-33` — Read-only live environment and CDK inventory.
 
 **Wave 20**
 
-- [ ] `474-36` — Integrated intentional-failure matrix.
+- [ ] `474-34` — Staging-only immutable CDK substrate.
+- [ ] `474-79` — GitHub protected environments only.
 
 **Wave 21**
 
-- [ ] `474-37` — Final multi-source coverage audit.
+- [ ] `474-80` — Owner verification of GitHub and staging evidence. *(blocking checkpoint)*
 
 **Wave 22**
 
-- [ ] `474-38` — Final evidence sealing and later-HEAD reverification.
+- [ ] `474-35` — Live staging delivery smoke and controlled rollback.
 
+**Wave 23**
+
+- [ ] `474-36` — Integrated intentional-failure matrix.
+
+**Wave 24**
+
+- [ ] `474-37` — Final multi-source coverage audit.
+
+**Wave 25**
+
+- [ ] `474-38` — Final evidence sealing and later-HEAD reverification.
 **Success criteria:**
 
 1. One authoritative command verifies exact clean backend/Web/infra identities; Python runs twice in fresh 3.12 frozen environments with zero skip/xfail/xpass and ambient AWS/network denial.
@@ -462,7 +512,7 @@ Plans:
 
 **Required evidence:** Three repository source receipts; two-clock gate receipts; quality/dependency/Web/CDK/workflow results; protected-environment owner verification; `staging-substrate.json`; live staging delivery/smoke; controlled rollback; failure matrix; source audit; final evidence index.
 
-**Exit gate:** All 70 task rows and the full gate pass, staging and rollback evidence are live and source-bound, production mutation remains exact `NOT RUN`, and zero source-audit item is missing.
+**Exit gate:** All 89 task rows and the full gate pass, staging and rollback evidence are live and source-bound, production mutation remains exact `NOT RUN`, and zero source-audit item is missing.
 
 ### Phase 475: Transactional Usage Assignment And Relationship Consistency
 
@@ -760,7 +810,7 @@ Phase 473 remains complete; its four nonblocking verification findings have one 
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 0/38 | Planning revision | - |
+| 474. Deterministic Verification And Gated Delivery | 0/80 | Planning revision | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 0/TBD | Not started | - |
 | 476. Billing Idempotency And Paid Access Recovery | 0/TBD | Not started | - |
 | 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
