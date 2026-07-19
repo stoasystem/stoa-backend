@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass
+from decimal import Decimal
 from hashlib import sha256
-from typing import Any
 
 from botocore.exceptions import ClientError
 
@@ -48,27 +49,124 @@ class PublicIdentityCommandState:
     updated_at: str = ""
 
     @classmethod
-    def from_item(cls, item: dict[str, Any]) -> "PublicIdentityCommandState":
-        fields = {field: item.get(field) for field in cls.__dataclass_fields__}
-        for flag in (
-            "provider_signup_complete",
-            "pending_profile_complete",
-            "binding_complete",
-            "canonical_group_complete",
-            "email_verification_complete",
-            "activation_complete",
+    def from_item(cls, item: Mapping[str, object]) -> "PublicIdentityCommandState":
+        state = cls(
+            email_digest=_required_text(item, "email_digest"),
+            email=_required_text(item, "email"),
+            issuer=_required_text(item, "issuer"),
+            subject=_required_text(item, "subject"),
+            user_id=_required_text(item, "user_id"),
+            role=_required_text(item, "role"),
+            registration_command=_required_text(item, "registration_command"),
+            fingerprint=_required_text(item, "fingerprint"),
+            provider_signup_complete=_boolean(item, "provider_signup_complete"),
+            pending_profile_complete=_boolean(item, "pending_profile_complete"),
+            binding_complete=_boolean(item, "binding_complete"),
+            canonical_group_complete=_boolean(item, "canonical_group_complete"),
+            email_verification_complete=_boolean(item, "email_verification_complete"),
+            activation_complete=_boolean(item, "activation_complete"),
+            version=_nonnegative_integer(item, "version", default=0),
+            created_at=_optional_text(item, "created_at"),
+            updated_at=_optional_text(item, "updated_at"),
+        )
+        try:
+            expected_email_digest = normalized_email_digest(state.email)
+        except ValueError:
+            raise _malformed_command() from None
+        expected_fingerprint = _fingerprint(
+            issuer=state.issuer,
+            subject=state.subject,
+            user_id=state.user_id,
+            role=state.role,
+            command=state.registration_command,
+        )
+        if (
+            state.role not in PUBLIC_ROLES
+            or state.registration_command != PUBLIC_REGISTRATION_COMMAND
+            or state.email_digest != expected_email_digest
+            or state.fingerprint != expected_fingerprint
         ):
-            fields[flag] = bool(fields[flag])
-        fields["version"] = int(fields["version"] or 0)
-        return cls(**fields)
+            raise _malformed_command()
+        return state
 
-    def as_item(self) -> dict[str, Any]:
+    def as_item(self) -> dict[str, object]:
         return {
             "PK": f"PUBLIC_IDENTITY#{self.email_digest}",
             "SK": "COMMAND",
             "entity_type": "public_identity_command",
-            **asdict(self),
+            "email_digest": self.email_digest,
+            "email": self.email,
+            "issuer": self.issuer,
+            "subject": self.subject,
+            "user_id": self.user_id,
+            "role": self.role,
+            "registration_command": self.registration_command,
+            "fingerprint": self.fingerprint,
+            "provider_signup_complete": self.provider_signup_complete,
+            "pending_profile_complete": self.pending_profile_complete,
+            "binding_complete": self.binding_complete,
+            "canonical_group_complete": self.canonical_group_complete,
+            "email_verification_complete": self.email_verification_complete,
+            "activation_complete": self.activation_complete,
+            "version": self.version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
+
+
+def _malformed_command() -> ValueError:
+    return ValueError("malformed public identity command")
+
+
+def _required_text(item: Mapping[str, object], field: str) -> str:
+    value = item.get(field)
+    if not isinstance(value, str) or not value:
+        raise _malformed_command()
+    return value
+
+
+def _optional_text(item: Mapping[str, object], field: str) -> str:
+    value = item.get(field, "")
+    if not isinstance(value, str):
+        raise _malformed_command()
+    return value
+
+
+def _boolean(
+    item: Mapping[str, object], field: str, *, default: bool = False
+) -> bool:
+    value = item.get(field, default)
+    if not isinstance(value, bool):
+        raise _malformed_command()
+    return value
+
+
+def _nonnegative_integer(
+    item: Mapping[str, object], field: str, *, default: int
+) -> int:
+    value = item.get(field, default)
+    if isinstance(value, bool):
+        raise _malformed_command()
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+    else:
+        raise _malformed_command()
+    if parsed < 0:
+        raise _malformed_command()
+    return parsed
+
+
+def _string_keyed_mapping(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise _malformed_command()
+    result: dict[str, object] = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise _malformed_command()
+        result[key] = member
+    return result
 
 
 def _fingerprint(*, issuer: str, subject: str, user_id: str, role: str, command: str) -> str:
@@ -168,7 +266,11 @@ def get_public_identity_command(email: str) -> PublicIdentityCommandState | None
         ConsistentRead=True,
     )
     item = response.get("Item")
-    return PublicIdentityCommandState.from_item(dict(item)) if item else None
+    return (
+        PublicIdentityCommandState.from_item(_string_keyed_mapping(item))
+        if item is not None
+        else None
+    )
 
 
 def require_command_fence(command: PublicIdentityCommandState) -> int:
@@ -206,7 +308,7 @@ def advance_public_identity_command(
     if not updates or any(value is not True for value in updates.values()):
         raise ValueError("command transitions may only mark convergence steps complete")
     names = {"#version": "version", "#updated_at": "updated_at"}
-    values: dict[str, Any] = {
+    values: dict[str, object] = {
         ":expected_version": expected_version,
         ":next_version": expected_version + 1,
         ":updated_at": updated_at,
@@ -236,4 +338,6 @@ def advance_public_identity_command(
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             raise PublicIdentityCommandConflict("stale public identity command transition") from exc
         raise
-    return PublicIdentityCommandState.from_item(dict(response.get("Attributes") or {}))
+    return PublicIdentityCommandState.from_item(
+        _string_keyed_mapping(response.get("Attributes"))
+    )

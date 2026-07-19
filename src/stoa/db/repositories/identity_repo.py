@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from hashlib import sha256
-from typing import Any
 
 from botocore.exceptions import ClientError
 
@@ -14,6 +14,9 @@ from stoa.db.repositories import account_deletion_repo
 
 class IdentityBindingConflict(RuntimeError):
     """The external identity is already bound to a different local user."""
+
+
+type IdentityItem = dict[str, object]
 
 
 def issuer_hash(issuer: str) -> str:
@@ -30,7 +33,7 @@ def create_identity_binding(
     user_id: str,
     created_at: str,
     created_by: str,
-) -> dict[str, Any]:
+) -> IdentityItem:
     normalized_issuer = issuer.strip().rstrip("/")
     normalized_subject = subject.strip()
     normalized_user_id = user_id.strip()
@@ -113,18 +116,22 @@ def create_identity_binding(
 
 
 def _create_or_repair_identity_inventory(
-    binding: dict[str, Any], *, created_at: str
+    binding: Mapping[str, object], *, created_at: str
 ) -> None:
     """Create only the reverse row that exactly describes an authoritative binding."""
 
+    user_id = _required_text(binding, "user_id")
+    issuer = _required_text(binding, "issuer")
+    subject = _required_text(binding, "subject")
+    binding_pk = _required_text(binding, "PK")
     inventory = {
-        "PK": f"USER#{binding['user_id']}",
-        "SK": f"IDENTITY#{issuer_hash(binding['issuer'])}#{binding['subject']}",
+        "PK": f"USER#{user_id}",
+        "SK": f"IDENTITY#{issuer_hash(issuer)}#{subject}",
         "entity_type": "user_identity_inventory",
-        "issuer": binding["issuer"],
-        "subject": binding["subject"],
-        "user_id": binding["user_id"],
-        "binding_pk": binding["PK"],
+        "issuer": issuer,
+        "subject": subject,
+        "user_id": user_id,
+        "binding_pk": binding_pk,
         "created_at": created_at,
     }
     table = get_table()
@@ -140,13 +147,13 @@ def _create_or_repair_identity_inventory(
             Key={"PK": inventory["PK"], "SK": inventory["SK"]},
             ConsistentRead=True,
         )
-        existing = response.get("Item") or {}
+        existing = _optional_item(response.get("Item")) or {}
         immutable = ("issuer", "subject", "user_id", "binding_pk")
         if any(existing.get(field) != inventory[field] for field in immutable):
             raise IdentityBindingConflict("identity inventory conflicts with binding") from exc
 
 
-def get_identity_binding(issuer: str, subject: str) -> dict[str, Any] | None:
+def get_identity_binding(issuer: str, subject: str) -> IdentityItem | None:
     response = get_table().get_item(
         Key={
             "PK": f"IDENTITY#{issuer_hash(issuer)}#{subject.strip()}",
@@ -155,10 +162,10 @@ def get_identity_binding(issuer: str, subject: str) -> dict[str, Any] | None:
         ConsistentRead=True,
     )
     item = response.get("Item")
-    return dict(item) if item else None
+    return _optional_item(item)
 
 
-def get_current_capability_grants(user_id: str) -> list[dict[str, Any]]:
+def get_current_capability_grants(user_id: str) -> list[IdentityItem]:
     from stoa.db.repositories import capability_repo
 
     return capability_repo.get_current_grants(user_id, table_factory=get_table)
@@ -167,18 +174,44 @@ def get_current_capability_grants(user_id: str) -> list[dict[str, Any]]:
 class DynamoIdentityRepository:
     """Async request adapter around the existing synchronous DynamoDB wrapper."""
 
-    async def get_binding(self, issuer: str, subject: str) -> dict[str, Any] | None:
+    async def get_binding(self, issuer: str, subject: str) -> IdentityItem | None:
         return await asyncio.to_thread(get_identity_binding, issuer, subject)
 
-    async def get_account_fence(self, user_id: str) -> dict[str, Any] | None:
-        from stoa.db.repositories import account_deletion_repo
+    async def get_account_fence(self, user_id: str) -> IdentityItem | None:
+        return await asyncio.to_thread(_get_account_fence, user_id)
 
-        return await asyncio.to_thread(account_deletion_repo.get_account_fence, user_id)
+    async def get_account(self, user_id: str) -> IdentityItem | None:
+        return await asyncio.to_thread(_get_account, user_id)
 
-    async def get_account(self, user_id: str) -> dict[str, Any] | None:
-        from stoa.db.repositories import user_repo
-
-        return await asyncio.to_thread(user_repo.get_user, user_id)
-
-    async def get_current_grants(self, user_id: str) -> list[dict[str, Any]]:
+    async def get_current_grants(self, user_id: str) -> list[IdentityItem]:
         return await asyncio.to_thread(get_current_capability_grants, user_id)
+
+
+def _get_account_fence(user_id: str) -> IdentityItem | None:
+    return _optional_item(account_deletion_repo.get_account_fence(user_id))
+
+
+def _get_account(user_id: str) -> IdentityItem | None:
+    from stoa.db.repositories import user_repo
+
+    return _optional_item(user_repo.get_user(user_id))
+
+
+def _required_text(item: Mapping[str, object], field: str) -> str:
+    value = item.get(field)
+    if not isinstance(value, str) or not value:
+        raise ValueError("malformed identity binding")
+    return value
+
+
+def _optional_item(value: object) -> IdentityItem | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ValueError("malformed identity repository response")
+    item: IdentityItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise ValueError("malformed identity repository response")
+        item[key] = member
+    return item

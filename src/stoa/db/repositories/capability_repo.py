@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from decimal import Decimal
 from hashlib import sha256
-from typing import Any, Callable, Mapping
+from typing import Literal, NotRequired, Protocol, TypedDict, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
 from boto3.dynamodb.types import TypeSerializer
@@ -43,6 +45,58 @@ KNOWN_CAPABILITIES = frozenset(
 
 class CapabilityVersionConflict(RuntimeError):
     """A capability transition was based on stale or conflicting state."""
+
+
+type CapabilityItem = dict[str, object]
+
+
+class _ConditionOperation(TypedDict):
+    kind: Literal["condition"]
+    key: dict[str, str]
+    expected: dict[str, object]
+
+
+class _PutOperation(TypedDict):
+    kind: Literal["put"]
+    item: CapabilityItem
+    condition: Literal["absent", "revoked_generation", "exact"]
+    expected: NotRequired[dict[str, object]]
+
+
+type _CapabilityOperation = _ConditionOperation | _PutOperation
+
+
+@runtime_checkable
+class _CapabilityQueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _CapabilityGetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _CapabilityTransactionApplier(Protocol):
+    def apply_capability_transaction(
+        self, operations: list[_CapabilityOperation]
+    ) -> None: ...
+
+
+class _DynamoTransactionClient(Protocol):
+    def transact_write_items(
+        self, *, TransactItems: list[dict[str, object]]
+    ) -> object: ...
+
+
+class _DynamoMeta(Protocol):
+    client: _DynamoTransactionClient
+
+
+@runtime_checkable
+class _DynamoCapabilityTable(Protocol):
+    name: str
+    meta: _DynamoMeta
 
 
 def _scope_key(scope: str) -> str:
@@ -97,11 +151,11 @@ def grant_capability(
     effective_at: str,
     expected_generation: int,
     expires_at: str | None = None,
-    table_factory: Callable[[], Any] | None = None,
-) -> dict[str, Any]:
+    table_factory: Callable[[], object] | None = None,
+) -> CapabilityItem:
     """Create a new grant lineage, never restore an historical grant."""
     values = [user_id, command_id, grant_id, capability, scope, grantor_id, reason, effective_at]
-    if any(not str(value).strip() for value in values) or expected_generation < 0:
+    if any(not value.strip() for value in values) or expected_generation < 0:
         raise ValueError("complete capability grant command fields are required")
     if capability not in KNOWN_CAPABILITIES:
         raise ValueError("unknown capability")
@@ -113,10 +167,12 @@ def grant_capability(
     target_student = _target_student_from_scope(scope)
     if target_student:
         fence_user_ids.add(target_student)
-    fence_operations = []
+    fence_operations: list[_CapabilityOperation] = []
     for fence_user_id in sorted(fence_user_ids):
-        fence = account_deletion_repo.require_active_account_fence(
-            fence_user_id, table=table
+        fence = _mapping(
+            account_deletion_repo.require_active_account_fence(
+                fence_user_id, table=table
+            )
         )
         fence_operations.append(
             {
@@ -124,7 +180,7 @@ def grant_capability(
                 "key": account_deletion_repo.account_fence_key(fence_user_id),
                 "expected": {
                     "status": "active",
-                    "generation": int(fence["generation"]),
+                    "generation": _required_positive_integer(fence, "generation"),
                 },
             }
         )
@@ -137,7 +193,8 @@ def grant_capability(
     else:
         if (
             pointer.get("status") != "revoked"
-            or int(pointer.get("generation") or 0) != expected_generation
+            or _required_positive_integer(pointer, "generation")
+            != expected_generation
         ):
             raise CapabilityVersionConflict("replacement requires the exact revoked generation")
         if command_id in {pointer.get("command_id"), pointer.get("last_action_id")}:
@@ -146,7 +203,7 @@ def grant_capability(
             raise CapabilityVersionConflict("replacement requires a new grant identity")
         generation = expected_generation + 1
 
-    revision = {
+    revision: CapabilityItem = {
         **_version_key(user_id, capability, scope, generation, grant_id, 1),
         "entity_type": "capability_grant_revision",
         "user_id": user_id,
@@ -164,7 +221,7 @@ def grant_capability(
         "version": 1,
         "updated_at": effective_at,
     }
-    next_pointer = {
+    next_pointer: CapabilityItem = {
         **pointer_key,
         "entity_type": "capability_grant_current",
         "user_id": user_id,
@@ -206,8 +263,8 @@ def revoke_capability(
     reason: str,
     changed_at: str,
     action_id: str,
-    table_factory: Callable[[], Any] | None = None,
-) -> dict[str, Any]:
+    table_factory: Callable[[], object] | None = None,
+) -> CapabilityItem:
     """Revoke the exact current pointer, with replay-safe immutable evidence."""
     if expected_generation < 1 or expected_version < 1:
         raise ValueError("expected generation and version are required")
@@ -240,7 +297,7 @@ def revoke_capability(
     if any(pointer.get(key) != value for key, value in expected.items()):
         raise CapabilityVersionConflict("stale capability current pointer")
     next_version = expected_version + 1
-    revoked = {
+    revoked: CapabilityItem = {
         **_version_key(user_id, capability, scope, expected_generation, grant_id, next_version),
         "entity_type": "capability_grant_revision",
         "user_id": user_id,
@@ -258,7 +315,7 @@ def revoke_capability(
         "updated_by": actor_id,
         "last_action_id": action_id,
     }
-    next_pointer = {
+    next_pointer: CapabilityItem = {
         **pointer,
         "current_version": next_version,
         "status": "revoked",
@@ -280,42 +337,49 @@ def get_current_grants(
     user_id: str,
     *,
     now: datetime | None = None,
-    table_factory: Callable[[], Any] | None = None,
-) -> list[dict[str, Any]]:
+    table_factory: Callable[[], object] | None = None,
+) -> list[CapabilityItem]:
     """Authorize only exact active pointer/revision pairs, with fail-closed legacy fallback."""
     table = (table_factory or get_table)()
     items = [dict(item) for item in _query_user_capabilities(table, user_id)]
     pointers = [item for item in items if item.get("entity_type") == "capability_grant_current"]
-    revisions = {
-        (item["PK"], item["SK"]): item
-        for item in items
-        if item.get("entity_type") == "capability_grant_revision"
-    }
+    revisions: dict[tuple[str, str], CapabilityItem] = {}
+    for item in items:
+        if item.get("entity_type") == "capability_grant_revision":
+            revisions[
+                (_required_text(item, "PK"), _required_text(item, "SK"))
+            ] = item
     instant = now or datetime.now(UTC)
-    current: list[dict[str, Any]] = []
+    current: list[CapabilityItem] = []
     pointer_lineages: set[tuple[str, str]] = set()
     for pointer in pointers:
-        lineage = (str(pointer.get("capability")), str(pointer.get("scope_hash")))
+        lineage = (
+            _text_or_empty(pointer.get("capability")),
+            _text_or_empty(pointer.get("scope_hash")),
+        )
         pointer_lineages.add(lineage)
         if pointer.get("status") != "active":
             continue
         key = _version_key(
             user_id,
-            str(pointer.get("capability")),
-            str(pointer.get("scope")),
-            int(pointer.get("generation") or 0),
-            str(pointer.get("current_grant_id")),
-            int(pointer.get("current_version") or 0),
+            _required_text(pointer, "capability"),
+            _required_text(pointer, "scope"),
+            _required_positive_integer(pointer, "generation"),
+            _required_text(pointer, "current_grant_id"),
+            _required_positive_integer(pointer, "current_version"),
         )
         revision = revisions.get((key["PK"], key["SK"])) or _get(table, key)
         if revision and _exact_revision(pointer, revision) and _effective(revision, instant):
             current.append(dict(revision))
 
-    legacy: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    legacy: dict[tuple[str, str], list[CapabilityItem]] = {}
     for item in items:
         if item.get("entity_type") != "capability_grant":
             continue
-        lineage = (str(item.get("capability")), _scope_key(str(item.get("scope") or "")))
+        lineage = (
+            _text_or_empty(item.get("capability")),
+            _scope_key(_text_or_empty(item.get("scope"))),
+        )
         if lineage not in pointer_lineages:
             legacy.setdefault(lineage, []).append(item)
     for rows in legacy.values():
@@ -325,18 +389,24 @@ def get_current_grants(
     return current
 
 
-def _migrate_and_revoke_legacy(**values: Any) -> dict[str, Any]:
-    table = values.pop("table")
-    user_id = values["user_id"]
-    capability = values["capability"]
-    scope = values["scope"]
-    grant_id = values["grant_id"]
-    expected_version = values["expected_version"]
+def _migrate_and_revoke_legacy(
+    *,
+    table: object,
+    user_id: str,
+    grant_id: str,
+    capability: str,
+    scope: str,
+    expected_version: int,
+    actor_id: str,
+    reason: str,
+    changed_at: str,
+    action_id: str,
+) -> CapabilityItem:
     rows = [
         row for row in _query_user_capabilities(table, user_id)
         if row.get("entity_type") == "capability_grant"
         and row.get("capability") == capability
-        and _scope_key(str(row.get("scope") or "")) == _scope_key(scope)
+        and _scope_key(_text_or_empty(row.get("scope"))) == _scope_key(scope)
     ]
     if len(rows) != 1:
         raise CapabilityVersionConflict("legacy capability lineage is ambiguous")
@@ -344,26 +414,26 @@ def _migrate_and_revoke_legacy(**values: Any) -> dict[str, Any]:
     if (
         legacy.get("grant_id") != grant_id
         or legacy.get("status") != "active"
-        or int(legacy.get("version") or 0) != expected_version
+        or _required_positive_integer(legacy, "version") != expected_version
     ):
         raise CapabilityVersionConflict("stale legacy capability grant")
-    active = {
+    active: CapabilityItem = {
         **legacy,
         **_version_key(user_id, capability, scope, 1, grant_id, expected_version),
         "entity_type": "capability_grant_revision",
         "generation": 1,
     }
-    revoked = {
+    revoked: CapabilityItem = {
         **active,
         **_version_key(user_id, capability, scope, 1, grant_id, expected_version + 1),
         "status": "revoked",
         "version": expected_version + 1,
-        "reason": values["reason"],
-        "updated_at": values["changed_at"],
-        "updated_by": values["actor_id"],
-        "last_action_id": values["action_id"],
+        "reason": reason,
+        "updated_at": changed_at,
+        "updated_by": actor_id,
+        "last_action_id": action_id,
     }
-    pointer = {
+    pointer: CapabilityItem = {
         **_pointer_key(user_id, capability, scope),
         "entity_type": "capability_grant_current",
         "user_id": user_id,
@@ -374,11 +444,16 @@ def _migrate_and_revoke_legacy(**values: Any) -> dict[str, Any]:
         "generation": 1,
         "current_version": expected_version + 1,
         "status": "revoked",
-        "updated_at": values["changed_at"],
-        "updated_by": values["actor_id"],
-        "last_action_id": values["action_id"],
+        "updated_at": changed_at,
+        "updated_by": actor_id,
+        "last_action_id": action_id,
     }
-    migrated = {**legacy, "status": "revoked", "migrated": True, "last_action_id": values["action_id"]}
+    migrated: CapabilityItem = {
+        **legacy,
+        "status": "revoked",
+        "migrated": True,
+        "last_action_id": action_id,
+    }
     _apply(
         table,
         [
@@ -394,78 +469,114 @@ def _migrate_and_revoke_legacy(**values: Any) -> dict[str, Any]:
     return revoked
 
 
-def _exact_revision(pointer: Mapping[str, Any], revision: Mapping[str, Any]) -> bool:
+def _exact_revision(
+    pointer: Mapping[str, object], revision: Mapping[str, object]
+) -> bool:
+    revision_grant_id = _nonempty_text(revision.get("grant_id"))
+    pointer_grant_id = _nonempty_text(pointer.get("current_grant_id"))
+    revision_capability = _nonempty_text(revision.get("capability"))
+    pointer_capability = _nonempty_text(pointer.get("capability"))
+    revision_scope_hash = _nonempty_text(revision.get("scope_hash"))
+    pointer_scope_hash = _nonempty_text(pointer.get("scope_hash"))
+    revision_generation = _positive_integer(revision.get("generation"))
+    pointer_generation = _positive_integer(pointer.get("generation"))
+    revision_version = _positive_integer(revision.get("version"))
+    pointer_version = _positive_integer(pointer.get("current_version"))
     return all(
         (
-            revision.get("grant_id") == pointer.get("current_grant_id"),
-            revision.get("capability") == pointer.get("capability"),
-            revision.get("scope_hash") == pointer.get("scope_hash"),
-            int(revision.get("generation") or 0) == int(pointer.get("generation") or 0),
-            int(revision.get("version") or 0) == int(pointer.get("current_version") or 0),
+            revision_grant_id is not None,
+            revision_grant_id == pointer_grant_id,
+            revision_capability is not None,
+            revision_capability == pointer_capability,
+            revision_scope_hash is not None,
+            revision_scope_hash == pointer_scope_hash,
+            revision_generation is not None,
+            revision_generation == pointer_generation,
+            revision_version is not None,
+            revision_version == pointer_version,
             revision.get("status") == pointer.get("status") == "active",
         )
     )
 
 
-def _effective(item: Mapping[str, Any], instant: datetime) -> bool:
+def _effective(item: Mapping[str, object], instant: datetime) -> bool:
     effective = _parse_time(item.get("effective_at"))
     expires = _parse_time(item.get("expires_at"))
     return not ((effective and effective > instant) or (expires and expires <= instant))
 
 
-def _valid_legacy(item: Mapping[str, Any], instant: datetime) -> bool:
+def _valid_legacy(item: Mapping[str, object], instant: datetime) -> bool:
     return bool(
         item.get("status") == "active"
-        and int(item.get("version") or 0) > 0
-        and item.get("capability")
-        and item.get("scope")
-        and item.get("grant_id")
+        and _positive_integer(item.get("version")) is not None
+        and _nonempty_text(item.get("capability")) is not None
+        and _nonempty_text(item.get("scope")) is not None
+        and _nonempty_text(item.get("grant_id")) is not None
         and not item.get("migrated")
         and _effective(item, instant)
     )
 
 
-def _revision_for_pointer(table: Any, pointer: Mapping[str, Any]) -> dict[str, Any] | None:
+def _revision_for_pointer(
+    table: object, pointer: Mapping[str, object]
+) -> CapabilityItem | None:
     key = _version_key(
-        str(pointer["user_id"]), str(pointer["capability"]), str(pointer["scope"]),
-        int(pointer["generation"]), str(pointer["current_grant_id"]), int(pointer["current_version"]),
+        _required_text(pointer, "user_id"),
+        _required_text(pointer, "capability"),
+        _required_text(pointer, "scope"),
+        _required_positive_integer(pointer, "generation"),
+        _required_text(pointer, "current_grant_id"),
+        _required_positive_integer(pointer, "current_version"),
     )
     return _get(table, key)
 
 
-def _query_user_capabilities(table: Any, user_id: str) -> list[dict[str, Any]]:
-    response = table.query(
-        KeyConditionExpression=Key("PK").eq(_pk(user_id)) & Key("SK").begins_with("CAPABILITY"),
-        ConsistentRead=True,
+def _query_user_capabilities(table: object, user_id: str) -> list[CapabilityItem]:
+    if not isinstance(table, _CapabilityQueryTable):
+        raise RuntimeError("capability repository query is unavailable")
+    response = _mapping(
+        table.query(
+            KeyConditionExpression=Key("PK").eq(_pk(user_id))
+            & Key("SK").begins_with("CAPABILITY"),
+            ConsistentRead=True,
+        )
     )
-    return [dict(item) for item in response.get("Items", [])]
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list):
+        raise ValueError("malformed capability repository response")
+    return [_mapping(item) for item in raw_items]
 
 
-def _get(table: Any, key: Mapping[str, str]) -> dict[str, Any] | None:
-    if hasattr(table, "get_item"):
-        response = table.get_item(Key=dict(key), ConsistentRead=True)
-        return dict(response["Item"]) if response.get("Item") else None
+def _get(table: object, key: Mapping[str, str]) -> CapabilityItem | None:
+    if isinstance(table, _CapabilityGetTable):
+        response = _mapping(
+            table.get_item(Key=dict(key), ConsistentRead=True)
+        )
+        item = response.get("Item")
+        return _mapping(item) if item is not None else None
     rows = _query_user_capabilities(table, key["PK"].removeprefix("USER#"))
     return next((row for row in rows if row.get("SK") == key["SK"]), None)
 
 
-def _apply(table: Any, operations: list[dict[str, Any]]) -> None:
+def _apply(table: object, operations: list[_CapabilityOperation]) -> None:
     """Apply one atomic transaction; fakes may expose the same high-level contract."""
     try:
-        if hasattr(table, "apply_capability_transaction"):
+        if isinstance(table, _CapabilityTransactionApplier):
             table.apply_capability_transaction(operations)
             return
+        if not isinstance(table, _DynamoCapabilityTable):
+            raise RuntimeError("capability repository transaction is unavailable")
         serializer = TypeSerializer()
         table_name = table.name
-        transact_items = []
+        transact_items: list[dict[str, object]] = []
         for operation in operations:
             if operation["kind"] == "condition":
-                names = {}
-                values = {}
-                clauses = []
+                condition_names: dict[str, str] = {}
+                condition_values: dict[str, object] = {}
+                clauses: list[str] = []
                 for index, (field, value) in enumerate(operation["expected"].items()):
-                    names[f"#n{index}"] = field
-                    values[f":v{index}"] = serializer.serialize(value)
+                    condition_names[f"#n{index}"] = field
+                    condition_values[f":v{index}"] = serializer.serialize(value)
                     clauses.append(f"#n{index} = :v{index}")
                 transact_items.append(
                     {
@@ -476,33 +587,33 @@ def _apply(table: Any, operations: list[dict[str, Any]]) -> None:
                                 for key, value in operation["key"].items()
                             },
                             "ConditionExpression": " AND ".join(clauses),
-                            "ExpressionAttributeNames": names,
-                            "ExpressionAttributeValues": values,
+                            "ExpressionAttributeNames": condition_names,
+                            "ExpressionAttributeValues": condition_values,
                         }
                     }
                 )
                 continue
             item = operation["item"]
-            names: dict[str, str] = {}
-            values: dict[str, Any] = {}
+            put_names: dict[str, str] = {}
+            put_values: dict[str, object] = {}
             condition = operation.get("condition")
             if condition == "absent":
                 expression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
             else:
                 clauses = []
                 for index, (field, value) in enumerate(operation.get("expected", {}).items()):
-                    names[f"#n{index}"] = field
-                    values[f":v{index}"] = serializer.serialize(value)
+                    put_names[f"#n{index}"] = field
+                    put_values[f":v{index}"] = serializer.serialize(value)
                     clauses.append(f"#n{index} = :v{index}")
                 expression = " AND ".join(clauses)
-            put: dict[str, Any] = {
+            put: dict[str, object] = {
                 "TableName": table_name,
                 "Item": {key: serializer.serialize(value) for key, value in item.items() if value is not None},
                 "ConditionExpression": expression,
             }
-            if names:
-                put["ExpressionAttributeNames"] = names
-                put["ExpressionAttributeValues"] = values
+            if put_names:
+                put["ExpressionAttributeNames"] = put_names
+                put["ExpressionAttributeValues"] = put_values
             transact_items.append({"Put": put})
         table.meta.client.transact_write_items(TransactItems=transact_items)
     except ClientError as exc:
@@ -513,16 +624,63 @@ def _apply(table: Any, operations: list[dict[str, Any]]) -> None:
         raise
 
 
-def _parse_time(value: Any) -> datetime | None:
+def _parse_time(value: object) -> datetime | None:
     if not value:
         return None
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if not isinstance(value, str):
+        raise ValueError("malformed capability timestamp")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _target_student_from_scope(scope: str) -> str | None:
-    normalized = str(scope).strip()
+    normalized = scope.strip()
     for prefix in ("student:", "student/"):
         if normalized.startswith(prefix) and normalized[len(prefix):].strip():
             return normalized[len(prefix):].strip()
     return None
+
+
+def _mapping(value: object) -> CapabilityItem:
+    if not isinstance(value, Mapping):
+        raise ValueError("malformed capability repository response")
+    item: CapabilityItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise ValueError("malformed capability repository response")
+        item[key] = member
+    return item
+
+
+def _required_text(item: Mapping[str, object], field: str) -> str:
+    value = item.get(field)
+    if not isinstance(value, str) or not value:
+        raise ValueError("malformed capability repository response")
+    return value
+
+
+def _text_or_empty(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _nonempty_text(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _positive_integer(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+    else:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _required_positive_integer(item: Mapping[str, object], field: str) -> int:
+    parsed = _positive_integer(item.get(field))
+    if parsed is None:
+        raise ValueError("malformed capability repository response")
+    return parsed
