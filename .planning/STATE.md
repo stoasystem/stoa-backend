@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-41-PLAN.md
-last_updated: "2026-07-19T18:10:49.495Z"
+stopped_at: Completed 474-42-PLAN.md
+last_updated: "2026-07-19T18:36:16.983Z"
 last_activity: 2026-07-19 -- Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 142
-  completed_plans: 76
+  completed_plans: 77
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 15 of 80
+Plan: 16 of 80
 Status: Ready to execute
 Last activity: 2026-07-19 -- Phase 474 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T18:10:49.490Z
-**Stopped At:** Completed 474-41-PLAN.md
+**Last Date:** 2026-07-19T18:36:16.977Z
+**Stopped At:** Completed 474-42-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -191,6 +191,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P10 | 9 min | 1 tasks | 3 files |
 | Phase 474 P40 | 7 min | 1 tasks | 3 files |
 | Phase 474 P41 | 10 min | 1 tasks | 1 files |
+| Phase 474 P42 | 6 min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -358,3 +359,6 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: Report persistence keeps the central table object-valued and narrows only the operation used by each path. — Operation-specific Protocols preserve central diagnostics and least-capability test fakes.
 - [Phase 474]: Provider mappings and collections are validated before report lifecycle decisions. — Malformed pagination, recovery, retention, and deletion inputs fail through stable redacted conflicts.
 - [Phase 474]: Opaque report pagination tokens retain the exact Invalid pagination token contract. — Decoded JSON is narrowed to string-keyed records without changing the public recovery behavior.
+- [Phase 474]: DynamoDB notification and connection responses remain object-valued until runtime narrowing establishes safe use. — String-keyed mapping, item-list, cursor, text, and integer checks prevent provider values from becoming trusted through annotation alone.
+- [Phase 474]: Notification and WebSocket paths validate only the table capability each operation invokes. — Operation-specific Protocols preserve least-capability test fakes and validate the actual provider boundary.
+- [Phase 474]: Malformed notification and WebSocket provider responses use stable redacted conflicts. — Delivery identity, account fences, pagination behavior, and coordinate privacy remain unchanged.
