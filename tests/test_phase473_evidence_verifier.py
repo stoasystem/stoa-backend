@@ -525,7 +525,12 @@ def test_candidate_snapshot_reads_immutable_git_blobs_not_publication_child(
     ]
 
 
-def _publication_repo(tmp_path: Path, *, commit: bool = True) -> tuple[Path, str]:
+def _publication_repo(
+    tmp_path: Path,
+    *,
+    extra_publication_path: bool = False,
+    intermediate_parent: bool = False,
+) -> tuple[Path, str, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -545,6 +550,8 @@ def _publication_repo(tmp_path: Path, *, commit: bool = True) -> tuple[Path, str
     _json(manifest, {"schema_version": "stale"})
     _commit(repo, "candidate evidence baseline")
     candidate = _git(repo, "rev-parse", "HEAD")
+    if intermediate_parent:
+        _git(repo, "commit", "--allow-empty", "-m", "intermediate metadata")
     _json(results, {"schema_version": "phase-473-test-results.v1", "candidate_sha": candidate})
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(f"candidate `{candidate}`\n", encoding="utf-8")
@@ -568,47 +575,122 @@ def _publication_repo(tmp_path: Path, *, commit: bool = True) -> tuple[Path, str
             "artifacts": artifacts,
         },
     )
-    if commit:
-        _commit(repo, "publication")
-    return repo, candidate
-
-
-@pytest.mark.parametrize("mutation", ["hash", "self", "parent", "extra", "dirty"])
-def test_publication_rejects_hash_ancestry_path_and_cleanliness_drift(
-    tmp_path: Path, mutation: str
-) -> None:
-    verifier = _load_verifier()
-    repo, candidate = _publication_repo(tmp_path)
-    manifest_path = repo / "docs/security/phase-473-evidence-manifest.json"
-    if mutation == "hash":
-        data = json.loads(manifest_path.read_text())
-        data["artifacts"][0]["sha256"] = "0" * 64
-        _json(manifest_path, data)
-    elif mutation == "self":
-        data = json.loads(manifest_path.read_text())
-        data["artifacts"].append(
-            {"path": "docs/security/phase-473-evidence-manifest.json", "bytes": 1, "sha256": "0" * 64}
-        )
-        _json(manifest_path, data)
-    elif mutation == "parent":
-        _git(repo, "commit", "--allow-empty", "-m", "wrong parent")
-    elif mutation == "extra":
+    if extra_publication_path:
         (repo / "extra.txt").write_text("extra\n", encoding="utf-8")
         _git(repo, "add", "extra.txt")
-        _git(repo, "commit", "-m", "extra path")
-    elif mutation == "dirty":
-        (repo / "source.py").write_text("VALUE = 2\n", encoding="utf-8")
-    with pytest.raises(verifier.EvidenceError):
-        verifier.verify_publication(repo, candidate, dirty=False)
+    publication = _commit(repo, "publication")
+    return repo, candidate, publication
 
 
-def test_publication_accepts_exact_direct_four_path_child(tmp_path: Path) -> None:
+def test_publication_accepts_explicit_pair_from_later_metadata_head(
+    tmp_path: Path,
+) -> None:
     verifier = _load_verifier()
-    repo, candidate = _publication_repo(tmp_path)
-    verifier.verify_publication(repo, candidate, dirty=False)
+    repo, candidate, publication = _publication_repo(tmp_path)
+    _git(repo, "commit", "--allow-empty", "-m", "later metadata")
+
+    verifier.verify_publication(repo, candidate, publication)
 
 
-def test_publication_accepts_exact_dirty_four_path_draft(tmp_path: Path) -> None:
+def test_publication_rejects_later_mutation_of_immutable_artifact(
+    tmp_path: Path,
+) -> None:
     verifier = _load_verifier()
-    repo, candidate = _publication_repo(tmp_path, commit=False)
-    verifier.verify_publication(repo, candidate, dirty=True)
+    repo, candidate, publication = _publication_repo(tmp_path)
+    evidence = repo / "docs/security/phase-473-evidence.md"
+    evidence.write_text(evidence.read_text(encoding="utf-8") + "mutated\n", encoding="utf-8")
+    _git(repo, "add", evidence.relative_to(repo).as_posix())
+    _git(repo, "commit", "-m", "mutate publication artifact")
+
+    with pytest.raises(verifier.EvidenceError, match="blob|artifact|changed"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_publication_rejects_extra_path_in_publication_commit(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(
+        tmp_path, extra_publication_path=True
+    )
+
+    with pytest.raises(verifier.EvidenceError, match="four|path"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_publication_rejects_non_direct_candidate_pair(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(
+        tmp_path, intermediate_parent=True
+    )
+
+    with pytest.raises(verifier.EvidenceError, match="direct|parent"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_publication_rejects_sideways_head(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(tmp_path)
+    _git(repo, "switch", "--detach", candidate)
+    _git(repo, "commit", "--allow-empty", "-m", "sideways metadata")
+
+    with pytest.raises(verifier.EvidenceError, match="descend|ancestor"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_publication_rejects_merge_publication(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(tmp_path)
+    tree = _git(repo, "rev-parse", f"{publication}^{{tree}}")
+    side = _git(repo, "commit-tree", tree, "-p", candidate, "-m", "side parent")
+    merged = _git(
+        repo,
+        "commit-tree",
+        tree,
+        "-p",
+        candidate,
+        "-p",
+        side,
+        "-m",
+        "merge publication",
+    )
+    _git(repo, "switch", "--detach", merged)
+
+    with pytest.raises(verifier.EvidenceError, match="one parent|merge"):
+        verifier.verify_publication(repo, candidate, merged)
+
+
+def test_publication_rejects_missing_blob_at_later_head(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(tmp_path)
+    evidence = repo / "docs/security/phase-473-evidence.md"
+    evidence.unlink()
+    _git(repo, "add", evidence.relative_to(repo).as_posix())
+    _git(repo, "commit", "-m", "remove publication artifact")
+
+    with pytest.raises(verifier.EvidenceError, match="blob|missing"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_publication_rejects_inferred_or_implicit_commit_names(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(tmp_path)
+
+    for stale_or_inferred in (candidate[:12], "HEAD", "main"):
+        with pytest.raises(verifier.EvidenceError, match="explicit|commit|SHA"):
+            verifier.verify_publication(repo, stale_or_inferred, publication)
+
+
+def test_publication_rejects_dirty_later_worktree(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    repo, candidate, publication = _publication_repo(tmp_path)
+    (repo / "source.py").write_text("VALUE = 2\n", encoding="utf-8")
+
+    with pytest.raises(verifier.EvidenceError, match="clean"):
+        verifier.verify_publication(repo, candidate, publication)
+
+
+def test_verify_publication_cli_requires_explicit_publication(tmp_path: Path) -> None:
+    verifier = _load_verifier()
+    _, candidate, _ = _publication_repo(tmp_path)
+
+    with pytest.raises(SystemExit):
+        verifier.main(["verify-publication", "--candidate", candidate])
