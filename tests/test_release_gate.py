@@ -239,3 +239,164 @@ def _load_gate() -> Any:
     spec.loader.exec_module(module)
     return module
 
+
+def _operations(gate: Any, *, returncode: int = 0, raises: bool = False) -> Any:
+    moments = iter(["2026-07-19T00:00:00Z", "2026-07-19T00:00:01Z"])
+
+    def run_process(argv: tuple[str, ...], timeout_seconds: int) -> Any:
+        assert argv
+        assert timeout_seconds == 120
+        if raises:
+            raise OSError("provider diagnostic TOP_SECRET=must-not-serialize")
+        return gate.ProcessResult(
+            returncode=returncode,
+            stdout=b"TOP_SECRET=must-not-serialize\n",
+            stderr=b"bounded diagnostic\n",
+        )
+
+    return gate.GateOperations(
+        run_process=run_process,
+        git=lambda root, argv: "",
+        now_utc=lambda: next(moments),
+        python_version=lambda: "3.12.11",
+        platform_identity=lambda: "linux-aarch64",
+    )
+
+
+def test_canonical_receipt_digest_is_order_independent_and_tamper_evident() -> None:
+    gate = _load_gate()
+    receipt = _receipt()
+    receipt["receipt_sha256"] = gate.canonical_receipt_sha256(receipt)
+    reordered = dict(reversed(list(receipt.items())))
+    assert gate.canonical_receipt_sha256(reordered) == receipt["receipt_sha256"]
+
+    receipt["runtime"]["clock"] = "2035-01-15T12:00:00Z"
+    assert gate.canonical_receipt_sha256(receipt) != receipt["receipt_sha256"]
+
+
+def test_registry_rejects_duplicate_and_unknown_gate_ids() -> None:
+    gate = _load_gate()
+    spec = gate.GateSpec(
+        gate_id="gate-self-test",
+        argv=(sys.executable, "-c", "raise SystemExit(0)"),
+        artifact_paths=("evidence/phase-474/candidate-identity.json",),
+        config_paths=("schemas/release/gate-receipt-v1.schema.json",),
+    )
+    with pytest.raises(gate.GatePolicyError, match="duplicate gate id"):
+        gate.GateRegistry((spec, spec))
+    with pytest.raises(gate.GatePolicyError, match="unknown gate id"):
+        gate.GateRegistry((spec,)).require("frontend-build")
+
+
+def test_registered_gate_emits_a_source_bound_privacy_safe_receipt() -> None:
+    gate = _load_gate()
+    candidate = gate.load_candidate(CANDIDATE_PATH)
+    receipt = gate.run_registered_gate(
+        gate_id="gate-self-test",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=_operations(gate),
+    )
+
+    gate.validate_receipt(receipt, candidate=candidate, registry=gate.default_registry())
+    encoded = json.dumps(receipt, sort_keys=True)
+    assert receipt["result"]["classification"] == "COMPLETE_PASS"
+    assert receipt["result"]["outcomes"] == _counts()
+    assert "TOP_SECRET" not in encoded
+    assert "must-not-serialize" not in encoded
+    assert receipt["source"]["candidate_identity"] == candidate["execution_identity"]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "raises", "classification", "exit_code"),
+    [
+        (7, False, "POLICY_REJECTION", 2),
+        (0, True, "EXECUTION_FAILURE", 3),
+    ],
+)
+def test_policy_rejection_and_unexpected_execution_failure_stay_distinct(
+    returncode: int,
+    raises: bool,
+    classification: str,
+    exit_code: int,
+) -> None:
+    gate = _load_gate()
+    candidate = gate.load_candidate(CANDIDATE_PATH)
+    receipt = gate.run_registered_gate(
+        gate_id="gate-self-test",
+        command_name="self-test",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=_operations(gate, returncode=returncode, raises=raises),
+    )
+    assert receipt["result"]["classification"] == classification
+    assert receipt["result"]["exit_code"] == exit_code
+    assert "provider diagnostic" not in json.dumps(receipt)
+    gate.validate_receipt(receipt, candidate=candidate, registry=gate.default_registry())
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        ("source", lambda value: value["source"].__setitem__("candidate_identity", "b" * 64)),
+        ("argv", lambda value: value["command"]["argv"].append("--ci-only")),
+        ("counts", lambda value: value["result"]["outcomes"].__setitem__("skipped", 1)),
+        ("artifact digest", lambda value: value["inputs"]["artifacts"][0].__setitem__("sha256", "b" * 64)),
+        ("receipt digest", lambda value: value.__setitem__("receipt_sha256", "b" * 64)),
+    ],
+)
+def test_runtime_validation_rejects_single_field_tampering(label: str, mutate: Any) -> None:
+    gate = _load_gate()
+    candidate = gate.load_candidate(CANDIDATE_PATH)
+    receipt = gate.run_registered_gate(
+        gate_id="gate-self-test",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=_operations(gate),
+    )
+    mutate(receipt)
+    with pytest.raises(gate.GatePolicyError, match=".+"):
+        gate.validate_receipt(receipt, candidate=candidate, registry=gate.default_registry())
+
+
+def test_cli_exposes_only_registered_gate_selection_not_caller_argv() -> None:
+    gate = _load_gate()
+    parser = gate.build_parser()
+    args = parser.parse_args(
+        ["verify", "--candidate", str(CANDIDATE_PATH), "--gate", "gate-self-test"]
+    )
+    assert args.gate == "gate-self-test"
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "verify",
+                "--candidate",
+                str(CANDIDATE_PATH),
+                "--gate",
+                "gate-self-test",
+                "--argv",
+                "pytest -q",
+            ]
+        )
+
+
+def test_candidate_validation_preserves_exact_plan_01_identity_and_not_run_fields() -> None:
+    gate = _load_gate()
+    candidate = gate.load_candidate(CANDIDATE_PATH)
+    assert candidate["execution_identity"] == "0ce6ef7946e87ca41d05cb0c395ee58eea66dd61c41a100ede11ba06e9a3582c"
+    assert candidate["repositories"][2]["root"] == "/Users/zhdeng/stoa-infra"
+    for field in (
+        "repository_mutation",
+        "production_infrastructure",
+        "production_deploy",
+        "production_smoke",
+        "production_rollback",
+    ):
+        assert candidate[field] == "NOT RUN"
+
+    tampered = deepcopy(candidate)
+    tampered["repositories"][2]["root"] = "/tmp/stoa-infra"
+    with pytest.raises(gate.GatePolicyError, match="infra repository identity"):
+        gate.validate_candidate(tampered)
