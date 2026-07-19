@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.invalid/schemas/release/release-manifest-v1.schema.json",
+  "title": "STOA closed cross-repository release manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "release_id",
+    "identity_source",
+    "candidate_execution_identity",
+    "repositories",
+    "runtime",
+    "gates",
+    "artifacts",
+    "configs",
+    "production",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "stoa.release.manifest.v1"},
+    "release_id": {"$ref": "#/$defs/sha256"},
+    "identity_source": {"const": "execution-receipted-git-objects"},
+    "candidate_execution_identity": {"$ref": "#/$defs/sha256"},
+    "repositories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"$ref": "#/$defs/backend_repository"},
+        {"$ref": "#/$defs/frontend_repository"},
+        {"$ref": "#/$defs/infra_repository"}
+      ],
+      "items": false
+    },
+    "runtime": {"$ref": "#/$defs/runtime"},
+    "gates": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "prefixItems": [
+        {"$ref": "#/$defs/gate_candidate"},
+        {"$ref": "#/$defs/gate_backend_standard"},
+        {"$ref": "#/$defs/gate_backend_future"},
+        {"$ref": "#/$defs/gate_backend_ruff"},
+        {"$ref": "#/$defs/gate_backend_mypy"},
+        {"$ref": "#/$defs/gate_backend_dependencies"},
+        {"$ref": "#/$defs/gate_frontend_install"},
+        {"$ref": "#/$defs/gate_frontend_eslint"},
+        {"$ref": "#/$defs/gate_frontend_typecheck"},
+        {"$ref": "#/$defs/gate_frontend_build"},
+        {"$ref": "#/$defs/gate_frontend_dependencies"},
+        {"$ref": "#/$defs/gate_frontend_contract"},
+        {"$ref": "#/$defs/gate_frontend_playwright"},
+        {"$ref": "#/$defs/gate_release_provenance"},
+        {"$ref": "#/$defs/gate_artifact_integrity"}
+      ],
+      "items": false
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/backend_artifact"},
+        {"$ref": "#/$defs/frontend_artifact"}
+      ],
+      "items": false
+    },
+    "configs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/backend_config"},
+        {"$ref": "#/$defs/frontend_config"}
+      ],
+      "items": false
+    },
+    "production": {"$ref": "#/$defs/production"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256", "clean"],
+      "properties": {
+        "name": {"type": "string"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"type": "string"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "clean": {"const": true}
+      }
+    },
+    "backend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256", "clean"],
+      "properties": {
+        "name": {"const": "backend"}, "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"}, "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}, "clean": {"const": true}
+      }
+    },
+    "frontend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256", "clean"],
+      "properties": {
+        "name": {"const": "frontend"}, "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"}, "lock_path": {"const": "package-lock.json"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}, "clean": {"const": true}
+      }
+    },
+    "infra_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256", "clean"],
+      "properties": {
+        "name": {"const": "infra"}, "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"}, "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}, "clean": {"const": true}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend_python", "lambda_runtime", "lambda_platform", "lambda_architecture", "web_node", "web_npm", "web_platform"],
+      "properties": {
+        "backend_python": {"type": "string", "pattern": "^3\\.12\\.[0-9]+$"},
+        "lambda_runtime": {"const": "python3.12"},
+        "lambda_platform": {"const": "manylinux2014_aarch64"},
+        "lambda_architecture": {"const": "arm64"},
+        "web_node": {"type": "string", "pattern": "^20\\.[0-9]+\\.[0-9]+$"},
+        "web_npm": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "web_platform": {"const": "linux-x64"}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "receipt_sha256", "run_id", "status"],
+      "properties": {
+        "gate_id": {"type": "string"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
+        "status": {"const": "PASS"}
+      }
+    },
+    "gate_candidate": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "candidate-source"}}},
+    "gate_backend_standard": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-python-standard"}}},
+    "gate_backend_future": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-python-future"}}},
+    "gate_backend_ruff": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-ruff"}}},
+    "gate_backend_mypy": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-mypy"}}},
+    "gate_backend_dependencies": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "backend-dependencies"}}},
+    "gate_frontend_install": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-locked-install"}}},
+    "gate_frontend_eslint": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-eslint"}}},
+    "gate_frontend_typecheck": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-typecheck"}}},
+    "gate_frontend_build": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-build"}}},
+    "gate_frontend_dependencies": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-dependencies"}}},
+    "gate_frontend_contract": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-contract"}}},
+    "gate_frontend_playwright": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "frontend-playwright"}}},
+    "gate_release_provenance": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "release-provenance"}}},
+    "gate_artifact_integrity": {"$ref": "#/$defs/gate", "properties": {"gate_id": {"const": "artifact-integrity"}}},
+    "byte_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "bytes", "sha256"],
+      "properties": {
+        "name": {"type": "string"}, "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "backend_artifact": {"$ref": "#/$defs/byte_identity", "properties": {"name": {"const": "backend-lambda-zip"}}},
+    "frontend_artifact": {"$ref": "#/$defs/byte_identity", "properties": {"name": {"const": "frontend-web-bundle"}}},
+    "backend_config": {"$ref": "#/$defs/byte_identity", "properties": {"name": {"const": "backend-runtime-config"}}},
+    "frontend_config": {"$ref": "#/$defs/byte_identity", "properties": {"name": {"const": "frontend-runtime-config"}}},
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["infrastructure", "deploy", "smoke", "rollback"],
+      "properties": {
+        "infrastructure": {"const": "NOT RUN"}, "deploy": {"const": "NOT RUN"},
+        "smoke": {"const": "NOT RUN"}, "rollback": {"const": "NOT RUN"}
+      }
+    }
+  }
+}
