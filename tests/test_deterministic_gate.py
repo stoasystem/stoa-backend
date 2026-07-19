@@ -3,7 +3,9 @@ from __future__ import annotations
 from hashlib import sha256
 import importlib.util
 import json
+import os
 from pathlib import Path
+import sys
 import tomllib
 from types import SimpleNamespace
 from typing import Any
@@ -13,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GUARD_PATH = ROOT / "scripts" / "phase474_pytest_guard.py"
+RELEASE_GATE_PATH = ROOT / "scripts" / "release_gate.py"
 
 
 def _load_guard() -> Any:
@@ -20,6 +23,15 @@ def _load_guard() -> Any:
     spec = importlib.util.spec_from_file_location("phase474_pytest_guard", GUARD_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_release_gate() -> Any:
+    spec = importlib.util.spec_from_file_location("phase474_release_gate", RELEASE_GATE_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -183,3 +195,158 @@ def test_hermetic_environment_removes_ambient_aws_and_proxy_paths() -> None:
     assert environment["AWS_CONFIG_FILE"].endswith("config")
     assert environment["PATH"] == "/usr/bin"
 
+
+def _matrix_project(tmp_path: Path) -> Path:
+    project = tmp_path / "project"
+    project.mkdir()
+    for name, content in (
+        ("pyproject.toml", "[project]\nname = 'matrix'\nversion = '1'\n"),
+        ("uv.lock", "version = 1\n"),
+        ("requirements.txt", "example==1\n"),
+    ):
+        (project / name).write_text(content, encoding="utf-8")
+    return project
+
+
+def _matrix_operations(gate: Any, project: Path, *, mismatch: bool = False) -> tuple[Any, list[Any]]:
+    calls: list[Any] = []
+
+    def run_process(
+        argv: tuple[str, ...], environment: dict[str, str], cwd: Path, timeout_seconds: int
+    ) -> Any:
+        calls.append((argv, dict(environment), cwd, timeout_seconds))
+        assert cwd == project
+        if argv[:2] == ("uv", "sync"):
+            environment_path = Path(environment["UV_PROJECT_ENVIRONMENT"])
+            python = environment_path / "bin" / "python"
+            python.parent.mkdir(parents=True)
+            python.write_text("", encoding="utf-8")
+            return gate.ProcessResult(0, b"sync", b"")
+
+        manifest_path = Path(environment["STOA_PHASE474_MANIFEST"])
+        clock = environment["STOA_PHASE474_CLOCK"]
+        collection = "b" * 64 if mismatch and clock.startswith("2035") else "a" * 64
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "stoa.phase474.pytest-nodes.v1",
+                    "clock": clock,
+                    "seed": 4740718,
+                    "runtime": "3.12.13",
+                    "lock_sha256": sha256((project / "uv.lock").read_bytes()).hexdigest(),
+                    "collection_sha256": collection,
+                    "nodes": [{"node_id": "tests/test_ok.py::test_ok", "outcome": "passed", "phases": []}],
+                    "counts": {
+                        "total": 1,
+                        "passed": 1,
+                        "failed": 0,
+                        "error": 0,
+                        "skipped": 0,
+                        "xfail": 0,
+                        "xpass": 0,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return gate.ProcessResult(0, b"pytest", b"")
+
+    return (
+        gate.PythonMatrixOperations(
+            run_process=run_process,
+            network_boundary=lambda: ("network-none", "--"),
+        ),
+        calls,
+    )
+
+
+def test_python_matrix_returns_exact_not_run_without_an_os_boundary(tmp_path: Path) -> None:
+    gate = _load_release_gate()
+    project = _matrix_project(tmp_path)
+    operations = gate.PythonMatrixOperations(
+        run_process=lambda *args: pytest.fail("no process may run without the required boundary"),
+        network_boundary=lambda: None,
+    )
+
+    result = gate.run_python_matrix(
+        root=project,
+        environment_paths=(tmp_path / "env-one", tmp_path / "env-two"),
+        operations=operations,
+        source_environment={"PATH": "/usr/bin"},
+    )
+
+    assert result["status"] == "NOT RUN"
+    assert result["reason_code"] == "OS_NETWORK_BOUNDARY_UNAVAILABLE"
+    assert result["runs"] == []
+    assert gate.python_matrix_exit_code(result) == 2
+
+
+def test_python_matrix_uses_two_fresh_envs_and_identical_suite_argv(tmp_path: Path) -> None:
+    gate = _load_release_gate()
+    project = _matrix_project(tmp_path)
+    operations, calls = _matrix_operations(gate, project)
+    environment_paths = (tmp_path / "env-one", tmp_path / "env-two")
+
+    result = gate.run_python_matrix(
+        root=project,
+        environment_paths=environment_paths,
+        operations=operations,
+        source_environment={
+            "PATH": "/usr/bin",
+            "AWS_ACCESS_KEY_ID": "ambient",
+            "HTTPS_PROXY": "http://ambient.invalid",
+        },
+    )
+
+    assert result["status"] == "PASS"
+    assert gate.python_matrix_exit_code(result) == 0
+    assert [run["clock"] for run in result["runs"]] == list(gate.PYTHON_MATRIX_CLOCKS)
+    assert result["runs"][0]["collection_sha256"] == result["runs"][1]["collection_sha256"]
+    sync_calls = [call for call in calls if call[0][:2] == ("uv", "sync")]
+    test_calls = [call for call in calls if call[0][:2] != ("uv", "sync")]
+    assert len(sync_calls) == len(test_calls) == 2
+    assert sync_calls[0][1]["UV_PROJECT_ENVIRONMENT"] != sync_calls[1][1]["UV_PROJECT_ENVIRONMENT"]
+    assert [call[0][2:] for call in test_calls] == [gate.PYTHON_SUITE_ARGV] * 2
+    for _, environment, _, _ in test_calls:
+        assert "AWS_ACCESS_KEY_ID" not in environment
+        assert "HTTPS_PROXY" not in environment
+        assert environment["AWS_EC2_METADATA_DISABLED"] == "true"
+        assert environment["STOA_PHASE474_HERMETIC"] == "1"
+
+
+def test_python_matrix_rejects_a_warm_environment(tmp_path: Path) -> None:
+    gate = _load_release_gate()
+    project = _matrix_project(tmp_path)
+    operations, _ = _matrix_operations(gate, project)
+    warm = tmp_path / "warm"
+    warm.mkdir()
+
+    with pytest.raises(gate.GatePolicyError, match="fresh"):
+        gate.run_python_matrix(
+            root=project,
+            environment_paths=(warm, tmp_path / "fresh"),
+            operations=operations,
+            source_environment=os.environ,
+        )
+
+
+def test_python_matrix_rejects_collection_drift(tmp_path: Path) -> None:
+    gate = _load_release_gate()
+    project = _matrix_project(tmp_path)
+    operations, _ = _matrix_operations(gate, project, mismatch=True)
+
+    with pytest.raises(gate.GatePolicyError, match="collection"):
+        gate.run_python_matrix(
+            root=project,
+            environment_paths=(tmp_path / "env-one", tmp_path / "env-two"),
+            operations=operations,
+            source_environment=os.environ,
+        )
+
+
+def test_backend_python_matrix_is_a_checked_in_registered_gate() -> None:
+    gate = _load_release_gate()
+    spec = gate.default_registry().require("backend-python-hermetic")
+    assert spec.argv == (sys.executable, "scripts/release_gate.py", "python-hermetic")
+    assert spec.artifact_paths == ("pyproject.toml", "uv.lock", "requirements.txt")
+    assert spec.timeout_seconds >= 3600
