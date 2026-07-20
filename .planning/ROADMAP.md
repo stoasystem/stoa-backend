@@ -448,7 +448,7 @@ Plans:
 - [x] `474-86` — Exact live candidate issuance and stale-source rejection.
 - [ ] `474-24` — Subordinate Web and OpenAPI verifier.
 - [x] `474-87` — Exact fresh-install Web subordinate verifier.
-- [ ] `474-88` — Candidate-bound fresh Web evidence registration.
+- [x] `474-88` — Candidate-bound fresh Web evidence registration.
 
 **Wave 12**
 
