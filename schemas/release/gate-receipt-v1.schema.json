@@ -88,7 +88,6 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "root",
         "head",
         "tree",
         "lock_path",
@@ -98,7 +97,6 @@
       ],
       "properties": {
         "name": {"type": "string"},
-        "root": {"type": "string"},
         "head": {"$ref": "#/$defs/git_sha"},
         "tree": {"$ref": "#/$defs/git_sha"},
         "lock_path": {"type": "string"},
@@ -112,7 +110,6 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "root",
         "head",
         "tree",
         "lock_path",
@@ -122,7 +119,6 @@
       ],
       "properties": {
         "name": {"const": "backend"},
-        "root": {"const": "/Users/zhdeng/stoa-backend"},
         "head": {"$ref": "#/$defs/git_sha"},
         "tree": {"$ref": "#/$defs/git_sha"},
         "lock_path": {"const": "uv.lock"},
@@ -136,7 +132,6 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "root",
         "head",
         "tree",
         "lock_path",
@@ -146,7 +141,6 @@
       ],
       "properties": {
         "name": {"const": "frontend"},
-        "root": {"const": "/Users/zhdeng/stoa-frontend"},
         "head": {"$ref": "#/$defs/git_sha"},
         "tree": {"$ref": "#/$defs/git_sha"},
         "lock_path": {"const": "package-lock.json"},
@@ -160,7 +154,6 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "root",
         "head",
         "tree",
         "lock_path",
@@ -170,7 +163,6 @@
       ],
       "properties": {
         "name": {"const": "infra"},
-        "root": {"const": "/Users/zhdeng/stoa-infra"},
         "head": {"$ref": "#/$defs/git_sha"},
         "tree": {"$ref": "#/$defs/git_sha"},
         "lock_path": {"const": "uv.lock"},
@@ -201,9 +193,11 @@
     "command": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "argv"],
+      "required": ["name", "repository", "cwd", "argv"],
       "properties": {
         "name": {"enum": ["verify", "self-test"]},
+        "repository": {"enum": ["backend", "frontend", "infra"]},
+        "cwd": {"$ref": "#/$defs/relative_path"},
         "argv": {
           "type": "array",
           "minItems": 2,
@@ -225,8 +219,9 @@
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "bytes", "sha256"],
+      "required": ["repository", "path", "bytes", "sha256"],
       "properties": {
+        "repository": {"enum": ["backend", "frontend", "infra"]},
         "path": {"$ref": "#/$defs/relative_path"},
         "bytes": {"type": "integer", "minimum": 1},
         "sha256": {"$ref": "#/$defs/sha256"}

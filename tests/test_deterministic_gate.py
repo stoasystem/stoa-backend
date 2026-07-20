@@ -420,7 +420,7 @@ def test_python_matrix_cli_overwrites_stale_pass_with_closed_collection_drift_ev
 def test_backend_python_matrix_is_a_checked_in_registered_gate() -> None:
     gate = _load_release_gate()
     spec = gate.default_registry().require("backend-python-hermetic")
-    assert spec.argv == (sys.executable, "scripts/release_gate.py", "python-hermetic")
+    assert spec.argv == ("{python}", "scripts/release_gate.py", "python-hermetic")
     assert spec.artifact_paths == ("pyproject.toml", "uv.lock", "requirements.txt")
     assert spec.timeout_seconds >= 3600
 

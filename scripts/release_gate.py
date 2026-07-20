@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from typing import Any
 
 
@@ -92,7 +93,6 @@ _CANDIDATE_KEYS = {
 }
 _REPOSITORY_KEYS = {
     "name",
-    "root",
     "head",
     "tree",
     "lock_path",
@@ -101,10 +101,17 @@ _REPOSITORY_KEYS = {
     "clean",
 }
 _REPOSITORY_CONTRACTS = (
-    ("backend", "/Users/zhdeng/stoa-backend", "uv.lock"),
-    ("frontend", "/Users/zhdeng/stoa-frontend", "package-lock.json"),
-    ("infra", "/Users/zhdeng/stoa-infra", "uv.lock"),
+    ("backend", "uv.lock"),
+    ("frontend", "package-lock.json"),
+    ("infra", "uv.lock"),
 )
+_REPOSITORY_NAMES = tuple(name for name, _ in _REPOSITORY_CONTRACTS)
+_LOCK_PATHS = dict(_REPOSITORY_CONTRACTS)
+_REPOSITORY_MARKERS = {
+    "backend": ("pyproject.toml", "stoa-backend"),
+    "frontend": ("package.json", "stoa-frontend"),
+    "infra": ("pyproject.toml", "stoa-infra"),
+}
 _RECEIPT_KEYS = {
     "schema",
     "gate_id",
@@ -120,7 +127,7 @@ _RECEIPT_KEYS = {
     "receipt_sha256",
 }
 _COUNT_KEYS = {"total", "passed", "failed", "errors", "skipped", "xfail", "xpass"}
-_IDENTITY_KEYS = {"path", "bytes", "sha256"}
+_IDENTITY_KEYS = {"repository", "path", "bytes", "sha256"}
 
 
 class GatePolicyError(ValueError):
@@ -144,6 +151,8 @@ class GateSpec:
     argv: tuple[str, ...]
     artifact_paths: tuple[str, ...]
     config_paths: tuple[str, ...]
+    repository: str = "backend"
+    cwd: str = "."
     timeout_seconds: int = 120
 
     def __post_init__(self) -> None:
@@ -151,13 +160,20 @@ class GateSpec:
             raise GatePolicyError("gate registration is incomplete")
         if not self.artifact_paths or not self.config_paths:
             raise GatePolicyError("gate registration lacks input identities")
+        if self.repository not in _REPOSITORY_NAMES:
+            raise GatePolicyError("gate repository is invalid")
+        if not _is_safe_relative_path(self.cwd, allow_dot=True):
+            raise GatePolicyError("gate cwd must be repository-relative")
+        for path in (*self.artifact_paths, *self.config_paths):
+            if not _is_safe_relative_path(path):
+                raise GatePolicyError("gate input path must be repository-relative")
         if self.timeout_seconds <= 0:
             raise GatePolicyError("gate timeout must be positive")
 
 
 @dataclass(frozen=True)
 class GateOperations:
-    run_process: Callable[[tuple[str, ...], int], ProcessResult]
+    run_process: Callable[[tuple[str, ...], Path, int], ProcessResult]
     git: Callable[[Path, tuple[str, ...]], str]
     now_utc: Callable[[], str]
     python_version: Callable[[], str]
@@ -168,6 +184,81 @@ class GateOperations:
 class PythonMatrixOperations:
     run_process: Callable[[tuple[str, ...], dict[str, str], Path, int], ProcessResult]
     network_boundary: Callable[[], tuple[str, ...] | None]
+
+
+@dataclass(frozen=True)
+class WorkspaceRoots:
+    """Execution-only repository roots; canonical receipts contain no host paths."""
+
+    roots: tuple[tuple[str, Path], ...]
+
+    @classmethod
+    def from_mapping(cls, roots: Mapping[str, Path]) -> WorkspaceRoots:
+        if set(roots) != set(_REPOSITORY_NAMES):
+            raise GatePolicyError("workspace repository roots are incomplete")
+        resolved_roots: list[tuple[str, Path]] = []
+        for name in _REPOSITORY_NAMES:
+            supplied = Path(roots[name])
+            if supplied.is_symlink():
+                raise GatePolicyError("workspace repository root is a symlink")
+            try:
+                resolved = supplied.resolve(strict=True)
+            except OSError as exc:
+                raise GatePolicyError("workspace repository root is unavailable") from exc
+            if not resolved.is_dir():
+                raise GatePolicyError("workspace repository root is not a directory")
+            resolved_roots.append((name, resolved))
+        if len({root for _, root in resolved_roots}) != len(resolved_roots):
+            raise GatePolicyError("workspace repository roots must be distinct")
+
+        validated: list[tuple[str, Path]] = []
+        for name, resolved in resolved_roots:
+            lock = resolved / _LOCK_PATHS[name]
+            if lock.is_symlink() or not lock.is_file():
+                raise GatePolicyError("workspace repository lock is unavailable")
+            marker_path, expected_project = _REPOSITORY_MARKERS[name]
+            marker = resolved / marker_path
+            if marker.is_symlink() or not marker.is_file():
+                raise GatePolicyError("workspace repository identity is unavailable")
+            try:
+                if marker_path == "package.json":
+                    marker_value = json.loads(marker.read_text(encoding="utf-8")).get("name")
+                else:
+                    marker_value = tomllib.loads(marker.read_text(encoding="utf-8")).get(
+                        "project", {}
+                    ).get("name")
+            except (OSError, UnicodeError, json.JSONDecodeError, tomllib.TOMLDecodeError, AttributeError):
+                raise GatePolicyError("workspace repository identity is invalid") from None
+            if marker_value != expected_project:
+                raise GatePolicyError("workspace repository identity is invalid")
+            validated.append((name, resolved))
+        return cls(tuple(validated))
+
+    def require(self, repository: str) -> Path:
+        for name, root in self.roots:
+            if name == repository:
+                return root
+        raise GatePolicyError("unknown workspace repository")
+
+
+def _is_safe_relative_path(value: str, *, allow_dot: bool = False) -> bool:
+    if not isinstance(value, str) or not value or "\x00" in value or "\n" in value or "\r" in value:
+        return False
+    path = Path(value)
+    if path.is_absolute() or any(part == ".." for part in path.parts):
+        return False
+    return allow_dot or value != "."
+
+
+def default_workspace_roots() -> WorkspaceRoots:
+    parent = ROOT.parent
+    return WorkspaceRoots.from_mapping(
+        {
+            "backend": ROOT,
+            "frontend": parent / "stoa-frontend",
+            "infra": parent / "stoa-infra",
+        }
+    )
 
 
 class GateRegistry:
@@ -196,13 +287,13 @@ def default_registry() -> GateRegistry:
         (
             GateSpec(
                 gate_id="gate-self-test",
-                argv=(sys.executable, "-c", "raise SystemExit(0)"),
+                argv=("{python}", "-c", "raise SystemExit(0)"),
                 artifact_paths=("evidence/phase-474/candidate-identity.json",),
                 config_paths=("schemas/release/gate-receipt-v1.schema.json",),
             ),
             GateSpec(
                 gate_id="backend-python-hermetic",
-                argv=(sys.executable, "scripts/release_gate.py", "python-hermetic"),
+                argv=("{python}", "scripts/release_gate.py", "python-hermetic"),
                 artifact_paths=_PYTHON_MATRIX_SOURCE_FILES,
                 config_paths=("scripts/phase474_pytest_guard.py", "tests/conftest.py"),
                 timeout_seconds=7200,
@@ -262,7 +353,6 @@ def _require_sha(value: Any, label: str, *, git: bool = False) -> str:
 def _canonical_candidate_repositories(repositories: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     ordered_keys = (
         "name",
-        "root",
         "head",
         "tree",
         "lock_path",
@@ -294,7 +384,7 @@ def validate_candidate(candidate: Mapping[str, Any]) -> None:
     repositories = candidate.get("repositories")
     if not isinstance(repositories, list) or len(repositories) != len(_REPOSITORY_CONTRACTS):
         raise GatePolicyError("candidate repositories are incomplete")
-    for repository, (name, root, lock_path) in zip(
+    for repository, (name, lock_path) in zip(
         repositories, _REPOSITORY_CONTRACTS, strict=True
     ):
         if not isinstance(repository, dict):
@@ -302,7 +392,6 @@ def validate_candidate(candidate: Mapping[str, Any]) -> None:
         _require_exact_keys(repository, _REPOSITORY_KEYS, f"{name} repository identity")
         if (
             repository.get("name") != name
-            or repository.get("root") != root
             or repository.get("lock_path") != lock_path
             or repository.get("clean") is not True
         ):
@@ -329,21 +418,32 @@ def load_candidate(path: Path) -> dict[str, Any]:
     return candidate
 
 
-def _root_path(relative_path: str) -> Path:
-    if not isinstance(relative_path, str) or not relative_path or Path(relative_path).is_absolute():
+def _root_path(root: Path, relative_path: str) -> Path:
+    if not _is_safe_relative_path(relative_path):
         raise GatePolicyError("input path must be repository-relative")
-    candidate = (ROOT / relative_path).resolve()
-    if candidate != ROOT and ROOT not in candidate.parents:
+    unresolved = root / relative_path
+    current = root
+    for part in Path(relative_path).parts:
+        current /= part
+        if current.is_symlink():
+            raise GatePolicyError("input path is not a regular file")
+    candidate = unresolved.resolve()
+    if candidate != root and root not in candidate.parents:
         raise GatePolicyError("input path escapes the repository")
-    if candidate.is_symlink() or not candidate.is_file():
+    if not candidate.is_file():
         raise GatePolicyError("input path is not a regular file")
     return candidate
 
 
-def _file_identity(relative_path: str) -> dict[str, Any]:
-    path = _root_path(relative_path)
+def _file_identity(
+    workspace: WorkspaceRoots,
+    repository: str,
+    relative_path: str,
+) -> dict[str, Any]:
+    path = _root_path(workspace.require(repository), relative_path)
     content = path.read_bytes()
     return {
+        "repository": repository,
         "path": relative_path,
         "bytes": len(content),
         "sha256": sha256(content).hexdigest(),
@@ -506,7 +606,7 @@ def _validate_registered_python_run(
     return value
 
 
-def _validate_registered_python_matrix(matrix: Mapping[str, Any]) -> None:
+def _validate_registered_python_matrix(matrix: Mapping[str, Any], *, root: Path = ROOT) -> None:
     status = matrix.get("status")
     expected_keys = set(_PYTHON_MATRIX_KEYS)
     if status == "REJECTED":
@@ -520,7 +620,7 @@ def _validate_registered_python_matrix(matrix: Mapping[str, Any]) -> None:
         raise GatePolicyError("Python matrix clocks are invalid")
     if matrix.get("suite_argv") != list(PYTHON_SUITE_ARGV):
         raise GatePolicyError("Python matrix suite command is invalid")
-    if matrix.get("source") != _matrix_source_identity(ROOT):
+    if matrix.get("source") != _matrix_source_identity(root):
         raise GatePolicyError("Python matrix source identity is invalid")
 
     runs = matrix.get("runs")
@@ -733,11 +833,13 @@ def _counts(*, passed: int = 0, failed: int = 0, errors: int = 0) -> dict[str, i
     }
 
 
-def _system_run(argv: tuple[str, ...], timeout_seconds: int) -> ProcessResult:
+def _system_run(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> ProcessResult:
+    resolved_argv = (sys.executable, *argv[1:]) if argv[0] == "{python}" else argv
     completed = subprocess.run(
-        list(argv),
+        list(resolved_argv),
         check=False,
         capture_output=True,
+        cwd=cwd,
         timeout=timeout_seconds,
     )
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
@@ -840,14 +942,35 @@ def run_registered_gate(
     candidate: Mapping[str, Any],
     registry: GateRegistry,
     operations: GateOperations,
+    workspace: WorkspaceRoots | None = None,
 ) -> dict[str, Any]:
     validate_candidate(candidate)
     if command_name not in {"verify", "self-test"}:
         raise GatePolicyError("unknown command name")
     spec = registry.require(gate_id)
+    resolved_workspace = workspace or default_workspace_roots()
+    repository_root = resolved_workspace.require(spec.repository)
+    unresolved_cwd = repository_root / spec.cwd
+    current_cwd = repository_root
+    for part in Path(spec.cwd).parts:
+        current_cwd /= part
+        if current_cwd.is_symlink():
+            raise GatePolicyError("gate cwd is not a directory")
+    command_cwd = unresolved_cwd.resolve()
+    if (
+        command_cwd != repository_root
+        and repository_root not in command_cwd.parents
+    ) or not command_cwd.is_dir():
+        raise GatePolicyError("gate cwd is not a directory")
     inputs = {
-        "artifacts": [_file_identity(path) for path in spec.artifact_paths],
-        "configs": [_file_identity(path) for path in spec.config_paths],
+        "artifacts": [
+            _file_identity(resolved_workspace, spec.repository, path)
+            for path in spec.artifact_paths
+        ],
+        "configs": [
+            _file_identity(resolved_workspace, spec.repository, path)
+            for path in spec.config_paths
+        ],
     }
     started_at = operations.now_utc()
     stdout = b""
@@ -855,14 +978,17 @@ def run_registered_gate(
     gate_evidence: dict[str, Any] | None = None
     try:
         for repository in candidate["repositories"]:
-            operations.git(Path(repository["root"]), ("cat-file", "-e", f"{repository['head']}^{{commit}}"))
-        completed = operations.run_process(spec.argv, spec.timeout_seconds)
+            operations.git(
+                resolved_workspace.require(repository["name"]),
+                ("cat-file", "-e", f"{repository['head']}^{{commit}}"),
+            )
+        completed = operations.run_process(spec.argv, command_cwd, spec.timeout_seconds)
         stdout = completed.stdout
         stderr = completed.stderr
         if gate_id == "backend-python-hermetic":
             try:
                 matrix = _load_python_matrix_output(stdout)
-                _validate_registered_python_matrix(matrix)
+                _validate_registered_python_matrix(matrix, root=repository_root)
                 valid_exit_status = (completed.returncode, matrix["status"]) in {
                     (0, "PASS"),
                     (POLICY_EXIT, "NOT RUN"),
@@ -935,7 +1061,12 @@ def run_registered_gate(
         "schema": RECEIPT_SCHEMA,
         "gate_id": gate_id,
         "source": _source(candidate),
-        "command": {"name": command_name, "argv": list(spec.argv)},
+        "command": {
+            "name": command_name,
+            "repository": spec.repository,
+            "cwd": spec.cwd,
+            "argv": list(spec.argv),
+        },
         "runtime": {
             "python": operations.python_version(),
             "platform": operations.platform_identity(),
@@ -1028,9 +1159,14 @@ def _validate_result(value: Any) -> None:
 
 
 def validate_receipt(
-    receipt: Mapping[str, Any], *, candidate: Mapping[str, Any], registry: GateRegistry
+    receipt: Mapping[str, Any],
+    *,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    workspace: WorkspaceRoots | None = None,
 ) -> None:
     validate_candidate(candidate)
+    resolved_workspace = workspace or default_workspace_roots()
     _require_exact_keys(receipt, _RECEIPT_KEYS, "receipt")
     if receipt.get("schema") != RECEIPT_SCHEMA:
         raise GatePolicyError("receipt schema is invalid")
@@ -1038,9 +1174,19 @@ def validate_receipt(
     if receipt.get("source") != _source(candidate):
         raise GatePolicyError("receipt source identity mismatch")
     command = receipt.get("command")
-    if not isinstance(command, dict) or set(command) != {"name", "argv"}:
+    if not isinstance(command, dict) or set(command) != {
+        "name",
+        "repository",
+        "cwd",
+        "argv",
+    }:
         raise GatePolicyError("receipt command is malformed")
-    if command["name"] not in {"verify", "self-test"} or command["argv"] != list(spec.argv):
+    if (
+        command["name"] not in {"verify", "self-test"}
+        or command["repository"] != spec.repository
+        or command["cwd"] != spec.cwd
+        or command["argv"] != list(spec.argv)
+    ):
         raise GatePolicyError("receipt command graph mismatch")
 
     runtime = receipt.get("runtime")
@@ -1065,7 +1211,10 @@ def validate_receipt(
         if not isinstance(values, list) or len(values) != len(paths):
             raise GatePolicyError(f"receipt {label} are incomplete")
         for value, path in zip(values, paths, strict=True):
-            _validate_identity(value, _file_identity(path))
+            _validate_identity(
+                value,
+                _file_identity(resolved_workspace, spec.repository, path),
+            )
 
     _validate_result(receipt.get("result"))
     result = receipt["result"]
@@ -1081,7 +1230,10 @@ def validate_receipt(
         else:
             if not isinstance(gate_evidence, dict):
                 raise GatePolicyError("hermetic receipt matrix evidence is malformed")
-            _validate_registered_python_matrix(gate_evidence)
+            _validate_registered_python_matrix(
+                gate_evidence,
+                root=resolved_workspace.require(spec.repository),
+            )
             expected_shape = {
                 "PASS": ("COMPLETE_PASS", None),
                 "NOT RUN": ("NOT_RUN_OBLIGATION", "EXTERNAL_CHECK_UNAVAILABLE"),
@@ -1122,6 +1274,17 @@ def write_json(value: object, path: Path | None) -> None:
 def _execute(args: argparse.Namespace, command_name: str) -> int:
     candidate = load_candidate(Path(args.candidate))
     registry = default_registry()
+    workspace = WorkspaceRoots.from_mapping(
+        {
+            "backend": Path(args.backend_root) if args.backend_root else ROOT,
+            "frontend": Path(args.frontend_root)
+            if args.frontend_root
+            else ROOT.parent / "stoa-frontend",
+            "infra": Path(args.infra_root)
+            if args.infra_root
+            else ROOT.parent / "stoa-infra",
+        }
+    )
     gate_id = args.gate if command_name == "verify" else "gate-self-test"
     receipt = run_registered_gate(
         gate_id=gate_id,
@@ -1129,8 +1292,14 @@ def _execute(args: argparse.Namespace, command_name: str) -> int:
         candidate=candidate,
         registry=registry,
         operations=system_operations(),
+        workspace=workspace,
     )
-    validate_receipt(receipt, candidate=candidate, registry=registry)
+    validate_receipt(
+        receipt,
+        candidate=candidate,
+        registry=registry,
+        workspace=workspace,
+    )
     write_json(receipt, Path(args.output) if args.output else None)
     return int(receipt["result"]["exit_code"])
 
@@ -1161,11 +1330,17 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--candidate", required=True)
     verify.add_argument("--gate", required=True)
     verify.add_argument("--output")
+    verify.add_argument("--backend-root")
+    verify.add_argument("--frontend-root")
+    verify.add_argument("--infra-root")
     verify.set_defaults(func=lambda args: _execute(args, "verify"))
 
     self_test = subparsers.add_parser("self-test", help="Exercise the authoritative gate path")
     self_test.add_argument("--candidate", default=str(DEFAULT_CANDIDATE))
     self_test.add_argument("--output")
+    self_test.add_argument("--backend-root")
+    self_test.add_argument("--frontend-root")
+    self_test.add_argument("--infra-root")
     self_test.set_defaults(func=lambda args: _execute(args, "self-test"))
 
     python_hermetic = subparsers.add_parser(

@@ -2,11 +2,10 @@
   "schema": "stoa.release.candidate-identity.v1",
   "status": "CLEAN",
   "identity_source": "execution-time-live-repository-state",
-  "execution_identity": "0ce6ef7946e87ca41d05cb0c395ee58eea66dd61c41a100ede11ba06e9a3582c",
+  "execution_identity": "b513818ec3aa39c774e9ac8d6c2934189fc75a39ff5faff6dc170a1ce702acfc",
   "repositories": [
     {
       "name": "backend",
-      "root": "/Users/zhdeng/stoa-backend",
       "head": "feeda5524d65dfe1c624aaedc0bcc6353dcb9746",
       "tree": "1089bf218cb0d59ddd5cb4dcc870f269ce0e8ce9",
       "lock_path": "uv.lock",
@@ -16,7 +15,6 @@
     },
     {
       "name": "frontend",
-      "root": "/Users/zhdeng/stoa-frontend",
       "head": "0d0df6fa2a505bca372c5ddfc23e9a1fe3031387",
       "tree": "b31a21c9bf7480d4312b17b1aa0c32ff6357979f",
       "lock_path": "package-lock.json",
@@ -26,7 +24,6 @@
     },
     {
       "name": "infra",
-      "root": "/Users/zhdeng/stoa-infra",
       "head": "a4d5cfeb22163d6d7f8f70016a0f98be4732a7a9",
       "tree": "e2ba82492a63e03237a3f6e36aaf1b7f5aed8fd2",
       "lock_path": "uv.lock",

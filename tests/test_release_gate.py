@@ -128,7 +128,9 @@ def _receipt() -> dict[str, Any]:
         "source": _candidate_source(),
         "command": {
             "name": "self-test",
-            "argv": [sys.executable, "scripts/release_gate.py", "self-test"],
+            "repository": "backend",
+            "cwd": ".",
+            "argv": ["{python}", "scripts/release_gate.py", "self-test"],
         },
         "runtime": {
             "python": "3.12.11",
@@ -137,10 +139,20 @@ def _receipt() -> dict[str, Any]:
         },
         "inputs": {
             "artifacts": [
-                {"path": "evidence/phase-474/candidate-identity.json", "bytes": 1, "sha256": SHA256}
+                {
+                    "repository": "backend",
+                    "path": "evidence/phase-474/candidate-identity.json",
+                    "bytes": 1,
+                    "sha256": SHA256,
+                }
             ],
             "configs": [
-                {"path": "schemas/release/gate-receipt-v1.schema.json", "bytes": 1, "sha256": SHA256}
+                {
+                    "repository": "backend",
+                    "path": "schemas/release/gate-receipt-v1.schema.json",
+                    "bytes": 1,
+                    "sha256": SHA256,
+                }
             ],
         },
         "result": {
@@ -298,8 +310,9 @@ def _load_gate() -> Any:
 def _operations(gate: Any, *, returncode: int = 0, raises: bool = False) -> Any:
     moments = iter(["2026-07-19T00:00:00Z", "2026-07-19T00:00:01Z"])
 
-    def run_process(argv: tuple[str, ...], timeout_seconds: int) -> Any:
+    def run_process(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> Any:
         assert argv
+        assert cwd == ROOT
         assert timeout_seconds == 120
         if raises:
             raise OSError("provider diagnostic TOP_SECRET=must-not-serialize")
@@ -321,8 +334,9 @@ def _operations(gate: Any, *, returncode: int = 0, raises: bool = False) -> Any:
 def _hermetic_operations(gate: Any, *, stdout: bytes, returncode: int) -> Any:
     moments = iter(["2026-07-19T00:00:00Z", "2026-07-19T00:00:01Z"])
 
-    def run_process(argv: tuple[str, ...], timeout_seconds: int) -> Any:
+    def run_process(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> Any:
         assert argv == gate.default_registry().require("backend-python-hermetic").argv
+        assert cwd == ROOT
         assert timeout_seconds == 7200
         return gate.ProcessResult(returncode=returncode, stdout=stdout, stderr=b"")
 
@@ -350,7 +364,7 @@ def test_registry_rejects_duplicate_and_unknown_gate_ids() -> None:
     gate = _load_gate()
     spec = gate.GateSpec(
         gate_id="gate-self-test",
-        argv=(sys.executable, "-c", "raise SystemExit(0)"),
+        argv=("{python}", "-c", "raise SystemExit(0)"),
         artifact_paths=("evidence/phase-474/candidate-identity.json",),
         config_paths=("schemas/release/gate-receipt-v1.schema.json",),
     )
@@ -553,11 +567,11 @@ def test_cli_exposes_only_registered_gate_selection_not_caller_argv() -> None:
         )
 
 
-def test_candidate_validation_preserves_exact_plan_01_identity_and_not_run_fields() -> None:
+def test_candidate_validation_preserves_logical_identity_and_not_run_fields() -> None:
     gate = _load_gate()
     candidate = gate.load_candidate(CANDIDATE_PATH)
-    assert candidate["execution_identity"] == "0ce6ef7946e87ca41d05cb0c395ee58eea66dd61c41a100ede11ba06e9a3582c"
-    assert candidate["repositories"][2]["root"] == "/Users/zhdeng/stoa-infra"
+    assert candidate["execution_identity"] == "b513818ec3aa39c774e9ac8d6c2934189fc75a39ff5faff6dc170a1ce702acfc"
+    assert all("root" not in repository for repository in candidate["repositories"])
     for field in (
         "repository_mutation",
         "production_infrastructure",
@@ -568,7 +582,7 @@ def test_candidate_validation_preserves_exact_plan_01_identity_and_not_run_field
         assert candidate[field] == "NOT RUN"
 
     tampered = deepcopy(candidate)
-    tampered["repositories"][2]["root"] = "/tmp/stoa-infra"
+    tampered["repositories"][2]["name"] = "mobile"
     with pytest.raises(gate.GatePolicyError, match="infra repository identity"):
         gate.validate_candidate(tampered)
 
@@ -636,6 +650,15 @@ def test_gate_spec_binds_logical_repository_and_safe_relative_cwd() -> None:
             artifact_paths=("package-lock.json",),
             config_paths=("package.json",),
         )
+    with pytest.raises(gate.GatePolicyError, match="input path"):
+        gate.GateSpec(
+            gate_id="portable-test",
+            repository="frontend",
+            cwd=".",
+            argv=("node", "--version"),
+            artifact_paths=("../package-lock.json",),
+            config_paths=("package.json",),
+        )
 
 
 def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
@@ -648,6 +671,16 @@ def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
         root = tmp_path / name
         root.mkdir()
         (root / lock_path).write_text("lock\n", encoding="utf-8")
+        if name == "frontend":
+            (root / "package.json").write_text(
+                json.dumps({"name": "stoa-frontend"}) + "\n",
+                encoding="utf-8",
+            )
+        else:
+            (root / "pyproject.toml").write_text(
+                f'[project]\nname = "stoa-{name}"\n',
+                encoding="utf-8",
+            )
         roots[name] = root
 
     workspace = gate.WorkspaceRoots.from_mapping(roots)
@@ -656,3 +689,81 @@ def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
     link.symlink_to(roots["frontend"], target_is_directory=True)
     with pytest.raises(gate.GatePolicyError, match="symlink"):
         gate.WorkspaceRoots.from_mapping({**roots, "frontend": link})
+
+    with pytest.raises(gate.GatePolicyError, match="distinct"):
+        gate.WorkspaceRoots.from_mapping({**roots, "infra": roots["backend"]})
+
+    mobile = tmp_path / "mobile"
+    mobile.mkdir()
+    (mobile / "package-lock.json").write_text("lock\n", encoding="utf-8")
+    (mobile / "package.json").write_text(
+        json.dumps({"name": "@stoa/mobile"}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.GatePolicyError, match="identity"):
+        gate.WorkspaceRoots.from_mapping({**roots, "frontend": mobile})
+
+    spec = gate.GateSpec(
+        gate_id="portable-test",
+        repository="frontend",
+        cwd=".",
+        argv=("node", "--version"),
+        artifact_paths=("package-lock.json",),
+        config_paths=("package.json",),
+    )
+    moments = iter(["2026-07-19T00:00:00Z", "2026-07-19T00:00:01Z"])
+
+    def run_process(argv: tuple[str, ...], cwd: Path, timeout: int) -> Any:
+        assert argv == ("node", "--version")
+        assert cwd == roots["frontend"]
+        assert timeout == 120
+        return gate.ProcessResult(returncode=0, stdout=b"v20.20.2\n", stderr=b"")
+
+    operations = gate.GateOperations(
+        run_process=run_process,
+        git=lambda root, argv: "",
+        now_utc=lambda: next(moments),
+        python_version=lambda: "3.12.13",
+        platform_identity=lambda: "linux-aarch64",
+    )
+    candidate = gate.load_candidate(CANDIDATE_PATH)
+    registry = gate.GateRegistry((spec,))
+    receipt = gate.run_registered_gate(
+        gate_id="portable-test",
+        command_name="verify",
+        candidate=candidate,
+        registry=registry,
+        operations=operations,
+        workspace=workspace,
+    )
+    gate.validate_receipt(
+        receipt,
+        candidate=candidate,
+        registry=registry,
+        workspace=workspace,
+    )
+    assert receipt["command"]["repository"] == "frontend"
+    assert receipt["command"]["cwd"] == "."
+    assert receipt["inputs"]["artifacts"][0]["repository"] == "frontend"
+    encoded = json.dumps(receipt, sort_keys=True)
+    assert str(tmp_path) not in encoded
+
+    symlink_input = roots["frontend"] / "linked-package.json"
+    symlink_input.symlink_to(roots["frontend"] / "package.json")
+    symlink_spec = gate.GateSpec(
+        gate_id="symlink-test",
+        repository="frontend",
+        cwd=".",
+        argv=("node", "--version"),
+        artifact_paths=("package-lock.json",),
+        config_paths=("linked-package.json",),
+    )
+    with pytest.raises(gate.GatePolicyError, match="regular file"):
+        gate.run_registered_gate(
+            gate_id="symlink-test",
+            command_name="verify",
+            candidate=candidate,
+            registry=gate.GateRegistry((symlink_spec,)),
+            operations=operations,
+            workspace=workspace,
+        )

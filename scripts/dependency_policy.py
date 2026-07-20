@@ -17,8 +17,6 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND_ROOT = Path("/Users/zhdeng/stoa-frontend")
-FRONTEND_LOCK = FRONTEND_ROOT / "package-lock.json"
 DEFAULT_EXCEPTIONS = ROOT / "evidence" / "phase-474" / "dependency-exceptions.json"
 SCHEMA_VERSION = "stoa.release.dependency-exceptions.v1"
 POLICY_RESULT_SCHEMA = "stoa.release.dependency-policy-result.v1"
@@ -401,10 +399,24 @@ def evaluate_backend(
     )
 
 
-def _frontend_lock_packages(lock_path: Path) -> dict[str, dict[str, Any]]:
+def _frontend_lock_packages(
+    lock_path: Path,
+    *,
+    frontend_root: Path,
+) -> dict[str, dict[str, Any]]:
+    if frontend_root.is_symlink() or lock_path.is_symlink():
+        raise DependencyPolicyError("authoritative Web root or lock is a symlink")
     try:
-        if lock_path.resolve(strict=True) != FRONTEND_LOCK.resolve(strict=True):
+        resolved_root = frontend_root.resolve(strict=True)
+        expected_lock = (resolved_root / "package-lock.json").resolve(strict=True)
+        if not resolved_root.is_dir() or lock_path.resolve(strict=True) != expected_lock:
             raise DependencyPolicyError("frontend audit must use the authoritative Web root lock")
+        package_path = resolved_root / "package.json"
+        if package_path.is_symlink() or not package_path.is_file():
+            raise DependencyPolicyError("authoritative Web root identity is unavailable")
+        package = load_json(package_path)
+        if package.get("name") != "stoa-frontend":
+            raise DependencyPolicyError("authoritative Web root identity is invalid")
     except OSError as exc:
         raise DependencyPolicyError("authoritative Web root lock is unavailable") from exc
     lock = load_json(lock_path)
@@ -489,10 +501,11 @@ def evaluate_frontend(
     *,
     audit: Mapping[str, Any],
     lock_path: Path,
+    frontend_root: Path,
     exceptions: Mapping[str, Any],
     now: datetime,
 ) -> dict[str, Any]:
-    packages = _frontend_lock_packages(lock_path)
+    packages = _frontend_lock_packages(lock_path, frontend_root=frontend_root)
     lock_sha256 = _sha256_file(lock_path)
     validated = validate_exception_ledger(exceptions, now=now)
     if any(item["ecosystem"] != "frontend-npm" for item in validated):
@@ -560,7 +573,8 @@ def _parser() -> argparse.ArgumentParser:
     backend.add_argument("--exceptions", type=Path, default=DEFAULT_EXCEPTIONS)
     backend.add_argument("--now")
     frontend = subparsers.add_parser("check-frontend")
-    frontend.add_argument("--lock", type=Path, default=FRONTEND_LOCK)
+    frontend.add_argument("--repo-root", type=Path, required=True)
+    frontend.add_argument("--lock", type=Path)
     frontend.add_argument("--audit", type=Path, required=True)
     frontend.add_argument("--exceptions", type=Path)
     frontend.add_argument("--now")
@@ -581,9 +595,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 now=_policy_now(args.now),
             )
         else:
+            lock_path = args.lock or args.repo_root / "package-lock.json"
             result = evaluate_frontend(
                 audit=load_json(args.audit),
-                lock_path=args.lock,
+                lock_path=lock_path,
+                frontend_root=args.repo_root,
                 exceptions=exceptions,
                 now=_policy_now(args.now),
             )

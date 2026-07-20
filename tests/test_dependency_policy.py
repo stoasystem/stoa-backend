@@ -15,7 +15,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "dependency_policy.py"
-FRONTEND_LOCK = Path("/Users/zhdeng/stoa-frontend/package-lock.json")
+FRONTEND_ROOT = ROOT.parent / "stoa-frontend"
+FRONTEND_LOCK = FRONTEND_ROOT / "package-lock.json"
 NOW = datetime(2026, 7, 19, 9, 0, tzinfo=timezone.utc)
 
 
@@ -274,18 +275,21 @@ def test_frontend_high_and_production_medium_block_but_dev_medium_does_not():
     high = policy.evaluate_frontend(
         audit=_frontend_audit(severity="high"),
         lock_path=FRONTEND_LOCK,
+        frontend_root=FRONTEND_ROOT,
         exceptions=_ledger(),
         now=NOW,
     )
     medium = policy.evaluate_frontend(
         audit=_frontend_audit(severity="moderate"),
         lock_path=FRONTEND_LOCK,
+        frontend_root=FRONTEND_ROOT,
         exceptions=_ledger(),
         now=NOW,
     )
     dev_medium = policy.evaluate_frontend(
         audit=_frontend_audit(severity="moderate", node="node_modules/@playwright/test"),
         lock_path=FRONTEND_LOCK,
+        frontend_root=FRONTEND_ROOT,
         exceptions=_ledger(),
         now=NOW,
     )
@@ -298,15 +302,29 @@ def test_frontend_high_and_production_medium_block_but_dev_medium_does_not():
 
 def test_frontend_policy_requires_the_authoritative_web_root_and_rejects_mobile_substitution(tmp_path):
     policy = _load_policy()
-    mobile = tmp_path / "mobile" / "package-lock.json"
-    mobile.parent.mkdir()
+    mobile_root = tmp_path / "mobile"
+    mobile_root.mkdir()
+    mobile = mobile_root / "package-lock.json"
     mobile.write_text(FRONTEND_LOCK.read_text(encoding="utf-8"), encoding="utf-8")
+    (mobile_root / "package.json").write_text(
+        json.dumps({"name": "@stoa/mobile"}) + "\n",
+        encoding="utf-8",
+    )
 
     with pytest.raises(policy.DependencyPolicyError, match="Web root"):
         policy.evaluate_frontend(
             audit=_frontend_audit(),
             lock_path=mobile,
             frontend_root=FRONTEND_LOCK.parent,
+            exceptions=_ledger(),
+            now=NOW,
+        )
+
+    with pytest.raises(policy.DependencyPolicyError, match="Web root identity"):
+        policy.evaluate_frontend(
+            audit=_frontend_audit(),
+            lock_path=mobile,
+            frontend_root=mobile_root,
             exceptions=_ledger(),
             now=NOW,
         )
@@ -332,6 +350,7 @@ def test_frontend_audit_node_and_installed_version_are_lock_bound():
         policy.evaluate_frontend(
             audit=audit,
             lock_path=FRONTEND_LOCK,
+            frontend_root=FRONTEND_ROOT,
             exceptions=_ledger(),
             now=NOW,
         )
