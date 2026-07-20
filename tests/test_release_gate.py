@@ -631,7 +631,15 @@ def test_gate_spec_binds_logical_repository_and_safe_relative_cwd() -> None:
     assert spec.repository == "frontend"
     assert spec.cwd == "."
 
-    for cwd in ("/tmp", "../frontend", "nested/../../escape"):
+    for cwd in (
+        "/tmp",
+        "../frontend",
+        "nested/../../escape",
+        "nested\\windows",
+        "nested//double",
+        "./nested",
+        "x" * 241,
+    ):
         with pytest.raises(gate.GatePolicyError, match="cwd"):
             gate.GateSpec(
                 gate_id="portable-test",

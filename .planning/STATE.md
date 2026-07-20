@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-81-PLAN.md
-last_updated: "2026-07-20T00:13:44Z"
-last_activity: 2026-07-20 -- Completed runtime environment projection from validated config
+stopped_at: Completed 474-82-PLAN.md
+last_updated: "2026-07-20T00:25:38Z"
+last_activity: 2026-07-20 -- Completed the Web descriptor/config startup barrier
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 146
-  completed_plans: 80
+  total_plans: 147
+  completed_plans: 82
   percent: 20
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 18 of 84
+Plan: 20 of 85
 Status: Ready to execute
-Last activity: 2026-07-20 -- Completed runtime environment projection from validated config
+Last activity: 2026-07-20 -- Completed the Web descriptor/config startup barrier
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Completed runtime environment projection from valid
 
 ## Session
 
-**Last Date:** 2026-07-20T00:13:44Z
-**Stopped At:** Completed 474-81-PLAN.md
+**Last Date:** 2026-07-20T00:25:38Z
+**Stopped At:** Completed 474-82-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -194,6 +194,7 @@ Last activity: 2026-07-20 -- Completed runtime environment projection from valid
 | Phase 474 P42 | 6 min | 1 tasks | 2 files |
 | Phase 474 P73 | 14 min | 1 task | 4 frontend files |
 | Phase 474 P81 | 4 min | 1 task | 2 frontend files |
+| Phase 474 P82 | 12 min | 1 task | 3 frontend files |
 
 ## Decisions
 
@@ -366,3 +367,4 @@ Last activity: 2026-07-20 -- Completed runtime environment projection from valid
 - [Phase 474]: Malformed notification and WebSocket provider responses use stable redacted conflicts. — Delivery identity, account fences, pagination behavior, and coordinate privacy remain unchanged.
 - [Phase 474]: The served-release descriptor binds stable runtime-config.json and index.html service keys to exact S3 VersionIds and SHA-256 values, while caller-owned expected origin remains the trust root. — This preserves Plan 72's exact runtime-config path, avoids descriptor self-identity cycles, and rejects descriptor-controlled origin substitution.
 - [Phase 474]: Existing Web environment exports project only the installed validated runtime registry; staging-pilot remains API-mode-compatible with staging and every mock, demo, MSW, debug, preview, and fallback surface is fixed false. — This removes compile-time release truth without breaking current consumers or taking ownership of startup and service policy.
+- [Phase 474]: The browser statically imports only its startup barrier, then installs descriptor-bound runtime config before dynamically importing i18n, React, App, routes, API, or auth code. — Timeout, failure, and duplicate attempts render one fixed actionable message and cannot begin another App/root sequence.

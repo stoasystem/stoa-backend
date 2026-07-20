@@ -242,12 +242,22 @@ class WorkspaceRoots:
 
 
 def _is_safe_relative_path(value: str, *, allow_dot: bool = False) -> bool:
-    if not isinstance(value, str) or not value or "\x00" in value or "\n" in value or "\r" in value:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 240
+        or "\\" in value
+        or "\x00" in value
+        or "\n" in value
+        or "\r" in value
+    ):
         return False
-    path = Path(value)
-    if path.is_absolute() or any(part == ".." for part in path.parts):
+    if value == ".":
+        return allow_dot
+    parts = value.split("/")
+    if value.startswith("/") or any(part in {"", ".", ".."} for part in parts):
         return False
-    return allow_dot or value != "."
+    return True
 
 
 def default_workspace_roots() -> WorkspaceRoots:
