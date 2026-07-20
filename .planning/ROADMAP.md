@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 20/86 plans executed
+**Plans:** 21/86 plans executed
 
 Plans:
 
@@ -438,7 +438,7 @@ Plans:
 
 **Wave 10**
 
-- [ ] `474-83` — Frontend monitoring runtime feature flag.
+- [x] `474-83` — Frontend monitoring runtime feature flag.
 - [ ] `474-84` — Remove browser EmailJS contact fallback.
 - [ ] `474-22` — Automated repository-wide mypy-zero gate and report.
 
