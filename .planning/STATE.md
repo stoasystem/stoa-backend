@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Planned 474-90-PLAN.md
-last_updated: "2026-07-20T05:45:00Z"
-last_activity: 2026-07-20 -- Planned backend exact-ref formal verification caller
+stopped_at: Completed 474-90-SUMMARY.md
+last_updated: "2026-07-20T06:02:00Z"
+last_activity: 2026-07-20 -- Completed backend exact-ref formal verification caller
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 152
-  completed_plans: 89
+  completed_plans: 90
   percent: 20
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 90 of 90
-Status: Ready to execute Plan 90
-Last activity: 2026-07-20 -- Planned backend exact-ref formal verification caller
+Status: Plan 90 complete; ready to plan frontend caller
+Last activity: 2026-07-20 -- Completed backend exact-ref formal verification caller
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Planned backend exact-ref formal verification calle
 
 ## Session
 
-**Last Date:** 2026-07-20T05:45:00Z
-**Stopped At:** Planned 474-90-PLAN.md
+**Last Date:** 2026-07-20T06:02:00Z
+**Stopped At:** Completed 474-90-SUMMARY.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -374,3 +374,4 @@ Last activity: 2026-07-20 -- Planned backend exact-ref formal verification calle
 - [Phase 474]: The served-release descriptor binds stable runtime-config.json and index.html service keys to exact S3 VersionIds and SHA-256 values, while caller-owned expected origin remains the trust root. — This preserves Plan 72's exact runtime-config path, avoids descriptor self-identity cycles, and rejects descriptor-controlled origin substitution.
 - [Phase 474]: Existing Web environment exports project only the installed validated runtime registry; staging-pilot remains API-mode-compatible with staging and every mock, demo, MSW, debug, preview, and fallback surface is fixed false. — This removes compile-time release truth without breaking current consumers or taking ownership of startup and service policy.
 - [Phase 474]: The browser statically imports only its startup barrier, then installs descriptor-bound runtime config before dynamically importing i18n, React, App, routes, API, or auth code. — Timeout, failure, and duplicate attempts render one fixed actionable message and cannot begin another App/root sequence.
+- [Phase 474]: The backend workflow revision owns the gate implementation SHA and invokes only candidate then fixed formal after exact three-repository identity and Linux namespace proof. — A new caller cannot execute an older gate, select an alternate graph, or retain direct deployment authority.
