@@ -25,6 +25,20 @@ REPOSITORIES = {
     "infra": "stoasystem/stoa-infra",
 }
 
+STEP_NAMES = [
+    "Validate immutable source refs",
+    "Check out backend",
+    "Check out frontend",
+    "Check out infra",
+    "Set up Python",
+    "Set up uv",
+    "Verify checkout identities",
+    "Prepare and prove Linux namespaces",
+    "Create private evidence directory",
+    "Issue release candidate",
+    "Run fixed formal aggregate",
+]
+
 
 class WorkflowLoader(yaml.SafeLoader):
     """YAML loader that preserves Actions' `on` key and rejects duplicates."""
@@ -113,11 +127,9 @@ def test_workflow_is_manual_closed_and_read_only() -> None:
     _, workflow = _load_workflow()
 
     assert set(workflow) == {"name", "on", "permissions", "env", "jobs"}
+    assert workflow["name"] == "Formal Release Verification"
     assert workflow["permissions"] == {"contents": "read"}
-    assert workflow["env"] == {
-        "EVIDENCE_DIR": "${{ runner.temp }}/stoa-formal-evidence",
-        "UV_PYTHON_DOWNLOADS": "never",
-    }
+    assert workflow["env"] == {"UV_PYTHON_DOWNLOADS": "never"}
 
     triggers = workflow["on"]
     assert isinstance(triggers, dict)
@@ -141,10 +153,12 @@ def test_job_shape_and_runtime_are_closed() -> None:
     job = _formal_job(workflow)
 
     assert set(job) == {"name", "runs-on", "timeout-minutes", "steps"}
+    assert job["name"] == "Fixed formal candidate verification"
     assert job["runs-on"] == "ubuntu-24.04"
     assert job["timeout-minutes"] == 180
 
     steps = _steps(job)
+    assert [step.get("name") for step in steps] == STEP_NAMES
     uses = [step["uses"] for step in steps if "uses" in step]
     assert uses == [CHECKOUT_ACTION, CHECKOUT_ACTION, CHECKOUT_ACTION, PYTHON_ACTION, UV_ACTION]
     assert all(re.fullmatch(r"[^@]+@[0-9a-f]{40}", action) for action in uses)
@@ -153,7 +167,7 @@ def test_job_shape_and_runtime_are_closed() -> None:
     assert python == {
         "name": "Set up Python",
         "uses": PYTHON_ACTION,
-        "with": {"python-version": "3.12.13", "cache": False},
+        "with": {"python-version": "3.12.13"},
     }
     uv = _step(steps, "Set up uv")
     assert uv == {
@@ -171,12 +185,23 @@ def test_refs_are_validated_before_any_checkout() -> None:
     assert steps.index(validation) < min(
         index for index, step in enumerate(steps) if step.get("uses") == CHECKOUT_ACTION
     )
-    assert validation["shell"] == "bash"
-    assert validation["env"] == {
-        "BACKEND_SHA": "${{ inputs.backend_sha }}",
-        "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
-        "INFRA_SHA": "${{ inputs.infra_sha }}",
-        "WORKFLOW_SHA": "${{ github.sha }}",
+    assert validation == {
+        "name": "Validate immutable source refs",
+        "shell": "bash",
+        "env": {
+            "BACKEND_SHA": "${{ inputs.backend_sha }}",
+            "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
+            "INFRA_SHA": "${{ inputs.infra_sha }}",
+            "WORKFLOW_SHA": "${{ github.sha }}",
+        },
+        "run": (
+            "set -euo pipefail\n"
+            "sha_pattern='^[0-9a-f]{40}$'\n"
+            'for sha in "$BACKEND_SHA" "$FRONTEND_SHA" "$INFRA_SHA" "$WORKFLOW_SHA"; do\n'
+            '  [[ "$sha" =~ $sha_pattern ]] || exit 1\n'
+            "done\n"
+            '[[ "$BACKEND_SHA" == "$WORKFLOW_SHA" ]]\n'
+        ),
     }
     run = validation["run"]
     assert isinstance(run, str)
@@ -241,10 +266,23 @@ def test_checkouts_are_exact_read_only_siblings() -> None:
         }
 
     identity = _step(steps, "Verify checkout identities")
-    assert identity["env"] == {
-        "BACKEND_SHA": "${{ inputs.backend_sha }}",
-        "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
-        "INFRA_SHA": "${{ inputs.infra_sha }}",
+    assert identity == {
+        "name": "Verify checkout identities",
+        "shell": "bash",
+        "env": {
+            "BACKEND_SHA": "${{ inputs.backend_sha }}",
+            "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
+            "INFRA_SHA": "${{ inputs.infra_sha }}",
+        },
+        "run": (
+            "set -euo pipefail\n"
+            'test "$(git -C "$GITHUB_WORKSPACE/stoa-backend" rev-parse HEAD)" '
+            '= "$BACKEND_SHA"\n'
+            'test "$(git -C "$GITHUB_WORKSPACE/stoa-frontend" rev-parse HEAD)" '
+            '= "$FRONTEND_SHA"\n'
+            'test "$(git -C "$GITHUB_WORKSPACE/stoa-infra" rev-parse HEAD)" '
+            '= "$INFRA_SHA"\n'
+        ),
     }
     run = identity["run"]
     assert isinstance(run, str)
@@ -254,6 +292,31 @@ def test_checkouts_are_exact_read_only_siblings() -> None:
         assert f'"${component.upper()}_SHA"' in run
 
 
+def test_linux_network_and_pid_namespaces_are_proved_before_formal() -> None:
+    _, workflow = _load_workflow()
+    steps = _steps(_formal_job(workflow))
+    namespace = _step(steps, "Prepare and prove Linux namespaces")
+    candidate = _step(steps, "Issue release candidate")
+
+    assert steps.index(namespace) < steps.index(candidate)
+    assert namespace == {
+        "name": "Prepare and prove Linux namespaces",
+        "shell": "bash",
+        "run": (
+            "set -euo pipefail\n"
+            "if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then\n"
+            "  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0\n"
+            "fi\n"
+            "if [[ -e /proc/sys/kernel/unprivileged_userns_clone ]]; then\n"
+            "  sudo sysctl -w kernel.unprivileged_userns_clone=1\n"
+            "fi\n"
+            "/usr/bin/unshare --user --map-root-user --net -- true\n"
+            "/usr/bin/unshare --user --map-root-user --pid --fork --mount-proc \\\n"
+            "  --kill-child=SIGKILL -- /usr/bin/dash -c 'test \"$$\" -eq 1'\n"
+        ),
+    }
+
+
 def test_evidence_directory_is_private_and_precedes_gate() -> None:
     _, workflow = _load_workflow()
     steps = _steps(_formal_job(workflow))
@@ -261,14 +324,18 @@ def test_evidence_directory_is_private_and_precedes_gate() -> None:
     candidate = _step(steps, "Issue release candidate")
 
     assert steps.index(private) < steps.index(candidate)
-    assert private["shell"] == "bash"
-    assert private["run"] == (
-        "set -euo pipefail\n"
-        "umask 077\n"
-        'test ! -e "$EVIDENCE_DIR"\n'
-        'install -d -m 0700 "$EVIDENCE_DIR"\n'
-        'test "$(stat -c %a "$EVIDENCE_DIR")" = "700"\n'
-    )
+    assert private == {
+        "name": "Create private evidence directory",
+        "shell": "bash",
+        "run": (
+            "set -euo pipefail\n"
+            "umask 077\n"
+            'evidence_dir="$(mktemp -d "$RUNNER_TEMP/stoa-formal-evidence.XXXXXX")"\n'
+            'chmod 0700 "$evidence_dir"\n'
+            'test "$(stat -c %a "$evidence_dir")" = "700"\n'
+            "printf 'EVIDENCE_DIR=%s\\n' \"$evidence_dir\" >> \"$GITHUB_ENV\"\n"
+        ),
+    }
 
 
 def test_only_candidate_then_fixed_formal_are_invoked() -> None:
@@ -321,8 +388,10 @@ def test_workflow_has_no_delivery_or_alternate_gate_authority() -> None:
         "azure",
         "oidc",
         "lambda",
+        "s3",
         "cloudfront",
         "configure-credentials",
+        "artifact",
         "upload-artifact",
         "download-artifact",
         "docker",
@@ -336,6 +405,12 @@ def test_workflow_has_no_delivery_or_alternate_gate_authority() -> None:
         "npm ",
         "pnpm ",
         "yarn ",
+        " build",
+        "deploy",
+        "smoke",
+        "rollback",
+        "mobile",
+        "native",
         "--gate",
         "--skip",
         "--only",
@@ -346,3 +421,22 @@ def test_workflow_has_no_delivery_or_alternate_gate_authority() -> None:
     )
     assert not [token for token in forbidden if token in lowered]
     assert not (set(job) & {"environment", "container", "services"})
+    for step in _steps(job):
+        run = step.get("run")
+        if isinstance(run, str):
+            assert "${{ inputs." not in run
+
+
+def test_every_run_step_is_valid_bash() -> None:
+    _, workflow = _load_workflow()
+    for step in _steps(_formal_job(workflow)):
+        run = step.get("run")
+        if not isinstance(run, str):
+            continue
+        completed = subprocess.run(
+            ["bash", "-n", "-c", run],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
