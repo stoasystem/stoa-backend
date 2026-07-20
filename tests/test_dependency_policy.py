@@ -15,7 +15,27 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "dependency_policy.py"
-FRONTEND_ROOT = ROOT.parent / "stoa-frontend"
+
+
+def _resolve_frontend_root(backend_root: Path) -> Path:
+    matches: list[Path] = []
+    for name in ("stoa-frontend", "frontend"):
+        candidate = backend_root.parent / name
+        manifest = candidate / "package.json"
+        if candidate.is_symlink() or manifest.is_symlink():
+            continue
+        try:
+            value = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if candidate.is_dir() and isinstance(value, dict) and value.get("name") == "stoa-frontend":
+            matches.append(candidate.resolve(strict=True))
+    if len(matches) != 1:
+        raise RuntimeError("authoritative Web test root is missing or ambiguous")
+    return matches[0]
+
+
+FRONTEND_ROOT = _resolve_frontend_root(ROOT)
 FRONTEND_LOCK = FRONTEND_ROOT / "package-lock.json"
 NOW = datetime(2026, 7, 19, 9, 0, tzinfo=timezone.utc)
 
