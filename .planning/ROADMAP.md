@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 26/89 plans executed
+**Plans:** 26/90 plans executed
 
 Plans:
 
@@ -454,6 +454,7 @@ Plans:
 - [x] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
 - [x] `474-92` — Infrastructure exact-ref formal verification caller and CDK-deploy removal.
 - [x] `474-93` — Owner-approved exact cross-repository source handoff and admission boundary.
+- [ ] `474-94` — Two independent no-host-mount Linux formal PASS runs and sealed admission.
 
 **Wave 12**
 
