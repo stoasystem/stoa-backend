@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -12,7 +13,33 @@ import pytest
 import yaml
 
 
-FRONTEND_ROOT = Path("/Users/zhdeng/stoa-frontend")
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_frontend_root(backend_root: Path) -> Path:
+    matches: list[Path] = []
+    for name in ("stoa-frontend", "frontend"):
+        candidate = backend_root.parent / name
+        marker = candidate / "package.json"
+        if (
+            candidate.is_symlink()
+            or not candidate.is_dir()
+            or marker.is_symlink()
+            or not marker.is_file()
+        ):
+            continue
+        try:
+            manifest = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if isinstance(manifest, dict) and manifest.get("name") == "stoa-frontend":
+            matches.append(candidate)
+    if len(matches) != 1:
+        raise RuntimeError("exactly one canonical frontend repository root is required")
+    return matches[0]
+
+
+FRONTEND_ROOT = _resolve_frontend_root(BACKEND_ROOT)
 WORKFLOW_DIR = FRONTEND_ROOT / ".github" / "workflows"
 WORKFLOW_PATH = WORKFLOW_DIR / "frontend-ci.yml"
 
@@ -251,7 +278,64 @@ def test_loader_rejects_duplicate_workflow_keys() -> None:
         yaml.load("permissions: {}\npermissions: {}\n", Loader=WorkflowLoader)
 
 
+@pytest.mark.parametrize("name", ["stoa-frontend", "frontend"])
+def test_frontend_root_resolution_supports_only_canonical_layouts(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    backend = tmp_path / "backend-root"
+    backend.mkdir()
+    frontend = tmp_path / name
+    frontend.mkdir()
+    (frontend / "package.json").write_text(
+        json.dumps({"name": "stoa-frontend"}),
+        encoding="utf-8",
+    )
+
+    assert _resolve_frontend_root(backend) == frontend
+
+
+def test_frontend_root_resolution_rejects_zero_multiple_and_symlink_matches(
+    tmp_path: Path,
+) -> None:
+    backend = tmp_path / "backend-root"
+    backend.mkdir()
+    with pytest.raises(RuntimeError, match="exactly one"):
+        _resolve_frontend_root(backend)
+
+    canonical = tmp_path / "frontend"
+    canonical.mkdir()
+    (canonical / "package.json").write_text(
+        json.dumps({"name": "wrong-project"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="exactly one"):
+        _resolve_frontend_root(backend)
+
+    (canonical / "package.json").write_text(
+        json.dumps({"name": "stoa-frontend"}),
+        encoding="utf-8",
+    )
+    second = tmp_path / "stoa-frontend"
+    second.mkdir()
+    (second / "package.json").write_text(
+        json.dumps({"name": "stoa-frontend"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="exactly one"):
+        _resolve_frontend_root(backend)
+
+    for path in (canonical, second):
+        (path / "package.json").unlink()
+        path.rmdir()
+    canonical.symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="exactly one"):
+        _resolve_frontend_root(backend)
+
+
 def test_frontend_has_exactly_one_regular_workflow() -> None:
+    assert not WORKFLOW_DIR.is_symlink()
+    assert WORKFLOW_DIR.is_dir()
     entries = sorted(WORKFLOW_DIR.iterdir(), key=lambda path: path.name)
     assert [path.name for path in entries] == ["frontend-ci.yml"]
     assert WORKFLOW_PATH.is_file()
@@ -362,4 +446,3 @@ def test_every_run_step_is_valid_bash() -> None:
             text=True,
         )
         assert completed.returncode == 0, completed.stderr
-
