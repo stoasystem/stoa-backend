@@ -452,6 +452,7 @@ Plans:
 - [x] `474-89` — Non-selectable formal Python and Web aggregate.
 - [x] `474-90` — Backend exact-ref formal verification caller.
 - [x] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
+- [ ] `474-92` — Infrastructure exact-ref formal verification caller and CDK-deploy removal.
 
 **Wave 12**
 
