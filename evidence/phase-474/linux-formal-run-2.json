@@ -1,0 +1,540 @@
+{
+  "children": [
+    {
+      "command": {
+        "argv": [
+          "{python}",
+          "scripts/release_gate.py",
+          "python-hermetic"
+        ],
+        "cwd": ".",
+        "name": "verify",
+        "repository": "backend"
+      },
+      "ended_at": "2026-07-20T08:14:39.409583Z",
+      "gate_evidence": {
+        "clocks": [
+          "2026-07-01T12:00:00Z",
+          "2035-01-15T12:00:00Z"
+        ],
+        "reason_code": null,
+        "runs": [
+          {
+            "clock": "2026-07-01T12:00:00Z",
+            "collection_sha256": "44f385468c352ab8c42d26bd1b38de296dc03ce37e87f35b5f69ba32a9c7e3ac",
+            "counts": {
+              "error": 0,
+              "failed": 0,
+              "passed": 2344,
+              "skipped": 0,
+              "total": 2344,
+              "xfail": 0,
+              "xpass": 0
+            },
+            "environment": "fresh-1",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "run": 1,
+            "runtime": "3.12.13",
+            "seed": 4740718
+          },
+          {
+            "clock": "2035-01-15T12:00:00Z",
+            "collection_sha256": "44f385468c352ab8c42d26bd1b38de296dc03ce37e87f35b5f69ba32a9c7e3ac",
+            "counts": {
+              "error": 0,
+              "failed": 0,
+              "passed": 2344,
+              "skipped": 0,
+              "total": 2344,
+              "xfail": 0,
+              "xpass": 0
+            },
+            "environment": "fresh-2",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "run": 2,
+            "runtime": "3.12.13",
+            "seed": 4740718
+          }
+        ],
+        "schema": "stoa.phase474.python-matrix.v1",
+        "seed": 4740718,
+        "source": {
+          "pyproject.toml": {
+            "bytes": 1086,
+            "sha256": "20a9680c89104f77b9987242cf9c91db6825664c31acc71af52e865093f5b426"
+          },
+          "requirements.txt": {
+            "bytes": 32045,
+            "sha256": "4d0506298eeb3b69b52a4bed30dee38e78ecc40045ed7fdb8683d2f89ba9e3c6"
+          },
+          "uv.lock": {
+            "bytes": 274249,
+            "sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa"
+          }
+        },
+        "status": "PASS",
+        "suite_argv": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "-p",
+          "no:socket"
+        ]
+      },
+      "gate_id": "backend-python-hermetic",
+      "inputs": {
+        "artifacts": [
+          {
+            "bytes": 1086,
+            "path": "pyproject.toml",
+            "repository": "backend",
+            "sha256": "20a9680c89104f77b9987242cf9c91db6825664c31acc71af52e865093f5b426"
+          },
+          {
+            "bytes": 274249,
+            "path": "uv.lock",
+            "repository": "backend",
+            "sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa"
+          },
+          {
+            "bytes": 32045,
+            "path": "requirements.txt",
+            "repository": "backend",
+            "sha256": "4d0506298eeb3b69b52a4bed30dee38e78ecc40045ed7fdb8683d2f89ba9e3c6"
+          }
+        ],
+        "configs": [
+          {
+            "bytes": 8170,
+            "path": "scripts/phase474_pytest_guard.py",
+            "repository": "backend",
+            "sha256": "21fafd71d6ac45a83963f53617a565112603dd28329f44c19eb1d3969786a2d2"
+          },
+          {
+            "bytes": 1421,
+            "path": "tests/conftest.py",
+            "repository": "backend",
+            "sha256": "d4afc5635ad0c239287cf058e4a11d594b39d7c4ab2775632d17624d01860bbe"
+          }
+        ]
+      },
+      "privacy": {
+        "environment_values_serialized": false,
+        "match_count": 0,
+        "passed": true,
+        "scanned_field_count": 12,
+        "secret_values_serialized": false
+      },
+      "receipt_sha256": "caa6d37b91c58f563306cf4d293011ec022957329f40408af3996bdd2c657d8b",
+      "result": {
+        "classification": "COMPLETE_PASS",
+        "exit_code": 0,
+        "outcomes": {
+          "errors": 0,
+          "failed": 0,
+          "passed": 2344,
+          "skipped": 0,
+          "total": 2344,
+          "xfail": 0,
+          "xpass": 0
+        },
+        "reason_code": null,
+        "status": "PASS",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "695aa3466c2de4ac29c4270c9333656b505174e7bd3ec08b4b391e669d8a6e88"
+      },
+      "runtime": {
+        "clock": "2026-07-20T08:11:21.582114Z",
+        "platform": "linux-aarch64",
+        "python": "3.12.13"
+      },
+      "schema": "stoa.release.gate-receipt.v1",
+      "source": {
+        "candidate_identity": "b29c8138222a3bfb2351e1f095c34f26a88e2c44a9eedbb835e54981329e25ee",
+        "repositories": [
+          {
+            "clean": true,
+            "head": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+            "lock_path": "uv.lock",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "name": "backend",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "996169c3c40b66a2a395e8093ec7a9a749e49bb7"
+          },
+          {
+            "clean": true,
+            "head": "13c4d1067492eead665999d2b43cd359141a6dd6",
+            "lock_path": "package-lock.json",
+            "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+            "name": "frontend",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+          },
+          {
+            "clean": true,
+            "head": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+            "lock_path": "uv.lock",
+            "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+            "name": "infra",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+          }
+        ]
+      },
+      "started_at": "2026-07-20T08:11:21.582114Z"
+    },
+    {
+      "command": {
+        "argv": [
+          "{node}",
+          "scripts/verify-release.mjs",
+          "verify",
+          "--output",
+          "{evidence_output}"
+        ],
+        "cwd": ".",
+        "name": "verify",
+        "repository": "frontend"
+      },
+      "ended_at": "2026-07-20T08:15:17.186313Z",
+      "gate_evidence": {
+        "artifact": {
+          "bytes": 3432822,
+          "files": 26,
+          "path": "dist",
+          "treeSha256": "220b8adbdd4e702875c3fe12052b49971c2f2c7cabe7d8b9d572d7ff7d0301d4"
+        },
+        "counts": {
+          "failed": 0,
+          "omitted": 0,
+          "passed": 5,
+          "total": 5
+        },
+        "production": {
+          "deploy": "NOT RUN",
+          "infrastructure": "NOT RUN",
+          "rollback": "NOT RUN",
+          "smoke": "NOT RUN"
+        },
+        "receiptSha256": "f24a28a2d14a5a91770646349382a63fc51e229a9b5862582a75da6cf6d978e4",
+        "runtime": {
+          "arch": "arm64",
+          "node": "20.20.2",
+          "npm": "10.8.2",
+          "platform": "linux"
+        },
+        "schema": "stoa.web.gate-run.v1",
+        "source": {
+          "packageJson": {
+            "bytes": 2329,
+            "sha256": "883ba0c375eb32da07ea221335fd53b85d2a2702895d7e624816e4edfc857cee"
+          },
+          "packageLock": {
+            "bytes": 263450,
+            "sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17"
+          },
+          "treeSha256": "9f5922308ff69aeb42322ee406679b3413f8833714f7e838711a2f0f68e2d418"
+        },
+        "status": "PASS",
+        "steps": [
+          {
+            "argv": [
+              "npm",
+              "ci",
+              "--ignore-scripts",
+              "--no-audit",
+              "--no-fund",
+              "--include=dev",
+              "--package-lock=true"
+            ],
+            "counts": {
+              "failed": 0,
+              "passed": 1,
+              "total": 1
+            },
+            "exitCode": 0,
+            "id": "frontend-locked-install",
+            "status": "PASS",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdoutSha256": "f0500ce59073c684cf5702247257117218e8eec4ba1762c6bb36ed6d7efe43c1"
+          },
+          {
+            "argv": [
+              "npm",
+              "run",
+              "lint"
+            ],
+            "counts": {
+              "failed": 0,
+              "passed": 1,
+              "total": 1
+            },
+            "exitCode": 0,
+            "id": "frontend-eslint",
+            "status": "PASS",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdoutSha256": "0e95872ef134dac5a3e68eddc98b32bfda4cd5ee00c8bcb114e95944c31c221a"
+          },
+          {
+            "argv": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "counts": {
+              "failed": 0,
+              "passed": 1,
+              "total": 1
+            },
+            "exitCode": 0,
+            "id": "frontend-typecheck",
+            "status": "PASS",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdoutSha256": "3581148679e780620566a7d2a703eaab83cbc52b12e45d34521e6d34abc3f196"
+          },
+          {
+            "argv": [
+              "npm",
+              "run",
+              "build"
+            ],
+            "counts": {
+              "failed": 0,
+              "passed": 1,
+              "total": 1
+            },
+            "exitCode": 0,
+            "id": "frontend-build",
+            "status": "PASS",
+            "stderrSha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+            "stdoutSha256": "2810fdc98d18e79a35e012a5a88cb2e72c6eaa35b383af0bca7e880b84289fef"
+          },
+          {
+            "argv": [
+              "npm",
+              "run",
+              "test:release"
+            ],
+            "counts": {
+              "failed": 0,
+              "passed": 1,
+              "total": 1
+            },
+            "exitCode": 0,
+            "id": "web-release-contracts",
+            "status": "PASS",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdoutSha256": "6b9d3eb610b114182c996df562ce805db00a6a41248e827514d690d222df70af"
+          }
+        ]
+      },
+      "gate_id": "frontend-web-fresh",
+      "inputs": {
+        "artifacts": [
+          {
+            "bytes": 263450,
+            "path": "package-lock.json",
+            "repository": "frontend",
+            "sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17"
+          }
+        ],
+        "configs": [
+          {
+            "bytes": 2329,
+            "path": "package.json",
+            "repository": "frontend",
+            "sha256": "883ba0c375eb32da07ea221335fd53b85d2a2702895d7e624816e4edfc857cee"
+          },
+          {
+            "bytes": 35287,
+            "path": "scripts/verify-release.mjs",
+            "repository": "frontend",
+            "sha256": "458e62844cfbb4c06db23cd31a5185035c0d444bd9cfe1b3beb49d10c19a4213"
+          },
+          {
+            "bytes": 5934,
+            "path": "schemas/release/web-gate-run-v1.schema.json",
+            "repository": "frontend",
+            "sha256": "4a87b5d1d44f75fb212199711e356d5c7d739bf8cf6161cc1a637d1bbd9ace81"
+          }
+        ]
+      },
+      "privacy": {
+        "environment_values_serialized": false,
+        "match_count": 0,
+        "passed": true,
+        "scanned_field_count": 12,
+        "secret_values_serialized": false
+      },
+      "receipt_sha256": "3bb683436af7077820131175e80819d6ed13b55ddbf001caa379e309edb2214b",
+      "result": {
+        "classification": "COMPLETE_PASS",
+        "exit_code": 0,
+        "outcomes": {
+          "errors": 0,
+          "failed": 0,
+          "passed": 5,
+          "skipped": 0,
+          "total": 5,
+          "xfail": 0,
+          "xpass": 0
+        },
+        "reason_code": null,
+        "status": "PASS",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "runtime": {
+        "clock": "2026-07-20T08:14:41.518243Z",
+        "platform": "linux-aarch64",
+        "python": "3.12.13"
+      },
+      "schema": "stoa.release.gate-receipt.v1",
+      "source": {
+        "candidate_identity": "b29c8138222a3bfb2351e1f095c34f26a88e2c44a9eedbb835e54981329e25ee",
+        "repositories": [
+          {
+            "clean": true,
+            "head": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+            "lock_path": "uv.lock",
+            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "name": "backend",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "996169c3c40b66a2a395e8093ec7a9a749e49bb7"
+          },
+          {
+            "clean": true,
+            "head": "13c4d1067492eead665999d2b43cd359141a6dd6",
+            "lock_path": "package-lock.json",
+            "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+            "name": "frontend",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+          },
+          {
+            "clean": true,
+            "head": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+            "lock_path": "uv.lock",
+            "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+            "name": "infra",
+            "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+          }
+        ]
+      },
+      "started_at": "2026-07-20T08:14:41.518243Z"
+    }
+  ],
+  "command": {
+    "argv": [
+      "{python}",
+      "scripts/release_gate.py",
+      "formal",
+      "--candidate",
+      "{candidate}",
+      "--backend-root",
+      "{backend_root}",
+      "--frontend-root",
+      "{frontend_root}",
+      "--infra-root",
+      "{infra_root}",
+      "--output",
+      "{output}"
+    ],
+    "cwd": ".",
+    "gate_ids": [
+      "backend-python-hermetic",
+      "frontend-web-fresh"
+    ],
+    "name": "formal",
+    "repository": "backend"
+  },
+  "ended_at": "2026-07-20T08:15:17.723800Z",
+  "inputs": {
+    "child_schema": {
+      "bytes": 35893,
+      "path": "schemas/release/gate-receipt-v1.schema.json",
+      "repository": "backend",
+      "sha256": "5ee1d30e62625c16699558fb37e45e1fc10f066c7263dc02f3a58714c94171aa"
+    },
+    "formal_schema": {
+      "bytes": 10329,
+      "path": "schemas/release/formal-gate-run-v1.schema.json",
+      "repository": "backend",
+      "sha256": "3e9f4998e20ed746936a94fe800febe9a1f39c97c607bbec9f37691c0bbc999a"
+    },
+    "orchestrator": {
+      "bytes": 157668,
+      "path": "scripts/release_gate.py",
+      "repository": "backend",
+      "sha256": "777040e75ac8aff8bbc08566df734d00e1353b1dda99e5df78983891e4955846"
+    }
+  },
+  "privacy": {
+    "environment_values_serialized": false,
+    "match_count": 0,
+    "passed": true,
+    "scanned_field_count": 12,
+    "secret_values_serialized": false
+  },
+  "production": {
+    "deploy": "NOT RUN",
+    "infrastructure": "NOT RUN",
+    "rollback": "NOT RUN",
+    "smoke": "NOT RUN"
+  },
+  "receipt_sha256": "d2a7186c33293de9ea88905d83a2bc78561fe78ee51ed7bd040bfd7e88ce2e8b",
+  "result": {
+    "classification": "COMPLETE_PASS",
+    "exit_code": 0,
+    "obligations": {
+      "execution_failed": 0,
+      "not_run": 0,
+      "passed": 2,
+      "policy_rejected": 0,
+      "total": 2
+    },
+    "reason_code": null,
+    "status": "PASS"
+  },
+  "runtime": {
+    "clock": "2026-07-20T08:11:19.869426Z",
+    "platform": "linux-aarch64",
+    "python": "3.12.13"
+  },
+  "schema": "stoa.release.formal-gate-run.v1",
+  "source": {
+    "candidate_identity": "b29c8138222a3bfb2351e1f095c34f26a88e2c44a9eedbb835e54981329e25ee",
+    "repositories": [
+      {
+        "clean": true,
+        "head": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+        "lock_path": "uv.lock",
+        "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+        "name": "backend",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "996169c3c40b66a2a395e8093ec7a9a749e49bb7"
+      },
+      {
+        "clean": true,
+        "head": "13c4d1067492eead665999d2b43cd359141a6dd6",
+        "lock_path": "package-lock.json",
+        "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+        "name": "frontend",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+      },
+      {
+        "clean": true,
+        "head": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+        "lock_path": "uv.lock",
+        "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+        "name": "infra",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+      }
+    ]
+  },
+  "started_at": "2026-07-20T08:11:19.869426Z"
+}

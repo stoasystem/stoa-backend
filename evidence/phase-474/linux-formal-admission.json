@@ -1,0 +1,124 @@
+{
+  "admission_sha256": "9aad0cdc5b9b1b7e62c35961eee8c4990f6bfd96c75a42555218791d768123ac",
+  "approved_source": {
+    "repositories": [
+      {
+        "commit": "6b3b464af7f4a37f187d9d75dea6b62ad0439624",
+        "lock_path": "uv.lock",
+        "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+        "name": "backend",
+        "tree": "ffd0c4c25c22be0733749c354debec88eea434be"
+      },
+      {
+        "commit": "13c4d1067492eead665999d2b43cd359141a6dd6",
+        "lock_path": "package-lock.json",
+        "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+        "name": "frontend",
+        "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+      },
+      {
+        "commit": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+        "lock_path": "uv.lock",
+        "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+        "name": "infra",
+        "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+      }
+    ],
+    "tuple_sha256": "0d32b350c2ec6a78d2f9292cba6d0e9a6848b5f980470542be8f3643c4ae5281"
+  },
+  "candidate_source": {
+    "candidate_identity": "b29c8138222a3bfb2351e1f095c34f26a88e2c44a9eedbb835e54981329e25ee",
+    "repositories": [
+      {
+        "clean": true,
+        "head": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+        "lock_path": "uv.lock",
+        "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+        "name": "backend",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "996169c3c40b66a2a395e8093ec7a9a749e49bb7"
+      },
+      {
+        "clean": true,
+        "head": "13c4d1067492eead665999d2b43cd359141a6dd6",
+        "lock_path": "package-lock.json",
+        "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+        "name": "frontend",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+      },
+      {
+        "clean": true,
+        "head": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+        "lock_path": "uv.lock",
+        "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+        "name": "infra",
+        "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+      }
+    ]
+  },
+  "formal_receipts": [
+    {
+      "ended_at": "2026-07-20T08:10:25.403947Z",
+      "receipt_sha256": "18478240144bb9a9a94df796c10e50b604eb2e6bd71a538fc5fb40ea754f4b34",
+      "sequence": 1,
+      "stable_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+      "started_at": "2026-07-20T08:06:28.101351Z"
+    },
+    {
+      "ended_at": "2026-07-20T08:15:17.723800Z",
+      "receipt_sha256": "d2a7186c33293de9ea88905d83a2bc78561fe78ee51ed7bd040bfd7e88ce2e8b",
+      "sequence": 2,
+      "stable_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+      "started_at": "2026-07-20T08:11:19.869426Z"
+    }
+  ],
+  "normalization": {
+    "canonical_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+    "method": "fixed-json-pointer-replacement-v1",
+    "pointers": [
+      "/runtime/clock",
+      "/started_at",
+      "/ended_at",
+      "/receipt_sha256",
+      "/children/0/runtime/clock",
+      "/children/0/started_at",
+      "/children/0/ended_at",
+      "/children/0/receipt_sha256",
+      "/children/0/result/stdout_sha256",
+      "/children/0/result/stderr_sha256",
+      "/children/1/runtime/clock",
+      "/children/1/started_at",
+      "/children/1/ended_at",
+      "/children/1/receipt_sha256",
+      "/children/1/result/stdout_sha256",
+      "/children/1/result/stderr_sha256",
+      "/children/1/gate_evidence/receiptSha256",
+      "/children/1/gate_evidence/steps/0/stdoutSha256",
+      "/children/1/gate_evidence/steps/0/stderrSha256",
+      "/children/1/gate_evidence/steps/1/stdoutSha256",
+      "/children/1/gate_evidence/steps/1/stderrSha256",
+      "/children/1/gate_evidence/steps/2/stdoutSha256",
+      "/children/1/gate_evidence/steps/2/stderrSha256",
+      "/children/1/gate_evidence/steps/3/stdoutSha256",
+      "/children/1/gate_evidence/steps/3/stderrSha256",
+      "/children/1/gate_evidence/steps/4/stdoutSha256",
+      "/children/1/gate_evidence/steps/4/stderrSha256"
+    ]
+  },
+  "production": {
+    "deploy": "NOT RUN",
+    "infrastructure": "NOT RUN",
+    "rollback": "NOT RUN",
+    "smoke": "NOT RUN"
+  },
+  "publication": {
+    "commit": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+    "handoff_blob_oid": "39ecb6280576364bf631dd65a9ee02767ca0d309",
+    "handoff_blob_sha256": "936091fefa04bcabac18d0417630b39e2dade027aa10f967c257388e93f0c5ad",
+    "parent": "6b3b464af7f4a37f187d9d75dea6b62ad0439624"
+  },
+  "schema": "stoa.release.source-handoff-admission.v1",
+  "status": "PASS"
+}

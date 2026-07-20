@@ -1,0 +1,199 @@
+{
+  "admission": {
+    "admission_sha256": "9aad0cdc5b9b1b7e62c35961eee8c4990f6bfd96c75a42555218791d768123ac",
+    "file_sha256": "847aef6d0fc0268cd67765f03a72c9bf60a7078e7679595cc1f3bdfefac4691c",
+    "fresh_revalidation": {
+      "byte_identical": true,
+      "complete_object_closure": true,
+      "exact_pfi_checkout": true,
+      "file_sha256": "847aef6d0fc0268cd67765f03a72c9bf60a7078e7679595cc1f3bdfefac4691c",
+      "no_host_mount": true,
+      "status": "PASS"
+    },
+    "stable_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+    "status": "PASS"
+  },
+  "bundles": [
+    {
+      "complete_history": true,
+      "name": "backend",
+      "sha256": "f06528223e3cb946d6e93cebb14a93beccc6c52d2b74200e2632defcafd71d08"
+    },
+    {
+      "complete_history": true,
+      "name": "frontend",
+      "sha256": "2d0c1785a57ccd54834921eb76008c718bbf28482993b4271791fd3c00f3b0f6"
+    },
+    {
+      "complete_history": true,
+      "name": "infra",
+      "sha256": "0df599f8e3888673cfb8adb02c5eefcf6ec320028748f64ef8f2759315b94b4b"
+    }
+  ],
+  "candidate": {
+    "execution_identity": "b29c8138222a3bfb2351e1f095c34f26a88e2c44a9eedbb835e54981329e25ee",
+    "file_sha256": "b536da059d422ecec16da8e3bcffb55987671e00e6fd83465eff97dd0b6b6bef",
+    "repositories_clean": true
+  },
+  "environment": {
+    "architecture": "aarch64",
+    "boot_id": "75312665-ba77-4267-9051-3e6fa0b7bb21",
+    "kernel": "7.0.0-27-generic",
+    "lima": {
+      "arch": "aarch64",
+      "cpus": 6,
+      "memory": "12GiB",
+      "mounts": null
+    },
+    "os": {
+      "id": "ubuntu",
+      "pretty_name": "Ubuntu 26.04 LTS",
+      "version_id": "26.04"
+    },
+    "python": "3.12.13",
+    "python_executable": "/home/zhdeng.guest/.local/share/uv/python/cpython-3.12.13-linux-aarch64-gnu/bin/python3.12",
+    "uv": "0.11.16"
+  },
+  "excluded_operations": {
+    "mobile": "NOT RUN",
+    "native": "NOT RUN",
+    "provider_workflow": "NOT RUN",
+    "staging": "NOT RUN"
+  },
+  "formal_runs": [
+    {
+      "command": [
+        "/home/zhdeng.guest/.local/share/uv/python/cpython-3.12.13-linux-aarch64-gnu/bin/python3.12",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/backend/scripts/release_gate.py",
+        "formal",
+        "--candidate",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/evidence/candidate.json",
+        "--backend-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/backend",
+        "--frontend-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/frontend",
+        "--infra-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/infra",
+        "--output",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/evidence/formal-run-1.json"
+      ],
+      "exit_code": 0,
+      "file_sha256": "ba84a54373d992b4eae0bcd8b84ed9a08122d17f76b40bae3bbebe65cd5eaf81",
+      "process_ended_at": "2026-07-20T08:10:26Z",
+      "process_started_at": "2026-07-20T08:06:27Z",
+      "python": {
+        "fresh_environments": 2,
+        "passed_per_environment": 2344,
+        "skipped": 0,
+        "xfail": 0,
+        "xpass": 0
+      },
+      "receipt_ended_at": "2026-07-20T08:10:25.403947Z",
+      "receipt_sha256": "18478240144bb9a9a94df796c10e50b604eb2e6bd71a538fc5fb40ea754f4b34",
+      "receipt_started_at": "2026-07-20T08:06:28.101351Z",
+      "result": "PASS",
+      "sequence": 1,
+      "stable_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+      "web": {
+        "failed": 0,
+        "omitted": 0,
+        "passed": 5
+      }
+    },
+    {
+      "command": [
+        "/home/zhdeng.guest/.local/share/uv/python/cpython-3.12.13-linux-aarch64-gnu/bin/python3.12",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/backend/scripts/release_gate.py",
+        "formal",
+        "--candidate",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/evidence/candidate.json",
+        "--backend-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/backend",
+        "--frontend-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/frontend",
+        "--infra-root",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/workspace/infra",
+        "--output",
+        "/home/zhdeng.guest/stoa-v9qual-474-fe467c5-final/evidence/formal-run-2.json"
+      ],
+      "exit_code": 0,
+      "file_sha256": "b5d42750a41dd5b805e897e855c2462b1be0edad840492003fd0ab6348c693cc",
+      "process_ended_at": "2026-07-20T08:15:18Z",
+      "process_started_at": "2026-07-20T08:11:19Z",
+      "python": {
+        "fresh_environments": 2,
+        "passed_per_environment": 2344,
+        "skipped": 0,
+        "xfail": 0,
+        "xpass": 0
+      },
+      "receipt_ended_at": "2026-07-20T08:15:17.723800Z",
+      "receipt_sha256": "d2a7186c33293de9ea88905d83a2bc78561fe78ee51ed7bd040bfd7e88ce2e8b",
+      "receipt_started_at": "2026-07-20T08:11:19.869426Z",
+      "result": "PASS",
+      "sequence": 2,
+      "stable_sha256": "7915ab0b1aa25c3583c9f8018b513a363ace515a0e1daa3b2e02c1d2640b3ebe",
+      "web": {
+        "failed": 0,
+        "omitted": 0,
+        "passed": 5
+      }
+    }
+  ],
+  "isolation": {
+    "complete_object_closure": true,
+    "forbidden_shared_filesystems": [
+      "9p",
+      "virtiofs",
+      "fuse.sshfs"
+    ],
+    "forbidden_shared_mount_count": 0,
+    "host_source_mount_count": 0,
+    "host_source_path_present": false,
+    "network_namespace_probe": "PASS",
+    "pid_namespace_probe": "PASS",
+    "repositories_non_shallow": true,
+    "source_transfer": "complete-git-bundles",
+    "workspace": "vm-local-detached-clean-clones"
+  },
+  "production": {
+    "deploy": "NOT RUN",
+    "infrastructure": "NOT RUN",
+    "rollback": "NOT RUN",
+    "smoke": "NOT RUN"
+  },
+  "provenance_scope": "owner-operated local VM evidence; no third-party non-repudiation is claimed",
+  "publication": {
+    "commit": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+    "handoff_blob_oid": "39ecb6280576364bf631dd65a9ee02767ca0d309",
+    "handoff_blob_sha256": "936091fefa04bcabac18d0417630b39e2dade027aa10f967c257388e93f0c5ad",
+    "parent": "6b3b464af7f4a37f187d9d75dea6b62ad0439624",
+    "tuple_sha256": "0d32b350c2ec6a78d2f9292cba6d0e9a6848b5f980470542be8f3643c4ae5281"
+  },
+  "repositories": [
+    {
+      "head": "fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0",
+      "lock_path": "uv.lock",
+      "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+      "name": "backend",
+      "tree": "996169c3c40b66a2a395e8093ec7a9a749e49bb7"
+    },
+    {
+      "head": "13c4d1067492eead665999d2b43cd359141a6dd6",
+      "lock_path": "package-lock.json",
+      "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+      "name": "frontend",
+      "tree": "e2d4cdabc6e6563c61e924b0fd9a2c5fd97e75bf"
+    },
+    {
+      "head": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6",
+      "lock_path": "uv.lock",
+      "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+      "name": "infra",
+      "tree": "bb279d0f076a29fd0b83280c818289597446a45d"
+    }
+  ],
+  "schema": "stoa.release.linux-formal-execution-envelope.v1",
+  "sequential_non_overlapping": true,
+  "status": "PASS"
+}
