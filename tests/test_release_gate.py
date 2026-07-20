@@ -1496,6 +1496,19 @@ def test_default_workspace_roots_accept_materialized_snapshot_names(
     assert workspace.require("frontend") == roots["frontend"]
     assert workspace.require("infra") == roots["infra"]
 
+    alternate_frontend = tmp_path / "stoa-frontend"
+    alternate_frontend.mkdir()
+    (alternate_frontend / "package-lock.json").write_text(
+        "lock\n",
+        encoding="utf-8",
+    )
+    (alternate_frontend / "package.json").write_text(
+        json.dumps({"name": "stoa-frontend"}) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(gate.GatePolicyError, match="ambiguous"):
+        gate.default_workspace_roots()
+
 
 def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
     tmp_path: Path,
