@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
+import io
 import importlib.util
 import json
 import os
@@ -11,6 +13,7 @@ import re
 import subprocess
 import sys
 import stat
+import tarfile
 import time
 from typing import Any
 
@@ -1722,6 +1725,7 @@ def _web_test_operations(
     mutate: Any = None,
     output_kind: str = "regular",
     returncode: int = 0,
+    mutate_source: bool = False,
 ) -> tuple[Any, dict[str, Any]]:
     moments = iter(["2026-07-20T00:00:00Z", "2026-07-20T00:00:01Z"])
     observed: dict[str, Any] = {}
@@ -1750,6 +1754,11 @@ def _web_test_operations(
         (cwd / "node_modules").mkdir()
         (cwd / "dist").mkdir()
         (cwd / "dist" / "index.js").write_text("release artifact\n", encoding="utf-8")
+        if mutate_source:
+            (cwd / "src" / "app.js").write_text(
+                "export default 'mutated during run'\n",
+                encoding="utf-8",
+            )
         receipt = _web_test_receipt(cwd)
         if mutate is not None:
             mutate(receipt)
@@ -2012,6 +2021,8 @@ def test_web_gate_rejects_missing_or_unsafe_evidence_output(
     ("label", "mutate"),
     [
         ("node runtime", lambda value: value["runtime"].__setitem__("node", "21.0.0")),
+        ("node patch", lambda value: value["runtime"].__setitem__("node", "20.19.5")),
+        ("npm patch", lambda value: value["runtime"].__setitem__("npm", "10.8.1")),
         ("step order", lambda value: value["steps"][0].__setitem__("id", "frontend-build")),
         ("package", lambda value: value["source"]["packageJson"].__setitem__("sha256", "b" * 64)),
         ("candidate lock", lambda value: value["source"]["packageLock"].__setitem__("sha256", "b" * 64)),
@@ -2124,3 +2135,278 @@ def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> N
         )
     time.sleep(0.5)
     assert not marker.exists()
+
+
+def _controlled_node_archive_bytes(
+    archive_root: str,
+    *,
+    unsafe_member: bool = False,
+) -> bytes:
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        files = {
+            f"{archive_root}/bin/node": (
+                b"#!/bin/sh\nprintf 'v20.20.2\\n'\n",
+                0o755,
+            ),
+            f"{archive_root}/lib/node_modules/npm/package.json": (
+                b'{"name":"npm","version":"10.8.2"}\n',
+                0o644,
+            ),
+            f"{archive_root}/lib/node_modules/npm/bin/npm-cli.js": (
+                b"// npm cli fixture\n",
+                0o755,
+            ),
+        }
+        for name, (content, mode) in files.items():
+            member = tarfile.TarInfo(name)
+            member.mode = mode
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
+        if unsafe_member:
+            link = tarfile.TarInfo(
+                f"{archive_root}/lib/node_modules/npm/node_modules/escape"
+            )
+            link.type = tarfile.SYMTYPE
+            link.linkname = "../../../../../../outside"
+            archive.addfile(link)
+    return output.getvalue()
+
+
+def _controlled_node_test_environment(tmp_path: Path) -> dict[str, str]:
+    home = tmp_path / "home"
+    temporary = tmp_path / "tmp"
+    home.mkdir()
+    temporary.mkdir()
+    return {
+        "CI": "true",
+        "HOME": str(home),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "TMPDIR": str(temporary),
+        "TZ": "UTC",
+    }
+
+
+class _NodeDownloadResponse:
+    def __init__(self, content: bytes, url: str, *, content_length: int | None = None):
+        self._content = io.BytesIO(content)
+        self._url = url
+        self.status = 200
+        self.headers = {
+            "Content-Length": str(
+                len(content) if content_length is None else content_length
+            )
+        }
+
+    def __enter__(self) -> _NodeDownloadResponse:
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def geturl(self) -> str:
+        return self._url
+
+    def read(self, size: int) -> bytes:
+        return self._content.read(size)
+
+
+class _NodeDownloadOpener:
+    def __init__(self, response: _NodeDownloadResponse):
+        self._response = response
+
+    def open(self, request: Any, *, timeout: int) -> _NodeDownloadResponse:
+        assert timeout == 120
+        return self._response
+
+
+def test_audit_controlled_node_archive_never_executes_ambient_path_shim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    marker = tmp_path / "ambient-node-executed"
+    ambient_bin = tmp_path / "ambient-bin"
+    ambient_bin.mkdir()
+    shim = ambient_bin / "node"
+    shim.write_text(
+        f"#!/bin/sh\ntouch '{marker}'\nprintf 'v20.20.2\\n'\n",
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", str(ambient_bin))
+
+    archive_root = "node-v20.20.2-test-fixture"
+    archive = _controlled_node_archive_bytes(archive_root)
+    spec = gate.NodeArchiveSpec(
+        archive_root=archive_root,
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256=sha256(archive).hexdigest(),
+    )
+    monkeypatch.setattr(gate, "_selected_node_archive", lambda: spec)
+
+    def download(selected: Any, destination: Path) -> None:
+        assert selected == spec
+        destination.write_bytes(archive)
+        destination.chmod(0o600)
+
+    monkeypatch.setattr(gate, "_download_node_archive", download)
+    destination = tmp_path / "controlled-toolchain"
+    node = gate._system_resolve_node20(
+        _controlled_node_test_environment(tmp_path),
+        destination,
+    )
+    assert node == destination / "bin" / "node"
+    assert not marker.exists()
+
+
+def test_audit_controlled_node_archive_rejects_wrong_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    archive_root = "node-v20.20.2-test-fixture"
+    archive = _controlled_node_archive_bytes(archive_root)
+    spec = gate.NodeArchiveSpec(
+        archive_root=archive_root,
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256="b" * 64,
+    )
+    monkeypatch.setattr(gate, "_selected_node_archive", lambda: spec)
+    monkeypatch.setattr(
+        gate,
+        "_download_node_archive",
+        lambda selected, destination: destination.write_bytes(archive),
+    )
+    with pytest.raises(gate.GatePolicyError, match="archive digest"):
+        gate._system_resolve_node20(
+            _controlled_node_test_environment(tmp_path),
+            tmp_path / "controlled-toolchain",
+        )
+
+
+def test_audit_controlled_node_archive_rejects_unsafe_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    archive_root = "node-v20.20.2-test-fixture"
+    archive = _controlled_node_archive_bytes(archive_root, unsafe_member=True)
+    spec = gate.NodeArchiveSpec(
+        archive_root=archive_root,
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256=sha256(archive).hexdigest(),
+    )
+    monkeypatch.setattr(gate, "_selected_node_archive", lambda: spec)
+    monkeypatch.setattr(
+        gate,
+        "_download_node_archive",
+        lambda selected, destination: destination.write_bytes(archive),
+    )
+    with pytest.raises(gate.GatePolicyError, match="archive member"):
+        gate._system_resolve_node20(
+            _controlled_node_test_environment(tmp_path),
+            tmp_path / "controlled-toolchain",
+        )
+    assert not (tmp_path / "outside").exists()
+
+
+def test_audit_node_download_disables_ambient_proxies(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    content = b"official archive fixture"
+    spec = gate.NodeArchiveSpec(
+        archive_root="node-v20.20.2-test-fixture",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256=sha256(content).hexdigest(),
+    )
+    observed: dict[str, Any] = {}
+
+    def build_opener(*handlers: Any) -> _NodeDownloadOpener:
+        observed["handlers"] = handlers
+        return _NodeDownloadOpener(_NodeDownloadResponse(content, spec.url))
+
+    monkeypatch.setattr(gate.urllib.request, "build_opener", build_opener)
+    destination = tmp_path / "node.tar.gz"
+    gate._download_node_archive(spec, destination)
+    assert destination.read_bytes() == content
+    proxy_handlers = [
+        handler
+        for handler in observed["handlers"]
+        if isinstance(handler, gate.urllib.request.ProxyHandler)
+    ]
+    assert len(proxy_handlers) == 1
+    assert proxy_handlers[0].proxies == {}
+    assert any(isinstance(handler, gate._NoRedirectHandler) for handler in observed["handlers"])
+
+
+def test_audit_node_download_rejects_redirect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    content = b"redirected bytes"
+    spec = gate.NodeArchiveSpec(
+        archive_root="node-v20.20.2-test-fixture",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256=sha256(content).hexdigest(),
+    )
+    monkeypatch.setattr(
+        gate.urllib.request,
+        "build_opener",
+        lambda *handlers: _NodeDownloadOpener(
+            _NodeDownloadResponse(content, "https://attacker.invalid/node.tar.gz")
+        ),
+    )
+    with pytest.raises(gate.GatePolicyError, match="redirect"):
+        gate._download_node_archive(spec, tmp_path / "node.tar.gz")
+
+
+def test_audit_node_download_rejects_oversized_content_length(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    spec = gate.NodeArchiveSpec(
+        archive_root="node-v20.20.2-test-fixture",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-test-fixture.tar.gz",
+        sha256="b" * 64,
+    )
+    monkeypatch.setattr(
+        gate.urllib.request,
+        "build_opener",
+        lambda *handlers: _NodeDownloadOpener(
+            _NodeDownloadResponse(
+                b"",
+                spec.url,
+                content_length=gate.NODE_ARCHIVE_MAX_BYTES + 1,
+            )
+        ),
+    )
+    with pytest.raises(gate.GatePolicyError, match="size"):
+        gate._download_node_archive(spec, tmp_path / "node.tar.gz")
+
+
+def test_audit_web_gate_rejects_self_consistent_source_mutation(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, _ = _web_test_operations(
+        gate,
+        workspace,
+        mutate_source=True,
+    )
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+    assert receipt["result"]["reason_code"] == "GATE_EVIDENCE_INVALID"
+    assert receipt["gate_evidence"] is None
