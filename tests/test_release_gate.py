@@ -587,6 +587,120 @@ def test_candidate_validation_preserves_logical_identity_and_not_run_fields() ->
         gate.validate_candidate(tampered)
 
 
+def _live_candidate_fixture(gate: Any, tmp_path: Path) -> tuple[Any, Any, dict[str, dict[str, Any]]]:
+    roots: dict[str, Path] = {}
+    states: dict[str, dict[str, Any]] = {}
+    contracts = {
+        "backend": ("uv.lock", "pyproject.toml", '[project]\nname = "stoa-backend"\n'),
+        "frontend": ("package-lock.json", "package.json", '{"name":"stoa-frontend"}\n'),
+        "infra": ("uv.lock", "pyproject.toml", '[project]\nname = "stoa-infra"\n'),
+    }
+    for index, (name, (lock_path, marker_path, marker)) in enumerate(contracts.items(), start=1):
+        root = tmp_path / f"checkout-{index}"
+        root.mkdir()
+        lock_bytes = f"{name}-lock\n".encode()
+        (root / lock_path).write_bytes(lock_bytes)
+        (root / marker_path).write_text(marker, encoding="utf-8")
+        roots[name] = root
+        states[name] = {
+            "head": str(index) * 40,
+            "tree": str(index + 3) * 40,
+            "porcelain": "",
+            "blob": lock_bytes,
+        }
+
+    root_names = {root: name for name, root in roots.items()}
+
+    def git(root: Path, argv: tuple[str, ...]) -> str:
+        state = states[root_names[root]]
+        if argv == ("rev-parse", "HEAD"):
+            return state["head"]
+        if argv == ("rev-parse", "HEAD^{tree}"):
+            return state["tree"]
+        if argv[0:3] == ("status", "--porcelain=v1", "--untracked-files=all"):
+            return state["porcelain"]
+        if argv[0:2] == ("cat-file", "-e"):
+            return ""
+        raise AssertionError(argv)
+
+    def git_blob(root: Path, revision_path: str) -> bytes:
+        assert revision_path == f"HEAD:{'package-lock.json' if root_names[root] == 'frontend' else 'uv.lock'}"
+        return states[root_names[root]]["blob"]
+
+    operations = gate.GateOperations(
+        run_process=lambda argv, cwd, timeout: (_ for _ in ()).throw(
+            AssertionError("gate command must not execute during candidate validation")
+        ),
+        git=git,
+        git_blob=git_blob,
+        now_utc=lambda: "2026-07-20T00:00:00Z",
+        python_version=lambda: "3.12.13",
+        platform_identity=lambda: "linux-x86_64",
+    )
+    return gate.WorkspaceRoots.from_mapping(roots), operations, states
+
+
+def test_live_candidate_is_host_path_free_and_revalidates_exact_roots(tmp_path: Path) -> None:
+    gate = _load_gate()
+    workspace, operations, _ = _live_candidate_fixture(gate, tmp_path)
+    candidate = gate.issue_live_candidate(workspace=workspace, operations=operations)
+
+    gate.validate_live_candidate(candidate, workspace=workspace, operations=operations)
+    encoded = json.dumps(candidate, sort_keys=True)
+    assert str(tmp_path) not in encoded
+    assert candidate["candidate_issued"] is True
+    assert all(repository["porcelain_sha256"] == gate.sha256(b"").hexdigest() for repository in candidate["repositories"])
+
+
+@pytest.mark.parametrize("drift", ["head", "tree", "porcelain", "committed-lock", "worktree-lock"])
+def test_live_candidate_rejects_every_source_drift(tmp_path: Path, drift: str) -> None:
+    gate = _load_gate()
+    workspace, operations, states = _live_candidate_fixture(gate, tmp_path)
+    candidate = gate.issue_live_candidate(workspace=workspace, operations=operations)
+
+    if drift == "head":
+        states["backend"]["head"] = "9" * 40
+    elif drift == "tree":
+        states["frontend"]["tree"] = "9" * 40
+    elif drift == "porcelain":
+        states["infra"]["porcelain"] = "?? unexpected.txt"
+    elif drift == "committed-lock":
+        states["backend"]["blob"] = b"different-committed-lock\n"
+    else:
+        (workspace.require("frontend") / "package-lock.json").write_bytes(b"different-worktree-lock\n")
+
+    with pytest.raises(gate.GatePolicyError, match="candidate|lock|clean"):
+        gate.validate_live_candidate(candidate, workspace=workspace, operations=operations)
+
+
+def test_candidate_porcelain_has_only_exact_infra_root_exception(tmp_path: Path) -> None:
+    gate = _load_gate()
+    workspace, operations, _ = _live_candidate_fixture(gate, tmp_path)
+    calls: list[tuple[Path, tuple[str, ...]]] = []
+    original_git = operations.git
+    observed = gate.GateOperations(
+        run_process=operations.run_process,
+        git=lambda root, argv: (calls.append((root, argv)), original_git(root, argv))[1],
+        git_blob=operations.git_blob,
+        now_utc=operations.now_utc,
+        python_version=operations.python_version,
+        platform_identity=operations.platform_identity,
+    )
+
+    gate.issue_live_candidate(workspace=workspace, operations=observed)
+    status_calls = {root: argv for root, argv in calls if argv and argv[0] == "status"}
+    assert ":(top,exclude,literal).DS_Store" not in status_calls[workspace.require("backend")]
+    assert ":(top,exclude,literal).DS_Store" not in status_calls[workspace.require("frontend")]
+    assert status_calls[workspace.require("infra")][-1] == ":(top,exclude,literal).DS_Store"
+
+
+def test_self_test_requires_an_explicit_candidate() -> None:
+    gate = _load_gate()
+    parser = gate.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["self-test"])
+
+
 def test_duplicate_json_fields_fail_before_candidate_or_receipt_use(tmp_path: Path) -> None:
     gate = _load_gate()
     duplicate = tmp_path / "duplicate.json"
