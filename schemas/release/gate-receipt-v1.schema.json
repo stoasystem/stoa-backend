@@ -24,6 +24,7 @@
       "enum": [
         "gate-self-test",
         "backend-python-hermetic",
+        "frontend-web-fresh",
         "candidate-source",
         "backend-python-standard",
         "backend-python-future",
@@ -56,7 +57,8 @@
     "gate_evidence": {
       "oneOf": [
         {"type": "null"},
-        {"$ref": "#/$defs/python_matrix_evidence"}
+        {"$ref": "#/$defs/python_matrix_evidence"},
+        {"$ref": "#/$defs/web_gate_run_evidence"}
       ]
     },
     "privacy": {"$ref": "#/$defs/privacy"},
@@ -446,6 +448,162 @@
         {"$ref": "#/$defs/python_matrix_not_run"},
         {"$ref": "#/$defs/python_matrix_rejected"}
       ]
+    },
+    "web_gate_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "sha256"],
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "web_gate_step_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed"],
+      "properties": {
+        "total": {"const": 1},
+        "passed": {"const": 1},
+        "failed": {"const": 0}
+      }
+    },
+    "web_gate_run_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "status", "runtime", "source", "artifact", "steps", "counts", "production", "receiptSha256"],
+      "properties": {
+        "schema": {"const": "stoa.web.gate-run.v1"},
+        "status": {"const": "PASS"},
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "npm", "platform", "arch"],
+          "properties": {
+            "node": {"type": "string", "pattern": "^20\\.[0-9]+\\.[0-9]+$"},
+            "npm": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+            "platform": {"type": "string", "pattern": "^[A-Za-z0-9_-]{2,32}$"},
+            "arch": {"type": "string", "pattern": "^[A-Za-z0-9_-]{2,32}$"}
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["packageJson", "packageLock", "treeSha256"],
+          "properties": {
+            "packageJson": {"$ref": "#/$defs/web_gate_identity"},
+            "packageLock": {"$ref": "#/$defs/web_gate_identity"},
+            "treeSha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "files", "bytes", "treeSha256"],
+          "properties": {
+            "path": {"const": "dist"},
+            "files": {"type": "integer", "minimum": 1},
+            "bytes": {"type": "integer", "minimum": 1},
+            "treeSha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "argv", "status", "exitCode", "counts", "stdoutSha256", "stderrSha256"],
+              "properties": {
+                "id": {"const": "frontend-locked-install"},
+                "argv": {
+                  "type": "array",
+                  "minItems": 7,
+                  "maxItems": 7,
+                  "prefixItems": [
+                    {"const": "npm"}, {"const": "ci"}, {"const": "--ignore-scripts"},
+                    {"const": "--no-audit"}, {"const": "--no-fund"},
+                    {"const": "--include=dev"}, {"const": "--package-lock=true"}
+                  ],
+                  "items": false
+                },
+                "status": {"const": "PASS"},
+                "exitCode": {"const": 0},
+                "counts": {"$ref": "#/$defs/web_gate_step_counts"},
+                "stdoutSha256": {"$ref": "#/$defs/sha256"},
+                "stderrSha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "argv", "status", "exitCode", "counts", "stdoutSha256", "stderrSha256"],
+              "properties": {
+                "id": {"const": "frontend-eslint"},
+                "argv": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"const": "npm"}, {"const": "run"}, {"const": "lint"}], "items": false},
+                "status": {"const": "PASS"}, "exitCode": {"const": 0},
+                "counts": {"$ref": "#/$defs/web_gate_step_counts"},
+                "stdoutSha256": {"$ref": "#/$defs/sha256"}, "stderrSha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "argv", "status", "exitCode", "counts", "stdoutSha256", "stderrSha256"],
+              "properties": {
+                "id": {"const": "frontend-typecheck"},
+                "argv": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"const": "npm"}, {"const": "run"}, {"const": "typecheck"}], "items": false},
+                "status": {"const": "PASS"}, "exitCode": {"const": 0},
+                "counts": {"$ref": "#/$defs/web_gate_step_counts"},
+                "stdoutSha256": {"$ref": "#/$defs/sha256"}, "stderrSha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "argv", "status", "exitCode", "counts", "stdoutSha256", "stderrSha256"],
+              "properties": {
+                "id": {"const": "frontend-build"},
+                "argv": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"const": "npm"}, {"const": "run"}, {"const": "build"}], "items": false},
+                "status": {"const": "PASS"}, "exitCode": {"const": 0},
+                "counts": {"$ref": "#/$defs/web_gate_step_counts"},
+                "stdoutSha256": {"$ref": "#/$defs/sha256"}, "stderrSha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "argv", "status", "exitCode", "counts", "stdoutSha256", "stderrSha256"],
+              "properties": {
+                "id": {"const": "web-release-contracts"},
+                "argv": {"type": "array", "minItems": 3, "maxItems": 3, "prefixItems": [{"const": "npm"}, {"const": "run"}, {"const": "test:release"}], "items": false},
+                "status": {"const": "PASS"}, "exitCode": {"const": 0},
+                "counts": {"$ref": "#/$defs/web_gate_step_counts"},
+                "stdoutSha256": {"$ref": "#/$defs/sha256"}, "stderrSha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          ],
+          "items": false
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "passed", "failed", "omitted"],
+          "properties": {"total": {"const": 5}, "passed": {"const": 5}, "failed": {"const": 0}, "omitted": {"const": 0}}
+        },
+        "production": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["infrastructure", "deploy", "smoke", "rollback"],
+          "properties": {
+            "infrastructure": {"const": "NOT RUN"}, "deploy": {"const": "NOT RUN"},
+            "smoke": {"const": "NOT RUN"}, "rollback": {"const": "NOT RUN"}
+          }
+        },
+        "receiptSha256": {"$ref": "#/$defs/sha256"}
+      }
     },
     "pass_counts": {
       "type": "object",

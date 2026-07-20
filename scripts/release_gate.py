@@ -15,10 +15,12 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from typing import Any
 
@@ -76,6 +78,49 @@ _PYTHON_MATRIX_RUN_KEYS = {
     "lock_sha256",
     "collection_sha256",
     "counts",
+}
+WEB_GATE_SCHEMA = "stoa.web.gate-run.v1"
+WEB_GATE_MAX_RECEIPT_BYTES = 1024 * 1024
+WEB_GATE_MAX_TREE_FILE_BYTES = 64 * 1024 * 1024
+WEB_GATE_EXCLUDED_SOURCE_ROOTS = frozenset({".git", "dist", "node_modules"})
+WEB_GATE_STEPS = (
+    (
+        "frontend-locked-install",
+        (
+            "npm",
+            "ci",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--include=dev",
+            "--package-lock=true",
+        ),
+    ),
+    ("frontend-eslint", ("npm", "run", "lint")),
+    ("frontend-typecheck", ("npm", "run", "typecheck")),
+    ("frontend-build", ("npm", "run", "build")),
+    ("web-release-contracts", ("npm", "run", "test:release")),
+)
+_EVIDENCE_KINDS = frozenset({"none", "python-matrix", "web-gate-run"})
+_WEB_RECEIPT_KEYS = {
+    "schema",
+    "status",
+    "runtime",
+    "source",
+    "artifact",
+    "steps",
+    "counts",
+    "production",
+    "receiptSha256",
+}
+_WEB_STEP_KEYS = {
+    "id",
+    "argv",
+    "status",
+    "exitCode",
+    "counts",
+    "stdoutSha256",
+    "stderrSha256",
 }
 
 _CANDIDATE_KEYS = {
@@ -218,6 +263,7 @@ class GateSpec:
     repository: str = "backend"
     cwd: str = "."
     timeout_seconds: int = 120
+    evidence_kind: str = "none"
 
     def __post_init__(self) -> None:
         if not self.gate_id or not self.argv:
@@ -233,6 +279,15 @@ class GateSpec:
                 raise GatePolicyError("gate input path must be repository-relative")
         if self.timeout_seconds <= 0:
             raise GatePolicyError("gate timeout must be positive")
+        if self.evidence_kind not in _EVIDENCE_KINDS:
+            raise GatePolicyError("gate evidence kind is invalid")
+        evidence_tokens = sum(value == "{evidence_output}" for value in self.argv)
+        node_tokens = sum(value == "{node}" for value in self.argv)
+        if self.evidence_kind == "web-gate-run":
+            if evidence_tokens != 1 or node_tokens != 1:
+                raise GatePolicyError("Web gate evidence tokens are invalid")
+        elif evidence_tokens or node_tokens:
+            raise GatePolicyError("non-Web gate cannot use Web evidence tokens")
 
 
 @dataclass(frozen=True)
@@ -244,6 +299,10 @@ class GateOperations:
     platform_identity: Callable[[], str]
     git_blob: Callable[[Path, str], bytes] | None = None
     materialize_checkout: Callable[[Path, str, Path], None] | None = None
+    resolve_node20: Callable[[Mapping[str, str]], Path] | None = None
+    run_web_process: (
+        Callable[[tuple[str, ...], dict[str, str], Path, int], ProcessResult] | None
+    ) = None
 
 
 @dataclass(frozen=True)
@@ -373,6 +432,26 @@ def default_registry() -> GateRegistry:
                 artifact_paths=_PYTHON_MATRIX_SOURCE_FILES,
                 config_paths=("scripts/phase474_pytest_guard.py", "tests/conftest.py"),
                 timeout_seconds=7200,
+                evidence_kind="python-matrix",
+            ),
+            GateSpec(
+                gate_id="frontend-web-fresh",
+                repository="frontend",
+                argv=(
+                    "{node}",
+                    "scripts/verify-release.mjs",
+                    "verify",
+                    "--output",
+                    "{evidence_output}",
+                ),
+                artifact_paths=("package-lock.json",),
+                config_paths=(
+                    "package.json",
+                    "scripts/verify-release.mjs",
+                    "schemas/release/web-gate-run-v1.schema.json",
+                ),
+                timeout_seconds=5400,
+                evidence_kind="web-gate-run",
             ),
         )
     )
@@ -400,6 +479,10 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise GatePolicyError(f"duplicate JSON field: {key}")
         value[key] = item
     return value
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise GatePolicyError(f"non-finite JSON value is forbidden: {value}")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -932,7 +1015,11 @@ def _validate_pytest_manifest(
 def _load_python_matrix_output(stdout: bytes) -> dict[str, Any]:
     try:
         text = stdout.decode("utf-8", errors="strict")
-        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
     except GatePolicyError:
         raise
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -1047,6 +1134,498 @@ def _validate_registered_python_matrix(matrix: Mapping[str, Any], *, root: Path 
     }
     if matrix.get("diagnostic") != expected_diagnostic:
         raise GatePolicyError("Python matrix rejection diagnostic is invalid")
+
+
+def _same_file_metadata(left: os.stat_result, right: os.stat_result) -> bool:
+    return all(
+        getattr(left, name) == getattr(right, name)
+        for name in (
+            "st_dev",
+            "st_ino",
+            "st_mode",
+            "st_nlink",
+            "st_uid",
+            "st_gid",
+            "st_size",
+            "st_mtime_ns",
+            "st_ctime_ns",
+        )
+    )
+
+
+def _read_stable_regular_at(
+    directory: int,
+    name: str,
+    expected: os.stat_result,
+    *,
+    maximum_bytes: int,
+    label: str,
+) -> bytes:
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW,
+            dir_fd=directory,
+        )
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or not _same_file_metadata(expected, before)
+            or before.st_size < 0
+            or before.st_size > maximum_bytes
+        ):
+            raise GatePolicyError(f"{label} is not a stable regular file")
+        chunks: list[bytes] = []
+        remaining = maximum_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        content = b"".join(chunks)
+        after = os.fstat(descriptor)
+        if (
+            len(content) != before.st_size
+            or len(content) > maximum_bytes
+            or not _same_file_metadata(before, after)
+        ):
+            raise GatePolicyError(f"{label} changed during inspection")
+        return content
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError(f"{label} is unavailable") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _web_tree_identity(
+    root: Path,
+    *,
+    exclude_generated: bool = False,
+) -> dict[str, Any]:
+    """Recompute the Plan-87 byte tree without following links or special files."""
+    root_descriptor = -1
+    try:
+        root_metadata = root.lstat()
+        if not stat.S_ISDIR(root_metadata.st_mode) or stat.S_ISLNK(root_metadata.st_mode):
+            raise GatePolicyError("Web tree root is not a directory")
+        root_descriptor = os.open(
+            root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        opened_root = os.fstat(root_descriptor)
+        if not _same_file_metadata(root_metadata, opened_root):
+            raise GatePolicyError("Web tree root changed during inspection")
+    except GatePolicyError:
+        if root_descriptor >= 0:
+            os.close(root_descriptor)
+        raise
+    except OSError as exc:
+        if root_descriptor >= 0:
+            os.close(root_descriptor)
+        raise GatePolicyError("Web tree root is unavailable") from exc
+
+    digest = sha256()
+    files = 0
+    byte_count = 0
+
+    def visit(directory: int, prefix: str) -> None:
+        nonlocal files, byte_count
+        try:
+            names = sorted(os.listdir(directory), key=os.fsencode)
+        except (OSError, UnicodeError) as exc:
+            raise GatePolicyError("Web tree directory is unavailable") from exc
+        for name in names:
+            if not name or "/" in name or "\\" in name or "\x00" in name:
+                raise GatePolicyError("Web tree path is invalid")
+            relative = name if not prefix else f"{prefix}/{name}"
+            try:
+                metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except OSError as exc:
+                raise GatePolicyError("Web tree entry is unavailable") from exc
+            if (
+                exclude_generated
+                and not prefix
+                and name in WEB_GATE_EXCLUDED_SOURCE_ROOTS
+            ):
+                continue
+            if stat.S_ISLNK(metadata.st_mode):
+                raise GatePolicyError("Web tree contains a symlink")
+            if stat.S_ISDIR(metadata.st_mode):
+                digest.update(f"directory\0{relative}\0".encode("utf-8"))
+                child = -1
+                try:
+                    child = os.open(
+                        name,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=directory,
+                    )
+                    opened = os.fstat(child)
+                    if not _same_file_metadata(metadata, opened):
+                        raise GatePolicyError("Web tree directory changed during inspection")
+                    visit(child, relative)
+                    if not _same_file_metadata(opened, os.fstat(child)):
+                        raise GatePolicyError("Web tree directory changed during inspection")
+                except GatePolicyError:
+                    raise
+                except OSError as exc:
+                    raise GatePolicyError("Web tree directory is unavailable") from exc
+                finally:
+                    if child >= 0:
+                        os.close(child)
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                raise GatePolicyError("Web tree contains a special entry")
+            content = _read_stable_regular_at(
+                directory,
+                name,
+                metadata,
+                maximum_bytes=WEB_GATE_MAX_TREE_FILE_BYTES,
+                label="Web tree file",
+            )
+            executable = "1" if metadata.st_mode & 0o111 else "0"
+            digest.update(
+                f"file\0{relative}\0{executable}\0{len(content)}\0".encode("utf-8")
+            )
+            digest.update(content)
+            files += 1
+            byte_count += len(content)
+
+    try:
+        visit(root_descriptor, "")
+        if not _same_file_metadata(opened_root, os.fstat(root_descriptor)):
+            raise GatePolicyError("Web tree root changed during inspection")
+    finally:
+        os.close(root_descriptor)
+    return {
+        "files": files,
+        "bytes": byte_count,
+        "treeSha256": digest.hexdigest(),
+    }
+
+
+def _web_root_file_identity(root: Path, name: str) -> dict[str, Any]:
+    directory = -1
+    try:
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise GatePolicyError("Web source input is not a regular file")
+        content = _read_stable_regular_at(
+            directory,
+            name,
+            metadata,
+            maximum_bytes=WEB_GATE_MAX_TREE_FILE_BYTES,
+            label="Web source input",
+        )
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError("Web source input is unavailable") from exc
+    finally:
+        if directory >= 0:
+            os.close(directory)
+    return {"bytes": len(content), "sha256": sha256(content).hexdigest()}
+
+
+def _require_web_identity(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise GatePolicyError(f"{label} is malformed")
+    _require_exact_keys(value, {"bytes", "sha256"}, label)
+    if (
+        not isinstance(value.get("bytes"), int)
+        or isinstance(value.get("bytes"), bool)
+        or value["bytes"] < 1
+    ):
+        raise GatePolicyError(f"{label} byte count is invalid")
+    _require_sha(value.get("sha256"), f"{label} digest")
+    return value
+
+
+def _validate_web_gate_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    frontend_root: Path,
+    candidate: Mapping[str, Any],
+) -> None:
+    _require_exact_keys(receipt, _WEB_RECEIPT_KEYS, "Web gate receipt")
+    if receipt.get("schema") != WEB_GATE_SCHEMA or receipt.get("status") != "PASS":
+        raise GatePolicyError("Web gate receipt status is invalid")
+    supplied_digest = _require_sha(receipt.get("receiptSha256"), "Web receipt digest")
+    body = {key: value for key, value in receipt.items() if key != "receiptSha256"}
+    try:
+        expected_digest = sha256(_canonical_bytes(body)).hexdigest()
+    except (TypeError, ValueError) as exc:
+        raise GatePolicyError("Web gate receipt contains an invalid JSON value") from exc
+    if supplied_digest != expected_digest:
+        raise GatePolicyError("Web gate receipt digest mismatch")
+
+    runtime = receipt.get("runtime")
+    if not isinstance(runtime, dict):
+        raise GatePolicyError("Web gate runtime is malformed")
+    _require_exact_keys(runtime, {"node", "npm", "platform", "arch"}, "Web runtime")
+    if not isinstance(runtime.get("node"), str) or re.fullmatch(
+        r"20\.[0-9]+\.[0-9]+", runtime["node"]
+    ) is None:
+        raise GatePolicyError("Web gate Node runtime is invalid")
+    if not isinstance(runtime.get("npm"), str) or re.fullmatch(
+        r"[0-9]+\.[0-9]+\.[0-9]+", runtime["npm"]
+    ) is None:
+        raise GatePolicyError("Web gate npm runtime is invalid")
+    for field in ("platform", "arch"):
+        value = runtime.get(field)
+        if not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9_-]{2,32}", value) is None:
+            raise GatePolicyError("Web gate platform identity is invalid")
+
+    source = receipt.get("source")
+    if not isinstance(source, dict):
+        raise GatePolicyError("Web gate source is malformed")
+    _require_exact_keys(source, {"packageJson", "packageLock", "treeSha256"}, "Web source")
+    package_json = _require_web_identity(source.get("packageJson"), "Web package")
+    package_lock = _require_web_identity(source.get("packageLock"), "Web lock")
+    _require_sha(source.get("treeSha256"), "Web source tree digest")
+
+    steps = receipt.get("steps")
+    if not isinstance(steps, list) or len(steps) != len(WEB_GATE_STEPS):
+        raise GatePolicyError("Web gate steps are incomplete")
+    for value, (expected_id, expected_argv) in zip(steps, WEB_GATE_STEPS, strict=True):
+        if not isinstance(value, dict):
+            raise GatePolicyError("Web gate step is malformed")
+        _require_exact_keys(value, _WEB_STEP_KEYS, "Web gate step")
+        if (
+            value.get("id") != expected_id
+            or value.get("argv") != list(expected_argv)
+            or value.get("status") != "PASS"
+            or value.get("exitCode") != 0
+            or value.get("counts") != {"total": 1, "passed": 1, "failed": 0}
+        ):
+            raise GatePolicyError("Web gate step is not an exact pass")
+        _require_sha(value.get("stdoutSha256"), "Web step stdout digest")
+        _require_sha(value.get("stderrSha256"), "Web step stderr digest")
+
+    if receipt.get("counts") != {"total": 5, "passed": 5, "failed": 0, "omitted": 0}:
+        raise GatePolicyError("Web gate counts are not complete-pass")
+    if receipt.get("production") != {
+        "infrastructure": "NOT RUN",
+        "deploy": "NOT RUN",
+        "smoke": "NOT RUN",
+        "rollback": "NOT RUN",
+    }:
+        raise GatePolicyError("Web gate production evidence is invalid")
+
+    artifact = receipt.get("artifact")
+    if not isinstance(artifact, dict):
+        raise GatePolicyError("Web gate artifact is malformed")
+    _require_exact_keys(artifact, {"path", "files", "bytes", "treeSha256"}, "Web artifact")
+    if (
+        artifact.get("path") != "dist"
+        or not isinstance(artifact.get("files"), int)
+        or isinstance(artifact.get("files"), bool)
+        or artifact["files"] < 1
+        or not isinstance(artifact.get("bytes"), int)
+        or isinstance(artifact.get("bytes"), bool)
+        or artifact["bytes"] < 1
+    ):
+        raise GatePolicyError("Web gate artifact identity is invalid")
+    _require_sha(artifact.get("treeSha256"), "Web artifact tree digest")
+
+    first_package_json = _web_root_file_identity(frontend_root, "package.json")
+    first_package_lock = _web_root_file_identity(frontend_root, "package-lock.json")
+    first_source_tree = _web_tree_identity(frontend_root, exclude_generated=True)
+    second_package_json = _web_root_file_identity(frontend_root, "package.json")
+    second_package_lock = _web_root_file_identity(frontend_root, "package-lock.json")
+    second_source_tree = _web_tree_identity(frontend_root, exclude_generated=True)
+    if (
+        first_package_json != second_package_json
+        or first_package_lock != second_package_lock
+        or first_source_tree != second_source_tree
+    ):
+        raise GatePolicyError("Web source changed during independent binding")
+    if package_json != first_package_json or package_lock != first_package_lock:
+        raise GatePolicyError("Web package identity does not match candidate snapshot")
+    if source["treeSha256"] != first_source_tree["treeSha256"]:
+        raise GatePolicyError("Web source tree does not match candidate snapshot")
+
+    candidate_frontend = next(
+        (
+            repository
+            for repository in candidate["repositories"]
+            if repository.get("name") == "frontend"
+        ),
+        None,
+    )
+    if (
+        not isinstance(candidate_frontend, dict)
+        or candidate_frontend.get("lock_sha256") != first_package_lock["sha256"]
+    ):
+        raise GatePolicyError("Web lock does not match candidate identity")
+
+    first_artifact = _web_tree_identity(frontend_root / "dist")
+    second_artifact = _web_tree_identity(frontend_root / "dist")
+    if first_artifact != second_artifact:
+        raise GatePolicyError("Web artifact changed during independent binding")
+    if artifact != {"path": "dist", **first_artifact}:
+        raise GatePolicyError("Web artifact does not match candidate execution")
+
+
+def _load_private_web_receipt(path: Path) -> dict[str, Any]:
+    parent_descriptor = -1
+    try:
+        parent_metadata = path.parent.lstat()
+        if (
+            not stat.S_ISDIR(parent_metadata.st_mode)
+            or stat.S_ISLNK(parent_metadata.st_mode)
+            or stat.S_IMODE(parent_metadata.st_mode) != 0o700
+            or (hasattr(os, "getuid") and parent_metadata.st_uid != os.getuid())
+        ):
+            raise GatePolicyError("Web evidence directory is not private")
+        parent_descriptor = os.open(
+            path.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        opened_parent = os.fstat(parent_descriptor)
+        if not _same_file_metadata(parent_metadata, opened_parent):
+            raise GatePolicyError("Web evidence directory changed during inspection")
+        metadata = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_ISLNK(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size < 1
+            or metadata.st_size > WEB_GATE_MAX_RECEIPT_BYTES
+            or (hasattr(os, "getuid") and metadata.st_uid != os.getuid())
+        ):
+            raise GatePolicyError("Web evidence output is not a private regular file")
+        content = _read_stable_regular_at(
+            parent_descriptor,
+            path.name,
+            metadata,
+            maximum_bytes=WEB_GATE_MAX_RECEIPT_BYTES,
+            label="Web evidence output",
+        )
+        if not _same_file_metadata(opened_parent, os.fstat(parent_descriptor)):
+            raise GatePolicyError("Web evidence directory changed during inspection")
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError("Web evidence output is unavailable") from exc
+    finally:
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+
+    try:
+        text = content.decode("utf-8", errors="strict")
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except GatePolicyError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise GatePolicyError("Web evidence output is malformed") from exc
+    if not isinstance(value, dict):
+        raise GatePolicyError("Web evidence output must be an object")
+    try:
+        canonical = _canonical_bytes(value)
+    except (TypeError, ValueError) as exc:
+        raise GatePolicyError("Web evidence output contains an invalid JSON value") from exc
+    if content != canonical + b"\n":
+        raise GatePolicyError("Web evidence output is not canonical JSON")
+    return value
+
+
+@contextmanager
+def _private_web_evidence_directory(
+    workspace: WorkspaceRoots,
+) -> Iterator[tuple[Path, Path, dict[str, str]]]:
+    temporary_base = Path(tempfile.gettempdir()).resolve(strict=True)
+    for _, source_root in workspace.roots:
+        if temporary_base == source_root or source_root in temporary_base.parents:
+            raise GatePolicyError("Web evidence base must be source-external")
+    directory = Path(tempfile.mkdtemp(prefix="stoa-web-evidence-", dir=temporary_base))
+    try:
+        directory.chmod(0o700)
+        resolved = directory.resolve(strict=True)
+        for _, source_root in workspace.roots:
+            if resolved == source_root or source_root in resolved.parents:
+                raise GatePolicyError("Web evidence directory must be source-external")
+        home = resolved / "home"
+        temporary = resolved / "tmp"
+        home.mkdir(mode=0o700)
+        temporary.mkdir(mode=0o700)
+        environment = {
+            "CI": "true",
+            "HOME": str(home),
+            "LANG": "C",
+            "LC_ALL": "C",
+            "TMPDIR": str(temporary),
+            "TZ": "UTC",
+        }
+        yield resolved, resolved / "receipt.json", environment
+    finally:
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            raise GatePolicyError("Web evidence directory cleanup failed") from exc
+
+
+def _run_web_gate_evidence(
+    *,
+    spec: GateSpec,
+    candidate: Mapping[str, Any],
+    workspace: WorkspaceRoots,
+    command_cwd: Path,
+    operations: GateOperations,
+) -> tuple[ProcessResult, dict[str, Any]]:
+    if operations.resolve_node20 is None or operations.run_web_process is None:
+        raise GatePolicyError("Web gate launcher is unavailable")
+    with _private_web_evidence_directory(workspace) as (
+        evidence_directory,
+        evidence_path,
+        base_environment,
+    ):
+        node = operations.resolve_node20(base_environment)
+        if not node.is_absolute():
+            raise GatePolicyError("Web gate Node executable is not absolute")
+        resolved_node = node.resolve(strict=False)
+        for _, source_root in workspace.roots:
+            if resolved_node == source_root or source_root in resolved_node.parents:
+                raise GatePolicyError("Web gate Node executable is source-local")
+        environment = {
+            **base_environment,
+            "PATH": str(resolved_node.parent),
+        }
+        actual_argv = tuple(
+            str(resolved_node)
+            if value == "{node}"
+            else str(evidence_path)
+            if value == "{evidence_output}"
+            else value
+            for value in spec.argv
+        )
+        completed = operations.run_web_process(
+            actual_argv,
+            environment,
+            command_cwd,
+            spec.timeout_seconds,
+        )
+        if completed.returncode != 0:
+            return completed, {}
+        receipt = _load_private_web_receipt(evidence_path)
+        _validate_web_gate_receipt(
+            receipt,
+            frontend_root=command_cwd,
+            candidate=candidate,
+        )
+        if evidence_directory != evidence_path.parent:
+            raise GatePolicyError("Web evidence output path changed")
+        return completed, receipt
 
 
 def run_python_matrix(
@@ -1219,6 +1798,87 @@ def _system_run(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> Proce
         timeout=timeout_seconds,
     )
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _system_resolve_node20(base_environment: Mapping[str, str]) -> Path:
+    candidate = shutil.which("node")
+    if not candidate:
+        raise GatePolicyError("controlled Node executable is unavailable")
+    try:
+        resolved = Path(candidate).expanduser().resolve(strict=True)
+        metadata = resolved.stat()
+    except OSError as exc:
+        raise GatePolicyError("controlled Node executable is unavailable") from exc
+    if (
+        not resolved.is_absolute()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_mode & 0o111 == 0
+    ):
+        raise GatePolicyError("controlled Node executable is invalid")
+    environment = {**base_environment, "PATH": str(resolved.parent)}
+    try:
+        probe = subprocess.run(
+            [str(resolved), "--version"],
+            check=False,
+            capture_output=True,
+            env=environment,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise GatePolicyError("controlled Node runtime probe failed") from exc
+    try:
+        version = probe.stdout.decode("ascii", errors="strict").strip()
+    except UnicodeError as exc:
+        raise GatePolicyError("controlled Node runtime identity is invalid") from exc
+    if probe.returncode != 0 or re.fullmatch(r"v20\.[0-9]+\.[0-9]+", version) is None:
+        raise GatePolicyError("controlled Node runtime must be Node 20")
+    return resolved
+
+
+def _system_web_run(
+    argv: tuple[str, ...],
+    environment: dict[str, str],
+    cwd: Path,
+    timeout_seconds: int,
+) -> ProcessResult:
+    process = subprocess.Popen(
+        list(argv),
+        cwd=cwd,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.communicate()
+        _confirm_web_process_group_stopped(process.pid)
+        raise
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    _confirm_web_process_group_stopped(process.pid)
+    return ProcessResult(process.returncode, stdout, stderr)
+
+
+def _confirm_web_process_group_stopped(process_group: int) -> None:
+    deadline = time.monotonic() + 5.0
+    while True:
+        try:
+            os.killpg(process_group, 0)
+        except ProcessLookupError:
+            return
+        except OSError as exc:
+            raise GatePolicyError("Web gate process group state is unavailable") from exc
+        if time.monotonic() >= deadline:
+            raise GatePolicyError("Web gate process group did not stop")
+        time.sleep(0.01)
 
 
 def _system_matrix_run(
@@ -1505,6 +2165,8 @@ def system_operations() -> GateOperations:
         platform_identity=lambda: f"{platform.system().lower()}-{platform.machine().lower()}",
         git_blob=_system_git_blob,
         materialize_checkout=_system_materialize_checkout,
+        resolve_node20=_system_resolve_node20,
+        run_web_process=_system_web_run,
     )
 
 
@@ -1557,20 +2219,15 @@ def _run_registered_gate_on_snapshot(
                 resolved_source_workspace.require(repository["name"]),
                 ("cat-file", "-e", f"{repository['head']}^{{commit}}"),
             )
-        completed = operations.run_process(spec.argv, command_cwd, spec.timeout_seconds)
-        stdout = completed.stdout
-        stderr = completed.stderr
-        if gate_id == "backend-python-hermetic":
+        if spec.evidence_kind == "web-gate-run":
             try:
-                matrix = _load_python_matrix_output(stdout)
-                _validate_registered_python_matrix(matrix, root=repository_root)
-                valid_exit_status = (completed.returncode, matrix["status"]) in {
-                    (0, "PASS"),
-                    (POLICY_EXIT, "NOT RUN"),
-                    (POLICY_EXIT, "REJECTED"),
-                }
-                if not valid_exit_status:
-                    raise GatePolicyError("Python matrix exit and status disagree")
+                completed, web_evidence = _run_web_gate_evidence(
+                    spec=spec,
+                    candidate=candidate,
+                    workspace=resolved_workspace,
+                    command_cwd=command_cwd,
+                    operations=operations,
+                )
             except GatePolicyError:
                 result = {
                     "status": "FAIL",
@@ -1580,48 +2237,91 @@ def _run_registered_gate_on_snapshot(
                     "outcomes": _counts(failed=1),
                 }
             else:
-                gate_evidence = matrix
-                if matrix["status"] == "PASS":
-                    passed = matrix["runs"][0]["counts"]["passed"]
+                stdout = completed.stdout
+                stderr = completed.stderr
+                if completed.returncode == 0:
+                    gate_evidence = web_evidence
                     result = {
                         "status": "PASS",
                         "classification": "COMPLETE_PASS",
                         "exit_code": 0,
                         "reason_code": None,
-                        "outcomes": _counts(passed=passed),
-                    }
-                elif matrix["status"] == "NOT RUN":
-                    result = {
-                        "status": "NOT RUN",
-                        "classification": "NOT_RUN_OBLIGATION",
-                        "exit_code": POLICY_EXIT,
-                        "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
-                        "outcomes": _counts(),
+                        "outcomes": _counts(passed=len(WEB_GATE_STEPS)),
                     }
                 else:
                     result = {
                         "status": "FAIL",
                         "classification": "POLICY_REJECTION",
                         "exit_code": POLICY_EXIT,
-                        "reason_code": "COLLECTION_IDENTITY_DRIFT",
+                        "reason_code": "GATE_COMMAND_FAILED",
                         "outcomes": _counts(failed=1),
                     }
-        elif completed.returncode == 0:
-            result = {
-                "status": "PASS",
-                "classification": "COMPLETE_PASS",
-                "exit_code": 0,
-                "reason_code": None,
-                "outcomes": _counts(passed=1),
-            }
         else:
-            result = {
-                "status": "FAIL",
-                "classification": "POLICY_REJECTION",
-                "exit_code": POLICY_EXIT,
-                "reason_code": "GATE_COMMAND_FAILED",
-                "outcomes": _counts(failed=1),
-            }
+            completed = operations.run_process(spec.argv, command_cwd, spec.timeout_seconds)
+            stdout = completed.stdout
+            stderr = completed.stderr
+            if spec.evidence_kind == "python-matrix":
+                try:
+                    matrix = _load_python_matrix_output(stdout)
+                    _validate_registered_python_matrix(matrix, root=repository_root)
+                    valid_exit_status = (completed.returncode, matrix["status"]) in {
+                        (0, "PASS"),
+                        (POLICY_EXIT, "NOT RUN"),
+                        (POLICY_EXIT, "REJECTED"),
+                    }
+                    if not valid_exit_status:
+                        raise GatePolicyError("Python matrix exit and status disagree")
+                except GatePolicyError:
+                    result = {
+                        "status": "FAIL",
+                        "classification": "POLICY_REJECTION",
+                        "exit_code": POLICY_EXIT,
+                        "reason_code": "GATE_EVIDENCE_INVALID",
+                        "outcomes": _counts(failed=1),
+                    }
+                else:
+                    gate_evidence = matrix
+                    if matrix["status"] == "PASS":
+                        passed = matrix["runs"][0]["counts"]["passed"]
+                        result = {
+                            "status": "PASS",
+                            "classification": "COMPLETE_PASS",
+                            "exit_code": 0,
+                            "reason_code": None,
+                            "outcomes": _counts(passed=passed),
+                        }
+                    elif matrix["status"] == "NOT RUN":
+                        result = {
+                            "status": "NOT RUN",
+                            "classification": "NOT_RUN_OBLIGATION",
+                            "exit_code": POLICY_EXIT,
+                            "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
+                            "outcomes": _counts(),
+                        }
+                    else:
+                        result = {
+                            "status": "FAIL",
+                            "classification": "POLICY_REJECTION",
+                            "exit_code": POLICY_EXIT,
+                            "reason_code": "COLLECTION_IDENTITY_DRIFT",
+                            "outcomes": _counts(failed=1),
+                        }
+            elif completed.returncode == 0:
+                result = {
+                    "status": "PASS",
+                    "classification": "COMPLETE_PASS",
+                    "exit_code": 0,
+                    "reason_code": None,
+                    "outcomes": _counts(passed=1),
+                }
+            else:
+                result = {
+                    "status": "FAIL",
+                    "classification": "POLICY_REJECTION",
+                    "exit_code": POLICY_EXIT,
+                    "reason_code": "GATE_COMMAND_FAILED",
+                    "outcomes": _counts(failed=1),
+                }
     except Exception:
         result = {
             "status": "FAIL",
@@ -1794,7 +2494,7 @@ def validate_receipt(
     _validate_result(receipt.get("result"))
     result = receipt["result"]
     gate_evidence = receipt.get("gate_evidence")
-    if spec.gate_id == "backend-python-hermetic":
+    if spec.evidence_kind == "python-matrix":
         if gate_evidence is None:
             if not (
                 result["classification"] in {"POLICY_REJECTION", "EXECUTION_FAILURE"}
@@ -1820,8 +2520,34 @@ def validate_receipt(
                 passed = gate_evidence["runs"][0]["counts"]["passed"]
                 if result["outcomes"] != _counts(passed=passed):
                     raise GatePolicyError("hermetic receipt outcomes mismatch")
+    elif spec.evidence_kind == "web-gate-run":
+        if gate_evidence is None:
+            if not (
+                result["classification"] in {"POLICY_REJECTION", "EXECUTION_FAILURE"}
+                and result["reason_code"]
+                in {
+                    "GATE_COMMAND_FAILED",
+                    "GATE_EVIDENCE_INVALID",
+                    "GATE_EXECUTION_ERROR",
+                }
+            ):
+                raise GatePolicyError("Web receipt lacks gate evidence")
+        else:
+            if not isinstance(gate_evidence, dict):
+                raise GatePolicyError("Web receipt gate evidence is malformed")
+            _validate_web_gate_receipt(
+                gate_evidence,
+                frontend_root=resolved_workspace.require(spec.repository),
+                candidate=candidate,
+            )
+            if (
+                result["classification"] != "COMPLETE_PASS"
+                or result["reason_code"] is not None
+                or result["outcomes"] != _counts(passed=len(WEB_GATE_STEPS))
+            ):
+                raise GatePolicyError("Web receipt result and evidence disagree")
     elif gate_evidence is not None:
-        raise GatePolicyError("non-hermetic receipt has unexpected gate evidence")
+        raise GatePolicyError("gate receipt has unexpected evidence")
     expected_privacy = {
         "passed": True,
         "scanned_field_count": len(_RECEIPT_KEYS),

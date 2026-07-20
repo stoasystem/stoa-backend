@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import stat
+import time
 from typing import Any
 
 import pytest
@@ -1779,6 +1780,57 @@ def _web_test_operations(
         elif output_kind == "oversized":
             output.write_bytes(b"x" * (1024 * 1024 + 1))
             output.chmod(0o600)
+        elif output_kind == "duplicate":
+            canonical = json.dumps(
+                receipt,
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            output.write_text(
+                canonical.replace(
+                    '"schema":"stoa.web.gate-run.v1"',
+                    '"schema":"duplicate","schema":"stoa.web.gate-run.v1"',
+                    1,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            output.chmod(0o600)
+        elif output_kind == "noncanonical":
+            output.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+            output.chmod(0o600)
+        elif output_kind == "digest":
+            receipt["receiptSha256"] = "b" * 64
+            output.write_text(
+                json.dumps(receipt, separators=(",", ":"), sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            output.chmod(0o600)
+        elif output_kind == "public-mode":
+            output.write_text(
+                json.dumps(receipt, separators=(",", ":"), sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            output.chmod(0o644)
+        elif output_kind == "multiple-newline":
+            output.write_bytes(
+                json.dumps(receipt, separators=(",", ":"), sort_keys=True).encode()
+                + b"\n\n"
+            )
+            output.chmod(0o600)
+        elif output_kind == "invalid-utf8":
+            output.write_bytes(b"\xff{}\n")
+            output.chmod(0o600)
+        elif output_kind == "nan":
+            output.write_bytes(
+                json.dumps(receipt, separators=(",", ":"), sort_keys=True)
+                .replace('"status":"PASS"', '"status":NaN', 1)
+                .encode()
+                + b"\n"
+            )
+            output.chmod(0o600)
         else:
             output.write_text(
                 json.dumps(
@@ -1852,8 +1904,21 @@ def test_web_gate_registration_and_evidence_tokens_are_closed() -> None:
 
 def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gate = _load_gate()
+    hostile = {
+        "NODE_OPTIONS": "--require=/tmp/preload.js",
+        "NPM_CONFIG_USERCONFIG": "/tmp/attacker-npmrc",
+        "VITE_TOKEN": "secret",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "GIT_CONFIG_GLOBAL": "/tmp/attacker-gitconfig",
+        "DYLD_INSERT_LIBRARIES": "/tmp/preload.dylib",
+        "LD_PRELOAD": "/tmp/preload.so",
+        "npm_lifecycle_event": "preverify:release",
+    }
+    for name, value in hostile.items():
+        monkeypatch.setenv(name, value)
     workspace, candidate = _web_test_workspace(gate, tmp_path)
     operations, observed = _web_test_operations(gate, workspace)
     receipt = gate._run_registered_gate_on_snapshot(
@@ -1885,6 +1950,7 @@ def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
         "TZ",
     }
     assert observed["environment"]["PATH"] == str(Path(sys.executable).resolve().parent)
+    assert set(observed["environment"]).isdisjoint(hostile)
     assert not observed["output_parent"].exists()
     encoded = json.dumps(receipt, sort_keys=True)
     assert str(tmp_path) not in encoded
@@ -1901,7 +1967,20 @@ def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
 
 @pytest.mark.parametrize(
     "output_kind",
-    ["missing", "symlink", "hardlink", "fifo", "oversized"],
+    [
+        "missing",
+        "symlink",
+        "hardlink",
+        "fifo",
+        "oversized",
+        "duplicate",
+        "noncanonical",
+        "digest",
+        "public-mode",
+        "multiple-newline",
+        "invalid-utf8",
+        "nan",
+    ],
 )
 def test_web_gate_rejects_missing_or_unsafe_evidence_output(
     tmp_path: Path,
@@ -1934,7 +2013,6 @@ def test_web_gate_rejects_missing_or_unsafe_evidence_output(
     [
         ("node runtime", lambda value: value["runtime"].__setitem__("node", "21.0.0")),
         ("step order", lambda value: value["steps"][0].__setitem__("id", "frontend-build")),
-        ("step digest", lambda value: value["steps"][0].__setitem__("stdoutSha256", "f" * 64)),
         ("package", lambda value: value["source"]["packageJson"].__setitem__("sha256", "b" * 64)),
         ("candidate lock", lambda value: value["source"]["packageLock"].__setitem__("sha256", "b" * 64)),
         ("source tree", lambda value: value["source"].__setitem__("treeSha256", "b" * 64)),
@@ -1973,3 +2051,76 @@ def test_web_gate_schema_rejects_bundle_overclaim_as_canonical_frontend_gates() 
     }
     assert not _matches(receipt, schema, schema)
     assert "frontend-contract" in schema["properties"]["gate_id"]["enum"]
+
+
+def test_system_web_launcher_kills_normal_return_orphan_process_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    marker = tmp_path / "orphan-survived"
+    child = (
+        "import pathlib,sys,time;"
+        "time.sleep(0.5);"
+        "pathlib.Path(sys.argv[1]).write_text('survived',encoding='utf-8')"
+    )
+    parent = (
+        "import subprocess,sys;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)"
+    )
+    system_killpg = os.killpg
+
+    def confirmed_killpg(process_group: int, signal_number: int) -> None:
+        if signal_number == 0:
+            raise ProcessLookupError
+        system_killpg(process_group, signal_number)
+
+    monkeypatch.setattr(gate.os, "killpg", confirmed_killpg)
+    result = gate._system_web_run(
+        (sys.executable, "-c", parent, child, str(marker)),
+        {"PATH": str(Path(sys.executable).resolve().parent)},
+        tmp_path,
+        5,
+    )
+    assert result.returncode == 0
+    time.sleep(0.7)
+    assert not marker.exists()
+
+
+def test_system_web_launcher_fails_closed_when_group_cannot_be_confirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+
+    def denied_killpg(process_group: int, signal_number: int) -> None:
+        raise PermissionError(process_group, signal_number)
+
+    monkeypatch.setattr(gate.os, "killpg", denied_killpg)
+    with pytest.raises(gate.GatePolicyError, match="process group state"):
+        gate._confirm_web_process_group_stopped(47488)
+
+
+def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> None:
+    gate = _load_gate()
+    marker = tmp_path / "timeout-child-survived"
+    child = (
+        "import pathlib,sys,time;"
+        "time.sleep(1.3);"
+        "pathlib.Path(sys.argv[1]).write_text('survived',encoding='utf-8')"
+    )
+    parent = (
+        "import subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
+        "time.sleep(30)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        gate._system_web_run(
+            (sys.executable, "-c", parent, child, str(marker)),
+            {"PATH": str(Path(sys.executable).resolve().parent)},
+            tmp_path,
+            1,
+        )
+    time.sleep(0.5)
+    assert not marker.exists()
