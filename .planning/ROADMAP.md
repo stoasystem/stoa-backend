@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 24/87 plans executed
+**Plans:** 25/87 plans executed
 
 Plans:
 
@@ -364,7 +364,7 @@ Plans:
 **Wave 4**
 
 - [ ] `474-05` — Dependency policy and measured advisory repair.
-- [ ] `474-26` — Immutable release storage and scoped roles.
+- [x] `474-26` — Immutable release storage and scoped roles.
 
 **Wave 5**
 
