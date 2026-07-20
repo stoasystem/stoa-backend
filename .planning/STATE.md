@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Planned 474-92-PLAN.md
-last_updated: "2026-07-20T06:27:00Z"
-last_activity: 2026-07-20 -- Planned infrastructure exact-ref formal verification caller
+stopped_at: Completed 474-92-SUMMARY.md
+last_updated: "2026-07-20T06:35:00Z"
+last_activity: 2026-07-20 -- Completed infrastructure exact-ref formal verification caller
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 154
-  completed_plans: 91
+  completed_plans: 92
   percent: 20
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 92 of 92
-Status: Ready to execute Plan 92
-Last activity: 2026-07-20 -- Planned infrastructure exact-ref formal verification caller
+Status: Plan 92 complete; ready to plan exact source handoff
+Last activity: 2026-07-20 -- Completed infrastructure exact-ref formal verification caller
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Planned infrastructure exact-ref formal verificatio
 
 ## Session
 
-**Last Date:** 2026-07-20T06:27:00Z
-**Stopped At:** Planned 474-92-PLAN.md
+**Last Date:** 2026-07-20T06:35:00Z
+**Stopped At:** Completed 474-92-SUMMARY.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -376,3 +376,4 @@ Last activity: 2026-07-20 -- Planned infrastructure exact-ref formal verificatio
 - [Phase 474]: The browser statically imports only its startup barrier, then installs descriptor-bound runtime config before dynamically importing i18n, React, App, routes, API, or auth code. — Timeout, failure, and duplicate attempts render one fixed actionable message and cannot begin another App/root sequence.
 - [Phase 474]: The backend workflow revision owns the gate implementation SHA and invokes only candidate then fixed formal after exact three-repository identity and Linux namespace proof. — A new caller cannot execute an older gate, select an alternate graph, or retain direct deployment authority.
 - [Phase 474]: Frontend automation is a generic exact-ref verifier, not a release authority; Plan 93 must machine-bind one external three-repository tuple before Plan 94 may admit any receipt. — This keeps historical exact verification useful without letting a self-selected backend gate approve itself.
+- [Phase 474]: Infra automation is the same generic exact-ref verifier with infra_sha bound to its workflow revision and no OIDC/CDK/provider authority. — Repository automation now verifies source only; external tuple admission remains separate and mandatory.
