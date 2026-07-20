@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import stat
 from typing import Any
 
 import pytest
@@ -1540,3 +1541,435 @@ def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
             operations=operations,
             workspace=workspace,
         )
+
+
+def _web_test_tree_identity(
+    root: Path,
+    *,
+    exclude_generated: bool = False,
+) -> dict[str, Any]:
+    digest = __import__("hashlib").sha256()
+    files = 0
+    byte_count = 0
+
+    def visit(directory: Path, prefix: str) -> None:
+        nonlocal files, byte_count
+        for name in sorted(os.listdir(directory), key=os.fsencode):
+            relative = name if prefix == "" else f"{prefix}/{name}"
+            path = directory / name
+            metadata = path.lstat()
+            if exclude_generated and prefix == "" and name in {
+                ".git",
+                "dist",
+                "node_modules",
+            }:
+                continue
+            assert not stat.S_ISLNK(metadata.st_mode)
+            if stat.S_ISDIR(metadata.st_mode):
+                digest.update(f"directory\0{relative}\0".encode())
+                visit(path, relative)
+                continue
+            assert stat.S_ISREG(metadata.st_mode)
+            content = path.read_bytes()
+            executable = "1" if metadata.st_mode & 0o111 else "0"
+            digest.update(
+                f"file\0{relative}\0{executable}\0{len(content)}\0".encode()
+            )
+            digest.update(content)
+            files += 1
+            byte_count += len(content)
+
+    visit(root, "")
+    return {
+        "files": files,
+        "bytes": byte_count,
+        "treeSha256": digest.hexdigest(),
+    }
+
+
+def _web_test_workspace(gate: Any, tmp_path: Path) -> tuple[Any, dict[str, Any]]:
+    roots: dict[str, Path] = {}
+    for name in ("backend", "frontend", "infra"):
+        root = tmp_path / name
+        root.mkdir()
+        if name == "frontend":
+            (root / "package.json").write_text(
+                json.dumps({"name": "stoa-frontend"}) + "\n",
+                encoding="utf-8",
+            )
+            (root / "package-lock.json").write_text("web-lock\n", encoding="utf-8")
+            (root / "scripts").mkdir()
+            (root / "scripts" / "verify-release.mjs").write_text(
+                "// exact verifier\n",
+                encoding="utf-8",
+            )
+            (root / "schemas" / "release").mkdir(parents=True)
+            (root / "schemas" / "release" / "web-gate-run-v1.schema.json").write_text(
+                "{}\n",
+                encoding="utf-8",
+            )
+            (root / "src").mkdir()
+            (root / "src" / "app.js").write_text("export default 1\n", encoding="utf-8")
+        else:
+            (root / "uv.lock").write_text(f"{name}-lock\n", encoding="utf-8")
+            (root / "pyproject.toml").write_text(
+                f'[project]\nname = "stoa-{name}"\n',
+                encoding="utf-8",
+            )
+        roots[name] = root
+
+    candidate = deepcopy(gate.load_candidate(CANDIDATE_PATH))
+    frontend_identity = next(
+        repository
+        for repository in candidate["repositories"]
+        if repository["name"] == "frontend"
+    )
+    frontend_identity["lock_sha256"] = __import__("hashlib").sha256(
+        (roots["frontend"] / "package-lock.json").read_bytes()
+    ).hexdigest()
+    candidate["execution_identity"] = gate.candidate_execution_identity(
+        candidate["repositories"]
+    )
+    return gate.WorkspaceRoots.from_mapping(roots), candidate
+
+
+def _web_test_receipt(frontend_root: Path) -> dict[str, Any]:
+    package_json = (frontend_root / "package.json").read_bytes()
+    package_lock = (frontend_root / "package-lock.json").read_bytes()
+    source = _web_test_tree_identity(frontend_root, exclude_generated=True)
+    artifact = _web_test_tree_identity(frontend_root / "dist")
+    step_definitions = (
+        (
+            "frontend-locked-install",
+            [
+                "npm",
+                "ci",
+                "--ignore-scripts",
+                "--no-audit",
+                "--no-fund",
+                "--include=dev",
+                "--package-lock=true",
+            ],
+        ),
+        ("frontend-eslint", ["npm", "run", "lint"]),
+        ("frontend-typecheck", ["npm", "run", "typecheck"]),
+        ("frontend-build", ["npm", "run", "build"]),
+        ("web-release-contracts", ["npm", "run", "test:release"]),
+    )
+    body: dict[str, Any] = {
+        "schema": "stoa.web.gate-run.v1",
+        "status": "PASS",
+        "runtime": {
+            "node": "20.20.2",
+            "npm": "10.8.2",
+            "platform": "linux",
+            "arch": "arm64",
+        },
+        "source": {
+            "packageJson": {
+                "bytes": len(package_json),
+                "sha256": __import__("hashlib").sha256(package_json).hexdigest(),
+            },
+            "packageLock": {
+                "bytes": len(package_lock),
+                "sha256": __import__("hashlib").sha256(package_lock).hexdigest(),
+            },
+            "treeSha256": source["treeSha256"],
+        },
+        "artifact": {
+            "path": "dist",
+            "files": artifact["files"],
+            "bytes": artifact["bytes"],
+            "treeSha256": artifact["treeSha256"],
+        },
+        "steps": [
+            {
+                "id": gate_id,
+                "argv": argv,
+                "status": "PASS",
+                "exitCode": 0,
+                "counts": {"total": 1, "passed": 1, "failed": 0},
+                "stdoutSha256": "1" * 64,
+                "stderrSha256": "2" * 64,
+            }
+            for gate_id, argv in step_definitions
+        ],
+        "counts": {"total": 5, "passed": 5, "failed": 0, "omitted": 0},
+        "production": {
+            "infrastructure": "NOT RUN",
+            "deploy": "NOT RUN",
+            "smoke": "NOT RUN",
+            "rollback": "NOT RUN",
+        },
+    }
+    body["receiptSha256"] = __import__("hashlib").sha256(
+        json.dumps(
+            body,
+            allow_nan=False,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    return body
+
+
+def _web_test_operations(
+    gate: Any,
+    workspace: Any,
+    *,
+    mutate: Any = None,
+    output_kind: str = "regular",
+    returncode: int = 0,
+) -> tuple[Any, dict[str, Any]]:
+    moments = iter(["2026-07-20T00:00:00Z", "2026-07-20T00:00:01Z"])
+    observed: dict[str, Any] = {}
+
+    def run_web_process(
+        argv: tuple[str, ...],
+        environment: dict[str, str],
+        cwd: Path,
+        timeout_seconds: int,
+    ) -> Any:
+        observed.update(
+            {
+                "argv": argv,
+                "environment": dict(environment),
+                "cwd": cwd,
+                "timeout": timeout_seconds,
+                "output_parent": Path(argv[-1]).parent,
+            }
+        )
+        assert cwd == workspace.require("frontend")
+        assert argv[0] == str(Path(sys.executable).resolve())
+        assert argv[1:4] == ("scripts/verify-release.mjs", "verify", "--output")
+        assert Path(argv[-1]).is_absolute()
+        assert cwd not in Path(argv[-1]).parents
+        assert stat.S_IMODE(Path(argv[-1]).parent.stat().st_mode) == 0o700
+        (cwd / "node_modules").mkdir()
+        (cwd / "dist").mkdir()
+        (cwd / "dist" / "index.js").write_text("release artifact\n", encoding="utf-8")
+        receipt = _web_test_receipt(cwd)
+        if mutate is not None:
+            mutate(receipt)
+            receipt["receiptSha256"] = __import__("hashlib").sha256(
+                json.dumps(
+                    {key: value for key, value in receipt.items() if key != "receiptSha256"},
+                    allow_nan=False,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode()
+            ).hexdigest()
+        output = Path(argv[-1])
+        if output_kind == "missing":
+            return gate.ProcessResult(returncode=returncode, stdout=b"", stderr=b"")
+        if output_kind == "symlink":
+            target = output.parent / "target.json"
+            target.write_text(json.dumps(receipt) + "\n", encoding="utf-8")
+            target.chmod(0o600)
+            output.symlink_to(target)
+        elif output_kind == "hardlink":
+            target = output.parent / "target.json"
+            target.write_text(json.dumps(receipt) + "\n", encoding="utf-8")
+            target.chmod(0o600)
+            output.hardlink_to(target)
+        elif output_kind == "fifo":
+            os.mkfifo(output, mode=0o600)
+        elif output_kind == "oversized":
+            output.write_bytes(b"x" * (1024 * 1024 + 1))
+            output.chmod(0o600)
+        else:
+            output.write_text(
+                json.dumps(
+                    receipt,
+                    allow_nan=False,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            output.chmod(0o600)
+        return gate.ProcessResult(returncode=returncode, stdout=b"web\n", stderr=b"")
+
+    operations = gate.GateOperations(
+        run_process=lambda argv, cwd, timeout: (_ for _ in ()).throw(
+            AssertionError("generic process runner must not launch Web evidence")
+        ),
+        git=lambda root, argv: "",
+        now_utc=lambda: next(moments),
+        python_version=lambda: "3.12.13",
+        platform_identity=lambda: "linux-arm64",
+        resolve_node20=lambda environment: Path(sys.executable).resolve(),
+        run_web_process=run_web_process,
+    )
+    return operations, observed
+
+
+def test_web_gate_registration_and_evidence_tokens_are_closed() -> None:
+    gate = _load_gate()
+    spec = gate.default_registry().require("frontend-web-fresh")
+    assert spec.repository == "frontend"
+    assert spec.evidence_kind == "web-gate-run"
+    assert spec.argv == (
+        "{node}",
+        "scripts/verify-release.mjs",
+        "verify",
+        "--output",
+        "{evidence_output}",
+    )
+    assert gate.default_registry().require("backend-python-hermetic").evidence_kind == (
+        "python-matrix"
+    )
+    assert gate.default_registry().require("gate-self-test").evidence_kind == "none"
+
+    with pytest.raises(gate.GatePolicyError, match="evidence"):
+        gate.GateSpec(
+            gate_id="bad-none",
+            argv=("tool", "{evidence_output}"),
+            artifact_paths=("package-lock.json",),
+            config_paths=("package.json",),
+        )
+    with pytest.raises(gate.GatePolicyError, match="evidence"):
+        gate.GateSpec(
+            gate_id="bad-web",
+            argv=("{node}", "script.mjs"),
+            artifact_paths=("package-lock.json",),
+            config_paths=("package.json",),
+            evidence_kind="web-gate-run",
+        )
+    with pytest.raises(gate.GatePolicyError, match="evidence"):
+        gate.GateSpec(
+            gate_id="unknown-evidence",
+            argv=("tool", "run"),
+            artifact_paths=("package-lock.json",),
+            config_paths=("package.json",),
+            evidence_kind="playwright",
+        )
+
+
+def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, observed = _web_test_operations(gate, workspace)
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+
+    assert receipt["result"]["classification"] == "COMPLETE_PASS"
+    assert receipt["result"]["outcomes"] == _counts(total=5, passed=5)
+    assert receipt["runtime"]["python"] == "3.12.13"
+    assert receipt["gate_evidence"]["runtime"]["node"] == "20.20.2"
+    assert receipt["gate_evidence"]["production"] == {
+        "infrastructure": "NOT RUN",
+        "deploy": "NOT RUN",
+        "smoke": "NOT RUN",
+        "rollback": "NOT RUN",
+    }
+    assert set(observed["environment"]) == {
+        "CI",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "PATH",
+        "TMPDIR",
+        "TZ",
+    }
+    assert observed["environment"]["PATH"] == str(Path(sys.executable).resolve().parent)
+    assert not observed["output_parent"].exists()
+    encoded = json.dumps(receipt, sort_keys=True)
+    assert str(tmp_path) not in encoded
+    assert str(observed["output_parent"]) not in encoded
+    gate.validate_receipt(
+        receipt,
+        candidate=candidate,
+        registry=gate.default_registry(),
+        workspace=workspace,
+    )
+    schema = _load_schema()
+    assert _matches(receipt, schema, schema)
+
+
+@pytest.mark.parametrize(
+    "output_kind",
+    ["missing", "symlink", "hardlink", "fifo", "oversized"],
+)
+def test_web_gate_rejects_missing_or_unsafe_evidence_output(
+    tmp_path: Path,
+    output_kind: str,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, observed = _web_test_operations(
+        gate,
+        workspace,
+        output_kind=output_kind,
+    )
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+
+    assert receipt["result"]["classification"] == "POLICY_REJECTION"
+    assert receipt["result"]["reason_code"] == "GATE_EVIDENCE_INVALID"
+    assert receipt["gate_evidence"] is None
+    assert not observed["output_parent"].exists()
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        ("node runtime", lambda value: value["runtime"].__setitem__("node", "21.0.0")),
+        ("step order", lambda value: value["steps"][0].__setitem__("id", "frontend-build")),
+        ("step digest", lambda value: value["steps"][0].__setitem__("stdoutSha256", "f" * 64)),
+        ("package", lambda value: value["source"]["packageJson"].__setitem__("sha256", "b" * 64)),
+        ("candidate lock", lambda value: value["source"]["packageLock"].__setitem__("sha256", "b" * 64)),
+        ("source tree", lambda value: value["source"].__setitem__("treeSha256", "b" * 64)),
+        ("artifact tree", lambda value: value["artifact"].__setitem__("treeSha256", "b" * 64)),
+        ("production", lambda value: value["production"].__setitem__("deploy", "PASS")),
+    ],
+)
+def test_web_gate_rejects_tamper_even_with_recomputed_inner_digest(
+    tmp_path: Path,
+    label: str,
+    mutate: Any,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, _ = _web_test_operations(gate, workspace, mutate=mutate)
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+    assert receipt["result"]["reason_code"] == "GATE_EVIDENCE_INVALID", label
+    assert receipt["gate_evidence"] is None
+
+
+def test_web_gate_schema_rejects_bundle_overclaim_as_canonical_frontend_gates() -> None:
+    schema = _load_schema()
+    assert "frontend-web-fresh" in schema["properties"]["gate_id"]["enum"]
+    receipt = _receipt()
+    receipt["gate_id"] = "frontend-web-fresh"
+    receipt["gate_evidence"] = {
+        "schema": "stoa.web.gate-run.v1",
+        "status": "PASS",
+    }
+    assert not _matches(receipt, schema, schema)
+    assert "frontend-contract" in schema["properties"]["gate_id"]["enum"]
