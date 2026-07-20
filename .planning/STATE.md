@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Planned 474-94-PLAN.md
-last_updated: "2026-07-20T07:25:00Z"
-last_activity: 2026-07-20 -- Planned two independent Linux formal runs
+stopped_at: Republished 474-93 source handoff after Linux snapshot-path repair
+last_updated: "2026-07-20T07:38:00Z"
+last_activity: 2026-07-20 -- Replaced rejected source handoff after real Linux gap repair
 progress:
   total_phases: 10
   completed_phases: 2
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 94 of 94
-Status: Ready to execute Plan 94
-Last activity: 2026-07-20 -- Planned two independent Linux formal runs
+Status: Ready to execute Plan 94 against the replacement source publication
+Last activity: 2026-07-20 -- Replaced rejected source handoff after real Linux gap repair
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Planned two independent Linux formal runs
 
 ## Session
 
-**Last Date:** 2026-07-20T07:25:00Z
-**Stopped At:** Planned 474-94-PLAN.md
+**Last Date:** 2026-07-20T07:38:00Z
+**Stopped At:** Republished 474-93 source handoff after Linux snapshot-path repair
 **Resume File:** None
 
 ## Performance Metrics
@@ -378,3 +378,4 @@ Last activity: 2026-07-20 -- Planned two independent Linux formal runs
 - [Phase 474]: Frontend automation is a generic exact-ref verifier, not a release authority; Plan 93 must machine-bind one external three-repository tuple before Plan 94 may admit any receipt. — This keeps historical exact verification useful without letting a self-selected backend gate approve itself.
 - [Phase 474]: Infra automation is the same generic exact-ref verifier with infra_sha bound to its workflow revision and no OIDC/CDK/provider authority. — Repository automation now verifies source only; external tuple admission remains separate and mandatory.
 - [Phase 474]: The owner-approved handoff records only implementation B/F/I; the direct metadata publication remains an external trust input and Plan 94 candidates must use P/F/I. — This avoids self-reference while preventing any generic caller from selecting release evidence.
+- [Phase 474]: A source handoff is not admissible after a failed real formal attempt; the failed publication is superseded only after fixing the exact materialized-snapshot path and issuing a new direct metadata child. — V9QUAL completion counts only the replacement source's later PASS receipts.
