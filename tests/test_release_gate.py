@@ -1461,6 +1461,42 @@ def test_gate_spec_binds_logical_repository_and_safe_relative_cwd() -> None:
         )
 
 
+def test_default_workspace_roots_accept_materialized_snapshot_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    roots: dict[str, Path] = {}
+    lock_paths = {
+        "backend": "uv.lock",
+        "frontend": "package-lock.json",
+        "infra": "uv.lock",
+    }
+    for name, lock_path in lock_paths.items():
+        root = tmp_path / name
+        root.mkdir()
+        (root / lock_path).write_text("lock\n", encoding="utf-8")
+        if name == "frontend":
+            (root / "package.json").write_text(
+                json.dumps({"name": "stoa-frontend"}) + "\n",
+                encoding="utf-8",
+            )
+        else:
+            (root / "pyproject.toml").write_text(
+                f'[project]\nname = "stoa-{name}"\n',
+                encoding="utf-8",
+            )
+        roots[name] = root
+
+    monkeypatch.setattr(gate, "ROOT", roots["backend"])
+
+    workspace = gate.default_workspace_roots()
+
+    assert workspace.require("backend") == roots["backend"]
+    assert workspace.require("frontend") == roots["frontend"]
+    assert workspace.require("infra") == roots["infra"]
+
+
 def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
     tmp_path: Path,
 ) -> None:
