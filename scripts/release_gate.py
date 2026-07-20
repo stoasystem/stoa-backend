@@ -4,16 +4,18 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import sha256
+from hashlib import sha1, sha256
 import json
 import os
 from pathlib import Path
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,7 +24,6 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CANDIDATE = ROOT / "evidence/phase-474/candidate-identity.json"
 SCHEMA_PATH = ROOT / "schemas/release/gate-receipt-v1.schema.json"
 RECEIPT_SCHEMA = "stoa.release.gate-receipt.v1"
 POLICY_EXIT = 2
@@ -112,6 +113,69 @@ _REPOSITORY_MARKERS = {
     "frontend": ("package.json", "stoa-frontend"),
     "infra": ("pyproject.toml", "stoa-infra"),
 }
+
+
+def _scrubbed_git_environment(
+    source: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Return a deterministic process environment with no ambient Git routing."""
+    environment = dict(os.environ if source is None else source)
+    for name in tuple(environment):
+        if name.startswith("GIT_"):
+            environment.pop(name)
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_ATTR_NOSYSTEM"] = "1"
+    environment["GIT_NO_LAZY_FETCH"] = "1"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return environment
+
+
+def _git_command(*argv: str) -> list[str]:
+    return [
+        "git",
+        "--no-replace-objects",
+        "--no-lazy-fetch",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        f"core.hooksPath={os.devnull}",
+        "-c",
+        "core.untrackedCache=false",
+        "-c",
+        "core.preloadIndex=false",
+        "-c",
+        "core.fileMode=true",
+        "-c",
+        "core.ignoreStat=false",
+        "-c",
+        "core.ignoreCase=false",
+        "-c",
+        "core.precomposeUnicode=false",
+        "-c",
+        "core.symlinks=true",
+        "-c",
+        f"core.attributesFile={os.devnull}",
+        "-c",
+        f"core.excludesFile={os.devnull}",
+        "-c",
+        "protocol.allow=never",
+        "-c",
+        "credential.helper=",
+        *argv,
+    ]
+
+
+def _git_worktree_command(root: Path, *argv: str) -> list[str]:
+    resolved = root.resolve()
+    return _git_command(
+        "-C",
+        str(resolved),
+        f"--work-tree={resolved}",
+        *argv,
+    )
+
+
 _RECEIPT_KEYS = {
     "schema",
     "gate_id",
@@ -178,6 +242,8 @@ class GateOperations:
     now_utc: Callable[[], str]
     python_version: Callable[[], str]
     platform_identity: Callable[[], str]
+    git_blob: Callable[[Path, str], bytes] | None = None
+    materialize_checkout: Callable[[Path, str, Path], None] | None = None
 
 
 @dataclass(frozen=True)
@@ -298,7 +364,7 @@ def default_registry() -> GateRegistry:
             GateSpec(
                 gate_id="gate-self-test",
                 argv=("{python}", "-c", "raise SystemExit(0)"),
-                artifact_paths=("evidence/phase-474/candidate-identity.json",),
+                artifact_paths=("pyproject.toml",),
                 config_paths=("schemas/release/gate-receipt-v1.schema.json",),
             ),
             GateSpec(
@@ -373,6 +439,16 @@ def _canonical_candidate_repositories(repositories: Sequence[Mapping[str, Any]])
     return [{key: repository[key] for key in ordered_keys} for repository in repositories]
 
 
+def candidate_execution_identity(repositories: Sequence[Mapping[str, Any]]) -> str:
+    return sha256(
+        json.dumps(
+            _canonical_candidate_repositories(repositories),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def validate_candidate(candidate: Mapping[str, Any]) -> None:
     _require_exact_keys(candidate, _CANDIDATE_KEYS, "candidate")
     expected_literals = {
@@ -411,13 +487,7 @@ def validate_candidate(candidate: Mapping[str, Any]) -> None:
         _require_sha(repository.get("lock_sha256"), f"{name} lock digest")
         _require_sha(repository.get("porcelain_sha256"), f"{name} porcelain digest")
 
-    expected_identity = sha256(
-        json.dumps(
-            _canonical_candidate_repositories(repositories),
-            ensure_ascii=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
+    expected_identity = candidate_execution_identity(repositories)
     if candidate.get("execution_identity") != expected_identity:
         raise GatePolicyError("candidate execution identity mismatch")
 
@@ -426,6 +496,301 @@ def load_candidate(path: Path) -> dict[str, Any]:
     candidate = load_json(path)
     validate_candidate(candidate)
     return candidate
+
+
+def _untracked_argv(repository: str) -> tuple[str, ...]:
+    argv = ("ls-files", "--others", "--exclude-standard", "-z", "--", ".")
+    if repository == "infra":
+        return (*argv, ":(top,exclude,literal).DS_Store")
+    return argv
+
+
+def _parse_index_entries(raw: str) -> list[tuple[str, str, str]]:
+    entries: list[tuple[str, str, str]] = []
+    seen_paths: set[str] = set()
+    for record in raw.split("\0"):
+        if not record:
+            continue
+        try:
+            metadata, path = record.split("\t", 1)
+            mode, oid, stage = metadata.split(" ")
+        except ValueError as exc:
+            raise GatePolicyError("candidate index entry is malformed") from exc
+        if (
+            stage != "0"
+            or mode not in {"100644", "100755", "120000"}
+            or GIT_SHA_RE.fullmatch(oid) is None
+            or not _is_safe_relative_path(path)
+            or any(part.casefold() == ".git" for part in Path(path).parts)
+            or path in seen_paths
+        ):
+            raise GatePolicyError("candidate index entry is invalid")
+        seen_paths.add(path)
+        entries.append((mode, oid, path))
+    if len(entries) > 100_000:
+        raise GatePolicyError("candidate index has too many entries")
+    return sorted(entries, key=lambda entry: entry[2])
+
+
+def _parse_head_tree_entries(raw: str) -> list[tuple[str, str, str]]:
+    entries: list[tuple[str, str, str]] = []
+    seen_paths: set[str] = set()
+    for record in raw.split("\0"):
+        if not record:
+            continue
+        try:
+            metadata, path = record.split("\t", 1)
+            mode, kind, oid = metadata.split(" ")
+        except ValueError as exc:
+            raise GatePolicyError("candidate HEAD tree entry is malformed") from exc
+        if (
+            kind != "blob"
+            or mode not in {"100644", "100755", "120000"}
+            or GIT_SHA_RE.fullmatch(oid) is None
+            or not _is_safe_relative_path(path)
+            or any(part.casefold() == ".git" for part in Path(path).parts)
+            or path in seen_paths
+        ):
+            raise GatePolicyError("candidate HEAD tree entry is invalid")
+        seen_paths.add(path)
+        entries.append((mode, oid, path))
+    if len(entries) > 100_000:
+        raise GatePolicyError("candidate HEAD tree has too many entries")
+    return sorted(entries, key=lambda entry: entry[2])
+
+
+def _raw_git_blob_oid(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode("ascii")
+    return sha1(header + content, usedforsecurity=False).hexdigest()
+
+
+def _read_raw_tracked_path(root: Path, relative_path: str, mode: str) -> bytes:
+    parts = Path(relative_path).parts
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(root, directory_flags)
+    try:
+        for part in parts[:-1]:
+            try:
+                child = os.open(part, directory_flags, dir_fd=directory)
+            except OSError as exc:
+                raise GatePolicyError(
+                    "tracked worktree parent type differs from index"
+                ) from exc
+            os.close(directory)
+            directory = child
+        name = parts[-1]
+        if mode == "120000":
+            metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            if not stat.S_ISLNK(metadata.st_mode):
+                raise GatePolicyError("tracked worktree type differs from index")
+            return os.fsencode(os.readlink(name, dir_fd=directory))
+        metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise GatePolicyError("tracked worktree type differs from index")
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW,
+            dir_fd=directory,
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise GatePolicyError("tracked worktree type differs from index")
+            executable = bool(metadata.st_mode & stat.S_IXUSR)
+            if executable != (mode == "100755"):
+                raise GatePolicyError("tracked worktree mode differs from index")
+            with os.fdopen(descriptor, "rb", closefd=False) as tracked_file:
+                return tracked_file.read()
+        finally:
+            os.close(descriptor)
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError("tracked worktree path is unavailable") from exc
+    finally:
+        os.close(directory)
+
+
+def _raw_tracked_worktree_identity(root: Path, raw_index: str) -> str:
+    projection: list[dict[str, str]] = []
+    for mode, oid, relative_path in _parse_index_entries(raw_index):
+        content = _read_raw_tracked_path(root, relative_path, mode)
+        if _raw_git_blob_oid(content) != oid:
+            raise GatePolicyError("tracked worktree bytes differ from index")
+        projection.append({"mode": mode, "oid": oid, "path": relative_path})
+    return sha256(
+        json.dumps(
+            projection,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _live_repository_identities(
+    *,
+    workspace: WorkspaceRoots,
+    operations: GateOperations,
+) -> list[dict[str, Any]]:
+    if operations.git_blob is None:
+        raise GatePolicyError("live candidate Git blob reader is unavailable")
+    repositories: list[dict[str, Any]] = []
+    for name, lock_path in _REPOSITORY_CONTRACTS:
+        root = workspace.require(name)
+        try:
+            head = operations.git(root, ("rev-parse", "HEAD"))
+            tree = operations.git(root, ("rev-parse", f"{head}^{{tree}}"))
+            head_entries = operations.git(root, ("ls-tree", "-r", "-z", head))
+            index_flags = operations.git(root, ("ls-files", "-v", "--"))
+            index_entries = operations.git(root, ("ls-files", "--stage", "-z", "--"))
+            tracked_infra_exception = (
+                operations.git(root, ("ls-files", "--", ".DS_Store"))
+                if name == "infra"
+                else ""
+            )
+            committed_infra_exception = (
+                operations.git(
+                    root,
+                    ("ls-tree", "--name-only", head, "--", ".DS_Store"),
+                )
+                if name == "infra"
+                else ""
+            )
+            untracked = operations.git(root, _untracked_argv(name))
+            committed_lock = operations.git_blob(root, f"{head}:{lock_path}")
+            worktree_lock = _root_path(root, lock_path).read_bytes()
+            tracked_identity = _raw_tracked_worktree_identity(root, index_entries)
+            second_head = operations.git(root, ("rev-parse", "HEAD"))
+            second_index_flags = operations.git(root, ("ls-files", "-v", "--"))
+            second_index_entries = operations.git(
+                root,
+                ("ls-files", "--stage", "-z", "--"),
+            )
+            second_untracked = operations.git(root, _untracked_argv(name))
+            second_tracked_identity = _raw_tracked_worktree_identity(
+                root,
+                index_entries,
+            )
+            second_worktree_lock = _root_path(root, lock_path).read_bytes()
+            final_untracked = operations.git(root, _untracked_argv(name))
+            final_index_flags = operations.git(root, ("ls-files", "-v", "--"))
+            final_index_entries = operations.git(
+                root,
+                ("ls-files", "--stage", "-z", "--"),
+            )
+            final_head = operations.git(root, ("rev-parse", "HEAD"))
+            if (
+                second_head != head
+                or final_head != head
+                or second_index_flags != index_flags
+                or final_index_flags != index_flags
+                or second_index_entries != index_entries
+                or final_index_entries != index_entries
+                or second_untracked != untracked
+                or final_untracked != untracked
+                or second_tracked_identity != tracked_identity
+                or second_worktree_lock != worktree_lock
+            ):
+                raise GatePolicyError("live repository changed during candidate capture")
+        except GatePolicyError:
+            raise
+        except Exception as exc:
+            raise GatePolicyError("live repository identity is unavailable") from exc
+        _require_sha(head, f"{name} live head", git=True)
+        _require_sha(tree, f"{name} live tree", git=True)
+        head_projection = _parse_head_tree_entries(head_entries)
+        index_projection = _parse_index_entries(index_entries)
+        if any(not line.startswith("H ") for line in index_flags.splitlines() if line):
+            raise GatePolicyError(f"{name} index has nonstandard path flags")
+        if tracked_infra_exception or committed_infra_exception:
+            raise GatePolicyError("infra .DS_Store exception cannot be tracked")
+        if committed_lock != worktree_lock:
+            raise GatePolicyError(f"{name} lock differs from committed source")
+        clean = head_projection == index_projection and untracked == ""
+        repositories.append(
+            {
+                "name": name,
+                "head": head,
+                "tree": tree,
+                "lock_path": lock_path,
+                "lock_sha256": sha256(worktree_lock).hexdigest(),
+                "porcelain_sha256": sha256(untracked.encode("utf-8")).hexdigest(),
+                "clean": clean,
+            }
+        )
+    return repositories
+
+
+def issue_live_candidate(
+    *,
+    workspace: WorkspaceRoots,
+    operations: GateOperations,
+) -> dict[str, Any]:
+    repositories = _live_repository_identities(workspace=workspace, operations=operations)
+    if not all(repository["clean"] is True for repository in repositories):
+        raise GatePolicyError("live candidate repositories are not clean")
+    candidate: dict[str, Any] = {
+        "schema": "stoa.release.candidate-identity.v1",
+        "status": "CLEAN",
+        "identity_source": "execution-time-live-repository-state",
+        "execution_identity": candidate_execution_identity(repositories),
+        "repositories": repositories,
+        "candidate_issued": True,
+        "mutation_count": 0,
+        "repository_mutation": "NOT RUN",
+        "production_infrastructure": "NOT RUN",
+        "production_deploy": "NOT RUN",
+        "production_smoke": "NOT RUN",
+        "production_rollback": "NOT RUN",
+    }
+    validate_candidate(candidate)
+    return candidate
+
+
+def validate_live_candidate(
+    candidate: Mapping[str, Any],
+    *,
+    workspace: WorkspaceRoots,
+    operations: GateOperations,
+) -> None:
+    validate_candidate(candidate)
+    live_candidate = issue_live_candidate(workspace=workspace, operations=operations)
+    if candidate != live_candidate:
+        raise GatePolicyError("candidate does not match live repository state")
+
+
+@contextmanager
+def materialize_candidate_workspace(
+    candidate: Mapping[str, Any],
+    *,
+    source_workspace: WorkspaceRoots,
+    operations: GateOperations,
+) -> Iterator[WorkspaceRoots]:
+    validate_candidate(candidate)
+    if operations.materialize_checkout is None:
+        raise GatePolicyError("candidate checkout materializer is unavailable")
+    with tempfile.TemporaryDirectory(prefix="stoa-release-candidate-") as temporary_root:
+        parent = Path(temporary_root)
+        roots: dict[str, Path] = {}
+        for repository in candidate["repositories"]:
+            name = repository["name"]
+            destination = parent / name
+            destination.mkdir()
+            try:
+                operations.materialize_checkout(
+                    source_workspace.require(name),
+                    repository["head"],
+                    destination,
+                )
+            except Exception as exc:
+                raise GatePolicyError("candidate checkout is unavailable") from exc
+            roots[name] = destination
+        snapshot = WorkspaceRoots.from_mapping(roots)
+        for repository in candidate["repositories"]:
+            lock = _root_path(snapshot.require(repository["name"]), repository["lock_path"])
+            if sha256(lock.read_bytes()).hexdigest() != repository["lock_sha256"]:
+                raise GatePolicyError("candidate archive lock identity mismatch")
+        yield snapshot
 
 
 def _root_path(root: Path, relative_path: str) -> Path:
@@ -484,7 +849,7 @@ def _matrix_source_identity(root: Path) -> dict[str, dict[str, Any]]:
 def _matrix_hermetic_environment(
     source: Mapping[str, str], *, nonexistent_root: Path
 ) -> dict[str, str]:
-    environment = dict(source)
+    environment = _scrubbed_git_environment(source)
     for name in (
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -850,6 +1215,7 @@ def _system_run(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> Proce
         check=False,
         capture_output=True,
         cwd=cwd,
+        env=_scrubbed_git_environment(),
         timeout=timeout_seconds,
     )
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
@@ -922,13 +1288,208 @@ def system_python_matrix_operations() -> PythonMatrixOperations:
 
 def _system_git(root: Path, argv: tuple[str, ...]) -> str:
     completed = subprocess.run(
-        ["git", "-C", str(root), *argv],
+        _git_worktree_command(root, *argv),
         check=True,
         capture_output=True,
+        env=_scrubbed_git_environment(),
         text=True,
         timeout=30,
     )
-    return completed.stdout.strip()
+    return completed.stdout.rstrip("\n")
+
+
+def _system_git_blob(root: Path, revision_path: str) -> bytes:
+    completed = subprocess.run(
+        _git_worktree_command(root, "show", revision_path),
+        check=True,
+        capture_output=True,
+        env=_scrubbed_git_environment(),
+        timeout=30,
+    )
+    return completed.stdout
+
+
+def _parse_tree_entries(raw: bytes) -> list[tuple[str, str, str, bytes]]:
+    entries: list[tuple[str, str, str, bytes]] = []
+    seen_paths: set[bytes] = set()
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, path = record.split(b"\t", 1)
+            mode_bytes, kind_bytes, oid_bytes = metadata.split(b" ", 2)
+            mode = mode_bytes.decode("ascii")
+            kind = kind_bytes.decode("ascii")
+            oid = oid_bytes.decode("ascii")
+        except (ValueError, UnicodeError) as exc:
+            raise GatePolicyError("candidate tree entry is malformed") from exc
+        if path in seen_paths or not path or b"\0" in path:
+            raise GatePolicyError("candidate tree path is invalid")
+        seen_paths.add(path)
+        entries.append((mode, kind, oid, path))
+    if len(entries) > 100_000:
+        raise GatePolicyError("candidate tree has too many entries")
+    return entries
+
+
+def _batch_git_blobs(root: Path, entries: Sequence[tuple[str, str, str, bytes]]) -> list[bytes]:
+    requested = [oid for mode, kind, oid, _ in entries if kind == "blob"]
+    completed = subprocess.run(
+        _git_worktree_command(root, "cat-file", "--batch"),
+        input=("\n".join(requested) + "\n").encode("ascii"),
+        check=True,
+        capture_output=True,
+        env=_scrubbed_git_environment(),
+        timeout=120,
+    )
+    output = completed.stdout
+    cursor = 0
+    blobs: list[bytes] = []
+    for expected_oid in requested:
+        newline = output.find(b"\n", cursor)
+        if newline < 0:
+            raise GatePolicyError("candidate blob batch is truncated")
+        try:
+            actual_oid, kind, size_text = output[cursor:newline].decode("ascii").split(" ")
+            size = int(size_text)
+        except (ValueError, UnicodeError) as exc:
+            raise GatePolicyError("candidate blob header is malformed") from exc
+        cursor = newline + 1
+        end = cursor + size
+        if actual_oid != expected_oid or kind != "blob" or size < 0 or end >= len(output):
+            raise GatePolicyError("candidate blob identity is invalid")
+        blobs.append(output[cursor:end])
+        if output[end : end + 1] != b"\n":
+            raise GatePolicyError("candidate blob delimiter is invalid")
+        cursor = end + 1
+    if cursor != len(output):
+        raise GatePolicyError("candidate blob batch has trailing data")
+    return blobs
+
+
+def _safe_checkout_path(destination: Path, raw_path: bytes) -> Path:
+    relative = Path(os.fsdecode(raw_path))
+    if relative.is_absolute() or any(
+        part in {"", ".", ".."} or part.casefold() == ".git"
+        for part in relative.parts
+    ):
+        raise GatePolicyError("candidate tree path is unsafe")
+    resolved_destination = destination.resolve()
+    path = resolved_destination.joinpath(*relative.parts)
+    resolved_parent = path.parent.resolve(strict=False)
+    if (
+        resolved_parent != resolved_destination
+        and resolved_destination not in resolved_parent.parents
+    ):
+        raise GatePolicyError("candidate tree path escapes checkout")
+    return path
+
+
+def _install_git_context(root: Path, commit: str, destination: Path) -> None:
+    git_dir = destination / ".git"
+    environment = _scrubbed_git_environment()
+    subprocess.run(
+        _git_command("init", "--bare", "--template=", "-q", str(git_dir)),
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=30,
+    )
+    packed = subprocess.run(
+        _git_worktree_command(root, "pack-objects", "--revs", "--stdout"),
+        input=f"{commit}\n".encode("ascii"),
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=300,
+    )
+    subprocess.run(
+        _git_command(f"--git-dir={git_dir}", "index-pack", "--stdin", "--fix-thin"),
+        input=packed.stdout,
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=300,
+    )
+    git_dir_args = _git_command(f"--git-dir={git_dir}")
+    subprocess.run(
+        [*git_dir_args, "config", "core.bare", "false"],
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=30,
+    )
+    subprocess.run(
+        [*git_dir_args, "update-ref", "--no-deref", "HEAD", commit],
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=30,
+    )
+    subprocess.run(
+        [*git_dir_args, "read-tree", commit],
+        check=True,
+        capture_output=True,
+        env=environment,
+        timeout=30,
+    )
+
+
+def _system_materialize_checkout(root: Path, commit: str, destination: Path) -> None:
+    checkout_root = destination.resolve()
+    tree_result = subprocess.run(
+        _git_worktree_command(root, "ls-tree", "-r", "-z", commit),
+        check=True,
+        capture_output=True,
+        env=_scrubbed_git_environment(),
+        timeout=120,
+    )
+    entries = _parse_tree_entries(tree_result.stdout)
+    if any(kind == "commit" or mode == "160000" for mode, kind, _, _ in entries):
+        raise GatePolicyError("candidate tree contains a gitlink")
+    if any(
+        kind != "blob" or mode not in {"100644", "100755", "120000"}
+        for mode, kind, _, _ in entries
+    ):
+        raise GatePolicyError("candidate tree contains an unsupported entry")
+    blobs = iter(_batch_git_blobs(root, entries))
+    for mode, _, _, raw_path in entries:
+        path = _safe_checkout_path(destination, raw_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        blob = next(blobs)
+        if mode == "120000":
+            target_text = os.fsdecode(blob)
+            target = Path(target_text)
+            resolved_target = (path.parent / target).resolve(strict=False)
+            if (
+                target.is_absolute()
+                or any(part.casefold() == ".git" for part in target.parts)
+                or (
+                    resolved_target != checkout_root
+                    and checkout_root not in resolved_target.parents
+                )
+            ):
+                raise GatePolicyError("candidate symlink escapes checkout")
+            path.symlink_to(target_text)
+        else:
+            path.write_bytes(blob)
+            path.chmod(0o755 if mode == "100755" else 0o644)
+    try:
+        next(blobs)
+    except StopIteration:
+        pass
+    else:
+        raise GatePolicyError("candidate blob count is invalid")
+    _install_git_context(root, commit, destination)
+    snapshot_head = _system_git(destination, ("rev-parse", "HEAD"))
+    snapshot_tree = _system_git(destination, ("rev-parse", "HEAD^{tree}"))
+    expected_tree = _system_git(root, ("rev-parse", f"{commit}^{{tree}}"))
+    snapshot_status = _system_git(
+        destination,
+        ("status", "--porcelain=v1", "--untracked-files=all", "--", "."),
+    )
+    if snapshot_head != commit or snapshot_tree != expected_tree or snapshot_status:
+        raise GatePolicyError("candidate checkout identity is invalid")
 
 
 def _now_utc() -> str:
@@ -942,10 +1503,12 @@ def system_operations() -> GateOperations:
         now_utc=_now_utc,
         python_version=platform.python_version,
         platform_identity=lambda: f"{platform.system().lower()}-{platform.machine().lower()}",
+        git_blob=_system_git_blob,
+        materialize_checkout=_system_materialize_checkout,
     )
 
 
-def run_registered_gate(
+def _run_registered_gate_on_snapshot(
     *,
     gate_id: str,
     command_name: str,
@@ -953,12 +1516,14 @@ def run_registered_gate(
     registry: GateRegistry,
     operations: GateOperations,
     workspace: WorkspaceRoots | None = None,
+    source_workspace: WorkspaceRoots | None = None,
 ) -> dict[str, Any]:
     validate_candidate(candidate)
     if command_name not in {"verify", "self-test"}:
         raise GatePolicyError("unknown command name")
     spec = registry.require(gate_id)
     resolved_workspace = workspace or default_workspace_roots()
+    resolved_source_workspace = source_workspace or resolved_workspace
     repository_root = resolved_workspace.require(spec.repository)
     unresolved_cwd = repository_root / spec.cwd
     current_cwd = repository_root
@@ -989,7 +1554,7 @@ def run_registered_gate(
     try:
         for repository in candidate["repositories"]:
             operations.git(
-                resolved_workspace.require(repository["name"]),
+                resolved_source_workspace.require(repository["name"]),
                 ("cat-file", "-e", f"{repository['head']}^{{commit}}"),
             )
         completed = operations.run_process(spec.argv, command_cwd, spec.timeout_seconds)
@@ -1271,6 +1836,49 @@ def validate_receipt(
         raise GatePolicyError("receipt digest mismatch")
 
 
+def run_registered_gate(
+    *,
+    gate_id: str,
+    command_name: str,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    operations: GateOperations,
+    workspace: WorkspaceRoots | None = None,
+) -> dict[str, Any]:
+    source_workspace = workspace or default_workspace_roots()
+    validate_live_candidate(
+        candidate,
+        workspace=source_workspace,
+        operations=operations,
+    )
+    with materialize_candidate_workspace(
+        candidate,
+        source_workspace=source_workspace,
+        operations=operations,
+    ) as snapshot:
+        validate_live_candidate(
+            candidate,
+            workspace=source_workspace,
+            operations=operations,
+        )
+        receipt = _run_registered_gate_on_snapshot(
+            gate_id=gate_id,
+            command_name=command_name,
+            candidate=candidate,
+            registry=registry,
+            operations=operations,
+            workspace=snapshot,
+            source_workspace=source_workspace,
+        )
+        validate_receipt(
+            receipt,
+            candidate=candidate,
+            registry=registry,
+            workspace=snapshot,
+        )
+        return receipt
+
+
 def write_json(value: object, path: Path | None) -> None:
     text = json.dumps(value, indent=2, sort_keys=True) + "\n"
     if path is None:
@@ -1278,43 +1886,93 @@ def write_json(value: object, path: Path | None) -> None:
         return
     resolved = path if path.is_absolute() else ROOT / path
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(text, encoding="utf-8")
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=resolved.parent,
+        prefix=f".{resolved.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(text)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, resolved)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _requested_root_paths(args: argparse.Namespace) -> tuple[Path, ...]:
+    return (
+        Path(args.backend_root) if getattr(args, "backend_root", None) else ROOT,
+        Path(args.frontend_root)
+        if getattr(args, "frontend_root", None)
+        else ROOT.parent / "stoa-frontend",
+        Path(args.infra_root)
+        if getattr(args, "infra_root", None)
+        else ROOT.parent / "stoa-infra",
+    )
+
+
+def _prepare_external_output(args: argparse.Namespace) -> Path | None:
+    if not args.output:
+        return None
+    requested = Path(args.output)
+    if not requested.is_absolute():
+        raise GatePolicyError("candidate and gate output must be an absolute external path")
+    if requested.is_symlink():
+        raise GatePolicyError("candidate and gate output cannot be a symlink")
+    resolved = requested.resolve(strict=False)
+    protected_roots = {ROOT.resolve(), *(root.resolve(strict=False) for root in _requested_root_paths(args))}
+    if any(resolved == root or root in resolved.parents for root in protected_roots):
+        raise GatePolicyError("candidate and gate output must be outside source repositories")
+    candidate_path = getattr(args, "candidate", None)
+    if candidate_path and resolved == Path(candidate_path).resolve(strict=False):
+        raise GatePolicyError("gate output cannot replace its candidate input")
+    if resolved.is_dir():
+        raise GatePolicyError("gate output path is a directory")
+    resolved.unlink(missing_ok=True)
+    return resolved
+
+
+def _workspace_from_args(args: argparse.Namespace) -> WorkspaceRoots:
+    backend, frontend, infra = _requested_root_paths(args)
+    return WorkspaceRoots.from_mapping(
+        {"backend": backend, "frontend": frontend, "infra": infra}
+    )
 
 
 def _execute(args: argparse.Namespace, command_name: str) -> int:
+    output = _prepare_external_output(args)
     candidate = load_candidate(Path(args.candidate))
     registry = default_registry()
-    workspace = WorkspaceRoots.from_mapping(
-        {
-            "backend": Path(args.backend_root) if args.backend_root else ROOT,
-            "frontend": Path(args.frontend_root)
-            if args.frontend_root
-            else ROOT.parent / "stoa-frontend",
-            "infra": Path(args.infra_root)
-            if args.infra_root
-            else ROOT.parent / "stoa-infra",
-        }
-    )
+    workspace = _workspace_from_args(args)
+    operations = system_operations()
     gate_id = args.gate if command_name == "verify" else "gate-self-test"
     receipt = run_registered_gate(
         gate_id=gate_id,
         command_name=command_name,
         candidate=candidate,
         registry=registry,
-        operations=system_operations(),
+        operations=operations,
         workspace=workspace,
     )
-    validate_receipt(
-        receipt,
-        candidate=candidate,
-        registry=registry,
-        workspace=workspace,
-    )
-    write_json(receipt, Path(args.output) if args.output else None)
+    write_json(receipt, output)
     return int(receipt["result"]["exit_code"])
 
 
+def _execute_candidate(args: argparse.Namespace) -> int:
+    output = _prepare_external_output(args)
+    candidate = issue_live_candidate(
+        workspace=_workspace_from_args(args),
+        operations=system_operations(),
+    )
+    write_json(candidate, output)
+    return 0
+
+
 def _execute_python_matrix(args: argparse.Namespace) -> int:
+    output = _prepare_external_output(args)
     try:
         with tempfile.TemporaryDirectory(prefix="stoa-phase474-python-") as temporary_root:
             parent = Path(temporary_root)
@@ -1328,13 +1986,23 @@ def _execute_python_matrix(args: argparse.Namespace) -> int:
         if exc.result is None:
             raise
         result = exc.result
-    write_json(result, Path(args.output) if args.output else None)
+    write_json(result, output)
     return python_matrix_exit_code(result)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    candidate = subparsers.add_parser(
+        "candidate",
+        help="Issue one candidate from exact current clean repository state",
+    )
+    candidate.add_argument("--output")
+    candidate.add_argument("--backend-root")
+    candidate.add_argument("--frontend-root")
+    candidate.add_argument("--infra-root")
+    candidate.set_defaults(func=_execute_candidate)
 
     verify = subparsers.add_parser("verify", help="Run one typed registered release gate")
     verify.add_argument("--candidate", required=True)
@@ -1346,7 +2014,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.set_defaults(func=lambda args: _execute(args, "verify"))
 
     self_test = subparsers.add_parser("self-test", help="Exercise the authoritative gate path")
-    self_test.add_argument("--candidate", default=str(DEFAULT_CANDIDATE))
+    self_test.add_argument("--candidate", required=True)
     self_test.add_argument("--output")
     self_test.add_argument("--backend-root")
     self_test.add_argument("--frontend-root")
