@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Planned 474-91-PLAN.md
-last_updated: "2026-07-20T06:06:00Z"
-last_activity: 2026-07-20 -- Planned frontend exact-ref formal verification caller
+stopped_at: Completed 474-91-SUMMARY.md
+last_updated: "2026-07-20T06:22:00Z"
+last_activity: 2026-07-20 -- Completed frontend exact-ref formal verification caller
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 153
-  completed_plans: 90
+  completed_plans: 91
   percent: 20
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 91 of 91
-Status: Ready to execute Plan 91
-Last activity: 2026-07-20 -- Planned frontend exact-ref formal verification caller
+Status: Plan 91 complete; ready to plan infra caller
+Last activity: 2026-07-20 -- Completed frontend exact-ref formal verification caller
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Planned frontend exact-ref formal verification call
 
 ## Session
 
-**Last Date:** 2026-07-20T06:06:00Z
-**Stopped At:** Planned 474-91-PLAN.md
+**Last Date:** 2026-07-20T06:22:00Z
+**Stopped At:** Completed 474-91-SUMMARY.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -375,3 +375,4 @@ Last activity: 2026-07-20 -- Planned frontend exact-ref formal verification call
 - [Phase 474]: Existing Web environment exports project only the installed validated runtime registry; staging-pilot remains API-mode-compatible with staging and every mock, demo, MSW, debug, preview, and fallback surface is fixed false. — This removes compile-time release truth without breaking current consumers or taking ownership of startup and service policy.
 - [Phase 474]: The browser statically imports only its startup barrier, then installs descriptor-bound runtime config before dynamically importing i18n, React, App, routes, API, or auth code. — Timeout, failure, and duplicate attempts render one fixed actionable message and cannot begin another App/root sequence.
 - [Phase 474]: The backend workflow revision owns the gate implementation SHA and invokes only candidate then fixed formal after exact three-repository identity and Linux namespace proof. — A new caller cannot execute an older gate, select an alternate graph, or retain direct deployment authority.
+- [Phase 474]: Frontend automation is a generic exact-ref verifier, not a release authority; Plan 93 must machine-bind one external three-repository tuple before Plan 94 may admit any receipt. — This keeps historical exact verification useful without letting a self-selected backend gate approve itself.

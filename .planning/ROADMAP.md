@@ -34,7 +34,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | 21/86 | In Progress|  |
+| 474 | 22/86 | In Progress|  |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Correct multi-write, retry, and concurrency behavior | Phase 474 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
@@ -451,7 +451,7 @@ Plans:
 - [x] `474-88` — Candidate-bound fresh Web evidence registration.
 - [x] `474-89` — Non-selectable formal Python and Web aggregate.
 - [x] `474-90` — Backend exact-ref formal verification caller.
-- [ ] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
+- [x] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
 
 **Wave 12**
 
