@@ -9,9 +9,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha1, sha256
+import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import re
 import shutil
@@ -19,10 +20,13 @@ import signal
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import tomllib
 from typing import Any
+import urllib.error
+import urllib.request
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +84,12 @@ _PYTHON_MATRIX_RUN_KEYS = {
     "counts",
 }
 WEB_GATE_SCHEMA = "stoa.web.gate-run.v1"
+NODE_RUNTIME_VERSION = "20.20.2"
+NPM_RUNTIME_VERSION = "10.8.2"
+NODE_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024
+NODE_ARCHIVE_MAX_MEMBERS = 20_000
+NODE_ARCHIVE_MAX_MEMBER_BYTES = 128 * 1024 * 1024
+NODE_ARCHIVE_MAX_EXTRACTED_BYTES = 192 * 1024 * 1024
 WEB_GATE_MAX_RECEIPT_BYTES = 1024 * 1024
 WEB_GATE_MAX_TREE_FILE_BYTES = 64 * 1024 * 1024
 WEB_GATE_EXCLUDED_SOURCE_ROOTS = frozenset({".git", "dist", "node_modules"})
@@ -255,6 +265,37 @@ class ProcessResult:
 
 
 @dataclass(frozen=True)
+class NodeArchiveSpec:
+    archive_root: str
+    url: str
+    sha256: str
+
+
+_NODE_ARCHIVES = {
+    ("darwin", "arm64"): NodeArchiveSpec(
+        archive_root="node-v20.20.2-darwin-arm64",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-darwin-arm64.tar.gz",
+        sha256="466e05f3477c20dfb723054dfebffe55bc74660ee77f612166fca121dacb65b6",
+    ),
+    ("darwin", "x64"): NodeArchiveSpec(
+        archive_root="node-v20.20.2-darwin-x64",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-darwin-x64.tar.gz",
+        sha256="8be6f5e4bb128c82774f8a0b8d7a1cc1365a7977d9657cece0ca647b3fe04e61",
+    ),
+    ("linux", "arm64"): NodeArchiveSpec(
+        archive_root="node-v20.20.2-linux-arm64",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-arm64.tar.gz",
+        sha256="47ef73d543ecf6eb19435f6c03a0ac4809b3bf0dd6b26c7c571efc2a6572a74d",
+    ),
+    ("linux", "x64"): NodeArchiveSpec(
+        archive_root="node-v20.20.2-linux-x64",
+        url="https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-x64.tar.gz",
+        sha256="19e56f0825510207dd904f087fe52faa0a4eb6b2aab5f0ea7a33830d04888b8b",
+    ),
+}
+
+
+@dataclass(frozen=True)
 class GateSpec:
     gate_id: str
     argv: tuple[str, ...]
@@ -299,7 +340,7 @@ class GateOperations:
     platform_identity: Callable[[], str]
     git_blob: Callable[[Path, str], bytes] | None = None
     materialize_checkout: Callable[[Path, str, Path], None] | None = None
-    resolve_node20: Callable[[Mapping[str, str]], Path] | None = None
+    resolve_node20: Callable[[Mapping[str, str], Path], Path] | None = None
     run_web_process: (
         Callable[[tuple[str, ...], dict[str, str], Path, int], ProcessResult] | None
     ) = None
@@ -1308,7 +1349,13 @@ def _web_tree_identity(
     }
 
 
-def _web_root_file_identity(root: Path, name: str) -> dict[str, Any]:
+def _web_root_file_identity(
+    root: Path,
+    name: str,
+    *,
+    maximum_bytes: int = WEB_GATE_MAX_TREE_FILE_BYTES,
+    label: str = "Web source input",
+) -> dict[str, Any]:
     directory = -1
     try:
         directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -1319,8 +1366,8 @@ def _web_root_file_identity(root: Path, name: str) -> dict[str, Any]:
             directory,
             name,
             metadata,
-            maximum_bytes=WEB_GATE_MAX_TREE_FILE_BYTES,
-            label="Web source input",
+            maximum_bytes=maximum_bytes,
+            label=label,
         )
     except GatePolicyError:
         raise
@@ -1330,6 +1377,37 @@ def _web_root_file_identity(root: Path, name: str) -> dict[str, Any]:
         if directory >= 0:
             os.close(directory)
     return {"bytes": len(content), "sha256": sha256(content).hexdigest()}
+
+
+def _stable_regular_path_bytes(
+    path: Path,
+    *,
+    maximum_bytes: int,
+    label: str,
+) -> bytes:
+    directory = -1
+    try:
+        directory = os.open(
+            path.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        metadata = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise GatePolicyError(f"{label} is not a single-link regular file")
+        return _read_stable_regular_at(
+            directory,
+            path.name,
+            metadata,
+            maximum_bytes=maximum_bytes,
+            label=label,
+        )
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError(f"{label} is unavailable") from exc
+    finally:
+        if directory >= 0:
+            os.close(directory)
 
 
 def _require_web_identity(value: Any, label: str) -> dict[str, Any]:
@@ -1346,11 +1424,72 @@ def _require_web_identity(value: Any, label: str) -> dict[str, Any]:
     return value
 
 
+def _web_source_identity(frontend_root: Path) -> dict[str, Any]:
+    source_tree = _web_tree_identity(frontend_root, exclude_generated=True)
+    return {
+        "packageJson": _web_root_file_identity(frontend_root, "package.json"),
+        "packageLock": _web_root_file_identity(frontend_root, "package-lock.json"),
+        "treeSha256": source_tree["treeSha256"],
+    }
+
+
+def _stable_web_source_identity(frontend_root: Path) -> dict[str, Any]:
+    first = _web_source_identity(frontend_root)
+    second = _web_source_identity(frontend_root)
+    if first != second:
+        raise GatePolicyError("Web source changed during independent binding")
+    return first
+
+
+def _require_candidate_web_lock(
+    source: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+) -> None:
+    candidate_frontend = next(
+        (
+            repository
+            for repository in candidate["repositories"]
+            if repository.get("name") == "frontend"
+        ),
+        None,
+    )
+    package_lock = source.get("packageLock")
+    if (
+        not isinstance(candidate_frontend, dict)
+        or not isinstance(package_lock, dict)
+        or candidate_frontend.get("lock_sha256") != package_lock.get("sha256")
+    ):
+        raise GatePolicyError("Web lock does not match candidate identity")
+
+
+def _require_fresh_web_generated_state(frontend_root: Path) -> None:
+    directory = -1
+    try:
+        directory = os.open(
+            frontend_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        for name in ("dist", "node_modules"):
+            try:
+                os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            raise GatePolicyError("Web candidate contains a generated tree")
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError("Web generated state is unavailable") from exc
+    finally:
+        if directory >= 0:
+            os.close(directory)
+
+
 def _validate_web_gate_receipt(
     receipt: Mapping[str, Any],
     *,
     frontend_root: Path,
     candidate: Mapping[str, Any],
+    expected_source: Mapping[str, Any] | None = None,
 ) -> None:
     _require_exact_keys(receipt, _WEB_RECEIPT_KEYS, "Web gate receipt")
     if receipt.get("schema") != WEB_GATE_SCHEMA or receipt.get("status") != "PASS":
@@ -1368,13 +1507,9 @@ def _validate_web_gate_receipt(
     if not isinstance(runtime, dict):
         raise GatePolicyError("Web gate runtime is malformed")
     _require_exact_keys(runtime, {"node", "npm", "platform", "arch"}, "Web runtime")
-    if not isinstance(runtime.get("node"), str) or re.fullmatch(
-        r"20\.[0-9]+\.[0-9]+", runtime["node"]
-    ) is None:
+    if runtime.get("node") != NODE_RUNTIME_VERSION:
         raise GatePolicyError("Web gate Node runtime is invalid")
-    if not isinstance(runtime.get("npm"), str) or re.fullmatch(
-        r"[0-9]+\.[0-9]+\.[0-9]+", runtime["npm"]
-    ) is None:
+    if runtime.get("npm") != NPM_RUNTIME_VERSION:
         raise GatePolicyError("Web gate npm runtime is invalid")
     for field in ("platform", "arch"):
         value = runtime.get(field)
@@ -1385,8 +1520,8 @@ def _validate_web_gate_receipt(
     if not isinstance(source, dict):
         raise GatePolicyError("Web gate source is malformed")
     _require_exact_keys(source, {"packageJson", "packageLock", "treeSha256"}, "Web source")
-    package_json = _require_web_identity(source.get("packageJson"), "Web package")
-    package_lock = _require_web_identity(source.get("packageLock"), "Web lock")
+    _require_web_identity(source.get("packageJson"), "Web package")
+    _require_web_identity(source.get("packageLock"), "Web lock")
     _require_sha(source.get("treeSha256"), "Web source tree digest")
 
     steps = receipt.get("steps")
@@ -1433,36 +1568,11 @@ def _validate_web_gate_receipt(
         raise GatePolicyError("Web gate artifact identity is invalid")
     _require_sha(artifact.get("treeSha256"), "Web artifact tree digest")
 
-    first_package_json = _web_root_file_identity(frontend_root, "package.json")
-    first_package_lock = _web_root_file_identity(frontend_root, "package-lock.json")
-    first_source_tree = _web_tree_identity(frontend_root, exclude_generated=True)
-    second_package_json = _web_root_file_identity(frontend_root, "package.json")
-    second_package_lock = _web_root_file_identity(frontend_root, "package-lock.json")
-    second_source_tree = _web_tree_identity(frontend_root, exclude_generated=True)
-    if (
-        first_package_json != second_package_json
-        or first_package_lock != second_package_lock
-        or first_source_tree != second_source_tree
-    ):
-        raise GatePolicyError("Web source changed during independent binding")
-    if package_json != first_package_json or package_lock != first_package_lock:
-        raise GatePolicyError("Web package identity does not match candidate snapshot")
-    if source["treeSha256"] != first_source_tree["treeSha256"]:
-        raise GatePolicyError("Web source tree does not match candidate snapshot")
-
-    candidate_frontend = next(
-        (
-            repository
-            for repository in candidate["repositories"]
-            if repository.get("name") == "frontend"
-        ),
-        None,
-    )
-    if (
-        not isinstance(candidate_frontend, dict)
-        or candidate_frontend.get("lock_sha256") != first_package_lock["sha256"]
-    ):
-        raise GatePolicyError("Web lock does not match candidate identity")
+    post_run_source = _stable_web_source_identity(frontend_root)
+    baseline = dict(post_run_source if expected_source is None else expected_source)
+    if source != baseline or post_run_source != baseline:
+        raise GatePolicyError("Web source does not match the pre-run candidate seal")
+    _require_candidate_web_lock(baseline, candidate)
 
     first_artifact = _web_tree_identity(frontend_root / "dist")
     second_artifact = _web_tree_identity(frontend_root / "dist")
@@ -1585,18 +1695,25 @@ def _run_web_gate_evidence(
 ) -> tuple[ProcessResult, dict[str, Any]]:
     if operations.resolve_node20 is None or operations.run_web_process is None:
         raise GatePolicyError("Web gate launcher is unavailable")
+    _require_fresh_web_generated_state(command_cwd)
+    source_baseline = _stable_web_source_identity(command_cwd)
+    _require_candidate_web_lock(source_baseline, candidate)
     with _private_web_evidence_directory(workspace) as (
         evidence_directory,
         evidence_path,
         base_environment,
     ):
-        node = operations.resolve_node20(base_environment)
+        toolchain_root = evidence_directory / "toolchain"
+        node = operations.resolve_node20(base_environment, toolchain_root)
         if not node.is_absolute():
             raise GatePolicyError("Web gate Node executable is not absolute")
-        resolved_node = node.resolve(strict=False)
+        resolved_node = node.resolve(strict=True)
+        if resolved_node != toolchain_root / "bin" / "node":
+            raise GatePolicyError("Web gate Node executable is outside its private snapshot")
         for _, source_root in workspace.roots:
             if resolved_node == source_root or source_root in resolved_node.parents:
                 raise GatePolicyError("Web gate Node executable is source-local")
+        toolchain_baseline = _node_toolchain_identity(resolved_node)
         environment = {
             **base_environment,
             "PATH": str(resolved_node.parent),
@@ -1615,6 +1732,8 @@ def _run_web_gate_evidence(
             command_cwd,
             spec.timeout_seconds,
         )
+        if _node_toolchain_identity(resolved_node) != toolchain_baseline:
+            raise GatePolicyError("controlled Node toolchain changed during Web gate")
         if completed.returncode != 0:
             return completed, {}
         receipt = _load_private_web_receipt(evidence_path)
@@ -1622,6 +1741,7 @@ def _run_web_gate_evidence(
             receipt,
             frontend_root=command_cwd,
             candidate=candidate,
+            expected_source=source_baseline,
         )
         if evidence_directory != evidence_path.parent:
             raise GatePolicyError("Web evidence output path changed")
@@ -1800,39 +1920,325 @@ def _system_run(argv: tuple[str, ...], cwd: Path, timeout_seconds: int) -> Proce
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
 
 
-def _system_resolve_node20(base_environment: Mapping[str, str]) -> Path:
-    candidate = shutil.which("node")
-    if not candidate:
-        raise GatePolicyError("controlled Node executable is unavailable")
+def _write_all(descriptor: int, content: bytes) -> None:
+    remaining = memoryview(content)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        if written <= 0:
+            raise GatePolicyError("controlled Node file write was incomplete")
+        remaining = remaining[written:]
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        del req, fp, code, msg, headers, newurl
+        raise GatePolicyError("controlled Node archive redirect is forbidden")
+
+
+def _selected_node_archive() -> NodeArchiveSpec:
+    system = platform.system().lower()
+    raw_machine = platform.machine().lower()
+    machine_aliases = {
+        "aarch64": "arm64",
+        "arm64": "arm64",
+        "amd64": "x64",
+        "x86_64": "x64",
+    }
+    machine = machine_aliases.get(raw_machine)
+    if machine is None:
+        raise GatePolicyError("controlled Node platform is unsupported")
     try:
-        resolved = Path(candidate).expanduser().resolve(strict=True)
-        metadata = resolved.stat()
-    except OSError as exc:
-        raise GatePolicyError("controlled Node executable is unavailable") from exc
+        return _NODE_ARCHIVES[(system, machine)]
+    except KeyError as exc:
+        raise GatePolicyError("controlled Node platform is unsupported") from exc
+
+
+def _download_node_archive(spec: NodeArchiveSpec, destination: Path) -> None:
     if (
-        not resolved.is_absolute()
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_mode & 0o111 == 0
+        not spec.url.startswith("https://nodejs.org/dist/v20.20.2/")
+        or not spec.url.endswith(".tar.gz")
+        or SHA256_RE.fullmatch(spec.sha256) is None
     ):
-        raise GatePolicyError("controlled Node executable is invalid")
-    environment = {**base_environment, "PATH": str(resolved.parent)}
+        raise GatePolicyError("controlled Node archive registration is invalid")
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _NoRedirectHandler(),
+    )
+    request = urllib.request.Request(
+        spec.url,
+        headers={
+            "Accept-Encoding": "identity",
+            "User-Agent": "stoa-release-gate/1",
+        },
+        method="GET",
+    )
+    descriptor = -1
     try:
-        probe = subprocess.run(
-            [str(resolved), "--version"],
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+        with opener.open(request, timeout=120) as response:
+            if response.status != 200:
+                raise GatePolicyError("controlled Node archive response is invalid")
+            if response.geturl() != spec.url:
+                raise GatePolicyError("controlled Node archive redirect is forbidden")
+            if response.headers.get("Content-Encoding") not in {None, "identity"}:
+                raise GatePolicyError("controlled Node archive encoding is invalid")
+            raw_length = response.headers.get("Content-Length")
+            try:
+                expected_length = int(raw_length)
+            except (TypeError, ValueError) as exc:
+                raise GatePolicyError("controlled Node archive size is invalid") from exc
+            if not 1 <= expected_length <= NODE_ARCHIVE_MAX_BYTES:
+                raise GatePolicyError("controlled Node archive size is invalid")
+            digest = sha256()
+            received = 0
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                received += len(chunk)
+                if received > expected_length or received > NODE_ARCHIVE_MAX_BYTES:
+                    raise GatePolicyError("controlled Node archive size is invalid")
+                _write_all(descriptor, chunk)
+                digest.update(chunk)
+            if received != expected_length:
+                raise GatePolicyError("controlled Node archive size is invalid")
+            if digest.hexdigest() != spec.sha256:
+                raise GatePolicyError("controlled Node archive digest mismatch")
+        os.fsync(descriptor)
+    except GatePolicyError:
+        raise
+    except (OSError, urllib.error.URLError) as exc:
+        raise GatePolicyError("controlled Node archive download failed") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if sys.exc_info()[0] is not None:
+            destination.unlink(missing_ok=True)
+
+
+def _safe_node_archive_path(name: str) -> PurePosixPath:
+    path = PurePosixPath(name)
+    if (
+        path.is_absolute()
+        or not path.parts
+        or any(part in {"", ".", ".."} for part in path.parts)
+        or "\\" in name
+        or "\x00" in name
+    ):
+        raise GatePolicyError("controlled Node archive member path is unsafe")
+    return path
+
+
+def _extract_controlled_node_archive(
+    spec: NodeArchiveSpec,
+    archive_bytes: bytes,
+    destination: Path,
+) -> None:
+    if destination.exists() or destination.is_symlink():
+        raise GatePolicyError("controlled Node toolchain destination is not empty")
+    destination.mkdir(mode=0o700)
+    node_member = f"{spec.archive_root}/bin/node"
+    npm_prefix = f"{spec.archive_root}/lib/node_modules/npm"
+    required_files = {
+        node_member,
+        f"{npm_prefix}/package.json",
+        f"{npm_prefix}/bin/npm-cli.js",
+    }
+    seen: set[str] = set()
+    extracted_files: set[str] = set()
+    extracted_bytes = 0
+    member_count = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as archive:
+            for member in archive:
+                member_count += 1
+                if member_count > NODE_ARCHIVE_MAX_MEMBERS:
+                    raise GatePolicyError("controlled Node archive has too many members")
+                member_path = _safe_node_archive_path(member.name)
+                normalized = member_path.as_posix()
+                selected = normalized == node_member or normalized == npm_prefix or (
+                    normalized.startswith(f"{npm_prefix}/")
+                )
+                if not selected:
+                    continue
+                if normalized in seen:
+                    raise GatePolicyError("controlled Node archive member is duplicated")
+                seen.add(normalized)
+                if normalized == node_member:
+                    relative = PurePosixPath("bin/node")
+                else:
+                    relative = PurePosixPath(*member_path.parts[1:])
+                target = destination.joinpath(*relative.parts)
+                if member.isdir():
+                    target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    target.chmod(0o700)
+                    continue
+                if not member.isfile():
+                    raise GatePolicyError("controlled Node archive member type is unsafe")
+                if not 0 <= member.size <= NODE_ARCHIVE_MAX_MEMBER_BYTES:
+                    raise GatePolicyError("controlled Node archive member size is invalid")
+                extracted_bytes += member.size
+                if extracted_bytes > NODE_ARCHIVE_MAX_EXTRACTED_BYTES:
+                    raise GatePolicyError("controlled Node archive extraction is oversized")
+                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                source = archive.extractfile(member)
+                if source is None:
+                    raise GatePolicyError("controlled Node archive member is unavailable")
+                descriptor = -1
+                written = 0
+                try:
+                    descriptor = os.open(
+                        target,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                        0o600,
+                    )
+                    while True:
+                        chunk = source.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > member.size:
+                            raise GatePolicyError(
+                                "controlled Node archive member size is invalid"
+                            )
+                        _write_all(descriptor, chunk)
+                    if written != member.size:
+                        raise GatePolicyError(
+                            "controlled Node archive member size is invalid"
+                        )
+                    os.fsync(descriptor)
+                    os.fchmod(descriptor, 0o700 if member.mode & 0o111 else 0o600)
+                finally:
+                    source.close()
+                    if descriptor >= 0:
+                        os.close(descriptor)
+                extracted_files.add(normalized)
+    except GatePolicyError:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    except (OSError, tarfile.TarError) as exc:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise GatePolicyError("controlled Node archive extraction failed") from exc
+    if not required_files <= extracted_files:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise GatePolicyError("controlled Node archive is incomplete")
+
+
+def _node_toolchain_identity(node: Path) -> dict[str, Any]:
+    resolved = node.resolve(strict=True)
+    prefix = resolved.parent.parent
+    if resolved != prefix / "bin" / "node":
+        raise GatePolicyError("controlled Node executable layout is invalid")
+    npm_root = prefix / "lib" / "node_modules" / "npm"
+    package_path = npm_root / "package.json"
+    npm_cli = npm_root / "bin" / "npm-cli.js"
+    package_bytes = _stable_regular_path_bytes(
+        package_path,
+        maximum_bytes=1024 * 1024,
+        label="controlled npm package",
+    )
+    try:
+        package = json.loads(
+            package_bytes.decode("utf-8", errors="strict"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except GatePolicyError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise GatePolicyError("controlled npm package is malformed") from exc
+    if (
+        not isinstance(package, dict)
+        or package.get("name") != "npm"
+        or package.get("version") != NPM_RUNTIME_VERSION
+    ):
+        raise GatePolicyError("controlled npm runtime identity is invalid")
+    return {
+        "node": _web_root_file_identity(
+            resolved.parent,
+            resolved.name,
+            maximum_bytes=NODE_ARCHIVE_MAX_MEMBER_BYTES,
+            label="controlled Node executable",
+        ),
+        "npm": _web_tree_identity(npm_root),
+        "npmPackage": {
+            "bytes": len(package_bytes),
+            "sha256": sha256(package_bytes).hexdigest(),
+        },
+        "npmCli": _web_root_file_identity(
+            npm_cli.parent,
+            npm_cli.name,
+            label="controlled npm CLI",
+        ),
+    }
+
+
+def _system_resolve_node20(
+    base_environment: Mapping[str, str],
+    destination: Path,
+) -> Path:
+    spec = _selected_node_archive()
+    archive_path = destination.parent / f".{spec.archive_root}.tar.gz"
+    _download_node_archive(spec, archive_path)
+    try:
+        archive_bytes = _stable_regular_path_bytes(
+            archive_path,
+            maximum_bytes=NODE_ARCHIVE_MAX_BYTES,
+            label="controlled Node archive",
+        )
+        if sha256(archive_bytes).hexdigest() != spec.sha256:
+            raise GatePolicyError("controlled Node archive digest mismatch")
+        _extract_controlled_node_archive(spec, archive_bytes, destination)
+    finally:
+        archive_path.unlink(missing_ok=True)
+    node = (destination / "bin" / "node").resolve(strict=True)
+    initial_identity = _node_toolchain_identity(node)
+    npm_cli = destination / "lib" / "node_modules" / "npm" / "bin" / "npm-cli.js"
+    environment = {**base_environment, "PATH": str(node.parent)}
+    try:
+        node_probe = subprocess.run(
+            [str(node), "--version"],
             check=False,
             capture_output=True,
             env=environment,
             timeout=10,
         )
+        npm_probe = subprocess.run(
+            [str(node), str(npm_cli), "--version"],
+            check=False,
+            capture_output=True,
+            env=environment,
+            timeout=30,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         raise GatePolicyError("controlled Node runtime probe failed") from exc
     try:
-        version = probe.stdout.decode("ascii", errors="strict").strip()
+        node_version = node_probe.stdout.decode("ascii", errors="strict").strip()
+        npm_version = npm_probe.stdout.decode("ascii", errors="strict").strip()
     except UnicodeError as exc:
         raise GatePolicyError("controlled Node runtime identity is invalid") from exc
-    if probe.returncode != 0 or re.fullmatch(r"v20\.[0-9]+\.[0-9]+", version) is None:
-        raise GatePolicyError("controlled Node runtime must be Node 20")
-    return resolved
+    if (
+        node_probe.returncode != 0
+        or node_version != f"v{NODE_RUNTIME_VERSION}"
+        or npm_probe.returncode != 0
+        or npm_version != NPM_RUNTIME_VERSION
+    ):
+        raise GatePolicyError("controlled Node/npm runtime identity is invalid")
+    if _node_toolchain_identity(node) != initial_identity:
+        raise GatePolicyError("controlled Node toolchain changed during probe")
+    return node
 
 
 def _system_web_run(

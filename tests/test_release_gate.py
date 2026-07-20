@@ -1730,6 +1730,26 @@ def _web_test_operations(
     moments = iter(["2026-07-20T00:00:00Z", "2026-07-20T00:00:01Z"])
     observed: dict[str, Any] = {}
 
+    def resolve_node20(environment: dict[str, str], destination: Path) -> Path:
+        del environment
+        (destination / "bin").mkdir(parents=True)
+        npm_root = destination / "lib" / "node_modules" / "npm"
+        (npm_root / "bin").mkdir(parents=True)
+        node = destination / "bin" / "node"
+        node.write_text("#!/bin/sh\nprintf 'v20.20.2\\n'\n", encoding="utf-8")
+        node.chmod(0o700)
+        (npm_root / "package.json").write_text(
+            '{"name":"npm","version":"10.8.2"}\n',
+            encoding="utf-8",
+        )
+        (npm_root / "bin" / "npm-cli.js").write_text(
+            "// npm cli fixture\n",
+            encoding="utf-8",
+        )
+        (npm_root / "bin" / "npm-cli.js").chmod(0o700)
+        observed["node"] = node
+        return node
+
     def run_web_process(
         argv: tuple[str, ...],
         environment: dict[str, str],
@@ -1746,7 +1766,7 @@ def _web_test_operations(
             }
         )
         assert cwd == workspace.require("frontend")
-        assert argv[0] == str(Path(sys.executable).resolve())
+        assert argv[0] == str(observed["node"])
         assert argv[1:4] == ("scripts/verify-release.mjs", "verify", "--output")
         assert Path(argv[-1]).is_absolute()
         assert cwd not in Path(argv[-1]).parents
@@ -1863,7 +1883,7 @@ def _web_test_operations(
         now_utc=lambda: next(moments),
         python_version=lambda: "3.12.13",
         platform_identity=lambda: "linux-arm64",
-        resolve_node20=lambda environment: Path(sys.executable).resolve(),
+        resolve_node20=resolve_node20,
         run_web_process=run_web_process,
     )
     return operations, observed
@@ -1958,7 +1978,7 @@ def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
         "TMPDIR",
         "TZ",
     }
-    assert observed["environment"]["PATH"] == str(Path(sys.executable).resolve().parent)
+    assert observed["environment"]["PATH"] == str(observed["node"].parent)
     assert set(observed["environment"]).isdisjoint(hostile)
     assert not observed["output_parent"].exists()
     encoded = json.dumps(receipt, sort_keys=True)
@@ -2146,7 +2166,10 @@ def _controlled_node_archive_bytes(
     with tarfile.open(fileobj=output, mode="w:gz") as archive:
         files = {
             f"{archive_root}/bin/node": (
-                b"#!/bin/sh\nprintf 'v20.20.2\\n'\n",
+                (
+                    b"#!/bin/sh\ncase \"$1\" in *npm-cli.js) "
+                    b"printf '10.8.2\\n' ;; *) printf 'v20.20.2\\n' ;; esac\n"
+                ),
                 0o755,
             ),
             f"{archive_root}/lib/node_modules/npm/package.json": (
