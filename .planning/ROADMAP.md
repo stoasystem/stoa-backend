@@ -343,7 +343,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Audit findings:** TEST-001, OPS-001, OPS-002, SEC-007, QUALITY-001.
 
-**Plans:** 22/86 plans executed
+**Plans:** 23/86 plans executed
 
 Plans:
 
@@ -445,7 +445,7 @@ Plans:
 **Wave 11**
 
 - [ ] `474-85` — Portable logical repository roots for the canonical gate.
-- [ ] `474-86` — Exact live candidate issuance and stale-source rejection.
+- [x] `474-86` — Exact live candidate issuance and stale-source rejection.
 - [ ] `474-24` — Subordinate Web and OpenAPI verifier.
 
 **Wave 12**
