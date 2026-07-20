@@ -450,6 +450,7 @@ Plans:
 - [x] `474-87` — Exact fresh-install Web subordinate verifier.
 - [x] `474-88` — Candidate-bound fresh Web evidence registration.
 - [x] `474-89` — Non-selectable formal Python and Web aggregate.
+- [ ] `474-90` — Backend exact-ref formal verification caller.
 
 **Wave 12**
 
