@@ -500,13 +500,52 @@ def _is_safe_relative_path(value: str, *, allow_dot: bool = False) -> bool:
     return True
 
 
+def _matches_repository_contract(root: Path, repository: str) -> bool:
+    if root.is_symlink() or not root.is_dir():
+        return False
+    lock = root / _LOCK_PATHS[repository]
+    marker_path, expected_project = _REPOSITORY_MARKERS[repository]
+    marker = root / marker_path
+    if lock.is_symlink() or not lock.is_file() or marker.is_symlink() or not marker.is_file():
+        return False
+    try:
+        if marker_path == "package.json":
+            marker_value = json.loads(marker.read_text(encoding="utf-8")).get("name")
+        else:
+            marker_value = tomllib.loads(marker.read_text(encoding="utf-8")).get(
+                "project", {}
+            ).get("name")
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        tomllib.TOMLDecodeError,
+        AttributeError,
+    ):
+        return False
+    return marker_value == expected_project
+
+
+def _default_sibling_root(parent: Path, repository: str) -> Path:
+    matches = [
+        candidate
+        for directory in (f"stoa-{repository}", repository)
+        if _matches_repository_contract(candidate := parent / directory, repository)
+    ]
+    if len(matches) != 1:
+        raise GatePolicyError(
+            "default workspace repository root is missing or ambiguous"
+        )
+    return matches[0]
+
+
 def default_workspace_roots() -> WorkspaceRoots:
     parent = ROOT.parent
     return WorkspaceRoots.from_mapping(
         {
             "backend": ROOT,
-            "frontend": parent / "stoa-frontend",
-            "infra": parent / "stoa-infra",
+            "frontend": _default_sibling_root(parent, "frontend"),
+            "infra": _default_sibling_root(parent, "infra"),
         }
     )
 
