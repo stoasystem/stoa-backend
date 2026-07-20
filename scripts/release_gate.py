@@ -93,6 +93,17 @@ NODE_ARCHIVE_MAX_EXTRACTED_BYTES = 192 * 1024 * 1024
 WEB_GATE_MAX_RECEIPT_BYTES = 1024 * 1024
 WEB_GATE_MAX_TREE_FILE_BYTES = 64 * 1024 * 1024
 WEB_GATE_EXCLUDED_SOURCE_ROOTS = frozenset({".git", "dist", "node_modules"})
+WEB_CONTAINMENT_UNSHARE = Path("/usr/bin/unshare")
+WEB_CONTAINMENT_SHELL = Path("/usr/bin/dash")
+WEB_CONTAINMENT_PREFIX = (
+    "--user",
+    "--map-root-user",
+    "--pid",
+    "--fork",
+    "--mount-proc",
+    "--kill-child=SIGKILL",
+    "--",
+)
 WEB_GATE_STEPS = (
     (
         "frontend-locked-install",
@@ -257,6 +268,10 @@ class GatePolicyError(ValueError):
         self.result = result
 
 
+class GateContainmentUnavailable(GatePolicyError):
+    """The mandatory Web PID boundary cannot be proved before candidate code runs."""
+
+
 @dataclass(frozen=True)
 class ProcessResult:
     returncode: int
@@ -344,6 +359,7 @@ class GateOperations:
     run_web_process: (
         Callable[[tuple[str, ...], dict[str, str], Path, int], ProcessResult] | None
     ) = None
+    probe_web_containment: Callable[[], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -1693,6 +1709,16 @@ def _run_web_gate_evidence(
     command_cwd: Path,
     operations: GateOperations,
 ) -> tuple[ProcessResult, dict[str, Any]]:
+    if operations.probe_web_containment is None:
+        raise GateContainmentUnavailable("Web PID containment is unavailable")
+    try:
+        containment_available = operations.probe_web_containment()
+    except Exception as exc:
+        raise GateContainmentUnavailable(
+            "Web PID containment is unavailable"
+        ) from exc
+    if containment_available is not True:
+        raise GateContainmentUnavailable("Web PID containment is unavailable")
     if operations.resolve_node20 is None or operations.run_web_process is None:
         raise GatePolicyError("Web gate launcher is unavailable")
     _require_fresh_web_generated_state(command_cwd)
@@ -2241,7 +2267,59 @@ def _system_resolve_node20(
     return node
 
 
-def _system_web_run(
+def _is_trusted_root_executable(path: Path) -> bool:
+    if not path.is_absolute():
+        return False
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return False
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and metadata.st_uid == 0
+        and metadata.st_mode & 0o022 == 0
+        and metadata.st_mode & 0o111 != 0
+    )
+
+
+def _web_containment_environment() -> dict[str, str]:
+    return {
+        "HOME": "/nonexistent",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "TZ": "UTC",
+    }
+
+
+def _system_web_containment_available() -> bool:
+    if platform.system() != "Linux":
+        return False
+    if not _is_trusted_root_executable(WEB_CONTAINMENT_UNSHARE):
+        return False
+    if not _is_trusted_root_executable(WEB_CONTAINMENT_SHELL):
+        return False
+    probe_argv = (
+        str(WEB_CONTAINMENT_UNSHARE),
+        *WEB_CONTAINMENT_PREFIX,
+        str(WEB_CONTAINMENT_SHELL),
+        "-c",
+        'test "$$" -eq 1',
+    )
+    try:
+        completed = subprocess.run(
+            list(probe_argv),
+            check=False,
+            capture_output=True,
+            env=_web_containment_environment(),
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def _run_web_process_group(
     argv: tuple[str, ...],
     environment: dict[str, str],
     cwd: Path,
@@ -2271,6 +2349,27 @@ def _system_web_run(
         pass
     _confirm_web_process_group_stopped(process.pid)
     return ProcessResult(process.returncode, stdout, stderr)
+
+
+def _system_web_run(
+    argv: tuple[str, ...],
+    environment: dict[str, str],
+    cwd: Path,
+    timeout_seconds: int,
+) -> ProcessResult:
+    if not _system_web_containment_available():
+        raise GateContainmentUnavailable("Web PID containment is unavailable")
+    contained_argv = (
+        str(WEB_CONTAINMENT_UNSHARE),
+        *WEB_CONTAINMENT_PREFIX,
+        *argv,
+    )
+    return _run_web_process_group(
+        contained_argv,
+        environment,
+        cwd,
+        timeout_seconds,
+    )
 
 
 def _confirm_web_process_group_stopped(process_group: int) -> None:
@@ -2573,6 +2672,7 @@ def system_operations() -> GateOperations:
         materialize_checkout=_system_materialize_checkout,
         resolve_node20=_system_resolve_node20,
         run_web_process=_system_web_run,
+        probe_web_containment=_system_web_containment_available,
     )
 
 
@@ -2589,6 +2689,8 @@ def _run_registered_gate_on_snapshot(
     validate_candidate(candidate)
     if command_name not in {"verify", "self-test"}:
         raise GatePolicyError("unknown command name")
+    if command_name == "self-test" and gate_id != "gate-self-test":
+        raise GatePolicyError("command name is not registered for gate")
     spec = registry.require(gate_id)
     resolved_workspace = workspace or default_workspace_roots()
     resolved_source_workspace = source_workspace or resolved_workspace
@@ -2634,6 +2736,14 @@ def _run_registered_gate_on_snapshot(
                     command_cwd=command_cwd,
                     operations=operations,
                 )
+            except GateContainmentUnavailable:
+                result = {
+                    "status": "NOT RUN",
+                    "classification": "NOT_RUN_OBLIGATION",
+                    "exit_code": POLICY_EXIT,
+                    "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
+                    "outcomes": _counts(),
+                }
             except GatePolicyError:
                 result = {
                     "status": "FAIL",
@@ -2862,8 +2972,11 @@ def validate_receipt(
         "argv",
     }:
         raise GatePolicyError("receipt command is malformed")
+    allowed_command_names = (
+        {"verify", "self-test"} if spec.gate_id == "gate-self-test" else {"verify"}
+    )
     if (
-        command["name"] not in {"verify", "self-test"}
+        command["name"] not in allowed_command_names
         or command["repository"] != spec.repository
         or command["cwd"] != spec.cwd
         or command["argv"] != list(spec.argv)
@@ -2902,11 +3015,28 @@ def validate_receipt(
     gate_evidence = receipt.get("gate_evidence")
     if spec.evidence_kind == "python-matrix":
         if gate_evidence is None:
-            if not (
-                result["classification"] in {"POLICY_REJECTION", "EXECUTION_FAILURE"}
-                and result["reason_code"]
-                in {"GATE_EVIDENCE_INVALID", "GATE_EXECUTION_ERROR"}
-            ):
+            expected_outcomes = {
+                (
+                    "FAIL",
+                    "POLICY_REJECTION",
+                    POLICY_EXIT,
+                    "GATE_EVIDENCE_INVALID",
+                ): _counts(failed=1),
+                (
+                    "FAIL",
+                    "EXECUTION_FAILURE",
+                    EXECUTION_EXIT,
+                    "GATE_EXECUTION_ERROR",
+                ): _counts(errors=1),
+            }.get(
+                (
+                    result["status"],
+                    result["classification"],
+                    result["exit_code"],
+                    result["reason_code"],
+                )
+            )
+            if expected_outcomes is None or result["outcomes"] != expected_outcomes:
                 raise GatePolicyError("hermetic receipt lacks matrix evidence")
         else:
             if not isinstance(gate_evidence, dict):
@@ -2915,28 +3045,75 @@ def validate_receipt(
                 gate_evidence,
                 root=resolved_workspace.require(spec.repository),
             )
-            expected_shape = {
-                "PASS": ("COMPLETE_PASS", None),
-                "NOT RUN": ("NOT_RUN_OBLIGATION", "EXTERNAL_CHECK_UNAVAILABLE"),
-                "REJECTED": ("POLICY_REJECTION", "COLLECTION_IDENTITY_DRIFT"),
-            }[gate_evidence["status"]]
-            if (result["classification"], result["reason_code"]) != expected_shape:
-                raise GatePolicyError("hermetic receipt result and matrix disagree")
+            expected_shape: tuple[str, str, int, str | None, dict[str, int]]
             if gate_evidence["status"] == "PASS":
-                passed = gate_evidence["runs"][0]["counts"]["passed"]
-                if result["outcomes"] != _counts(passed=passed):
-                    raise GatePolicyError("hermetic receipt outcomes mismatch")
+                expected_shape = (
+                    "PASS",
+                    "COMPLETE_PASS",
+                    0,
+                    None,
+                    _counts(passed=gate_evidence["runs"][0]["counts"]["passed"]),
+                )
+            elif gate_evidence["status"] == "NOT RUN":
+                expected_shape = (
+                    "NOT RUN",
+                    "NOT_RUN_OBLIGATION",
+                    POLICY_EXIT,
+                    "EXTERNAL_CHECK_UNAVAILABLE",
+                    _counts(),
+                )
+            else:
+                expected_shape = (
+                    "FAIL",
+                    "POLICY_REJECTION",
+                    POLICY_EXIT,
+                    "COLLECTION_IDENTITY_DRIFT",
+                    _counts(failed=1),
+                )
+            if (
+                result["status"],
+                result["classification"],
+                result["exit_code"],
+                result["reason_code"],
+                result["outcomes"],
+            ) != expected_shape:
+                raise GatePolicyError("hermetic receipt result and matrix disagree")
     elif spec.evidence_kind == "web-gate-run":
         if gate_evidence is None:
-            if not (
-                result["classification"] in {"POLICY_REJECTION", "EXECUTION_FAILURE"}
-                and result["reason_code"]
-                in {
+            expected_outcomes = {
+                (
+                    "FAIL",
+                    "POLICY_REJECTION",
+                    POLICY_EXIT,
                     "GATE_COMMAND_FAILED",
+                ): _counts(failed=1),
+                (
+                    "FAIL",
+                    "POLICY_REJECTION",
+                    POLICY_EXIT,
                     "GATE_EVIDENCE_INVALID",
+                ): _counts(failed=1),
+                (
+                    "FAIL",
+                    "EXECUTION_FAILURE",
+                    EXECUTION_EXIT,
                     "GATE_EXECUTION_ERROR",
-                }
-            ):
+                ): _counts(errors=1),
+                (
+                    "NOT RUN",
+                    "NOT_RUN_OBLIGATION",
+                    POLICY_EXIT,
+                    "EXTERNAL_CHECK_UNAVAILABLE",
+                ): _counts(),
+            }.get(
+                (
+                    result["status"],
+                    result["classification"],
+                    result["exit_code"],
+                    result["reason_code"],
+                )
+            )
+            if expected_outcomes is None or result["outcomes"] != expected_outcomes:
                 raise GatePolicyError("Web receipt lacks gate evidence")
         else:
             if not isinstance(gate_evidence, dict):
@@ -2952,8 +3129,33 @@ def validate_receipt(
                 or result["outcomes"] != _counts(passed=len(WEB_GATE_STEPS))
             ):
                 raise GatePolicyError("Web receipt result and evidence disagree")
-    elif gate_evidence is not None:
-        raise GatePolicyError("gate receipt has unexpected evidence")
+    else:
+        if gate_evidence is not None:
+            raise GatePolicyError("gate receipt has unexpected evidence")
+        expected_outcomes = {
+            ("PASS", "COMPLETE_PASS", 0, None): _counts(passed=1),
+            (
+                "FAIL",
+                "POLICY_REJECTION",
+                POLICY_EXIT,
+                "GATE_COMMAND_FAILED",
+            ): _counts(failed=1),
+            (
+                "FAIL",
+                "EXECUTION_FAILURE",
+                EXECUTION_EXIT,
+                "GATE_EXECUTION_ERROR",
+            ): _counts(errors=1),
+        }.get(
+            (
+                result["status"],
+                result["classification"],
+                result["exit_code"],
+                result["reason_code"],
+            )
+        )
+        if expected_outcomes is None or result["outcomes"] != expected_outcomes:
+            raise GatePolicyError("gate receipt result is not registered")
     expected_privacy = {
         "passed": True,
         "scanned_field_count": len(_RECEIPT_KEYS),

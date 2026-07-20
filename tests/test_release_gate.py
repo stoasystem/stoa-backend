@@ -46,8 +46,24 @@ def _resolve(schema: dict[str, Any], root: dict[str, Any]) -> dict[str, Any]:
 def _matches(value: Any, schema: dict[str, Any], root: dict[str, Any]) -> bool:
     """Evaluate the deliberately small JSON-Schema vocabulary used by the receipt."""
     schema = _resolve(schema, root)
-    if "oneOf" in schema:
-        return sum(_matches(value, branch, root) for branch in schema["oneOf"]) == 1
+    if "allOf" in schema and not all(
+        _matches(value, branch, root) for branch in schema["allOf"]
+    ):
+        return False
+    if "anyOf" in schema and not any(
+        _matches(value, branch, root) for branch in schema["anyOf"]
+    ):
+        return False
+    if "oneOf" in schema and sum(
+        _matches(value, branch, root) for branch in schema["oneOf"]
+    ) != 1:
+        return False
+    if "not" in schema and _matches(value, schema["not"], root):
+        return False
+    if "if" in schema:
+        branch = schema.get("then") if _matches(value, schema["if"], root) else schema.get("else")
+        if branch is not None and not _matches(value, branch, root):
+            return False
     if "const" in schema and value != schema["const"]:
         return False
     if "enum" in schema and value not in schema["enum"]:
@@ -137,7 +153,7 @@ def _receipt() -> dict[str, Any]:
             "name": "self-test",
             "repository": "backend",
             "cwd": ".",
-            "argv": ["{python}", "scripts/release_gate.py", "self-test"],
+            "argv": ["{python}", "-c", "raise SystemExit(0)"],
         },
         "runtime": {
             "python": "3.12.11",
@@ -269,6 +285,7 @@ def test_schema_rejects_missing_unknown_or_tampered_fields(label: str, mutate: A
 def test_not_run_is_a_zero_count_obligation_and_never_pass_shaped() -> None:
     schema = _load_schema()
     receipt = _receipt()
+    receipt["gate_id"] = "production-approval"
     receipt["result"] = {
         "status": "NOT RUN",
         "classification": "NOT_RUN_OBLIGATION",
@@ -287,6 +304,7 @@ def test_not_run_is_a_zero_count_obligation_and_never_pass_shaped() -> None:
 def test_policy_and_execution_failures_have_separate_exit_classes() -> None:
     schema = _load_schema()
     receipt = _receipt()
+    receipt["gate_id"] = "candidate-source"
     receipt["result"] = {
         "status": "FAIL",
         "classification": "POLICY_REJECTION",
@@ -478,6 +496,8 @@ def test_hermetic_exit_two_requires_and_preserves_strict_matrix_evidence(status:
     assert receipt["result"]["classification"] == expected_classification
     assert receipt["gate_evidence"] == matrix
     gate.validate_receipt(receipt, candidate=candidate, registry=gate.default_registry())
+    schema = _load_schema()
+    assert _matches(receipt, schema, schema)
 
 
 @pytest.mark.parametrize("stdout", [b"garbage", b"{}", b'{"status":"REJECTED"}'])
@@ -498,6 +518,8 @@ def test_hermetic_exit_two_does_not_accept_garbage_as_not_run_or_rejected(
     assert receipt["result"]["reason_code"] == "GATE_EVIDENCE_INVALID"
     assert receipt["gate_evidence"] is None
     gate.validate_receipt(receipt, candidate=candidate, registry=gate.default_registry())
+    schema = _load_schema()
+    assert _matches(receipt, schema, schema)
 
 
 @pytest.mark.parametrize(
@@ -1885,6 +1907,7 @@ def _web_test_operations(
         platform_identity=lambda: "linux-arm64",
         resolve_node20=resolve_node20,
         run_web_process=run_web_process,
+        probe_web_containment=lambda: True,
     )
     return operations, observed
 
@@ -1928,6 +1951,15 @@ def test_web_gate_registration_and_evidence_tokens_are_closed() -> None:
             artifact_paths=("package-lock.json",),
             config_paths=("package.json",),
             evidence_kind="playwright",
+        )
+
+    with pytest.raises(gate.GatePolicyError, match="command name"):
+        gate._run_registered_gate_on_snapshot(
+            gate_id="frontend-web-fresh",
+            command_name="self-test",
+            candidate=gate.load_candidate(CANDIDATE_PATH),
+            registry=gate.default_registry(),
+            operations=_operations(gate),
         )
 
 
@@ -1992,6 +2024,31 @@ def test_web_gate_valid_receipt_is_candidate_bound_private_and_schema_closed(
     )
     schema = _load_schema()
     assert _matches(receipt, schema, schema)
+
+
+def test_audit_validator_rejects_self_test_name_on_web_gate_with_new_digest(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, _ = _web_test_operations(gate, workspace)
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+    receipt["command"]["name"] = "self-test"
+    receipt["receipt_sha256"] = gate.canonical_receipt_sha256(receipt)
+    with pytest.raises(gate.GatePolicyError, match="command graph"):
+        gate.validate_receipt(
+            receipt,
+            candidate=candidate,
+            registry=gate.default_registry(),
+            workspace=workspace,
+        )
 
 
 @pytest.mark.parametrize(
@@ -2129,6 +2186,15 @@ def test_audit_schema_rejects_web_evidence_for_another_gate(tmp_path: Path) -> N
     assert not _matches(receipt, schema, schema)
 
 
+def test_audit_schema_rejects_python_evidence_for_another_gate() -> None:
+    gate = _load_gate()
+    schema = _load_schema()
+    receipt = _receipt()
+    receipt["gate_id"] = "backend-python-standard"
+    receipt["gate_evidence"] = _python_matrix(gate)
+    assert not _matches(receipt, schema, schema)
+
+
 def test_audit_schema_binds_each_implemented_gate_to_its_exact_command_and_evidence(
     tmp_path: Path,
 ) -> None:
@@ -2211,7 +2277,7 @@ def test_system_web_launcher_kills_normal_return_orphan_process_group(
         system_killpg(process_group, signal_number)
 
     monkeypatch.setattr(gate.os, "killpg", confirmed_killpg)
-    result = gate._system_web_run(
+    result = gate._run_web_process_group(
         (sys.executable, "-c", parent, child, str(marker)),
         {"PATH": str(Path(sys.executable).resolve().parent)},
         tmp_path,
@@ -2250,7 +2316,7 @@ def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> N
         "time.sleep(30)"
     )
     with pytest.raises(subprocess.TimeoutExpired):
-        gate._system_web_run(
+        gate._run_web_process_group(
             (sys.executable, "-c", parent, child, str(marker)),
             {"PATH": str(Path(sys.executable).resolve().parent)},
             tmp_path,
@@ -2258,6 +2324,89 @@ def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> N
         )
     time.sleep(0.5)
     assert not marker.exists()
+
+
+def test_audit_system_web_containment_probe_is_fixed_and_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    observed: dict[str, Any] = {}
+    monkeypatch.setattr(gate.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(gate, "_is_trusted_root_executable", lambda path: True)
+
+    def run(argv: list[str], **kwargs: Any) -> Any:
+        observed["argv"] = argv
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+    monkeypatch.setattr(gate.subprocess, "run", run)
+    assert gate._system_web_containment_available() is True
+    assert observed == {
+        "argv": [
+            "/usr/bin/unshare",
+            "--user",
+            "--map-root-user",
+            "--pid",
+            "--fork",
+            "--mount-proc",
+            "--kill-child=SIGKILL",
+            "--",
+            "/usr/bin/dash",
+            "-c",
+            'test "$$" -eq 1',
+        ],
+        "check": False,
+        "capture_output": True,
+        "env": {
+            "HOME": "/nonexistent",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "TZ": "UTC",
+        },
+        "timeout": 15,
+    }
+
+
+def test_audit_system_web_runner_wraps_only_the_actual_argv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    observed: dict[str, Any] = {}
+    logical_argv = (
+        "/private/node/bin/node",
+        "scripts/verify-release.mjs",
+        "verify",
+        "--output",
+        "/private/evidence/receipt.json",
+    )
+    environment = {"PATH": "/private/node/bin"}
+    monkeypatch.setattr(gate, "_system_web_containment_available", lambda: True)
+
+    def run_group(
+        argv: tuple[str, ...],
+        supplied_environment: dict[str, str],
+        cwd: Path,
+        timeout_seconds: int,
+    ) -> Any:
+        observed.update(
+            argv=argv,
+            environment=supplied_environment,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+        )
+        return gate.ProcessResult(0, b"ok", b"")
+
+    monkeypatch.setattr(gate, "_run_web_process_group", run_group)
+    result = gate._system_web_run(logical_argv, environment, tmp_path, 47)
+    assert result == gate.ProcessResult(0, b"ok", b"")
+    assert observed == {
+        "argv": ("/usr/bin/unshare", *gate.WEB_CONTAINMENT_PREFIX, *logical_argv),
+        "environment": environment,
+        "cwd": tmp_path,
+        "timeout_seconds": 47,
+    }
 
 
 def _run_or_refuse_containment(gate: Any, *args: Any) -> Any:
@@ -2356,7 +2505,7 @@ def test_audit_unavailable_containment_is_exact_not_run(
         "stderr_sha256": sha256(b"").hexdigest(),
     }
     assert receipt["gate_evidence"] is None
-    assert "argv" not in observed
+    assert observed == {}
     gate.validate_receipt(
         receipt,
         candidate=candidate,

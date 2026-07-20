@@ -66,6 +66,66 @@
     "ended_at": {"$ref": "#/$defs/utc"},
     "receipt_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": ["gate_id"],
+        "properties": {"gate_id": {"const": "gate-self-test"}}
+      },
+      "then": {"$ref": "#/$defs/gate_self_test_contract"}
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["gate_id"],
+        "properties": {"gate_id": {"const": "backend-python-hermetic"}}
+      },
+      "then": {"$ref": "#/$defs/backend_python_hermetic_contract"}
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["gate_id"],
+        "properties": {"gate_id": {"const": "frontend-web-fresh"}}
+      },
+      "then": {"$ref": "#/$defs/frontend_web_fresh_contract"}
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["gate_evidence"],
+        "properties": {
+          "gate_evidence": {
+            "type": "object",
+            "required": ["schema"],
+            "properties": {"schema": {"const": "stoa.phase474.python-matrix.v1"}}
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {"gate_id": {"const": "backend-python-hermetic"}}
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["gate_evidence"],
+        "properties": {
+          "gate_evidence": {
+            "type": "object",
+            "required": ["schema"],
+            "properties": {"schema": {"const": "stoa.web.gate-run.v1"}}
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {"gate_id": {"const": "frontend-web-fresh"}}
+      }
+    }
+  ],
   "$defs": {
     "sha256": {
       "type": "string",
@@ -714,6 +774,299 @@
         {"$ref": "#/$defs/policy_result"},
         {"$ref": "#/$defs/execution_result"},
         {"$ref": "#/$defs/not_run_result"}
+      ]
+    },
+    "gate_self_test_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "cwd", "argv"],
+      "properties": {
+        "name": {"enum": ["verify", "self-test"]},
+        "repository": {"const": "backend"},
+        "cwd": {"const": "."},
+        "argv": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"const": "{python}"},
+            {"const": "-c"},
+            {"const": "raise SystemExit(0)"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "backend_python_hermetic_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "cwd", "argv"],
+      "properties": {
+        "name": {"const": "verify"},
+        "repository": {"const": "backend"},
+        "cwd": {"const": "."},
+        "argv": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"const": "{python}"},
+            {"const": "scripts/release_gate.py"},
+            {"const": "python-hermetic"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "frontend_web_fresh_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "cwd", "argv"],
+      "properties": {
+        "name": {"const": "verify"},
+        "repository": {"const": "frontend"},
+        "cwd": {"const": "."},
+        "argv": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {"const": "{node}"},
+            {"const": "scripts/verify-release.mjs"},
+            {"const": "verify"},
+            {"const": "--output"},
+            {"const": "{evidence_output}"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "single_pass_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "errors", "skipped", "xfail", "xpass"],
+      "properties": {
+        "total": {"const": 1},
+        "passed": {"const": 1},
+        "failed": {"const": 0},
+        "errors": {"const": 0},
+        "skipped": {"const": 0},
+        "xfail": {"const": 0},
+        "xpass": {"const": 0}
+      }
+    },
+    "five_pass_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "errors", "skipped", "xfail", "xpass"],
+      "properties": {
+        "total": {"const": 5},
+        "passed": {"const": 5},
+        "failed": {"const": 0},
+        "errors": {"const": 0},
+        "skipped": {"const": 0},
+        "xfail": {"const": 0},
+        "xpass": {"const": 0}
+      }
+    },
+    "single_policy_failure_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "errors", "skipped", "xfail", "xpass"],
+      "properties": {
+        "total": {"const": 1},
+        "passed": {"const": 0},
+        "failed": {"const": 1},
+        "errors": {"const": 0},
+        "skipped": {"const": 0},
+        "xfail": {"const": 0},
+        "xpass": {"const": 0}
+      }
+    },
+    "single_execution_failure_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "errors", "skipped", "xfail", "xpass"],
+      "properties": {
+        "total": {"const": 1},
+        "passed": {"const": 0},
+        "failed": {"const": 0},
+        "errors": {"const": 1},
+        "skipped": {"const": 0},
+        "xfail": {"const": 0},
+        "xpass": {"const": 0}
+      }
+    },
+    "single_pass_result": {
+      "allOf": [
+        {"$ref": "#/$defs/pass_result"},
+        {"type": "object", "properties": {"outcomes": {"$ref": "#/$defs/single_pass_counts"}}}
+      ]
+    },
+    "five_pass_result": {
+      "allOf": [
+        {"$ref": "#/$defs/pass_result"},
+        {"type": "object", "properties": {"outcomes": {"$ref": "#/$defs/five_pass_counts"}}}
+      ]
+    },
+    "gate_command_failed_result": {
+      "allOf": [
+        {"$ref": "#/$defs/policy_result"},
+        {
+          "type": "object",
+          "properties": {
+            "reason_code": {"const": "GATE_COMMAND_FAILED"},
+            "outcomes": {"$ref": "#/$defs/single_policy_failure_counts"}
+          }
+        }
+      ]
+    },
+    "gate_evidence_invalid_result": {
+      "allOf": [
+        {"$ref": "#/$defs/policy_result"},
+        {
+          "type": "object",
+          "properties": {
+            "reason_code": {"const": "GATE_EVIDENCE_INVALID"},
+            "outcomes": {"$ref": "#/$defs/single_policy_failure_counts"}
+          }
+        }
+      ]
+    },
+    "collection_identity_drift_result": {
+      "allOf": [
+        {"$ref": "#/$defs/policy_result"},
+        {
+          "type": "object",
+          "properties": {
+            "reason_code": {"const": "COLLECTION_IDENTITY_DRIFT"},
+            "outcomes": {"$ref": "#/$defs/single_policy_failure_counts"}
+          }
+        }
+      ]
+    },
+    "gate_execution_error_result": {
+      "allOf": [
+        {"$ref": "#/$defs/execution_result"},
+        {
+          "type": "object",
+          "properties": {
+            "reason_code": {"const": "GATE_EXECUTION_ERROR"},
+            "outcomes": {"$ref": "#/$defs/single_execution_failure_counts"}
+          }
+        }
+      ]
+    },
+    "external_check_unavailable_result": {
+      "allOf": [
+        {"$ref": "#/$defs/not_run_result"},
+        {
+          "type": "object",
+          "properties": {"reason_code": {"const": "EXTERNAL_CHECK_UNAVAILABLE"}}
+        }
+      ]
+    },
+    "gate_self_test_contract": {
+      "type": "object",
+      "required": ["command", "result", "gate_evidence"],
+      "properties": {
+        "command": {"$ref": "#/$defs/gate_self_test_command"},
+        "result": {
+          "oneOf": [
+            {"$ref": "#/$defs/single_pass_result"},
+            {"$ref": "#/$defs/gate_command_failed_result"},
+            {"$ref": "#/$defs/gate_execution_error_result"}
+          ]
+        },
+        "gate_evidence": {"type": "null"}
+      }
+    },
+    "backend_python_hermetic_contract": {
+      "type": "object",
+      "required": ["command", "result", "gate_evidence"],
+      "properties": {
+        "command": {"$ref": "#/$defs/backend_python_hermetic_command"}
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/pass_result"},
+            "gate_evidence": {"$ref": "#/$defs/python_matrix_pass"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/external_check_unavailable_result"},
+            "gate_evidence": {"$ref": "#/$defs/python_matrix_not_run"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/collection_identity_drift_result"},
+            "gate_evidence": {"$ref": "#/$defs/python_matrix_rejected"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/gate_evidence_invalid_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/gate_execution_error_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        }
+      ]
+    },
+    "frontend_web_fresh_contract": {
+      "type": "object",
+      "required": ["command", "result", "gate_evidence"],
+      "properties": {
+        "command": {"$ref": "#/$defs/frontend_web_fresh_command"}
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/five_pass_result"},
+            "gate_evidence": {"$ref": "#/$defs/web_gate_run_evidence"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/gate_command_failed_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/gate_evidence_invalid_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/gate_execution_error_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "result": {"$ref": "#/$defs/external_check_unavailable_result"},
+            "gate_evidence": {"type": "null"}
+          }
+        }
       ]
     },
     "privacy": {
