@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.invalid/schemas/release/formal-gate-run-v1.schema.json",
+  "title": "STOA fixed formal release gate receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "command",
+    "runtime",
+    "inputs",
+    "children",
+    "result",
+    "production",
+    "privacy",
+    "started_at",
+    "ended_at",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "stoa.release.formal-gate-run.v1"},
+    "source": {
+      "$ref": "https://stoa.invalid/schemas/release/gate-receipt-v1.schema.json#/$defs/source"
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "cwd", "argv", "gate_ids"],
+      "properties": {
+        "name": {"const": "formal"},
+        "repository": {"const": "backend"},
+        "cwd": {"const": "."},
+        "argv": {
+          "const": [
+            "{python}",
+            "scripts/release_gate.py",
+            "formal",
+            "--candidate",
+            "{candidate}",
+            "--backend-root",
+            "{backend_root}",
+            "--frontend-root",
+            "{frontend_root}",
+            "--infra-root",
+            "{infra_root}",
+            "--output",
+            "{output}"
+          ]
+        },
+        "gate_ids": {
+          "const": ["backend-python-hermetic", "frontend-web-fresh"]
+        }
+      }
+    },
+    "runtime": {"$ref": "#/$defs/runtime"},
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orchestrator", "formal_schema", "child_schema"],
+      "properties": {
+        "orchestrator": {
+          "allOf": [
+            {"$ref": "#/$defs/input_identity"},
+            {
+              "properties": {
+                "repository": {"const": "backend"},
+                "path": {"const": "scripts/release_gate.py"}
+              }
+            }
+          ]
+        },
+        "formal_schema": {
+          "allOf": [
+            {"$ref": "#/$defs/input_identity"},
+            {
+              "properties": {
+                "repository": {"const": "backend"},
+                "path": {
+                  "const": "schemas/release/formal-gate-run-v1.schema.json"
+                }
+              }
+            }
+          ]
+        },
+        "child_schema": {
+          "allOf": [
+            {"$ref": "#/$defs/input_identity"},
+            {
+              "properties": {
+                "repository": {"const": "backend"},
+                "path": {"const": "schemas/release/gate-receipt-v1.schema.json"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "children": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "https://stoa.invalid/schemas/release/gate-receipt-v1.schema.json"
+            },
+            {
+              "type": "object",
+              "required": ["gate_id"],
+              "properties": {
+                "gate_id": {"const": "backend-python-hermetic"},
+                "runtime": {
+                  "properties": {
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "darwin-arm64",
+                        "darwin-x86_64",
+                        "linux-aarch64",
+                        "linux-x86_64"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "https://stoa.invalid/schemas/release/gate-receipt-v1.schema.json"
+            },
+            {
+              "type": "object",
+              "required": ["gate_id"],
+              "properties": {
+                "gate_id": {"const": "frontend-web-fresh"},
+                "runtime": {
+                  "properties": {
+                    "platform": {
+                      "type": "string",
+                      "enum": [
+                        "darwin-arm64",
+                        "darwin-x86_64",
+                        "linux-aarch64",
+                        "linux-x86_64"
+                      ]
+                    }
+                  }
+                },
+                "gate_evidence": {
+                  "properties": {
+                    "runtime": {
+                      "properties": {
+                        "platform": {"enum": ["darwin", "linux"]},
+                        "arch": {"enum": ["arm64", "x64"]}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "result": {"$ref": "#/$defs/result"},
+    "production": {"$ref": "#/$defs/production"},
+    "privacy": {"$ref": "#/$defs/privacy"},
+    "started_at": {"$ref": "#/$defs/utc"},
+    "ended_at": {"$ref": "#/$defs/utc"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "platform", "clock"],
+      "properties": {
+        "python": {
+          "type": "string",
+          "pattern": "^3\\.[0-9]+\\.[0-9]+$"
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "darwin-arm64",
+            "darwin-x86_64",
+            "linux-aarch64",
+            "linux-x86_64"
+          ]
+        },
+        "clock": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "input_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "path", "bytes", "sha256"],
+      "properties": {
+        "repository": {"const": "backend"},
+        "path": {"type": "string", "minLength": 1, "maxLength": 240},
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "obligations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "passed",
+        "policy_rejected",
+        "execution_failed",
+        "not_run"
+      ],
+      "properties": {
+        "total": {"const": 2},
+        "passed": {"type": "integer", "minimum": 0, "maximum": 2},
+        "policy_rejected": {"type": "integer", "minimum": 0, "maximum": 2},
+        "execution_failed": {"type": "integer", "minimum": 0, "maximum": 2},
+        "not_run": {"type": "integer", "minimum": 0, "maximum": 2}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "classification",
+        "exit_code",
+        "reason_code",
+        "obligations"
+      ],
+      "properties": {
+        "status": {"enum": ["PASS", "FAIL", "NOT RUN"]},
+        "classification": {
+          "enum": [
+            "COMPLETE_PASS",
+            "POLICY_REJECTION",
+            "EXECUTION_FAILURE",
+            "NOT_RUN_OBLIGATION"
+          ]
+        },
+        "exit_code": {"enum": [0, 2, 3]},
+        "reason_code": {
+          "enum": [
+            null,
+            "CHILD_POLICY_REJECTION",
+            "CHILD_EXECUTION_FAILURE",
+            "EXTERNAL_CHECK_UNAVAILABLE"
+          ]
+        },
+        "obligations": {"$ref": "#/$defs/obligations"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {"const": "PASS"},
+            "classification": {"const": "COMPLETE_PASS"},
+            "exit_code": {"const": 0},
+            "reason_code": {"const": null},
+            "obligations": {
+              "properties": {
+                "passed": {"const": 2},
+                "policy_rejected": {"const": 0},
+                "execution_failed": {"const": 0},
+                "not_run": {"const": 0}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "FAIL"},
+            "classification": {"const": "EXECUTION_FAILURE"},
+            "exit_code": {"const": 3},
+            "reason_code": {"const": "CHILD_EXECUTION_FAILURE"},
+            "obligations": {
+              "properties": {"execution_failed": {"minimum": 1}}
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "FAIL"},
+            "classification": {"const": "POLICY_REJECTION"},
+            "exit_code": {"const": 2},
+            "reason_code": {"const": "CHILD_POLICY_REJECTION"},
+            "obligations": {
+              "properties": {
+                "execution_failed": {"const": 0},
+                "policy_rejected": {"minimum": 1}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {"const": "NOT RUN"},
+            "classification": {"const": "NOT_RUN_OBLIGATION"},
+            "exit_code": {"const": 2},
+            "reason_code": {"const": "EXTERNAL_CHECK_UNAVAILABLE"},
+            "obligations": {
+              "properties": {
+                "execution_failed": {"const": 0},
+                "policy_rejected": {"const": 0},
+                "not_run": {"minimum": 1}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["infrastructure", "deploy", "smoke", "rollback"],
+      "properties": {
+        "infrastructure": {"const": "NOT RUN"},
+        "deploy": {"const": "NOT RUN"},
+        "smoke": {"const": "NOT RUN"},
+        "rollback": {"const": "NOT RUN"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "scanned_field_count",
+        "match_count",
+        "environment_values_serialized",
+        "secret_values_serialized"
+      ],
+      "properties": {
+        "passed": {"const": true},
+        "scanned_field_count": {"const": 12},
+        "match_count": {"const": 0},
+        "environment_values_serialized": {"const": false},
+        "secret_values_serialized": {"const": false}
+      }
+    }
+  }
+}

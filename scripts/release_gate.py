@@ -32,6 +32,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas/release/gate-receipt-v1.schema.json"
 RECEIPT_SCHEMA = "stoa.release.gate-receipt.v1"
+FORMAL_RECEIPT_SCHEMA = "stoa.release.formal-gate-run.v1"
 POLICY_EXIT = 2
 EXECUTION_EXIT = 3
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -179,6 +180,36 @@ _REPOSITORY_MARKERS = {
     "frontend": ("package.json", "stoa-frontend"),
     "infra": ("pyproject.toml", "stoa-infra"),
 }
+FORMAL_CHILD_GATE_IDS = (
+    "backend-python-hermetic",
+    "frontend-web-fresh",
+)
+_FORMAL_PLATFORM_WEB_IDENTITIES = {
+    "darwin-arm64": ("darwin", "arm64"),
+    "darwin-x86_64": ("darwin", "x64"),
+    "linux-aarch64": ("linux", "arm64"),
+    "linux-x86_64": ("linux", "x64"),
+}
+_FORMAL_INPUT_CONTRACTS = (
+    ("orchestrator", "backend", "scripts/release_gate.py"),
+    ("formal_schema", "backend", "schemas/release/formal-gate-run-v1.schema.json"),
+    ("child_schema", "backend", "schemas/release/gate-receipt-v1.schema.json"),
+)
+_FORMAL_COMMAND_ARGV = (
+    "{python}",
+    "scripts/release_gate.py",
+    "formal",
+    "--candidate",
+    "{candidate}",
+    "--backend-root",
+    "{backend_root}",
+    "--frontend-root",
+    "{frontend_root}",
+    "--infra-root",
+    "{infra_root}",
+    "--output",
+    "{output}",
+)
 
 
 def _scrubbed_git_environment(
@@ -258,8 +289,20 @@ _RECEIPT_KEYS = {
 }
 _COUNT_KEYS = {"total", "passed", "failed", "errors", "skipped", "xfail", "xpass"}
 _IDENTITY_KEYS = {"repository", "path", "bytes", "sha256"}
-
-
+_FORMAL_RECEIPT_KEYS = {
+    "schema",
+    "source",
+    "command",
+    "runtime",
+    "inputs",
+    "children",
+    "result",
+    "production",
+    "privacy",
+    "started_at",
+    "ended_at",
+    "receipt_sha256",
+}
 class GatePolicyError(ValueError):
     """A stable, redacted rejection of untrusted release evidence."""
 
@@ -270,6 +313,21 @@ class GatePolicyError(ValueError):
 
 class GateContainmentUnavailable(GatePolicyError):
     """The mandatory Web PID boundary cannot be proved before candidate code runs."""
+
+
+class _StoreOnceAction(argparse.Action):
+    """Reject duplicate formal options instead of silently taking the last value."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[str] | None,
+        option_string: str | None = None,
+    ) -> None:
+        if getattr(namespace, self.dest, None) is not None:
+            parser.error(f"argument {option_string or self.dest}: may only be supplied once")
+        setattr(namespace, self.dest, values)
 
 
 @dataclass(frozen=True)
@@ -1500,13 +1558,12 @@ def _require_fresh_web_generated_state(frontend_root: Path) -> None:
             os.close(directory)
 
 
-def _validate_web_gate_receipt(
+def _validate_web_gate_receipt_shape(
     receipt: Mapping[str, Any],
     *,
-    frontend_root: Path,
     candidate: Mapping[str, Any],
-    expected_source: Mapping[str, Any] | None = None,
-) -> None:
+    expected_source: Mapping[str, Any],
+) -> dict[str, Any]:
     _require_exact_keys(receipt, _WEB_RECEIPT_KEYS, "Web gate receipt")
     if receipt.get("schema") != WEB_GATE_SCHEMA or receipt.get("status") != "PASS":
         raise GatePolicyError("Web gate receipt status is invalid")
@@ -1584,11 +1641,28 @@ def _validate_web_gate_receipt(
         raise GatePolicyError("Web gate artifact identity is invalid")
     _require_sha(artifact.get("treeSha256"), "Web artifact tree digest")
 
+    if source != expected_source:
+        raise GatePolicyError("Web source does not match the candidate seal")
+    _require_candidate_web_lock(expected_source, candidate)
+    return dict(artifact)
+
+
+def _validate_web_gate_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    frontend_root: Path,
+    candidate: Mapping[str, Any],
+    expected_source: Mapping[str, Any] | None = None,
+) -> None:
     post_run_source = _stable_web_source_identity(frontend_root)
     baseline = dict(post_run_source if expected_source is None else expected_source)
-    if source != baseline or post_run_source != baseline:
+    artifact = _validate_web_gate_receipt_shape(
+        receipt,
+        candidate=candidate,
+        expected_source=baseline,
+    )
+    if post_run_source != baseline:
         raise GatePolicyError("Web source does not match the pre-run candidate seal")
-    _require_candidate_web_lock(baseline, candidate)
 
     first_artifact = _web_tree_identity(frontend_root / "dist")
     second_artifact = _web_tree_identity(frontend_root / "dist")
@@ -3170,6 +3244,443 @@ def validate_receipt(
         raise GatePolicyError("receipt digest mismatch")
 
 
+def _freeze_json_object(value: Mapping[str, Any], label: str) -> dict[str, Any]:
+    try:
+        serialized = _canonical_bytes(value)
+        frozen = json.loads(
+            serialized,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_json,
+        )
+    except GatePolicyError:
+        raise
+    except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        raise GatePolicyError(f"{label} is not canonical JSON") from exc
+    if not isinstance(frozen, dict):
+        raise GatePolicyError(f"{label} must be an object")
+    return frozen
+
+
+def classify_formal_children(
+    children: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Classify exactly two formal obligations without collapsing NOT RUN into PASS."""
+    if len(children) != len(FORMAL_CHILD_GATE_IDS):
+        raise GatePolicyError("formal aggregate requires exactly two child receipts")
+    kinds: list[str] = []
+    for child in children:
+        result = child.get("result")
+        if not isinstance(result, Mapping):
+            raise GatePolicyError("formal child result is malformed")
+        status = result.get("status")
+        classification = result.get("classification")
+        exit_code = result.get("exit_code")
+        reason_code = result.get("reason_code")
+        if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+            raise GatePolicyError("formal child exit code is invalid")
+        if (status, classification, exit_code, reason_code) == (
+            "PASS",
+            "COMPLETE_PASS",
+            0,
+            None,
+        ):
+            kinds.append("pass")
+        elif (
+            status == "FAIL"
+            and classification == "POLICY_REJECTION"
+            and exit_code == POLICY_EXIT
+            and isinstance(reason_code, str)
+            and bool(reason_code)
+        ):
+            kinds.append("policy")
+        elif (
+            status == "FAIL"
+            and classification == "EXECUTION_FAILURE"
+            and exit_code == EXECUTION_EXIT
+            and isinstance(reason_code, str)
+            and bool(reason_code)
+        ):
+            kinds.append("execution")
+        elif (status, classification, exit_code, reason_code) == (
+            "NOT RUN",
+            "NOT_RUN_OBLIGATION",
+            POLICY_EXIT,
+            "EXTERNAL_CHECK_UNAVAILABLE",
+        ):
+            kinds.append("not_run")
+        else:
+            raise GatePolicyError("formal child classification is invalid")
+
+    obligations = {
+        "total": len(FORMAL_CHILD_GATE_IDS),
+        "passed": kinds.count("pass"),
+        "policy_rejected": kinds.count("policy"),
+        "execution_failed": kinds.count("execution"),
+        "not_run": kinds.count("not_run"),
+    }
+    if obligations["execution_failed"]:
+        result_shape: tuple[str, str, int, str | None] = (
+            "FAIL",
+            "EXECUTION_FAILURE",
+            EXECUTION_EXIT,
+            "CHILD_EXECUTION_FAILURE",
+        )
+    elif obligations["policy_rejected"]:
+        result_shape = (
+            "FAIL",
+            "POLICY_REJECTION",
+            POLICY_EXIT,
+            "CHILD_POLICY_REJECTION",
+        )
+    elif obligations["not_run"]:
+        result_shape = (
+            "NOT RUN",
+            "NOT_RUN_OBLIGATION",
+            POLICY_EXIT,
+            "EXTERNAL_CHECK_UNAVAILABLE",
+        )
+    else:
+        result_shape = ("PASS", "COMPLETE_PASS", 0, None)
+    status, classification, exit_code, reason_code = result_shape
+    return {
+        "status": status,
+        "classification": classification,
+        "exit_code": exit_code,
+        "reason_code": reason_code,
+        "obligations": obligations,
+    }
+
+
+def _validate_frozen_web_child_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    workspace: WorkspaceRoots,
+) -> None:
+    """Recheck a validated Web child without recreating its deleted dist tree."""
+    _require_exact_keys(receipt, _RECEIPT_KEYS, "formal Web child receipt")
+    if receipt.get("schema") != RECEIPT_SCHEMA:
+        raise GatePolicyError("formal Web child schema is invalid")
+    spec = registry.require("frontend-web-fresh")
+    if receipt.get("gate_id") != spec.gate_id or receipt.get("source") != _source(candidate):
+        raise GatePolicyError("formal Web child source or gate is invalid")
+    if receipt.get("command") != {
+        "name": "verify",
+        "repository": spec.repository,
+        "cwd": spec.cwd,
+        "argv": list(spec.argv),
+    }:
+        raise GatePolicyError("formal Web child command graph is invalid")
+
+    runtime = receipt.get("runtime")
+    if not isinstance(runtime, dict) or set(runtime) != {"python", "platform", "clock"}:
+        raise GatePolicyError("formal Web child runtime is malformed")
+    if not isinstance(runtime["python"], str) or re.fullmatch(
+        r"3\.[0-9]+\.[0-9]+", runtime["python"]
+    ) is None:
+        raise GatePolicyError("formal Web child Python runtime is invalid")
+    if not isinstance(runtime["platform"], str) or not runtime["platform"]:
+        raise GatePolicyError("formal Web child platform is invalid")
+    if runtime["clock"] != receipt.get("started_at"):
+        raise GatePolicyError("formal Web child clock identity mismatch")
+    started = _parse_utc(receipt.get("started_at"), "formal Web child start")
+    ended = _parse_utc(receipt.get("ended_at"), "formal Web child end")
+    if ended < started:
+        raise GatePolicyError("formal Web child time ordering is invalid")
+
+    inputs = receipt.get("inputs")
+    if not isinstance(inputs, dict) or set(inputs) != {"artifacts", "configs"}:
+        raise GatePolicyError("formal Web child inputs are malformed")
+    for label, paths in (("artifacts", spec.artifact_paths), ("configs", spec.config_paths)):
+        identities = inputs[label]
+        if not isinstance(identities, list) or len(identities) != len(paths):
+            raise GatePolicyError(f"formal Web child {label} are incomplete")
+        for identity, path in zip(identities, paths, strict=True):
+            _validate_identity(identity, _file_identity(workspace, spec.repository, path))
+
+    _validate_result(receipt.get("result"))
+    result = receipt["result"]
+    evidence = receipt.get("gate_evidence")
+    if not isinstance(evidence, dict):
+        raise GatePolicyError("formal passing Web child lacks evidence")
+    expected_source = _stable_web_source_identity(workspace.require("frontend"))
+    _validate_web_gate_receipt_shape(
+        evidence,
+        candidate=candidate,
+        expected_source=expected_source,
+    )
+    if (
+        result["status"],
+        result["classification"],
+        result["exit_code"],
+        result["reason_code"],
+        result["outcomes"],
+    ) != (
+        "PASS",
+        "COMPLETE_PASS",
+        0,
+        None,
+        _counts(passed=len(WEB_GATE_STEPS)),
+    ):
+        raise GatePolicyError("formal Web child result and evidence disagree")
+    expected_privacy = {
+        "passed": True,
+        "scanned_field_count": len(_RECEIPT_KEYS),
+        "match_count": 0,
+        "environment_values_serialized": False,
+        "secret_values_serialized": False,
+    }
+    if receipt.get("privacy") != expected_privacy:
+        raise GatePolicyError("formal Web child privacy evidence is invalid")
+    _require_sha(receipt.get("receipt_sha256"), "formal Web child digest")
+    if receipt["receipt_sha256"] != canonical_receipt_sha256(receipt):
+        raise GatePolicyError("formal Web child digest mismatch")
+
+
+def _validate_frozen_child_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    expected_gate_id: str,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    workspace: WorkspaceRoots,
+) -> None:
+    if receipt.get("gate_id") != expected_gate_id:
+        raise GatePolicyError("formal child order is invalid")
+    runtime = receipt.get("runtime")
+    if (
+        not isinstance(runtime, Mapping)
+        or not isinstance(runtime.get("platform"), str)
+        or runtime["platform"] not in _FORMAL_PLATFORM_WEB_IDENTITIES
+    ):
+        raise GatePolicyError("formal child platform identity is invalid")
+    result = receipt.get("result")
+    is_passing_web = (
+        expected_gate_id == "frontend-web-fresh"
+        and isinstance(result, Mapping)
+        and result.get("classification") == "COMPLETE_PASS"
+    )
+    if is_passing_web:
+        _validate_frozen_web_child_receipt(
+            receipt,
+            candidate=candidate,
+            registry=registry,
+            workspace=workspace,
+        )
+        return
+    validate_receipt(
+        receipt,
+        candidate=candidate,
+        registry=registry,
+        workspace=workspace,
+    )
+
+
+def _formal_inputs(workspace: WorkspaceRoots) -> dict[str, dict[str, Any]]:
+    return {
+        label: _file_identity(workspace, repository, path)
+        for label, repository, path in _FORMAL_INPUT_CONTRACTS
+    }
+
+
+def _formal_privacy() -> dict[str, Any]:
+    return {
+        "passed": True,
+        "scanned_field_count": len(_FORMAL_RECEIPT_KEYS),
+        "match_count": 0,
+        "environment_values_serialized": False,
+        "secret_values_serialized": False,
+    }
+
+
+def _validate_formal_string_privacy(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _validate_formal_string_privacy(item)
+        return
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for item in value:
+            _validate_formal_string_privacy(item)
+        return
+    if isinstance(value, str) and (
+        value.startswith(("/", "\\\\"))
+        or re.match(r"^[A-Za-z]:[\\/]", value) is not None
+    ):
+        raise GatePolicyError("formal receipt contains an absolute host path")
+
+
+def validate_formal_receipt(
+    receipt: Mapping[str, Any],
+    *,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    workspace: WorkspaceRoots,
+) -> None:
+    validate_candidate(candidate)
+    _validate_formal_string_privacy(receipt)
+    _require_exact_keys(receipt, _FORMAL_RECEIPT_KEYS, "formal receipt")
+    if receipt.get("schema") != FORMAL_RECEIPT_SCHEMA:
+        raise GatePolicyError("formal receipt schema is invalid")
+    if receipt.get("source") != _source(candidate):
+        raise GatePolicyError("formal receipt source identity mismatch")
+    if receipt.get("command") != {
+        "name": "formal",
+        "repository": "backend",
+        "cwd": ".",
+        "argv": list(_FORMAL_COMMAND_ARGV),
+        "gate_ids": list(FORMAL_CHILD_GATE_IDS),
+    }:
+        raise GatePolicyError("formal receipt command graph mismatch")
+
+    runtime = receipt.get("runtime")
+    if not isinstance(runtime, dict) or set(runtime) != {"python", "platform", "clock"}:
+        raise GatePolicyError("formal receipt runtime is malformed")
+    if not isinstance(runtime["python"], str) or re.fullmatch(
+        r"3\.[0-9]+\.[0-9]+", runtime["python"]
+    ) is None:
+        raise GatePolicyError("formal receipt Python runtime is invalid")
+    if not isinstance(runtime["platform"], str) or re.fullmatch(
+        r"[A-Za-z0-9_.-]{2,96}", runtime["platform"]
+    ) is None or runtime["platform"] not in _FORMAL_PLATFORM_WEB_IDENTITIES:
+        raise GatePolicyError("formal receipt platform is invalid")
+    if runtime["clock"] != receipt.get("started_at"):
+        raise GatePolicyError("formal receipt clock identity mismatch")
+    started = _parse_utc(receipt.get("started_at"), "formal receipt start")
+    ended = _parse_utc(receipt.get("ended_at"), "formal receipt end")
+    if ended < started:
+        raise GatePolicyError("formal receipt time ordering is invalid")
+
+    inputs = receipt.get("inputs")
+    expected_inputs = _formal_inputs(workspace)
+    if not isinstance(inputs, dict) or inputs != expected_inputs:
+        raise GatePolicyError("formal receipt input identity mismatch")
+
+    children = receipt.get("children")
+    if not isinstance(children, list) or len(children) != len(FORMAL_CHILD_GATE_IDS):
+        raise GatePolicyError("formal receipt children are incomplete")
+    validated_children: list[Mapping[str, Any]] = []
+    child_times: list[tuple[datetime, datetime]] = []
+    for child, expected_gate_id in zip(children, FORMAL_CHILD_GATE_IDS, strict=True):
+        if not isinstance(child, dict):
+            raise GatePolicyError("formal child receipt is malformed")
+        _validate_frozen_child_receipt(
+            child,
+            expected_gate_id=expected_gate_id,
+            candidate=candidate,
+            registry=registry,
+            workspace=workspace,
+        )
+        child_start = _parse_utc(child.get("started_at"), "formal child start")
+        child_end = _parse_utc(child.get("ended_at"), "formal child end")
+        if child_start < started or child_end > ended:
+            raise GatePolicyError("formal child time is outside aggregate bounds")
+        child_times.append((child_start, child_end))
+        validated_children.append(child)
+        if child["runtime"]["python"] != runtime["python"]:
+            raise GatePolicyError("formal child Python runtime differs from aggregate")
+        if child["runtime"]["platform"] != runtime["platform"]:
+            raise GatePolicyError("formal child platform differs from aggregate")
+        if expected_gate_id == "frontend-web-fresh" and isinstance(
+            child.get("gate_evidence"), Mapping
+        ):
+            web_runtime = child["gate_evidence"].get("runtime")
+            expected_web_runtime = _FORMAL_PLATFORM_WEB_IDENTITIES[runtime["platform"]]
+            if not isinstance(web_runtime, Mapping) or (
+                web_runtime.get("platform"),
+                web_runtime.get("arch"),
+            ) != expected_web_runtime:
+                raise GatePolicyError("formal Web runtime differs from aggregate")
+    if child_times[1][0] < child_times[0][1]:
+        raise GatePolicyError("formal child lifetimes overlap")
+
+    expected_result = classify_formal_children(validated_children)
+    if receipt.get("result") != expected_result:
+        raise GatePolicyError("formal receipt result does not match child obligations")
+    if receipt.get("production") != {
+        "infrastructure": "NOT RUN",
+        "deploy": "NOT RUN",
+        "smoke": "NOT RUN",
+        "rollback": "NOT RUN",
+    }:
+        raise GatePolicyError("formal receipt production evidence is invalid")
+    if receipt.get("privacy") != _formal_privacy():
+        raise GatePolicyError("formal receipt privacy evidence is invalid")
+    _require_sha(receipt.get("receipt_sha256"), "formal receipt digest")
+    if receipt["receipt_sha256"] != canonical_receipt_sha256(receipt):
+        raise GatePolicyError("formal receipt digest mismatch")
+
+
+def run_formal_gate(
+    *,
+    candidate: Mapping[str, Any],
+    registry: GateRegistry,
+    operations: GateOperations,
+    workspace: WorkspaceRoots,
+) -> dict[str, Any]:
+    validate_live_candidate(candidate, workspace=workspace, operations=operations)
+    started_at = operations.now_utc()
+    inputs = _formal_inputs(workspace)
+    children: list[dict[str, Any]] = []
+    for gate_id in FORMAL_CHILD_GATE_IDS:
+        child = run_registered_gate(
+            gate_id=gate_id,
+            command_name="verify",
+            candidate=candidate,
+            registry=registry,
+            operations=operations,
+            workspace=workspace,
+        )
+        validate_live_candidate(candidate, workspace=workspace, operations=operations)
+        _validate_frozen_child_receipt(
+            child,
+            expected_gate_id=gate_id,
+            candidate=candidate,
+            registry=registry,
+            workspace=workspace,
+        )
+        children.append(child)
+
+    ended_at = operations.now_utc()
+    receipt: dict[str, Any] = {
+        "schema": FORMAL_RECEIPT_SCHEMA,
+        "source": _source(candidate),
+        "command": {
+            "name": "formal",
+            "repository": "backend",
+            "cwd": ".",
+            "argv": list(_FORMAL_COMMAND_ARGV),
+            "gate_ids": list(FORMAL_CHILD_GATE_IDS),
+        },
+        "runtime": {
+            "python": operations.python_version(),
+            "platform": operations.platform_identity(),
+            "clock": started_at,
+        },
+        "inputs": inputs,
+        "children": children,
+        "result": classify_formal_children(children),
+        "production": {
+            "infrastructure": "NOT RUN",
+            "deploy": "NOT RUN",
+            "smoke": "NOT RUN",
+            "rollback": "NOT RUN",
+        },
+        "privacy": _formal_privacy(),
+        "started_at": started_at,
+        "ended_at": ended_at,
+    }
+    receipt["receipt_sha256"] = canonical_receipt_sha256(receipt)
+    validate_formal_receipt(
+        receipt,
+        candidate=candidate,
+        registry=registry,
+        workspace=workspace,
+    )
+    validate_live_candidate(candidate, workspace=workspace, operations=operations)
+    return receipt
+
+
 def run_registered_gate(
     *,
     gate_id: str,
@@ -3210,7 +3721,7 @@ def run_registered_gate(
             registry=registry,
             workspace=snapshot,
         )
-        return receipt
+        return _freeze_json_object(receipt, "registered gate receipt")
 
 
 def write_json(value: object, path: Path | None) -> None:
@@ -3234,6 +3745,238 @@ def write_json(value: object, path: Path | None) -> None:
         os.replace(temporary, resolved)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _open_formal_parent(output: Path) -> int:
+    if not output.is_absolute() or output.name in {"", ".", ".."}:
+        raise GatePolicyError("formal output path is invalid")
+    descriptor = -1
+    try:
+        parent_metadata = output.parent.lstat()
+        if not stat.S_ISDIR(parent_metadata.st_mode) or stat.S_ISLNK(
+            parent_metadata.st_mode
+        ):
+            raise GatePolicyError("formal output parent is not a directory")
+        descriptor = os.open(
+            output.parent,
+            os.O_RDONLY
+            | os.O_DIRECTORY
+            | os.O_NOFOLLOW
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        if not _same_file_metadata(parent_metadata, os.fstat(descriptor)):
+            raise GatePolicyError("formal output parent changed during inspection")
+        return descriptor
+    except GatePolicyError:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise GatePolicyError("formal output parent is unavailable") from exc
+
+
+def _authoritative_source_roots() -> set[Path]:
+    return {
+        ROOT.resolve(strict=True),
+        (ROOT.parent / "stoa-frontend").resolve(strict=False),
+        (ROOT.parent / "stoa-infra").resolve(strict=False),
+    }
+
+
+def _require_formal_external_target(output: Path, protected_roots: set[Path]) -> None:
+    if any(output == root or root in output.parents for root in protected_roots):
+        raise GatePolicyError("formal output must be outside source repositories")
+
+
+def _require_private_formal_parent(output: Path, descriptor: int) -> None:
+    try:
+        path_metadata = output.parent.lstat()
+        opened_metadata = os.fstat(descriptor)
+    except OSError as exc:
+        raise GatePolicyError("formal output parent is unavailable") from exc
+    if (
+        not stat.S_ISDIR(path_metadata.st_mode)
+        or stat.S_ISLNK(path_metadata.st_mode)
+        or not _same_file_metadata(path_metadata, opened_metadata)
+        or stat.S_IMODE(opened_metadata.st_mode) != 0o700
+        or (hasattr(os, "getuid") and opened_metadata.st_uid != os.getuid())
+    ):
+        raise GatePolicyError("formal output parent is not private")
+
+
+def _unlink_formal_target(output: Path, parent_descriptor: int) -> None:
+    try:
+        metadata = os.stat(
+            output.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise GatePolicyError("formal output target is unavailable") from exc
+    if stat.S_ISDIR(metadata.st_mode):
+        raise GatePolicyError("formal output target is a directory")
+    try:
+        os.unlink(output.name, dir_fd=parent_descriptor)
+        os.fsync(parent_descriptor)
+    except OSError as exc:
+        raise GatePolicyError("formal stale output invalidation failed") from exc
+
+
+def _invalidate_formal_output(output: Path) -> None:
+    parent_descriptor = _open_formal_parent(output)
+    try:
+        _unlink_formal_target(output, parent_descriptor)
+        _require_private_formal_parent(output, parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def publish_formal_receipt(
+    receipt: Mapping[str, Any],
+    output: Path,
+    *,
+    before_replace: Callable[[], None],
+) -> None:
+    """Publish one formal receipt through a private, durable atomic replacement."""
+    try:
+        output = output.parent.resolve(strict=True) / output.name
+    except OSError as exc:
+        raise GatePolicyError("formal output parent is unavailable") from exc
+    _require_formal_external_target(output, _authoritative_source_roots())
+    try:
+        content = (
+            json.dumps(
+                receipt,
+                allow_nan=False,
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise GatePolicyError("formal receipt output is not canonical JSON") from exc
+    if not content or len(content) > 16 * 1024 * 1024:
+        raise GatePolicyError("formal receipt output size is invalid")
+    parent_descriptor = _open_formal_parent(output)
+    temporary_descriptor = -1
+    temporary_name: str | None = None
+    published = False
+    try:
+        _unlink_formal_target(output, parent_descriptor)
+        _require_private_formal_parent(output, parent_descriptor)
+        for _ in range(32):
+            candidate_name = f".{output.name}.{os.urandom(16).hex()}.tmp"
+            try:
+                temporary_descriptor = os.open(
+                    candidate_name,
+                    os.O_WRONLY
+                    | os.O_CREAT
+                    | os.O_EXCL
+                    | os.O_NOFOLLOW
+                    | getattr(os, "O_CLOEXEC", 0),
+                    0o600,
+                    dir_fd=parent_descriptor,
+                )
+            except FileExistsError:
+                continue
+            temporary_name = candidate_name
+            break
+        if temporary_descriptor < 0 or temporary_name is None:
+            raise GatePolicyError("formal temporary output cannot be created")
+        os.fchmod(temporary_descriptor, 0o600)
+        remaining = memoryview(content)
+        while remaining:
+            written = os.write(temporary_descriptor, remaining)
+            if written <= 0:
+                raise GatePolicyError("formal receipt write was incomplete")
+            remaining = remaining[written:]
+        os.fsync(temporary_descriptor)
+        temporary_metadata = os.fstat(temporary_descriptor)
+        if (
+            not stat.S_ISREG(temporary_metadata.st_mode)
+            or temporary_metadata.st_nlink != 1
+            or stat.S_IMODE(temporary_metadata.st_mode) != 0o600
+            or (
+                hasattr(os, "getuid")
+                and temporary_metadata.st_uid != os.getuid()
+            )
+        ):
+            raise GatePolicyError("formal temporary output is not private")
+
+        before_replace()
+        _require_private_formal_parent(output, parent_descriptor)
+        path_metadata = os.stat(
+            temporary_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if not _same_file_metadata(temporary_metadata, path_metadata):
+            raise GatePolicyError("formal temporary output changed before publication")
+        os.replace(
+            temporary_name,
+            output.name,
+            src_dir_fd=parent_descriptor,
+            dst_dir_fd=parent_descriptor,
+        )
+        temporary_name = None
+        os.fsync(parent_descriptor)
+        _require_private_formal_parent(output, parent_descriptor)
+        published_metadata = os.stat(
+            output.name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(published_metadata.st_mode)
+            or published_metadata.st_nlink != 1
+            or stat.S_IMODE(published_metadata.st_mode) != 0o600
+            or published_metadata.st_size != len(content)
+            or (
+                hasattr(os, "getuid")
+                and published_metadata.st_uid != os.getuid()
+            )
+            or (
+                published_metadata.st_dev,
+                published_metadata.st_ino,
+                published_metadata.st_size,
+                published_metadata.st_mtime_ns,
+            )
+            != (
+                temporary_metadata.st_dev,
+                temporary_metadata.st_ino,
+                temporary_metadata.st_size,
+                temporary_metadata.st_mtime_ns,
+            )
+        ):
+            raise GatePolicyError("formal published output is not exact")
+        published = True
+    except GatePolicyError:
+        raise
+    except OSError as exc:
+        raise GatePolicyError("formal receipt publication failed") from exc
+    finally:
+        if temporary_descriptor >= 0:
+            os.close(temporary_descriptor)
+        if temporary_name is not None:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+        if not published:
+            try:
+                os.unlink(output.name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+            try:
+                os.fsync(parent_descriptor)
+            except OSError:
+                pass
+        os.close(parent_descriptor)
 
 
 def _requested_root_paths(args: argparse.Namespace) -> tuple[Path, ...]:
@@ -3266,6 +4009,26 @@ def _prepare_external_output(args: argparse.Namespace) -> Path | None:
     if resolved.is_dir():
         raise GatePolicyError("gate output path is a directory")
     resolved.unlink(missing_ok=True)
+    return resolved
+
+
+def _prepare_formal_output(args: argparse.Namespace) -> Path:
+    requested = Path(args.output)
+    if not requested.is_absolute():
+        raise GatePolicyError("formal output must be an absolute external path")
+    try:
+        parent = requested.parent.resolve(strict=True)
+    except OSError as exc:
+        raise GatePolicyError("formal output parent is unavailable") from exc
+    resolved = parent / requested.name
+    protected_roots = {
+        *_authoritative_source_roots(),
+        *(root.resolve(strict=False) for root in _requested_root_paths(args)),
+    }
+    _require_formal_external_target(resolved, protected_roots)
+    if resolved == Path(args.candidate).resolve(strict=False):
+        raise GatePolicyError("formal output cannot replace its candidate input")
+    _invalidate_formal_output(resolved)
     return resolved
 
 
@@ -3324,8 +4087,38 @@ def _execute_python_matrix(args: argparse.Namespace) -> int:
     return python_matrix_exit_code(result)
 
 
+def _execute_formal(args: argparse.Namespace) -> int:
+    output = _prepare_formal_output(args)
+    workspace = _workspace_from_args(args)
+    candidate = load_candidate(Path(args.candidate))
+    registry = default_registry()
+    operations = system_operations()
+    receipt = run_formal_gate(
+        candidate=candidate,
+        registry=registry,
+        operations=operations,
+        workspace=workspace,
+    )
+
+    def revalidate_before_publication() -> None:
+        validate_formal_receipt(
+            receipt,
+            candidate=candidate,
+            registry=registry,
+            workspace=workspace,
+        )
+        validate_live_candidate(candidate, workspace=workspace, operations=operations)
+
+    publish_formal_receipt(
+        receipt,
+        output,
+        before_replace=revalidate_before_publication,
+    )
+    return int(receipt["result"]["exit_code"])
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     candidate = subparsers.add_parser(
@@ -3361,6 +4154,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     python_hermetic.add_argument("--output")
     python_hermetic.set_defaults(func=_execute_python_matrix)
+
+    formal = subparsers.add_parser(
+        "formal",
+        help="Run the fixed Python and Web release obligations",
+        allow_abbrev=False,
+    )
+    for option in (
+        "candidate",
+        "backend-root",
+        "frontend-root",
+        "infra-root",
+        "output",
+    ):
+        formal.add_argument(
+            f"--{option}",
+            required=True,
+            action=_StoreOnceAction,
+        )
+    formal.set_defaults(func=_execute_formal)
     return parser
 
 
