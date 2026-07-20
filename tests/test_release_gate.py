@@ -2084,6 +2084,109 @@ def test_web_gate_schema_rejects_bundle_overclaim_as_canonical_frontend_gates() 
     assert "frontend-contract" in schema["properties"]["gate_id"]["enum"]
 
 
+def test_audit_schema_rejects_web_pass_without_web_evidence() -> None:
+    schema = _load_schema()
+    receipt = _receipt()
+    receipt["gate_id"] = "frontend-web-fresh"
+    receipt["command"] = {
+        "name": "verify",
+        "repository": "frontend",
+        "cwd": ".",
+        "argv": [
+            "{node}",
+            "scripts/verify-release.mjs",
+            "verify",
+            "--output",
+            "{evidence_output}",
+        ],
+    }
+    receipt["result"] = {
+        "status": "PASS",
+        "classification": "COMPLETE_PASS",
+        "exit_code": 0,
+        "reason_code": None,
+        "outcomes": _counts(total=5, passed=5),
+        "stdout_sha256": SHA256,
+        "stderr_sha256": SHA256,
+    }
+    receipt["gate_evidence"] = None
+    assert not _matches(receipt, schema, schema)
+
+
+def test_audit_schema_rejects_web_evidence_for_another_gate(tmp_path: Path) -> None:
+    gate = _load_gate()
+    schema = _load_schema()
+    workspace, _ = _web_test_workspace(gate, tmp_path)
+    frontend = workspace.require("frontend")
+    (frontend / "dist").mkdir()
+    (frontend / "dist" / "index.js").write_text(
+        "release artifact\n",
+        encoding="utf-8",
+    )
+    receipt = _receipt()
+    receipt["gate_id"] = "frontend-contract"
+    receipt["gate_evidence"] = _web_test_receipt(frontend)
+    assert not _matches(receipt, schema, schema)
+
+
+def test_audit_schema_binds_each_implemented_gate_to_its_exact_command_and_evidence(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    schema = _load_schema()
+
+    self_test = _receipt()
+    self_test["command"]["argv"] = ["{python}", "-c", "raise SystemExit(7)"]
+    assert not _matches(self_test, schema, schema)
+
+    hermetic = _receipt()
+    hermetic["gate_id"] = "backend-python-hermetic"
+    hermetic["command"] = {
+        "name": "verify",
+        "repository": "backend",
+        "cwd": ".",
+        "argv": ["{python}", "scripts/release_gate.py", "python-hermetic"],
+    }
+    hermetic["result"] = {
+        "status": "PASS",
+        "classification": "COMPLETE_PASS",
+        "exit_code": 0,
+        "reason_code": None,
+        "outcomes": _counts(total=2124, passed=2124),
+        "stdout_sha256": SHA256,
+        "stderr_sha256": SHA256,
+    }
+    hermetic["gate_evidence"] = None
+    assert not _matches(hermetic, schema, schema)
+
+    workspace, _ = _web_test_workspace(gate, tmp_path)
+    frontend = workspace.require("frontend")
+    (frontend / "dist").mkdir()
+    (frontend / "dist" / "index.js").write_text(
+        "release artifact\n",
+        encoding="utf-8",
+    )
+    web = _receipt()
+    web["gate_id"] = "frontend-web-fresh"
+    web["command"] = {
+        "name": "verify",
+        "repository": "frontend",
+        "cwd": ".",
+        "argv": ["{node}", "scripts/attacker.mjs", "{evidence_output}"],
+    }
+    web["result"] = {
+        "status": "PASS",
+        "classification": "COMPLETE_PASS",
+        "exit_code": 0,
+        "reason_code": None,
+        "outcomes": _counts(total=5, passed=5),
+        "stdout_sha256": SHA256,
+        "stderr_sha256": SHA256,
+    }
+    web["gate_evidence"] = _web_test_receipt(frontend)
+    assert not _matches(web, schema, schema)
+
+
 def test_system_web_launcher_kills_normal_return_orphan_process_group(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2155,6 +2258,173 @@ def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> N
         )
     time.sleep(0.5)
     assert not marker.exists()
+
+
+def _run_or_refuse_containment(gate: Any, *args: Any) -> Any:
+    unavailable = getattr(gate, "GateContainmentUnavailable", None)
+    try:
+        return gate._system_web_run(*args)
+    except Exception as exc:
+        if unavailable is None or not isinstance(exc, unavailable):
+            raise
+        return None
+
+
+def test_audit_containment_blocks_detached_setsid_child_after_normal_return(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    marker = tmp_path / "detached-normal-survived"
+    child = (
+        "import pathlib,sys,time;"
+        "time.sleep(0.5);"
+        "pathlib.Path(sys.argv[1]).write_text('survived',encoding='utf-8')"
+    )
+    parent = (
+        "import subprocess,sys;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)"
+    )
+    _run_or_refuse_containment(
+        gate,
+        (sys.executable, "-c", parent, child, str(marker)),
+        {"PATH": str(Path(sys.executable).resolve().parent)},
+        tmp_path,
+        5,
+    )
+    time.sleep(0.7)
+    assert not marker.exists()
+
+
+def test_audit_containment_blocks_detached_setsid_child_after_timeout(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    marker = tmp_path / "detached-timeout-survived"
+    child = (
+        "import pathlib,sys,time;"
+        "time.sleep(1.3);"
+        "pathlib.Path(sys.argv[1]).write_text('survived',encoding='utf-8')"
+    )
+    parent = (
+        "import subprocess,sys,time;"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True);"
+        "time.sleep(30)"
+    )
+    try:
+        _run_or_refuse_containment(
+            gate,
+            (sys.executable, "-c", parent, child, str(marker)),
+            {"PATH": str(Path(sys.executable).resolve().parent)},
+            tmp_path,
+            1,
+        )
+    except subprocess.TimeoutExpired:
+        pass
+    time.sleep(0.5)
+    assert not marker.exists()
+
+
+def test_audit_unavailable_containment_is_exact_not_run(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, observed = _web_test_operations(gate, workspace)
+    operations = gate.GateOperations(
+        **{
+            **operations.__dict__,
+            "probe_web_containment": lambda: False,
+        }
+    )
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+    assert receipt["result"] == {
+        "status": "NOT RUN",
+        "classification": "NOT_RUN_OBLIGATION",
+        "exit_code": 2,
+        "reason_code": "EXTERNAL_CHECK_UNAVAILABLE",
+        "outcomes": _counts(total=0, passed=0),
+        "stdout_sha256": sha256(b"").hexdigest(),
+        "stderr_sha256": sha256(b"").hexdigest(),
+    }
+    assert receipt["gate_evidence"] is None
+    assert "argv" not in observed
+    gate.validate_receipt(
+        receipt,
+        candidate=candidate,
+        registry=gate.default_registry(),
+        workspace=workspace,
+    )
+    schema = _load_schema()
+    assert _matches(receipt, schema, schema)
+
+
+@pytest.mark.parametrize(
+    ("classification", "reason_code"),
+    [
+        ("POLICY_REJECTION", "GATE_EXECUTION_ERROR"),
+        ("POLICY_REJECTION", "EXTERNAL_CHECK_UNAVAILABLE"),
+        ("EXECUTION_FAILURE", "GATE_COMMAND_FAILED"),
+        ("EXECUTION_FAILURE", "GATE_EVIDENCE_INVALID"),
+        ("EXECUTION_FAILURE", "EXTERNAL_CHECK_UNAVAILABLE"),
+        ("NOT_RUN_OBLIGATION", "GATE_COMMAND_FAILED"),
+        ("NOT_RUN_OBLIGATION", "GATE_EVIDENCE_INVALID"),
+        ("NOT_RUN_OBLIGATION", "GATE_EXECUTION_ERROR"),
+    ],
+)
+def test_audit_web_receipt_rejects_every_invalid_classification_reason_pair(
+    tmp_path: Path,
+    classification: str,
+    reason_code: str,
+) -> None:
+    gate = _load_gate()
+    workspace, candidate = _web_test_workspace(gate, tmp_path)
+    operations, _ = _web_test_operations(
+        gate,
+        workspace,
+        output_kind="missing",
+    )
+    receipt = gate._run_registered_gate_on_snapshot(
+        gate_id="frontend-web-fresh",
+        command_name="verify",
+        candidate=candidate,
+        registry=gate.default_registry(),
+        operations=operations,
+        workspace=workspace,
+    )
+    if classification == "POLICY_REJECTION":
+        status, exit_code, outcomes = "FAIL", 2, _counts(passed=0, failed=1)
+    elif classification == "EXECUTION_FAILURE":
+        status, exit_code, outcomes = "FAIL", 3, _counts(passed=0, errors=1)
+    else:
+        status, exit_code, outcomes = "NOT RUN", 2, _counts(total=0, passed=0)
+    receipt["result"] = {
+        "status": status,
+        "classification": classification,
+        "exit_code": exit_code,
+        "reason_code": reason_code,
+        "outcomes": outcomes,
+        "stdout_sha256": sha256(b"").hexdigest(),
+        "stderr_sha256": sha256(b"").hexdigest(),
+    }
+    receipt["gate_evidence"] = None
+    receipt["receipt_sha256"] = gate.canonical_receipt_sha256(receipt)
+
+    with pytest.raises(gate.GatePolicyError):
+        gate.validate_receipt(
+            receipt,
+            candidate=candidate,
+            registry=gate.default_registry(),
+            workspace=workspace,
+        )
 
 
 def _controlled_node_archive_bytes(
