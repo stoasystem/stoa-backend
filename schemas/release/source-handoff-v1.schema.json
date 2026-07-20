@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.invalid/schemas/release/source-handoff-v1.schema.json",
+  "title": "STOA owner-approved source handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "identity_source",
+    "repositories",
+    "publication_policy",
+    "production",
+    "tuple_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "stoa.release.source-handoff.v1"},
+    "identity_source": {"const": "owner-approved-immutable-git-objects"},
+    "repositories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"$ref": "#/$defs/backend_repository"},
+        {"$ref": "#/$defs/frontend_repository"},
+        {"$ref": "#/$defs/infra_repository"}
+      ],
+      "items": false
+    },
+    "publication_policy": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/handoff_publication"},
+        {"$ref": "#/$defs/summary_publication"},
+        {"$ref": "#/$defs/roadmap_publication"},
+        {"$ref": "#/$defs/state_publication"}
+      ],
+      "items": false
+    },
+    "production": {"$ref": "#/$defs/production"},
+    "tuple_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "backend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "backend"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "frontend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "frontend"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "package-lock.json"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "infra_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "infra"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "handoff_publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "mode"],
+      "properties": {
+        "path": {"const": "evidence/phase-474/final-source-handoff.json"},
+        "status": {"const": "A"},
+        "mode": {"const": "100644"}
+      }
+    },
+    "summary_publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "mode"],
+      "properties": {
+        "path": {
+          "const": ".planning/phases/474-deterministic-verification-and-gated-delivery/474-93-SUMMARY.md"
+        },
+        "status": {"const": "A"},
+        "mode": {"const": "100644"}
+      }
+    },
+    "roadmap_publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "mode"],
+      "properties": {
+        "path": {"const": ".planning/ROADMAP.md"},
+        "status": {"const": "M"},
+        "mode": {"const": "100644"}
+      }
+    },
+    "state_publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "status", "mode"],
+      "properties": {
+        "path": {"const": ".planning/STATE.md"},
+        "status": {"const": "M"},
+        "mode": {"const": "100644"}
+      }
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["infrastructure", "deploy", "smoke", "rollback"],
+      "properties": {
+        "infrastructure": {"const": "NOT RUN"},
+        "deploy": {"const": "NOT RUN"},
+        "smoke": {"const": "NOT RUN"},
+        "rollback": {"const": "NOT RUN"}
+      }
+    }
+  }
+}

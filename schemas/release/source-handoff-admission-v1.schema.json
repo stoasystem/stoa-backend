@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.invalid/schemas/release/source-handoff-admission-v1.schema.json",
+  "title": "STOA owner-approved source handoff admission v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "publication",
+    "approved_source",
+    "candidate_source",
+    "formal_receipts",
+    "normalization",
+    "production",
+    "admission_sha256"
+  ],
+  "properties": {
+    "schema": {"const": "stoa.release.source-handoff-admission.v1"},
+    "status": {"const": "PASS"},
+    "publication": {"$ref": "#/$defs/publication"},
+    "approved_source": {"$ref": "#/$defs/approved_source"},
+    "candidate_source": {"$ref": "#/$defs/candidate_source"},
+    "formal_receipts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/first_formal_receipt"},
+        {"$ref": "#/$defs/second_formal_receipt"}
+      ],
+      "items": false
+    },
+    "normalization": {"$ref": "#/$defs/normalization"},
+    "production": {"$ref": "#/$defs/production"},
+    "admission_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "parent",
+        "handoff_blob_oid",
+        "handoff_blob_sha256"
+      ],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "parent": {"$ref": "#/$defs/git_sha"},
+        "handoff_blob_oid": {"$ref": "#/$defs/git_sha"},
+        "handoff_blob_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "approved_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tuple_sha256", "repositories"],
+      "properties": {
+        "tuple_sha256": {"$ref": "#/$defs/sha256"},
+        "repositories": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"$ref": "#/$defs/approved_backend_repository"},
+            {"$ref": "#/$defs/approved_frontend_repository"},
+            {"$ref": "#/$defs/approved_infra_repository"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "approved_backend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "backend"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "approved_frontend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "frontend"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "package-lock.json"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "approved_infra_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "commit", "tree", "lock_path", "lock_sha256"],
+      "properties": {
+        "name": {"const": "infra"},
+        "commit": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_identity", "repositories"],
+      "properties": {
+        "candidate_identity": {"$ref": "#/$defs/sha256"},
+        "repositories": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"$ref": "#/$defs/candidate_backend_repository"},
+            {"$ref": "#/$defs/candidate_frontend_repository"},
+            {"$ref": "#/$defs/candidate_infra_repository"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "candidate_backend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "head",
+        "tree",
+        "lock_path",
+        "lock_sha256",
+        "porcelain_sha256",
+        "clean"
+      ],
+      "properties": {
+        "name": {"const": "backend"},
+        "head": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "porcelain_sha256": {"$ref": "#/$defs/sha256"},
+        "clean": {"const": true}
+      }
+    },
+    "candidate_frontend_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "head",
+        "tree",
+        "lock_path",
+        "lock_sha256",
+        "porcelain_sha256",
+        "clean"
+      ],
+      "properties": {
+        "name": {"const": "frontend"},
+        "head": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "package-lock.json"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "porcelain_sha256": {"$ref": "#/$defs/sha256"},
+        "clean": {"const": true}
+      }
+    },
+    "candidate_infra_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "head",
+        "tree",
+        "lock_path",
+        "lock_sha256",
+        "porcelain_sha256",
+        "clean"
+      ],
+      "properties": {
+        "name": {"const": "infra"},
+        "head": {"$ref": "#/$defs/git_sha"},
+        "tree": {"$ref": "#/$defs/git_sha"},
+        "lock_path": {"const": "uv.lock"},
+        "lock_sha256": {"$ref": "#/$defs/sha256"},
+        "porcelain_sha256": {"$ref": "#/$defs/sha256"},
+        "clean": {"const": true}
+      }
+    },
+    "formal_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "receipt_sha256",
+        "started_at",
+        "ended_at",
+        "stable_sha256"
+      ],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 2},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "started_at": {"$ref": "#/$defs/utc"},
+        "ended_at": {"$ref": "#/$defs/utc"},
+        "stable_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "first_formal_receipt": {
+      "$ref": "#/$defs/formal_receipt",
+      "properties": {"sequence": {"const": 1}}
+    },
+    "second_formal_receipt": {
+      "$ref": "#/$defs/formal_receipt",
+      "properties": {"sequence": {"const": 2}}
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "pointers", "canonical_sha256"],
+      "properties": {
+        "method": {"const": "fixed-json-pointer-replacement-v1"},
+        "pointers": {
+          "const": [
+            "/runtime/clock",
+            "/started_at",
+            "/ended_at",
+            "/receipt_sha256",
+            "/children/0/runtime/clock",
+            "/children/0/started_at",
+            "/children/0/ended_at",
+            "/children/0/receipt_sha256",
+            "/children/0/result/stdout_sha256",
+            "/children/0/result/stderr_sha256",
+            "/children/1/runtime/clock",
+            "/children/1/started_at",
+            "/children/1/ended_at",
+            "/children/1/receipt_sha256",
+            "/children/1/result/stdout_sha256",
+            "/children/1/result/stderr_sha256",
+            "/children/1/gate_evidence/receiptSha256",
+            "/children/1/gate_evidence/steps/0/stdoutSha256",
+            "/children/1/gate_evidence/steps/0/stderrSha256",
+            "/children/1/gate_evidence/steps/1/stdoutSha256",
+            "/children/1/gate_evidence/steps/1/stderrSha256",
+            "/children/1/gate_evidence/steps/2/stdoutSha256",
+            "/children/1/gate_evidence/steps/2/stderrSha256",
+            "/children/1/gate_evidence/steps/3/stdoutSha256",
+            "/children/1/gate_evidence/steps/3/stderrSha256",
+            "/children/1/gate_evidence/steps/4/stdoutSha256",
+            "/children/1/gate_evidence/steps/4/stderrSha256"
+          ]
+        },
+        "canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["infrastructure", "deploy", "smoke", "rollback"],
+      "properties": {
+        "infrastructure": {"const": "NOT RUN"},
+        "deploy": {"const": "NOT RUN"},
+        "smoke": {"const": "NOT RUN"},
+        "rollback": {"const": "NOT RUN"}
+      }
+    }
+  }
+}

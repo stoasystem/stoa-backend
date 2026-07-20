@@ -261,6 +261,38 @@ def test_publication_accepts_only_the_exact_direct_metadata_child(
     assert approved["handoff"] == source_fixture["payload"]
 
 
+def test_publication_rejects_a_shallow_object_store(
+    source_fixture: dict[str, Any], tmp_path: Path
+) -> None:
+    handoff = source_fixture["handoff"]
+    publication = _publish(source_fixture)
+    shallow = tmp_path / "shallow-backend"
+    completed = subprocess.run(
+        [
+            "git",
+            "clone",
+            "-q",
+            "--depth=1",
+            f"file://{source_fixture['roots']['backend']}",
+            str(shallow),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    shallow_workspace = source_fixture["gate"].WorkspaceRoots.from_mapping(
+        {
+            **source_fixture["roots"],
+            "backend": shallow,
+        }
+    )
+    assert _git(shallow, "rev-parse", "HEAD") == publication
+    assert _git(shallow, "rev-parse", "--is-shallow-repository") == "true"
+    with pytest.raises(handoff.HandoffPolicyError, match="shallow"):
+        handoff.verify_publication(publication, shallow_workspace)
+
+
 @pytest.mark.parametrize("attack", ["extra", "mode", "pretty", "duplicate"])
 def test_publication_rejects_extra_mode_and_noncanonical_json(
     source_fixture: dict[str, Any], attack: str
@@ -304,9 +336,10 @@ def test_handoff_rejects_tree_lock_marker_order_and_tracked_ds_store(
     _write(infra / ".DS_Store", "tracked\n")
     _git(infra, "add", ".DS_Store")
     _git(infra, "commit", "-qm", "track forbidden metadata")
-    changed = handoff.issue_handoff(source_fixture["workspace"], source_fixture["operations"])
     with pytest.raises(handoff.HandoffPolicyError):
-        handoff.validate_handoff(changed, source_fixture["workspace"])
+        handoff.issue_handoff(
+            source_fixture["workspace"], source_fixture["operations"]
+        )
 
 
 def test_stable_projection_replaces_only_the_fixed_run_local_fields(
@@ -389,8 +422,8 @@ def test_admission_rejects_wrong_candidate_weak_run_and_retained_drift(
     elif attack == "duplicate":
         receipts[1]["receipt_sha256"] = receipts[0]["receipt_sha256"]
     elif attack == "overlap":
-        receipts[1]["started_at"] = receipts[0]["ended_at"] = _utc(3)
-        receipts[1]["runtime"]["clock"] = _utc(3)
+        receipts[1]["started_at"] = _utc(2)
+        receipts[1]["runtime"]["clock"] = _utc(2)
     elif attack == "darwin":
         for receipt in receipts:
             receipt["runtime"]["platform"] = "darwin-arm64"
@@ -410,6 +443,7 @@ def test_admission_rejects_wrong_candidate_weak_run_and_retained_drift(
 
 def test_source_handoff_schemas_are_closed_and_match_runtime_constants() -> None:
     handoff = _load_module("source_handoff_schema_contract", HANDOFF_MODULE_PATH)
+    loaded: dict[str, dict[str, Any]] = {}
     for path, schema_name in (
         (ROOT / "schemas/release/source-handoff-v1.schema.json", handoff.HANDOFF_SCHEMA),
         (
@@ -418,6 +452,11 @@ def test_source_handoff_schemas_are_closed_and_match_runtime_constants() -> None
         ),
     ):
         schema = json.loads(path.read_text(encoding="utf-8"))
+        loaded[schema_name] = schema
         assert schema["additionalProperties"] is False
         assert schema["properties"]["schema"]["const"] == schema_name
+    admission = loaded[handoff.ADMISSION_SCHEMA]
+    assert admission["$defs"]["normalization"]["properties"]["pointers"][
+        "const"
+    ] == list(handoff.NORMALIZATION_POINTERS)
     assert sha256(b"").hexdigest() == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
