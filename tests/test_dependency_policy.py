@@ -306,9 +306,22 @@ def test_frontend_policy_requires_the_authoritative_web_root_and_rejects_mobile_
         policy.evaluate_frontend(
             audit=_frontend_audit(),
             lock_path=mobile,
+            frontend_root=FRONTEND_LOCK.parent,
             exceptions=_ledger(),
             now=NOW,
         )
+
+
+def test_frontend_policy_accepts_an_explicit_portable_authoritative_root() -> None:
+    policy = _load_policy()
+    result = policy.evaluate_frontend(
+        audit=_frontend_audit(),
+        lock_path=FRONTEND_LOCK,
+        frontend_root=FRONTEND_LOCK.parent,
+        exceptions=_ledger(),
+        now=NOW,
+    )
+    assert result["ecosystem"] == "frontend-npm"
 
 
 def test_frontend_audit_node_and_installed_version_are_lock_bound():

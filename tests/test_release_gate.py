@@ -579,3 +579,80 @@ def test_duplicate_json_fields_fail_before_candidate_or_receipt_use(tmp_path: Pa
     duplicate.write_text('{"schema":"first","schema":"second"}\n', encoding="utf-8")
     with pytest.raises(gate.GatePolicyError, match="duplicate JSON field: schema"):
         gate.load_json(duplicate)
+
+
+def test_candidate_and_receipt_schema_use_only_logical_repository_identities() -> None:
+    candidate = json.loads(CANDIDATE_PATH.read_text(encoding="utf-8"))
+    assert [repository["name"] for repository in candidate["repositories"]] == [
+        "backend",
+        "frontend",
+        "infra",
+    ]
+    assert all("root" not in repository for repository in candidate["repositories"])
+
+    schema = _load_schema()
+    for definition in ("backend_repository", "frontend_repository", "infra_repository"):
+        repository_schema = schema["$defs"][definition]
+        assert "root" not in repository_schema["required"]
+        assert "root" not in repository_schema["properties"]
+    identity = schema["$defs"]["identity"]
+    assert identity["required"] == ["repository", "path", "bytes", "sha256"]
+    assert identity["properties"]["repository"]["enum"] == [
+        "backend",
+        "frontend",
+        "infra",
+    ]
+
+
+def test_gate_spec_binds_logical_repository_and_safe_relative_cwd() -> None:
+    gate = _load_gate()
+    spec = gate.GateSpec(
+        gate_id="portable-test",
+        repository="frontend",
+        cwd=".",
+        argv=("node", "--version"),
+        artifact_paths=("package-lock.json",),
+        config_paths=("package.json",),
+    )
+    assert spec.repository == "frontend"
+    assert spec.cwd == "."
+
+    for cwd in ("/tmp", "../frontend", "nested/../../escape"):
+        with pytest.raises(gate.GatePolicyError, match="cwd"):
+            gate.GateSpec(
+                gate_id="portable-test",
+                repository="frontend",
+                cwd=cwd,
+                argv=("node", "--version"),
+                artifact_paths=("package-lock.json",),
+                config_paths=("package.json",),
+            )
+    with pytest.raises(gate.GatePolicyError, match="repository"):
+        gate.GateSpec(
+            gate_id="portable-test",
+            repository="mobile",
+            cwd=".",
+            argv=("node", "--version"),
+            artifact_paths=("package-lock.json",),
+            config_paths=("package.json",),
+        )
+
+
+def test_workspace_roots_reject_symlinks_and_expose_no_paths_in_receipts(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    roots: dict[str, Path] = {}
+    lock_paths = {"backend": "uv.lock", "frontend": "package-lock.json", "infra": "uv.lock"}
+    for name, lock_path in lock_paths.items():
+        root = tmp_path / name
+        root.mkdir()
+        (root / lock_path).write_text("lock\n", encoding="utf-8")
+        roots[name] = root
+
+    workspace = gate.WorkspaceRoots.from_mapping(roots)
+    assert workspace.require("frontend") == roots["frontend"]
+    link = tmp_path / "frontend-link"
+    link.symlink_to(roots["frontend"], target_is_directory=True)
+    with pytest.raises(gate.GatePolicyError, match="symlink"):
+        gate.WorkspaceRoots.from_mapping({**roots, "frontend": link})
