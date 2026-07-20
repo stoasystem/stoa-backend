@@ -453,7 +453,7 @@ Plans:
 - [x] `474-90` — Backend exact-ref formal verification caller.
 - [x] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
 - [x] `474-92` — Infrastructure exact-ref formal verification caller and CDK-deploy removal.
-- [x] `474-93` — Replacement owner-approved exact source handoff after formal-snapshot path repair.
+- [x] `474-93` — Final owner-approved exact source handoff after both formal-snapshot root repairs.
 - [ ] `474-94` — Two independent no-host-mount Linux formal PASS runs and sealed admission.
 
 **Wave 12**

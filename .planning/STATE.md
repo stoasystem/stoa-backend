@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Republished 474-93 source handoff after Linux snapshot-path repair
-last_updated: "2026-07-20T07:38:00Z"
-last_activity: 2026-07-20 -- Replaced rejected source handoff after real Linux gap repair
+stopped_at: Prepared final 474-93 source handoff after complete Linux snapshot preflight
+last_updated: "2026-07-20T08:03:00Z"
+last_activity: 2026-07-20 -- Repaired all observed snapshot roots and passed 2344 strict Linux tests
 progress:
   total_phases: 10
   completed_phases: 2
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 94 of 94
-Status: Ready to execute Plan 94 against the replacement source publication
-Last activity: 2026-07-20 -- Replaced rejected source handoff after real Linux gap repair
+Status: Ready to execute Plan 94 against the final replacement source publication
+Last activity: 2026-07-20 -- Repaired all observed snapshot roots and passed 2344 strict Linux tests
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Replaced rejected source handoff after real Linux g
 
 ## Session
 
-**Last Date:** 2026-07-20T07:38:00Z
-**Stopped At:** Republished 474-93 source handoff after Linux snapshot-path repair
+**Last Date:** 2026-07-20T08:03:00Z
+**Stopped At:** Prepared final 474-93 source handoff after complete Linux snapshot preflight
 **Resume File:** None
 
 ## Performance Metrics
@@ -379,3 +379,4 @@ Last activity: 2026-07-20 -- Replaced rejected source handoff after real Linux g
 - [Phase 474]: Infra automation is the same generic exact-ref verifier with infra_sha bound to its workflow revision and no OIDC/CDK/provider authority. — Repository automation now verifies source only; external tuple admission remains separate and mandatory.
 - [Phase 474]: The owner-approved handoff records only implementation B/F/I; the direct metadata publication remains an external trust input and Plan 94 candidates must use P/F/I. — This avoids self-reference while preventing any generic caller from selecting release evidence.
 - [Phase 474]: A source handoff is not admissible after a failed real formal attempt; the failed publication is superseded only after fixing the exact materialized-snapshot path and issuing a new direct metadata child. — V9QUAL completion counts only the replacement source's later PASS receipts.
+- [Phase 474]: Both historical handoff publications are rejected because their Python children exposed distinct snapshot-root assumptions; only the post-2344-pass implementation may be republished and counted. — Real Linux failures remain evidence, never PASS credit.
