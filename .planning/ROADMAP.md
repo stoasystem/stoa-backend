@@ -451,6 +451,7 @@ Plans:
 - [x] `474-88` — Candidate-bound fresh Web evidence registration.
 - [x] `474-89` — Non-selectable formal Python and Web aggregate.
 - [x] `474-90` — Backend exact-ref formal verification caller.
+- [ ] `474-91` — Frontend exact-ref formal verification caller and direct-deploy removal.
 
 **Wave 12**
 
