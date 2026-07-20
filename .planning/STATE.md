@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Planned 474-93-PLAN.md
-last_updated: "2026-07-20T06:43:00Z"
-last_activity: 2026-07-20 -- Planned exact cross-repository source handoff
+stopped_at: Completed 474-93-SUMMARY.md
+last_updated: "2026-07-20T07:22:00Z"
+last_activity: 2026-07-20 -- Completed owner-approved exact source handoff
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 155
-  completed_plans: 92
+  completed_plans: 93
   percent: 20
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
 Plan: 93 of 93
-Status: Ready to execute Plan 93
-Last activity: 2026-07-20 -- Planned exact cross-repository source handoff
+Status: Plan 93 complete; ready to plan two independent Linux formal runs
+Last activity: 2026-07-20 -- Completed owner-approved exact source handoff
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-20 -- Planned exact cross-repository source handoff
 
 ## Session
 
-**Last Date:** 2026-07-20T06:43:00Z
-**Stopped At:** Planned 474-93-PLAN.md
+**Last Date:** 2026-07-20T07:22:00Z
+**Stopped At:** Completed 474-93-SUMMARY.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -377,3 +377,4 @@ Last activity: 2026-07-20 -- Planned exact cross-repository source handoff
 - [Phase 474]: The backend workflow revision owns the gate implementation SHA and invokes only candidate then fixed formal after exact three-repository identity and Linux namespace proof. — A new caller cannot execute an older gate, select an alternate graph, or retain direct deployment authority.
 - [Phase 474]: Frontend automation is a generic exact-ref verifier, not a release authority; Plan 93 must machine-bind one external three-repository tuple before Plan 94 may admit any receipt. — This keeps historical exact verification useful without letting a self-selected backend gate approve itself.
 - [Phase 474]: Infra automation is the same generic exact-ref verifier with infra_sha bound to its workflow revision and no OIDC/CDK/provider authority. — Repository automation now verifies source only; external tuple admission remains separate and mandatory.
+- [Phase 474]: The owner-approved handoff records only implementation B/F/I; the direct metadata publication remains an external trust input and Plan 94 candidates must use P/F/I. — This avoids self-reference while preventing any generic caller from selecting release evidence.
