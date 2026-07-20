@@ -449,7 +449,7 @@ Plans:
 - [ ] `474-24` — Subordinate Web and OpenAPI verifier.
 - [x] `474-87` — Exact fresh-install Web subordinate verifier.
 - [x] `474-88` — Candidate-bound fresh Web evidence registration.
-- [ ] `474-89` — Non-selectable formal Python and Web aggregate.
+- [x] `474-89` — Non-selectable formal Python and Web aggregate.
 
 **Wave 12**
 
