@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-42-PLAN.md
-last_updated: "2026-07-19T23:32:56.515Z"
-last_activity: 2026-07-19 -- Phase 474 execution started
+stopped_at: Completed 474-73-PLAN.md
+last_updated: "2026-07-20T00:05:43Z"
+last_activity: 2026-07-20 -- Completed the served-release descriptor trust contract
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 146
-  completed_plans: 78
+  completed_plans: 79
   percent: 20
 ---
 
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 16 of 84
+Plan: 17 of 84
 Status: Ready to execute
-Last activity: 2026-07-19 -- Phase 474 execution started
+Last activity: 2026-07-20 -- Completed the served-release descriptor trust contract
 
 ## Accumulated Context
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 
 ## Session
 
-**Last Date:** 2026-07-19T18:36:16.977Z
-**Stopped At:** Completed 474-42-PLAN.md
+**Last Date:** 2026-07-20T00:05:43Z
+**Stopped At:** Completed 474-73-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -192,6 +192,7 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 | Phase 474 P40 | 7 min | 1 tasks | 3 files |
 | Phase 474 P41 | 10 min | 1 tasks | 1 files |
 | Phase 474 P42 | 6 min | 1 tasks | 2 files |
+| Phase 474 P73 | 14 min | 1 task | 4 frontend files |
 
 ## Decisions
 
@@ -362,3 +363,4 @@ Last activity: 2026-07-19 -- Phase 474 execution started
 - [Phase 474]: DynamoDB notification and connection responses remain object-valued until runtime narrowing establishes safe use. — String-keyed mapping, item-list, cursor, text, and integer checks prevent provider values from becoming trusted through annotation alone.
 - [Phase 474]: Notification and WebSocket paths validate only the table capability each operation invokes. — Operation-specific Protocols preserve least-capability test fakes and validate the actual provider boundary.
 - [Phase 474]: Malformed notification and WebSocket provider responses use stable redacted conflicts. — Delivery identity, account fences, pagination behavior, and coordinate privacy remain unchanged.
+- [Phase 474]: The served-release descriptor binds stable runtime-config.json and index.html service keys to exact S3 VersionIds and SHA-256 values, while caller-owned expected origin remains the trust root. — This preserves Plan 72's exact runtime-config path, avoids descriptor self-identity cycles, and rejects descriptor-controlled origin substitution.
