@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-06-PLAN.md
-last_updated: "2026-07-21T21:47:40.033Z"
+stopped_at: Completed 475-09-PLAN.md
+last_updated: "2026-07-21T22:02:24.241Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 96
+  completed_plans: 97
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 3 of 13
+Plan: 4 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-21T21:47:40.027Z
-**Stopped At:** Completed 475-06-PLAN.md
+**Last Date:** 2026-07-21T22:02:24.235Z
+**Stopped At:** Completed 475-09-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -203,6 +203,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 474 P88 | multi-cycle | 1 task | 3 contract files plus summary |
 | Phase 475 P01 | 9 min | 1 tasks | 3 files |
 | Phase 475 P06 | 12 min | 1 tasks | 6 files |
+| Phase 475 P09 | 10 min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -389,3 +390,6 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Binding rows admit only absence or exact relationship identity/version. — Conditional updates preserve conflicting parents and stable replay coordinates.
 - [Phase 475]: Registration persists a non-authoritative pending profile before the atomic relationship write. — No profile parent projection can commit before both formal relationship rows.
 - [Phase 475]: Parent binding conflicts remain typed and report-only. — The admin route returns a safe 409 without selecting or overwriting either parent.
+- [Phase 475]: Rate-operation IDs use a domain-separated digest over kind, owner, UTC period, and caller identity. — Daily namespaces are isolated and raw caller idempotency keys are not persisted.
+- [Phase 475]: Conversation message commands remain the authoritative chat quota path; the legacy adapter shares the same CHAT counter. — This preserves existing retry semantics without adding a second production chat counter.
+- [Phase 475]: Hint idempotency keys are required and bound to the exact challenge digest. — Same-operation retry replays once while changed challenge meaning conflicts before mutation.
