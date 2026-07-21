@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
@@ -8,10 +8,17 @@ from stoa.models.attachment import AttachmentReference, AttachmentSummary
 
 class QuestionStatus(str, Enum):
     PENDING = "pending"
+    SUBMISSION_FAILED = "submission_failed"
     AI_ANSWERED = "ai_answered"
     ESCALATED = "escalated"
     TEACHER_ACTIVE = "teacher_active"
     RESOLVED = "resolved"
+
+
+class QuestionSubmissionErrorCode(StrEnum):
+    PAYLOAD_MISMATCH = "question_submission_payload_mismatch"
+    QUOTA_EXCEEDED = "question_quota_exceeded"
+    ADMISSION_UNAVAILABLE = "question_submission_temporarily_unavailable"
 
 
 class AIResponse(BaseModel):

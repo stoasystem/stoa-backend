@@ -2,17 +2,22 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import question_repo, user_repo
+from stoa.db.repositories import (
+    attachment_repo,
+    question_repo,
+    question_submission_repo,
+    user_repo,
+)
 from stoa.deps import get_actor
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
 from stoa.security.authorization import AuthorizationPurpose, AuthorizationSpec
 from stoa.security.identity import Actor
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.private_telemetry import emit_private_event
 from stoa.security.route_authorization import (
@@ -25,6 +30,7 @@ from stoa.models.question import (
     FeedbackRequest,
     QuestionResponse,
     QuestionStatus,
+    QuestionSubmissionErrorCode,
     SubmitQuestionRequest,
 )
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
@@ -44,41 +50,47 @@ from stoa.services import (
 router = APIRouter()
 
 
-def _check_daily_limit(
-    student_id: str,
+def _question_limit(
     subscription_tier: str,
     settings: Settings,
     *,
     entitlement: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Raise 429 if the student has exceeded their daily question quota."""
+) -> int:
     limits = {
         "free": settings.free_tier_daily_question_limit,
         "standard": settings.standard_tier_daily_question_limit,
         "premium": settings.premium_tier_daily_question_limit,
     }
     effective_plan = (entitlement or {}).get("effectivePlan") or subscription_tier
-    limit = int(
+    return int(
         ((entitlement or {}).get("limits") or {}).get("dailyAiQuestionLimit")
         or limits.get(effective_plan, settings.free_tier_daily_question_limit)
     )
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    expires_at = int(datetime.now(timezone.utc).timestamp()) + 172800
-    count = question_repo.record_daily_question_usage(student_id, today, limit, expires_at)
-    if count is None:
-        blocking_reason = (entitlement or {}).get("blockingReason")
-        suffix = f" ({blocking_reason})" if blocking_reason else ""
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily question limit ({limit}) reached for your plan{suffix}",
-        )
-    return {
-        "quotaPeriod": today,
-        "counterKey": f"USAGE#{student_id}/QUESTION#{today}",
-        "counterValue": count,
-        "limit": limit,
-        "expiresAt": expires_at,
-    }
+
+
+def _raise_question_submission_error(
+    code: QuestionSubmissionErrorCode,
+    *,
+    correlation_id: str,
+    limit: int | None = None,
+) -> NoReturn:
+    if code is QuestionSubmissionErrorCode.PAYLOAD_MISMATCH:
+        http_status = status.HTTP_409_CONFLICT
+        message = "This submission key belongs to different content. Submit the edit as a new question."
+        action = "create_new_submission"
+    elif code is QuestionSubmissionErrorCode.QUOTA_EXCEEDED:
+        http_status = status.HTTP_429_TOO_MANY_REQUESTS
+        message = f"Daily question limit ({limit}) reached for your plan"
+        action = "wait_for_quota_reset"
+    else:
+        http_status = status.HTTP_503_SERVICE_UNAVAILABLE
+        message = "Question submission is temporarily unavailable. Try again with the same submission key."
+        action = "retry_same_submission"
+    raise HTTPException(
+        status_code=http_status,
+        detail={"code": code.value, "message": message, "action": action},
+        headers={"X-Correlation-ID": correlation_id},
+    )
 
 
 def _question_response(item: dict[str, Any]) -> QuestionResponse:
@@ -89,9 +101,12 @@ def _question_response(item: dict[str, Any]) -> QuestionResponse:
         attachment_id or item.get("image_s3_key") or item.get("has_image")
     )
     if attachment_id and not public_item.get("attachment"):
-        summary = attachment_service.list_attachment_summaries([str(attachment_id)]).get(
-            str(attachment_id)
-        )
+        try:
+            summary = attachment_service.list_attachment_summaries(
+                [str(attachment_id)]
+            ).get(str(attachment_id))
+        except Exception:
+            summary = None
         public_item["attachment"] = summary
     public_item["ocr_metadata"] = item.get("ocr_metadata") or {
         "status": "not_requested",
@@ -135,22 +150,99 @@ def _build_question_content(
     return content, metadata, ocr_text
 
 
-def _question_retry_matches(existing_question: dict[str, Any], body: SubmitQuestionRequest, subject: str) -> bool:
-    """Return whether an idempotent retry matches the original question intent."""
-    return (
-        existing_question.get("subject") == subject
-        and (existing_question.get("original_content") or existing_question.get("content")) == body.content
-        and (existing_question.get("corrected_text") or None) == (body.corrected_text or None)
-        and (existing_question.get("attachment_source_identity") or None)
-        == (_attachment_identity(body) or None)
-    )
-
-
 def _attachment_identity(body: SubmitQuestionRequest) -> str | None:
     if body.attachment is None:
         return None
     kind, value = body.attachment.identity
     return f"{kind}:{value}"
+
+
+def _project_question_admission(
+    result: question_submission_repo.QuestionAdmissionResult,
+    *,
+    correlation_id: str,
+    limit: int,
+) -> dict[str, Any] | None:
+    disposition = result.disposition
+    if disposition is question_submission_repo.QuestionAdmissionDisposition.ADMITTED:
+        return dict(result.question or {})
+    if disposition is question_submission_repo.QuestionAdmissionDisposition.RESUME:
+        command = result.command or {}
+        question_id = command.get("question_id")
+        question = question_repo.get_question(str(question_id)) if question_id else None
+        if question is not None:
+            return dict(question)
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+            correlation_id=correlation_id,
+        )
+    if disposition is question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH:
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.PAYLOAD_MISMATCH,
+            correlation_id=correlation_id,
+        )
+    if disposition is question_submission_repo.QuestionAdmissionDisposition.QUOTA_EXCEEDED:
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.QUOTA_EXCEEDED,
+            correlation_id=correlation_id,
+            limit=limit,
+        )
+    _raise_question_submission_error(
+        QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+        correlation_id=correlation_id,
+    )
+
+
+def _question_attachment_operations(
+    *,
+    question: dict[str, Any],
+    prepared: dict[str, Any] | None,
+    actor: Actor,
+    effective_plan: str,
+    now: str,
+) -> tuple[object, ...]:
+    if prepared is None:
+        return ()
+    attachment = prepared["attachment"]
+    attachment_id = str(attachment["attachment_id"])
+    question_id = str(question["question_id"])
+    association: dict[str, object] = {
+        **attachment_repo.question_association_key(attachment_id, question_id),
+        "attachment_id": attachment_id,
+        "owner_id": actor.user_id,
+        "student_id": actor.user_id,
+        "entity_type": "attachment_association",
+        "resource_type": "question",
+        "resource_id": question_id,
+        "created_at": now,
+    }
+    return tuple(
+        attachment_repo.build_question_attachment_transaction(
+            question=question_repo.question_item(question),
+            prepared=prepared,
+            attachment=attachment,
+            association=association,
+            owner_id=actor.user_id,
+            limit_bytes=attachment_service.storage_limit_for_entitlement(effective_plan),
+            now_iso=now,
+        )
+    )
+
+
+def _prepared_attachment_summary(
+    prepared: dict[str, Any] | None,
+) -> dict[str, object] | None:
+    if prepared is None:
+        return None
+    attachment = prepared["attachment"]
+    return {
+        "attachmentId": str(attachment["attachment_id"]),
+        "filename": str(attachment["original_filename"]),
+        "mediaType": str(attachment["detected_type"]),
+        "sizeBytes": int(attachment["content_length"]),
+        "status": "active",
+        "createdAt": str(attachment["created_at"]),
+    }
 
 
 def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> None:
@@ -202,14 +294,14 @@ async def submit_question(
     """Submit a question; run OCR if an image is provided, then call AI."""
     student_id = actor.user_id
     student_profile = user_repo.get_user(student_id) or {}
-    subscription_tier = student_profile.get("subscription_tier", "free")
+    subscription_tier = str(student_profile.get("subscription_tier") or "free")
     entitlement = entitlement_service.resolve_student_entitlement(
         student_id,
         settings=settings,
         student_profile=student_profile,
     )
-    language = student_profile.get("language", "de")
-    grade = student_profile.get("grade", "Sek1")
+    language = str(student_profile.get("language") or "de")
+    grade = str(student_profile.get("grade") or "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
     question_id = str(uuid.uuid4())
     idempotency_key = usage_ledger_service.build_question_idempotency_key(
@@ -217,26 +309,44 @@ async def submit_question(
         body.idempotency_key,
     )
     quota_period = usage_ledger_service.today_period()
+    attachment_identity = _attachment_identity(body)
+    attachment_identities = (attachment_identity,) if attachment_identity else ()
+    fingerprint = question_submission_repo.question_submission_fingerprint(
+        subject=subject,
+        original_content=body.content,
+        corrected_content=body.corrected_text,
+        attachment_identities=attachment_identities,
+    )
+    limit = _question_limit(
+        subscription_tier, settings, entitlement=entitlement
+    )
 
-    if body.idempotency_key:
-        existing_usage = usage_ledger_service.get_question_usage_event(
-            student_id=student_id,
-            quota_period=quota_period,
-            idempotency_key=idempotency_key,
+    # Avoid re-reserving an upload for a durable replay. A later strong read in
+    # admit_question_submission remains the authority for concurrent first calls.
+    try:
+        existing_command = question_submission_repo.get_question_submission_command(
+            student_id, idempotency_key
         )
-        if existing_usage and existing_usage.get("question_id"):
-            existing_question = question_repo.get_question(str(existing_usage["question_id"]))
-            if existing_question:
-                if not _question_retry_matches(existing_question, body, subject):
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Idempotency key was already used for a different question submission",
-                    )
-                return _question_response(existing_question)
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Question submission is already recorded; retry later",
-            )
+    except Exception:
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+            correlation_id=correlation_id,
+        )
+    if existing_command is not None:
+        disposition = (
+            question_submission_repo.QuestionAdmissionDisposition.RESUME
+            if existing_command.get("fingerprint") == fingerprint
+            else question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH
+        )
+        replay = _project_question_admission(
+            question_submission_repo.QuestionAdmissionResult(
+                disposition,
+                command=existing_command,
+            ),
+            correlation_id=correlation_id,
+            limit=limit,
+        )
+        return _question_response(replay or {})
 
     prepared_attachment: dict[str, Any] | None = None
     if body.attachment is not None:
@@ -247,73 +357,39 @@ async def submit_question(
                 effective_plan=str(entitlement.get("effectivePlan") or subscription_tier),
             )
         except AttachmentDecisionError as error:
+            try:
+                command = question_submission_repo.get_question_submission_command(
+                    student_id, idempotency_key
+                )
+            except Exception:
+                command = None
+            if command is not None:
+                disposition = (
+                    question_submission_repo.QuestionAdmissionDisposition.RESUME
+                    if command.get("fingerprint") == fingerprint
+                    else question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH
+                )
+                replay = _project_question_admission(
+                    question_submission_repo.QuestionAdmissionResult(
+                        disposition,
+                        command=command,
+                    ),
+                    correlation_id=correlation_id,
+                    limit=limit,
+                )
+                return _question_response(replay or {})
             _raise_attachment(error, correlation_id)
-
-    try:
-        usage_counter = _check_daily_limit(
-            student_id, subscription_tier, settings, entitlement=entitlement
-        )
-    except Exception:
-        if prepared_attachment is not None:
-            attachment_service.release_question_attachment_reservation(
-                prepared_attachment, actor
-            )
-        raise
-
-    try:
-        ai_content, ocr_metadata, ocr_text = _build_question_content(
-            body, settings, prepared_attachment
-        )
-    except ocr_service.OcrAttachmentFailure as error:
-        emit_private_event(
-            "question_ocr_failed",
-            exception=error,
-            attachment_count=1,
-            correlation_id=correlation_id,
-            level=logging.WARNING,
-        )
-        if prepared_attachment is not None:
-            if error.terminal:
-                attachment_service.invalidate_question_attachment(
-                    prepared_attachment, actor
-                )
-            else:
-                attachment_service.release_question_attachment_reservation(
-                    prepared_attachment, actor
-                )
-        _raise_attachment(
-            AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_INVALID
-                if error.terminal
-                else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            ),
-            correlation_id,
-        )
-    except Exception:
-        if prepared_attachment is not None:
-            attachment_service.release_question_attachment_reservation(
-                prepared_attachment, actor
-            )
-        _raise_attachment(
-            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE),
-            correlation_id,
-        )
 
     now = datetime.now(timezone.utc).isoformat()
     public_content = body.corrected_text.strip() if body.corrected_text else body.content
-    usage_ledger_service.record_question_usage_event(
-        student_id=student_id,
-        question_id=question_id,
-        quota_period=usage_counter["quotaPeriod"],
-        idempotency_key=idempotency_key,
-        counter_key=usage_counter["counterKey"],
-        counter_value=usage_counter["counterValue"],
-        quantity=1,
-        entitlement=entitlement,
-        created_at=now,
-    )
-
-    item = {
+    initial_ocr_metadata = {
+        "status": "processing" if prepared_attachment is not None else "not_requested",
+        "source": "question_image" if prepared_attachment is not None else None,
+        "text_length": 0,
+        "correction_applied": body.corrected_text is not None,
+        "failure_class": None,
+    }
+    item: dict[str, Any] = {
         "question_id": question_id,
         "student_id": student_id,
         "subject": subject,
@@ -325,10 +401,10 @@ async def submit_question(
             if prepared_attachment is not None
             else None
         ),
-        "attachment_source_identity": _attachment_identity(body),
+        "attachment_source_identity": attachment_identity,
         "has_image": prepared_attachment is not None,
-        "ocr_text": ocr_text,
-        "ocr_metadata": ocr_metadata,
+        "ocr_text": None,
+        "ocr_metadata": initial_ocr_metadata,
         "status": QuestionStatus.PENDING.value,
         "ai_response": None,
         "teacher_id": None,
@@ -340,22 +416,84 @@ async def submit_question(
         "created_at": now,
         "resolved_at": None,
     }
-    if prepared_attachment is None:
-        question_repo.put_question(item)
-    else:
-        try:
-            summary = attachment_service.commit_question_with_attachment(
-                question=question_repo.question_item(item),
+    usage_event = usage_ledger_service.build_question_usage_event(
+        student_id=student_id,
+        question_id=question_id,
+        quota_period=quota_period,
+        idempotency_key=idempotency_key,
+        counter_key=f"USAGE#{student_id}/QUESTION#{quota_period}",
+        counter_value=1,
+        quantity=1,
+        entitlement=entitlement,
+        created_at=now,
+    )
+    try:
+        result = question_submission_repo.admit_question_submission(
+            student_id=student_id,
+            idempotency_key=idempotency_key,
+            fingerprint=fingerprint,
+            question=item,
+            usage_event=usage_event,
+            quota_period=quota_period,
+            limit=limit,
+            expires_at=usage_ledger_service.counter_ttl(),
+            attachment_identities=attachment_identities,
+            attachment_operations=_question_attachment_operations(
+                question=item,
                 prepared=prepared_attachment,
                 actor=actor,
-                effective_plan=str(entitlement.get("effectivePlan") or subscription_tier),
-            )
-            item["attachment"] = summary
-        except AttachmentDecisionError as error:
+                effective_plan=str(
+                    entitlement.get("effectivePlan") or subscription_tier
+                ),
+                now=now,
+            ),
+            created_at=now,
+        )
+    except Exception:
+        if prepared_attachment is not None:
             attachment_service.release_question_attachment_reservation(
                 prepared_attachment, actor
             )
-            _raise_attachment(error, correlation_id)
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+            correlation_id=correlation_id,
+        )
+    if result.disposition is not question_submission_repo.QuestionAdmissionDisposition.ADMITTED:
+        if prepared_attachment is not None:
+            attachment_service.release_question_attachment_reservation(
+                prepared_attachment, actor
+            )
+        replay = _project_question_admission(
+            result,
+            correlation_id=correlation_id,
+            limit=limit,
+        )
+        return _question_response(replay or {})
+
+    item["attachment"] = _prepared_attachment_summary(prepared_attachment)
+
+    try:
+        ai_content, ocr_metadata, ocr_text = _build_question_content(
+            body, settings, prepared_attachment
+        )
+        item["ocr_text"] = ocr_text
+        item["ocr_metadata"] = ocr_metadata
+        if prepared_attachment is not None:
+            question_repo.update_status(
+                question_id,
+                QuestionStatus.PENDING.value,
+                ocr_text=ocr_text,
+                ocr_metadata=ocr_metadata,
+            )
+    except Exception as error:
+        emit_private_event(
+            "question_ocr_failed",
+            exception=error,
+            attachment_count=1,
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
+        return _question_response(item)
 
     # Call AI synchronously (Lambda function has up to 30s; Haiku is fast)
     try:

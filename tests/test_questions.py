@@ -1,11 +1,13 @@
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.config import Settings, get_settings
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import questions
+from stoa.db.repositories import question_submission_repo
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services.ocr_service import OcrAttachmentFailure
@@ -54,6 +56,7 @@ def _prepared_question_attachment() -> dict:
             "status": "consuming",
             "version": 2,
             "expires_at": 2_000_000_000,
+            "consume_epoch": 1_900_000_000,
         },
         "attachment": {
             "attachment_id": "attachment-1",
@@ -69,6 +72,37 @@ def _prepared_question_attachment() -> dict:
             "created_at": "2026-07-16T00:00:00+00:00",
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def _atomic_question_admission(monkeypatch):
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **kwargs: question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            question=dict(kwargs["question"]),
+        ),
+    )
+    monkeypatch.setattr(
+        questions,
+        "_question_attachment_operations",
+        lambda **kwargs: ("prepared-attachment",)
+        if kwargs["prepared"] is not None
+        else (),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "list_attachment_summaries",
+        lambda attachment_ids: {
+            attachment_id: _attachment_summary() for attachment_id in attachment_ids
+        },
+    )
 
 
 def _attachment_summary() -> dict:
@@ -123,7 +157,6 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
 
 def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch):
     stored = {}
-    usage_calls = []
 
     monkeypatch.setattr(
         questions.user_repo,
@@ -145,11 +178,6 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         },
     )
     monkeypatch.setattr(
-        questions.question_repo,
-        "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: usage_calls.append((student_id, limit)) or 1,
-    )
-    monkeypatch.setattr(
         questions.ocr_service,
         "extract_text_from_attachment",
         lambda attachment, settings_obj: "raw OCR text from image",
@@ -160,9 +188,13 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         lambda *args, **kwargs: _prepared_question_attachment(),
     )
     monkeypatch.setattr(
-        questions.attachment_service,
-        "commit_question_with_attachment",
-        lambda **kwargs: stored.update(kwargs["question"]) or _attachment_summary(),
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **kwargs: stored.update(kwargs["question"])
+        or question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            question=dict(kwargs["question"]),
+        ),
     )
     monkeypatch.setattr(
         questions.attachment_service,
@@ -170,9 +202,6 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {}
-    )
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
@@ -201,11 +230,11 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     assert "raw OCR text from image" not in str(body)
     assert stored["attachment_id"] == "attachment-1"
     assert stored["attachment_source_identity"] == "upload:upload-1"
-    assert stored["ocr_text"] == "raw OCR text from image"
+    assert stored["ocr_text"] is None
     assert stored["original_content"] == "Please solve the image"
     assert stored["corrected_text"] == "Solve 2x + 4 = 10"
     assert stored["entitlement"]["effectivePlan"] == "free"
-    assert usage_calls == [("student-1", 2)]
+    assert stored["status"] == "pending"
 
 
 def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
@@ -289,10 +318,10 @@ def test_question_quota_race_stable_error_has_no_question_or_ai_effect(monkeypat
         lambda *args, **kwargs: "private-ocr-canary",
     )
     monkeypatch.setattr(
-        questions.attachment_service,
-        "commit_question_with_attachment",
-        lambda **kwargs: (_ for _ in ()).throw(
-            AttachmentDecisionError(AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED)
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **_kwargs: question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.QUOTA_EXCEEDED
         ),
     )
     monkeypatch.setattr(
@@ -313,11 +342,8 @@ def test_question_quota_race_stable_error_has_no_question_or_ai_effect(monkeypat
             "attachment": {"uploadId": "upload-1"},
         },
     )
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "storage_quota_exceeded"
-    assert response.json()["detail"]["message"] == (
-        "Storage is full. Delete attachments or upgrade your plan."
-    )
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "question_quota_exceeded"
     assert effects == ["released"]
     assert "private-question-canary" not in response.text
     assert "private-ocr-canary" not in response.text
@@ -364,36 +390,14 @@ def test_get_question_hides_private_image_key(monkeypatch):
     assert "private/student-1/image.png" not in str(response.json())
 
 
-def test_check_daily_limit_uses_atomic_counter(monkeypatch):
-    calls = []
+def test_question_limit_uses_subscription_tier_default():
     settings = _settings()
-    monkeypatch.setattr(
-        questions.question_repo,
-        "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: (
-            calls.append((student_id, day, limit, expires_at)) or 2
-        ),
-    )
-
-    questions._check_daily_limit("student-1", "free", settings)
-
-    assert calls[0][0] == "student-1"
-    assert calls[0][2] == 2
+    assert questions._question_limit("free", settings) == 2
 
 
-def test_check_daily_limit_uses_effective_entitlement(monkeypatch):
-    calls = []
+def test_question_limit_uses_effective_entitlement():
     settings = _settings()
-    monkeypatch.setattr(
-        questions.question_repo,
-        "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: (
-            calls.append((student_id, day, limit, expires_at)) or 1
-        ),
-    )
-
-    questions._check_daily_limit(
-        "student-1",
+    assert questions._question_limit(
         "free",
         settings,
         entitlement={
@@ -401,22 +405,12 @@ def test_check_daily_limit_uses_effective_entitlement(monkeypatch):
             "limits": {"dailyAiQuestionLimit": 100},
             "blockingReason": None,
         },
-    )
-
-    assert calls[0][2] == 100
+    ) == 100
 
 
-def test_check_daily_limit_rejects_when_counter_condition_fails(monkeypatch):
+def test_question_limit_uses_configured_tier_when_entitlement_limit_absent():
     settings = _settings()
-    monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: None)
-
-    try:
-        questions._check_daily_limit("student-1", "free", settings)
-    except questions.HTTPException as exc:
-        assert exc.status_code == 429
-        assert "Daily question limit (2)" in exc.detail
-    else:
-        raise AssertionError("quota exhaustion should raise")
+    assert questions._question_limit("standard", settings, entitlement={}) == 30
 
 
 def test_record_daily_question_usage_returns_none_on_condition_failure(monkeypatch):
@@ -456,27 +450,22 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
             "blockingReason": None,
         },
     )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "record_daily_question_usage",
-        lambda student_id, day, limit, expires_at: 7,
-    )
-    monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         questions.ai_service,
         "get_ai_answer",
         lambda **kwargs: {"answer": "AI answer", "steps": [], "hints": [], "similar_exercises": []},
     )
+    def admit(**kwargs):
+        stored.update(kwargs["question"])
+        ledger_calls.append(kwargs["usage_event"])
+        return question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            question=dict(kwargs["question"]),
+        )
+
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "get_question_usage_event",
-        lambda **kwargs: None,
-    )
-    monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "record_question_usage_event",
-        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+        questions.question_submission_repo, "admit_question_submission", admit
     )
 
     response = _client().post(
@@ -491,9 +480,10 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
     assert response.status_code == 201
     assert ledger_calls[0]["student_id"] == "student-1"
     assert ledger_calls[0]["question_id"] == stored["question_id"]
-    assert ledger_calls[0]["counter_value"] == 7
+    assert ledger_calls[0]["counter_value_after"] == 1
     assert ledger_calls[0]["idempotency_key"] == "question-submit-1"
-    assert ledger_calls[0]["entitlement"]["effectivePlan"] == "premium"
+    assert ledger_calls[0]["effective_plan"] == "premium"
+    assert ledger_calls[0]["entitlement_snapshot"]["effectivePlan"] == "premium"
 
 
 def test_submit_question_idempotent_retry_without_question_does_not_increment_counter(monkeypatch):
@@ -518,10 +508,19 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
             "blockingReason": None,
         },
     )
+    fingerprint = question_submission_repo.question_submission_fingerprint(
+        subject="math",
+        original_content="Please solve 2x + 4 = 10",
+        corrected_content=None,
+    )
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "get_question_usage_event",
-        lambda **kwargs: {"question_id": "question-existing"},
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: {
+            "question_id": "question-existing",
+            "fingerprint": fingerprint,
+            "status": "processing",
+        },
     )
     monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: None)
     monkeypatch.setattr(
@@ -539,7 +538,10 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == (
+        "question_submission_temporarily_unavailable"
+    )
     assert usage_calls == []
 
 
@@ -565,10 +567,19 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
             "blockingReason": None,
         },
     )
+    original_fingerprint = question_submission_repo.question_submission_fingerprint(
+        subject="math",
+        original_content="Please solve 2x + 4 = 10",
+        corrected_content=None,
+    )
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "get_question_usage_event",
-        lambda **kwargs: {"question_id": "question-existing"},
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: {
+            "question_id": "question-existing",
+            "fingerprint": original_fingerprint,
+            "status": "processing",
+        },
     )
     monkeypatch.setattr(
         questions.question_repo,
@@ -608,7 +619,7 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
     )
 
     assert response.status_code == 409
-    assert "different question submission" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "question_submission_payload_mismatch"
     assert usage_calls == []
 
 
@@ -656,7 +667,7 @@ def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
     assert "object_key" not in str(response.json()).lower()
 
 
-def test_transient_ocr_failure_releases_reservation_with_safe_error(
+def test_transient_ocr_failure_returns_durable_processing_question(
     monkeypatch, caplog
 ) -> None:
     _patch_question_submit_dependencies(monkeypatch)
@@ -696,16 +707,19 @@ def test_transient_ocr_failure_releases_reservation_with_safe_error(
             "attachment": {"uploadId": "upload-1"},
         },
     )
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "upload_service_unavailable"
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+    assert response.json()["ocr_metadata"]["status"] == "processing"
     assert "provider-payload-canary" not in str(response.json())
     assert "provider-payload-canary" not in caplog.text
     assert "event_category=question_ocr_failed" in caplog.text
     assert "exception_class=OcrAttachmentFailure" in caplog.text
-    assert effects == ["released"]
+    assert effects == []
 
 
-def test_terminal_ocr_failure_invalidates_without_question_write(monkeypatch) -> None:
+def test_terminal_ocr_failure_preserves_durable_attachment_and_processing_question(
+    monkeypatch,
+) -> None:
     _patch_question_submit_dependencies(monkeypatch)
     effects = []
     monkeypatch.setattr(
@@ -738,10 +752,11 @@ def test_terminal_ocr_failure_invalidates_without_question_write(monkeypatch) ->
             "attachment": {"uploadId": "upload-1"},
         },
     )
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "upload_invalid"
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+    assert response.json()["attachment"]["attachmentId"] == "attachment-1"
     assert "provider-canary" not in str(response.json())
-    assert effects == ["invalidated"]
+    assert effects == []
 
 
 def test_unresolved_attachment_fails_before_counter_ocr_or_question(monkeypatch) -> None:
@@ -802,10 +817,20 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
             "limits": {"dailyAiQuestionLimit": 2},
         },
     )
+    original_fingerprint = question_submission_repo.question_submission_fingerprint(
+        subject="math",
+        original_content="Please solve this equation",
+        corrected_content=None,
+        attachment_identities=("upload:upload-original",),
+    )
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "get_question_usage_event",
-        lambda **kwargs: {"question_id": "question-existing"},
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: {
+            "question_id": "question-existing",
+            "fingerprint": original_fingerprint,
+            "status": "processing",
+        },
     )
     monkeypatch.setattr(
         questions.question_repo,
@@ -894,7 +919,7 @@ def test_request_teacher_records_support_visible_usage_event(monkeypatch):
     }
 
 
-def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_reconciliation(
+def test_submit_question_precommit_failure_has_no_legacy_partial_writes(
     monkeypatch,
 ):
     ledger_calls = []
@@ -925,14 +950,11 @@ def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_recon
         lambda *args: counter_calls.append(args) or 1,
     )
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "get_question_usage_event",
-        lambda **kwargs: None,
-    )
-    monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "record_question_usage_event",
-        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **_kwargs: question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.RETRYABLE
+        ),
     )
 
     def fail_put_question(item):
@@ -950,10 +972,12 @@ def test_submit_question_persistence_failure_leaves_counter_and_ledger_for_recon
         },
     )
 
-    assert response.status_code == 500
-    assert len(counter_calls) == 1
-    assert len(ledger_calls) == 1
-    assert ledger_calls[0]["idempotency_key"] == "question-submit-1"
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == (
+        "question_submission_temporarily_unavailable"
+    )
+    assert counter_calls == []
+    assert ledger_calls == []
 
 
 def test_submit_question_rejects_body_owner_substitution_before_any_write(monkeypatch):
