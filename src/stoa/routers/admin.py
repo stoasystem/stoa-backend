@@ -5,6 +5,7 @@ from typing import Any, Optional
 import boto3
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.responses import JSONResponse
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
@@ -2104,8 +2105,7 @@ async def repair_parent_binding(
     if not student or student.get("role") != "student":
         raise HTTPException(status_code=404, detail="Student profile not found")
     now = report_audit_retention_service.now_iso()
-    user_repo.update_student_parent_link(body.student_id, body.parent_id, body.relationship)
-    binding = user_repo.put_parent_student_binding(
+    result = user_repo.put_parent_student_relationship(
         parent_id=body.parent_id,
         student_id=body.student_id,
         relationship=body.relationship,
@@ -2114,7 +2114,28 @@ async def repair_parent_binding(
         actor=str(user.get("sub") or user.get("username") or "admin"),
         created_at=now,
     )
-    return _binding_response(binding)
+    if result.disposition is user_repo.ParentBindingDisposition.CONFLICT:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": "parent_binding_conflict",
+                "message": (
+                    "The relationship conflicts with current records and requires "
+                    "administrator review. No relationship was changed."
+                ),
+            },
+        )
+    if result.disposition is user_repo.ParentBindingDisposition.RETRYABLE:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "code": "parent_binding_temporarily_unavailable",
+                "message": "The relationship was not changed. Try again later.",
+            },
+        )
+    if result.binding is None:
+        raise RuntimeError("parent relationship result omitted binding")
+    return _binding_response(result.binding)
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)

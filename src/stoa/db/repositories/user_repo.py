@@ -1,7 +1,9 @@
 """DynamoDB access patterns for the User entity."""
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from enum import StrEnum
 
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.repositories import account_deletion_repo
@@ -10,6 +12,30 @@ from stoa.db.dynamodb import get_table
 
 type UserItem = dict[str, object]
 type TransactionOperation = dict[str, object]
+
+
+class ParentBindingDisposition(StrEnum):
+    """Closed outcomes for one atomic parent/student relationship write."""
+
+    CREATED = "created"
+    REPLAYED = "replayed"
+    CONFLICT = "conflict"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBindingResult:
+    disposition: ParentBindingDisposition
+    binding: UserItem | None = None
+    profile: UserItem | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ParentBindingSnapshot:
+    profile: UserItem | None
+    forward: UserItem | None
+    reverse: UserItem | None
+    reverse_rows: tuple[UserItem, ...]
 
 
 def put_user(item: Mapping[str, object]) -> None:
@@ -172,7 +198,7 @@ def update_profile_fields(
     return get_user(user_id) or {}
 
 
-def put_parent_student_binding(
+def build_parent_binding_transaction(
     *,
     parent_id: str,
     student_id: str,
@@ -182,10 +208,19 @@ def put_parent_student_binding(
     actor: str = "system",
     created_at: str,
     version: int = 1,
-) -> UserItem:
-    """Persist the formal parent/student binding and a reverse lookup row."""
-    table = get_table()
-    fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
+    expected_generation: int,
+) -> list[TransactionOperation]:
+    """Compose both formal rows and the profile projection behind one fence."""
+    parent_id = _required_text(parent_id, "parent_id")
+    student_id = _required_text(student_id, "student_id")
+    relationship = _required_text(relationship, "relationship")
+    status = _required_text(status, "status")
+    source = _required_text(source, "source")
+    actor = _required_text(actor, "actor")
+    created_at = _required_text(created_at, "created_at")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError("version must be a positive integer")
+
     binding = {
         "entity_type": "parent_student_binding",
         "parent_id": parent_id,
@@ -198,33 +233,318 @@ def put_parent_student_binding(
         "created_at": created_at,
         "updated_at": created_at,
     }
-    account_deletion_repo.transact(
-        [
-            account_deletion_repo.active_fence_condition(
-                student_id, _required_positive_integer(fence.get("generation"))
-            ),
-            {
-                "Put": {
-                    "Item": {
-                        "PK": f"USER#{parent_id}",
-                        "SK": f"CHILD#{student_id}",
-                        **binding,
-                    }
-                }
-            },
-            {
-                "Put": {
-                    "Item": {
-                        "PK": f"USER#{student_id}",
-                        "SK": f"PARENT#{parent_id}",
-                        **binding,
-                    }
-                }
-            },
-        ],
-        table=table,
+    names = {
+        "#entity_type": "entity_type",
+        "#parent_id": "parent_id",
+        "#student_id": "student_id",
+        "#relationship": "relationship",
+        "#status": "status",
+        "#source": "source",
+        "#actor": "actor",
+        "#version": "version",
+        "#created_at": "created_at",
+        "#updated_at": "updated_at",
+    }
+    values = {f":{key}": value for key, value in binding.items()}
+    condition = (
+        "(attribute_not_exists(PK) AND attribute_not_exists(SK)) OR "
+        "(#parent_id = :parent_id AND #student_id = :student_id AND "
+        "#relationship = :relationship AND #version = :version)"
     )
-    return binding
+    update = (
+        "SET #entity_type = if_not_exists(#entity_type, :entity_type), "
+        "#parent_id = if_not_exists(#parent_id, :parent_id), "
+        "#student_id = if_not_exists(#student_id, :student_id), "
+        "#relationship = if_not_exists(#relationship, :relationship), "
+        "#status = :status, #source = :source, #actor = :actor, "
+        "#version = if_not_exists(#version, :version), "
+        "#created_at = if_not_exists(#created_at, :created_at), "
+        "#updated_at = :updated_at"
+    )
+
+    def binding_update(pk: str, sk: str) -> TransactionOperation:
+        return {
+            "Update": {
+                "Key": {"PK": pk, "SK": sk},
+                "UpdateExpression": update,
+                "ConditionExpression": condition,
+                "ExpressionAttributeNames": dict(names),
+                "ExpressionAttributeValues": dict(values),
+            }
+        }
+
+    return [
+        account_deletion_repo.active_fence_condition(student_id, expected_generation),
+        binding_update(f"USER#{parent_id}", f"CHILD#{student_id}"),
+        binding_update(f"USER#{student_id}", f"PARENT#{parent_id}"),
+        {
+            "Update": {
+                "Key": {"PK": f"USER#{student_id}", "SK": "PROFILE"},
+                "UpdateExpression": (
+                    "SET #parent_id = :parent_id, #relationship = :relationship, "
+                    "#parent_binding_status = :status"
+                ),
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND "
+                    "#user_id = :student_id AND #role = :student_role AND "
+                    "(attribute_not_exists(#parent_id) OR #parent_id = :parent_id) AND "
+                    "(attribute_not_exists(#relationship) OR #relationship = :relationship)"
+                ),
+                "ExpressionAttributeNames": {
+                    "#parent_id": "parent_id",
+                    "#relationship": "relationship",
+                    "#parent_binding_status": "parent_binding_status",
+                    "#user_id": "user_id",
+                    "#role": "role",
+                },
+                "ExpressionAttributeValues": {
+                    ":parent_id": parent_id,
+                    ":student_id": student_id,
+                    ":student_role": "student",
+                    ":relationship": relationship,
+                    ":status": status,
+                },
+            }
+        },
+    ]
+
+
+def put_parent_student_relationship(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str = "child",
+    status: str = "active",
+    source: str = "admin_repair",
+    actor: str = "system",
+    created_at: str,
+    version: int = 1,
+) -> ParentBindingResult:
+    """Commit or replay the exact relationship without choosing a conflict winner."""
+    table = get_table()
+    snapshot = _parent_binding_snapshot(parent_id, student_id)
+    replay = _matching_parent_relationship(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status=status,
+        version=version,
+    )
+    if replay is not None:
+        return ParentBindingResult(
+            ParentBindingDisposition.REPLAYED,
+            binding=replay,
+            profile=snapshot.profile,
+        )
+    if _parent_relationship_conflicts(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        version=version,
+    ):
+        return ParentBindingResult(ParentBindingDisposition.CONFLICT)
+
+    try:
+        fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
+        account_deletion_repo.transact(
+            build_parent_binding_transaction(
+                parent_id=parent_id,
+                student_id=student_id,
+                relationship=relationship,
+                status=status,
+                source=source,
+                actor=actor,
+                created_at=created_at,
+                version=version,
+                expected_generation=_required_positive_integer(fence.get("generation")),
+            ),
+            table=table,
+        )
+    except account_deletion_repo.AccountDeletionConflict:
+        current = _parent_binding_snapshot(parent_id, student_id)
+        replay = _matching_parent_relationship(
+            current,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            status=status,
+            version=version,
+        )
+        if replay is not None:
+            return ParentBindingResult(
+                ParentBindingDisposition.REPLAYED,
+                binding=replay,
+                profile=current.profile,
+            )
+        if _parent_relationship_conflicts(
+            current,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            version=version,
+        ):
+            return ParentBindingResult(ParentBindingDisposition.CONFLICT)
+        return ParentBindingResult(ParentBindingDisposition.RETRYABLE)
+
+    current = _parent_binding_snapshot(parent_id, student_id)
+    binding = _matching_parent_relationship(
+        current,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status=status,
+        version=version,
+    )
+    if binding is None:
+        if _parent_relationship_conflicts(
+            current,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            version=version,
+        ):
+            return ParentBindingResult(ParentBindingDisposition.CONFLICT)
+        return ParentBindingResult(ParentBindingDisposition.RETRYABLE)
+    return ParentBindingResult(
+        ParentBindingDisposition.CREATED,
+        binding=binding,
+        profile=current.profile,
+    )
+
+
+def put_parent_student_binding(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str = "child",
+    status: str = "active",
+    source: str = "admin_repair",
+    actor: str = "system",
+    created_at: str,
+    version: int = 1,
+) -> UserItem:
+    """Compatibility wrapper over the atomic relationship primitive."""
+    result = put_parent_student_relationship(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status=status,
+        source=source,
+        actor=actor,
+        created_at=created_at,
+        version=version,
+    )
+    if result.binding is None:
+        raise account_deletion_repo.AccountDeletionConflict(
+            f"parent binding {result.disposition.value}"
+        )
+    return result.binding
+
+
+def _parent_binding_snapshot(
+    parent_id: str, student_id: str
+) -> _ParentBindingSnapshot:
+    return _ParentBindingSnapshot(
+        profile=get_user(student_id),
+        forward=get_parent_student_binding(parent_id, student_id),
+        reverse=get_student_parent_binding(student_id, parent_id),
+        reverse_rows=tuple(list_student_parent_bindings(student_id)),
+    )
+
+
+def _matching_parent_relationship(
+    snapshot: _ParentBindingSnapshot,
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    status: str,
+    version: int,
+) -> UserItem | None:
+    rows = (snapshot.forward, snapshot.reverse)
+    if any(
+        not _binding_row_matches(
+            row,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            version=version,
+            status=status,
+        )
+        for row in rows
+    ):
+        return None
+    profile = snapshot.profile
+    if (
+        profile is None
+        or profile.get("user_id") != student_id
+        or profile.get("role") != "student"
+        or profile.get("parent_id") != parent_id
+        or profile.get("relationship") != relationship
+        or profile.get("parent_binding_status") != status
+    ):
+        return None
+    return snapshot.forward
+
+
+def _parent_relationship_conflicts(
+    snapshot: _ParentBindingSnapshot,
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    version: int,
+) -> bool:
+    profile = snapshot.profile
+    if (
+        profile is None
+        or profile.get("user_id") != student_id
+        or profile.get("role") != "student"
+    ):
+        return True
+    profile_parent = profile.get("parent_id")
+    if profile_parent is not None and profile_parent != "" and profile_parent != parent_id:
+        return True
+    profile_relationship = profile.get("relationship")
+    if (
+        profile_relationship is not None
+        and profile_relationship != ""
+        and profile_relationship != relationship
+    ):
+        return True
+    for row in (snapshot.forward, snapshot.reverse, *snapshot.reverse_rows):
+        if row is not None and not _binding_row_matches(
+            row,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            version=version,
+        ):
+            return True
+    return False
+
+
+def _binding_row_matches(
+    row: Mapping[str, object] | None,
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    version: int,
+    status: str | None = None,
+) -> bool:
+    if row is None:
+        return False
+    if (
+        row.get("parent_id") != parent_id
+        or row.get("student_id") != student_id
+        or row.get("relationship") != relationship
+        or row.get("version") != version
+    ):
+        return False
+    return status is None or row.get("status") == status
 
 
 def get_parent_student_binding(parent_id: str, student_id: str) -> UserItem | None:
@@ -316,3 +636,9 @@ def _required_positive_integer(value: object) -> int:
     if parsed < 1:
         raise ValueError("malformed account fence generation")
     return parsed
+
+
+def _required_text(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} is required")
+    return value

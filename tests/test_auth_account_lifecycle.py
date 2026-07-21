@@ -329,7 +329,7 @@ def test_existing_account_adoption_matrix_is_indistinguishable_and_mutation_free
     )
     monkeypatch.setattr(
         auth,
-        "_bind_parent_student_if_possible",
+        "_prepare_parent_student_relationship",
         lambda *args: mutations.append(("relationship", args)),
     )
 
@@ -423,10 +423,28 @@ def test_register_records_email_verification_policy_and_parent_binding(monkeypat
         else None,
     )
     monkeypatch.setattr(auth.user_repo, "put_user", lambda profile: stored.update(profile))
+    def put_relationship(**kwargs):
+        assert stored["user_id"] == "cognito-user-sub"
+        assert "parent_id" not in stored
+        assert stored["parent_binding_status"] == "pending_parent_binding"
+        bindings.append(kwargs)
+        stored.update(
+            {
+                "parent_id": kwargs["parent_id"],
+                "relationship": kwargs["relationship"],
+                "parent_binding_status": kwargs["status"],
+            }
+        )
+        return auth.user_repo.ParentBindingResult(
+            auth.user_repo.ParentBindingDisposition.CREATED,
+            binding=kwargs,
+            profile=dict(stored),
+        )
+
     monkeypatch.setattr(
         auth.user_repo,
-        "put_parent_student_binding",
-        lambda **kwargs: bindings.append(kwargs) or kwargs,
+        "put_parent_student_relationship",
+        put_relationship,
     )
 
     response = _auth_client().post(
@@ -482,8 +500,12 @@ def test_register_keeps_one_sided_parent_email_pending(monkeypatch):
     monkeypatch.setattr(auth.user_repo, "put_user", lambda profile: stored.update(profile))
     monkeypatch.setattr(
         auth.user_repo,
-        "put_parent_student_binding",
-        lambda **kwargs: bindings.append(kwargs) or kwargs,
+        "put_parent_student_relationship",
+        lambda **kwargs: bindings.append(kwargs)
+        or auth.user_repo.ParentBindingResult(
+            auth.user_repo.ParentBindingDisposition.CREATED,
+            binding=kwargs,
+        ),
     )
 
     response = _auth_client().post(
@@ -1304,19 +1326,12 @@ def test_reset_password_invalid_proof_is_account_state_indistinguishable(
 
 def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):
     bindings = []
-    student_updates = []
     monkeypatch.setattr(
         admin.user_repo,
         "get_user",
         lambda user_id: {"user_id": user_id, "role": "parent" if user_id == "parent-1" else "student"},
     )
     monkeypatch.setattr(admin.user_repo, "list_parent_student_bindings", lambda parent_id: bindings)
-    monkeypatch.setattr(
-        admin.user_repo,
-        "update_student_parent_link",
-        lambda student_id, parent_id, relationship: student_updates.append((student_id, parent_id, relationship)),
-    )
-
     def put_binding(**kwargs):
         bindings.append(
             {
@@ -1328,9 +1343,14 @@ def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):
                 "updated_at": kwargs["created_at"],
             }
         )
-        return bindings[-1]
+        return admin.user_repo.ParentBindingResult(
+            admin.user_repo.ParentBindingDisposition.CREATED,
+            binding=bindings[-1],
+        )
 
-    monkeypatch.setattr(admin.user_repo, "put_parent_student_binding", put_binding)
+    monkeypatch.setattr(
+        admin.user_repo, "put_parent_student_relationship", put_binding
+    )
 
     repair = _admin_client().post(
         "/admin/parent-bindings/repair",
@@ -1344,7 +1364,6 @@ def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):
 
     assert repair.status_code == 200
     assert repair.json()["source"] == "admin_repair"
-    assert student_updates == [("student-1", "parent-1", "child")]
 
     listed = _admin_client().get("/admin/parent-bindings", params={"parent_id": "parent-1"})
     assert listed.status_code == 200

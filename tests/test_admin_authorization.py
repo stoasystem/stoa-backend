@@ -147,8 +147,15 @@ def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypat
     monkeypatch.setattr(user_repo := admin.user_repo, "get_user", lambda value: {
         "user_id": value, "role": "parent" if value.startswith("parent") else "student"
     })
-    monkeypatch.setattr(user_repo, "update_student_parent_link", lambda *args: calls.append(("link", args)))
-    monkeypatch.setattr(user_repo, "put_parent_student_binding", lambda **values: calls.append(("binding", values)) or values)
+    monkeypatch.setattr(
+        user_repo,
+        "put_parent_student_relationship",
+        lambda **values: calls.append(("relationship", values))
+        or user_repo.ParentBindingResult(
+            user_repo.ParentBindingDisposition.CREATED,
+            binding=values,
+        ),
+    )
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
@@ -157,7 +164,51 @@ def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypat
         "parent_id": "parent-1", "student_id": "student-1", "relationship": "child", "reason": "repair"
     })
     assert response.status_code == 200
-    assert [kind for kind, _ in calls] == ["link", "binding"]
+    assert [kind for kind, _ in calls] == ["relationship"]
+
+
+def test_parent_binding_conflict_is_structured_and_does_not_retry_mutation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        user_repo := admin.user_repo,
+        "get_user",
+        lambda value: {
+            "user_id": value,
+            "role": "parent" if value.startswith("parent") else "student",
+        },
+    )
+    monkeypatch.setattr(
+        user_repo,
+        "put_parent_student_relationship",
+        lambda **values: calls.append(values)
+        or user_repo.ParentBindingResult(user_repo.ParentBindingDisposition.CONFLICT),
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_actor] = lambda: _actor(
+        "parent_binding_repairer", scope="student:student-1"
+    )
+
+    response = TestClient(app).post(
+        "/admin/parent-bindings/repair",
+        json={
+            "parent_id": "parent-1",
+            "student_id": "student-1",
+            "relationship": "child",
+            "reason": "repair",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "parent_binding_conflict",
+        "message": (
+            "The relationship conflicts with current records and requires "
+            "administrator review. No relationship was changed."
+        ),
+    }
+    assert len(calls) == 1
 
 
 def test_bulk_body_targets_are_all_of_and_duplicate_safe(monkeypatch):

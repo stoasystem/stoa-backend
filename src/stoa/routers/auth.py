@@ -1,4 +1,5 @@
 """Authentication routes — aligned with frontend API contract."""
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import boto3
@@ -28,6 +29,15 @@ from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services.account_deletion_service import DeletionReceipt
 
 router = APIRouter()
+
+
+@dataclass(frozen=True, slots=True)
+class _ParentRelationshipIntent:
+    parent_id: str
+    student_id: str
+    relationship: str
+    status: str
+    source: str
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +288,9 @@ def _profile_from_current_user(current_user: dict) -> dict | None:
     return user_repo.get_user(user_id) if user_id else None
 
 
-def _bind_parent_student_if_possible(parent_email: str | None, student_profile: dict) -> dict | None:
+def _prepare_parent_student_relationship(
+    parent_email: str | None, student_profile: dict
+) -> _ParentRelationshipIntent | None:
     if not parent_email:
         return None
     parent = user_repo.get_user_by_email(parent_email)
@@ -292,26 +304,31 @@ def _bind_parent_student_if_possible(parent_email: str | None, student_profile: 
         return None
     parent_id = parent.get("user_id")
     student_id = student_profile.get("user_id")
-    if not parent_id or not student_id:
+    if (
+        not isinstance(parent_id, str)
+        or not parent_id
+        or not isinstance(student_id, str)
+        or not student_id
+    ):
         return None
     binding_status = account_verification_service.binding_status_for_profiles(
         student_profile,
         parent,
     )
-    student_profile["parent_id"] = parent_id
-    student_profile["parent_binding_status"] = binding_status
-    return user_repo.put_parent_student_binding(
+    student_profile["parent_binding_status"] = "pending_parent_binding"
+    student_profile["parent_email"] = parent_email
+    return _ParentRelationshipIntent(
         parent_id=parent_id,
         student_id=student_id,
         relationship="child",
         status=binding_status,
         source="student_registration",
-        actor="system",
-        created_at=_utc_now_iso(),
     )
 
 
-def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | None) -> dict | None:
+def _prepare_existing_child_relationship(
+    parent_profile: dict, child_email: str | None
+) -> _ParentRelationshipIntent | None:
     if not child_email:
         return None
     child = user_repo.get_user_by_email(child_email)
@@ -319,27 +336,52 @@ def _bind_existing_child_if_possible(parent_profile: dict, child_email: str | No
         parent_profile["child_binding_status"] = "pending_student_profile"
         parent_profile["child_email"] = child_email
         return None
-    if _norm_email(child.get("parent_email")) != _norm_email(parent_profile.get("email")):
+    child_parent_email = child.get("parent_email")
+    parent_email = parent_profile.get("email")
+    if _norm_email(
+        child_parent_email if isinstance(child_parent_email, str) else None
+    ) != _norm_email(parent_email if isinstance(parent_email, str) else None):
         parent_profile["child_binding_status"] = "pending_student_confirmation"
         parent_profile["child_email"] = child_email
         return None
     parent_id = parent_profile.get("user_id")
     student_id = child.get("user_id")
-    if not parent_id or not student_id:
+    if (
+        not isinstance(parent_id, str)
+        or not parent_id
+        or not isinstance(student_id, str)
+        or not student_id
+    ):
         return None
     binding_status = account_verification_service.binding_status_for_profiles(
         parent_profile,
         child,
     )
-    if binding_status == "active":
-        user_repo.update_student_parent_link(student_id, parent_id, child.get("relationship", "child"))
     parent_profile["child_binding_status"] = binding_status
-    return user_repo.put_parent_student_binding(
+    child_relationship = child.get("relationship")
+    relationship = (
+        child_relationship
+        if isinstance(child_relationship, str) and child_relationship
+        else "child"
+    )
+    return _ParentRelationshipIntent(
         parent_id=parent_id,
         student_id=student_id,
-        relationship=child.get("relationship", "child"),
+        relationship=relationship,
         status=binding_status,
         source="parent_registration",
+    )
+
+
+def _commit_parent_student_relationship(
+    intent: _ParentRelationshipIntent,
+) -> user_repo.ParentBindingResult:
+    return user_repo.put_parent_student_relationship(
+        parent_id=intent.parent_id,
+        student_id=intent.student_id,
+        relationship=intent.relationship,
+        status=intent.status,
+        source=intent.source,
         actor="system",
         created_at=_utc_now_iso(),
     )
@@ -485,15 +527,16 @@ async def register(
     }
     if age is not None:
         profile["age"] = int(age)
+    relationship_intent = None
     if role == "student" and resume_command is None:
-        _bind_parent_student_if_possible(parent_email, profile)
+        relationship_intent = _prepare_parent_student_relationship(parent_email, profile)
     if role == "parent" and resume_command is None:
         child_email = (
             parent_profile.get("childEmail")
             or parent_profile.get("studentEmail")
             or parent_profile.get("child_email")
         )
-        _bind_existing_child_if_possible(profile, child_email)
+        relationship_intent = _prepare_existing_child_relationship(profile, child_email)
     try:
         if resume_command is None:
             _, profile = public_identity_service.start_or_resume_public_registration(
@@ -520,6 +563,11 @@ async def register(
         raise _public_identity_conflict() from exc
     except public_identity_service.PublicIdentityDependencyError as exc:
         raise _public_identity_dependency_error() from exc
+
+    if relationship_intent is not None:
+        relationship_result = _commit_parent_student_relationship(relationship_intent)
+        if relationship_result.profile is not None:
+            profile = relationship_result.profile
 
     return _auth_response_for_profile(
         access_token="",
