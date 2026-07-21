@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-11-PLAN.md
-last_updated: "2026-07-21T22:13:13.270Z"
+stopped_at: Completed 475-02-PLAN.md
+last_updated: "2026-07-21T23:29:20.530Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 98
+  completed_plans: 99
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 5 of 13
+Plan: 6 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-21T22:13:13.264Z
-**Stopped At:** Completed 475-11-PLAN.md
+**Last Date:** 2026-07-21T23:29:03.725Z
+**Stopped At:** Completed 475-02-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -205,6 +205,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P06 | 12 min | 1 tasks | 6 files |
 | Phase 475 P09 | 10 min | 1 tasks | 6 files |
 | Phase 475 P11 | 7 min | 1 tasks | 5 files |
+| Phase 475 P02 | 10 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -396,3 +397,6 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Hint idempotency keys are required and bound to the exact challenge digest. — Same-operation retry replays once while changed challenge meaning conflicts before mutation.
 - [Phase 475]: Delivery cancellation requires ordered fence failure plus strong deletion proof — Only the exact owner-generation fence in deletion_pending or deleted may terminalize delivery; every unclassified failure remains recoverable.
 - [Phase 475]: Exact inflight strong reads reconcile ambiguous delivery begin as BEGUN — A claim-matching intent at version plus one proves the transaction committed without weakening provider acceptance-unknown recovery.
+- [Phase 475]: Only the ADMITTED disposition owns OCR and AI effects; RESUME projects the strongly persisted original question without reserving an attachment or invoking a provider again. — This makes lost-response replay side-effect free while preserving the original durable result.
+- [Phase 475]: Question admission failures use closed coordinate-free codes and explicit client actions for new submission, quota reset, or same-identity retry. — Stable safe actions let the Web client recover without exposing provider or storage details.
+- [Phase 475]: The initial pending question and coordinate-free attachment summary remain returnable when later OCR, AI, or attachment-summary reads fail. — Post-commit dependency failure must not become a false submission failure or force duplicate admission effects.
