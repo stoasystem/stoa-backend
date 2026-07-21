@@ -183,8 +183,8 @@ def test_delivery_claim_rechecks_fence_immediately_before_provider_effect(
     monkeypatch.setattr(
         notification_repo,
         "begin_delivery_effect",
-        lambda **_kw: (_ for _ in ()).throw(
-            account_deletion_repo.AccountDeletionConflict("fence changed")
+        lambda **_kw: notification_repo.DeliveryBeginResult(
+            notification_repo.DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED
         ),
     )
     monkeypatch.setattr(

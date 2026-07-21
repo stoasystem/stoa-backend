@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
@@ -294,6 +295,23 @@ class DeliveryIntentClaim:
     payload_digest: str
 
 
+class DeliveryBeginDisposition(StrEnum):
+    """Closed outcomes from the final pre-provider delivery transition."""
+
+    BEGUN = "begun"
+    CLAIM_LOST = "claim_lost"
+    PROVEN_ACCOUNT_DELETED = "proven_account_deleted"
+    DEPENDENCY_RETRY = "dependency_retry"
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryBeginResult:
+    """Provider-neutral result of attempting the final delivery CAS."""
+
+    disposition: DeliveryBeginDisposition
+    claim: DeliveryIntentClaim | None = None
+
+
 _DELIVERY_TERMINAL_STATES = frozenset(
     {"accepted", "provider_acceptance_unknown", "canceled_account_deletion"}
 )
@@ -401,6 +419,135 @@ def _delivery_conditional_loss(exc: Exception) -> bool:
         "ConditionalCheckFailedException",
         "TransactionCanceledException",
     }
+
+
+def _delivery_client_error(exc: Exception) -> ClientError | None:
+    """Return a wrapped provider error without trusting exception messages."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ClientError):
+            return current
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def _strong_delivery_intent(
+    *, scope: DeliveryIntentScope, claim: DeliveryIntentClaim, table: object
+) -> NotificationItem | None:
+    response = _get_item(
+        table,
+        Key=_delivery_key(scope, claim.operation_id),
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def _begun_claim_from_intent(
+    item: Mapping[str, object] | None,
+    *,
+    scope: DeliveryIntentScope,
+    claim: DeliveryIntentClaim,
+) -> DeliveryIntentClaim | None:
+    if (
+        item is None
+        or not _delivery_identity_matches(
+            item,
+            scope=scope,
+            operation_id=claim.operation_id,
+            payload_digest=claim.payload_digest,
+        )
+        or item.get("effect_state") != "effect_inflight"
+        or item.get("lease_owner") != claim.lease_owner
+        or item.get("intent_version") != claim.intent_version + 1
+    ):
+        return None
+    try:
+        return _intent_claim(item)
+    except account_deletion_repo.AccountDeletionConflict:
+        return None
+
+
+def classify_delivery_transaction_failure(
+    exc: Exception,
+    *,
+    scope: DeliveryIntentScope,
+    claim: DeliveryIntentClaim,
+    operation_count: int,
+    fence_operation_index: int | None,
+    intent_operation_index: int,
+    table: object | None = None,
+) -> DeliveryBeginResult:
+    """Classify a failed begin using ordered reasons and authoritative strong reads.
+
+    A transaction/provider exception is never itself evidence of account deletion.
+    The deletion outcome requires both an exact fence-condition cancellation reason
+    and a strong read of the permanent fence in a deletion state.
+    """
+    target = table or get_table()
+    try:
+        intent = _strong_delivery_intent(scope=scope, claim=claim, table=target)
+    except Exception:
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+
+    begun_claim = _begun_claim_from_intent(intent, scope=scope, claim=claim)
+    if begun_claim is not None:
+        return DeliveryBeginResult(DeliveryBeginDisposition.BEGUN, begun_claim)
+
+    provider_error = _delivery_client_error(exc)
+    if provider_error is None:
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+    error_code = str(provider_error.response.get("Error", {}).get("Code") or "")
+    if error_code != "TransactionCanceledException":
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+    reasons = provider_error.response.get("CancellationReasons")
+    if not isinstance(reasons, list) or len(reasons) != operation_count:
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+
+    conditional_indexes: list[int] = []
+    for index, reason in enumerate(reasons):
+        if not isinstance(reason, Mapping):
+            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+        code = reason.get("Code")
+        if not isinstance(code, str):
+            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+        if code == "None":
+            continue
+        if code == "ConditionalCheckFailed":
+            conditional_indexes.append(index)
+            continue
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+
+    if fence_operation_index is not None and fence_operation_index in conditional_indexes:
+        if scope.kind != "private_owner":
+            return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
+        try:
+            fence = account_deletion_repo.get_account_fence(
+                str(scope.owner_id), table=target
+            )
+        except Exception:
+            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+        if (
+            fence is not None
+            and fence.get("user_id") == scope.owner_id
+            and fence.get("generation") == scope.generation
+            and fence.get("status") in {"deletion_pending", "deleted"}
+        ):
+            return DeliveryBeginResult(
+                DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED
+            )
+        if fence is None or fence.get("status") != "active":
+            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+
+    if intent_operation_index in conditional_indexes:
+        return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
+    if any(
+        index not in {fence_operation_index, intent_operation_index}
+        for index in conditional_indexes
+    ):
+        return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
+    return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
 
 
 def notification_pk(event_id: str) -> str:
@@ -936,13 +1083,6 @@ def delivery_intent_sendable(
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     operation = claim.operation_id if claim is not None else str(operation_id or "")
     target = table or get_table()
-    if scope.kind == "private_owner":
-        try:
-            account_deletion_repo.require_active_account_fence(
-                str(scope.owner_id), int(scope.generation or 0), table=target
-            )
-        except account_deletion_repo.AccountDeletionConflict:
-            return False
     item = _optional_item(
         _get_item(
             target,
@@ -972,16 +1112,28 @@ def begin_delivery_effect(
     claim: DeliveryIntentClaim,
     now_iso: str,
     table: object | None = None,
-) -> DeliveryIntentClaim:
+) -> DeliveryBeginResult:
     """Durably cross the final exact CAS immediately before provider mutation."""
     scope = _delivery_scope(scope)
     if claim.scope_digest != scope.digest:
-        raise account_deletion_repo.AccountDeletionConflict("delivery scope changed")
+        return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
     target = table or get_table()
     hook = getattr(target, "begin_delivery_effect", None)
     if callable(hook):
-        value = hook(scope, claim, now_iso)
-        return value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
+        try:
+            value = hook(scope, claim, now_iso)
+            begun = value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
+            return DeliveryBeginResult(DeliveryBeginDisposition.BEGUN, begun)
+        except Exception as exc:
+            return classify_delivery_transaction_failure(
+                exc,
+                scope=scope,
+                claim=claim,
+                operation_count=2,
+                fence_operation_index=0 if scope.kind == "private_owner" else None,
+                intent_operation_index=1,
+                table=target,
+            )
     condition_expression = (
         "#effect=:pre_effect AND lease_owner=:lease AND "
         "intent_version=:version AND scope_digest=:scope AND "
@@ -1080,18 +1232,25 @@ def begin_delivery_effect(
     try:
         account_deletion_repo.transact(operations, table=target)
     except Exception as exc:
-        if _delivery_conditional_loss(exc):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "delivery begin claim lost"
-            ) from exc
-        raise
-    return DeliveryIntentClaim(
-        operation_id=claim.operation_id,
-        lease_owner=claim.lease_owner,
-        intent_version=claim.intent_version + 1,
-        lease_expires_at=claim.lease_expires_at,
-        scope_digest=claim.scope_digest,
-        payload_digest=claim.payload_digest,
+        return classify_delivery_transaction_failure(
+            exc,
+            scope=scope,
+            claim=claim,
+            operation_count=len(operations),
+            fence_operation_index=0 if scope.kind == "private_owner" else None,
+            intent_operation_index=len(operations) - 1,
+            table=target,
+        )
+    return DeliveryBeginResult(
+        DeliveryBeginDisposition.BEGUN,
+        DeliveryIntentClaim(
+            operation_id=claim.operation_id,
+            lease_owner=claim.lease_owner,
+            intent_version=claim.intent_version + 1,
+            lease_expires_at=claim.lease_expires_at,
+            scope_digest=claim.scope_digest,
+            payload_digest=claim.payload_digest,
+        ),
     )
 
 

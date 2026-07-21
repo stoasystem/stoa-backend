@@ -518,21 +518,29 @@ def run_delivery_intent(
     )
     if not claimed:
         return {"status": "retryable_claim_conflict"}
-    if not notification_repo.delivery_intent_sendable(scope=scope, claim=claimed):
-        try:
-            notification_repo.cancel_delivery_intent(
-                scope=scope, claim=claimed, now_iso=now_iso()
-            )
-        except account_deletion_repo.AccountDeletionConflict:
-            return {"status": "retryable_claim_conflict"}
-        return {"status": "canceled_account_deletion"}
     try:
-        inflight_claim = notification_repo.begin_delivery_effect(
-            scope=scope,
-            claim=claimed,
-            now_iso=now_iso(),
+        sendable = notification_repo.delivery_intent_sendable(
+            scope=scope, claim=claimed
         )
-    except account_deletion_repo.AccountDeletionConflict:
+    except Exception:
+        return {"status": "retryable_dependency"}
+    if not sendable:
+        return {"status": "retryable_claim_conflict"}
+    begin_result = notification_repo.begin_delivery_effect(
+        scope=scope,
+        claim=claimed,
+        now_iso=now_iso(),
+    )
+    # Preserve compatibility with injected Plan 473 fakes while the repository
+    # contract itself always returns DeliveryBeginResult.
+    if isinstance(begin_result, notification_repo.DeliveryIntentClaim):
+        begin_result = notification_repo.DeliveryBeginResult(
+            notification_repo.DeliveryBeginDisposition.BEGUN, begin_result
+        )
+    if (
+        begin_result.disposition
+        is notification_repo.DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED
+    ):
         try:
             notification_repo.cancel_delivery_intent(
                 scope=scope, claim=claimed, now_iso=now_iso()
@@ -540,6 +548,19 @@ def run_delivery_intent(
         except account_deletion_repo.AccountDeletionConflict:
             return {"status": "retryable_claim_conflict"}
         return {"status": "canceled_account_deletion"}
+    if (
+        begin_result.disposition
+        is notification_repo.DeliveryBeginDisposition.CLAIM_LOST
+    ):
+        return {"status": "retryable_claim_conflict"}
+    if (
+        begin_result.disposition
+        is notification_repo.DeliveryBeginDisposition.DEPENDENCY_RETRY
+    ):
+        return {"status": "retryable_dependency"}
+    inflight_claim = begin_result.claim
+    if inflight_claim is None:
+        return {"status": "retryable_dependency"}
     # No call may be inserted between this durable begin and the provider.
     try:
         provider_call()

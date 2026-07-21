@@ -159,7 +159,9 @@ def test_begin_private_claim_is_one_fence_plus_exact_version_cas(
         table=object(),
     )
 
-    assert begun.intent_version == 9
+    assert begun.disposition is notification_repo.DeliveryBeginDisposition.BEGUN
+    assert begun.claim is not None
+    assert begun.claim.intent_version == 9
     assert len(captured) == 2
     fence = captured[0]["ConditionCheck"]
     assert fence["ConditionExpression"] == "#status=:active AND generation=:generation"
