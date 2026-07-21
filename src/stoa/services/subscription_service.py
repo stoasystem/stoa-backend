@@ -8,6 +8,7 @@ import importlib
 import json
 import time
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -18,7 +19,7 @@ from fastapi import HTTPException
 
 from stoa.config import Settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.models.user import SubscriptionTier
 from stoa.services import entitlement_service, notification_service
 
@@ -1050,17 +1051,16 @@ def _apply_request_item(
     expression_values[":tier"] = requested_tier
     update_expression = "SET " + ", ".join(f"#{key} = :{key}" for key in updates)
     event_item = {**event, "PK": item["PK"], "SK": _event_sk(event["event_at"], event["event_id"])}
+    profile = _require_parent(parent_id)
     try:
         _transact_write(
             [
-                {
-                    "Update": {
-                        "Key": {"PK": f"USER#{parent_id}", "SK": "PROFILE"},
-                        "UpdateExpression": "SET subscription_tier = :tier",
-                        "ExpressionAttributeValues": {":tier": requested_tier},
-                        "ConditionExpression": "attribute_exists(PK)",
-                    }
-                },
+                *_versioned_profile_operations(
+                    parent_id,
+                    profile=profile,
+                    update_expression="SET subscription_tier = :tier",
+                    expression_attribute_values={":tier": requested_tier},
+                ),
                 {
                     "Update": {
                         "Key": {"PK": item["PK"], "SK": "SUMMARY"},
@@ -2825,15 +2825,13 @@ def _apply_billing_transition(
     ):
         operations.append({"Put": {"Item": lookup}})
     if not manual_override_active and status in {"active", "canceled"}:
-        operations.append(
-            {
-                "Update": {
-                    "Key": {"PK": f"USER#{parent_id}", "SK": "PROFILE"},
-                    "UpdateExpression": "SET subscription_tier = :tier",
-                    "ExpressionAttributeValues": {":tier": tier},
-                    "ConditionExpression": "attribute_exists(PK)",
-                }
-            }
+        operations.extend(
+            _versioned_profile_operations(
+                parent_id,
+                profile=_require_parent(parent_id),
+                update_expression="SET subscription_tier = :tier",
+                expression_attribute_values={":tier": tier},
+            )
         )
     try:
         _transact_write(operations)
@@ -3056,7 +3054,18 @@ def _transact_write(operations: list[dict[str, Any]]) -> None:
     serializer = TypeSerializer()
     client_ops: list[dict[str, Any]] = []
     for operation in operations:
-        if "Put" in operation:
+        if "ConditionCheck" in operation:
+            check = operation["ConditionCheck"]
+            client_ops.append(
+                {
+                    "ConditionCheck": {
+                        "TableName": table_name,
+                        "Key": _serialize_map(check["Key"], serializer),
+                        **_transaction_common(check, serializer),
+                    }
+                }
+            )
+        elif "Put" in operation:
             put = operation["Put"]
             client_ops.append(
                 {
@@ -3094,6 +3103,40 @@ def _transact_write(operations: list[dict[str, Any]]) -> None:
             raise ValueError(f"Unsupported transaction operation: {operation}")
 
     table.meta.client.transact_write_items(TransactItems=client_ops)
+
+
+def _versioned_profile_operations(
+    user_id: str,
+    *,
+    profile: dict[str, Any],
+    update_expression: str,
+    expression_attribute_values: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Compose an ordinary profile CAS into a wider domain transaction."""
+    table = get_table()
+    fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+    generation = fence.get("generation")
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed account fence generation"
+        )
+    version = profile.get("version")
+    if isinstance(version, Decimal) and version == version.to_integral_value():
+        version = int(version)
+    if version is not None:
+        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "malformed profile version"
+            )
+    return [
+        account_deletion_repo.active_fence_condition(user_id, generation),
+        user_repo.profile_update_operation(
+            user_id,
+            update_expression=update_expression,
+            expression_attribute_values=expression_attribute_values,
+            expected_version=version,
+        ),
+    ]
 
 
 def _transaction_common(operation: dict[str, Any], serializer: TypeSerializer) -> dict[str, Any]:

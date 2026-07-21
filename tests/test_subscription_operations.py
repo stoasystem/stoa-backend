@@ -21,7 +21,7 @@ class FakeTable:
     def put_item(self, Item):
         self.items[(Item["PK"], Item["SK"])] = dict(Item)
 
-    def get_item(self, Key):
+    def get_item(self, Key, ConsistentRead=False):  # noqa: N803
         item = self.items.get((Key["PK"], Key["SK"]))
         return {"Item": dict(item)} if item else {}
 
@@ -81,6 +81,16 @@ class FakeTable:
                 self.items.pop((key["PK"], key["SK"]), None)
 
     def _check_transaction_operation(self, operation):
+        if "ConditionCheck" in operation:
+            check = operation["ConditionCheck"]
+            item = self.items.get((check["Key"]["PK"], check["Key"]["SK"]))
+            values = check.get("ExpressionAttributeValues", {})
+            if (
+                item is None
+                or item.get("status") != values.get(":active")
+                or item.get("generation") != values.get(":generation")
+            ):
+                raise _conditional_error()
         if "Put" in operation:
             put = operation["Put"]
             key = (put["Item"]["PK"], put["Item"]["SK"])
@@ -95,6 +105,10 @@ class FakeTable:
                 raise _conditional_error()
             if condition == "#current_status = :current_status":
                 if item is None or item.get("status") != update["ExpressionAttributeValues"][":current_status"]:
+                    raise _conditional_error()
+            if condition and "version=:expected_profile_version" in condition:
+                expected = update["ExpressionAttributeValues"][":expected_profile_version"]
+                if item is None or item.get("version") != expected:
                     raise _conditional_error()
 
 
@@ -127,6 +141,7 @@ def _profiles():
             "email": "parent@example.com",
             "role": "parent",
             "subscription_tier": "free",
+            "version": 1,
         },
         "student-1": {
             "user_id": "student-1",
@@ -135,12 +150,14 @@ def _profiles():
             "subscription_tier": "free",
             "parent_id": "parent-1",
             "parent_binding_status": "active",
+            "version": 1,
         },
         "admin-1": {
             "user_id": "admin-1",
             "email": "admin@example.com",
             "role": "admin",
             "subscription_tier": "premium",
+            "version": 1,
         },
     }
 
@@ -179,6 +196,12 @@ def _install_fakes(monkeypatch):
             "SK": "PROFILE",
             **profile,
         }
+        table.items[(f"USER#{profile['user_id']}", "ACCOUNT_FENCE")] = {
+            "PK": f"USER#{profile['user_id']}",
+            "SK": "ACCOUNT_FENCE",
+            "status": "active",
+            "generation": 1,
+        }
 
     def get_user(user_id):
         return profiles.get(user_id)
@@ -193,12 +216,26 @@ def _install_fakes(monkeypatch):
     def update_item(Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
         if Key["PK"].startswith("USER#") and Key["SK"] == "PROFILE":
             user_id = Key["PK"].removeprefix("USER#")
-            profiles.setdefault(
+            profile = profiles.setdefault(
                 user_id,
-                {"user_id": user_id, "role": "parent", "subscription_tier": "free"},
+                {
+                    "user_id": user_id,
+                    "role": "parent",
+                    "subscription_tier": "free",
+                    "version": 1,
+                },
             )
-            if ":tier" in ExpressionAttributeValues:
-                profiles[user_id]["subscription_tier"] = ExpressionAttributeValues[":tier"]
+            names = ExpressionAttributeNames or {}
+            assignments = UpdateExpression.removeprefix("SET ").split(",")
+            for assignment in assignments:
+                alias, value_alias = [part.strip() for part in assignment.split("=")]
+                field = names.get(alias, alias)
+                profile[field] = ExpressionAttributeValues[value_alias]
+            table.items[(Key["PK"], Key["SK"])] = {
+                "PK": Key["PK"],
+                "SK": Key["SK"],
+                **profile,
+            }
             return
         return table_update_item(
             Key=Key,

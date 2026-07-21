@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+import re
+from typing import Any
 
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.repositories import account_deletion_repo
@@ -11,7 +13,46 @@ from stoa.db.dynamodb import get_table
 
 
 type UserItem = dict[str, object]
-type TransactionOperation = dict[str, object]
+type TransactionOperation = dict[str, Any]
+
+
+PROFILE_WRITE_MAX_ATTEMPTS = 3
+PROFILE_SCRUB_OWNED_FIELDS = frozenset(
+    {
+        "child_user_id",
+        "student_id",
+        "child_id",
+        "children",
+        "child_summaries",
+        "student_summaries",
+    }
+)
+
+# Closed source inventory for every production mutation of USER#*/PROFILE.  The
+# source-backed test in Plan 475-08 requires additions to be reviewed here; row
+# creation and deletion scrub remain special lifecycle primitives, while every
+# ordinary update is built by profile_update_operation().
+PROFILE_WRITER_REGISTRY = frozenset(
+    {
+        "src/stoa/db/repositories/account_deletion_repo.py:materialize_profile_with_fence",
+        "src/stoa/db/repositories/account_deletion_repo.py:_parent_profile_scrub_operation",
+        "src/stoa/db/repositories/user_repo.py:profile_update_operation",
+    }
+)
+
+
+class ProfileWriteDisposition(StrEnum):
+    """Closed outcomes for one bounded shared-profile CAS operation."""
+
+    UPDATED = "updated"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileWriteResult:
+    disposition: ProfileWriteDisposition
+    profile: UserItem | None = None
+    attempts: int = 0
 
 
 class ParentBindingDisposition(StrEnum):
@@ -156,24 +197,118 @@ def build_profile_update_transaction(
     expression_attribute_values: Mapping[str, object],
     expression_attribute_names: Mapping[str, str] | None = None,
     expected_generation: int,
+    expected_version: int | None = None,
 ) -> list[TransactionOperation]:
-    """Build one exact-generation profile update that cannot ghost-upsert."""
+    """Build one exact-generation, exact-version profile update."""
     return [
         account_deletion_repo.active_fence_condition(user_id, expected_generation),
-        {
-            "Update": {
-                "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
-                "UpdateExpression": update_expression,
-                "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
-                **(
-                    {"ExpressionAttributeNames": dict(expression_attribute_names)}
-                    if expression_attribute_names
-                    else {}
-                ),
-                "ExpressionAttributeValues": dict(expression_attribute_values),
-            }
-        },
+        profile_update_operation(
+            user_id,
+            update_expression=update_expression,
+            expression_attribute_values=expression_attribute_values,
+            expression_attribute_names=expression_attribute_names,
+            expected_version=expected_version,
+        ),
     ]
+
+
+def profile_update_operation(
+    user_id: str,
+    *,
+    update_expression: str,
+    expression_attribute_values: Mapping[str, object],
+    expression_attribute_names: Mapping[str, str] | None = None,
+    expected_version: int | None,
+    additional_condition_expression: str | None = None,
+) -> TransactionOperation:
+    """Build the sole ordinary PROFILE update shape: narrow CAS plus one increment."""
+    expression = update_expression.strip()
+    if not expression:
+        raise ValueError("profile update expression is required")
+    names = dict(expression_attribute_names or {})
+    values = dict(expression_attribute_values)
+    if ":next_profile_version" in values:
+        raise ValueError("profile version aliases are repository-owned")
+    if expected_version is None:
+        condition = "attribute_not_exists(version)"
+        next_version = 1
+    else:
+        expected_version = _required_profile_version(expected_version)
+        condition = "version=:expected_profile_version"
+        values[":expected_profile_version"] = expected_version
+        next_version = expected_version + 1
+    values[":next_profile_version"] = next_version
+
+    if expression.upper().startswith("SET "):
+        expression = (
+            "SET version=:next_profile_version, " + expression[4:].lstrip()
+        )
+    else:
+        expression = "SET version=:next_profile_version " + expression
+    condition_expression = (
+        "attribute_exists(PK) AND attribute_exists(SK) AND " + condition
+    )
+    if additional_condition_expression:
+        condition_expression += f" AND ({additional_condition_expression})"
+    return {
+        "Update": {
+            "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
+            "UpdateExpression": expression,
+            "ConditionExpression": condition_expression,
+            **({"ExpressionAttributeNames": names} if names else {}),
+            "ExpressionAttributeValues": values,
+        }
+    }
+
+
+def update_profile_fields_versioned(
+    user_id: str,
+    *,
+    update_expression: str,
+    expression_attribute_values: Mapping[str, object],
+    expression_attribute_names: Mapping[str, str] | None = None,
+    owned_fields: frozenset[str] | None = None,
+    max_attempts: int = PROFILE_WRITE_MAX_ATTEMPTS,
+) -> ProfileWriteResult:
+    """Strong-read and apply one bounded, narrow profile CAS operation."""
+    if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
+        raise ValueError("max_attempts must be a positive integer")
+    fields = owned_fields or _profile_update_fields(
+        update_expression, expression_attribute_names
+    )
+    # A stale ordinary mutation of scrub-owned data is never replayed after a
+    # scrub wins.  Unrelated writers retain bounded retry and convergence.
+    attempt_limit = 1 if fields & PROFILE_SCRUB_OWNED_FIELDS else max_attempts
+    table = get_table()
+    for attempt in range(1, attempt_limit + 1):
+        profile = get_user(user_id)
+        if profile is None:
+            return ProfileWriteResult(ProfileWriteDisposition.RETRYABLE, attempts=attempt)
+        expected_version = _optional_profile_version(profile.get("version"))
+        try:
+            fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+            account_deletion_repo.transact(
+                build_profile_update_transaction(
+                    user_id,
+                    update_expression=update_expression,
+                    expression_attribute_values=expression_attribute_values,
+                    expression_attribute_names=expression_attribute_names,
+                    expected_generation=_required_positive_integer(fence.get("generation")),
+                    expected_version=expected_version,
+                ),
+                table=table,
+            )
+        except account_deletion_repo.AccountDeletionConflict:
+            continue
+        current = get_user(user_id)
+        if current is None:
+            return ProfileWriteResult(ProfileWriteDisposition.RETRYABLE, attempts=attempt)
+        return ProfileWriteResult(
+            ProfileWriteDisposition.UPDATED,
+            profile=current,
+            attempts=attempt,
+        )
+    return ProfileWriteResult(ProfileWriteDisposition.RETRYABLE, attempts=attempt_limit)
 
 
 def update_profile_fields(
@@ -182,20 +317,19 @@ def update_profile_fields(
     update_expression: str,
     expression_attribute_values: Mapping[str, object],
     expression_attribute_names: Mapping[str, str] | None = None,
+    owned_fields: frozenset[str] | None = None,
 ) -> UserItem:
-    table = get_table()
-    fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
-    account_deletion_repo.transact(
-        build_profile_update_transaction(
-            user_id,
-            update_expression=update_expression,
-            expression_attribute_values=expression_attribute_values,
-            expression_attribute_names=expression_attribute_names,
-            expected_generation=_required_positive_integer(fence.get("generation")),
-        ),
-        table=table,
+    """Compatibility projection over the typed, bounded profile writer."""
+    result = update_profile_fields_versioned(
+        user_id,
+        update_expression=update_expression,
+        expression_attribute_values=expression_attribute_values,
+        expression_attribute_names=expression_attribute_names,
+        owned_fields=owned_fields,
     )
-    return get_user(user_id) or {}
+    if result.disposition is not ProfileWriteDisposition.UPDATED or result.profile is None:
+        raise account_deletion_repo.AccountDeletionConflict("profile write remains retryable")
+    return result.profile
 
 
 def build_parent_binding_transaction(
@@ -209,6 +343,7 @@ def build_parent_binding_transaction(
     created_at: str,
     version: int = 1,
     expected_generation: int,
+    expected_profile_version: int | None = None,
 ) -> list[TransactionOperation]:
     """Compose both formal rows and the profile projection behind one fence."""
     parent_id = _required_text(parent_id, "parent_id")
@@ -277,35 +412,34 @@ def build_parent_binding_transaction(
         account_deletion_repo.active_fence_condition(student_id, expected_generation),
         binding_update(f"USER#{parent_id}", f"CHILD#{student_id}"),
         binding_update(f"USER#{student_id}", f"PARENT#{parent_id}"),
-        {
-            "Update": {
-                "Key": {"PK": f"USER#{student_id}", "SK": "PROFILE"},
-                "UpdateExpression": (
-                    "SET #parent_id = :parent_id, #relationship = :relationship, "
-                    "#parent_binding_status = :status"
-                ),
-                "ConditionExpression": (
-                    "attribute_exists(PK) AND attribute_exists(SK) AND "
-                    "#user_id = :student_id AND #role = :student_role AND "
-                    "(attribute_not_exists(#parent_id) OR #parent_id = :parent_id) AND "
-                    "(attribute_not_exists(#relationship) OR #relationship = :relationship)"
-                ),
-                "ExpressionAttributeNames": {
-                    "#parent_id": "parent_id",
-                    "#relationship": "relationship",
-                    "#parent_binding_status": "parent_binding_status",
-                    "#user_id": "user_id",
-                    "#role": "role",
-                },
-                "ExpressionAttributeValues": {
-                    ":parent_id": parent_id,
-                    ":student_id": student_id,
-                    ":student_role": "student",
-                    ":relationship": relationship,
-                    ":status": status,
-                },
-            }
-        },
+        profile_update_operation(
+            student_id,
+            update_expression=(
+                "SET #parent_id = :parent_id, #relationship = :relationship, "
+                "#parent_binding_status = :status"
+            ),
+            expression_attribute_names={
+                "#parent_id": "parent_id",
+                "#relationship": "relationship",
+                "#parent_binding_status": "parent_binding_status",
+                "#user_id": "user_id",
+                "#role": "role",
+            },
+            expression_attribute_values={
+                ":parent_id": parent_id,
+                ":student_id": student_id,
+                ":student_role": "student",
+                ":relationship": relationship,
+                ":status": status,
+            },
+            expected_version=expected_profile_version,
+            additional_condition_expression=(
+                "#user_id = :student_id AND #role = :student_role AND "
+                "(attribute_not_exists(#parent_id) OR #parent_id = :parent_id) AND "
+                "(attribute_not_exists(#relationship) OR "
+                "#relationship = :relationship)"
+            ),
+        ),
     ]
 
 
@@ -359,6 +493,9 @@ def put_parent_student_relationship(
                 created_at=created_at,
                 version=version,
                 expected_generation=_required_positive_integer(fence.get("generation")),
+                expected_profile_version=_optional_profile_version(
+                    snapshot.profile.get("version") if snapshot.profile else None
+                ),
             ),
             table=table,
         )
@@ -636,6 +773,34 @@ def _required_positive_integer(value: object) -> int:
     if parsed < 1:
         raise ValueError("malformed account fence generation")
     return parsed
+
+
+def _required_profile_version(value: object) -> int:
+    if isinstance(value, bool):
+        raise ValueError("malformed profile version")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+    else:
+        raise ValueError("malformed profile version")
+    if parsed < 1:
+        raise ValueError("malformed profile version")
+    return parsed
+
+
+def _optional_profile_version(value: object) -> int | None:
+    if value is None:
+        return None
+    return _required_profile_version(value)
+
+
+def _profile_update_fields(
+    update_expression: str, expression_attribute_names: Mapping[str, str] | None
+) -> frozenset[str]:
+    aliases = set((expression_attribute_names or {}).values())
+    identifiers = set(re.findall(r"(?<![:#])[A-Za-z_][A-Za-z0-9_]*", update_expression))
+    return frozenset(aliases | identifiers)
 
 
 def _required_text(value: object, field: str) -> str:

@@ -372,7 +372,7 @@ def test_forged_in_memory_complete_map_cannot_terminalize_durable_incomplete_set
     assert finalized == []
 
 
-def test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences() -> None:
+def test_parent_scrub_retries_version_cas_and_never_replaces_concurrent_preferences() -> None:
     scanned = {
         "PK": "USER#parent-1",
         "SK": "PROFILE",
@@ -390,6 +390,7 @@ def test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences()
                 "version": 4,
                 "preferences": {"digest": "daily"},
             }
+            self.attempts: list[int] = []
 
         def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
             if Key["SK"] == "ACCOUNT_FENCE":
@@ -399,22 +400,26 @@ def test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences()
             return {"Item": dict(self.current)}
 
         def scrub_parent_profile_child(self, *_args: Any, **kwargs: Any) -> None:
-            assert kwargs["expected_version"] == 3
+            self.attempts.append(kwargs["expected_version"])
             if self.current["version"] != kwargs["expected_version"]:
                 raise account_deletion_repo.AccountDeletionRowConflict(
                     "parent profile changed"
                 )
+            scrubbed = dict(_args[1])
+            scrubbed["version"] = kwargs["expected_version"] + 1
+            self.current = scrubbed
 
     table = _ConcurrentParent()
-    with pytest.raises(account_deletion_repo.AccountDeletionRowConflict):
-        account_deletion_repo.scrub_parent_profile_child(
-            scanned,
-            child_user_id="student-1",
-            generation=7,
-            table=table,
-        )
+    account_deletion_repo.scrub_parent_profile_child(
+        scanned,
+        child_user_id="student-1",
+        generation=7,
+        table=table,
+    )
+    assert table.attempts == [3, 4]
+    assert table.current["version"] == 5
     assert table.current["preferences"] == {"digest": "daily"}
-    assert table.current["child_summaries"][0]["student_id"] == "student-1"
+    assert table.current["child_summaries"] == []
 
 
 def test_fresh_parent_rescan_removes_only_child_and_advances_row_version() -> None:
@@ -434,11 +439,12 @@ def test_fresh_parent_rescan_removes_only_child_and_advances_row_version() -> No
 
     class _CurrentParent:
         def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+            user_id = Key["PK"].removeprefix("USER#")
             return {
                 "Item": {
                     **Key,
-                    "status": "active",
-                    "generation": 9,
+                    "status": "active" if user_id == "parent-1" else "deletion_pending",
+                    "generation": 9 if user_id == "parent-1" else 7,
                 }
             }
 

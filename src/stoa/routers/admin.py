@@ -1633,7 +1633,6 @@ async def update_user(
     if not profile:
         raise HTTPException(status_code=404, detail="User not found")
 
-    table = get_table()
     update_parts = []
     attr_values: dict = {}
 
@@ -1647,10 +1646,18 @@ async def update_user(
     if not update_parts:
         return {"user_id": user_id, "message": "Nothing to update"}
 
-    table.update_item(
-        Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
-        UpdateExpression="SET " + ", ".join(update_parts),
-        ExpressionAttributeValues=attr_values,
+    user_repo.update_profile_fields(
+        user_id,
+        update_expression="SET " + ", ".join(update_parts),
+        expression_attribute_values=attr_values,
+        owned_fields=frozenset(
+            field
+            for field, present in (
+                ("subscription_tier", body.subscription_tier is not None),
+                ("is_active", body.is_active is not None),
+            )
+            if present
+        ),
     )
     return {"user_id": user_id, "updated": {k.lstrip(":"): v for k, v in attr_values.items()}}
 

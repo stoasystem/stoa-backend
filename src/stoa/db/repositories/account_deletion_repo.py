@@ -306,6 +306,12 @@ def materialize_profile_with_fence(
     now_iso = _valid_lifecycle_timestamp(now_iso)
     user_id = _required(profile.get("user_id"), "user_id")
     target = table or get_table()
+    profile_item = {
+        "PK": f"USER#{user_id}",
+        "SK": "PROFILE",
+        **profile,
+        "version": 1,
+    }
     fence = {
         **account_fence_key(user_id),
         "entity_type": "account_fence",
@@ -319,13 +325,13 @@ def materialize_profile_with_fence(
     }
     hook = getattr(target, "put_profile_with_fence", None)
     if callable(hook):
-        hook(dict(profile), fence)
+        hook(profile_item, fence)
         return
     transact(
         [
             {
                 "Put": {
-                    "Item": {"PK": f"USER#{user_id}", "SK": "PROFILE", **profile},
+                    "Item": profile_item,
                     "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                 }
             },
@@ -681,23 +687,86 @@ def scrub_parent_profile_child(
     generation: int,
     table: Any | None = None,
 ) -> None:
-    """Remove one closing child from embedded parent summaries without deleting parent."""
+    """CAS-remove one closing child without replacing any unrelated profile field."""
     parent_id = _required(item.get("user_id"), "parent user_id")
     if parent_id == child_user_id:
         raise AccountDeletionConflict("student profile requires tombstone replacement")
     target = table or get_table()
-    parent_fence = require_active_account_fence(parent_id, table=target)
-    expected_version = item.get("version")
-    if expected_version is not None:
-        expected_version = _positive_int(expected_version, "parent profile version")
-    scrubbed = deepcopy(dict(item))
-    for field in ("child_user_id", "student_id", "child_id"):
-        if scrubbed.get(field) == child_user_id:
+    current = dict(item)
+    for attempt in range(1, 4):
+        require_deletion_account_fence(child_user_id, generation, table=target)
+        parent_fence = require_active_account_fence(parent_id, table=target)
+        if current.get("user_id") != parent_id:
+            raise AccountDeletionRowConflict("parent profile identity changed")
+        removed, replacements = _parent_profile_child_scrub_changes(
+            current, child_user_id
+        )
+        if not removed and not replacements:
+            if attempt == 1:
+                raise AccountDeletionRowConflict("closing child reference changed")
+            return
+        expected_version = current.get("version")
+        if expected_version is not None:
+            expected_version = _positive_int(
+                expected_version, "parent profile version"
+            )
+        scrubbed = deepcopy(current)
+        for field in removed:
             scrubbed.pop(field, None)
+        scrubbed.update(replacements)
+        hook = getattr(target, "scrub_parent_profile_child", None)
+        try:
+            if callable(hook):
+                hook(
+                    dict(current),
+                    scrubbed,
+                    child_user_id,
+                    generation,
+                    int(parent_fence["generation"]),
+                    expected_version=expected_version,
+                )
+                return
+            operations = [
+                deletion_fence_condition(child_user_id, generation),
+                active_fence_condition(parent_id, int(parent_fence["generation"])),
+                _parent_profile_scrub_operation(
+                    current,
+                    parent_id=parent_id,
+                    expected_version=expected_version,
+                    removed=removed,
+                    replacements=replacements,
+                ),
+            ]
+            transact(operations, table=target)
+            return
+        except AccountDeletionConflict as exc:
+            if attempt == 3:
+                raise AccountDeletionRowConflict(
+                    "parent profile changed during bounded scrub"
+                ) from exc
+            response = target.get_item(
+                Key={"PK": f"USER#{parent_id}", "SK": "PROFILE"},
+                ConsistentRead=True,
+            )
+            refreshed = response.get("Item") if isinstance(response, Mapping) else None
+            if not isinstance(refreshed, Mapping):
+                raise AccountDeletionRowConflict("parent profile disappeared") from exc
+            current = dict(refreshed)
+
+
+def _parent_profile_child_scrub_changes(
+    profile: Mapping[str, Any], child_user_id: str
+) -> tuple[tuple[str, ...], dict[str, Any]]:
+    removed = tuple(
+        field
+        for field in ("child_user_id", "student_id", "child_id")
+        if profile.get(field) == child_user_id
+    )
+    replacements: dict[str, Any] = {}
     for field in ("children", "child_summaries", "student_summaries"):
-        value = scrubbed.get(field)
+        value = profile.get(field)
         if isinstance(value, list):
-            scrubbed[field] = [
+            filtered = [
                 entry
                 for entry in value
                 if not (
@@ -710,8 +779,10 @@ def scrub_parent_profile_child(
                     }
                 )
             ]
+            if filtered != value:
+                replacements[field] = filtered
         elif isinstance(value, Mapping):
-            scrubbed[field] = {
+            filtered_map = {
                 key: entry
                 for key, entry in value.items()
                 if key != child_user_id
@@ -725,67 +796,58 @@ def scrub_parent_profile_child(
                     }
                 )
             }
-    if scrubbed == dict(item):
-        raise AccountDeletionRowConflict("closing child reference changed")
-    hook = getattr(target, "scrub_parent_profile_child", None)
-    if callable(hook):
-        hook(
-            dict(item),
-            scrubbed,
-            child_user_id,
-            generation,
-            int(parent_fence["generation"]),
-            expected_version=expected_version,
-        )
-        return
+            if filtered_map != value:
+                replacements[field] = filtered_map
+    return removed, replacements
+
+
+def _parent_profile_scrub_operation(
+    profile: Mapping[str, Any],
+    *,
+    parent_id: str,
+    expected_version: int | None,
+    removed: tuple[str, ...],
+    replacements: Mapping[str, Any],
+) -> dict[str, Any]:
+    names = {"#version": "version"}
+    values: dict[str, Any] = {":parent": parent_id}
+    set_parts: list[str] = []
+    for index, (field, value) in enumerate(replacements.items()):
+        name = f"#scrub_set_{index}"
+        token = f":scrub_set_{index}"
+        names[name] = field
+        values[token] = value
+        set_parts.append(f"{name}={token}")
+    remove_parts: list[str] = []
+    for index, field in enumerate(removed):
+        name = f"#scrub_remove_{index}"
+        names[name] = field
+        remove_parts.append(name)
     if expected_version is None:
-        # A narrow first write gives a legacy row a version without replacing any
-        # concurrently mutable parent field. The caller must strongly rescan.
-        transact(
-            [
-                deletion_fence_condition(child_user_id, generation),
-                active_fence_condition(parent_id, int(parent_fence["generation"])),
-                {
-                    "Update": {
-                        "Key": {"PK": item["PK"], "SK": item["SK"]},
-                        "UpdateExpression": "SET #version=:one",
-                        "ConditionExpression": (
-                            "attribute_exists(PK) AND attribute_exists(SK) AND "
-                            "user_id=:parent AND attribute_not_exists(#version)"
-                        ),
-                        "ExpressionAttributeNames": {"#version": "version"},
-                        "ExpressionAttributeValues": {
-                            ":parent": parent_id,
-                            ":one": 1,
-                        },
-                    }
-                },
-            ],
-            table=target,
-        )
-        raise AccountDeletionRowConflict("legacy parent profile normalized; rescan")
-    scrubbed["version"] = expected_version + 1
-    transact(
-        [
-            deletion_fence_condition(child_user_id, generation),
-            active_fence_condition(parent_id, int(parent_fence["generation"])),
-            {
-                "Put": {
-                    "Item": scrubbed,
-                    "ConditionExpression": (
-                        "attribute_exists(PK) AND attribute_exists(SK) AND "
-                        "user_id=:parent AND #version=:expected_version"
-                    ),
-                    "ExpressionAttributeNames": {"#version": "version"},
-                    "ExpressionAttributeValues": {
-                        ":parent": parent_id,
-                        ":expected_version": expected_version,
-                    },
-                }
-            },
-        ],
-        table=target,
-    )
+        condition = "attribute_not_exists(#version)"
+        next_version = 1
+    else:
+        condition = "#version=:expected_version"
+        values[":expected_version"] = expected_version
+        next_version = expected_version + 1
+    values[":next_version"] = next_version
+    expression = "SET #version=:next_version"
+    if set_parts:
+        expression += ", " + ", ".join(set_parts)
+    if remove_parts:
+        expression += " REMOVE " + ", ".join(remove_parts)
+    return {
+        "Update": {
+            "Key": {"PK": profile["PK"], "SK": profile["SK"]},
+            "UpdateExpression": expression,
+            "ConditionExpression": (
+                "attribute_exists(PK) AND attribute_exists(SK) AND "
+                "user_id=:parent AND " + condition
+            ),
+            "ExpressionAttributeNames": names,
+            "ExpressionAttributeValues": values,
+        }
+    }
 
 
 def terminalize_identity_row(
