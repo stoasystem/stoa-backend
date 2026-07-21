@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-01-PLAN.md
-last_updated: "2026-07-21T21:29:32.605Z"
+stopped_at: Completed 475-06-PLAN.md
+last_updated: "2026-07-21T21:47:40.033Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 95
+  completed_plans: 96
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 2 of 13
+Plan: 3 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,9 +107,9 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-21T21:29:32.599Z
-**Stopped At:** Completed 475-01-PLAN.md
-**Resume File:** .planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-02-PLAN.md
+**Last Date:** 2026-07-21T21:47:40.027Z
+**Stopped At:** Completed 475-06-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -202,6 +202,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 474 P26 | multi-session | 1 task | 5 infra files plus summary |
 | Phase 474 P88 | multi-cycle | 1 task | 3 contract files plus summary |
 | Phase 475 P01 | 9 min | 1 tasks | 3 files |
+| Phase 475 P06 | 12 min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -385,3 +386,6 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Question admission uses one durable application command with a domain-separated length-prefixed payload fingerprint. — Exact content and attachment order remain bound beyond DynamoDB's client-token window.
 - [Phase 475]: Prepared attachment operations join the admission transaction after duplicate fence and question actions are removed. — The transaction preserves existing attachment invariants without targeting one DynamoDB item twice.
 - [Phase 475]: Ambiguous admission writes reconcile through a strong command read, and quota exhaustion requires durable counter evidence. — Lost responses replay the original result without exposing provider diagnostics or double charging.
+- [Phase 475]: Binding rows admit only absence or exact relationship identity/version. — Conditional updates preserve conflicting parents and stable replay coordinates.
+- [Phase 475]: Registration persists a non-authoritative pending profile before the atomic relationship write. — No profile parent projection can commit before both formal relationship rows.
+- [Phase 475]: Parent binding conflicts remain typed and report-only. — The admin route returns a safe 409 without selecting or overwriting either parent.
