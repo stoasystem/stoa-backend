@@ -189,8 +189,8 @@ def test_teacher_reply_authorization_outage_returns_503_before_mutation(monkeypa
 
 
 def test_teacher_takeover_records_takeover_sla(monkeypatch):
-    updates = []
-    table = FakeTeacherTable()
+    claims = []
+    table = object()
     monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(teachers, "_now", lambda: "2026-06-08T08:12:00+00:00")
     monkeypatch.setattr(
@@ -205,18 +205,25 @@ def test_teacher_takeover_records_takeover_sla(monkeypatch):
     )
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "claim_teacher_takeover",
+        lambda question_id, teacher_id, **attrs: claims.append(
+            (question_id, teacher_id, attrs)
+        )
+        or teachers.question_repo.TeacherTakeoverResult(
+            teachers.question_repo.TeacherTakeoverDisposition.CLAIMED,
+            question_id,
+            session_id="session-1",
+        ),
     )
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post("/teachers/questions/question-1/takeover")
 
     assert response.status_code == 200
-    assert updates[0][1] == "teacher_active"
-    assert updates[0][2]["teacher_taken_over_at"] == "2026-06-08T08:12:00+00:00"
-    assert updates[0][2]["sla_request_to_takeover_seconds"] == 720
-    assert table.put_items[0]["student_id"] == "student-1"
+    assert claims[0][1] == "teacher-1"
+    assert claims[0][2]["claimed_at"] == "2026-06-08T08:12:00+00:00"
+    assert claims[0][2]["sla_fields"]["sla_request_to_takeover_seconds"] == 720
+    assert claims[0][2]["table"] is table
 
 
 class FakeAdminTable:

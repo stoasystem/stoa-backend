@@ -182,43 +182,59 @@ async def takeover(
 ):
     """Lock a question to this teacher and start a session."""
     item = dict(authorized.value)
-    if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
-        raise HTTPException(status_code=409, detail="Question is already taken by a teacher")
-    if item.get("status") != QuestionStatus.ESCALATED.value:
-        raise HTTPException(status_code=409, detail="Question is not awaiting teacher takeover")
-
-    teacher_id = authorized.facts.teacher.teacher_account["user_id"]
+    teacher_facts = authorized.facts.teacher
+    teacher_account = teacher_facts.teacher_account if teacher_facts else None
+    teacher_id = str(teacher_account.get("user_id") or "") if teacher_account else ""
+    if not teacher_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_takeover_temporarily_unavailable",
+                "message": "Teacher takeover is temporarily unavailable. Try again.",
+                "action": "retry_teacher_takeover",
+            },
+        )
     now = _now()
-    if _is_dispatch_restricted_to_other_teacher(item, teacher_id, now):
-        raise HTTPException(status_code=409, detail="Question is dispatched to another teacher")
-    session_id = str(uuid.uuid4())
     sla_fields = teacher_reply_service.compute_takeover_sla_fields(item, now)
-
-    question_repo.update_status(
+    result = question_repo.claim_teacher_takeover(
         question_id,
-        QuestionStatus.TEACHER_ACTIVE.value,
         teacher_id=teacher_id,
-        session_id=session_id,
-        teacher_started_at=now,
-        teacher_taken_over_at=now,
-        dispatch_status="accepted" if item.get("dispatch_status") == "dispatched" else item.get("dispatch_status"),
-        dispatch_accepted_at=now if item.get("dispatch_status") == "dispatched" else item.get("dispatch_accepted_at"),
-        **sla_fields,
+        claimed_at=now,
+        question=item,
+        sla_fields=sla_fields,
+        table=get_table(),
     )
-
-    question_repo.create_teacher_session({
-        "session_id": session_id,
-        "question_id": question_id,
-        "teacher_id": teacher_id,
-        "student_id": item["student_id"],
-        "started_at": now,
-        "resolved_at": None,
-    }, table=get_table())
-    notification_service.emit_teacher_takeover(question=item, teacher_id=teacher_id)
+    if result.disposition is question_repo.TeacherTakeoverDisposition.ALREADY_CLAIMED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "teacher_takeover_already_claimed",
+                "message": "Question was taken by another teacher.",
+                "action": "refresh_teacher_queue",
+            },
+        )
+    if result.disposition is question_repo.TeacherTakeoverDisposition.RETRYABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_takeover_temporarily_unavailable",
+                "message": "Teacher takeover is temporarily unavailable. Try again.",
+                "action": "retry_teacher_takeover",
+            },
+        )
+    if not result.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_takeover_temporarily_unavailable",
+                "message": "Teacher takeover is temporarily unavailable. Try again.",
+                "action": "retry_teacher_takeover",
+            },
+        )
 
     return TakeoverResponse(
         question_id=question_id,
-        session_id=session_id,
+        session_id=result.session_id,
         status=QuestionStatus.TEACHER_ACTIVE.value,
     )
 

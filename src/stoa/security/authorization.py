@@ -231,6 +231,12 @@ class TeacherAuthorizationFacts:
         if action is AuthorizationAction.CLAIM:
             if resource.resource_type is not ResourceType.QUESTION:
                 return False
+            if question.get("status") == "teacher_active":
+                return (
+                    question.get("teacher_id") == actor_id
+                    and bool(question.get("session_id"))
+                    and bool(question.get("teacher_takeover_claim_id"))
+                )
             if question.get("status") != "escalated":
                 return False
             if actor_id in _string_set(question.get("previous_dispatch_teacher_ids")):

@@ -197,8 +197,7 @@ def test_teacher_queue_filters_dispatches_owned_by_other_teachers(monkeypatch):
 
 
 def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch):
-    updates = []
-    table_items = []
+    claims = []
     item = {
         **QUESTION,
         "dispatch_status": "dispatched",
@@ -206,17 +205,21 @@ def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch
         "dispatch_deadline_at": "2099-06-15T10:15:00+00:00",
     }
 
-    class FakeTable:
-        def put_item(self, Item):
-            table_items.append(Item)
-
-    monkeypatch.setattr(teachers, "get_table", lambda: FakeTable())
+    table = object()
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(teachers, "_now", lambda: "2026-06-15T10:05:00+00:00")
     monkeypatch.setattr(teachers.question_repo, "get_question", lambda question_id: item)
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "claim_teacher_takeover",
+        lambda question_id, teacher_id, **attrs: claims.append(
+            (question_id, teacher_id, attrs)
+        )
+        or teachers.question_repo.TeacherTakeoverResult(
+            teachers.question_repo.TeacherTakeoverDisposition.CLAIMED,
+            question_id,
+            session_id="session-1",
+        ),
     )
 
     other = _app(teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}).post(
@@ -228,9 +231,9 @@ def test_takeover_accepts_current_dispatch_and_rejects_other_teacher(monkeypatch
         "/teachers/questions/question-1/takeover"
     )
     assert mine.status_code == 200
-    assert updates[0][2]["dispatch_status"] == "accepted"
-    assert updates[0][2]["dispatch_accepted_at"] == "2026-06-15T10:05:00+00:00"
-    assert table_items[0]["teacher_id"] == "teacher-1"
+    assert claims[0][1] == "teacher-1"
+    assert claims[0][2]["claimed_at"] == "2026-06-15T10:05:00+00:00"
+    assert claims[0][2]["table"] is table
 
 
 def test_teacher_queue_projects_metadata_without_student_content(monkeypatch):
@@ -276,12 +279,12 @@ def test_dispatch_controls_require_exact_local_capability(monkeypatch):
 
 
 def test_suspended_teacher_cannot_take_over_and_mutation_does_not_run(monkeypatch):
-    updates = []
+    claims = []
     monkeypatch.setattr(teachers.question_repo, "get_question", lambda _id: dict(QUESTION))
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
-        lambda *args, **kwargs: updates.append((args, kwargs)),
+        "claim_teacher_takeover",
+        lambda *args, **kwargs: claims.append((args, kwargs)),
     )
     response = _app(
         teachers.router,
@@ -290,7 +293,7 @@ def test_suspended_teacher_cannot_take_over_and_mutation_does_not_run(monkeypatc
     ).post("/teachers/questions/question-1/takeover")
 
     assert response.status_code == 404
-    assert updates == []
+    assert claims == []
 
 
 def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):
