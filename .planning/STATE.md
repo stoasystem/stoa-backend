@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 474-94 two-run Linux formal admission
-last_updated: "2026-07-20T08:22:00Z"
+stopped_at: Phase 475 context gathered
+last_updated: "2026-07-21T20:47:21.941Z"
 last_activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Linux PASS runs
 progress:
   total_phases: 10
@@ -107,9 +107,9 @@ Last activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Li
 
 ## Session
 
-**Last Date:** 2026-07-20T08:22:00Z
-**Stopped At:** Completed 474-94 two-run Linux formal admission
-**Resume File:** None
+**Last Date:** 2026-07-21T20:47:21.934Z
+**Stopped At:** Phase 475 context gathered
+**Resume File:** .planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-CONTEXT.md
 
 ## Performance Metrics
 
