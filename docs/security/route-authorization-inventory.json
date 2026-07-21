@@ -4109,7 +4109,9 @@
     ],
     "classification": "authorized",
     "family": "practice",
-    "identifiers": [],
+    "identifiers": [
+      "challengeId"
+    ],
     "method": "POST",
     "path": "/practice/hints",
     "sensitive": true
