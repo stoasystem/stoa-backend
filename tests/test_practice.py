@@ -142,7 +142,11 @@ def test_practice_hint_body_cannot_select_another_student(monkeypatch):
 
     response = _client(_actor("student-canonical")).post(
         "/practice/hints",
-        json={"challengeId": "challenge-1", "studentId": "student-other"},
+        json={
+            "challengeId": "challenge-1",
+            "idempotencyKey": "hint-owner-1",
+            "studentId": "student-other",
+        },
     )
 
     assert response.status_code == 200
@@ -321,7 +325,8 @@ def test_hint_requires_approval_and_rejects_answer_or_explanation_canaries(monke
     for challenge in cases:
         monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _id, item=challenge: item)
         response = _client().post(
-            "/practice/hints", json={"challengeId": "challenge-1"}
+            "/practice/hints",
+            json={"challengeId": "challenge-1", "idempotencyKey": "hint-approved-1"},
         )
         assert response.status_code == 200
         assert response.json() == {
@@ -329,3 +334,26 @@ def test_hint_requires_approval_and_rejects_answer_or_explanation_canaries(monke
             "hintAvailable": False,
             "hint": None,
         }
+
+
+def test_hint_requires_explicit_idempotency_key_before_rate_admission(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_challenge",
+        lambda _id: _approved_hint_challenge(),
+    )
+    from stoa.services import rate_limit
+
+    monkeypatch.setattr(
+        rate_limit,
+        "check_and_record_hint",
+        lambda *_args, **_kwargs: calls.append("admit"),
+    )
+
+    response = _client().post(
+        "/practice/hints", json={"challengeId": "challenge-1"}
+    )
+
+    assert response.status_code == 422
+    assert calls == []

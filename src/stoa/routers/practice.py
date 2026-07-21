@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
 from stoa.db.repositories import practice_repo
@@ -57,6 +58,22 @@ _practice_progress = authorized_student_dependency(
     query_alias="studentId",
 )
 _curriculum_answer_read = authorized_curriculum_answer_dependency()
+
+
+class PracticeHintRequest(BaseModel):
+    """One hint request with an explicit logical-operation identity."""
+
+    # Preserve the legacy route's tolerance for unrelated body keys while making
+    # the rate-operation identity itself explicit and required.
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    challenge_id: str = Field(alias="challengeId", min_length=1, max_length=200)
+    idempotency_key: str = Field(
+        alias="idempotencyKey",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._~-]+$",
+    )
 
 
 async def _authorize_practice_item(
@@ -198,6 +215,24 @@ async def _authorized_body_challenge_update(
     )
 
 
+async def _authorized_hint_challenge_update(
+    body: PracticeHintRequest,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+) -> AuthorizedResource:
+    return await _authorize_practice_item(
+        actor=actor,
+        facts=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+        item_id=body.challenge_id,
+        item=practice_repo.get_challenge(body.challenge_id),
+        action=AuthorizationAction.UPDATE,
+    )
+
+
 async def _lesson_metadata_resolver(resource_id: str):
     return practice_repo.get_lesson(resource_id)
 
@@ -220,6 +255,9 @@ _authorized_challenge_update.authorization_specs = _practice_item_specs(  # type
     AuthorizationAction.UPDATE, _challenge_metadata_resolver
 )
 _authorized_body_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
+    AuthorizationAction.UPDATE, _challenge_metadata_resolver
+)
+_authorized_hint_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
     AuthorizationAction.UPDATE, _challenge_metadata_resolver
 )
 _authorized_attempt_read.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
@@ -863,17 +901,18 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
 
 @router.post("/hints", response_model=PracticeHintResponse)
 async def get_hint(
-    body: dict,
+    body: PracticeHintRequest,
     actor: Actor = Depends(_practice_update),
-    authorized_challenge: AuthorizedResource = Depends(_authorized_body_challenge_update),
+    authorized_challenge: AuthorizedResource = Depends(_authorized_hint_challenge_update),
 ):
     from stoa.services.rate_limit import check_and_record_hint
-    challenge_id = body.get("challengeId", "")
+    challenge_id = body.challenge_id
     challenge = dict(authorized_challenge.value)
 
     usage_counter = check_and_record_hint(
         actor.user_id,
         challenge_id,
+        body.idempotency_key,
         limit=_hint_limit_for_student(actor.user_id),
     )
 

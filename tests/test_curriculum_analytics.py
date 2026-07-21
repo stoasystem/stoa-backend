@@ -208,7 +208,7 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
     monkeypatch.setattr(
         rate_limit,
         "check_and_record_hint",
-        lambda student_id, challenge_id, limit=None: {
+        lambda student_id, challenge_id, operation_id, limit=None: {
             "quotaPeriod": "2026-07-04",
             "counterKey": "USAGE#student-1/HINT#2026-07-04",
             "counterValue": 1,
@@ -224,7 +224,7 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
 
     response = TestClient(_app_for_user({"sub": "student-1", "role": "student"})).post(
         "/practice/hints",
-        json={"challengeId": "exercise-1"},
+        json={"challengeId": "exercise-1", "idempotencyKey": "hint-ledger-1"},
     )
 
     assert response.status_code == 200

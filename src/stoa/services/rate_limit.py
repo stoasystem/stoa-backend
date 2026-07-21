@@ -1,110 +1,521 @@
-"""Shared rate-limiting helpers using DynamoDB atomic counters."""
+"""Capped, idempotent rate admission for logical chat and hint operations."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
+from enum import StrEnum
+import hashlib
+import struct
+from typing import Any, Mapping
+
 from fastapi import HTTPException, status
+
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
+
+
+_RATE_KINDS = frozenset({"chat", "hint"})
+_OPERATION_SCHEMA_VERSION = "rate-admission-operation.v1"
+_OPERATION_TTL_SECONDS = 172800
+
+
+class RateAdmissionDisposition(StrEnum):
+    """Closed, provider-independent outcomes for one logical rate operation."""
+
+    ADMITTED = "admitted"
+    REPLAYED = "replayed"
+    LIMIT_EXCEEDED = "limit_exceeded"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class RateAdmissionResult:
+    """Stable admission result without provider diagnostics or raw caller keys."""
+
+    disposition: RateAdmissionDisposition
+    owner_id: str
+    kind: str
+    operation_id: str
+    quota_period: str
+    counter_key: str
+    counter_value: int
+    limit: int
+    expires_at: int
+
+    def counter_receipt(self) -> dict[str, Any]:
+        return {
+            "quotaPeriod": self.quota_period,
+            "counterKey": self.counter_key,
+            "counterValue": self.counter_value,
+            "limit": self.limit,
+            "expiresAt": self.expires_at,
+            "operationId": self.operation_id,
+            "admissionStatus": self.disposition.value,
+        }
+
+
+class _RateDependencyFailure(RuntimeError):
+    pass
 
 
 def _today_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-def _increment_and_check(
-    pk: str,
-    sk: str,
-    limit: int,
-    label: str,
-    *,
-    owner_id: str | None = None,
-    account_fence_generation: int | None = None,
-) -> dict:
-    """Atomically increment a usage counter and raise 429 if the limit is hit."""
-    table = get_table()
-    expires_at_value = int((datetime.now(timezone.utc).timestamp()) + 172800)
-    atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
-    )
-    if owner_id and atomic:
-        if account_fence_generation is None:
-            fence = account_deletion_repo.require_active_account_fence(
-                owner_id, table=table
-            )
-            account_fence_generation = int(fence["generation"])
-        account_deletion_repo.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    owner_id, account_fence_generation
-                ),
-                {
-                    "Update": {
-                        "Key": {"PK": pk, "SK": sk},
-                        "UpdateExpression": (
-                            "ADD #c :one SET #ttl=if_not_exists(#ttl,:exp), "
-                            "retention_basis=:basis, owner_id=:owner, "
-                            "account_fence_generation=:generation"
-                        ),
-                        "ExpressionAttributeNames": {
-                            "#c": "count",
-                            "#ttl": "expires_at",
-                        },
-                        "ExpressionAttributeValues": {
-                            ":one": 1,
-                            ":exp": expires_at_value,
-                            ":basis": "usage_accounting",
-                            ":owner": owner_id,
-                            ":generation": account_fence_generation,
-                        },
-                    }
-                },
-            ],
-            table=table,
-        )
-        resp = table.get_item(Key={"PK": pk, "SK": sk}, ConsistentRead=True)
-        resp = {"Attributes": resp.get("Item") or {}}
-    else:
-        resp = table.update_item(
-            Key={"PK": pk, "SK": sk},
-            UpdateExpression="ADD #c :one SET #ttl = if_not_exists(#ttl, :exp)",
-            ExpressionAttributeNames={"#c": "count", "#ttl": "expires_at"},
-            ExpressionAttributeValues={":one": 1, ":exp": expires_at_value},
-            ReturnValues="UPDATED_NEW",
-        )
-    new_count = int(resp["Attributes"].get("count", 1))
-    expires_at = int(resp["Attributes"].get("expires_at") or 0)
-    if new_count > limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily {label} limit ({limit}) reached. Try again tomorrow.",
-        )
+def _required_text(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} is required")
+    return value.strip()
+
+
+def _rate_kind(value: object) -> str:
+    kind = _required_text(value, "kind").lower()
+    if kind not in _RATE_KINDS:
+        raise ValueError("unsupported rate kind")
+    return kind
+
+
+def _sha256_digest(value: object, field: str) -> str:
+    digest = _required_text(value, field)
+    if (
+        len(digest) != 64
+        or digest != digest.lower()
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError(f"{field} must be a lowercase SHA-256 digest")
+    return digest
+
+
+def _frame(value: str) -> bytes:
+    encoded = value.encode("utf-8")
+    return struct.pack(">I", len(encoded)) + encoded
+
+
+def build_rate_operation_id(
+    kind: str,
+    owner_id: str,
+    caller_operation_id: str,
+    quota_period: str | None = None,
+) -> str:
+    """Return a period-scoped opaque ID for one caller-owned logical operation."""
+    normalized_kind = _rate_kind(kind)
+    owner = _required_text(owner_id, "owner_id")
+    caller_id = _required_text(caller_operation_id, "caller_operation_id")
+    period = _required_text(quota_period or _today_utc(), "quota_period")
+    framed = b"stoa.rate-admission.operation.v1"
+    for value in (normalized_kind, owner, period, caller_id):
+        framed += _frame(value)
+    return hashlib.sha256(framed).hexdigest()
+
+
+def _payload_digest(kind: str, resource_id: str) -> str:
+    framed = b"stoa.rate-admission.payload.v1"
+    framed += _frame(_rate_kind(kind))
+    framed += _frame(_required_text(resource_id, "resource_id"))
+    return hashlib.sha256(framed).hexdigest()
+
+
+def _counter_key(owner_id: str, kind: str, quota_period: str) -> dict[str, str]:
     return {
-        "quotaPeriod": sk.split("#", 1)[1] if "#" in sk else _today_utc(),
-        "counterKey": f"{pk}/{sk}",
-        "counterValue": new_count,
-        "limit": limit,
-        "expiresAt": expires_at,
+        "PK": f"USAGE#{owner_id}",
+        "SK": f"{kind.upper()}#{quota_period}",
     }
 
 
-def check_and_record_chat(student_id: str, limit: int | None = None) -> dict:
-    """Increment today's chat counter; raise 429 if limit exceeded."""
-    today = _today_utc()
-    return _increment_and_check(
-        pk=f"USAGE#{student_id}",
-        sk=f"CHAT#{today}",
-        limit=limit if limit is not None else settings.daily_chat_message_limit,
-        label="chat message",
+def _operation_key(owner_id: str, kind: str, operation_id: str) -> dict[str, str]:
+    return {
+        "PK": f"USAGE#{owner_id}",
+        "SK": f"{kind.upper()}_QUOTA_OP#{operation_id}",
+    }
+
+
+def _get_item(table: object, key: dict[str, str]) -> dict[str, Any] | None:
+    getter = getattr(table, "get_item", None)
+    if not callable(getter):
+        raise _RateDependencyFailure
+    try:
+        response = getter(Key=key, ConsistentRead=True)
+    except Exception:
+        raise _RateDependencyFailure from None
+    if not isinstance(response, Mapping):
+        raise _RateDependencyFailure
+    item = response.get("Item")
+    if item is None:
+        return None
+    if not isinstance(item, Mapping) or any(not isinstance(key, str) for key in item):
+        raise _RateDependencyFailure
+    return dict(item)
+
+
+def _counter_state(table: object, key: dict[str, str]) -> tuple[int, int]:
+    item = _get_item(table, key) or {}
+    count = _stored_nonnegative_int(item.get("count", 0))
+    expires_at = _stored_nonnegative_int(item.get("expires_at", 0))
+    if count is None or expires_at is None:
+        raise _RateDependencyFailure
+    return count, expires_at
+
+
+def _stored_nonnegative_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, Decimal) and value.is_finite() and value == value.to_integral_value():
+        integer = int(value)
+        return integer if integer >= 0 else None
+    return None
+
+
+def _result(
+    disposition: RateAdmissionDisposition,
+    *,
+    owner_id: str,
+    kind: str,
+    operation_id: str,
+    quota_period: str,
+    counter_key: dict[str, str],
+    counter_value: int,
+    limit: int,
+    expires_at: int,
+) -> RateAdmissionResult:
+    return RateAdmissionResult(
+        disposition=disposition,
+        owner_id=owner_id,
+        kind=kind,
+        operation_id=operation_id,
+        quota_period=quota_period,
+        counter_key=f"{counter_key['PK']}/{counter_key['SK']}",
+        counter_value=counter_value,
+        limit=limit,
+        expires_at=expires_at,
     )
 
 
-def check_and_record_hint(student_id: str, challenge_id: str, limit: int | None = None) -> dict:
-    """Increment today's hint counter; raise 429 if limit exceeded."""
-    today = _today_utc()
-    return _increment_and_check(
-        pk=f"USAGE#{student_id}",
-        sk=f"HINT#{today}",
-        limit=limit if limit is not None else settings.daily_hint_limit,
-        label="hint",
+def _classify_operation(
+    item: dict[str, Any],
+    *,
+    owner_id: str,
+    kind: str,
+    operation_id: str,
+    quota_period: str,
+    payload_digest: str,
+    counter_key: dict[str, str],
+    counter_value: int,
+    limit: int,
+    expires_at: int,
+) -> RateAdmissionResult:
+    if (
+        item.get("entity_type") != "rate_admission_operation"
+        or item.get("schema_version") != _OPERATION_SCHEMA_VERSION
+        or item.get("owner_id") != owner_id
+        or item.get("kind") != kind
+        or item.get("operation_id") != operation_id
+        or item.get("quota_period") != quota_period
+        or item.get("status") != "admitted"
+        or not isinstance(item.get("payload_digest"), str)
+    ):
+        disposition = RateAdmissionDisposition.RETRYABLE
+    elif item["payload_digest"] != payload_digest:
+        disposition = RateAdmissionDisposition.IDEMPOTENCY_CONFLICT
+    else:
+        disposition = RateAdmissionDisposition.REPLAYED
+    return _result(
+        disposition,
+        owner_id=owner_id,
+        kind=kind,
+        operation_id=operation_id,
+        quota_period=quota_period,
+        counter_key=counter_key,
+        counter_value=counter_value,
+        limit=limit,
+        expires_at=expires_at,
+    )
+
+
+def check_and_record_operation(
+    *,
+    owner_id: str,
+    kind: str,
+    operation_id: str,
+    payload_digest: str,
+    limit: int,
+    quota_period: str | None = None,
+    account_fence_generation: int | None = None,
+    table: object | None = None,
+    now: datetime | None = None,
+) -> RateAdmissionResult:
+    """Admit one logical operation once without ever incrementing past its cap."""
+    owner = _required_text(owner_id, "owner_id")
+    normalized_kind = _rate_kind(kind)
+    opaque_operation_id = _sha256_digest(operation_id, "operation_id")
+    digest = _sha256_digest(payload_digest, "payload_digest")
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+        raise ValueError("limit must be a positive integer")
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None or observed_now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    period = _required_text(
+        quota_period or observed_now.astimezone(timezone.utc).strftime("%Y-%m-%d"),
+        "quota_period",
+    )
+    expires_at_value = int(observed_now.timestamp()) + _OPERATION_TTL_SECONDS
+    target = table or get_table()
+    counter_key = _counter_key(owner, normalized_kind, period)
+    operation_key = _operation_key(owner, normalized_kind, opaque_operation_id)
+
+    try:
+        existing = _get_item(target, operation_key)
+        counter_value, stored_expiry = _counter_state(target, counter_key)
+    except _RateDependencyFailure:
+        return _result(
+            RateAdmissionDisposition.RETRYABLE,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            counter_key=counter_key,
+            counter_value=0,
+            limit=limit,
+            expires_at=0,
+        )
+    if existing is not None:
+        return _classify_operation(
+            existing,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            payload_digest=digest,
+            counter_key=counter_key,
+            counter_value=counter_value,
+            limit=limit,
+            expires_at=stored_expiry,
+        )
+
+    try:
+        if account_fence_generation is None:
+            fence = account_deletion_repo.require_active_account_fence(owner, table=target)
+            generation = int(fence["generation"])
+        else:
+            if (
+                isinstance(account_fence_generation, bool)
+                or not isinstance(account_fence_generation, int)
+                or account_fence_generation <= 0
+            ):
+                raise ValueError("account_fence_generation must be positive")
+            generation = account_fence_generation
+    except (account_deletion_repo.AccountDeletionConflict, KeyError, TypeError, ValueError):
+        return _result(
+            RateAdmissionDisposition.RETRYABLE,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            counter_key=counter_key,
+            counter_value=counter_value,
+            limit=limit,
+            expires_at=stored_expiry,
+        )
+
+    if counter_value >= limit:
+        return _result(
+            RateAdmissionDisposition.LIMIT_EXCEEDED,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            counter_key=counter_key,
+            counter_value=counter_value,
+            limit=limit,
+            expires_at=stored_expiry,
+        )
+
+    operation = {
+        **operation_key,
+        "entity_type": "rate_admission_operation",
+        "schema_version": _OPERATION_SCHEMA_VERSION,
+        "operation_id": opaque_operation_id,
+        "owner_id": owner,
+        "kind": normalized_kind,
+        "quota_period": period,
+        "payload_digest": digest,
+        "status": "admitted",
+        "account_fence_generation": generation,
+        "created_at": observed_now.astimezone(timezone.utc).isoformat(),
+        "expires_at": expires_at_value,
+    }
+    operations = [
+        account_deletion_repo.active_fence_condition(owner, generation),
+        {
+            "Put": {
+                "Item": operation,
+                "ConditionExpression": (
+                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                ),
+            }
+        },
+        {
+            "Update": {
+                "Key": counter_key,
+                "UpdateExpression": (
+                    "ADD #count :one SET #ttl=if_not_exists(#ttl,:expires), "
+                    "entity_type=if_not_exists(entity_type,:counter_type), "
+                    "owner_id=if_not_exists(owner_id,:owner), "
+                    "quota_period=if_not_exists(quota_period,:period), "
+                    "account_fence_generation=:generation"
+                ),
+                "ConditionExpression": (
+                    "attribute_not_exists(#count) OR #count < :limit"
+                ),
+                "ExpressionAttributeNames": {"#count": "count", "#ttl": "expires_at"},
+                "ExpressionAttributeValues": {
+                    ":one": 1,
+                    ":limit": limit,
+                    ":expires": expires_at_value,
+                    ":counter_type": "rate_counter",
+                    ":owner": owner,
+                    ":period": period,
+                    ":generation": generation,
+                },
+            }
+        },
+    ]
+
+    for _ in range(3):
+        try:
+            account_deletion_repo.transact(operations, table=target)
+        except Exception:
+            try:
+                raced_operation = _get_item(target, operation_key)
+                raced_count, raced_expiry = _counter_state(target, counter_key)
+            except _RateDependencyFailure:
+                break
+            if raced_operation is not None:
+                return _classify_operation(
+                    raced_operation,
+                    owner_id=owner,
+                    kind=normalized_kind,
+                    operation_id=opaque_operation_id,
+                    quota_period=period,
+                    payload_digest=digest,
+                    counter_key=counter_key,
+                    counter_value=raced_count,
+                    limit=limit,
+                    expires_at=raced_expiry,
+                )
+            if raced_count >= limit:
+                return _result(
+                    RateAdmissionDisposition.LIMIT_EXCEEDED,
+                    owner_id=owner,
+                    kind=normalized_kind,
+                    operation_id=opaque_operation_id,
+                    quota_period=period,
+                    counter_key=counter_key,
+                    counter_value=raced_count,
+                    limit=limit,
+                    expires_at=raced_expiry,
+                )
+            continue
+        try:
+            admitted_count, admitted_expiry = _counter_state(target, counter_key)
+        except _RateDependencyFailure:
+            admitted_count, admitted_expiry = counter_value + 1, expires_at_value
+        return _result(
+            RateAdmissionDisposition.ADMITTED,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            counter_key=counter_key,
+            counter_value=admitted_count,
+            limit=limit,
+            expires_at=admitted_expiry,
+        )
+
+    return _result(
+        RateAdmissionDisposition.RETRYABLE,
+        owner_id=owner,
+        kind=normalized_kind,
+        operation_id=opaque_operation_id,
+        quota_period=period,
+        counter_key=counter_key,
+        counter_value=counter_value,
+        limit=limit,
+        expires_at=stored_expiry,
+    )
+
+
+def _counter_receipt_or_raise(result: RateAdmissionResult, label: str) -> dict[str, Any]:
+    if result.disposition in {
+        RateAdmissionDisposition.ADMITTED,
+        RateAdmissionDisposition.REPLAYED,
+    }:
+        return result.counter_receipt()
+    if result.disposition is RateAdmissionDisposition.LIMIT_EXCEEDED:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Daily {label} limit ({result.limit}) reached. Try again tomorrow.",
+        )
+    if result.disposition is RateAdmissionDisposition.IDEMPOTENCY_CONFLICT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "rate_operation_conflict",
+                "message": "This idempotency key was already used for another request.",
+            },
+        )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "rate_limit_unavailable",
+            "message": "Usage admission is temporarily unavailable. Please try again.",
+        },
+        headers={"Retry-After": "30"},
+    )
+
+
+def check_and_record_chat(
+    student_id: str,
+    operation_id: str,
+    payload_digest: str,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Legacy adapter; conversation commands remain the authoritative chat path."""
+    period = _today_utc()
+    result = check_and_record_operation(
         owner_id=student_id,
+        kind="chat",
+        operation_id=build_rate_operation_id(
+            "chat", student_id, operation_id, period
+        ),
+        payload_digest=payload_digest,
+        quota_period=period,
+        limit=limit if limit is not None else settings.daily_chat_message_limit,
     )
+    return _counter_receipt_or_raise(result, "chat message")
+
+
+def check_and_record_hint(
+    student_id: str,
+    challenge_id: str,
+    operation_id: str,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Admit one explicit hint idempotency identity for one challenge payload."""
+    period = _today_utc()
+    result = check_and_record_operation(
+        owner_id=student_id,
+        kind="hint",
+        operation_id=build_rate_operation_id(
+            "hint", student_id, operation_id, period
+        ),
+        payload_digest=_payload_digest("hint", challenge_id),
+        quota_period=period,
+        limit=limit if limit is not None else settings.daily_hint_limit,
+    )
+    return _counter_receipt_or_raise(result, "hint")

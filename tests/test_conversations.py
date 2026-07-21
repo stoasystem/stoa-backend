@@ -1,6 +1,7 @@
 import json
 import asyncio
 import hashlib
+import inspect
 import subprocess
 import sys
 import threading
@@ -19,6 +20,13 @@ from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+
+
+def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
+    source = inspect.getsource(conversations._execute_message_command)
+
+    assert "claim_message_command_and_quota" in source
+    assert "check_and_record_chat" not in source
 
 
 def _actor(role=CanonicalRole.STUDENT, user_id="student-1", grants=()):
