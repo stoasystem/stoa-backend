@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 475 planned (13 atomic plans; ready for execution)
-last_updated: "2026-07-21T21:12:09.163Z"
-last_activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Linux PASS runs
+stopped_at: Completed 475-01-PLAN.md
+last_updated: "2026-07-21T21:29:32.605Z"
+last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
-  total_plans: 156
-  completed_plans: 94
+  total_plans: 169
+  completed_plans: 95
   percent: 20
 ---
 
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 474 (Deterministic Verification And Gated Delivery) — EXECUTING
-Plan: 94 of 94
-Status: Plan 94 complete; Phase 474 remains open for other requirement gaps
-Last activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Linux PASS runs
+Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
+Plan: 2 of 13
+Status: Ready to execute
+Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Accumulated Context
 
@@ -107,9 +107,9 @@ Last activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Li
 
 ## Session
 
-**Last Date:** 2026-07-21T20:47:21.934Z
-**Stopped At:** Phase 475 planned (13 atomic plans; ready for execution)
-**Resume File:** .planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-01-PLAN.md
+**Last Date:** 2026-07-21T21:29:32.599Z
+**Stopped At:** Completed 475-01-PLAN.md
+**Resume File:** .planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-02-PLAN.md
 
 ## Performance Metrics
 
@@ -201,6 +201,7 @@ Last activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Li
 | Phase 474 P87 | 115 min | 1 task | 4 frontend files plus summary |
 | Phase 474 P26 | multi-session | 1 task | 5 infra files plus summary |
 | Phase 474 P88 | multi-cycle | 1 task | 3 contract files plus summary |
+| Phase 475 P01 | 9 min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -381,3 +382,6 @@ Last activity: 2026-07-20 -- Closed V9QUAL-01 and V9QUAL-02 with two admitted Li
 - [Phase 474]: A source handoff is not admissible after a failed real formal attempt; the failed publication is superseded only after fixing the exact materialized-snapshot path and issuing a new direct metadata child. — V9QUAL completion counts only the replacement source's later PASS receipts.
 - [Phase 474]: Both historical handoff publications are rejected because their Python children exposed distinct snapshot-root assumptions; only the post-2344-pass implementation may be republished and counted. — Real Linux failures remain evidence, never PASS credit.
 - [Phase 474]: Final publication fe467c5e4bdcce55863f62a0e7ffe26ca2c88ca0 produced two sequential complete Linux formal PASS receipts with distinct raw identities and one identical retained semantic digest. — V9QUAL-01 and V9QUAL-02 are now closed without claiming production execution.
+- [Phase 475]: Question admission uses one durable application command with a domain-separated length-prefixed payload fingerprint. — Exact content and attachment order remain bound beyond DynamoDB's client-token window.
+- [Phase 475]: Prepared attachment operations join the admission transaction after duplicate fence and question actions are removed. — The transaction preserves existing attachment invariants without targeting one DynamoDB item twice.
+- [Phase 475]: Ambiguous admission writes reconcile through a strong command read, and quota exhaustion requires durable counter evidence. — Lost responses replay the original result without exposing provider diagnostics or double charging.
