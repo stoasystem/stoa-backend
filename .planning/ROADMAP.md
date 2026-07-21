@@ -541,13 +541,36 @@ Plans:
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
 
-**Plans:** TBD
+**Plans:** 13 plans planned
 
-**Likely plan slices:**
+Plans:
 
-1. Transactional question quota/idempotency/ledger/upload/question state plus reconciliation of historical partial records.
-2. Conditional teacher claim/session/notification and transactional parent-child binding with repair tooling; one shared CAS/version discipline for normal parent-profile writes and child scrubs.
-3. Capped/idempotent rate-limit semantics, typed delivery-begin dependency/business outcomes, complete practice-attempt answer persistence, and stored terminal account-deletion receipt replay.
+**Wave 1**
+
+- [ ] `475-01` — Atomic question-admission primitive.
+- [ ] `475-06` — Atomic parent binding and profile projection.
+- [ ] `475-09` — Capped, idempotent rate admission.
+- [ ] `475-11` — Typed delivery-begin outcomes.
+
+**Wave 2**
+
+- [ ] `475-02` — Question route processing and replay projection.
+- [ ] `475-04` — Atomic teacher claim and deterministic session.
+- [ ] `475-08` — Shared profile-version/CAS discipline and real scrub race.
+- [ ] `475-10` — Bounded mistake-answer storage and legacy-unknown projection.
+- [ ] `475-12` — Completed account-deletion receipt replay.
+
+**Wave 3**
+
+- [ ] `475-03` — Question reconciliation and exact terminal reversal.
+- [ ] `475-05` — Recoverable exactly-once teacher notification effect.
+- [ ] `475-07` — Preview/apply parent-binding reconciliation.
+
+**Wave 4**
+
+- [ ] `475-13` — Integrated source-bound Phase 475 evidence gate.
+
+**Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced.
 
 **Success criteria:**
 
