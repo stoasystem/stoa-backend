@@ -379,6 +379,62 @@ def _assigned_call(source: str, *, target: str, function: str) -> bool:
     return False
 
 
+def _typed_delivery_begin_precedes_provider(source: str) -> bool:
+    """Require the typed begin result to own the claim used by the provider."""
+    if any(
+        token not in source
+        for token in (
+            "DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED",
+            "DeliveryBeginDisposition.CLAIM_LOST",
+            "DeliveryBeginDisposition.DEPENDENCY_RETRY",
+            "inflight_claim = begin_result.claim",
+        )
+    ):
+        return False
+    tree = ast.parse(source)
+    begin_line: int | None = None
+    claim_line: int | None = None
+    provider_line: int | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            target_names = {
+                item.id for item in targets if isinstance(item, ast.Name)
+            }
+            value = node.value
+            if (
+                "begin_result" in target_names
+                and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Attribute)
+                and value.func.attr == "begin_delivery_effect"
+            ):
+                begin_line = node.lineno
+            if (
+                "inflight_claim" in target_names
+                and isinstance(value, ast.Attribute)
+                and value.attr == "claim"
+                and isinstance(value.value, ast.Name)
+                and value.value.id == "begin_result"
+            ):
+                claim_line = node.lineno
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "provider_call"
+        ):
+            provider_line = (
+                node.lineno
+                if provider_line is None
+                else min(provider_line, node.lineno)
+            )
+    return bool(
+        begin_line is not None
+        and claim_line is not None
+        and provider_line is not None
+        and begin_line < claim_line < provider_line
+    )
+
+
 def validate_private_store_semantics(root: Path | str) -> None:
     """Reject reviewed race/privacy weakening independently of source digests."""
     root_path = Path(root).resolve()
@@ -399,10 +455,15 @@ def validate_private_store_semantics(root: Path | str) -> None:
                 raise ValueError(
                     f"reviewed private-store semantic missing: {relative}:{symbol}"
                 )
-        if relative.endswith("notification_service.py") and not _assigned_call(
-            functions["run_delivery_intent"],
-            target="inflight_claim",
-            function="begin_delivery_effect",
+        if relative.endswith("notification_service.py") and not (
+            _assigned_call(
+                functions["run_delivery_intent"],
+                target="inflight_claim",
+                function="begin_delivery_effect",
+            )
+            or _typed_delivery_begin_precedes_provider(
+                functions["run_delivery_intent"]
+            )
         ):
             raise ValueError(
                 "reviewed private-store semantic missing: durable delivery begin"
