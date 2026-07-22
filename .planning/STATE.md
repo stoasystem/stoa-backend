@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-40-PLAN.md
-last_updated: "2026-07-22T08:46:04.122Z"
+stopped_at: Completed 475-15-PLAN.md
+last_updated: "2026-07-22T09:09:51.922Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 114
+  completed_plans: 115
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 8 of 45
+Plan: 9 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T08:46:04.116Z
-**Stopped At:** Completed 475-40-PLAN.md
+**Last Date:** 2026-07-22T09:09:51.916Z
+**Stopped At:** Completed 475-15-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -221,6 +221,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P29 | 6 min | 1 tasks | 1 files |
 | Phase 475 P31 | 4 min | 1 tasks | 1 files |
 | Phase 475 P40 | 25 min | 1 tasks | 1 files |
+| Phase 475 P15 | 15 min | 1 tasks | 8 files |
 
 ## Decisions
 
@@ -447,3 +448,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Answer bytes, snapshot fields, reveal timing, and legacy-unknown projection remain unchanged during practice repository type cleanup. — D-14 and V9DATA-05 regressions remain the authoritative behavior contract.
 - [Phase 475]: Practice repository values are narrowed at the router boundary before string- and list-typed calls, preserving valid values exactly. — Keep D-14 persistence and response behavior byte-stable while satisfying typed repository inputs.
 - [Phase 475]: Practice preview collections use list[Mapping[str, Any]] to satisfy invariance without casts, ignores, or Any propagation. — Preserve the existing projection signature and explicit mapping contract.
+- [Phase 475]: Question command identity is a lowercase SHA-256 over a domain tag plus length-prefixed canonical student ID and exact validated caller key bytes.
+- [Phase 475]: The one student-bound digest is the command ID, command SK suffix, ledger event ID/SK suffix, and persisted idempotency digest; raw caller text has no durable compatibility path.
+- [Phase 475]: Question command schema v2 rejects v1/raw or malformed rows before payload comparison and never returns their stored coordinates.
