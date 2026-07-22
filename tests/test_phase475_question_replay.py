@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
+import re
+
+import pytest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -72,6 +76,166 @@ def _question_command(kwargs: dict[str, object]) -> dict[str, object]:
         "fingerprint": kwargs["fingerprint"],
         "question_id": kwargs["question"]["question_id"],  # type: ignore[index]
     }
+
+
+@pytest.mark.parametrize(
+    ("request_patch", "private_canary"),
+    (
+        pytest.param({}, "private-content-canary", id="missing"),
+        pytest.param({"idempotencyKey": None}, "private-content-canary", id="null"),
+        pytest.param({"idempotencyKey": "        "}, "        ", id="blank"),
+        pytest.param({"idempotencyKey": "short"}, "short", id="too-short"),
+        pytest.param({"idempotencyKey": "k" * 201}, "k" * 201, id="too-long"),
+        pytest.param(
+            {"idempotencyKey": "question-submit-valid", "unexpected": "private-extra-canary"},
+            "private-extra-canary",
+            id="unexpected-field",
+        ),
+    ),
+)
+def test_invalid_idempotency_input_is_redacted_and_effect_free(
+    monkeypatch,
+    request_patch: dict[str, object],
+    private_canary: str,
+) -> None:
+    effects: list[str] = []
+
+    def observed(name: str, value):
+        effects.append(name)
+        return value
+
+    monkeypatch.setattr(
+        questions.user_repo,
+        "get_user",
+        lambda *_args, **_kwargs: observed("profile", {}),
+    )
+    monkeypatch.setattr(
+        questions.entitlement_service,
+        "resolve_student_entitlement",
+        lambda *_args, **_kwargs: observed(
+            "entitlement",
+            {"effectivePlan": "free", "limits": {"dailyAiQuestionLimit": 2}},
+        ),
+    )
+    monkeypatch.setattr(
+        questions.uuid,
+        "uuid4",
+        lambda: observed("uuid", "generated-question-id"),
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: observed("command_read", None),
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **_kwargs: observed(
+            "admission",
+            question_submission_repo.QuestionAdmissionResult(
+                question_submission_repo.QuestionAdmissionDisposition.RETRYABLE
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        questions.usage_ledger_service,
+        "build_question_usage_event",
+        lambda **_kwargs: observed("ledger", {}),
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "update_status",
+        lambda *_args, **_kwargs: observed("question", None),
+    )
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *_args, **_kwargs: observed("attachment", {"attachment": {}}),
+    )
+    monkeypatch.setattr(
+        questions.ocr_service,
+        "extract_text_from_attachment",
+        lambda *_args, **_kwargs: observed("ocr", ""),
+    )
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: observed("ai", {}),
+    )
+
+    request = {
+        "content": "private-content-canary",
+        "subject": "math",
+        **request_patch,
+    }
+    response = _client().post("/questions", json=request)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "question_submission_identity_invalid",
+        "message": "Provide a valid question submission key and try again.",
+        "correlationId": response.json()["detail"]["correlationId"],
+    }
+    assert re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}",
+        response.json()["detail"]["correlationId"],
+    )
+    assert private_canary not in json.dumps(response.json())
+    assert effects == []
+
+
+def test_valid_idempotency_key_reaches_replay_boundary_byte_identically(monkeypatch) -> None:
+    _profile_and_entitlement(monkeypatch)
+    caller_key = "  question-submit-exact  "
+    observed_keys: list[str] = []
+
+    def command_read(_student_id: str, idempotency_key: str):
+        observed_keys.append(idempotency_key)
+        return {
+            "question_id": "question-original",
+            "fingerprint": question_submission_repo.question_submission_fingerprint(
+                subject="math",
+                original_content="Please solve 2x + 4 = 10",
+                corrected_content=None,
+            ),
+            "status": "processing",
+        }
+
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        command_read,
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda _question_id: {
+            "question_id": "question-original",
+            "student_id": "student-1",
+            "subject": "math",
+            "content": "Please solve 2x + 4 = 10",
+            "status": "pending",
+            "ai_response": None,
+            "teacher_id": None,
+            "teacher_response": None,
+            "knowledge_points": [],
+            "student_feedback": None,
+            "created_at": "2026-07-22T00:00:00+00:00",
+            "resolved_at": None,
+        },
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": caller_key,
+        },
+    )
+
+    assert response.status_code == 201
+    assert observed_keys == [caller_key]
 
 
 def test_lost_response_retry_returns_original_without_repeating_effects(monkeypatch) -> None:
