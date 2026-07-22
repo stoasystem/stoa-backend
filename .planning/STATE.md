@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-26-PLAN.md
-last_updated: "2026-07-22T10:39:16.921Z"
+stopped_at: Completed 475-34-PLAN.md
+last_updated: "2026-07-22T10:44:54.922Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 121
+  completed_plans: 122
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 15 of 45
+Plan: 16 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T10:39:16.915Z
-**Stopped At:** Completed 475-26-PLAN.md
+**Last Date:** 2026-07-22T10:44:54.916Z
+**Stopped At:** Completed 475-34-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -228,6 +228,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P16 | 6 min | 1 tasks | 2 files |
 | Phase 475 P17 | 18 min | 1 tasks | 8 files |
 | Phase 475 P26 | 10 min | 1 tasks | 3 files |
+| Phase 475 P34 | 4min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -472,3 +473,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Delete both formal relationship directions and scrub the exact matching student profile projection in one deletion-generation-fenced transaction.
 - [Phase 475]: Treat row or profile condition loss as retryable dirty debt; only later strong discovery may supply replacement status/version coordinates.
 - [Phase 475]: Deduplicate both discovered directions per branch page so one successful pair transaction is not followed by a stale second mutation.
+- [Phase 475]: Type push-token items as the repository's closed string-to-object row shape before persistence. — Match the existing notification repository row contract without Any, ignores, or behavior changes.
+- [Phase 475]: Narrow stored notification metadata through Mapping and list checks before rebuilding bounded delivery attempts. — Keep valid attempt history unchanged while failing closed on malformed persisted shapes.
