@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-32-PLAN.md
-last_updated: "2026-07-22T14:47:29.058Z"
+stopped_at: Completed 475-19-PLAN.md
+last_updated: "2026-07-22T15:12:08.226Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 126
+  completed_plans: 127
   percent: 20
 ---
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T14:47:29.052Z
-**Stopped At:** Completed 475-32-PLAN.md
+**Last Date:** 2026-07-22T15:12:08.220Z
+**Stopped At:** Completed 475-19-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -233,6 +233,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P18 | 21 min | 1 tasks | 6 files |
 | Phase 475 P21 | 8 min | 1 tasks | 4 files |
 | Phase 475 P32 | 2 min | 1 tasks | 1 files |
+| Phase 475 P19 | 13 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -488,3 +489,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Only canonical teacher plus active lifecycle satisfies the takeover profile condition; every conditional loss keeps the existing redacted retry response. — Aliases, other roles, lifecycle states, versions, and storage coordinates must neither authorize nor leak through the API.
 - [Phase 475]: DynamoDB user/profile and relationship reads remain object-valued until operation-specific runtime Protocol checks and explicit string-keyed Mapping narrowing establish safe use. — This preserves least-capability provider boundaries without trusting unvalidated provider values.
 - [Phase 475]: Plan 475-32 type closure changes only provider boundary typing; relationship fences, keys, conditions, lifecycle transitions, reconciliation classifications, and deletion scrub behavior remain unchanged. — The plan is a type-gate closure, not a relationship behavior change.
+- [Phase 475]: Payload mismatch is returned only after the durable question command and current owner fence establish authority. — Corrupt or stale rows must remain coordinate-free retry outcomes.
+- [Phase 475]: Exact question replay requires matching question.v1 key, owner, generation, positive version, and command-compatible status. — Private content may be projected only from one strongly loaded authoritative row.
+- [Phase 475]: All question replay and persisted projection paths consume one strong repository classifier. — One entry prevents route-local fingerprint or coordinate shortcuts.
