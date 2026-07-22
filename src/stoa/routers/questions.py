@@ -1,10 +1,14 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any, NoReturn
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
@@ -16,6 +20,7 @@ from stoa.db.repositories import (
 from stoa.deps import get_actor
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
 from stoa.security.authorization import AuthorizationPurpose, AuthorizationSpec
+from stoa.security.errors import normalize_correlation_id
 from stoa.security.identity import Actor
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.request_correlation import get_request_correlation_id
@@ -48,6 +53,35 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+
+class _QuestionSubmissionRoute(APIRoute):
+    """Redact request-validation details at the untrusted submission boundary."""
+
+    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+        route_handler = super().get_route_handler()
+
+        async def redacted_route_handler(request: Request) -> Response:
+            try:
+                return await route_handler(request)
+            except RequestValidationError:
+                correlation_id = normalize_correlation_id(
+                    getattr(request.state, "stoa_correlation_id", None)
+                )
+                request.state.stoa_correlation_id = correlation_id
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    content={
+                        "detail": {
+                            "code": QuestionSubmissionErrorCode.IDENTITY_INVALID.value,
+                            "message": "Provide a valid question submission key and try again.",
+                            "correlationId": correlation_id,
+                        }
+                    },
+                    headers={"X-Correlation-ID": correlation_id},
+                )
+
+        return redacted_route_handler
 
 
 def _question_limit(
@@ -284,7 +318,6 @@ _question_create_dependency.authorization_specs = (  # type: ignore[attr-defined
 )
 
 
-@router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_question(
     body: SubmitQuestionRequest,
     actor: Actor = Depends(_question_create_dependency),
@@ -292,6 +325,7 @@ async def submit_question(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Submit a question; run OCR if an image is provided, then call AI."""
+    idempotency_key = body.idempotency_key
     student_id = actor.user_id
     student_profile = user_repo.get_user(student_id) or {}
     subscription_tier = str(student_profile.get("subscription_tier") or "free")
@@ -304,10 +338,6 @@ async def submit_question(
     grade = str(student_profile.get("grade") or "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
     question_id = str(uuid.uuid4())
-    idempotency_key = usage_ledger_service.build_question_idempotency_key(
-        question_id,
-        body.idempotency_key,
-    )
     quota_period = usage_ledger_service.today_period()
     attachment_identity = _attachment_identity(body)
     attachment_identities = (attachment_identity,) if attachment_identity else ()
@@ -534,6 +564,16 @@ async def submit_question(
         pass
 
     return _question_response(item)
+
+
+router.add_api_route(
+    "",
+    submit_question,
+    methods=["POST"],
+    response_model=QuestionResponse,
+    status_code=status.HTTP_201_CREATED,
+    route_class_override=_QuestionSubmissionRoute,
+)
 
 
 @router.get("/{question_id}", response_model=QuestionResponse)

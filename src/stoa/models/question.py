@@ -1,6 +1,6 @@
 from enum import Enum, StrEnum
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
@@ -16,6 +16,7 @@ class QuestionStatus(str, Enum):
 
 
 class QuestionSubmissionErrorCode(StrEnum):
+    IDENTITY_INVALID = "question_submission_identity_invalid"
     PAYLOAD_MISMATCH = "question_submission_payload_mismatch"
     QUOTA_EXCEEDED = "question_quota_exceeded"
     ADMISSION_UNAVAILABLE = "question_submission_temporarily_unavailable"
@@ -36,7 +37,14 @@ class SubmitQuestionRequest(BaseModel):
     subject: str = Field(..., pattern="^(math|physics|german|english)$")
     attachment: AttachmentReference | None = None
     corrected_text: Optional[str] = Field(default=None, min_length=5, max_length=2000)
-    idempotency_key: Optional[str] = Field(default=None, alias="idempotencyKey", min_length=8, max_length=200)
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=8, max_length=200)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def require_nonblank_idempotency_key(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("question submission identity is blank")
+        return value
 
 
 class QuestionOcrMetadata(BaseModel):
