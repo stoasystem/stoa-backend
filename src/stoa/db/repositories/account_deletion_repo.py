@@ -691,7 +691,7 @@ def scrub_parent_profile_child(
     parent_id = _required(item.get("user_id"), "parent user_id")
     if parent_id == child_user_id:
         raise AccountDeletionConflict("student profile requires tombstone replacement")
-    target = table or get_table()
+    target: Any = table or get_table()
     current = dict(item)
     for attempt in range(1, 4):
         require_deletion_account_fence(child_user_id, generation, table=target)
