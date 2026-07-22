@@ -66,11 +66,26 @@ class ParentBindingDisposition(StrEnum):
     RETRYABLE = "retryable"
 
 
+class ParentBindingStatusDisposition(StrEnum):
+    """Closed outcomes for one explicit relationship lifecycle transition."""
+
+    TRANSITIONED = "transitioned"
+    CONFLICT = "conflict"
+    RETRYABLE = "retryable"
+
+
 @dataclass(frozen=True, slots=True)
 class ParentBindingResult:
     disposition: ParentBindingDisposition
     binding: UserItem | None = None
     profile: UserItem | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBindingStatusResult:
+    disposition: ParentBindingStatusDisposition
+    status: str | None = None
+    version: int | None = None
 
 
 class ParentBindingRepairClassification(StrEnum):
@@ -447,14 +462,16 @@ def build_parent_binding_transaction(
     condition = (
         "(attribute_not_exists(PK) AND attribute_not_exists(SK)) OR "
         "(#parent_id = :parent_id AND #student_id = :student_id AND "
-        "#relationship = :relationship AND #version = :version)"
+        "#relationship = :relationship AND #status = :status AND "
+        "#version = :version)"
     )
     update = (
         "SET #entity_type = if_not_exists(#entity_type, :entity_type), "
         "#parent_id = if_not_exists(#parent_id, :parent_id), "
         "#student_id = if_not_exists(#student_id, :student_id), "
         "#relationship = if_not_exists(#relationship, :relationship), "
-        "#status = :status, #source = :source, #actor = :actor, "
+        "#status = if_not_exists(#status, :status), "
+        "#source = :source, #actor = :actor, "
         "#version = if_not_exists(#version, :version), "
         "#created_at = if_not_exists(#created_at, :created_at), "
         "#updated_at = :updated_at"
@@ -538,6 +555,7 @@ def put_parent_student_relationship(
         parent_id=parent_id,
         student_id=student_id,
         relationship=relationship,
+        status=status,
         version=version,
     ):
         return ParentBindingResult(ParentBindingDisposition.CONFLICT)
@@ -564,6 +582,8 @@ def put_parent_student_relationship(
         version=version,
     )
     if replay is not None:
+        if status != "active":
+            return ParentBindingResult(ParentBindingDisposition.CONFLICT)
         return ParentBindingResult(
             ParentBindingDisposition.REPLAYED,
             binding=replay,
@@ -598,6 +618,8 @@ def put_parent_student_relationship(
             version=version,
         )
         if replay is not None:
+            if status != "active":
+                return ParentBindingResult(ParentBindingDisposition.CONFLICT)
             return ParentBindingResult(
                 ParentBindingDisposition.REPLAYED,
                 binding=replay,
@@ -608,6 +630,7 @@ def put_parent_student_relationship(
             parent_id=parent_id,
             student_id=student_id,
             relationship=relationship,
+            status=status,
             version=version,
         ):
             return ParentBindingResult(ParentBindingDisposition.CONFLICT)
@@ -628,6 +651,7 @@ def put_parent_student_relationship(
             parent_id=parent_id,
             student_id=student_id,
             relationship=relationship,
+            status=status,
             version=version,
         ):
             return ParentBindingResult(ParentBindingDisposition.CONFLICT)
@@ -666,6 +690,189 @@ def put_parent_student_binding(
             f"parent binding {result.disposition.value}"
         )
     return result.binding
+
+
+def build_parent_binding_status_transition_transaction(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    expected_status: str,
+    expected_version: int,
+    status: str,
+    source: str,
+    actor: str,
+    updated_at: str,
+    expected_student_profile_version: int,
+) -> list[TransactionOperation]:
+    """Build one exact-status/version transition across all relationship projections."""
+    parent_id = _required_text(parent_id, "parent_id")
+    student_id = _required_text(student_id, "student_id")
+    relationship = _required_text(relationship, "relationship")
+    expected_status = _required_relationship_status(expected_status)
+    status = _required_relationship_status(status)
+    if status == expected_status:
+        raise ValueError("relationship status transition must change status")
+    expected_version = _required_profile_version(expected_version)
+    source = _required_text(source, "source")
+    actor = _required_text(actor, "actor")
+    updated_at = _required_text(updated_at, "updated_at")
+    expected_student_profile_version = _required_profile_version(
+        expected_student_profile_version
+    )
+    next_version = expected_version + 1
+    names = {
+        "#parent_id": "parent_id",
+        "#student_id": "student_id",
+        "#relationship": "relationship",
+        "#status": "status",
+        "#version": "version",
+        "#source": "source",
+        "#actor": "actor",
+        "#updated_at": "updated_at",
+    }
+    values = {
+        ":parent_id": parent_id,
+        ":student_id": student_id,
+        ":relationship": relationship,
+        ":expected_status": expected_status,
+        ":expected_version": expected_version,
+        ":next_status": status,
+        ":next_version": next_version,
+        ":source": source,
+        ":actor": actor,
+        ":updated_at": updated_at,
+    }
+    condition = (
+        "attribute_exists(PK) AND attribute_exists(SK) AND "
+        "#parent_id=:parent_id AND #student_id=:student_id AND "
+        "#relationship=:relationship AND #status=:expected_status AND "
+        "#version=:expected_version"
+    )
+    update = (
+        "SET #status=:next_status, #version=:next_version, #source=:source, "
+        "#actor=:actor, #updated_at=:updated_at"
+    )
+
+    def binding_update(pk: str, sk: str) -> TransactionOperation:
+        return {
+            "Update": {
+                "Key": {"PK": pk, "SK": sk},
+                "UpdateExpression": update,
+                "ConditionExpression": condition,
+                "ExpressionAttributeNames": dict(names),
+                "ExpressionAttributeValues": dict(values),
+            }
+        }
+
+    return [
+        binding_update(f"USER#{parent_id}", f"CHILD#{student_id}"),
+        binding_update(f"USER#{student_id}", f"PARENT#{parent_id}"),
+        profile_update_operation(
+            student_id,
+            update_expression="SET #parent_binding_status=:next_status",
+            expression_attribute_names={
+                "#parent_binding_status": "parent_binding_status",
+                "#user_id": "user_id",
+                "#parent_id": "parent_id",
+                "#relationship": "relationship",
+            },
+            expression_attribute_values={
+                ":student_id": student_id,
+                ":parent_id": parent_id,
+                ":relationship": relationship,
+                ":expected_binding_status": expected_status,
+                ":next_status": status,
+            },
+            expected_version=expected_student_profile_version,
+            additional_condition_expression=(
+                "#user_id=:student_id AND #parent_id=:parent_id AND "
+                "#relationship=:relationship AND "
+                "#parent_binding_status=:expected_binding_status"
+            ),
+        ),
+    ]
+
+
+def transition_parent_student_relationship_status(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    expected_status: str,
+    expected_version: int,
+    status: str,
+    source: str,
+    actor: str,
+    updated_at: str,
+) -> ParentBindingStatusResult:
+    """Apply one explicit lifecycle transition guarded by exact status and version."""
+    expected_status = _required_relationship_status(expected_status)
+    status = _required_relationship_status(status)
+    if status == expected_status:
+        raise ValueError("relationship status transition must change status")
+    expected_version = _required_profile_version(expected_version)
+    table = get_table()
+    snapshot = _parent_binding_snapshot(parent_id, student_id)
+    if not _parent_binding_status_snapshot_matches(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status=expected_status,
+        version=expected_version,
+    ):
+        return ParentBindingStatusResult(ParentBindingStatusDisposition.CONFLICT)
+    profile = snapshot.profile
+    assert profile is not None
+    try:
+        expected_profile_version = _required_profile_version(profile.get("version"))
+        account_deletion_repo.transact(
+            build_parent_binding_status_transition_transaction(
+                parent_id=parent_id,
+                student_id=student_id,
+                relationship=relationship,
+                expected_status=expected_status,
+                expected_version=expected_version,
+                status=status,
+                source=source,
+                actor=actor,
+                updated_at=updated_at,
+                expected_student_profile_version=expected_profile_version,
+            ),
+            table=table,
+        )
+    except (ValueError, account_deletion_repo.AccountDeletionConflict):
+        current = _parent_binding_snapshot(parent_id, student_id)
+        disposition = (
+            ParentBindingStatusDisposition.RETRYABLE
+            if _parent_binding_status_snapshot_matches(
+                current,
+                parent_id=parent_id,
+                student_id=student_id,
+                relationship=relationship,
+                status=expected_status,
+                version=expected_version,
+            )
+            else ParentBindingStatusDisposition.CONFLICT
+        )
+        return ParentBindingStatusResult(disposition)
+    current = _parent_binding_snapshot(parent_id, student_id)
+    next_version = expected_version + 1
+    if not _parent_binding_status_snapshot_matches(
+        current,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status=status,
+        version=next_version,
+    ):
+        return ParentBindingStatusResult(ParentBindingStatusDisposition.RETRYABLE)
+    return ParentBindingStatusResult(
+        ParentBindingStatusDisposition.TRANSITIONED,
+        status=status,
+        version=next_version,
+    )
 
 
 def preview_parent_binding_repair(
@@ -1010,8 +1217,8 @@ def _matching_parent_relationship(
             parent_id=parent_id,
             student_id=student_id,
             relationship=relationship,
-            version=version,
             status=status,
+            version=version,
         )
         for row in rows
     ):
@@ -1041,6 +1248,7 @@ def _parent_relationship_conflicts(
     parent_id: str,
     student_id: str,
     relationship: str,
+    status: str,
     version: int,
 ) -> bool:
     profile = snapshot.profile
@@ -1072,10 +1280,42 @@ def _parent_relationship_conflicts(
             parent_id=parent_id,
             student_id=student_id,
             relationship=relationship,
+            status=status,
             version=version,
         ):
             return True
     return False
+
+
+def _parent_binding_status_snapshot_matches(
+    snapshot: _ParentBindingSnapshot,
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    status: str,
+    version: int,
+) -> bool:
+    if any(
+        not _binding_row_matches(
+            row,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+            status=status,
+            version=version,
+        )
+        for row in (snapshot.forward, snapshot.reverse)
+    ):
+        return False
+    profile = snapshot.profile
+    return bool(
+        profile is not None
+        and profile.get("user_id") == student_id
+        and profile.get("parent_id") == parent_id
+        and profile.get("relationship") == relationship
+        and profile.get("parent_binding_status") == status
+    )
 
 
 def _binding_row_matches(
@@ -1222,6 +1462,13 @@ def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} is required")
     return value
+
+
+def _required_relationship_status(value: object) -> str:
+    status = _required_text(value, "relationship status")
+    if status not in {"active", "active_pending_verification", "inactive", "revoked"}:
+        raise ValueError("unsupported relationship status")
+    return status
 
 
 def _active_profile_observation_condition(

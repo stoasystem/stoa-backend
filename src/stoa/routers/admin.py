@@ -1,6 +1,6 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import boto3
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -15,6 +15,7 @@ from stoa.security.admin_authorization import (
     admin_operation,
     admin_target_provider,
 )
+from stoa.security.errors import normalize_correlation_id
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
     ModerationCaseListResponse,
@@ -72,7 +73,14 @@ CURRICULUM_VERSION_TARGET = AdminTargetProvider(
 )
 PARENT_BINDING_TARGET = AdminTargetProvider(
     "scalar", "body", ("parent_id", "student_id"), ("parent_id", "student_id"),
-    reference_only=("relationship", "reason", "preview_id"),
+    reference_only=(
+        "relationship",
+        "reason",
+        "preview_id",
+        "expected_status",
+        "expected_version",
+        "status",
+    ),
 )
 BULK_REPORT_TARGETS = AdminTargetProvider(
     "collection", "request",
@@ -561,6 +569,20 @@ class ParentStudentBindingRepairRequest(ParentBindingRepairPreviewRequest):
     preview_id: str = Field(..., min_length=64, max_length=64)
 
 
+class ParentBindingStatusTransitionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: str = Field(..., min_length=1, max_length=200)
+    student_id: str = Field(..., min_length=1, max_length=200)
+    relationship: str = Field(default="child", min_length=1, max_length=50)
+    expected_status: Literal[
+        "active", "active_pending_verification", "inactive", "revoked"
+    ]
+    expected_version: int = Field(..., ge=1)
+    status: Literal["active", "active_pending_verification", "inactive", "revoked"]
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
 class ParentBindingRepairObservation(BaseModel):
     coordinate: str
     version: int | None = None
@@ -581,6 +603,12 @@ class ParentBindingRepairApplyResponse(BaseModel):
     preview_id: str
     classification: user_repo.ParentBindingRepairClassification
     mutated: bool
+
+
+class ParentBindingStatusTransitionResponse(BaseModel):
+    disposition: user_repo.ParentBindingStatusDisposition
+    status: str
+    version: int
 
 
 class AccountVerificationSupportResponse(BaseModel):
@@ -2202,6 +2230,80 @@ async def repair_parent_binding(
             content=response.model_dump(mode="json"),
         )
     return response
+
+
+def _relationship_status_error(
+    *, code: str, message: str, correlation_id: str | None, status_code: int
+) -> JSONResponse:
+    safe_correlation_id = normalize_correlation_id(correlation_id)
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "code": code,
+            "message": message,
+            "correlationId": safe_correlation_id,
+        },
+        headers={"X-Correlation-ID": safe_correlation_id},
+    )
+
+
+@router.post(
+    "/parent-bindings/status",
+    response_model=ParentBindingStatusTransitionResponse,
+)
+@admin_target_provider(PARENT_BINDING_TARGET)
+async def transition_parent_binding_status(
+    body: ParentBindingStatusTransitionRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Perform one canonical-admin, expected-status/version lifecycle transition."""
+    context = user.get("_admin_authorization")
+    correlation_id = str(getattr(context, "correlation_id", "") or "")
+    if user.get("role") != "admin":
+        return _relationship_status_error(
+            code="action_not_allowed",
+            message="You cannot perform this action.",
+            correlation_id=correlation_id,
+            status_code=403,
+        )
+    if body.status == body.expected_status:
+        return _relationship_status_error(
+            code="relationship_status_invalid",
+            message="Choose a different relationship status.",
+            correlation_id=correlation_id,
+            status_code=422,
+        )
+    result = user_repo.transition_parent_student_relationship_status(
+        parent_id=body.parent_id,
+        student_id=body.student_id,
+        relationship=body.relationship,
+        expected_status=body.expected_status,
+        expected_version=body.expected_version,
+        status=body.status,
+        source="admin_lifecycle",
+        actor=str(user.get("sub") or user.get("user_id") or "admin"),
+        updated_at=report_audit_retention_service.now_iso(),
+    )
+    if result.disposition is user_repo.ParentBindingStatusDisposition.CONFLICT:
+        return _relationship_status_error(
+            code="relationship_status_conflict",
+            message="The relationship changed. Refresh and retry.",
+            correlation_id=correlation_id,
+            status_code=409,
+        )
+    if result.disposition is user_repo.ParentBindingStatusDisposition.RETRYABLE:
+        return _relationship_status_error(
+            code="relationship_status_temporarily_unavailable",
+            message="The relationship update is temporarily unavailable. Try again later.",
+            correlation_id=correlation_id,
+            status_code=503,
+        )
+    assert result.status is not None and result.version is not None
+    return ParentBindingStatusTransitionResponse(
+        disposition=result.disposition,
+        status=result.status,
+        version=result.version,
+    )
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)
