@@ -486,6 +486,7 @@ def _account_profile_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
     now = datetime.now(UTC).isoformat()
+    processed_relationships: set[tuple[str, str]] = set()
 
     def mutate(item: dict[str, Any]) -> None:
         if item.get("SK") == "PROFILE" and item.get("user_id") == command["user_id"]:
@@ -494,6 +495,19 @@ def _account_profile_branch(
                 user_id=str(command["user_id"]),
                 generation=int(command["generation"]),
                 now_iso=now,
+            )
+        elif (
+            item.get("entity_type") == "parent_student_binding"
+            and item.get("parent_id") == command["user_id"]
+        ):
+            pair = (str(item.get("parent_id") or ""), str(item.get("student_id") or ""))
+            if pair in processed_relationships:
+                return
+            processed_relationships.add(pair)
+            account_deletion_repo.scrub_parent_student_relationship(
+                item,
+                parent_user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
             )
         elif item.get("SK") == "PROFILE":
             account_deletion_repo.scrub_parent_profile_child(
