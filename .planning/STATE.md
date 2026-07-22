@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-10-PLAN.md
-last_updated: "2026-07-22T00:10:35.940Z"
+stopped_at: Completed 475-12-PLAN.md
+last_updated: "2026-07-22T00:22:27.607Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 102
+  completed_plans: 103
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 10 of 13
+Plan: 12 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T00:10:35.935Z
-**Stopped At:** Completed 475-10-PLAN.md
+**Last Date:** 2026-07-22T00:22:00.754Z
+**Stopped At:** Completed 475-12-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -209,6 +209,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P04 | 9 min | 1 tasks | 6 files |
 | Phase 475 P08 | 14 min | 1 tasks | 7 files |
 | Phase 475 P10 | 7 min | 1 tasks | 5 files |
+| Phase 475 P12 | 5 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -411,3 +412,5 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Accepted practice answers preserve Unicode and whitespace exactly within explicit storage bounds. — A 4096-byte UTF-8 limit, 50-item limit, and flat string-list shape bound rendering/storage risk without rewriting the student response.
 - [Phase 475]: Unsupported answer bodies are narrowed from object-valued input by application validation. — One stable redacted 422 response prevents framework validation from echoing unsupported submitted values.
 - [Phase 475]: Mistake review uses recorded or unknown_legacy state and never substitutes standard_answer. — Historical absence is represented by null plus the fixed client message instead of guessed or empty known input.
+- [Phase 475]: Complete deletion replay projects only the validated nested terminal receipt. — Terminal compaction intentionally removes active branch registry fields, while issuer, subject, fingerprint, request, generation, and inventory bindings remain mandatory.
+- [Phase 475]: DeletionReceipt.is_terminal is the route continuation gate. — Pending requests schedule one continuation per accepted request; deleted replay schedules no cleanup or background work.
