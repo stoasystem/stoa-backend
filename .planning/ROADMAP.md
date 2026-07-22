@@ -541,7 +541,7 @@ Plans:
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
 
-**Plans:** 13/35 plans complete; 22 gap-closure plans pending
+**Plans:** 13/45 plans complete; 32 gap-closure plans pending
 
 Plans:
 
@@ -575,52 +575,65 @@ Plans:
 - [ ] `475-14` — Required caller-owned question idempotency key.
 - [ ] `475-22` — Dual parent/student lifecycle and profile-version fence.
 - [ ] `475-24` — Immutable per-operation rate-limit receipt.
-- [ ] `475-25` — Closed account-deletion ownership/reference discovery.
-- [ ] `475-26` — Deterministic completed-deletion receipt replay proof.
-- [ ] `475-29` — Subscription/quota service mypy cleanup.
+- [ ] `475-25` — Closed cross-account deletion-reference discovery.
+- [ ] `475-29` — Deterministic completed-deletion receipt replay proof.
+- [ ] `475-31` — Practice-repository mypy cleanup.
+- [ ] `475-40` — Practice-router mypy cleanup.
 
 **Gap Closure Wave 2**
 
 - [ ] `475-15` — Opaque question command, ledger, and receipt coordinates.
 - [ ] `475-23` — Non-revivable relationship status lifecycle.
+- [ ] `475-28` — Notification actor/metadata discovery-to-CAS-cleanup closure.
+- [ ] `475-41` — Auth-router mypy cleanup.
 
 **Gap Closure Wave 3**
 
 - [ ] `475-16` — Opaque reconciliation job command coordinates.
 - [ ] `475-17` — State/version CAS for every question writer.
-- [ ] `475-27` — Repository-layer mypy cleanup.
-- [ ] `475-28` — Effect-service mypy cleanup.
-- [ ] `475-31` — Admin-router mypy cleanup.
+- [ ] `475-26` — Parent relationship discovery-to-CAS-cleanup closure.
+- [ ] `475-34` — Notification-service mypy cleanup.
+- [ ] `475-38` — Admin-router mypy cleanup.
 
 **Gap Closure Wave 4**
 
 - [ ] `475-18` — Durable OCR/AI effect receipt and recovery.
 - [ ] `475-21` — Active canonical-teacher takeover fence.
+- [ ] `475-32` — User-repository mypy cleanup.
 
 **Gap Closure Wave 5**
 
 - [ ] `475-19` — Strict question replay integrity and ownership validation.
-- [ ] `475-30` — Teacher-router mypy cleanup.
+- [ ] `475-27` — Teacher question/session discovery-to-CAS-cleanup closure.
+- [ ] `475-37` — Teacher-router mypy cleanup.
 
 **Gap Closure Wave 6**
 
 - [ ] `475-20` — Production-reachable terminal proof and exact-once compensation.
+- [ ] `475-30` — Account-deletion-repository mypy cleanup.
+- [ ] `475-33` — Account-deletion-service mypy cleanup.
 
 **Gap Closure Wave 7**
 
-- [ ] `475-32` — Question, practice, and auth router mypy cleanup.
+- [ ] `475-35` — Usage-ledger-service mypy cleanup.
+- [ ] `475-36` — Subscription/quota-service mypy cleanup.
+- [ ] `475-39` — Question-router mypy cleanup.
 
 **Gap Closure Wave 8**
 
-- [ ] `475-33` — Fail-closed unfiltered mypy evidence gate.
+- [ ] `475-42` — Fail-closed unfiltered mypy evidence gate after all functional and type plans.
 
 **Gap Closure Wave 9**
 
-- [ ] `475-34` — Exhaustive source snapshot and complete gap coverage registry.
+- [ ] `475-43` — Exhaustive fail-closed source snapshot.
 
 **Gap Closure Wave 10**
 
-- [ ] `475-35` — Final immutable source-bound evidence publication.
+- [ ] `475-44` — Complete truthful D/V9DATA/CR/WR coverage registry.
+
+**Gap Closure Wave 11**
+
+- [ ] `475-45` — Final immutable source-bound evidence publication.
 
 **Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; canonical roles are exactly `student|parent|teacher|admin` and teacher is spelled only `teacher`; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced. Live AWS, provider-effect, deployment, and production-smoke execution remain exact later-phase `NOT RUN` obligations owned by Phases 479/480.
 
