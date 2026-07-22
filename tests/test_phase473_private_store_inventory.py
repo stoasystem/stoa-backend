@@ -250,6 +250,21 @@ def test_all_five_findings_have_exact_lower_source_seals_and_selectors():
             'condition = "attribute_exists(#version)"',
         ),
         (
+            "src/stoa/db/repositories/account_deletion_repo.py",
+            "deletion_fence_condition(parent_id, generation)",
+            "deletion_fence_condition(student_id, generation)",
+        ),
+        (
+            "src/stoa/db/repositories/account_deletion_repo.py",
+            "#relationship=:relationship AND #status=:status AND #version=:version",
+            "#relationship=:relationship",
+        ),
+        (
+            "src/stoa/db/repositories/account_deletion_repo.py",
+            "expected_relationship_projection=(parent_id, relationship, status)",
+            "expected_relationship_projection=None",
+        ),
+        (
             "src/stoa/db/repositories/notification_repo.py",
             "(#effect=:registered OR (#effect=:pre_effect AND ",
             "(#effect=:registered OR (#effect=:inflight AND ",

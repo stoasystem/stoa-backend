@@ -947,13 +947,13 @@ def _parent_profile_scrub_operation(
     names = {"#version": "version"}
     values: dict[str, Any] = {}
     if expected_relationship_projection is None:
-        identity_condition = "user_id=:parent"
+        identity_condition = "user_id=:parent AND "
         values[":parent"] = parent_id
     else:
         projected_parent_id, relationship, status = expected_relationship_projection
         identity_condition = (
             "user_id=:student_id AND parent_id=:parent_id AND "
-            "#relationship=:relationship AND parent_binding_status=:status"
+            "#relationship=:relationship AND parent_binding_status=:status AND "
         )
         names["#relationship"] = "relationship"
         values.update(
@@ -979,14 +979,13 @@ def _parent_profile_scrub_operation(
     if expected_version is None:
         condition = "attribute_not_exists(#version)"
         next_version = 1
+    elif expected_relationship_projection is None:
+        condition = "#version=:expected_version"
+        values[":expected_version"] = expected_version
+        next_version = expected_version + 1
     else:
-        version_token = (
-            ":version"
-            if expected_relationship_projection is not None
-            else ":expected_version"
-        )
-        condition = f"#version={version_token}"
-        values[version_token] = expected_version
+        condition = "#version=:version"
+        values[":version"] = expected_version
         next_version = expected_version + 1
     values[":next_version"] = next_version
     expression = "SET #version=:next_version"
@@ -1001,7 +1000,6 @@ def _parent_profile_scrub_operation(
             "ConditionExpression": (
                 "attribute_exists(PK) AND attribute_exists(SK) AND "
                 + identity_condition
-                + " AND "
                 + condition
             ),
             "ExpressionAttributeNames": names,

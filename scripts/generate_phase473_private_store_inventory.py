@@ -186,6 +186,17 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "lease_owner",
             "command_version",
         ),
+        "scrub_parent_student_relationship": (
+            "parent_id != parent_user_id",
+            "_relationship_version(item.get(\"version\"))",
+            "PK=:pk AND SK=:sk AND entity_type=:entity",
+            "parent_id=:parent_id AND student_id=:student_id",
+            "#relationship=:relationship AND #status=:status AND #version=:version",
+            "expected_relationship_projection=(parent_id, relationship, status)",
+            "deletion_fence_condition(parent_id, generation)",
+            "except AccountDeletionConflict as exc",
+            "raise AccountDeletionRowConflict(",
+        ),
     },
     "src/stoa/db/repositories/notification_repo.py": {
         "claim_delivery_intent": (
@@ -477,6 +488,18 @@ def validate_private_store_semantics(root: Path | str) -> None:
                 )
         for symbol, required in symbol_requirements.items():
             body = functions.get(symbol)
+            if body is None and symbol == "scrub_parent_student_relationship":
+                service = root_path / "src/stoa/services/account_deletion_service.py"
+                wired = service.is_file() and (
+                    "scrub_parent_student_relationship(" in service.read_text(
+                        encoding="utf-8"
+                    )
+                )
+                if not wired:
+                    # The immutable Phase 473 candidate predates this Phase 475
+                    # relationship scrub. Current source becomes mandatory as
+                    # soon as the account-profile branch wires the symbol.
+                    continue
             if body is None or any(token not in body for token in required):
                 raise ValueError(
                     f"reviewed private-store semantic missing: {relative}:{symbol}"
