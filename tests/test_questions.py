@@ -214,6 +214,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
             "content": "Please solve the image",
             "corrected_text": "Solve 2x + 4 = 10",
             "subject": "math",
+            "idempotencyKey": "question-submit-corrected-ocr",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -293,6 +294,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         json={
             "content": "Please solve",
             "subject": "math",
+            "idempotencyKey": "question-submit-appended-ocr",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -339,6 +341,7 @@ def test_question_quota_race_stable_error_has_no_question_or_ai_effect(monkeypat
         json={
             "content": "private-question-canary",
             "subject": "math",
+            "idempotencyKey": "question-submit-quota-race",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -658,6 +661,7 @@ def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
         json={
             "content": "Please solve this image",
             "subject": "math",
+            "idempotencyKey": "question-submit-resolved-attachment",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -704,6 +708,7 @@ def test_transient_ocr_failure_returns_durable_processing_question(
         json={
             "content": "Please solve this image",
             "subject": "math",
+            "idempotencyKey": "question-submit-transient-ocr",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -749,6 +754,7 @@ def test_terminal_ocr_failure_preserves_durable_attachment_and_processing_questi
         json={
             "content": "Please solve this image",
             "subject": "math",
+            "idempotencyKey": "question-submit-terminal-ocr",
             "attachment": {"uploadId": "upload-1"},
         },
     )
@@ -789,6 +795,7 @@ def test_unresolved_attachment_fails_before_counter_ocr_or_question(monkeypatch)
         json={
             "content": "Please solve this image",
             "subject": "math",
+            "idempotencyKey": "question-submit-missing-attachment",
             "attachment": {"attachmentId": "foreign-or-missing"},
         },
     )
